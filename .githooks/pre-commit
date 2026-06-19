@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Vidra monorepo STOP GUARD (mechanical enforcement)
+#
+# Rejects any commit that ADDS a new file at the repository root, except for an
+# explicit allowlist of infrastructure files. All application code, tests, config,
+# Docker, and docs must live inside vidra-core/ or vidra-user/.
+#
+# This backs up the instruction-level stop guard in .ralph/PROMPT.md so a root-run
+# Ralph loop (or a human) physically cannot land code at the root.
+#
+# Enabled via:  git config core.hooksPath .githooks
+# Bypass once (intentional):  git commit --no-verify
+
+set -euo pipefail
+
+# Root files/dirs that are allowed to be added at the repo root.
+# Directories (vidra-core/, vidra-user/, .ralph/, .github/, .githooks/) are never
+# flagged because their staged paths contain a "/".
+allow_root() {
+  case "$1" in
+    README.md|LICENSE|.gitignore|.gitattributes|.ralphrc|.editorconfig|.DS_Store)
+      return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+blocked=""
+# --diff-filter=A: only newly ADDED files. Existing tracked root files are untouched.
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  # Only consider repo-root paths (no slash).
+  case "$f" in
+    */*) continue ;;
+  esac
+  allow_root "$f" && continue
+  blocked="${blocked}  $f"$'\n'
+done < <(git diff --cached --name-only --diff-filter=A)
+
+if [ -n "$blocked" ]; then
+  echo "⛔ STOP GUARD: refusing to add new file(s) at the monorepo root:" >&2
+  printf '%s' "$blocked" >&2
+  echo "" >&2
+  echo "All application code/tests/config/docs belong in vidra-core/ or vidra-user/." >&2
+  echo "Move the file into the correct project subdirectory and re-stage it." >&2
+  echo "(Infra exceptions: README.md, LICENSE, .gitignore, .ralphrc. CI lives in .github/.)" >&2
+  echo "Intentional override: git commit --no-verify" >&2
+  exit 1
+fi
+
+exit 0

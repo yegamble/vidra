@@ -1,20 +1,77 @@
-# Monorepo root — no tasks here
+# Vidra Monorepo — Ralph Orchestrator Gate
 
-This is the Vidra monorepo root. **There is no work to do at this level.** All tasks
-live in the two project subdirectories, each with its own Ralph control plane:
+> ⛔ STOP GUARD: **Never create application code at the monorepo root.** All code,
+> tests, config, Docker, and docs go inside `vidra-core/` or `vidra-user/`. The root
+> holds only `.git`, `.gitignore`, `README.md`, `.github/workflows/`, and `.ralph/`.
+>
+> This is the **coarse gate** for a single orchestrator loop run from the root. It
+> exists to keep the loop alive and track overall progress. The **real, detailed task
+> lists live in the subdirectory plans** — work from those:
+> - `vidra-core/.ralph/fix_plan.md`
+> - `vidra-user/.ralph/fix_plan.md`
+>
+> Tick a phase box here **only** when that whole phase is genuinely complete
+> (`VERIFIED`/done) in the corresponding subdirectory plan. See `.ralph/PROMPT.md`.
 
-- Backend tasks → `vidra-core/.ralph/fix_plan.md`
-- Frontend tasks → `vidra-user/.ralph/fix_plan.md`
+## vidra-core (Go backend) — phase gate
 
-Run Ralph from inside the project you want to work on:
+- [ ] P0 — Ralph control plane and PeerTube parity tracking (`vidra-core`)
+- [ ] P1 — Backend project foundation (module, config, Docker, CI)
+- [ ] P2 — Database, migrations, and sqlc
+- [ ] P3 — HTTP API foundation and contracts (OpenAPI, system endpoints)
+- [ ] P4 — Auth, accounts, and identity
+- [ ] P5 — Channels, profiles, and instance metadata
+- [ ] P6 — Video publishing and media pipeline
+- [ ] P7 — Playback, discovery, and public video API
+- [ ] P8 — Library, playlists, comments, and notifications
+- [ ] P9 — Moderation, admin, and safety
+- [ ] P10 — Federation (ActivityPub, ATProto extension)
+- [ ] P11 — Messaging (normal + encrypted foundation)
+- [ ] P12 — Live streaming
+- [ ] P13 — Captions and Whisper
+- [ ] P14 — Simple crypto donations
+- [ ] P15 — Security hardening
+- [ ] P16 — Testing strategy
+- [ ] P17 — Observability and operations
+- [ ] P18 — Backend release gates
 
-```bash
-cd vidra-core && ralph --live   # backend
-cd vidra-user && ralph --live   # frontend
-```
+## vidra-user (Next.js frontend) — phase gate
 
-Do not create application code at the monorepo root. See `.ralph/PROMPT.md`.
+- [ ] P0 — Ralph control plane and PeerTube parity tracking (`vidra-user`)
+- [ ] P1 — Frontend project foundation (Next.js, TS, Tailwind, API client, Docker, CI)
+- [ ] P2 — App shell and navigation
+- [ ] P3 — Auth and account UI
+- [ ] P4 — Public video browsing and watch page
+- [ ] P5 — Library, playlists, subscriptions, and notifications
+- [ ] P6 — Publishing and upload UX
+- [ ] P7 — Studio and creator tools
+- [ ] P8 — Messaging UX
+- [ ] P9 — Moderation and reporting UI
+- [ ] P10 — Admin UI
+- [ ] P11 — Federation, search, and external identity UI
+- [ ] P12 — Captions, accessibility, and i18n readiness
+- [ ] P13 — Simple crypto donation UI
+- [ ] P14 — Frontend testing strategy (incl. backend-backed DB-effect e2e)
+- [ ] P15 — Frontend release gates
+
+## Cross-cutting
+
+- [ ] Root CI workflows exist and are path-scoped (`backend-ci` for `vidra-core/**`,
+      `frontend-ci` for `vidra-user/**`).
+- [ ] Backend ↔ frontend API contract is proven compatible (generated types / contract tests).
+- [ ] Every in-scope data-mutating `vidra-user` flow is verified against the real
+      database (row changed AND visible in the UI after refetch).
+
+## Optional / Deferred / Non-Blocking
+
+These do not block exit.
+
+- [ ] Premium subscriptions, payouts, custodial payments (out of scope).
+- [ ] Native mobile apps.
+- [ ] Full plugin/theme API parity.
 
 ## Completed
+
 - [x] Split Vidra into `vidra-core/` and `vidra-user/` monorepo subdirectories.
 - [x] Gave each subdirectory its own `.ralphrc` + `.ralph/` (PROMPT, AGENT, fix_plan, specs).
+- [x] Configured the root `.ralph/` as the orchestrator (this file + `.ralph/PROMPT.md`).
