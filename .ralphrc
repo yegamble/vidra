@@ -3,7 +3,9 @@
 # Documentation: https://github.com/frankbria/ralph-claude-code
 
 # Project identification
-PROJECT_NAME="vidra"
+# NOTE: This is the MONOREPO ROOT. Do not run Ralph here — run it from vidra-core/
+# or vidra-user/, which each have their own .ralphrc and .ralph/. See .ralph/PROMPT.md.
+PROJECT_NAME="vidra-monorepo-root"
 PROJECT_TYPE="generic"
 
 # Claude Code CLI command

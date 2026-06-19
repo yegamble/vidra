@@ -1,55 +1,39 @@
-# Vidra Core
+# Vidra
 
-The Go backend for **Vidra** — a clean-room, PeerTube-inspired federated video
-platform. This repository (`vidra-core`) exposes the Vidra HTTP API. The Next.js
-frontend lives in a separate `vidra-user` repository and consumes this API.
+A clean-room, PeerTube-inspired federated video platform. Vidra is a **monorepo** (one
+git repository) containing two independently developed projects:
 
-> Status: early bootstrap. The HTTP service, configuration, health/readiness
-> probes, database/Redis wiring, migrations, and CI are in place. Product
-> features are tracked in `.ralph/fix_plan.md` and the parity ledgers under
-> `.ralph/specs/`.
-
-## Quick start
-
-```bash
-cp .env.example .env
-make up        # postgres + redis + migrations + api via Docker Compose
+```
+vidra/
+├── vidra-core/   # Go backend / HTTP API  (Echo, PostgreSQL, sqlc, Redis, Docker)
+└── vidra-user/   # Next.js + TypeScript frontend (Tailwind, custom components)
 ```
 
-Then:
+Each project is self-contained — its own `go.mod` / `package.json`, its own Docker
+setup, and its own Ralph control plane (`.ralphrc` + `.ralph/`) with a separate
+`fix_plan.md`. The frontend consumes the backend's HTTP API contract.
+
+## Getting started
+See each project's README:
+- Backend: [`vidra-core/README.md`](vidra-core/README.md)
+- Frontend: [`vidra-user/README.md`](vidra-user/README.md)
+
+## Autonomous development (Ralph)
+Ralph drives each project independently. Always run it from inside the project
+directory (Ralph reads `.ralphrc` / `.ralph/` relative to the current directory):
 
 ```bash
-curl localhost:8080/healthz          # liveness
-curl localhost:8080/readyz           # readiness (postgres + redis)
-curl localhost:8080/api/v1/nodeinfo  # instance discovery metadata
+cd vidra-core && ralph --live   # work the backend
+cd vidra-user && ralph --live   # work the frontend
 ```
 
-## Local development (without Docker for the app)
+Do **not** run Ralph from the monorepo root — the root `.ralph/` is a guard that does
+no work and exists only to prevent code being scaffolded at the root.
 
-```bash
-cp .env.example .env
-# bring up just the datastores:
-docker compose --profile core up postgres redis
-make migrate-up   # requires the `migrate` CLI
-make run          # runs the API against local Postgres/Redis
-```
-
-## Developer commands
-
-Run `make help` for the full list (fmt, vet, test, test-race, cover, build,
-run, sqlc, migrate-up, up/down).
-
-## Tech stack
-
-Go · Echo · PostgreSQL (pg_trgm, uuid-ossp) · pgx · sqlc · Redis · Docker.
-
-## Project docs
-
-- Architecture: `.ralph/specs/architecture.md`
-- Security: `.ralph/specs/security.md`
-- Testing: `.ralph/specs/testing.md`
-- PeerTube parity ledgers: `.ralph/specs/peertube-*.md`
+## CI
+GitHub Actions workflows live at the repo root in [`.github/workflows/`](.github/workflows/)
+(GitHub only reads workflows from the root). They are path-filtered so backend changes
+run backend CI and frontend changes run frontend CI.
 
 ## License
-
 TBD.

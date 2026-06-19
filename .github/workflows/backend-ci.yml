@@ -1,12 +1,25 @@
 name: backend-ci
 
+# Monorepo: this workflow lives at the repo root (GitHub only reads workflows here)
+# but builds/tests the vidra-core/ subdirectory. Path filters keep it from running on
+# frontend-only changes.
 on:
   push:
     branches: [main]
+    paths:
+      - "vidra-core/**"
+      - ".github/workflows/backend-ci.yml"
   pull_request:
+    paths:
+      - "vidra-core/**"
+      - ".github/workflows/backend-ci.yml"
 
 permissions:
   contents: read
+
+defaults:
+  run:
+    working-directory: vidra-core
 
 jobs:
   build-test:
@@ -42,6 +55,7 @@ jobs:
         with:
           go-version: "1.26"
           cache: true
+          cache-dependency-path: vidra-core/go.sum
 
       - name: Verify formatting
         run: |

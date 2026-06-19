@@ -3,6 +3,7 @@ module github.com/vidra/vidra-core
 go 1.26.2
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/redis/go-redis/v9 v9.20.1
