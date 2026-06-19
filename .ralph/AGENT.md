@@ -1,49 +1,56 @@
-# Agent Build Instructions
+# Agent Build Instructions — vidra-core (Go backend)
+
+This checkout is **vidra-core**: a Go service (Echo) exposing the Vidra HTTP API.
+The Next.js frontend lives in a separate `vidra-user` repo.
+
+## Toolchain
+- Go 1.26+
+- Docker + Docker Compose
+- Optional CLIs: `sqlc` (codegen), `migrate` (golang-migrate v4.17.1)
 
 ## Project Setup
 ```bash
-# Install dependencies (example for Node.js project)
-npm install
-
-# Or for Python project
-pip install -r requirements.txt
-
-# Or for Rust project  
-cargo build
+cp .env.example .env        # safe local defaults (Compose service addresses)
+go mod download
 ```
 
-## Running Tests
+## Common Commands (Makefile — run `make help`)
 ```bash
-# Node.js
-npm test
-
-# Python
-pytest
-
-# Rust
-cargo test
+make check        # fmt + vet + unit tests (fast local gate)
+make test         # unit tests
+make test-race    # tests with race detector
+make cover        # coverage summary
+make build        # build ./bin/api
+make run          # run API locally (needs Postgres + Redis)
+make up           # full Docker stack: postgres, redis, migrate, api
+make down         # stop the Docker stack
+make sqlc         # generate typed query code (requires sqlc)
+make migrate-up   # apply migrations to DATABASE_URL (requires migrate CLI)
 ```
 
-## Build Commands
+## Running the full stack
 ```bash
-# Production build
-npm run build
-# or
-cargo build --release
+make up
+# then:
+curl localhost:8080/healthz          # {"status":"ok"}
+curl localhost:8080/readyz           # components: postgres/redis
+curl localhost:8080/api/v1/nodeinfo  # instance discovery metadata
 ```
 
-## Development Server
-```bash
-# Start development server
-npm run dev
-# or
-cargo run
-```
+## Layout
+- `cmd/api` — entrypoint + graceful shutdown
+- `internal/config` — env config (only place that reads env)
+- `internal/httpapi` — Echo handlers/routing/middleware
+- `internal/store` — pgx pool + sqlc queries (`queries/`, generated `sqlcgen/`)
+- `internal/cache` — Redis client
+- `migrations` — golang-migrate numbered pairs
 
 ## Key Learnings
-- Update this section when you learn new build optimizations
-- Document any gotchas or special setup requirements
-- Keep track of the fastest test/build cycle
+- sqlc reads `migrations/` as its schema; keep migrations and queries in sync.
+- `internal/store/sqlcgen` is generated, not committed-by-hand. No code imports
+  it yet, so the module compiles before `sqlc generate` is run.
+- Liveness (`/healthz`) does NO dependency checks; readiness (`/readyz`) pings
+  Postgres + Redis and returns 503 if any is down.
 
 ## Feature Development Quality Standards
 
