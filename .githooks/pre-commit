@@ -47,4 +47,25 @@ if [ -n "$blocked" ]; then
   exit 1
 fi
 
+# --- Documentation drift guard (vidra-core) ----------------------------------
+# When a commit changes the backend HTTP surface (routes/handlers) or the
+# database schema (migrations) but touches none of the docs that describe them,
+# warn loudly. This is a non-blocking nudge: the authoritative enforcement is
+# the TestOpenAPIContract drift test and the openapi.yml workflow, which fail CI
+# if api/openapi.yaml is out of sync with the registered routes.
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+touches() { printf '%s\n' "$staged" | grep -Eq "$1"; }
+
+if touches '^vidra-core/internal/httpapi/.*\.go$' || touches '^vidra-core/migrations/'; then
+  if ! touches '^vidra-core/api/openapi\.yaml$' \
+    && ! touches '^vidra-core/README\.md$' \
+    && ! touches '^vidra-core/\.ralph/specs/'; then
+    echo "⚠️  DOC DRIFT: you changed vidra-core routes/handlers or migrations but" >&2
+    echo "   did not touch api/openapi.yaml, README.md, or .ralph/specs/." >&2
+    echo "   If the API contract or schema changed, update the docs in this commit." >&2
+    echo "   (CI enforces route<->spec sync via TestOpenAPIContract / openapi.yml.)" >&2
+    echo "" >&2
+  fi
+fi
+
 exit 0

@@ -77,6 +77,22 @@ mark the item `BLOCKED` on that backend dependency — never `VERIFIED` on mocks
 GitHub Actions only reads workflows from the repo root, so CI workflows live in
 `.github/workflows/` and are path-filtered (`vidra-core/**`, `vidra-user/**`). This is
 the only place build/config lives at the root. Updating these workflows is allowed.
+Current workflows include `backend-ci.yml` (build/test/migrate) and `openapi.yml`
+(the backend documentation stop guard: lints `vidra-core/api/openapi.yaml` and runs
+the route↔spec drift check).
+
+## Documentation stop guard (keep docs reflective of the code)
+Documentation is part of done in both projects, updated in the same slice as the
+code it describes — never deferred. The hard rule for the backend: the HTTP API
+contract `vidra-core/api/openapi.yaml` must stay in lock-step with the registered
+routes. Adding, removing, or renaming an endpoint without updating the spec is a
+**build failure** — enforced by `vidra-core`'s `TestOpenAPIContract` (runs in
+`go test ./...`) and the `openapi.yml` workflow, and warned by the repo
+`.githooks/pre-commit` hook. When a backend slice changes the API surface, update
+`api/openapi.yaml` and run `make openapi-verify` before committing. The same
+keep-docs-current expectation applies to `README.md`, `.env.example`, `AGENT.md`,
+and the `vidra-user` API client/types. Per-project detail lives in each project's
+`.ralph/PROMPT.md` ("Documentation Requirements").
 
 ## Ralph infrastructure rules
 Never delete, move, rename, or wholesale-overwrite `.ralph/`, `.ralphrc`, or the

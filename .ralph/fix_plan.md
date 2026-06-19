@@ -58,6 +58,12 @@
 
 - [ ] Root CI workflows exist and are path-scoped (`backend-ci` for `vidra-core/**`,
       `frontend-ci` for `vidra-user/**`).
+- [x] Backend documentation stop guard exists: `openapi.yml` workflow lints
+      `vidra-core/api/openapi.yaml` and runs the route↔spec drift check
+      (`TestOpenAPIContract`); `.githooks/pre-commit` warns on doc drift.
+- [ ] `vidra-core/api/openapi.yaml` is current — lints clean and the route↔spec
+      drift guard passes (no undocumented or orphaned endpoints).
+- [ ] README files in both projects reflect the current setup, endpoints, and commands.
 - [ ] Backend ↔ frontend API contract is proven compatible (generated types / contract tests).
 - [ ] Every in-scope data-mutating `vidra-user` flow is verified against the real
       database (row changed AND visible in the UI after refetch).
