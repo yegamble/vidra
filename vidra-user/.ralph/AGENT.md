@@ -17,10 +17,13 @@ The typed API client is in `lib/api/` (`apiRequest` + `api.*` endpoint fns + pro
 `X-Correlation-ID` and maps the error envelope to `ApiError`. The app shell
 (`components/Header.tsx`) + home discovery feed (`components/VideoFeed.tsx`, a client
 component → route-mockable, with loading/error/empty/grid states; `components/VideoCard.tsx`;
-`components/ui/*` primitives) render the public feed; `lib/format.ts` has display helpers.
-Still TODO: more component primitives (Card/Badge/Skeleton/forms), the watch/channel/search
-pages, the backend-backed Playwright profile, and `instrumentation.ts` for OTel (real
-`traceparent` propagation).
+`components/ui/*` primitives) render the public feed; the watch page
+(`app/videos/[id]` → `components/WatchView.tsx`) plays the original via a native
+Range-capable `<video>` with title/views/date/duration/dimensions/description and
+loading/not-found/error states. `lib/format.ts` has display helpers (count, relative time,
+duration). Still TODO: more component primitives (Card/Badge/Skeleton/forms), the
+channel/search pages + custom player controls, the backend-backed Playwright profile, and
+`instrumentation.ts` for OTel (real `traceparent` propagation).
 
 ## Project setup (after scaffold)
 ```bash

@@ -43,7 +43,9 @@ component) loads the public feed and renders loading / error / empty / grid stat
 `components/VideoCard.tsx` and the `components/ui/*` primitives. The home route
 (`app/page.tsx`) is the discovery grid. Because the feed loads client-side, Playwright
 route-mocks the API in `e2e/` to test the grid without a running backend; proving real
-data still requires the backend-backed profile (later slice).
+data still requires the backend-backed profile (later slice). The watch page
+(`app/videos/[id]` → `components/WatchView.tsx`) plays a video's original via a native
+Range-capable `<video>` and shows its metadata, with loading / not-found / error states.
 
 ## Monorepo layout
 This is one project inside the Vidra monorepo (a single git repository):

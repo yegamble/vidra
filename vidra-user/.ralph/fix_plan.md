@@ -224,17 +224,17 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 
 ## P4.2 Watch Page
 
-- [ ] Implement video watch route.
-- [ ] Implement custom video player wrapper.
-- [ ] Implement play/pause.
-- [ ] Implement timeline/seek.
-- [ ] Implement volume/mute.
+- [x] Implement video watch route. (`app/videos/[id]/page.tsx` → `components/WatchView.tsx`, the destination feed cards link to.)
+- [~] Implement custom video player wrapper. (native `<video controls playsInline>` over the Range-capable `videoOriginalUrl`, with `has_thumbnail` poster; a custom-controls wrapper (quality/speed/captions/shortcuts) is a later slice.)
+- [x] Implement play/pause. (native controls)
+- [x] Implement timeline/seek. (native controls; backend serves HTTP Range so seeking works)
+- [x] Implement volume/mute. (native controls)
 - [ ] Implement captions toggle.
 - [ ] Implement quality selector.
 - [ ] Implement speed selector.
-- [ ] Implement fullscreen.
+- [x] Implement fullscreen. (native controls)
 - [ ] Implement keyboard shortcuts where specified.
-- [ ] Implement title/description/tags/category/license/language display.
+- [~] Implement title/description/tags/category/license/language display. (title, description, views · date, duration + dimensions chips shown; tags/category/license/language need backend fields/contract.)
 - [ ] Implement channel block with subscribe button.
 - [ ] Implement share button/dialog.
 - [ ] Implement download button/dialog.
@@ -244,8 +244,8 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [ ] Implement comments section.
 - [ ] Implement related videos section.
 - [ ] Implement watched progress/resume UI.
-- [ ] Implement private/unlisted/not-found/error states.
-- [ ] Add Playwright watch-page smoke test.
+- [~] Implement private/unlisted/not-found/error states. (loading / 404 not-found / generic error (retry) handled; private→owner gating needs auth (P3) + the original endpoint already 404s non-owners.)
+- [x] Add Playwright watch-page smoke test. (`e2e/watch.spec.ts`: route-mocked detail → asserts heading, views, duration, dimensions, description, and the `<video>` src; plus a 404 not-found case.)
 - [ ] Add backend-backed e2e proving interactions that mutate data (comment, like, save, watch-progress) persist to the database and reappear after refetch.
 
 ## P4.3 Embed Player

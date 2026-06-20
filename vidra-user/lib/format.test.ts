@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCount, relativeTime } from "./format";
+import { formatCount, formatDuration, relativeTime } from "./format";
 
 describe("formatCount", () => {
   it("formats small, thousands, millions, billions", () => {
@@ -38,5 +38,20 @@ describe("relativeTime", () => {
   it("handles future and invalid input", () => {
     expect(relativeTime(ago(-30), now)).toBe("just now");
     expect(relativeTime("not-a-date", now)).toBe("");
+  });
+});
+
+describe("formatDuration", () => {
+  it("formats seconds, minutes, and hours", () => {
+    expect(formatDuration(0)).toBe("0:00");
+    expect(formatDuration(5)).toBe("0:05");
+    expect(formatDuration(83)).toBe("1:23");
+    expect(formatDuration(600)).toBe("10:00");
+    expect(formatDuration(3723)).toBe("1:02:03");
+  });
+
+  it("guards against negative / NaN", () => {
+    expect(formatDuration(-1)).toBe("0:00");
+    expect(formatDuration(Number.NaN)).toBe("0:00");
   });
 });

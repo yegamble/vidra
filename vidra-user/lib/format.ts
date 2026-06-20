@@ -44,3 +44,15 @@ export function relativeTime(iso: string, now: Date = new Date()): string {
   }
   return `${Math.floor(secs / 31557600)}y ago`;
 }
+
+/** formatDuration renders whole seconds as m:ss, or h:mm:ss past an hour. */
+export function formatDuration(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "0:00";
+  const s = Math.floor(totalSeconds);
+  const hours = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  const ss = String(secs).padStart(2, "0");
+  if (hours > 0) return `${hours}:${String(mins).padStart(2, "0")}:${ss}`;
+  return `${mins}:${ss}`;
+}
