@@ -19,16 +19,24 @@ See each project's README:
 - Frontend: [`vidra-user/README.md`](vidra-user/README.md)
 
 ## Autonomous development (Ralph)
-Ralph drives each project independently. Always run it from inside the project
-directory (Ralph reads `.ralphrc` / `.ralph/` relative to the current directory):
+Ralph runs as a single **orchestrator from the monorepo root** and advances both
+projects, one vertical slice per loop:
 
 ```bash
-cd vidra-core && ralph --live   # work the backend
-cd vidra-user && ralph --live   # work the frontend
+ralph --live            # run from the repo root — drives vidra-core AND vidra-user
 ```
 
-Do **not** run Ralph from the monorepo root — the root `.ralph/` is a guard that does
-no work and exists only to prevent code being scaffolded at the root.
+Each loop the orchestrator picks the highest-priority slice, works inside the target
+project (`vidra-core/` or `vidra-user/`), and follows that project's own `.ralph/`
+(PROMPT, fix_plan, specs). It reads the **root** `.ralphrc` for loop settings and the
+root `.ralph/PROMPT.md` + `.ralph/fix_plan.md` as the coarse orchestration gate; the
+root `.ralph/` is *not* idle — it coordinates the whole run. (It never writes code at
+the root — see the stop guard in `.ralph/PROMPT.md`.)
+
+You *may* instead run a focused single-project loop from inside a subdirectory
+(`cd vidra-core && ralph --live`), which uses that subdir's `.ralphrc`. Do **not** run
+a subdir loop and the root orchestrator at the same time — both projects share one git
+history and one `main`.
 
 ## CI
 GitHub Actions workflows live at the repo root in [`.github/workflows/`](.github/workflows/)

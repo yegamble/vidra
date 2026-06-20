@@ -46,7 +46,10 @@ jobs:
           node-version: "20"
 
       - name: Lint the OpenAPI contract (Redocly)
-        run: npx --yes @redocly/cli@latest lint api/openapi.yaml
+        # Pinned to the 1.x line (not @latest) so a new Redocly release can't turn
+        # CI red with no spec change. Keep this in lock-step with the Makefile
+        # `openapi-lint` target; bump deliberately.
+        run: npx --yes @redocly/cli@1 lint api/openapi.yaml
 
       - uses: actions/setup-go@v5
         with:

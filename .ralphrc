@@ -3,8 +3,12 @@
 # Documentation: https://github.com/frankbria/ralph-claude-code
 
 # Project identification
-# NOTE: This is the MONOREPO ROOT. Do not run Ralph here — run it from vidra-core/
-# or vidra-user/, which each have their own .ralphrc and .ralph/. See .ralph/PROMPT.md.
+# NOTE: This is the MONOREPO ROOT and the Ralph ORCHESTRATOR launch point. Running
+# `ralph` here advances BOTH projects (see .ralph/PROMPT.md); this file's settings
+# (incl. CLAUDE_MODEL/CLAUDE_EFFORT below) apply to that orchestrator loop. Each loop
+# the orchestrator also reads the target project's .ralph/ docs. The subdirectory
+# .ralphrc files are used only by standalone per-subdir loops — do not run one of
+# those while the root orchestrator is running (shared git history / main).
 PROJECT_NAME="vidra-monorepo-root"
 PROJECT_TYPE="generic"
 
@@ -13,6 +17,17 @@ PROJECT_TYPE="generic"
 #   "npx @anthropic-ai/claude-code"  (uses npx, no global install needed)
 #   "/path/to/claude"                (custom path)
 CLAUDE_CODE_CMD="claude"
+
+# Model + reasoning effort applied to every Ralph invocation. ralph_loop.sh
+# appends `--model "$CLAUDE_MODEL"` and `--effort "$CLAUDE_EFFORT"` (Issue #228).
+#   CLAUDE_MODEL="opus"  -> the latest Opus (alias auto-tracks newest; pin to
+#                           "claude-opus-4-8" for determinism).
+#   CLAUDE_EFFORT="xhigh"-> highest reasoning effort Opus 4.8 supports; this is
+#                           the headless equivalent of `/effort ultracode`
+#                           (valid: low|medium|high|xhigh|max).
+# Changing these requires restarting Ralph (config is read at launch).
+CLAUDE_MODEL="opus"
+CLAUDE_EFFORT="xhigh"
 
 # Loop settings
 MAX_CALLS_PER_HOUR=100

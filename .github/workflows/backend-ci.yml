@@ -57,16 +57,6 @@ jobs:
           cache: true
           cache-dependency-path: vidra-core/go.sum
 
-      - name: Verify formatting
-        run: |
-          fmt_out=$(gofmt -l .)
-          if [ -n "$fmt_out" ]; then
-            echo "These files are not gofmt-clean:"; echo "$fmt_out"; exit 1
-          fi
-
-      - name: Vet
-        run: go vet ./...
-
       - name: Install migrate CLI
         run: |
           curl -fsSL https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz \
@@ -77,8 +67,11 @@ jobs:
           DATABASE_URL: postgres://vidra:vidra@localhost:5432/vidra?sslmode=disable
         run: migrate -path migrations -database "$DATABASE_URL" up
 
-      - name: Test
+      # Local/CI parity: run the SAME canonical gate developers run locally
+      # (`make ci` = fmt-check + vet + openapi-verify + test-race). Do not add
+      # checks here that aren't in `make ci`, or the two will drift.
+      - name: Run canonical gate (make ci)
         env:
           DATABASE_URL: postgres://vidra:vidra@localhost:5432/vidra?sslmode=disable
           REDIS_URL: redis://localhost:6379/0
-        run: go test -race ./...
+        run: make ci

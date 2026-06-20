@@ -1,0 +1,74 @@
+name: frontend-ci
+
+# Monorepo: this workflow lives at the repo root (GitHub only reads workflows
+# here) but builds/tests the vidra-user/ subdirectory. Path filters keep it off
+# backend-only changes.
+#
+# Local/CI parity: this runs the SAME canonical gate developers run locally —
+# `npm run ci` (typecheck + lint + unit + build + Playwright smoke). Do not add
+# checks here that aren't in the `ci` script, or the two drift. ci-guard.yml
+# verifies this workflow invokes `npm run ci`.
+#
+# The frontend is not scaffolded yet: until vidra-user/package.json exists the
+# job no-ops with a notice, then enforces automatically once it lands.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "vidra-user/**"
+      - ".github/workflows/frontend-ci.yml"
+  pull_request:
+    paths:
+      - "vidra-user/**"
+      - ".github/workflows/frontend-ci.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: vidra-user
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect scaffold
+        id: detect
+        run: |
+          if [ -f package.json ]; then
+            echo "scaffolded=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "scaffolded=false" >> "$GITHUB_OUTPUT"
+            echo "vidra-user not scaffolded yet (no package.json) — skipping. The gate enforces automatically once it exists."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.detect.outputs.scaffolded == 'true'
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: vidra-user/package-lock.json
+
+      - name: Install dependencies
+        if: steps.detect.outputs.scaffolded == 'true'
+        run: npm ci
+
+      - name: Install Playwright browsers
+        if: steps.detect.outputs.scaffolded == 'true'
+        run: npx playwright install --with-deps
+
+      # Canonical gate: the exact command developers run locally.
+      - name: Run canonical gate (npm run ci)
+        if: steps.detect.outputs.scaffolded == 'true'
+        run: npm run ci
+
+      - name: Upload Playwright artifacts
+        if: always() && steps.detect.outputs.scaffolded == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: vidra-user/playwright-report/
+          if-no-files-found: ignore

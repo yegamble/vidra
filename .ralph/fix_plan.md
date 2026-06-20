@@ -33,7 +33,8 @@
 - [ ] P15 — Security hardening
 - [ ] P16 — Testing strategy
 - [ ] P17 — Observability and operations
-- [ ] P18 — Backend release gates
+- [ ] P18 — PeerTube import and migration (import an existing PeerTube DB + instance)
+- [ ] P19 — Backend release gates
 
 ## vidra-user (Next.js frontend) — phase gate
 
@@ -64,7 +65,20 @@
 - [ ] `vidra-core/api/openapi.yaml` is current — lints clean and the route↔spec
       drift guard passes (no undocumented or orphaned endpoints).
 - [ ] README files in both projects reflect the current setup, endpoints, and commands.
+- [x] CI parity guard exists: each project has one canonical gate (`make ci` /
+      `npm run ci`), its workflow runs exactly that, and `ci-guard.yml` enforces
+      it (no unmarked `continue-on-error`; workflows must invoke the canonical gate).
+- [ ] Branch CI is green in both projects running the same canonical gate as local
+      (a local pass alone is not "done").
+- [ ] Observability is enforced in both projects per `.ralph/specs/observability.md`:
+      structured developer-friendly logging, no secrets/PII/plaintext in
+      logs/traces, and OpenTelemetry with `traceparent` correlation across the
+      `vidra-user` → `vidra-core` boundary.
 - [ ] Backend ↔ frontend API contract is proven compatible (generated types / contract tests).
+- [ ] PeerTube import path exists: an existing PeerTube instance (PostgreSQL DB +
+      media storage) can be imported into Vidra per
+      `vidra-core/.ralph/specs/peertube-import.md` (read-only source, idempotent,
+      dry-runnable, audited), with the `vidra-user` admin import UI consuming it.
 - [ ] Every in-scope data-mutating `vidra-user` flow is verified against the real
       database (row changed AND visible in the UI after refetch).
 
