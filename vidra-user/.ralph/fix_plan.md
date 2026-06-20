@@ -171,7 +171,7 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [~] Implement responsive header. (`components/Header.tsx`: brand link + Home nav, sticky/backdrop. Full responsive nav + collapse is a later slice.)
 - [ ] Implement left navigation.
 - [ ] Implement mobile navigation.
-- [ ] Implement search bar shell.
+- [x] Implement search bar shell. (`components/SearchBox.tsx` in the header → navigates to `/search?q=`.)
 - [ ] Implement user menu shell.
 - [x] Implement theme/accessibility-friendly base styles. (Tailwind base + dark-mode-aware tokens in `globals.css`; focus-visible rings on interactive elements.)
 - [x] Implement public home route. (`app/page.tsx` → `<VideoFeed/>` discovery grid.)
@@ -211,16 +211,16 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 
 - [~] Implement local/recent videos page. (home `<VideoFeed/>` shows the recent public feed; a dedicated /local route + sort UI is a later slice.)
 - [ ] Implement trending/popular page or documented intentional difference.
-- [ ] Implement search results page.
+- [x] Implement search results page. (`app/search/page.tsx` (reads `?q`) → `components/SearchResults.tsx`: client title search via `api.searchVideos`, with idle/loading/error(retry)/empty/grid states reusing `VideoCard` + the ui primitives.)
 - [ ] Implement filter/sort controls.
 - [ ] Implement pagination or infinite scroll.
 - [x] Implement video card component. (`components/VideoCard.tsx`: poster via `videoThumbnailUrl` with "No preview" fallback, title (clamped), `formatCount` views · `relativeTime`; links to `/videos/{id}`. `lib/format.ts` tested — 4 unit tests.)
 - [ ] Implement channel/account card component.
 - [ ] Implement playlist card component.
 - [x] Implement empty/no-results states. (`components/ui/EmptyState.tsx`, used by `VideoFeed`.)
-- [~] Implement search error states. (generic `components/ui/ErrorState.tsx` with retry exists + used by the feed; search-specific wiring lands with the search page.)
-- [~] Add component tests for cards and filters. (card rendering covered by the route-mocked Playwright grid test; pure formatters unit-tested. RTL component-unit tests can follow.)
-- [ ] Add Playwright smoke test for search route.
+- [x] Implement search error states. (`SearchResults` renders `ErrorState` with retry on a failed search.)
+- [~] Add component tests for cards and filters. (card rendering covered by the route-mocked Playwright grid + search tests; pure formatters unit-tested. RTL component-unit tests can follow.)
+- [x] Add Playwright smoke test for search route. (`e2e/search.spec.ts`: results, empty, blank-query prompt, and header-search navigation — 4 tests.)
 
 ## P4.2 Watch Page
 

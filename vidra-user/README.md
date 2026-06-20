@@ -55,6 +55,10 @@ and shows a registration-closed notice from the instance config). The header `Ac
 shows Sign in / username + Sign out. Note: auth flows are mock-tested only — proving they
 persist requires the backend-backed e2e (later slice).
 
+Search: the header `SearchBox` navigates to `/search?q=` (`app/search` →
+`components/SearchResults.tsx`), a client title search reusing the video card and
+loading / empty / error / results states.
+
 ## Monorepo layout
 This is one project inside the Vidra monorepo (a single git repository):
 
