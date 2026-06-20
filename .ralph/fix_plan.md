@@ -57,19 +57,22 @@
 
 ## Cross-cutting
 
-- [ ] Root CI workflows exist and are path-scoped (`backend-ci` for `vidra-core/**`,
-      `frontend-ci` for `vidra-user/**`).
+- [x] Root CI workflows exist and are path-scoped (`backend-ci` for `vidra-core/**`,
+      `frontend-ci` for `vidra-user/**`). Both committed and green on `main`
+      (frontend-ci ran the canonical `npm run ci` in GitHub for the first time).
 - [x] Backend documentation stop guard exists: `openapi.yml` workflow lints
       `vidra-core/api/openapi.yaml` and runs the route↔spec drift check
       (`TestOpenAPIContract`); `.githooks/pre-commit` warns on doc drift.
-- [ ] `vidra-core/api/openapi.yaml` is current — lints clean and the route↔spec
-      drift guard passes (no undocumented or orphaned endpoints).
+- [x] `vidra-core/api/openapi.yaml` is current — lints clean (Redocly @1, 0 errors)
+      and the route↔spec drift guard passes (no undocumented or orphaned endpoints).
+      Fixed two OpenAPI 3.1 violations that had reddened the `openapi` workflow.
 - [ ] README files in both projects reflect the current setup, endpoints, and commands.
 - [x] CI parity guard exists: each project has one canonical gate (`make ci` /
       `npm run ci`), its workflow runs exactly that, and `ci-guard.yml` enforces
       it (no unmarked `continue-on-error`; workflows must invoke the canonical gate).
-- [ ] Branch CI is green in both projects running the same canonical gate as local
-      (a local pass alone is not "done").
+- [x] Branch CI is green in both projects running the same canonical gate as local
+      (a local pass alone is not "done"). `main` green: backend-ci (`make ci`) +
+      frontend-ci (`npm run ci`) + openapi + ci-guard all ✅ as of 0137e9d.
 - [ ] Observability is enforced in both projects per `.ralph/specs/observability.md`:
       structured developer-friendly logging, no secrets/PII/plaintext in
       logs/traces, and OpenTelemetry with `traceparent` correlation across the
