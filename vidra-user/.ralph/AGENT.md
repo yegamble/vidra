@@ -28,8 +28,11 @@ the login + signup pages (`app/login`/`app/signup` → `LoginForm`/`SignupForm`)
 register (signup maps 422 field errors inline and shows a registration-closed notice from
 `instance.registration_enabled`), and the header `AccountMenu` shows sign in / username +
 sign out. Search: header `SearchBox` → `/search?q=` (`app/search` → `components/SearchResults.tsx`,
-client title search reusing the card + state primitives). Still TODO: the rest of P3 (password
-reset, MFA, settings/profile), the channel page, more component primitives
+client title search reusing the card + state primitives). The public channel page
+(`app/channels/[handle]` → `components/ChannelView.tsx`) loads `api.getChannel` +
+`api.listChannelVideos` and renders the channel header + a `VideoCard` grid with
+loading/not-found/error/empty states. Still TODO: the rest of P3 (password
+reset, MFA, settings/profile), more component primitives
 (Card/Badge/Skeleton/Input), custom player controls, the backend-backed Playwright profile
 (login/signup are mock-tested only — NOT `VERIFIED` until proven against a real backend+DB),
 and `instrumentation.ts` for OTel.

@@ -59,6 +59,11 @@ Search: the header `SearchBox` navigates to `/search?q=` (`app/search` →
 `components/SearchResults.tsx`), a client title search reusing the video card and
 loading / empty / error / results states.
 
+The public channel page (`app/channels/[handle]` → `components/ChannelView.tsx`) loads a
+channel and its videos client-side and renders the channel header (display name, handle,
+follower count, description) over a video-card grid, with loading / not-found / error /
+empty states.
+
 ## Monorepo layout
 This is one project inside the Vidra monorepo (a single git repository):
 

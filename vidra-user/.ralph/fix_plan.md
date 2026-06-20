@@ -215,6 +215,7 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [ ] Implement filter/sort controls.
 - [ ] Implement pagination or infinite scroll.
 - [x] Implement video card component. (`components/VideoCard.tsx`: poster via `videoThumbnailUrl` with "No preview" fallback, title (clamped), `formatCount` views · `relativeTime`; links to `/videos/{id}`. `lib/format.ts` tested — 4 unit tests.)
+- [x] Implement public channel page. (`app/channels/[handle]/page.tsx` → `components/ChannelView.tsx`: client load of `api.getChannel` + `api.listChannelVideos`, header (display name, `@handle · N followers`, description) + `VideoCard` grid, with loading / not-found (404) / error(retry) / empty states. `e2e/channel.spec.ts` route-mocks header+videos and the 404 case — 2 tests. Following is a later auth-gated slice.)
 - [ ] Implement channel/account card component.
 - [ ] Implement playlist card component.
 - [x] Implement empty/no-results states. (`components/ui/EmptyState.tsx`, used by `VideoFeed`.)
