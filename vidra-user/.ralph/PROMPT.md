@@ -184,7 +184,18 @@ At the start of every loop:
 4. Implement **one coherent vertical slice** per loop.
 5. Run focused tests/lint for changed areas.
 6. Update docs and `.ralph/fix_plan.md` with what changed, what remains, and what was learned.
-7. Commit working changes with a descriptive message when the repository is in a good state.
+7. **Commit AND push every loop that ends in a good state** (required, not optional).
+   "Good state" = `npm run ci` is green. Commit with a descriptive, scoped message
+   (`feat(user): …`), then `git push` the current branch — pushing runs CI, which
+   is how local↔CI parity is verified. Never commit/push a red gate, secrets, or
+   real personal data, and do not `--no-verify` past the stop guards. If `git push`
+   fails, `git pull --rebase` and retry once; if `git pull --rebase` reports a
+   conflict, run `git rebase --abort` (never resolve/commit conflict markers or
+   leave a rebase in progress) and mark the loop `BLOCKED` on the push. If push
+   still fails, mark `BLOCKED` and report it in the status block. A loop is not
+   complete until its work is committed and pushed (or the push failure is recorded).
+   Only ONE Ralph loop may run against this repo at a time (both projects share one
+   `main`; the pull-rebase-retry is not concurrency-safe).
 
 Do not wander. Do not perform cosmetic refactors unless required for the current task. Do not create busywork after all specs are complete.
 
@@ -471,6 +482,27 @@ Default direction:
 - Do not dangerously set HTML unless a sanitizer and test coverage exist.
 - Encrypted messaging must keep plaintext out of logs, analytics, URLs, server traces, and test snapshots.
 
+## Observability and Logging
+Logging and tracing ship with the code they describe. The authoritative rules
+live in `.ralph/specs/observability.md`; follow it exactly. Summary:
+
+- **Developer-friendly logging**: one structured logger module (server logs JSON,
+  client logs sparingly through it). Raw `console.log`/`console.error` are banned
+  in committed source — enforced by ESLint `no-console` (error), allowed only
+  inside the logger module. Bind a `request_id`/`correlation_id` per request.
+- **Security-friendly logging**: never log, send to an error tracker, put in a
+  URL/analytics event, or span-tag any token, session cookie, `Authorization`
+  header, secret, message plaintext, or unnecessary PII. Route logged objects
+  through the redaction helper; never write tokens to `localStorage`.
+- **OpenTelemetry**: instrument via `instrumentation.ts` (OTel JS SDK), disabled
+  by default, opt-in via `OTEL_ENABLED`. Every server-side fetch to `vidra-core`
+  must inject the W3C `traceparent` (+ a `correlation_id` header when tracing is
+  off) so frontend↔backend traces/logs correlate — this is what lines up a UI
+  action with its exact backend log/DB change during database-effect verification.
+- **Enforcement**: ESLint `no-console` + the secrets-in-logs/token-in-storage
+  check run inside `npm run lint`, which is part of the canonical `npm run ci`
+  gate; a test asserts `traceparent`/correlation propagation to the backend.
+
 ## Docker-First Developer Experience
 Every major service must be runnable in Docker.
 
@@ -560,10 +592,27 @@ Principles:
 - Keep security scans separate but visible.
 - Do not hide failing tests with `continue-on-error` unless the spec explicitly marks the job experimental.
 
+### Local↔CI parity (a green check must mean what it means)
+CI must run the **same gate developers run locally**, so "passes locally" is the
+same fact as "passes in GitHub". Enforce it:
+
+- The canonical gate is one command — `npm run ci` (typecheck + lint + unit test
+  + build + Playwright smoke). `frontend-ci.yml` runs **exactly** `npm run ci`;
+  it must not hand-duplicate or weaken those steps. Add any new required check to
+  the `ci` script, never only to the workflow, or the two drift.
+- A feature is not done on a local green alone: the branch's CI must be green too,
+  running the same gate. Report CI state honestly in the status block.
+- `ci-guard.yml` (at the repo root) is the integrity monitor: it fails when a
+  workflow hides failures with `continue-on-error: true` (unmarked) or when
+  `frontend-ci.yml` stops invoking `npm run ci`. Do not bypass it to ship fake green.
+
 Suggested workflows:
 
-- `backend-ci.yml`: format, lint, unit, integration, migration, API smoke.
-- `frontend-ci.yml`: typecheck, lint, unit, build, Playwright smoke.
+- `backend-ci.yml`: applies migrations to a fresh DB then runs `make ci` (vidra-core).
+- `frontend-ci.yml`: runs the canonical `npm run ci` gate (typecheck, lint, unit,
+  build, Playwright smoke), path-scoped to `vidra-user/**`.
+- `ci-guard.yml`: CI integrity/parity monitor (no `continue-on-error` cheating;
+  workflows must invoke the canonical per-project gate).
 - `contract-ci.yml`: OpenAPI diff, generated client check, frontend/backend compatibility.
 - `docker-ci.yml`: build images and run Compose smoke.
 - `security-ci.yml`: dependency audit, secret scan, container scan, SAST where configured.
@@ -595,8 +644,12 @@ A feature is not done unless:
 - It follows the repo architecture.
 - It has relevant tests.
 - It is documented in user/developer docs where needed.
+- It uses the structured logger (no stray `console.*`), leaks no secrets/PII/
+  plaintext to logs/analytics/URLs/traces, and propagates `traceparent`/
+  correlation to `vidra-core` per `.ralph/specs/observability.md`.
 - Docker/local dev instructions still work.
-- CI gates are updated if needed.
+- CI gates are updated if needed, and the branch's CI is green running the same
+  `npm run ci` gate as local (not just a local pass).
 - Security/privacy concerns are handled or explicitly documented as blocked.
 - `.ralph/fix_plan.md` reflects the new state.
 - The PeerTube/Vidra parity ledgers and UI inventory reflect the new state.
@@ -644,6 +697,8 @@ Keep these updated:
 - OpenAPI specs for backend API behavior.
 - Architecture docs when major patterns are introduced.
 - Security docs for auth, SSRF, E2EE, storage, and admin actions.
+- `.ralph/specs/observability.md` — logging, redaction, and OpenTelemetry/trace-
+  propagation rules; keep current when the logger, env flags, or fields change.
 - Testing docs for Docker profiles, integration tests, Postman/Newman, and Playwright.
 
 Docs should say what works, what is partial, what is deferred, and how to verify it.

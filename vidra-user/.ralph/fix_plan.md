@@ -91,23 +91,30 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 
 ## P1.1 Next.js, TypeScript, Tailwind
 
-- [ ] Initialize or verify Next.js app.
-- [ ] Verify strict TypeScript configuration.
-- [ ] Configure Tailwind CSS.
-- [ ] Add path aliases.
-- [ ] Add ESLint configuration.
+> P1 foundation slice landed: Next 16 (app router) + React 19 + strict TS + Tailwind v4
+> + ESLint 9 flat config + Vitest + Playwright, with a green canonical `npm run ci`
+> (typecheck + lint + unit + build + e2e smoke). Structured logger in `lib/logger.ts`
+> with a redaction denylist + `no-console` ESLint rule (observability spec). Component
+> primitives, the typed API client, and the backend-backed Playwright profile are
+> follow-up P1 slices.
+
+- [x] Initialize or verify Next.js app. (Next 16 app router; scaffolded via create-next-app then adapted; `npm run dev|build|start`.)
+- [x] Verify strict TypeScript configuration. (`tsconfig.json` `strict: true`; `npm run typecheck` = `tsc --noEmit`, green.)
+- [x] Configure Tailwind CSS. (Tailwind v4 via `@tailwindcss/postcss`; `app/globals.css` `@import "tailwindcss"`.)
+- [x] Add path aliases. (`@/*` → project root.)
+- [x] Add ESLint configuration. (`eslint.config.mjs` flat config: next core-web-vitals + typescript + `no-console: error`.)
 - [ ] Add Prettier or formatting command if desired.
-- [ ] Add app directory routing conventions.
-- [ ] Add global styles and design tokens.
+- [x] Add app directory routing conventions. (`app/layout.tsx` + `app/page.tsx`.)
+- [~] Add global styles and design tokens. (`app/globals.css` base + Tailwind theme tokens; full design-system tokens are a later slice.)
 - [ ] Add custom component primitives: Button, LinkButton, IconButton, Input, Textarea, Select, Checkbox, Radio, Toggle, Modal, Dropdown, Tabs, Toast, Card, Badge, Avatar, Skeleton, EmptyState, ErrorState.
 - [ ] Add accessible focus styles.
 - [ ] Add minified SVG icon strategy.
-- [ ] Add no-framework dependency rule to docs.
+- [x] Add no-framework dependency rule to docs. (`.ralph/AGENT.md` Stack: no UI framework / component library without user approval.)
 
 ## P1.2 Configuration and API Client
 
-- [ ] Add `.env.example`.
-- [ ] Add `NEXT_PUBLIC_API_BASE_URL`.
+- [x] Add `.env.example`. (`NEXT_PUBLIC_API_BASE_URL`, `LOG_LEVEL`, `OTEL_ENABLED`.)
+- [x] Add `NEXT_PUBLIC_API_BASE_URL`. (in `.env.example`; the typed config module that reads it is a follow-up.)
 - [ ] Add server-side API base URL option if needed.
 - [ ] Add typed config module.
 - [ ] Add API client foundation.
@@ -136,16 +143,25 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 > Frontend workflows must use `vidra-user/**` path filters and a `vidra-user`
 > working directory. This is the one allowed cross-boundary edit from this repo.
 
-- [ ] Add GitHub Actions workflow for install/cache.
-- [ ] Add GitHub Actions workflow for lint/typecheck.
-- [ ] Add GitHub Actions workflow for unit tests.
-- [ ] Add GitHub Actions workflow for build.
-- [ ] Add GitHub Actions workflow for Playwright smoke tests.
+- [ ] Add a canonical `ci` package script = typecheck + lint + unit + build + Playwright smoke (the single source of truth gate).
+- [ ] Add `frontend-ci.yml` that runs **exactly** `npm run ci` (path-scoped `vidra-user/**`) so local and CI are the same gate — do not duplicate/weaken steps in the workflow.
+- [ ] Keep `ci-guard.yml` green (it enforces that `frontend-ci.yml` invokes `npm run ci` and uses no unmarked `continue-on-error`).
 - [ ] Add Docker build check.
 - [ ] Add shared/reusable workflow or composite action for Node setup.
 - [ ] Add npm/pnpm/yarn cache.
 - [ ] Add Playwright browser cache.
 - [ ] Add artifact upload for Playwright traces/screenshots.
+
+## P1.5 Observability and Logging (see `.ralph/specs/observability.md`)
+
+- [ ] Add a single structured logger module (`lib/logger`): JSON server-side, browser-safe client path, configurable level.
+- [ ] Add ESLint `no-console` (error) with a narrow allow-list only inside the logger module; wire `lint` into `npm run ci`.
+- [ ] Add a redaction helper + denylist; never log tokens/cookies/secrets/PII/message plaintext; never write tokens to `localStorage`.
+- [ ] Add a secrets-in-logs / token-in-storage check (lint rule or test/grep).
+- [ ] Bind a `request_id`/`correlation_id` per request and thread it through server logs.
+- [ ] Add OpenTelemetry via `instrumentation.ts` (OTel JS SDK), disabled by default; config `OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME` in `.env.example`.
+- [ ] Inject W3C `traceparent` (+ correlation header) on every server-side fetch to `vidra-core`; add a test asserting propagation.
+- [ ] Stamp `trace_id`/`span_id` into server logs when OTel is enabled.
 
 ---
 
@@ -404,6 +420,7 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [ ] Implement jobs/worker status page.
 - [ ] Implement audit log page.
 - [ ] Implement system status page.
+- [ ] Implement a "Import from PeerTube" admin page that consumes the backend import contract (launch a dry-run, show the mapping/conflict report, start/resume an import, and stream progress + audit summary). Depends on the `vidra-core` P18 import endpoint; mark `BLOCKED` on that contract until it exists. Never display or store source DB credentials in the browser. See `../vidra-core/.ralph/specs/peertube-import.md`.
 - [ ] Add admin route guards.
 - [ ] Add Playwright admin smoke tests with mocked API.
 - [ ] Add backend-backed e2e proving admin mutations (user edit, registration accept/reject, instance config, feature toggles) persist to the database and are reflected in the UI after refetch.
@@ -490,7 +507,9 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [ ] Playwright smoke tests pass.
 - [ ] Backend-backed Playwright profile passes (or the unavailable backend dependency is documented).
 - [ ] Lint/typecheck passes.
-- [ ] CI passes.
+- [ ] Structured logger in place; ESLint `no-console` enforced; no secrets/PII/plaintext in logs, analytics, URLs, or traces; no tokens in `localStorage`.
+- [ ] OpenTelemetry + `traceparent`/correlation propagation to `vidra-core` works (or is behind a documented flag); see `.ralph/specs/observability.md`.
+- [ ] `npm run ci` passes locally and CI is green running the same `npm run ci` gate (local↔CI parity); `ci-guard.yml` passes.
 - [ ] `.ralph/AGENT.md` is accurate.
 - [ ] No secrets are committed.
 

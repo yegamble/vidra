@@ -4,9 +4,29 @@ The TypeScript **Next.js** frontend for **Vidra** — a clean-room, PeerTube-ins
 federated video platform. This project (`vidra-user`) consumes the HTTP API served by
 the sibling **`vidra-core`** Go backend.
 
-> Status: not yet scaffolded. The first milestone is to bootstrap the Next.js +
-> TypeScript + Tailwind app. Work is tracked in `.ralph/fix_plan.md` and the parity
-> ledgers under `.ralph/specs/`.
+> Status: scaffolded (P1 foundation). Next 16 (app router) · React 19 · strict
+> TypeScript · Tailwind v4 · ESLint 9 (`no-console`) · Vitest · Playwright. The
+> canonical gate `npm run ci` (typecheck + lint + unit + build + e2e smoke) is green.
+> Remaining work is tracked in `.ralph/fix_plan.md` and the parity ledgers under
+> `.ralph/specs/`.
+
+## Quick start
+```bash
+cp .env.example .env.local   # set NEXT_PUBLIC_API_BASE_URL to a vidra-core instance
+npm install
+npm run dev                  # http://localhost:3000
+```
+
+## Commands
+```bash
+npm run ci         # canonical gate: typecheck + lint + unit + build + e2e smoke
+npm run typecheck  # tsc --noEmit (strict)
+npm run lint       # eslint (no-console enforced; logger module is the only exception)
+npm run test       # vitest unit/component tests
+npm run build      # next build
+npm run e2e        # playwright (needs: npx playwright install chromium)
+```
+The single structured logger is `lib/logger.ts` (raw `console.*` is banned elsewhere).
 
 ## Monorepo layout
 This is one project inside the Vidra monorepo (a single git repository):

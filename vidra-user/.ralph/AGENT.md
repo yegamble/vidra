@@ -7,10 +7,13 @@
 Next.js · TypeScript (strict) · Tailwind CSS · custom components · minified inline
 SVG icons · Playwright. No UI framework / component library unless the user approves.
 
-## Status: bootstrap
-The Next.js app has not been scaffolded yet. The first frontend milestone is to create
-it (see `.ralph/fix_plan.md` → P1). Once `package.json` exists, fill in the exact
-commands below and keep them current.
+## Status: scaffolded (P1 foundation)
+The Next.js app is scaffolded: Next 16 (app router) · React 19 · TypeScript (strict) ·
+Tailwind v4 · ESLint 9 flat config (`no-console` error, logger-only allow) · Vitest
+(unit) · Playwright (e2e smoke). The canonical gate `npm run ci` is green
+(typecheck + lint + unit + build + e2e). The structured logger lives in `lib/logger.ts`.
+Still TODO (later P1 slices): custom component primitives, the typed API client +
+config module, the backend-backed Playwright profile, and `instrumentation.ts` for OTel.
 
 ## Project setup (after scaffold)
 ```bash
@@ -59,12 +62,19 @@ PostgreSQL (direct query or backend read endpoint) → assert the UI reflects it
 refetch. Capture a Playwright trace/screenshot plus the DB/API read as evidence.
 
 ## Frontend quality gate (run before declaring completion)
-1. `npm run typecheck`
-2. `npm run lint`
-3. `npm run test`
-4. `npm run build`
-5. `npx playwright test` (smoke for changed flows)
-6. backend-backed Playwright profile for every data-mutating flow (DB effect proven)
+1. `npm run ci` is green — the CANONICAL gate = typecheck + lint + unit test +
+   build + Playwright smoke. `frontend-ci.yml` runs this exact script, so
+   "passes locally" == "passes in GitHub". Add new required checks to the `ci`
+   script, never only to the workflow (`ci-guard.yml` enforces this).
+2. backend-backed Playwright profile for every data-mutating flow (DB effect proven)
+3. observability checks pass: ESLint `no-console`, no secrets/PII/plaintext in
+   logs/analytics/URLs/traces, `traceparent`/correlation propagated to
+   `vidra-core` (see `.ralph/specs/observability.md`)
+4. branch CI is green (same `npm run ci`); `ci-guard.yml` passes — a local green
+   alone is not done
+
+(Individual scripts — `npm run typecheck|lint|test|build`, `npx playwright test`
+— remain available for focused runs.)
 
 ## Key learnings
 - Frontend lives in `vidra-user/` (monorepo subdir).
