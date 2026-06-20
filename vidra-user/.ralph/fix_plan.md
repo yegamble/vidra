@@ -185,8 +185,8 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 # P3 — Auth and Account UI
 
 - [x] Implement login page. (`app/login/page.tsx` → `components/auth/LoginForm.tsx`: email/password, loading + error states, 401 → "Invalid email or password", redirects home on success. Session plumbing: `components/auth/AuthProvider.tsx` (context + `useSession`), in-memory `lib/api/auth-store.ts` access token auto-attached by the API client, `lib/api/auth.ts` (register/login/logout/me), header `AccountMenu` (sign in / username + sign out).)
-- [ ] Implement signup page. (uses the same `useSession().register` + auth client; next slice.)
-- [ ] Implement signup disabled/closed registration state.
+- [x] Implement signup page. (`app/signup/page.tsx` → `components/auth/SignupForm.tsx`: username/email/password via `useSession().register`; 422 `ApiError.fields` mapped to inline per-field messages (aria-invalid/aria-describedby); redirects home on success.)
+- [x] Implement signup disabled/closed registration state. (SignupForm reads `GET /api/v1/instance` `registration_enabled`; when false shows a "Registration is closed" notice instead of the form; instance-fetch failure falls back to showing the form.)
 - [ ] Implement terms-of-use signup step.
 - [ ] Implement email verification pending state.
 - [ ] Implement password reset request page.
@@ -200,7 +200,7 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [ ] Implement avatar/banner upload UI.
 - [ ] Implement import/export account UI placeholders backed by contract status.
 - [~] Add unit tests for validation. (auth client + token store unit-tested — 6; form-field validation tests can follow.)
-- [~] Add Playwright auth smoke tests with mocked API. (`e2e/auth.spec.ts`: login success → header shows account; bad-creds error. Signup smoke lands with the signup page.)
+- [x] Add Playwright auth smoke tests with mocked API. (`e2e/auth.spec.ts`: login success → header shows account; bad-creds error; signup success → account; 422 field-error inline; registration-closed notice.)
 - [ ] Add backend-backed auth e2e tests when backend contract exists, proving signup/login/profile-edit persist to the database and are reflected in the UI after refetch. (BLOCKED on running a real vidra-core+PostgreSQL in the gate — the backend-backed Playwright profile isn't wired into `npm run ci` yet; the login flow is therefore NOT `VERIFIED`, only mock-tested.)
 
 ---

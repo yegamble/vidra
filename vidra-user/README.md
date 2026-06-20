@@ -49,9 +49,11 @@ Range-capable `<video>` and shows its metadata, with loading / not-found / error
 
 Auth is wired client-side: `components/auth/AuthProvider.tsx` (`useSession`) holds the
 session, the access token lives in-memory (`lib/api/auth-store.ts`, auto-attached by the API
-client, never persisted to `localStorage`), and the login page (`app/login`) signs in via
-`lib/api/auth.ts`. The header `AccountMenu` shows Sign in / username + Sign out. Note: login
-is mock-tested only — proving it persists requires the backend-backed e2e (later slice).
+client, never persisted to `localStorage`), and the login/signup pages (`app/login`,
+`app/signup`) sign in / register via `lib/api/auth.ts` (signup maps 422 field errors inline
+and shows a registration-closed notice from the instance config). The header `AccountMenu`
+shows Sign in / username + Sign out. Note: auth flows are mock-tested only — proving they
+persist requires the backend-backed e2e (later slice).
 
 ## Monorepo layout
 This is one project inside the Vidra monorepo (a single git repository):

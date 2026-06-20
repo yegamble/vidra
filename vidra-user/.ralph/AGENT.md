@@ -24,11 +24,13 @@ loading/not-found/error states. `lib/format.ts` has display helpers (count, rela
 duration). Auth: `components/auth/AuthProvider.tsx` (`useSession`) holds the session
 client-side — the access token lives in the in-memory `lib/api/auth-store.ts` (auto-attached
 by the API client, never persisted/logged), `lib/api/auth.ts` wraps register/login/logout/me,
-the login page (`app/login` → `LoginForm`) signs in, and the header `AccountMenu` shows sign
-in / username + sign out. Still TODO: signup page + the rest of P3, more component primitives
-(Card/Badge/Skeleton/Input), the channel/search pages + custom player controls, the
-backend-backed Playwright profile (login/signup are mock-tested only — NOT `VERIFIED` until
-proven against a real backend+DB), and `instrumentation.ts` for OTel.
+the login + signup pages (`app/login`/`app/signup` → `LoginForm`/`SignupForm`) sign in /
+register (signup maps 422 field errors inline and shows a registration-closed notice from
+`instance.registration_enabled`), and the header `AccountMenu` shows sign in / username +
+sign out. Still TODO: the rest of P3 (password reset, MFA, settings/profile), more component
+primitives (Card/Badge/Skeleton/Input), the channel/search pages + custom player controls,
+the backend-backed Playwright profile (login/signup are mock-tested only — NOT `VERIFIED`
+until proven against a real backend+DB), and `instrumentation.ts` for OTel.
 
 ## Project setup (after scaffold)
 ```bash

@@ -52,3 +52,66 @@ test("shows an error on bad credentials", async ({ page }) => {
   await expect(page.getByText("Invalid email or password.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
 });
+
+const INSTANCE = /\/api\/v1\/instance$/;
+const REGISTER = /\/api\/v1\/auth\/register$/;
+
+function instanceJson(registrationEnabled: boolean) {
+  return {
+    name: "Vidra",
+    description: "",
+    software: { name: "vidra", version: "0.1.0" },
+    registration_enabled: registrationEnabled,
+    terms_url: "",
+    privacy_url: "",
+    contact_email: "",
+  };
+}
+
+test("signing up shows the account in the header", async ({ page }) => {
+  await page.route(INSTANCE, (route) => route.fulfill({ json: instanceJson(true) }));
+  await page.route(REGISTER, (route) => route.fulfill({ json: session }));
+  await page.route(FEED, (route) =>
+    route.fulfill({ json: { videos: [], sort: "recent", limit: 20, offset: 0 } }),
+  );
+
+  await page.goto("/signup");
+  await page.getByLabel("Username").fill("ada");
+  await page.getByLabel("Email").fill("ada@example.test");
+  await page.getByLabel("Password").fill("supersecret");
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+});
+
+test("maps 422 field errors inline", async ({ page }) => {
+  await page.route(INSTANCE, (route) => route.fulfill({ json: instanceJson(true) }));
+  await page.route(REGISTER, (route) =>
+    route.fulfill({
+      status: 422,
+      json: {
+        error: {
+          code: "unprocessable_entity",
+          message: "validation failed",
+          fields: [{ field: "password", message: "must be at least 8 characters" }],
+        },
+      },
+    }),
+  );
+
+  await page.goto("/signup");
+  await page.getByLabel("Username").fill("ada");
+  await page.getByLabel("Email").fill("ada@example.test");
+  await page.getByLabel("Password").fill("short");
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  await expect(page.getByText("must be at least 8 characters")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
+});
+
+test("shows the registration-closed notice when disabled", async ({ page }) => {
+  await page.route(INSTANCE, (route) => route.fulfill({ json: instanceJson(false) }));
+  await page.goto("/signup");
+  await expect(page.getByText("Registration is closed")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create account" })).toHaveCount(0);
+});
