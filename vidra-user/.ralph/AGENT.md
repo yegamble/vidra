@@ -69,19 +69,26 @@ npx playwright test         # e2e / smoke
 ## 🔴 Database-effect verification (required for data-mutating features)
 Mocks are acceptable for UI scaffolding only. A feature that creates/updates/deletes
 data is NOT done until proven end-to-end against a **real `vidra-core` backend with a
-real PostgreSQL**:
+real PostgreSQL**. The `backend-backed` Playwright project (`./e2e-backed`, run via
+`npm run e2e:backed`) is exactly this — no `page.route` mocks; it drives the UI against
+a live backend. It is **never** part of `npm run ci` (which stays mocked and fast).
 
 ```bash
-# 1. Start the real backend + database (from ../vidra-core):
-( cd ../vidra-core && make up )          # postgres + redis + migrations + api
-# 2. Run the frontend against it:
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
-# 3. Run the backend-backed Playwright profile (define this in playwright config):
-npx playwright test --project=backend-backed
+# 1. Start the real backend + database (from ../vidra-core), detached:
+( cd ../vidra-core && docker compose --profile core up -d --build )   # pg + redis + migrate + api → :8080
+#    If host :8080 is taken, map another host port: HTTP_PORT=8088 docker compose --profile core up -d
+#    (stale PG-version volume? `docker compose --profile core down -v` to reset the dev data.)
+# 2. Build the frontend pointed at it — NEXT_PUBLIC_* is baked at BUILD time, so a
+#    plain `npm run dev`/`start` will NOT pick up a new API URL; you must rebuild:
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run build
+# 3. Run the backend-backed project (Playwright starts `next start` and drives a real browser):
+npm run e2e:backed
 ```
 Each data-mutating e2e must: perform the UI action → assert the row exists/changed in
 PostgreSQL (direct query or backend read endpoint) → assert the UI reflects it after a
-refetch. Capture a Playwright trace/screenshot plus the DB/API read as evidence.
+refetch. Capture a Playwright trace (the `backend-backed` project sets `trace: "on"`)
+plus the DB/API read as evidence. Example DB read:
+`docker exec vidra-core-postgres-1 psql -U vidra -d vidra -c "SELECT email FROM users WHERE …"`.
 
 ## Frontend quality gate (run before declaring completion)
 1. `npm run ci` is green — the CANONICAL gate = typecheck + lint + unit test +

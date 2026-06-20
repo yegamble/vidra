@@ -201,7 +201,7 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [ ] Implement import/export account UI placeholders backed by contract status.
 - [~] Add unit tests for validation. (auth client + token store unit-tested — 6; form-field validation tests can follow.)
 - [x] Add Playwright auth smoke tests with mocked API. (`e2e/auth.spec.ts`: login success → header shows account; bad-creds error; signup success → account; 422 field-error inline; registration-closed notice.)
-- [ ] Add backend-backed auth e2e tests when backend contract exists, proving signup/login/profile-edit persist to the database and are reflected in the UI after refetch. (BLOCKED on running a real vidra-core+PostgreSQL in the gate — the backend-backed Playwright profile isn't wired into `npm run ci` yet; the login flow is therefore NOT `VERIFIED`, only mock-tested.)
+- [~] Add backend-backed auth e2e tests when backend contract exists, proving signup/login/profile-edit persist to the database and are reflected in the UI after refetch. **Signup + login VERIFIED**: the `backend-backed` Playwright project (`e2e-backed/auth-persistence.spec.ts`, `npm run e2e:backed`) drives the UI against a real vidra-core + PostgreSQL (docker compose `core` profile), signs up → signs out → logs back in with the same credentials (a fresh DB round-trip), and passes. Evidence captured: the UI-created row in Postgres (`psql … users WHERE email LIKE 'e2e-%'`) + a Playwright trace (`trace: "on"`). The profile is intentionally NOT part of `npm run ci` (kept mocked/fast); see `.ralph/AGENT.md` for the run procedure. Still pending: profile-edit backed coverage, and CI automation of the backed profile (a separate frontend-e2e job standing up the compose stack).
 
 ---
 
