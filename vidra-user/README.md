@@ -28,6 +28,15 @@ npm run e2e        # playwright (needs: npx playwright install chromium)
 ```
 The single structured logger is `lib/logger.ts` (raw `console.*` is banned elsewhere).
 
+## API client
+`lib/api/` is the typed client over the `vidra-core` contract: `apiRequest<T>` (a fetch
+wrapper that sends `X-Correlation-ID`, maps the `{error:{code,message,…}}` envelope to a
+typed `ApiError`, and parses JSON) plus `api.*` functions for the public read endpoints
+(instance, feed, video detail, search, channel, channel videos) and
+`videoOriginalUrl`/`videoThumbnailUrl` helpers. Types in `lib/api/types.ts` are
+hand-maintained against the backend OpenAPI and marked provisional. Configure the target
+with `NEXT_PUBLIC_API_BASE_URL` (`lib/config.ts`).
+
 ## Monorepo layout
 This is one project inside the Vidra monorepo (a single git repository):
 

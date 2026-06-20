@@ -12,8 +12,11 @@ The Next.js app is scaffolded: Next 16 (app router) · React 19 · TypeScript (s
 Tailwind v4 · ESLint 9 flat config (`no-console` error, logger-only allow) · Vitest
 (unit) · Playwright (e2e smoke). The canonical gate `npm run ci` is green
 (typecheck + lint + unit + build + e2e). The structured logger lives in `lib/logger.ts`.
-Still TODO (later P1 slices): custom component primitives, the typed API client +
-config module, the backend-backed Playwright profile, and `instrumentation.ts` for OTel.
+The typed API client is in `lib/api/` (`apiRequest` + `api.*` endpoint fns + provisional
+`types.ts`) over `lib/config.ts` (`apiBaseUrl` from `NEXT_PUBLIC_API_BASE_URL`); it sends
+`X-Correlation-ID` and maps the error envelope to `ApiError`.
+Still TODO (later P1 slices): custom component primitives, the backend-backed Playwright
+profile, and `instrumentation.ts` for OTel (real `traceparent` propagation).
 
 ## Project setup (after scaffold)
 ```bash

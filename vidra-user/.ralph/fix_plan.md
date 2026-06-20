@@ -115,15 +115,15 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 
 - [x] Add `.env.example`. (`NEXT_PUBLIC_API_BASE_URL`, `LOG_LEVEL`, `OTEL_ENABLED`.)
 - [x] Add `NEXT_PUBLIC_API_BASE_URL`. (in `.env.example`; the typed config module that reads it is a follow-up.)
-- [ ] Add server-side API base URL option if needed.
-- [ ] Add typed config module.
-- [ ] Add API client foundation.
-- [ ] Add auth token storage strategy.
+- [~] Add server-side API base URL option if needed. (one `apiBaseUrl` from `NEXT_PUBLIC_API_BASE_URL` works server + client; a separate internal URL can be added if SSR needs it.)
+- [x] Add typed config module. (`lib/config.ts` — `apiBaseUrl` (trailing-slash trimmed), `otelEnabled`.)
+- [x] Add API client foundation. (`lib/api/client.ts` `apiRequest<T>` fetch wrapper + typed `api.*` endpoint fns in `lib/api/endpoints.ts`: instance, feed (sort/page), video detail, search, channel, channel videos; plus `videoOriginalUrl`/`videoThumbnailUrl` helpers. Vitest-covered with mocked fetch — 16 tests.)
+- [~] Add auth token storage strategy. (the client accepts an optional bearer `token` per call and never logs it; token *storage*/refresh is P3.)
 - [ ] Add refresh/session handling strategy.
-- [ ] Add standardized error mapping.
-- [ ] Add request ID propagation if backend supports it.
-- [ ] Add generated or hand-maintained API types until backend OpenAPI exists.
-- [ ] Mark all provisional API types as pending backend contract.
+- [x] Add standardized error mapping. (`ApiError` maps the `{error:{code,message,request_id,fields}}` envelope; non-envelope → generic `http_error`; network failure → `network_error`.)
+- [x] Add request ID propagation if backend supports it. (every call sends `X-Correlation-ID`, which vidra-core accepts/echoes; W3C `traceparent` lands with the OTel instrumentation slice.)
+- [x] Add generated or hand-maintained API types until backend OpenAPI exists. (`lib/api/types.ts` mirrors the OpenAPI schemas: Instance, Video, feed/list/search responses, Channel, error envelope.)
+- [x] Mark all provisional API types as pending backend contract. (`lib/api/types.ts` header: PROVISIONAL — keep in lock-step with the backend OpenAPI.)
 
 ## P1.3 Docker-First Development
 
