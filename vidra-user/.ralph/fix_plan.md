@@ -167,17 +167,17 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 
 # P2 — App Shell and Navigation
 
-- [ ] Implement root layout.
-- [ ] Implement responsive header.
+- [x] Implement root layout. (`app/layout.tsx` renders `<Header/>` + page; sticky header, flex column shell.)
+- [~] Implement responsive header. (`components/Header.tsx`: brand link + Home nav, sticky/backdrop. Full responsive nav + collapse is a later slice.)
 - [ ] Implement left navigation.
 - [ ] Implement mobile navigation.
 - [ ] Implement search bar shell.
 - [ ] Implement user menu shell.
-- [ ] Implement theme/accessibility-friendly base styles.
-- [ ] Implement public home route.
-- [ ] Implement loading and error boundaries.
+- [x] Implement theme/accessibility-friendly base styles. (Tailwind base + dark-mode-aware tokens in `globals.css`; focus-visible rings on interactive elements.)
+- [x] Implement public home route. (`app/page.tsx` → `<VideoFeed/>` discovery grid.)
+- [~] Implement loading and error boundaries. (`VideoFeed` handles loading/error/empty/ready inline via `ui/Spinner`, `ui/ErrorState` (retry), `ui/EmptyState`; route-level error.tsx/loading.tsx boundaries still TODO.)
 - [ ] Implement 404 page.
-- [ ] Add Playwright smoke test for app loading.
+- [x] Add Playwright smoke test for app loading. (`e2e/home.spec.ts`: header brand present; route-mocked feed renders cards; empty + error states — 4 tests.)
 - [ ] Add accessibility smoke test for navigation landmarks.
 
 ---
@@ -209,17 +209,17 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 
 ## P4.1 Browse and Search
 
-- [ ] Implement local/recent videos page.
+- [~] Implement local/recent videos page. (home `<VideoFeed/>` shows the recent public feed; a dedicated /local route + sort UI is a later slice.)
 - [ ] Implement trending/popular page or documented intentional difference.
 - [ ] Implement search results page.
 - [ ] Implement filter/sort controls.
 - [ ] Implement pagination or infinite scroll.
-- [ ] Implement video card component.
+- [x] Implement video card component. (`components/VideoCard.tsx`: poster via `videoThumbnailUrl` with "No preview" fallback, title (clamped), `formatCount` views · `relativeTime`; links to `/videos/{id}`. `lib/format.ts` tested — 4 unit tests.)
 - [ ] Implement channel/account card component.
 - [ ] Implement playlist card component.
-- [ ] Implement empty/no-results states.
-- [ ] Implement search error states.
-- [ ] Add component tests for cards and filters.
+- [x] Implement empty/no-results states. (`components/ui/EmptyState.tsx`, used by `VideoFeed`.)
+- [~] Implement search error states. (generic `components/ui/ErrorState.tsx` with retry exists + used by the feed; search-specific wiring lands with the search page.)
+- [~] Add component tests for cards and filters. (card rendering covered by the route-mocked Playwright grid test; pure formatters unit-tested. RTL component-unit tests can follow.)
 - [ ] Add Playwright smoke test for search route.
 
 ## P4.2 Watch Page

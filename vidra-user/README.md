@@ -37,6 +37,14 @@ typed `ApiError`, and parses JSON) plus `api.*` functions for the public read en
 hand-maintained against the backend OpenAPI and marked provisional. Configure the target
 with `NEXT_PUBLIC_API_BASE_URL` (`lib/config.ts`).
 
+## UI
+`components/Header.tsx` is the app-shell header; `components/VideoFeed.tsx` (a client
+component) loads the public feed and renders loading / error / empty / grid states using
+`components/VideoCard.tsx` and the `components/ui/*` primitives. The home route
+(`app/page.tsx`) is the discovery grid. Because the feed loads client-side, Playwright
+route-mocks the API in `e2e/` to test the grid without a running backend; proving real
+data still requires the backend-backed profile (later slice).
+
 ## Monorepo layout
 This is one project inside the Vidra monorepo (a single git repository):
 

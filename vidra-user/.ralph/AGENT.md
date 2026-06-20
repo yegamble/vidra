@@ -14,9 +14,13 @@ Tailwind v4 · ESLint 9 flat config (`no-console` error, logger-only allow) · V
 (typecheck + lint + unit + build + e2e). The structured logger lives in `lib/logger.ts`.
 The typed API client is in `lib/api/` (`apiRequest` + `api.*` endpoint fns + provisional
 `types.ts`) over `lib/config.ts` (`apiBaseUrl` from `NEXT_PUBLIC_API_BASE_URL`); it sends
-`X-Correlation-ID` and maps the error envelope to `ApiError`.
-Still TODO (later P1 slices): custom component primitives, the backend-backed Playwright
-profile, and `instrumentation.ts` for OTel (real `traceparent` propagation).
+`X-Correlation-ID` and maps the error envelope to `ApiError`. The app shell
+(`components/Header.tsx`) + home discovery feed (`components/VideoFeed.tsx`, a client
+component → route-mockable, with loading/error/empty/grid states; `components/VideoCard.tsx`;
+`components/ui/*` primitives) render the public feed; `lib/format.ts` has display helpers.
+Still TODO: more component primitives (Card/Badge/Skeleton/forms), the watch/channel/search
+pages, the backend-backed Playwright profile, and `instrumentation.ts` for OTel (real
+`traceparent` propagation).
 
 ## Project setup (after scaffold)
 ```bash
