@@ -1,6 +1,7 @@
 import { apiBaseUrl } from "@/lib/config";
 import { logger } from "@/lib/logger";
 
+import { getAccessToken } from "./auth-store";
 import type { ApiErrorEnvelope, FieldError } from "./types";
 
 /**
@@ -88,8 +89,10 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   if (opts.body !== undefined) {
     headers["content-type"] = "application/json";
   }
-  if (opts.token) {
-    headers.authorization = `Bearer ${opts.token}`;
+  // Explicit per-call token wins; otherwise attach the stored session token.
+  const token = opts.token ?? getAccessToken();
+  if (token) {
+    headers.authorization = `Bearer ${token}`;
   }
 
   let res: Response;

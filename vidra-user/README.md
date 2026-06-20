@@ -47,6 +47,12 @@ data still requires the backend-backed profile (later slice). The watch page
 (`app/videos/[id]` → `components/WatchView.tsx`) plays a video's original via a native
 Range-capable `<video>` and shows its metadata, with loading / not-found / error states.
 
+Auth is wired client-side: `components/auth/AuthProvider.tsx` (`useSession`) holds the
+session, the access token lives in-memory (`lib/api/auth-store.ts`, auto-attached by the API
+client, never persisted to `localStorage`), and the login page (`app/login`) signs in via
+`lib/api/auth.ts`. The header `AccountMenu` shows Sign in / username + Sign out. Note: login
+is mock-tested only — proving it persists requires the backend-backed e2e (later slice).
+
 ## Monorepo layout
 This is one project inside the Vidra monorepo (a single git repository):
 

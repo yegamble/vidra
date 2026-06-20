@@ -21,9 +21,14 @@ component → route-mockable, with loading/error/empty/grid states; `components/
 (`app/videos/[id]` → `components/WatchView.tsx`) plays the original via a native
 Range-capable `<video>` with title/views/date/duration/dimensions/description and
 loading/not-found/error states. `lib/format.ts` has display helpers (count, relative time,
-duration). Still TODO: more component primitives (Card/Badge/Skeleton/forms), the
-channel/search pages + custom player controls, the backend-backed Playwright profile, and
-`instrumentation.ts` for OTel (real `traceparent` propagation).
+duration). Auth: `components/auth/AuthProvider.tsx` (`useSession`) holds the session
+client-side — the access token lives in the in-memory `lib/api/auth-store.ts` (auto-attached
+by the API client, never persisted/logged), `lib/api/auth.ts` wraps register/login/logout/me,
+the login page (`app/login` → `LoginForm`) signs in, and the header `AccountMenu` shows sign
+in / username + sign out. Still TODO: signup page + the rest of P3, more component primitives
+(Card/Badge/Skeleton/Input), the channel/search pages + custom player controls, the
+backend-backed Playwright profile (login/signup are mock-tested only — NOT `VERIFIED` until
+proven against a real backend+DB), and `instrumentation.ts` for OTel.
 
 ## Project setup (after scaffold)
 ```bash

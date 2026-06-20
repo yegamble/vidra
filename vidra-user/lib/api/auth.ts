@@ -1,0 +1,23 @@
+import { apiRequest } from "./client";
+import type { AuthResponse, LoginRequest, RegisterRequest, User } from "./types";
+
+/** Typed wrappers for the vidra-core auth endpoints. */
+export const authApi = {
+  /** POST /api/v1/auth/register — create an account; returns a session. */
+  register: (body: RegisterRequest) =>
+    apiRequest<AuthResponse>("/api/v1/auth/register", { method: "POST", body }),
+
+  /** POST /api/v1/auth/login — exchange credentials for a session. */
+  login: (body: LoginRequest) =>
+    apiRequest<AuthResponse>("/api/v1/auth/login", { method: "POST", body }),
+
+  /** POST /api/v1/auth/logout — revoke a session (idempotent, always 204). */
+  logout: (refreshToken: string) =>
+    apiRequest<void>("/api/v1/auth/logout", {
+      method: "POST",
+      body: { refresh_token: refreshToken },
+    }),
+
+  /** GET /api/v1/auth/me — the current account (uses the stored bearer token). */
+  me: () => apiRequest<User>("/api/v1/auth/me"),
+};

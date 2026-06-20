@@ -184,8 +184,8 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 
 # P3 — Auth and Account UI
 
-- [ ] Implement login page.
-- [ ] Implement signup page.
+- [x] Implement login page. (`app/login/page.tsx` → `components/auth/LoginForm.tsx`: email/password, loading + error states, 401 → "Invalid email or password", redirects home on success. Session plumbing: `components/auth/AuthProvider.tsx` (context + `useSession`), in-memory `lib/api/auth-store.ts` access token auto-attached by the API client, `lib/api/auth.ts` (register/login/logout/me), header `AccountMenu` (sign in / username + sign out).)
+- [ ] Implement signup page. (uses the same `useSession().register` + auth client; next slice.)
 - [ ] Implement signup disabled/closed registration state.
 - [ ] Implement terms-of-use signup step.
 - [ ] Implement email verification pending state.
@@ -194,14 +194,14 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [ ] Implement TOTP/MFA challenge page.
 - [ ] Implement TOTP enrollment page.
 - [ ] Implement recovery codes UI.
-- [ ] Implement logout flow.
+- [~] Implement logout flow. (`AccountMenu` sign-out → `useSession().logout()` clears the in-memory token/user and best-effort POSTs /auth/logout with the refresh token.)
 - [ ] Implement account settings page.
 - [ ] Implement profile edit form.
 - [ ] Implement avatar/banner upload UI.
 - [ ] Implement import/export account UI placeholders backed by contract status.
-- [ ] Add unit tests for validation.
-- [ ] Add Playwright auth smoke tests with mocked API.
-- [ ] Add backend-backed auth e2e tests when backend contract exists, proving signup/login/profile-edit persist to the database and are reflected in the UI after refetch.
+- [~] Add unit tests for validation. (auth client + token store unit-tested — 6; form-field validation tests can follow.)
+- [~] Add Playwright auth smoke tests with mocked API. (`e2e/auth.spec.ts`: login success → header shows account; bad-creds error. Signup smoke lands with the signup page.)
+- [ ] Add backend-backed auth e2e tests when backend contract exists, proving signup/login/profile-edit persist to the database and are reflected in the UI after refetch. (BLOCKED on running a real vidra-core+PostgreSQL in the gate — the backend-backed Playwright profile isn't wired into `npm run ci` yet; the login flow is therefore NOT `VERIFIED`, only mock-tested.)
 
 ---
 

@@ -1,7 +1,9 @@
 import Link from "next/link";
 
-// App shell header: brand + primary nav. Search and account controls land in
-// later slices.
+import { AccountMenu } from "@/components/auth/AccountMenu";
+
+// App shell header: brand + primary nav + account menu. Search lands in a later
+// slice.
 export function Header() {
   return (
     <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-black/80">
@@ -17,6 +19,9 @@ export function Header() {
             Home
           </Link>
         </nav>
+        <div className="ml-auto">
+          <AccountMenu />
+        </div>
       </div>
     </header>
   );

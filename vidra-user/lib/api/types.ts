@@ -68,6 +68,39 @@ export interface VideoSearchResponse {
   offset: number;
 }
 
+export type UserRole = "user" | "moderator" | "admin";
+
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  role: UserRole;
+  email_verified: boolean;
+  display_name: string;
+  bio: string;
+  created_at: string;
+}
+
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+/** Returned by register / login / refresh. */
+export interface AuthResponse {
+  token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+  user: User;
+}
+
 export interface Channel {
   id: string;
   owner_id: string;
