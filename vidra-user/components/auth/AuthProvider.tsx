@@ -4,7 +4,13 @@ import { createContext, useCallback, useContext, useMemo, useState } from "react
 import type { ReactNode } from "react";
 
 import { authApi, setAccessToken } from "@/lib/api";
-import type { AuthResponse, LoginRequest, RegisterRequest, User } from "@/lib/api";
+import type {
+  AuthResponse,
+  LoginRequest,
+  RegisterRequest,
+  UpdateProfileRequest,
+  User,
+} from "@/lib/api";
 
 type SessionStatus = "anon" | "authed";
 
@@ -13,6 +19,7 @@ interface SessionContextValue {
   status: SessionStatus;
   login: (credentials: LoginRequest) => Promise<void>;
   register: (input: RegisterRequest) => Promise<void>;
+  updateProfile: (input: UpdateProfileRequest) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -46,6 +53,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [apply],
   );
 
+  const updateProfile = useCallback(async (input: UpdateProfileRequest) => {
+    setUser(await authApi.updateMe(input));
+  }, []);
+
   const logout = useCallback(async () => {
     const rt = refreshToken;
     setAccessToken(null);
@@ -61,8 +72,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshToken]);
 
   const value = useMemo<SessionContextValue>(
-    () => ({ user, status: user ? "authed" : "anon", login, register, logout }),
-    [user, login, register, logout],
+    () => ({
+      user,
+      status: user ? "authed" : "anon",
+      login,
+      register,
+      updateProfile,
+      logout,
+    }),
+    [user, login, register, updateProfile, logout],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -92,6 +92,12 @@ export interface LoginRequest {
   password: string;
 }
 
+/** PATCH /api/v1/auth/me — partial profile update; omitted fields are unchanged. */
+export interface UpdateProfileRequest {
+  display_name?: string;
+  bio?: string;
+}
+
 /** Returned by register / login / refresh. */
 export interface AuthResponse {
   token: string;

@@ -1,5 +1,11 @@
 import { apiRequest } from "./client";
-import type { AuthResponse, LoginRequest, RegisterRequest, User } from "./types";
+import type {
+  AuthResponse,
+  LoginRequest,
+  RegisterRequest,
+  UpdateProfileRequest,
+  User,
+} from "./types";
 
 /** Typed wrappers for the vidra-core auth endpoints. */
 export const authApi = {
@@ -20,4 +26,8 @@ export const authApi = {
 
   /** GET /api/v1/auth/me — the current account (uses the stored bearer token). */
   me: () => apiRequest<User>("/api/v1/auth/me"),
+
+  /** PATCH /api/v1/auth/me — update the current account's profile; returns it. */
+  updateMe: (body: UpdateProfileRequest) =>
+    apiRequest<User>("/api/v1/auth/me", { method: "PATCH", body }),
 };

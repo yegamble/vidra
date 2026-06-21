@@ -12,7 +12,12 @@ export function AccountMenu() {
   if (status === "authed" && user) {
     return (
       <div className="flex items-center gap-3 text-sm">
-        <span className="font-medium text-zinc-700 dark:text-zinc-200">{user.username}</span>
+        <Link
+          href="/settings"
+          className="font-medium text-zinc-700 hover:underline dark:text-zinc-200"
+        >
+          {user.username}
+        </Link>
         <button
           type="button"
           onClick={() => {
