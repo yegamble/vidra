@@ -18,6 +18,9 @@ export function Header() {
           <Link href="/" className="hover:text-zinc-900 dark:hover:text-zinc-100">
             Home
           </Link>
+          <Link href="/subscriptions" className="hover:text-zinc-900 dark:hover:text-zinc-100">
+            Subscriptions
+          </Link>
         </nav>
         <div className="flex flex-1 justify-center px-2">
           <SearchBox />

@@ -237,7 +237,7 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [x] Implement fullscreen. (native controls)
 - [ ] Implement keyboard shortcuts where specified.
 - [~] Implement title/description/tags/category/license/language display. (title, description, views · date, duration + dimensions chips shown; tags/category/license/language need backend fields/contract.)
-- [ ] Implement channel block with subscribe button.
+- [~] Implement channel block with subscribe button. (`ChannelView` now renders a `SubscribeButton` in the channel header: anonymous → a "Sign in to subscribe" link (mock-tested in `e2e/channel.spec.ts`); authenticated → a Subscribe/Subscribed toggle calling `api.followChannel`/`unfollowChannel` (`POST`/`DELETE /channels/:handle/follow`) with an optimistic follower-count nudge. The authed data-mutating flow is **NOT yet VERIFIED / BLOCKED**: there is no client-side path to a channel page (no link from video cards/watch page, and a video's payload carries `channel_id` not `handle`), so a logged-in browser session can't reach the channel page to exercise follow. Unblock needs the backend to include the channel handle on video cards + a video→channel link, then a backed e2e proving follow persists (follower_count↑ after refetch).)
 - [ ] Implement share button/dialog.
 - [ ] Implement download button/dialog.
 - [ ] Implement save/watch-later/playlist button.
@@ -274,7 +274,7 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [ ] Implement playlist thumbnail selection/upload UI.
 - [ ] Implement add-to-playlist modal.
 - [ ] Implement quick-add to watch later.
-- [ ] Implement subscriptions page.
+- [x] Implement subscriptions page. (`app/subscriptions/page.tsx` → `components/SubscriptionsView.tsx`, auth-gated (sign-in prompt when the in-memory session is gone), reached via a header "Subscriptions" link. Loads `api.getSubscriptionVideos` (`GET /api/v1/me/subscriptions/videos`) into a `VideoCard` grid with loading / error(retry) / empty states. Mocked `e2e/subscriptions.spec.ts` (anon prompt, empty, grid — 3). **Backed-VERIFIED** (empty case): `e2e-backed/subscriptions.spec.ts` signs up → opens Subscriptions → the real endpoint returns no videos and the empty state renders. The populated round-trip (follow → video appears) is pending channel-page reachability + a video-upload seed.)
 - [ ] Implement notifications page.
 - [ ] Implement mark notification read/all-read controls.
 - [ ] Add component tests for playlist controls.

@@ -56,6 +56,21 @@ export const api = {
       `/api/v1/channels/${encodeURIComponent(handle)}/videos`,
       { token, signal },
     ),
+
+  /** POST /api/v1/channels/{handle}/follow — follow a channel (auth; idempotent 204). */
+  followChannel: (handle: string) =>
+    apiRequest<void>(`/api/v1/channels/${encodeURIComponent(handle)}/follow`, { method: "POST" }),
+
+  /** DELETE /api/v1/channels/{handle}/follow — unfollow a channel (auth; idempotent 204). */
+  unfollowChannel: (handle: string) =>
+    apiRequest<void>(`/api/v1/channels/${encodeURIComponent(handle)}/follow`, { method: "DELETE" }),
+
+  /** GET /api/v1/me/subscriptions/videos — videos from followed channels (auth). */
+  getSubscriptionVideos: (params: SearchParams = {}, signal?: AbortSignal) =>
+    apiRequest<VideoFeedResponse>("/api/v1/me/subscriptions/videos", {
+      query: { limit: params.limit, offset: params.offset },
+      signal,
+    }),
 };
 
 /** Direct URL to a video's original stream (for a <video> src). Range-capable. */

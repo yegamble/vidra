@@ -39,6 +39,8 @@ test("shows the channel header and its videos", async ({ page }) => {
   await expect(page.getByText("@ada")).toBeVisible();
   await expect(page.getByText("1.5K followers")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Building a Desk" })).toBeVisible();
+  // Anonymous visitors are invited to sign in before subscribing.
+  await expect(page.getByRole("link", { name: "Sign in to subscribe" })).toBeVisible();
 });
 
 test("shows a not-found state for a missing channel", async ({ page }) => {
