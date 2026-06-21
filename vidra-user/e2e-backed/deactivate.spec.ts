@@ -28,8 +28,11 @@ test("deactivating the account prevents future logins", async ({ page }) => {
   await page.getByLabel("Current password").fill(password);
   await page.getByRole("button", { name: "Deactivate account" }).click();
 
-  // Deactivation signs the account out everywhere.
-  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+  // Deactivation signs the account out everywhere (the session is gone, so the
+  // header no longer offers "Sign out"). We assert the absence of the session
+  // rather than presence of a "Sign in" link, which is ambiguous now that several
+  // signed-out views render their own "Sign in" link.
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeHidden();
 
   // A fresh login with the same credentials is refused — proof the deactivation
   // persisted in the database.
