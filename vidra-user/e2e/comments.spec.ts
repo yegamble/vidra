@@ -94,6 +94,9 @@ test("an authenticated viewer can post a comment", async ({ page }) => {
     }
   });
   await page.route(RATING, (route) => route.fulfill({ json: NO_RATING }));
+  await page.route(/\/api\/v1\/me\/saved(\?|$)/, (route) =>
+    route.fulfill({ json: { videos: [], sort: "recent", limit: 20, offset: 0 } }),
+  );
 
   // Navigate to the watch page from the home feed card (keeps the session).
   await page.getByRole("heading", { name: "Watch Me" }).click();

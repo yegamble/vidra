@@ -108,6 +108,21 @@ export const api = {
   /** DELETE /api/v1/videos/{id}/rating — clear your rating (auth). */
   clearVideoRating: (id: string) =>
     apiRequest<VideoRating>(`/api/v1/videos/${encodeURIComponent(id)}/rating`, { method: "DELETE" }),
+
+  /** GET /api/v1/me/saved — the caller's saved videos as cards (auth). */
+  getSavedVideos: (params: SearchParams = {}, signal?: AbortSignal) =>
+    apiRequest<VideoFeedResponse>("/api/v1/me/saved", {
+      query: { limit: params.limit, offset: params.offset },
+      signal,
+    }),
+
+  /** POST /api/v1/videos/{id}/save — save a video to your library (auth, idempotent). */
+  saveVideo: (id: string) =>
+    apiRequest<void>(`/api/v1/videos/${encodeURIComponent(id)}/save`, { method: "POST" }),
+
+  /** DELETE /api/v1/videos/{id}/save — remove a video from your library (auth, idempotent). */
+  unsaveVideo: (id: string) =>
+    apiRequest<void>(`/api/v1/videos/${encodeURIComponent(id)}/save`, { method: "DELETE" }),
 };
 
 /** Direct URL to a video's original stream (for a <video> src). Range-capable. */

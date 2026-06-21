@@ -21,6 +21,9 @@ export function Header() {
           <Link href="/subscriptions" className="hover:text-zinc-900 dark:hover:text-zinc-100">
             Subscriptions
           </Link>
+          <Link href="/library" className="hover:text-zinc-900 dark:hover:text-zinc-100">
+            Library
+          </Link>
         </nav>
         <div className="flex flex-1 justify-center px-2">
           <SearchBox />

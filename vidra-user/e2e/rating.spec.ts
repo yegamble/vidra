@@ -76,6 +76,10 @@ test("an authenticated viewer can like a video", async ({ page }) => {
     }
   });
 
+  await page.route(/\/api\/v1\/me\/saved(\?|$)/, (route) =>
+    route.fulfill({ json: { videos: [], sort: "recent", limit: 20, offset: 0 } }),
+  );
+
   await page.getByRole("heading", { name: "Watch Me" }).click();
   const like = page.getByRole("button", { name: "Like", exact: true });
   await expect(like).toHaveAttribute("aria-pressed", "false");

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { CommentsSection } from "@/components/CommentsSection";
 import { RatingControls } from "@/components/RatingControls";
+import { SaveButton } from "@/components/SaveButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
@@ -96,7 +97,10 @@ export function WatchView({ id }: { id: string }) {
             </span>
           ))}
         </div>
-        <RatingControls videoId={video.id} />
+        <div className="flex flex-wrap items-center gap-2">
+          <RatingControls videoId={video.id} />
+          <SaveButton videoId={video.id} />
+        </div>
         {video.description ? (
           <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
             {video.description}
