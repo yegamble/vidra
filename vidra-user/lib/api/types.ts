@@ -46,6 +46,10 @@ export interface Video {
   height?: number;
   has_thumbnail?: boolean;
   views?: number;
+  // Owning channel, present on card/feed views (so a card can link to the
+  // channel); omitted on the detail view.
+  channel_handle?: string;
+  channel_display_name?: string;
 }
 
 export type FeedSort = "recent" | "popular" | "trending";

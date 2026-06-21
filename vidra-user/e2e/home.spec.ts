@@ -16,6 +16,8 @@ function video(id: string, title: string, views: number) {
     created_at: new Date().toISOString(),
     views,
     has_thumbnail: false,
+    channel_handle: "ada",
+    channel_display_name: "Ada Makes",
   };
 }
 
@@ -42,6 +44,10 @@ test("renders feed cards from the API", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "First Test Video" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Second Test Video" })).toBeVisible();
   await expect(page.getByText("1.5K views")).toBeVisible();
+  // Each card links to its channel by handle and shows the channel name.
+  const channelLinks = page.getByRole("link", { name: "Ada Makes" });
+  await expect(channelLinks.first()).toHaveAttribute("href", "/channels/ada");
+  await expect(channelLinks).toHaveCount(2);
 });
 
 test("shows the empty state when there are no videos", async ({ page }) => {
