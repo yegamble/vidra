@@ -20,6 +20,7 @@ interface SessionContextValue {
   login: (credentials: LoginRequest) => Promise<void>;
   register: (input: RegisterRequest) => Promise<void>;
   updateProfile: (input: UpdateProfileRequest) => Promise<void>;
+  deactivate: (password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -57,6 +58,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(await authApi.updateMe(input));
   }, []);
 
+  const deactivate = useCallback(async (password: string) => {
+    await authApi.deactivate(password);
+    // The backend already revoked every session; drop the local one too.
+    setAccessToken(null);
+    setRefreshToken(null);
+    setUser(null);
+  }, []);
+
   const logout = useCallback(async () => {
     const rt = refreshToken;
     setAccessToken(null);
@@ -78,9 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       register,
       updateProfile,
+      deactivate,
       logout,
     }),
-    [user, login, register, updateProfile, logout],
+    [user, login, register, updateProfile, deactivate, logout],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

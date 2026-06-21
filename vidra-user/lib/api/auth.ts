@@ -30,4 +30,14 @@ export const authApi = {
   /** PATCH /api/v1/auth/me — update the current account's profile; returns it. */
   updateMe: (body: UpdateProfileRequest) =>
     apiRequest<User>("/api/v1/auth/me", { method: "PATCH", body }),
+
+  /**
+   * POST /api/v1/auth/me/deactivate — disable the current account after
+   * confirming its password. Revokes all sessions server-side (204).
+   */
+  deactivate: (password: string) =>
+    apiRequest<void>("/api/v1/auth/me/deactivate", {
+      method: "POST",
+      body: { password },
+    }),
 };

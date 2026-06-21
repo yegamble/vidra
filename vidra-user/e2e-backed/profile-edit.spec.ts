@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 
 // Backend-backed e2e (real vidra-core + Postgres, no mocks): proves a profile
@@ -5,11 +7,12 @@ import { expect, test } from "@playwright/test";
 // in → the new display name is still there (a fresh login re-reads the user from
 // the database). Unique email per run so it is repeatable without a DB reset.
 test("profile edit persists across a fresh login", async ({ page }) => {
-  const stamp = Date.now();
-  const username = `e2ep${stamp}`;
-  const email = `e2e-${stamp}@example.test`;
+  // A per-test unique id avoids collisions when the backed specs run in parallel.
+  const id = randomUUID().replace(/-/g, "").slice(0, 12);
+  const username = `e2ep${id}`;
+  const email = `e2e-${id}@example.test`;
   const password = "supersecret-e2e";
-  const newName = `Ada ${stamp}`;
+  const newName = `Ada ${id}`;
 
   // Sign up.
   await page.goto("/signup");

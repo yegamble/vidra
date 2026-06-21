@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 
 // Backend-backed e2e: runs against a REAL vidra-core + PostgreSQL with NO route
@@ -8,9 +10,11 @@ import { expect, test } from "@playwright/test";
 //
 // Each run uses a unique email so it is repeatable without resetting the DB.
 test("signup persists the account and a fresh login reads it back", async ({ page }) => {
-  const stamp = Date.now();
-  const username = `e2e${stamp}`;
-  const email = `e2e-${stamp}@example.test`;
+  // A per-test unique id avoids email/username collisions even when the
+  // backend-backed specs run in parallel from the same machine.
+  const id = randomUUID().replace(/-/g, "").slice(0, 12);
+  const username = `e2ea${id}`;
+  const email = `e2e-${id}@example.test`;
   const password = "supersecret-e2e";
 
   // Sign up through the UI against the real backend.

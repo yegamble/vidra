@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { useSession } from "@/components/auth/AuthProvider";
@@ -8,11 +9,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ApiError } from "@/lib/api";
 import type { UpdateProfileRequest } from "@/lib/api";
 
-// SettingsView lets the signed-in user edit their profile (display name, bio).
-// The session lives in memory, so a hard reload lands here signed out — we show
-// a sign-in prompt rather than an empty form in that case.
+// SettingsView lets the signed-in user edit their profile (display name, bio)
+// and deactivate their account. The session lives in memory, so a hard reload
+// lands here signed out — we show a sign-in prompt rather than an empty form.
 export function SettingsView() {
-  const { status, user, updateProfile } = useSession();
+  const { status, user, updateProfile, deactivate } = useSession();
 
   if (status === "anon" || !user) {
     return (
@@ -45,7 +46,83 @@ export function SettingsView() {
         initialBio={user.bio}
         updateProfile={updateProfile}
       />
+      <DeactivateSection deactivate={deactivate} />
     </div>
+  );
+}
+
+function DeactivateSection({ deactivate }: { deactivate: (password: string) => Promise<void> }) {
+  const router = useRouter();
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    setError(null);
+    setSubmitting(true);
+    try {
+      await deactivate(password);
+      // The account is disabled and the session is cleared; leave the page.
+      router.push("/");
+    } catch (err) {
+      setSubmitting(false);
+      if (err instanceof ApiError) {
+        setError(err.status === 403 ? "Incorrect password." : err.message);
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
+    }
+  }
+
+  return (
+    <section className="flex max-w-xl flex-col gap-3 rounded-md border border-red-200 p-4 dark:border-red-900/50">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-semibold text-red-700 dark:text-red-300">Deactivate account</h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          This disables your account and signs you out everywhere. You will not be able to sign in
+          again. Confirm your password to continue.
+        </p>
+      </div>
+      <form
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+        className="flex flex-col gap-3"
+      >
+        {error ? (
+          <p
+            role="alert"
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+          >
+            {error}
+          </p>
+        ) : null}
+        <div className="flex flex-col gap-1">
+          <label htmlFor="deactivate-password" className="text-sm font-medium">
+            Current password
+          </label>
+          <input
+            id="deactivate-password"
+            name="deactivate-password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={submitting || password === ""}
+          className="self-start rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-60"
+        >
+          {submitting ? "Deactivating…" : "Deactivate account"}
+        </button>
+      </form>
+    </section>
   );
 }
 

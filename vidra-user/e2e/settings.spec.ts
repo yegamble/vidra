@@ -71,3 +71,35 @@ test("prompts to sign in when the session is gone", async ({ page }) => {
   await page.goto("/settings");
   await expect(page.getByText("Sign in to manage your account")).toBeVisible();
 });
+
+const DEACTIVATE = /\/api\/v1\/auth\/me\/deactivate$/;
+
+test("deactivating the account signs the user out", async ({ page }) => {
+  await signIn(page);
+  await page.route(DEACTIVATE, (route) => route.fulfill({ status: 204, body: "" }));
+
+  await page.getByRole("link", { name: "ada" }).click();
+  await page.getByLabel("Current password").fill("supersecret");
+  await page.getByRole("button", { name: "Deactivate account" }).click();
+
+  // Redirected home and signed out.
+  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
+});
+
+test("shows an error when the deactivate password is wrong", async ({ page }) => {
+  await signIn(page);
+  await page.route(DEACTIVATE, (route) =>
+    route.fulfill({
+      status: 403,
+      json: { error: { code: "forbidden", message: "incorrect password" } },
+    }),
+  );
+
+  await page.getByRole("link", { name: "ada" }).click();
+  await page.getByLabel("Current password").fill("nope");
+  await page.getByRole("button", { name: "Deactivate account" }).click();
+
+  await expect(page.getByText("Incorrect password.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+});
