@@ -36,7 +36,9 @@ jobs:
       # the runner). The compose env defaults (vidra/vidra) need no .env file.
       - name: Start vidra-core stack
         working-directory: vidra-core
-        run: docker compose --profile core up -d --build
+        # Disable rate limiting for the e2e backend so the suite's many
+        # register/login calls from one runner IP are not throttled.
+        run: RATE_LIMIT_ENABLED=false docker compose --profile core up -d --build
 
       - name: Wait for the API to be healthy
         working-directory: vidra-core
