@@ -82,8 +82,10 @@ a live backend. It is **never** part of `npm run ci` (which stays mocked and fas
 # 2. Build the frontend pointed at it — NEXT_PUBLIC_* is baked at BUILD time, so a
 #    plain `npm run dev`/`start` will NOT pick up a new API URL; you must rebuild:
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run build
-# 3. Run the backend-backed project (Playwright starts `next start` and drives a real browser):
-npm run e2e:backed
+# 3. Run the backend-backed project (Playwright starts `next start` and drives a real browser).
+#    Some specs seed data via the API directly (e2e-backed/fixtures.ts); set E2E_API_URL
+#    to the backend (defaults to :8080; use :8088 if you mapped a different host port):
+E2E_API_URL=http://localhost:8080 npm run e2e:backed
 ```
 Each data-mutating e2e must: perform the UI action → assert the row exists/changed in
 PostgreSQL (direct query or backend read endpoint) → assert the UI reflects it after a
