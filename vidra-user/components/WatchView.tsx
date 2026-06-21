@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { CommentsSection } from "@/components/CommentsSection";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
@@ -69,6 +70,7 @@ export function WatchView({ id }: { id: string }) {
   }
 
   return (
+    <div className="flex flex-col gap-8">
     <article className="flex flex-col gap-4">
       <video
         controls
@@ -100,5 +102,8 @@ export function WatchView({ id }: { id: string }) {
         ) : null}
       </div>
     </article>
+
+      <CommentsSection videoId={video.id} />
+    </div>
   );
 }

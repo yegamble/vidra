@@ -24,10 +24,11 @@ export function uniqueId(): string {
  */
 export async function seedPublishedChannel(
   request: APIRequestContext,
-): Promise<{ handle: string; displayName: string }> {
+): Promise<{ handle: string; displayName: string; videoId: string; videoTitle: string }> {
   const id = uniqueId();
   const handle = `ch${id}`;
   const displayName = `Channel ${id}`;
+  const videoTitle = `Video ${id}`;
 
   const reg = await request.post(`${API_URL}/api/v1/auth/register`, {
     data: { username: `owner${id}`, email: `e2e-owner-${id}@example.test`, password: "supersecret-e2e" },
@@ -41,7 +42,7 @@ export async function seedPublishedChannel(
   });
   const vid = await request.post(`${API_URL}/api/v1/channels/${handle}/videos`, {
     headers: auth,
-    data: { title: `Video ${id}`, privacy: "public" },
+    data: { title: videoTitle, privacy: "public" },
   });
   const videoId = ((await vid.json()) as { id: string }).id;
   await request.post(`${API_URL}/api/v1/videos/${videoId}/file`, {
@@ -51,11 +52,20 @@ export async function seedPublishedChannel(
     },
   });
 
-  return { handle, displayName };
+  return { handle, displayName, videoId, videoTitle };
 }
 
 /** followerCount reads a channel's persisted follower count via the public API. */
 export async function followerCount(request: APIRequestContext, handle: string): Promise<number> {
   const res = await request.get(`${API_URL}/api/v1/channels/${handle}`);
   return ((await res.json()) as { follower_count: number }).follower_count;
+}
+
+/** videoComments reads a video's persisted comments via the public API. */
+export async function videoComments(
+  request: APIRequestContext,
+  videoId: string,
+): Promise<Array<{ body: string; author_username: string }>> {
+  const res = await request.get(`${API_URL}/api/v1/videos/${videoId}/comments`);
+  return ((await res.json()) as { comments: Array<{ body: string; author_username: string }> }).comments;
 }

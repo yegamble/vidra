@@ -3,6 +3,8 @@ import { apiBaseUrl } from "@/lib/config";
 import { apiRequest } from "./client";
 import type {
   Channel,
+  Comment,
+  CommentListResponse,
   FeedSort,
   InstanceResponse,
   Video,
@@ -71,6 +73,24 @@ export const api = {
       query: { limit: params.limit, offset: params.offset },
       signal,
     }),
+
+  /** GET /api/v1/videos/{id}/comments — a public video's comments, newest first. */
+  getVideoComments: (id: string, params: SearchParams = {}, signal?: AbortSignal) =>
+    apiRequest<CommentListResponse>(
+      `/api/v1/videos/${encodeURIComponent(id)}/comments`,
+      { query: { limit: params.limit, offset: params.offset }, signal },
+    ),
+
+  /** POST /api/v1/videos/{id}/comments — post a comment on a video (auth). */
+  postComment: (id: string, body: string) =>
+    apiRequest<Comment>(`/api/v1/videos/${encodeURIComponent(id)}/comments`, {
+      method: "POST",
+      body: { body },
+    }),
+
+  /** DELETE /api/v1/comments/{id} — delete your own comment (auth). */
+  deleteComment: (id: string) =>
+    apiRequest<void>(`/api/v1/comments/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };
 
 /** Direct URL to a video's original stream (for a <video> src). Range-capable. */

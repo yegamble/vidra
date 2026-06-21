@@ -26,6 +26,9 @@ test("plays a video and shows its metadata", async ({ page }) => {
     }),
   );
   await page.route(ORIGINAL, (route) => route.abort());
+  await page.route(/\/api\/v1\/videos\/v1\/comments/, (route) =>
+    route.fulfill({ json: { comments: [], limit: 20, offset: 0 } }),
+  );
 
   await page.goto("/videos/v1");
 

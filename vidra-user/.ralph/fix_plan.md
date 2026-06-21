@@ -243,12 +243,12 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [ ] Implement save/watch-later/playlist button.
 - [ ] Implement report button/dialog.
 - [ ] Implement like/dislike/reaction controls if in-scope.
-- [ ] Implement comments section.
+- [x] Implement comments section. VERIFIED end-to-end against a real backend. `components/CommentsSection.tsx` on the watch page: lists a public video's comments newest-first (`Comments (N)` heading, author display name + relative time), an auth-gated post form (anon → "Sign in to leave a comment"; authed → textarea + Post, optimistic prepend from the API response), and a Delete control on your own comments (filtered out on success). API client gained `getVideoComments`/`postComment`/`deleteComment` + `Comment`/`CommentListResponse` types. Mocked coverage: `e2e/comments.spec.ts` (render + anon prompt; authed post). Persistence proof: `e2e-backed/comments.spec.ts` — signup → watch page (client-side nav) → post → comment appears AND is read back via the API; also confirmed via direct `psql` (the `lovely clip <id>` row authored by `fan<id>`).
 - [ ] Implement related videos section.
 - [ ] Implement watched progress/resume UI.
 - [~] Implement private/unlisted/not-found/error states. (loading / 404 not-found / generic error (retry) handled; private→owner gating needs auth (P3) + the original endpoint already 404s non-owners.)
 - [x] Add Playwright watch-page smoke test. (`e2e/watch.spec.ts`: route-mocked detail → asserts heading, views, duration, dimensions, description, and the `<video>` src; plus a 404 not-found case.)
-- [ ] Add backend-backed e2e proving interactions that mutate data (comment, like, save, watch-progress) persist to the database and reappear after refetch.
+- [~] Add backend-backed e2e proving interactions that mutate data (comment, like, save, watch-progress) persist to the database and reappear after refetch. (comment DONE — `e2e-backed/comments.spec.ts` posts from the UI and reads the row back via API + psql. like/save/watch-progress pending their backends.)
 
 ## P4.3 Embed Player
 

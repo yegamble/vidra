@@ -120,3 +120,19 @@ export interface Channel {
   follower_count: number;
   created_at: string;
 }
+
+export interface Comment {
+  id: string;
+  video_id: string;
+  body: string;
+  author_username: string;
+  author_display_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommentListResponse {
+  comments: Comment[];
+  limit: number;
+  offset: number;
+}
