@@ -1,0 +1,93 @@
+name: frontend-e2e-backed
+
+# Backend-backed end-to-end tests: drive the vidra-user UI against a REAL
+# vidra-core + PostgreSQL (the docker-compose `core` profile) to prove that
+# data-mutating flows actually persist. This is an ADDITIONAL integration check,
+# deliberately SEPARATE from the canonical `npm run ci` gate (which stays
+# mocked/fast in frontend-ci.yml) — mirroring how vidra-core's `//go:build
+# integration` tests are separate from `make ci`. ci-guard.yml does not require
+# this workflow to invoke a canonical gate.
+#
+# It exercises both projects (frontend UI against the live backend), so it runs
+# when either changes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "vidra-user/**"
+      - "vidra-core/**"
+      - ".github/workflows/frontend-e2e-backed.yml"
+  pull_request:
+    paths:
+      - "vidra-user/**"
+      - "vidra-core/**"
+      - ".github/workflows/frontend-e2e-backed.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-backed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Bring up postgres + redis + migrations + the api (port 8080 is free on
+      # the runner). The compose env defaults (vidra/vidra) need no .env file.
+      - name: Start vidra-core stack
+        working-directory: vidra-core
+        run: docker compose --profile core up -d --build
+
+      - name: Wait for the API to be healthy
+        working-directory: vidra-core
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/healthz >/dev/null 2>&1; then
+              echo "api healthy after ${i} tries"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::vidra-core API did not become healthy in time"
+          docker compose --profile core logs --no-color | tail -200
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: vidra-user/package-lock.json
+
+      - name: Install dependencies
+        working-directory: vidra-user
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: vidra-user
+        run: npx playwright install --with-deps chromium
+
+      # NEXT_PUBLIC_* is baked at build time, so the app must be built pointing at
+      # the live backend for the un-mocked tests to actually call it.
+      - name: Build against the live backend
+        working-directory: vidra-user
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+        run: npm run build
+
+      - name: Run backend-backed e2e
+        working-directory: vidra-user
+        run: npm run e2e:backed
+
+      - name: Tail backend logs on failure
+        if: failure()
+        working-directory: vidra-core
+        run: docker compose --profile core logs --no-color | tail -200
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-backed-report
+          path: |
+            vidra-user/playwright-report/
+            vidra-user/test-results/
+          if-no-files-found: ignore

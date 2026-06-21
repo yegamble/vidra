@@ -90,6 +90,11 @@ refetch. Capture a Playwright trace (the `backend-backed` project sets `trace: "
 plus the DB/API read as evidence. Example DB read:
 `docker exec vidra-core-postgres-1 psql -U vidra -d vidra -c "SELECT email FROM users WHERE …"`.
 
+This profile also runs in CI: the root `frontend-e2e-backed.yml` workflow stands up
+the same compose `core` stack (api on :8080 — free on the runner, no port override)
+and runs `npm run e2e:backed` on every push/PR touching either project. It is a
+separate job from the canonical `npm run ci` gate (which stays mocked/fast).
+
 ## Frontend quality gate (run before declaring completion)
 1. `npm run ci` is green — the CANONICAL gate = typecheck + lint + unit test +
    build + Playwright smoke. `frontend-ci.yml` runs this exact script, so
