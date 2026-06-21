@@ -136,3 +136,11 @@ export interface CommentListResponse {
   limit: number;
   offset: number;
 }
+
+export type RatingValue = "like" | "dislike";
+
+export interface VideoRating {
+  like_count: number;
+  dislike_count: number;
+  my_rating: RatingValue | null;
+}

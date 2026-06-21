@@ -5,6 +5,8 @@ import { expect, test } from "@playwright/test";
 const DETAIL = /\/api\/v1\/videos\/v1$/;
 const ORIGINAL = /\/api\/v1\/videos\/v1\/original/;
 const COMMENTS = /\/api\/v1\/videos\/v1\/comments/;
+const RATING = /\/api\/v1\/videos\/v1\/rating/;
+const NO_RATING = { like_count: 0, dislike_count: 0, my_rating: null };
 const LOGIN = /\/api\/v1\/auth\/login$/;
 const FEED = /\/api\/v1\/videos(\?|$)/;
 
@@ -57,6 +59,7 @@ test("shows a video's comments and prompts anonymous viewers to sign in", async 
       json: { comments: [comment("c1", "First!"), comment("c2", "Nice one")], limit: 20, offset: 0 },
     }),
   );
+  await page.route(RATING, (route) => route.fulfill({ json: NO_RATING }));
 
   await page.goto("/videos/v1");
 
@@ -90,6 +93,7 @@ test("an authenticated viewer can post a comment", async ({ page }) => {
       void route.fulfill({ json: { comments: [], limit: 20, offset: 0 } });
     }
   });
+  await page.route(RATING, (route) => route.fulfill({ json: NO_RATING }));
 
   // Navigate to the watch page from the home feed card (keeps the session).
   await page.getByRole("heading", { name: "Watch Me" }).click();

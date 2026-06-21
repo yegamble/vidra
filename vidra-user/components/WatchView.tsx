@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { CommentsSection } from "@/components/CommentsSection";
+import { RatingControls } from "@/components/RatingControls";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
@@ -95,6 +96,7 @@ export function WatchView({ id }: { id: string }) {
             </span>
           ))}
         </div>
+        <RatingControls videoId={video.id} />
         {video.description ? (
           <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
             {video.description}

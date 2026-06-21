@@ -69,3 +69,12 @@ export async function videoComments(
   const res = await request.get(`${API_URL}/api/v1/videos/${videoId}/comments`);
   return ((await res.json()) as { comments: Array<{ body: string; author_username: string }> }).comments;
 }
+
+/** videoRating reads a video's persisted like/dislike counts via the public API. */
+export async function videoRating(
+  request: APIRequestContext,
+  videoId: string,
+): Promise<{ like_count: number; dislike_count: number }> {
+  const res = await request.get(`${API_URL}/api/v1/videos/${videoId}/rating`);
+  return (await res.json()) as { like_count: number; dislike_count: number };
+}

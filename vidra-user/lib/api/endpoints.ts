@@ -7,9 +7,11 @@ import type {
   CommentListResponse,
   FeedSort,
   InstanceResponse,
+  RatingValue,
   Video,
   VideoFeedResponse,
   VideoListResponse,
+  VideoRating,
   VideoSearchResponse,
 } from "./types";
 
@@ -91,6 +93,21 @@ export const api = {
   /** DELETE /api/v1/comments/{id} — delete your own comment (auth). */
   deleteComment: (id: string) =>
     apiRequest<void>(`/api/v1/comments/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  /** GET /api/v1/videos/{id}/rating — like/dislike counts (+ my_rating if authed). */
+  getVideoRating: (id: string, signal?: AbortSignal) =>
+    apiRequest<VideoRating>(`/api/v1/videos/${encodeURIComponent(id)}/rating`, { signal }),
+
+  /** PUT /api/v1/videos/{id}/rating — set/change your rating (auth). */
+  setVideoRating: (id: string, rating: RatingValue) =>
+    apiRequest<VideoRating>(`/api/v1/videos/${encodeURIComponent(id)}/rating`, {
+      method: "PUT",
+      body: { rating },
+    }),
+
+  /** DELETE /api/v1/videos/{id}/rating — clear your rating (auth). */
+  clearVideoRating: (id: string) =>
+    apiRequest<VideoRating>(`/api/v1/videos/${encodeURIComponent(id)}/rating`, { method: "DELETE" }),
 };
 
 /** Direct URL to a video's original stream (for a <video> src). Range-capable. */
