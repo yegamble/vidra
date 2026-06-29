@@ -12,6 +12,14 @@ const eslintConfig = defineConfig([
       "no-console": "error",
     },
   },
+  // Dev/CI Node scripts (run via `node`, never shipped to the browser) — console
+  // output is their entire purpose, so no-console does not apply to them.
+  {
+    files: ["scripts/**/*.{mjs,js,ts}"],
+    rules: {
+      "no-console": "off",
+    },
+  },
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
