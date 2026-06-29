@@ -144,3 +144,25 @@ export interface VideoRating {
   dislike_count: number;
   my_rating: RatingValue | null;
 }
+
+/** GET /api/v1/videos/{id}/watch-progress — the caller's saved resume position. */
+export interface WatchProgress {
+  video_id: string;
+  /** Saved resume position in whole seconds (0 when none recorded). */
+  position_seconds: number;
+}
+
+/**
+ * A watch-history card: a video card plus the caller's saved resume position and
+ * when they last watched it. Mirrors the backend HistoryItem (allOf Video + …).
+ */
+export interface HistoryItem extends Video {
+  position_seconds: number;
+  watched_at: string;
+}
+
+export interface WatchHistoryResponse {
+  videos: HistoryItem[];
+  limit: number;
+  offset: number;
+}

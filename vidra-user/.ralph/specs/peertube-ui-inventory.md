@@ -35,6 +35,7 @@ For every route/flow, use this structure:
 | PT-NAV-PUBLISH | Publish | nav button/link | logged-in/disabled if no upload rights | Opens publish flow | auth, quota, instance upload config | Playwright nav | NOT_STARTED | none |
 | PT-NAV-SEARCH | Search | input/button | empty/focused/results/error | Search local/global/URI/handle | search API | Playwright search | NOT_STARTED | none |
 | PT-NAV-MY-LIBRARY | My library | nav link | logged-in only | Opens library/history/playlists | auth | Playwright auth nav | NOT_STARTED | none |
+| PT-NAV-HISTORY | History | nav link | always shown (content auth-gated) | Opens /history watch-history page | GET /me/history | e2e/history.spec.ts + e2e-backed/history.spec.ts | VERIFIED | components/Header.tsx; app/history/page.tsx; components/WatchHistoryView.tsx |
 | PT-NAV-MY-VIDEO-SPACE | My video space | nav group | creator/admin | Shows videos/channels/studio | auth/permissions | Playwright | NOT_STARTED | none |
 | PT-NAV-ADMINISTRATION | Administration | nav group | admin/mod only | Opens admin sections | RBAC | Playwright RBAC | NOT_STARTED | none |
 
@@ -55,6 +56,8 @@ For every route/flow, use this structure:
 | PT-WATCH-DOWNLOAD | Download | button/modal | allowed/forbidden | Select downloadable resolution | files/download API | Playwright | NOT_STARTED | none |
 | PT-WATCH-REPORT | Report | menu/modal | logged-out/logged-in | Opens report content flow | reports API | integration/Playwright | NOT_STARTED | none |
 | PT-WATCH-SUPPORT | Support | button/link | present/absent | Shows creator support text/link | video support metadata | Playwright | NOT_STARTED | none |
+| PT-WATCH-RESUME | Resume from m:ss | button | shown when saved position ≥5s / hidden | Seeks player to the saved resume position | GET /videos/:id/watch-progress | e2e/history.spec.ts | VERIFIED | components/WatchView.tsx (Player) |
+| PT-WATCH-HISTORY-RECORD | (implicit progress reporting) | player behaviour | authed only; throttled/pause/unmount | Records playback position so the video enters history & can be resumed | PUT /videos/:id/watch-progress | e2e-backed/history.spec.ts | VERIFIED | components/WatchView.tsx (Player) |
 | PT-WATCH-COMMENT-SUBMIT | Comment | composer button | disabled/loading/error | Adds comment | comments API/federation | integration/Playwright | NOT_STARTED | none |
 
 ### PT-PUBLISH — Publish/upload/live

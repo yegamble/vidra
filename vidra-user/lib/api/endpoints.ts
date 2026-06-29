@@ -13,6 +13,8 @@ import type {
   VideoListResponse,
   VideoRating,
   VideoSearchResponse,
+  WatchHistoryResponse,
+  WatchProgress,
 } from "./types";
 
 export interface FeedParams {
@@ -123,6 +125,31 @@ export const api = {
   /** DELETE /api/v1/videos/{id}/save — remove a video from your library (auth, idempotent). */
   unsaveVideo: (id: string) =>
     apiRequest<void>(`/api/v1/videos/${encodeURIComponent(id)}/save`, { method: "DELETE" }),
+
+  /** GET /api/v1/me/history — the caller's watch history as cards, newest-watched first (auth). */
+  getWatchHistory: (params: SearchParams = {}, signal?: AbortSignal) =>
+    apiRequest<WatchHistoryResponse>("/api/v1/me/history", {
+      query: { limit: params.limit, offset: params.offset },
+      signal,
+    }),
+
+  /** GET /api/v1/videos/{id}/watch-progress — the caller's saved resume position (auth). */
+  getWatchProgress: (id: string, signal?: AbortSignal) =>
+    apiRequest<WatchProgress>(`/api/v1/videos/${encodeURIComponent(id)}/watch-progress`, { signal }),
+
+  /** PUT /api/v1/videos/{id}/watch-progress — record the caller's resume position (auth, 204). */
+  recordWatchProgress: (id: string, positionSeconds: number) =>
+    apiRequest<void>(`/api/v1/videos/${encodeURIComponent(id)}/watch-progress`, {
+      method: "PUT",
+      body: { position_seconds: positionSeconds },
+    }),
+
+  /** DELETE /api/v1/me/history/{id} — remove one video from history (auth, idempotent). */
+  deleteHistoryEntry: (id: string) =>
+    apiRequest<void>(`/api/v1/me/history/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  /** DELETE /api/v1/me/history — clear the caller's entire watch history (auth, idempotent). */
+  clearWatchHistory: () => apiRequest<void>("/api/v1/me/history", { method: "DELETE" }),
 };
 
 /** Direct URL to a video's original stream (for a <video> src). Range-capable. */
