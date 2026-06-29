@@ -35,12 +35,19 @@ CLAUDE_TIMEOUT_MINUTES=15
 CLAUDE_OUTPUT_FORMAT="json"
 # Token limit per hour (0 = disabled). One invocation can use 100k+ tokens.
 # Recommended: 500000 for light use, 2000000 for heavy use.
-#MAX_TOKENS_PER_HOUR=0
+# Set to a real ceiling: with opus+xhigh and MAX_CALLS_PER_HOUR effectively
+# non-binding (loops take 6-15+ min), this is the only spend governor. (Ralph audit)
+MAX_TOKENS_PER_HOUR=2000000
 
 # Tool permissions
 # Comma-separated list of allowed tools
 # Safe git subcommands only - broad Bash(git *) allows destructive commands like git clean/git rm (Issue #149)
-ALLOWED_TOOLS="Write,Read,Edit,Bash(git add *),Bash(git commit *),Bash(git diff *),Bash(git log *),Bash(git status),Bash(git status *),Bash(git push *),Bash(git pull *),Bash(git fetch *),Bash(git checkout *),Bash(git branch *),Bash(git stash *),Bash(git merge *),Bash(git tag *),Bash(go *),Bash(gofmt *),Bash(golangci-lint *),Bash(staticcheck *),Bash(sqlc *),Bash(migrate *),Bash(newman *),Bash(npm *),Bash(npx *),Bash(pnpm *),Bash(node *),Bash(playwright *),Bash(make *),Bash(docker *),Bash(docker-compose *),Bash(curl *),Bash(cd *)"
+# Hardened (Ralph audit): dropped unused Bash(git merge *) (PROMPT uses pull --rebase,
+# not merge); scoped Bash(curl *) to localhost only (its sole use is healthchecks —
+# unrestricted curl is a network-egress/exfiltration vector for an unsupervised
+# on-host agent). If a loop legitimately needs external HTTP, re-add Bash(curl *).
+# Still broad and worth sandboxing (see SANDBOX_PROVIDER below): docker *, git push *.
+ALLOWED_TOOLS="Write,Read,Edit,Bash(git add *),Bash(git commit *),Bash(git diff *),Bash(git log *),Bash(git status),Bash(git status *),Bash(git push *),Bash(git pull *),Bash(git fetch *),Bash(git checkout *),Bash(git branch *),Bash(git stash *),Bash(git tag *),Bash(go *),Bash(gofmt *),Bash(golangci-lint *),Bash(staticcheck *),Bash(sqlc *),Bash(migrate *),Bash(newman *),Bash(npm *),Bash(npx *),Bash(pnpm *),Bash(node *),Bash(playwright *),Bash(make *),Bash(docker *),Bash(docker-compose *),Bash(curl localhost:*),Bash(curl 127.0.0.1:*),Bash(curl http://localhost:*),Bash(curl http://127.0.0.1:*),Bash(cd *)"
 
 # Sections in fix_plan.md whose unchecked items do NOT block Ralph exit.
 OPTIONAL_SECTIONS="Optional / Deferred / Non-Blocking,Optional,Future,Future Enhancements,Nice to Have"

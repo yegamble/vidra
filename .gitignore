@@ -1,6 +1,7 @@
 # Ralph generated/runtime files (in ANY .ralph/ — root, vidra-core/, vidra-user/)
 **/.ralph/.call_count
 **/.ralph/.last_reset
+**/.ralph/.last_output_length
 **/.ralph/.loop_start_sha
 **/.ralph/.token_count
 **/.ralph/.exit_signals
