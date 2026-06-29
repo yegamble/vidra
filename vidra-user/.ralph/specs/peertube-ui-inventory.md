@@ -36,6 +36,8 @@ For every route/flow, use this structure:
 | PT-NAV-SEARCH | Search | input/button | empty/focused/results/error | Search local/global/URI/handle | search API | Playwright search | NOT_STARTED | none |
 | PT-NAV-MY-LIBRARY | My library | nav link | logged-in only | Opens library/history/playlists | auth | Playwright auth nav | NOT_STARTED | none |
 | PT-NAV-HISTORY | History | nav link | always shown (content auth-gated) | Opens /history watch-history page | GET /me/history | e2e/history.spec.ts + e2e-backed/history.spec.ts | VERIFIED | components/Header.tsx; app/history/page.tsx; components/WatchHistoryView.tsx |
+| PT-NAV-NOTIFICATIONS | Notifications | bell icon link + unread badge | authed only; badge when unread>0 | Opens /notifications; badge = unread count | GET /me/notifications/unread-count | e2e/notifications.spec.ts + e2e-backed/notifications.spec.ts | VERIFIED | components/NotificationsBell.tsx; app/notifications/page.tsx; components/NotificationsView.tsx |
+| PT-NAV-NOTIF-MARK-READ | Mark read / Mark all as read | buttons | unread/read | Marks one or all notifications read | POST /me/notifications/:id/read, /read-all | e2e/notifications.spec.ts + e2e-backed/notifications.spec.ts | VERIFIED | components/NotificationsView.tsx |
 | PT-NAV-MY-VIDEO-SPACE | My video space | nav group | creator/admin | Shows videos/channels/studio | auth/permissions | Playwright | NOT_STARTED | none |
 | PT-NAV-ADMINISTRATION | Administration | nav group | admin/mod only | Opens admin sections | RBAC | Playwright RBAC | NOT_STARTED | none |
 

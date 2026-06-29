@@ -80,4 +80,28 @@ describe("api endpoints", () => {
     expect(url).toBe("http://localhost:8080/api/v1/me/history");
     expect(init.method).toBe("DELETE");
   });
+
+  it("getNotifications targets the inbox with the unread filter", async () => {
+    await api.getNotifications({ unread: true, limit: 10 });
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/me/notifications?unread=true&limit=10");
+  });
+
+  it("getUnreadNotificationCount targets the count endpoint", async () => {
+    await api.getUnreadNotificationCount();
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/me/notifications/unread-count");
+  });
+
+  it("markNotificationRead POSTs to the per-notification read endpoint", async () => {
+    await api.markNotificationRead("n1");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/me/notifications/n1/read");
+    expect(init.method).toBe("POST");
+  });
+
+  it("markAllNotificationsRead POSTs to the read-all endpoint", async () => {
+    await api.markAllNotificationsRead();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/me/notifications/read-all");
+    expect(init.method).toBe("POST");
+  });
 });

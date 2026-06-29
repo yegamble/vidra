@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AccountMenu } from "@/components/auth/AccountMenu";
+import { NotificationsBell } from "@/components/NotificationsBell";
 import { SearchBox } from "@/components/SearchBox";
 
 // App shell header: brand + primary nav + search + account menu.
@@ -31,6 +32,7 @@ export function Header() {
         <div className="flex flex-1 justify-center px-2">
           <SearchBox />
         </div>
+        <NotificationsBell />
         <AccountMenu />
       </div>
     </header>

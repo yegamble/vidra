@@ -11,6 +11,8 @@ import type {
   Video,
   VideoFeedResponse,
   VideoListResponse,
+  NotificationListResponse,
+  UnreadCountResponse,
   VideoRating,
   VideoSearchResponse,
   WatchHistoryResponse,
@@ -150,6 +152,28 @@ export const api = {
 
   /** DELETE /api/v1/me/history — clear the caller's entire watch history (auth, idempotent). */
   clearWatchHistory: () => apiRequest<void>("/api/v1/me/history", { method: "DELETE" }),
+
+  /** GET /api/v1/me/notifications — the caller's notifications + unread count (auth). */
+  getNotifications: (
+    params: { unread?: boolean; limit?: number; offset?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    apiRequest<NotificationListResponse>("/api/v1/me/notifications", {
+      query: { unread: params.unread, limit: params.limit, offset: params.offset },
+      signal,
+    }),
+
+  /** GET /api/v1/me/notifications/unread-count — just the unread count, for a badge (auth). */
+  getUnreadNotificationCount: (signal?: AbortSignal) =>
+    apiRequest<UnreadCountResponse>("/api/v1/me/notifications/unread-count", { signal }),
+
+  /** POST /api/v1/me/notifications/{id}/read — mark one notification read (auth, idempotent). */
+  markNotificationRead: (id: string) =>
+    apiRequest<void>(`/api/v1/me/notifications/${encodeURIComponent(id)}/read`, { method: "POST" }),
+
+  /** POST /api/v1/me/notifications/read-all — mark all notifications read (auth, idempotent). */
+  markAllNotificationsRead: () =>
+    apiRequest<void>("/api/v1/me/notifications/read-all", { method: "POST" }),
 };
 
 /** Direct URL to a video's original stream (for a <video> src). Range-capable. */
