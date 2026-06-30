@@ -173,6 +173,8 @@ function ReportRow({
   const [note, setNote] = useState("");
   const [rowState, setRowState] = useState<RowState>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [blockState, setBlockState] = useState<"idle" | "blocking" | "blocked">("idle");
+  const [blockError, setBlockError] = useState<string | null>(null);
 
   async function resolve(status: "accepted" | "rejected") {
     if (rowState === "submitting") return;
@@ -184,6 +186,21 @@ function ReportRow({
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not resolve this report.");
       setRowState("idle");
+    }
+  }
+
+  // Block the reported video, recording the report's reason for the audit trail.
+  // Independent of resolution — a moderator may block without resolving.
+  async function blockVideo(videoId: string) {
+    if (blockState === "blocking") return;
+    setBlockState("blocking");
+    setBlockError(null);
+    try {
+      await api.blockVideo(videoId, { reason: report.reason });
+      setBlockState("blocked");
+    } catch (err) {
+      setBlockError(err instanceof ApiError ? err.message : "Could not block this video.");
+      setBlockState("idle");
     }
   }
 
@@ -250,7 +267,30 @@ function ReportRow({
             >
               Reject
             </button>
+            {report.target_type === "video" && report.video_id ? (
+              blockState === "blocked" ? (
+                <span className="inline-flex items-center gap-1 text-sm text-zinc-600 dark:text-zinc-300">
+                  Video blocked ·{" "}
+                  <Link
+                    href="/moderation/blocked"
+                    className="underline hover:text-zinc-900 dark:hover:text-zinc-100"
+                  >
+                    Manage
+                  </Link>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={blockState === "blocking"}
+                  onClick={() => void blockVideo(report.video_id as string)}
+                  className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-60 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
+                >
+                  {blockState === "blocking" ? "Blocking…" : "Block video"}
+                </button>
+              )
+            ) : null}
           </div>
+          {blockError ? <p className="text-sm text-red-600 dark:text-red-400">{blockError}</p> : null}
         </div>
       ) : null}
     </article>

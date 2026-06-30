@@ -5,6 +5,7 @@ import type {
   AdminUser,
   AdminUserListResponse,
   BlockedVideoListResponse,
+  BlockVideoRequest,
   Channel,
   ChannelListResponse,
   Comment,
@@ -330,6 +331,17 @@ export const api = {
     apiRequest<BlockedVideoListResponse>("/api/v1/admin/videos/blocked", {
       query: { limit: params.limit, offset: params.offset },
       signal,
+    }),
+
+  /**
+   * POST /api/v1/admin/videos/{id}/block — block a video so it is hidden from
+   * public surfaces (moderator/admin, idempotent, 204). The optional reason is
+   * recorded for the audit trail.
+   */
+  blockVideo: (id: string, body: BlockVideoRequest = {}) =>
+    apiRequest<void>(`/api/v1/admin/videos/${encodeURIComponent(id)}/block`, {
+      method: "POST",
+      body,
     }),
 
   /** DELETE /api/v1/admin/videos/{id}/block — lift a video's block (moderator/admin, idempotent, 204). */

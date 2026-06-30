@@ -214,6 +214,11 @@ export interface ResolveReportRequest {
   note?: string;
 }
 
+/** POST /api/v1/admin/videos/{id}/block body; the reason is recorded for audit. */
+export interface BlockVideoRequest {
+  reason?: string;
+}
+
 /**
  * A currently-blocked video as seen by a moderator/admin in the block-list.
  * Mirrors the backend BlockedVideo schema. `blocked_by` is omitted when the

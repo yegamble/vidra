@@ -262,4 +262,12 @@ describe("api endpoints", () => {
     expect(url).toBe("http://localhost:8080/api/v1/admin/videos/v1/block");
     expect(init.method).toBe("DELETE");
   });
+
+  it("blockVideo POSTs the block with the reason", async () => {
+    await api.blockVideo("v1", { reason: "copyright" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/admin/videos/v1/block");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ reason: "copyright" });
+  });
 });

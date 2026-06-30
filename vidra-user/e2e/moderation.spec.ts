@@ -7,6 +7,7 @@ const FEED = /\/api\/v1\/videos(\?|$)/;
 const UNREAD = /\/api\/v1\/me\/notifications\/unread-count$/;
 const REPORTS = /\/api\/v1\/admin\/reports(\?|$)/;
 const RESOLVE = /\/api\/v1\/admin\/reports\/[^/]+\/resolve$/;
+const BLOCK = /\/api\/v1\/admin\/videos\/[^/]+\/block$/;
 
 type Role = "user" | "moderator" | "admin";
 
@@ -122,6 +123,35 @@ test("accepting a report removes it from the open queue", async ({ page }) => {
   // The video report (r1) was open; resolving drops it from the open-only view.
   await expect(page.getByRole("link", { name: "Bad clip" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Accept" })).toHaveCount(1);
+});
+
+test("an admin blocks the video from a report card", async ({ page }) => {
+  await signIn(page, "admin");
+  await page.route(REPORTS, (route) =>
+    route.fulfill({ json: { reports: [videoReport("r1", "open")], limit: 100, offset: 0 } }),
+  );
+  let blockedVideoId: string | null = null;
+  await page.route(BLOCK, (route) => {
+    if (route.request().method() === "POST") {
+      blockedVideoId = route.request().url().match(/\/videos\/([^/]+)\/block$/)?.[1] ?? null;
+      return route.fulfill({ status: 204, body: "" });
+    }
+    return route.continue();
+  });
+
+  await page.getByRole("link", { name: "Moderation" }).click();
+  await expect(page.getByRole("link", { name: "Bad clip" })).toBeVisible();
+
+  const blocked = page.waitForResponse(
+    (r) => BLOCK.test(r.url()) && r.request().method() === "POST" && r.ok(),
+  );
+  await page.getByRole("button", { name: "Block video" }).click();
+  await blocked;
+
+  // The card reflects the block and offers a link to manage it.
+  await expect(page.getByText("Video blocked")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Manage" })).toBeVisible();
+  expect(blockedVideoId).toBe("v1");
 });
 
 test("the All filter shows resolved reports without resolve actions", async ({ page }) => {

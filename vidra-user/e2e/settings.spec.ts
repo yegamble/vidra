@@ -82,8 +82,10 @@ test("deactivating the account signs the user out", async ({ page }) => {
   await page.getByLabel("Current password").fill("supersecret");
   await page.getByRole("button", { name: "Deactivate account" }).click();
 
-  // Redirected home and signed out.
-  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+  // Signed out: the header shows "Sign in" (scoped to the banner — a transient
+  // signed-out prompt in the page body during the redirect would otherwise make
+  // an unscoped "Sign in" match two elements and trip strict mode).
+  await expect(page.getByRole("banner").getByRole("link", { name: "Sign in" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
 });
 
