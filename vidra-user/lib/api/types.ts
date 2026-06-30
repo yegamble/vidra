@@ -74,6 +74,33 @@ export interface VideoSearchResponse {
 
 export type UserRole = "user" | "moderator" | "admin";
 
+/**
+ * Admin projection of an account (the password hash is never exposed). Mirrors
+ * the backend AdminUser schema; returned by the admin users list + update.
+ */
+export interface AdminUser {
+  id: string;
+  username: string;
+  email: string;
+  role: UserRole;
+  is_active: boolean;
+  email_verified: boolean;
+  display_name: string;
+  created_at: string;
+}
+
+export interface AdminUserListResponse {
+  users: AdminUser[];
+  limit: number;
+  offset: number;
+}
+
+/** PATCH /api/v1/admin/users/{id} body — partial; provide at least one field. */
+export interface UpdateUserRequest {
+  role?: UserRole;
+  is_active?: boolean;
+}
+
 export interface User {
   id: string;
   username: string;

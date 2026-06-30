@@ -99,6 +99,43 @@ export async function seedPublishedChannel(
 }
 
 /**
+ * registerUser registers a fresh account via the API, returning its access token,
+ * id, and username. Used to seed a target account for admin user-management tests.
+ */
+export async function registerUser(
+  request: APIRequestContext,
+  prefix = "usr",
+): Promise<{ token: string; id: string; username: string; email: string }> {
+  const id = uniqueId();
+  const username = `${prefix}${id}`;
+  const email = `e2e-${prefix}-${id}@example.test`;
+  const reg = await request.post(`${API_URL}/api/v1/auth/register`, {
+    data: { username, email, password: "supersecret-e2e" },
+  });
+  const body = (await reg.json()) as { token: string; user: { id: string } };
+  return { token: body.token, id: body.user.id, username, email };
+}
+
+/** adminUsers reads the admin users list (optionally filtered by q) as the admin. */
+export async function adminUsers(
+  request: APIRequestContext,
+  token: string,
+  q?: string,
+): Promise<Array<{ id: string; username: string; role: string; is_active: boolean }>> {
+  const url = new URL(`${API_URL}/api/v1/admin/users`);
+  url.searchParams.set("limit", "100");
+  if (q) url.searchParams.set("q", q);
+  const res = await request.get(url.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return (
+    (await res.json()) as {
+      users: Array<{ id: string; username: string; role: string; is_active: boolean }>;
+    }
+  ).users;
+}
+
+/**
  * fileVideoReport registers a fresh reporter and files a report on a video via the
  * API, returning the unique reason used (so a test can find it in the queue). Used
  * to seed an open report for the moderation-resolve UI to act on.

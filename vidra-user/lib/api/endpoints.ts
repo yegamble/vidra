@@ -2,6 +2,8 @@ import { apiBaseUrl } from "@/lib/config";
 
 import { apiRequest } from "./client";
 import type {
+  AdminUser,
+  AdminUserListResponse,
   Channel,
   ChannelListResponse,
   Comment,
@@ -22,6 +24,7 @@ import type {
   ReportListResponse,
   ResolveReportRequest,
   UnreadCountResponse,
+  UpdateUserRequest,
   UpdatePlaylistRequest,
   UpdateVideoRequest,
   UploadVideoResult,
@@ -292,6 +295,26 @@ export const api = {
   resolveReport: (id: string, body: ResolveReportRequest) =>
     apiRequest<void>(`/api/v1/admin/reports/${encodeURIComponent(id)}/resolve`, {
       method: "POST",
+      body,
+    }),
+
+  /**
+   * GET /api/v1/admin/users — accounts newest first (admin only). Optional `q`
+   * filters by a username/email substring. Paginated via limit/offset.
+   */
+  getAdminUsers: (
+    params: { q?: string; limit?: number; offset?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    apiRequest<AdminUserListResponse>("/api/v1/admin/users", {
+      query: { q: params.q, limit: params.limit, offset: params.offset },
+      signal,
+    }),
+
+  /** PATCH /api/v1/admin/users/{id} — edit a user's role / active flag (admin only). */
+  updateAdminUser: (id: string, body: UpdateUserRequest) =>
+    apiRequest<AdminUser>(`/api/v1/admin/users/${encodeURIComponent(id)}`, {
+      method: "PATCH",
       body,
     }),
 };

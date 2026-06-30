@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AdminNavLink } from "@/components/AdminNavLink";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { ModerationNavLink } from "@/components/ModerationNavLink";
 import { NotificationsBell } from "@/components/NotificationsBell";
@@ -36,6 +37,7 @@ export function Header() {
             Studio
           </Link>
           <ModerationNavLink />
+          <AdminNavLink />
         </nav>
         <div className="flex flex-1 justify-center px-2">
           <SearchBox />

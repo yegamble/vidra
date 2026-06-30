@@ -232,4 +232,22 @@ describe("api endpoints", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({ status: "accepted", note: "spam" });
   });
+
+  it("getAdminUsers targets the admin users endpoint with the q filter", async () => {
+    await api.getAdminUsers({ q: "ada", limit: 100 });
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/users?q=ada&limit=100");
+  });
+
+  it("getAdminUsers omits q when not provided", async () => {
+    await api.getAdminUsers();
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/users");
+  });
+
+  it("updateAdminUser PATCHes the role / active flag", async () => {
+    await api.updateAdminUser("u1", { role: "moderator", is_active: false });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/admin/users/u1");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ role: "moderator", is_active: false });
+  });
 });

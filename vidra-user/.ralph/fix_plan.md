@@ -411,9 +411,9 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 # P10 — Admin UI
 
 - [ ] Implement admin overview.
-- [ ] Implement users list/search/filter.
-- [ ] Implement user detail/edit.
-- [ ] Implement role/quota/status controls.
+- [x] Implement users list/search/filter. (`app/admin/users/page.tsx` → `components/AdminUsersView.tsx`, admin-only (anon/regular/moderator see an "Administrators only" prompt and never fetch). Loads `api.getAdminUsers({q})` (`GET /api/v1/admin/users`) into a list of user cards (username, email, verified/unverified + active/deactivated badges, joined relative time). A search form (`role="search"`) sends the `q` substring filter (with a Clear control); loading / error(retry) / empty states. Reached via a role-gated header "Admin" nav link (`components/AdminNavLink.tsx`). API client gained `getAdminUsers`/`updateAdminUser` + `AdminUser`/`AdminUserListResponse`/`UpdateUserRequest` types (unit-tested).)
+- [~] Implement user detail/edit. (Inline per-row edit (role + active) covers the management action today; a dedicated `/admin/users/:id` detail page is DEFERRED — the row already shows username/email/role/status/verified/joined.)
+- [~] Implement role/quota/status controls. (**Role + active status DONE & VERIFIED**: each row has a role `<select>` (user/moderator/admin) → `PATCH /admin/users/:id {role}` and a Deactivate/Reactivate toggle → `{is_active}`; the PATCH returns the updated user and the row reflects it. The admin's **own** row is detected (`id === session user.id`) and its controls are disabled with a "you" badge + explanation, matching the backend's self-demote/deactivate guard (422). **Quota** is DEFERRED — the backend has no per-user quota field yet.)
 - [ ] Implement registration requests queue.
 - [ ] Implement accept/reject registration requests.
 - [ ] Implement instance configuration page.
@@ -423,9 +423,9 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [ ] Implement audit log page.
 - [ ] Implement system status page.
 - [ ] Implement a "Import from PeerTube" admin page that consumes the backend import contract (launch a dry-run, show the mapping/conflict report, start/resume an import, and stream progress + audit summary). Depends on the `vidra-core` P18 import endpoint; mark `BLOCKED` on that contract until it exists. Never display or store source DB credentials in the browser. See `../vidra-core/.ralph/specs/peertube-import.md`.
-- [~] Add admin route guards. (The client-side role-gate pattern landed with the moderation queue: `ModerationQueue` renders a "Moderators only" prompt for anon/regular sessions (never fetches → no 403), and `ModerationNavLink` only shows the nav entry to moderators/admins. Admin (`/admin/*`) routes will reuse this `useSession().user.role` gate; a shared guard wrapper can be extracted when the first admin page lands.)
-- [ ] Add Playwright admin smoke tests with mocked API.
-- [ ] Add backend-backed e2e proving admin mutations (user edit, registration accept/reject, instance config, feature toggles) persist to the database and are reflected in the UI after refetch.
+- [~] Add admin route guards. (The client-side role-gate pattern is now used by two surfaces: `ModerationQueue`/`ModerationNavLink` (moderator/admin) and `AdminUsersView`/`AdminNavLink` (admin-only) — each renders a permission prompt for an under-privileged/anon session (never fetches → no 403) and the nav link only shows for the allowed role(s). A shared `<RoleGate>` wrapper can be extracted once a third admin surface lands; the duplication is currently two small components.)
+- [x] Add Playwright admin smoke tests with mocked API. (`e2e/admin-users.spec.ts` — anon gated out (no fetch), moderators see Moderation but not Admin nav, admin sees the list with a self badge + disabled self controls, search filters by `q`, change role, deactivate — 6 tests. API client unit tests cover `getAdminUsers`/`updateAdminUser`.)
+- [~] Add backend-backed e2e proving admin mutations (user edit, registration accept/reject, instance config, feature toggles) persist to the database and are reflected in the UI after refetch. (**User edit VERIFIED**: `e2e-backed/admin-users.spec.ts` — a fresh account is seeded via the API, the deterministic admin logs in through the UI, searches for it, promotes it to moderator and deactivates it; a fresh refetch (navigate away+back, re-search) shows both changes AND the admin API read confirms `role=moderator`, `is_active=false`. DB-confirmed via psql (`users` row `moderator`/`is_active=f`). Runs in CI via `frontend-e2e-backed.yml`. Registration accept/reject, instance config, and feature toggles await those admin UIs + backend contracts.)
 
 ---
 

@@ -35,7 +35,11 @@ loading/not-found/error/empty states. Moderation: the moderator/admin queue
 (`app/moderation` → `components/ModerationQueue.tsx`, reached via the role-gated
 `ModerationNavLink`) lists abuse reports (`GET /admin/reports`, Open/All filter) and
 resolves them accept/reject with an internal note (`POST /admin/reports/:id/resolve`) —
-DB-effect VERIFIED in `e2e-backed/moderation.spec.ts`. Still TODO: the rest of P3 (password
+DB-effect VERIFIED in `e2e-backed/moderation.spec.ts`. Admin: the admin-only users
+page (`app/admin/users` → `components/AdminUsersView.tsx`, reached via the admin-only
+`AdminNavLink`) lists/searches accounts (`GET /admin/users?q=`) and edits each user's
+role + active flag (`PATCH /admin/users/:id`), disabling the admin's own row — DB-effect
+VERIFIED in `e2e-backed/admin-users.spec.ts`. Still TODO: the rest of P3 (password
 reset, MFA, settings/profile), more component primitives
 (Card/Badge/Skeleton/Input), custom player controls, the backend-backed Playwright profile
 (login/signup are mock-tested only — NOT `VERIFIED` until proven against a real backend+DB),
