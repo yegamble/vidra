@@ -250,4 +250,16 @@ describe("api endpoints", () => {
     expect(init.method).toBe("PATCH");
     expect(JSON.parse(init.body as string)).toEqual({ role: "moderator", is_active: false });
   });
+
+  it("getBlockedVideos targets the block-list endpoint with pagination", async () => {
+    await api.getBlockedVideos({ limit: 100 });
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/videos/blocked?limit=100");
+  });
+
+  it("unblockVideo DELETEs the block for the video", async () => {
+    await api.unblockVideo("v1");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/admin/videos/v1/block");
+    expect(init.method).toBe("DELETE");
+  });
 });

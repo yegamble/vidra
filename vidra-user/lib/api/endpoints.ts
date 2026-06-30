@@ -4,6 +4,7 @@ import { apiRequest } from "./client";
 import type {
   AdminUser,
   AdminUserListResponse,
+  BlockedVideoListResponse,
   Channel,
   ChannelListResponse,
   Comment,
@@ -316,6 +317,25 @@ export const api = {
     apiRequest<AdminUser>(`/api/v1/admin/users/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body,
+    }),
+
+  /**
+   * GET /api/v1/admin/videos/blocked — currently-blocked videos, newest block
+   * first (moderator/admin). Paginated via limit/offset.
+   */
+  getBlockedVideos: (
+    params: { limit?: number; offset?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    apiRequest<BlockedVideoListResponse>("/api/v1/admin/videos/blocked", {
+      query: { limit: params.limit, offset: params.offset },
+      signal,
+    }),
+
+  /** DELETE /api/v1/admin/videos/{id}/block — lift a video's block (moderator/admin, idempotent, 204). */
+  unblockVideo: (id: string) =>
+    apiRequest<void>(`/api/v1/admin/videos/${encodeURIComponent(id)}/block`, {
+      method: "DELETE",
     }),
 };
 

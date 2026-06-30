@@ -157,6 +157,38 @@ export async function fileVideoReport(
   return reason;
 }
 
+/** blockVideo blocks a video as the given admin/moderator (POST /admin/videos/:id/block). */
+export async function blockVideo(
+  request: APIRequestContext,
+  token: string,
+  videoId: string,
+  reason: string,
+): Promise<void> {
+  await request.post(`${API_URL}/api/v1/admin/videos/${videoId}/block`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { reason },
+  });
+}
+
+/** blockedVideos reads the moderation block-list (newest block first) as the given admin. */
+export async function blockedVideos(
+  request: APIRequestContext,
+  token: string,
+): Promise<Array<{ video_id: string; title: string; reason: string }>> {
+  const res = await request.get(`${API_URL}/api/v1/admin/videos/blocked?limit=100`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return (
+    (await res.json()) as { videos: Array<{ video_id: string; title: string; reason: string }> }
+  ).videos;
+}
+
+/** videoIsPublic reports whether GET /videos/:id is publicly reachable (200 = visible). */
+export async function videoIsPublic(request: APIRequestContext, videoId: string): Promise<boolean> {
+  const res = await request.get(`${API_URL}/api/v1/videos/${videoId}`);
+  return res.status() === 200;
+}
+
 /** seedComment posts a comment on a video as the given user, returning its id. */
 export async function seedComment(
   request: APIRequestContext,

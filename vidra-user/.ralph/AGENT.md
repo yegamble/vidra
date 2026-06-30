@@ -35,7 +35,11 @@ loading/not-found/error/empty states. Moderation: the moderator/admin queue
 (`app/moderation` → `components/ModerationQueue.tsx`, reached via the role-gated
 `ModerationNavLink`) lists abuse reports (`GET /admin/reports`, Open/All filter) and
 resolves them accept/reject with an internal note (`POST /admin/reports/:id/resolve`) —
-DB-effect VERIFIED in `e2e-backed/moderation.spec.ts`. Admin: the admin-only users
+DB-effect VERIFIED in `e2e-backed/moderation.spec.ts`. The moderation block-list
+(`app/moderation/blocked` → `components/BlockedVideosView.tsx`, reached via the role-gated
+`ModerationTabs` sub-nav) lists blocked videos (`GET /admin/videos/blocked`) and unblocks
+them (`DELETE /admin/videos/:id/block`) — DB-effect VERIFIED in `e2e-backed/blocked-videos.spec.ts`.
+Admin: the admin-only users
 page (`app/admin/users` → `components/AdminUsersView.tsx`, reached via the admin-only
 `AdminNavLink`) lists/searches accounts (`GET /admin/users?q=`) and edits each user's
 role + active flag (`PATCH /admin/users/:id`), disabling the admin's own row — DB-effect

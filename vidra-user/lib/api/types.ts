@@ -214,6 +214,29 @@ export interface ResolveReportRequest {
   note?: string;
 }
 
+/**
+ * A currently-blocked video as seen by a moderator/admin in the block-list.
+ * Mirrors the backend BlockedVideo schema. `blocked_by` is omitted when the
+ * moderator who blocked it has since been deleted.
+ */
+export interface BlockedVideo {
+  video_id: string;
+  title: string;
+  privacy: string;
+  state: string;
+  channel_handle: string;
+  channel_display_name: string;
+  reason: string;
+  blocked_by?: string;
+  blocked_at: string;
+}
+
+export interface BlockedVideoListResponse {
+  videos: BlockedVideo[];
+  limit: number;
+  offset: number;
+}
+
 /** PATCH /api/v1/videos/{id} body; provide at least one field, omitted ones unchanged. */
 export interface UpdateVideoRequest {
   title?: string;
