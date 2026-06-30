@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { useSession } from "@/components/auth/AuthProvider";
+import { ReportButton } from "@/components/ReportButton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
 import { ApiError, api } from "@/lib/api";
@@ -153,7 +154,7 @@ function CommentForm({
 
 // CommentItem renders one comment, with a Delete control only for its author.
 function CommentItem({ comment, onDeleted }: { comment: Comment; onDeleted: () => void }) {
-  const { user } = useSession();
+  const { user, status } = useSession();
   const [busy, setBusy] = useState(false);
   const isAuthor = user?.username === comment.author_username;
   const when = relativeTime(comment.created_at);
@@ -185,6 +186,10 @@ function CommentItem({ comment, onDeleted }: { comment: Comment; onDeleted: () =
           >
             Delete
           </button>
+        ) : status === "authed" ? (
+          <span className="ml-auto">
+            <ReportButton kind="comment" targetId={comment.id} variant="link" />
+          </span>
         ) : null}
       </div>
       <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{comment.body}</p>

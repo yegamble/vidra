@@ -29,8 +29,18 @@ export default defineConfig({
   projects: [
     { name: "chromium", testDir: "./e2e", use: { ...devices["Desktop Chrome"] } },
     {
+      // Runs first (as a dependency of backend-backed): seeds the deterministic
+      // admin account. Only the *.setup.ts file; never part of `npm run ci`.
+      name: "backed-setup",
+      testDir: "./e2e-backed",
+      testMatch: /.*\.setup\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
       name: "backend-backed",
       testDir: "./e2e-backed",
+      testIgnore: /.*\.setup\.ts/,
+      dependencies: ["backed-setup"],
       // Always capture a trace — it is the persistence evidence for the
       // data-mutating flows the frontend rule requires.
       use: { ...devices["Desktop Chrome"], trace: "on" },

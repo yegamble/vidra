@@ -173,6 +173,22 @@ describe("api endpoints", () => {
     expect(JSON.parse(init.body as string)).toEqual({ title: "Hi", privacy: "public" });
   });
 
+  it("reportVideo POSTs the reason to the video report endpoint", async () => {
+    await api.reportVideo("v1", "spam");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/videos/v1/report");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ reason: "spam" });
+  });
+
+  it("reportComment POSTs the reason to the comment report endpoint", async () => {
+    await api.reportComment("c1", "abuse");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/comments/c1/report");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ reason: "abuse" });
+  });
+
   it("updateVideo PATCHes the metadata to the video endpoint", async () => {
     await api.updateVideo("v1", { title: "New title", privacy: "unlisted" });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];

@@ -139,6 +139,11 @@ export interface CreateVideoRequest {
   privacy?: VideoPrivacy;
 }
 
+/** POST /api/v1/videos/{id}/report and /api/v1/comments/{id}/report body. */
+export interface CreateReportRequest {
+  reason: string;
+}
+
 /** PATCH /api/v1/videos/{id} body; provide at least one field, omitted ones unchanged. */
 export interface UpdateVideoRequest {
   title?: string;

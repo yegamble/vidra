@@ -241,7 +241,7 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [ ] Implement share button/dialog.
 - [ ] Implement download button/dialog.
 - [x] Implement save/watch-later/playlist button. (save/watch-later done; named playlists deferred.) VERIFIED end-to-end against a real backend. `components/SaveButton.tsx` on the watch page (next to the rating controls): a ★ Save / Saved toggle reflecting `aria-pressed`; on mount (authed) it reads `GET /me/saved` (limit 100) to show the correct initial state, then toggles via `POST`/`DELETE /videos/:id/save`; anon viewers get a "Sign in to save" link. API client gained `saveVideo`/`unsaveVideo`/`getSavedVideos`. Mocked: `e2e/save.spec.ts` (library anon prompt; library lists saved; watch-page Save → Saved). Persistence proof: `e2e-backed/save.spec.ts` — signup → watch page → Save → button flips AND the video appears in `/library` after a fresh refetch; also confirmed via direct `psql` (the `saved_videos` row by `fan<id>`).
-- [ ] Implement report button/dialog.
+- [x] Implement report button/dialog. (`components/ReportButton.tsx` on the watch-page controls row (`kind="video"`) + per-comment (`kind="comment"`): authed → accessible report modal (reason textarea → `POST /videos|comments/:id/report`); anon → "Sign in to report". **VERIFIED** end-to-end via the admin moderation queue read-back — see P9 + `e2e-backed/report.spec.ts`.)
 - [x] Implement like/dislike/reaction controls if in-scope. VERIFIED end-to-end against a real backend. `components/RatingControls.tsx` on the watch page (under the title): 👍/👎 buttons with counts (`formatCount`), the held rating highlighted via `aria-pressed`; clicking toggles (set → switch → clear) with the server's returned summary as source of truth; anon viewers see read-only counts + a "Sign in to rate" link (buttons disabled). API client gained `getVideoRating`/`setVideoRating`/`clearVideoRating` + `RatingValue`/`VideoRating` types (and `PUT` added to the request method union). Mocked: `e2e/rating.spec.ts` (anon disabled + prompt; authed like → `aria-pressed` flips). Persistence proof: `e2e-backed/rating.spec.ts` — signup → watch page → Like → button reflects it AND `like_count` reads back 1 via the API; also confirmed via direct `psql` (the `like` row by `fan<id>`).
 - [x] Implement comments section. VERIFIED end-to-end against a real backend. `components/CommentsSection.tsx` on the watch page: lists a public video's comments newest-first (`Comments (N)` heading, author display name + relative time), an auth-gated post form (anon → "Sign in to leave a comment"; authed → textarea + Post, optimistic prepend from the API response), and a Delete control on your own comments (filtered out on success). API client gained `getVideoComments`/`postComment`/`deleteComment` + `Comment`/`CommentListResponse` types. Mocked coverage: `e2e/comments.spec.ts` (render + anon prompt; authed post). Persistence proof: `e2e-backed/comments.spec.ts` — signup → watch page (client-side nav) → post → comment appears AND is read back via the API; also confirmed via direct `psql` (the `lovely clip <id>` row authored by `fan<id>`).
 - [ ] Implement related videos section.
@@ -388,8 +388,8 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 
 # P9 — Moderation and Reporting UI
 
-- [ ] Implement report content dialog.
-- [ ] Implement report account/channel/video/comment flows.
+- [x] Implement report content dialog. (`components/ReportButton.tsx`: an authed viewer gets a **Report** control that opens an accessible modal (`role="dialog"` + `aria-modal`, Escape/backdrop to close, focuses the reason field) with a required reason textarea (≤2000) → `POST /videos|comments/:id/report` → success confirmation; anon viewers get a "Sign in to report" link. **VERIFIED** end-to-end — see the backed e2e below.)
+- [~] Implement report account/channel/video/comment flows. (**Video + comment DONE & VERIFIED**: `ReportButton kind="video"` on the watch page controls row (`WatchView`); `kind="comment"` per non-authored comment (`CommentsSection`). API client gained `reportVideo`/`reportComment` + `CreateReportRequest` type (unit-tested). Account/channel report flows are DEFERRED — the backend `reports` target_type is `video|comment` only (no account/channel target yet).)
 - [ ] Implement mute account action.
 - [ ] Implement mute instance action.
 - [ ] Implement moderation reports list.
@@ -403,8 +403,8 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [ ] Implement create/edit/delete watched words list.
 - [ ] Implement comments moderation overview.
 - [ ] Implement bulk moderation actions if backend supports them.
-- [ ] Add Playwright moderation smoke tests with mocked API.
-- [ ] Add backend-backed e2e proving moderation actions (report resolve, block/unblock, mute, watched-words edit) persist to the database and are reflected in the UI after refetch.
+- [~] Add Playwright moderation smoke tests with mocked API. (Reporting DONE: `e2e/report.spec.ts` — anon prompt, authed video report (dialog → submit → confirmation), authed comment report — 3 tests. Block/mute/watched-words smoke tests await those UIs.)
+- [~] Add backend-backed e2e proving moderation actions (report resolve, block/unblock, mute, watched-words edit) persist to the database and are reflected in the UI after refetch. (**Report filing VERIFIED**: `e2e-backed/report.spec.ts` — a viewer files a video report and a comment report from the watch page; each is read back from the **admin moderation queue** (`GET /admin/reports`) as a deterministic admin, proving the `reports` row persisted (psql-confirmed: `video|open`, `comment|open`). This loop also added the reusable deterministic-admin backed harness: the `backed-setup` Playwright project (`e2e-backed/admin.setup.ts`, a dependency of `backend-backed`) registers the first account as admin; `fixtures.ts` `adminToken()`/`reportsQueue()` consume it. **Report resolve / block / mute / watched-words** await those admin/moderation UIs — the admin harness is now in place to verify them.)
 
 ---
 

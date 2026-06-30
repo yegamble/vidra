@@ -18,13 +18,56 @@ export function uniqueId(): string {
   return randomUUID().replace(/-/g, "").slice(0, 12);
 }
 
+// The deterministic test admin. The backend grants the admin role to the FIRST
+// account on a fresh instance, so `ensureAdmin` must run before any other
+// registration — the `backed-setup` Playwright project (a dependency of
+// `backend-backed`) guarantees that. These are throwaway credentials for an
+// ephemeral CI/dev database, never a real secret.
+export const ADMIN_USERNAME = "e2eadmin";
+export const ADMIN_EMAIL = "e2e-admin@example.test";
+export const ADMIN_PASSWORD = "e2e-admin-supersecret";
+
+/**
+ * ensureAdmin registers the deterministic admin (idempotent: a 409 means it already
+ * exists from a prior run, which is fine). Run once, first, by the setup project.
+ * NOTE: locally this only yields an admin against a FRESH database — reset with
+ * `docker compose --profile core down -v` if the dev DB already has other accounts.
+ */
+export async function ensureAdmin(request: APIRequestContext): Promise<void> {
+  await request.post(`${API_URL}/api/v1/auth/register`, {
+    data: { username: ADMIN_USERNAME, email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+  });
+}
+
+/** adminToken logs in as the deterministic admin and returns its access token. */
+export async function adminToken(request: APIRequestContext): Promise<string> {
+  const res = await request.post(`${API_URL}/api/v1/auth/login`, {
+    data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+  });
+  return ((await res.json()) as { token: string }).token;
+}
+
+/** reportsQueue reads the admin moderation queue (newest first) as the given admin. */
+export async function reportsQueue(
+  request: APIRequestContext,
+  token: string,
+): Promise<Array<{ reason: string; target_type: string; status: string }>> {
+  const res = await request.get(`${API_URL}/api/v1/admin/reports?limit=100`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return (
+    (await res.json()) as { reports: Array<{ reason: string; target_type: string; status: string }> }
+  ).reports;
+}
+
 /**
  * seedPublishedChannel registers a fresh owner, creates a channel, and publishes
- * one public video in it via the API, returning the channel handle + display name.
+ * one public video in it via the API, returning the channel handle + display name
+ * and the owner's access token (for seeding owner-authored data such as comments).
  */
 export async function seedPublishedChannel(
   request: APIRequestContext,
-): Promise<{ handle: string; displayName: string; videoId: string; videoTitle: string }> {
+): Promise<{ handle: string; displayName: string; videoId: string; videoTitle: string; token: string }> {
   const id = uniqueId();
   const handle = `ch${id}`;
   const displayName = `Channel ${id}`;
@@ -52,7 +95,21 @@ export async function seedPublishedChannel(
     },
   });
 
-  return { handle, displayName, videoId, videoTitle };
+  return { handle, displayName, videoId, videoTitle, token };
+}
+
+/** seedComment posts a comment on a video as the given user, returning its id. */
+export async function seedComment(
+  request: APIRequestContext,
+  videoId: string,
+  token: string,
+  body: string,
+): Promise<string> {
+  const res = await request.post(`${API_URL}/api/v1/videos/${videoId}/comments`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { body },
+  });
+  return ((await res.json()) as { id: string }).id;
 }
 
 /** followerCount reads a channel's persisted follower count via the public API. */

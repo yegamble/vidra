@@ -6,6 +6,7 @@ import { useSession } from "@/components/auth/AuthProvider";
 import { AddToPlaylistButton } from "@/components/AddToPlaylistButton";
 import { CommentsSection } from "@/components/CommentsSection";
 import { RatingControls } from "@/components/RatingControls";
+import { ReportButton } from "@/components/ReportButton";
 import { SaveButton } from "@/components/SaveButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -103,6 +104,7 @@ export function WatchView({ id }: { id: string }) {
             <RatingControls videoId={video.id} />
             <SaveButton videoId={video.id} />
             <AddToPlaylistButton videoId={video.id} />
+            <ReportButton kind="video" targetId={video.id} />
           </div>
           {video.description ? (
             <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">

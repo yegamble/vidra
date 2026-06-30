@@ -144,6 +144,20 @@ export const api = {
   deleteComment: (id: string) =>
     apiRequest<void>(`/api/v1/comments/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
+  /** POST /api/v1/videos/{id}/report — file an abuse report on a video (auth; idempotent 204). */
+  reportVideo: (id: string, reason: string) =>
+    apiRequest<void>(`/api/v1/videos/${encodeURIComponent(id)}/report`, {
+      method: "POST",
+      body: { reason },
+    }),
+
+  /** POST /api/v1/comments/{id}/report — file an abuse report on a comment (auth; idempotent 204). */
+  reportComment: (id: string, reason: string) =>
+    apiRequest<void>(`/api/v1/comments/${encodeURIComponent(id)}/report`, {
+      method: "POST",
+      body: { reason },
+    }),
+
   /** GET /api/v1/videos/{id}/rating — like/dislike counts (+ my_rating if authed). */
   getVideoRating: (id: string, signal?: AbortSignal) =>
     apiRequest<VideoRating>(`/api/v1/videos/${encodeURIComponent(id)}/rating`, { signal }),

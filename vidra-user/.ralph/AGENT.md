@@ -68,7 +68,20 @@ npx playwright test         # e2e / smoke
 Playwright serves the app on port 3000 by default (what CI + these docs assume). If
 3000 is taken locally (e.g. another project's dev server), override the port:
 `E2E_PORT=3100 npm run e2e` (and `E2E_PORT=3100 npm run e2e:backed`). The default is
-unchanged, so CI parity holds.
+unchanged, so CI parity holds. **Caveat for backed runs at a non-3000 port:** the
+backend's CORS allowlist must include that origin or the browser blocks mutations
+(signup/report/etc.). Bring up the api with `CORS_ALLOWED_ORIGINS=http://localhost:3100`
+(see `vidra-core/docker-compose.yml` — it honours that env). CI runs on :3000, which
+the compose default already allows.
+
+### Backed admin harness (deterministic admin)
+Admin-gated backed verification (e.g. reading the moderation queue) uses a Playwright
+**setup project**: `backed-setup` (`e2e-backed/admin.setup.ts`, `testMatch *.setup.ts`)
+is a `dependencies` of `backend-backed`, so it runs FIRST and registers a deterministic
+admin (the backend grants admin to the first account on a fresh instance). Specs then
+call `adminToken()` / `reportsQueue()` from `e2e-backed/fixtures.ts`. This works against
+a **fresh** DB only — locally `docker compose --profile core down -v` first; CI brings up
+a fresh stack per run. `backed-setup` never runs under `npm run ci` (that's `--project=chromium`).
 
 ## 🔴 Database-effect verification (required for data-mutating features)
 Mocks are acceptable for UI scaffolding only. A feature that creates/updates/deletes

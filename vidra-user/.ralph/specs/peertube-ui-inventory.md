@@ -58,11 +58,12 @@ For every route/flow, use this structure:
 | PT-WATCH-SAVE | Save to playlist / Watch later | menu/button | logged-out/logged-in/saved | Opens playlist save menu (+ ★ watch-later) | playlist API + saved API | e2e/playlists.spec.ts + e2e-backed/playlists.spec.ts (+ save.spec.ts) | VERIFIED | components/AddToPlaylistButton.tsx; components/SaveButton.tsx |
 | PT-WATCH-SHARE | Share | button/modal | default/open/copied | Opens share/embed/download options | video URL/embed | Playwright | NOT_STARTED | none |
 | PT-WATCH-DOWNLOAD | Download | button/modal | allowed/forbidden | Select downloadable resolution | files/download API | Playwright | NOT_STARTED | none |
-| PT-WATCH-REPORT | Report | menu/modal | logged-out/logged-in | Opens report content flow | reports API | integration/Playwright | NOT_STARTED | none |
+| PT-WATCH-REPORT | Report | button/modal | logged-out (sign-in link) / logged-in (reason dialog → submit/success) | Files an abuse report against the video | POST /videos/:id/report | e2e/report.spec.ts + e2e-backed/report.spec.ts | VERIFIED | components/ReportButton.tsx; components/WatchView.tsx |
 | PT-WATCH-SUPPORT | Support | button/link | present/absent | Shows creator support text/link | video support metadata | Playwright | NOT_STARTED | none |
 | PT-WATCH-RESUME | Resume from m:ss | button | shown when saved position ≥5s / hidden | Seeks player to the saved resume position | GET /videos/:id/watch-progress | e2e/history.spec.ts | VERIFIED | components/WatchView.tsx (Player) |
 | PT-WATCH-HISTORY-RECORD | (implicit progress reporting) | player behaviour | authed only; throttled/pause/unmount | Records playback position so the video enters history & can be resumed | PUT /videos/:id/watch-progress | e2e-backed/history.spec.ts | VERIFIED | components/WatchView.tsx (Player) |
 | PT-WATCH-COMMENT-SUBMIT | Comment | composer button | disabled/loading/error | Adds comment | comments API/federation | integration/Playwright | NOT_STARTED | none |
+| PT-WATCH-COMMENT-REPORT | Report (comment) | link/modal | shown for authed non-authors | Files an abuse report against a comment | POST /comments/:id/report | e2e/report.spec.ts + e2e-backed/report.spec.ts | VERIFIED | components/ReportButton.tsx; components/CommentsSection.tsx |
 
 ### PT-PUBLISH — Publish/upload/live
 
