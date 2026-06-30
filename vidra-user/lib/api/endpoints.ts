@@ -21,6 +21,7 @@ import type {
   PlaylistListResponse,
   UnreadCountResponse,
   UpdatePlaylistRequest,
+  UpdateVideoRequest,
   UploadVideoResult,
   VideoRating,
   VideoSearchResponse,
@@ -96,6 +97,14 @@ export const api = {
       method: "POST",
       body,
     }),
+
+  /** PATCH /api/v1/videos/{id} — update a video's metadata (auth, owner). */
+  updateVideo: (id: string, body: UpdateVideoRequest) =>
+    apiRequest<Video>(`/api/v1/videos/${encodeURIComponent(id)}`, { method: "PATCH", body }),
+
+  /** DELETE /api/v1/videos/{id} — delete a video (auth, owner; idempotent 204). */
+  deleteVideo: (id: string) =>
+    apiRequest<void>(`/api/v1/videos/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   /**
    * POST /api/v1/videos/{id}/file — upload the original file (auth, owner). The

@@ -342,20 +342,20 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 
 # P7 — Studio and Creator Tools
 
-- [ ] Implement My Videos page.
-- [ ] Implement video status badges: draft, uploading, scanning, transcoding, published, failed, blocked, quarantined, scheduled.
-- [ ] Implement quick edit controls.
-- [ ] Implement full video edit page.
-- [ ] Implement privacy editing.
-- [ ] Implement thumbnail/caption editing.
-- [ ] Implement delete video confirmation.
+- [~] Implement My Videos page. (Studio now has a **"Your videos"** section (`MyVideosSection` in `components/StudioView.tsx`): for the selected channel it lists the owner's videos via `GET /api/v1/channels/:handle/videos` (the owner view returns drafts/private too), each row showing the title (link to the watch page), a lifecycle **status badge**, and the privacy label, with loading / error(retry) / empty states and a **Refresh** control (refetch after a new upload, since the upload form is a sibling section). A multi-channel creator gets a channel selector. A dedicated `/studio/videos` route + pagination/sort is a later polish; this is the embedded my-videos list.)
+- [~] Implement video status badges: draft, uploading, scanning, transcoding, published, failed, blocked, quarantined, scheduled. (`StateBadge` renders the four backend lifecycle states — draft / processing / published / failed — with distinct colors. The scanning/transcoding/blocked/quarantined/scheduled states need backend states/fields that do not exist yet — DEFERRED on those backend dependencies.)
+- [x] Implement quick edit controls. (Per-row inline **Edit** in "Your videos" → title + privacy form → `PATCH /api/v1/videos/:id`; the server result replaces the row. Save/Cancel, disabled-while-saving, blank-title guard, 422/error message. **VERIFIED** end-to-end — see the backed e2e below.)
+- [~] Implement full video edit page. (Title + privacy editable inline today. A dedicated full-edit page with description/tags/category/language/license needs those backend metadata fields (the create-draft + `UpdateVideoRequest` only accept title/description/privacy) — DEFERRED to a metadata-fields slice; description editing can land once the studio surfaces it.)
+- [x] Implement privacy editing. (Inline Edit form's privacy `<select>` public/unlisted/private → `PATCH /api/v1/videos/:id` `{privacy}`. VERIFIED end-to-end below.)
+- [ ] Implement thumbnail/caption editing. (DEFERRED — needs backend thumbnail-replace / captions contracts.)
+- [x] Implement delete video confirmation. (Per-row two-step **Delete → Confirm** (inline, no `window.confirm`) → `DELETE /api/v1/videos/:id`; the row is removed on success. **VERIFIED** end-to-end below.)
 - [ ] Implement statistics page.
 - [ ] Implement channel management page.
-- [ ] Implement channel create/edit/delete.
+- [~] Implement channel create/edit/delete. (Create DONE (P6 studio `ChannelSection` → `POST /channels`). Channel **edit/delete** UI is not built yet — the backend exposes `PATCH`/`DELETE /channels/:handle`; DEFERRED to a channel-management slice.)
 - [ ] Implement channel sync page for remote channels if in-scope.
 - [ ] Implement quota/storage usage display.
-- [ ] Add Playwright creator smoke tests.
-- [ ] Add backend-backed e2e proving video edit/delete and channel create/edit/delete persist to the database and are reflected in the UI after refetch.
+- [x] Add Playwright creator smoke tests. (`e2e/studio.spec.ts` mocked: anon prompt, create channel → empty "Your videos", upload → Published, **edit title+privacy**, **delete** — 5 tests. API client unit tests cover `updateVideo`/`deleteVideo` — `lib/api/endpoints.test.ts`.)
+- [~] Add backend-backed e2e proving video edit/delete and channel create/edit/delete persist to the database and are reflected in the UI after refetch. (**Video edit + delete VERIFIED**: `e2e-backed/studio.spec.ts` "a creator can edit and delete their video" signs up → creates a channel → uploads the tiny H.264 mp4 → in "Your videos" edits the title (awaited PATCH) → the new title is read back via the **public channel-videos API** (`channelVideos` fixture; old title absent) → deletes it (awaited DELETE) → the public list no longer contains it. Run locally against the compose `core` stack on :8088 (`E2E_API_URL=http://localhost:8088 E2E_PORT=3100 npm run e2e:backed`) — both backed studio tests pass; the deleted rows are gone from the real `videos` table (psql). Runs in CI via `frontend-e2e-backed.yml`. **Channel edit/delete** backed coverage is DEFERRED with that UI.)
 
 ---
 

@@ -11,6 +11,11 @@ import { defineConfig, devices } from "@playwright/test";
 //                                  via `npm run e2e:backed` with the core stack up
 //                                  and the app built against it — see .ralph/AGENT.md.
 //                                  Never part of `npm run ci`.
+// The dev/test server port. Defaults to 3000 (what CI and the AGENT.md docs use);
+// override with E2E_PORT when 3000 is taken locally (e.g. another project's server).
+const PORT = process.env.E2E_PORT ?? "3000";
+const BASE_URL = `http://localhost:${PORT}`;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -18,7 +23,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: [["html", { open: "never" }]],
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: BASE_URL,
     trace: "on-first-retry",
   },
   projects: [
@@ -32,8 +37,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run start",
-    url: "http://localhost:3000",
+    command: `npm run start -- -p ${PORT}`,
+    url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

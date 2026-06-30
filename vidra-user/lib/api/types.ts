@@ -139,6 +139,13 @@ export interface CreateVideoRequest {
   privacy?: VideoPrivacy;
 }
 
+/** PATCH /api/v1/videos/{id} body; provide at least one field, omitted ones unchanged. */
+export interface UpdateVideoRequest {
+  title?: string;
+  description?: string;
+  privacy?: VideoPrivacy;
+}
+
 /** POST /api/v1/videos/{id}/file response (the published video + stored file). */
 export interface UploadVideoResult {
   video: Video;

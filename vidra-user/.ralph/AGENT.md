@@ -65,6 +65,10 @@ npm run lint                # eslint
 npm run typecheck           # tsc --noEmit (strict)
 npx playwright test         # e2e / smoke
 ```
+Playwright serves the app on port 3000 by default (what CI + these docs assume). If
+3000 is taken locally (e.g. another project's dev server), override the port:
+`E2E_PORT=3100 npm run e2e` (and `E2E_PORT=3100 npm run e2e:backed`). The default is
+unchanged, so CI parity holds.
 
 ## 🔴 Database-effect verification (required for data-mutating features)
 Mocks are acceptable for UI scaffolding only. A feature that creates/updates/deletes

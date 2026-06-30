@@ -173,6 +173,21 @@ describe("api endpoints", () => {
     expect(JSON.parse(init.body as string)).toEqual({ title: "Hi", privacy: "public" });
   });
 
+  it("updateVideo PATCHes the metadata to the video endpoint", async () => {
+    await api.updateVideo("v1", { title: "New title", privacy: "unlisted" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/videos/v1");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ title: "New title", privacy: "unlisted" });
+  });
+
+  it("deleteVideo DELETEs the video", async () => {
+    await api.deleteVideo("v1");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/videos/v1");
+    expect(init.method).toBe("DELETE");
+  });
+
   it("uploadVideoFile POSTs multipart form data (no JSON content-type)", async () => {
     const file = new File(["x"], "clip.mp4", { type: "video/mp4" });
     await api.uploadVideoFile("v1", file);

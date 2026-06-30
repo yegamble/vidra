@@ -78,6 +78,17 @@ For every route/flow, use this structure:
 | PT-PUBLISH-CHANNEL | Channel | select | empty/multiple | Selects owning channel | channel API | integration/Playwright | VERIFIED | e2e/studio.spec.ts + e2e-backed/studio.spec.ts; components/StudioView.tsx |
 | PT-PUBLISH-SAVE | Save/Publish | button | disabled/loading/success/error | Saves metadata/publishes | videos API/jobs | integration/Playwright | VERIFIED | e2e/studio.spec.ts + e2e-backed/studio.spec.ts; components/StudioView.tsx |
 
+### PT-STUDIO — Studio video management ("Your videos")
+
+| control id | label / accessible name | type | states | behavior | backend dependency | tests | status | evidence |
+|---|---|---|---|---|---|---|---|---|
+| PT-STUDIO-MY-VIDEOS-LIST | Your videos | list | loading/error/empty/ready | Lists the owner's videos for the selected channel (drafts/private included) with state + privacy | GET /channels/:handle/videos (owner view) | integration/Playwright | VERIFIED | e2e/studio.spec.ts + e2e-backed/studio.spec.ts; components/StudioView.tsx |
+| PT-STUDIO-MY-VIDEOS-CHANNEL | Videos channel | select | single/multiple channels | Chooses which channel's videos to manage | GET /channels/:handle/videos | Playwright | VERIFIED | e2e/studio.spec.ts; components/StudioView.tsx |
+| PT-STUDIO-MY-VIDEOS-REFRESH | Refresh | button | idle/loading | Refetches the video list (e.g. after a new upload) | GET /channels/:handle/videos | Playwright | VERIFIED | e2e-backed/studio.spec.ts; components/StudioView.tsx |
+| PT-STUDIO-VIDEO-EDIT | Edit | row action → inline form | view/edit; title+privacy; 422/error | Updates a video's title & privacy | PATCH /videos/:id (owner) | integration/Playwright | VERIFIED | e2e/studio.spec.ts + e2e-backed/studio.spec.ts; components/StudioView.tsx |
+| PT-STUDIO-VIDEO-DELETE | Delete | destructive row action | confirm/cancel/loading | Deletes a video (two-step confirm) | DELETE /videos/:id (owner) | integration/Playwright | VERIFIED | e2e/studio.spec.ts + e2e-backed/studio.spec.ts; components/StudioView.tsx |
+| PT-STUDIO-VIDEO-STATE | Status badge | badge | draft/processing/published/failed | Shows lifecycle state | videos API | Playwright | VERIFIED | e2e/studio.spec.ts; components/StudioView.tsx |
+
 ### PT-ADMIN — Administration/moderation
 
 | control id | label / accessible name | type | states | behavior | backend dependency | tests | status | evidence |

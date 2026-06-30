@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
 import { ApiError, api } from "@/lib/api";
-import type { Channel, Video, VideoPrivacy } from "@/lib/api";
+import type { Channel, Video, VideoPrivacy, VideoState } from "@/lib/api";
 
 type Status = "loading" | "error" | "ready";
 
@@ -83,6 +83,7 @@ function Studio() {
         onCreated={(ch) => setChannels((list) => [ch, ...list])}
       />
       {channels.length > 0 ? <UploadSection channels={channels} /> : null}
+      {channels.length > 0 ? <MyVideosSection channels={channels} /> : null}
     </div>
   );
 }
@@ -296,5 +297,267 @@ function UploadSection({ channels }: { channels: Channel[] }) {
       ) : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
     </section>
+  );
+}
+
+// MyVideosSection lists the owner's videos for the selected channel (the owner
+// view returns drafts/private too) and lets them edit metadata or delete a video.
+// It refetches on a remount/channel change; after an edit/delete the local list
+// is updated from the server result.
+function MyVideosSection({ channels }: { channels: Channel[] }) {
+  const [handle, setHandle] = useState(channels[0]?.handle ?? "");
+  const [status, setStatus] = useState<Status>("loading");
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    if (handle === "") return;
+    const controller = new AbortController();
+    api
+      .listChannelVideos(handle, undefined, controller.signal)
+      .then((res) => {
+        setVideos(res.videos);
+        setStatus("ready");
+      })
+      .catch((err: unknown) => {
+        void err;
+        if (controller.signal.aborted) return;
+        setStatus("error");
+      });
+    return () => controller.abort();
+  }, [handle, reloadKey]);
+
+  function refetch() {
+    setStatus("loading");
+    setReloadKey((k) => k + 1);
+  }
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Your videos</h2>
+        <button
+          type="button"
+          onClick={refetch}
+          className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {channels.length > 1 ? (
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Channel</span>
+          <select
+            value={handle}
+            onChange={(e) => {
+              setStatus("loading");
+              setHandle(e.target.value);
+            }}
+            aria-label="Videos channel"
+            className="rounded border border-zinc-300 px-3 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+          >
+            {channels.map((ch) => (
+              <option key={ch.id} value={ch.handle}>
+                {ch.display_name} (@{ch.handle})
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {status === "loading" ? (
+        <div className="flex justify-center py-8">
+          <Spinner label="Loading your videos" />
+        </div>
+      ) : status === "error" ? (
+        <ErrorState message="Could not load your videos." onRetry={refetch} />
+      ) : videos.length === 0 ? (
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">No videos in this channel yet.</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          {videos.map((v) => (
+            <VideoRow
+              key={v.id}
+              video={v}
+              onUpdated={(u) => setVideos((list) => list.map((x) => (x.id === u.id ? u : x)))}
+              onDeleted={() => setVideos((list) => list.filter((x) => x.id !== v.id))}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+type RowMode = "view" | "edit" | "confirm-delete";
+
+// VideoRow shows one of the owner's videos with inline edit (title + privacy) and
+// a two-step delete confirmation. The server result is the source of truth.
+function VideoRow({
+  video,
+  onUpdated,
+  onDeleted,
+}: {
+  video: Video;
+  onUpdated: (v: Video) => void;
+  onDeleted: () => void;
+}) {
+  const [mode, setMode] = useState<RowMode>("view");
+  const [title, setTitle] = useState(video.title);
+  const [privacy, setPrivacy] = useState<VideoPrivacy>(video.privacy);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (busy || title.trim() === "") return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await api.updateVideo(video.id, { title: title.trim(), privacy });
+      onUpdated(updated);
+      setMode("view");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not update the video.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function cancelEdit() {
+    setMode("view");
+    setTitle(video.title);
+    setPrivacy(video.privacy);
+    setError(null);
+  }
+
+  async function remove() {
+    setBusy(true);
+    try {
+      await api.deleteVideo(video.id);
+      onDeleted();
+    } catch {
+      setBusy(false);
+      setMode("view");
+    }
+  }
+
+  if (mode === "edit") {
+    return (
+      <li className="flex flex-col gap-2 px-4 py-3">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Title</span>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            aria-label="Edit title"
+            maxLength={200}
+            className="rounded border border-zinc-300 px-3 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Privacy</span>
+          <select
+            value={privacy}
+            onChange={(e) => setPrivacy(e.target.value as VideoPrivacy)}
+            aria-label="Edit privacy"
+            className="rounded border border-zinc-300 px-3 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+          >
+            <option value="public">Public</option>
+            <option value="unlisted">Unlisted</option>
+            <option value="private">Private</option>
+          </select>
+        </label>
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={busy || title.trim() === ""}
+            onClick={() => void save()}
+            className="rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={cancelEdit}
+            className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            Cancel
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-center gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium">
+          <Link href={`/videos/${video.id}`} className="hover:underline">
+            {video.title}
+          </Link>
+        </p>
+        <div className="mt-1 flex items-center gap-2 text-xs">
+          <StateBadge state={video.state} />
+          <span className="text-zinc-500 dark:text-zinc-400">{privacyLabel(video.privacy)}</span>
+        </div>
+      </div>
+      {mode === "confirm-delete" ? (
+        <div className="flex shrink-0 items-center gap-2 text-sm">
+          <span className="text-zinc-600 dark:text-zinc-300">Delete?</span>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void remove()}
+            className="font-medium text-red-600 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:opacity-50 dark:text-red-400"
+          >
+            Confirm
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setMode("view")}
+            className="font-medium text-zinc-500 hover:text-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-200"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="flex shrink-0 items-center gap-2 text-sm">
+          <button
+            type="button"
+            onClick={() => setMode("edit")}
+            className="font-medium text-zinc-600 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:text-zinc-300 dark:hover:text-zinc-100"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("confirm-delete")}
+            className="font-medium text-zinc-500 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:text-zinc-400 dark:hover:text-red-400"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function privacyLabel(p: VideoPrivacy): string {
+  return p === "public" ? "Public" : p === "unlisted" ? "Unlisted" : "Private";
+}
+
+function StateBadge({ state }: { state: VideoState }) {
+  const styles: Record<VideoState, string> = {
+    draft: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
+    processing: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+    published: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200",
+    failed: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200",
+  };
+  return (
+    <span className={`rounded px-1.5 py-0.5 font-medium capitalize ${styles[state]}`}>{state}</span>
   );
 }

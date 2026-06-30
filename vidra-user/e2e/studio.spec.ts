@@ -1,14 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 
 // Mocked studio coverage (a real backend is not running in `npm run ci`; the
-// publish round-trip is proven in e2e-backed/studio.spec.ts).
+// publish/edit/delete round-trips are proven in e2e-backed/studio.spec.ts).
 const LOGIN = /\/api\/v1\/auth\/login$/;
 const FEED = /\/api\/v1\/videos(\?|$)/;
 const UNREAD = /\/api\/v1\/me\/notifications\/unread-count$/;
 const MY_CHANNELS = /\/api\/v1\/me\/channels$/;
 const CREATE_CHANNEL = /\/api\/v1\/channels$/;
-const CREATE_VIDEO = /\/api\/v1\/channels\/ada_makes\/videos$/;
+const CHANNEL_VIDEOS = /\/api\/v1\/channels\/ada_makes\/videos$/;
 const UPLOAD = /\/api\/v1\/videos\/v1\/file$/;
+const VIDEO = /\/api\/v1\/videos\/v1$/;
 
 function channel(handle: string, name: string) {
   return {
@@ -19,6 +20,19 @@ function channel(handle: string, name: string) {
     description: "",
     follower_count: 0,
     created_at: new Date().toISOString(),
+  };
+}
+
+function video(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "v1",
+    channel_id: "c1",
+    title: "My clip",
+    description: "",
+    privacy: "public",
+    state: "published",
+    created_at: new Date().toISOString(),
+    ...overrides,
   };
 }
 
@@ -64,6 +78,8 @@ test("a creator can create a channel", async ({ page }) => {
     if (route.request().method() === "POST") return route.fulfill({ json: channel("ada_makes", "Ada Makes") });
     return route.fulfill({ json: { channels: [] } });
   });
+  // The new "Your videos" section loads the new channel's (empty) video list.
+  await page.route(CHANNEL_VIDEOS, (route) => route.fulfill({ json: { videos: [] } }));
 
   await page.getByRole("link", { name: "Studio" }).click();
   await expect(page.getByText("Create your first channel to start publishing.")).toBeVisible();
@@ -74,6 +90,7 @@ test("a creator can create a channel", async ({ page }) => {
   // The new channel appears, and the upload form becomes available.
   await expect(page.getByRole("link", { name: /Ada Makes/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Upload a video" })).toBeVisible();
+  await expect(page.getByText("No videos in this channel yet.")).toBeVisible();
 });
 
 test("a creator can upload and publish a video", async ({ page }) => {
@@ -81,42 +98,14 @@ test("a creator can upload and publish a video", async ({ page }) => {
   await page.route(MY_CHANNELS, (route) =>
     route.fulfill({ json: { channels: [channel("ada_makes", "Ada Makes")] } }),
   );
-  await page.route(CREATE_VIDEO, (route) =>
-    route.fulfill({
-      json: {
-        id: "v1",
-        channel_id: "c1",
-        title: "My clip",
-        description: "",
-        privacy: "public",
-        state: "draft",
-        created_at: new Date().toISOString(),
-      },
-    }),
-  );
-  await page.route(UPLOAD, (route) =>
-    route.fulfill({
-      json: {
-        video: {
-          id: "v1",
-          channel_id: "c1",
-          title: "My clip",
-          description: "",
-          privacy: "public",
-          state: "published",
-          created_at: new Date().toISOString(),
-        },
-        file: {
-          id: "f1",
-          kind: "original",
-          content_type: "video/mp4",
-          original_name: "clip.mp4",
-          size_bytes: 4,
-          created_at: new Date().toISOString(),
-        },
-      },
-    }),
-  );
+  // GET lists the channel's videos (the "Your videos" section); POST creates a draft.
+  await page.route(CHANNEL_VIDEOS, (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({ json: video({ state: "draft" }) });
+    }
+    return route.fulfill({ json: { videos: [] } });
+  });
+  await page.route(UPLOAD, (route) => route.fulfill({ json: { video: video() } }));
 
   await page.getByRole("link", { name: "Studio" }).click();
   await page.getByLabel("Video title").fill("My clip");
@@ -129,4 +118,59 @@ test("a creator can upload and publish a video", async ({ page }) => {
 
   await expect(page.getByText("Published!")).toBeVisible();
   await expect(page.getByRole("link", { name: /View .*My clip/ })).toBeVisible();
+});
+
+test("a creator can edit a video's title and privacy", async ({ page }) => {
+  await signIn(page);
+  await page.route(MY_CHANNELS, (route) =>
+    route.fulfill({ json: { channels: [channel("ada_makes", "Ada Makes")] } }),
+  );
+  await page.route(CHANNEL_VIDEOS, (route) =>
+    route.fulfill({ json: { videos: [video({ title: "Old title", privacy: "public" })] } }),
+  );
+  await page.route(VIDEO, (route) => {
+    if (route.request().method() === "PATCH") {
+      return route.fulfill({ json: video({ title: "New title", privacy: "unlisted" }) });
+    }
+    return route.continue();
+  });
+
+  await page.getByRole("link", { name: "Studio" }).click();
+  // Scope privacy assertions to the video row — "Public"/"Unlisted" also appear as
+  // <option>s in the upload form's privacy <select>.
+  const row = page.getByRole("listitem").filter({ hasText: "Old title" });
+  await expect(row).toBeVisible();
+  await expect(row.getByText("Public")).toBeVisible();
+
+  await row.getByRole("button", { name: "Edit" }).click();
+  await page.getByLabel("Edit title").fill("New title");
+  await page.getByLabel("Edit privacy").selectOption("unlisted");
+  await page.getByRole("button", { name: "Save" }).click();
+
+  const updatedRow = page.getByRole("listitem").filter({ hasText: "New title" });
+  await expect(updatedRow.getByRole("link", { name: "New title" })).toBeVisible();
+  await expect(updatedRow.getByText("Unlisted")).toBeVisible();
+});
+
+test("a creator can delete a video", async ({ page }) => {
+  await signIn(page);
+  await page.route(MY_CHANNELS, (route) =>
+    route.fulfill({ json: { channels: [channel("ada_makes", "Ada Makes")] } }),
+  );
+  await page.route(CHANNEL_VIDEOS, (route) =>
+    route.fulfill({ json: { videos: [video({ title: "Doomed clip" })] } }),
+  );
+  await page.route(VIDEO, (route) => {
+    if (route.request().method() === "DELETE") return route.fulfill({ status: 204 });
+    return route.continue();
+  });
+
+  await page.getByRole("link", { name: "Studio" }).click();
+  await expect(page.getByRole("link", { name: "Doomed clip" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Confirm" }).click();
+
+  await expect(page.getByRole("link", { name: "Doomed clip" })).toHaveCount(0);
+  await expect(page.getByText("No videos in this channel yet.")).toBeVisible();
 });
