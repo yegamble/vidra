@@ -121,6 +121,29 @@ export interface Channel {
   created_at: string;
 }
 
+export interface ChannelListResponse {
+  channels: Channel[];
+}
+
+/** POST /api/v1/channels body. */
+export interface CreateChannelRequest {
+  handle: string;
+  display_name: string;
+  description?: string;
+}
+
+/** POST /api/v1/channels/{handle}/videos body (create a draft). */
+export interface CreateVideoRequest {
+  title: string;
+  description?: string;
+  privacy?: VideoPrivacy;
+}
+
+/** POST /api/v1/videos/{id}/file response (the published video + stored file). */
+export interface UploadVideoResult {
+  video: Video;
+}
+
 export interface Comment {
   id: string;
   video_id: string;

@@ -3,8 +3,11 @@ import { apiBaseUrl } from "@/lib/config";
 import { apiRequest } from "./client";
 import type {
   Channel,
+  ChannelListResponse,
   Comment,
   CommentListResponse,
+  CreateChannelRequest,
+  CreateVideoRequest,
   FeedSort,
   InstanceResponse,
   RatingValue,
@@ -18,6 +21,7 @@ import type {
   PlaylistListResponse,
   UnreadCountResponse,
   UpdatePlaylistRequest,
+  UploadVideoResult,
   VideoRating,
   VideoSearchResponse,
   WatchHistoryResponse,
@@ -77,6 +81,34 @@ export const api = {
   /** DELETE /api/v1/channels/{handle}/follow — unfollow a channel (auth; idempotent 204). */
   unfollowChannel: (handle: string) =>
     apiRequest<void>(`/api/v1/channels/${encodeURIComponent(handle)}/follow`, { method: "DELETE" }),
+
+  /** GET /api/v1/me/channels — the caller's own channels (auth). */
+  getMyChannels: (signal?: AbortSignal) =>
+    apiRequest<ChannelListResponse>("/api/v1/me/channels", { signal }),
+
+  /** POST /api/v1/channels — create a channel (auth). */
+  createChannel: (body: CreateChannelRequest) =>
+    apiRequest<Channel>("/api/v1/channels", { method: "POST", body }),
+
+  /** POST /api/v1/channels/{handle}/videos — create a draft video (auth, owner). */
+  createVideoDraft: (handle: string, body: CreateVideoRequest) =>
+    apiRequest<Video>(`/api/v1/channels/${encodeURIComponent(handle)}/videos`, {
+      method: "POST",
+      body,
+    }),
+
+  /**
+   * POST /api/v1/videos/{id}/file — upload the original file (auth, owner). The
+   * multipart body moves the draft to processing and (with no prober) publishes it.
+   */
+  uploadVideoFile: (videoId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return apiRequest<UploadVideoResult>(`/api/v1/videos/${encodeURIComponent(videoId)}/file`, {
+      method: "POST",
+      body: form,
+    });
+  },
 
   /** GET /api/v1/me/subscriptions/videos — videos from followed channels (auth). */
   getSubscriptionVideos: (params: SearchParams = {}, signal?: AbortSignal) =>

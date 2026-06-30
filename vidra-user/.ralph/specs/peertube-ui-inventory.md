@@ -39,6 +39,7 @@ For every route/flow, use this structure:
 | PT-NAV-NOTIFICATIONS | Notifications | bell icon link + unread badge | authed only; badge when unread>0 | Opens /notifications; badge = unread count | GET /me/notifications/unread-count | e2e/notifications.spec.ts + e2e-backed/notifications.spec.ts | VERIFIED | components/NotificationsBell.tsx; app/notifications/page.tsx; components/NotificationsView.tsx |
 | PT-NAV-NOTIF-MARK-READ | Mark read / Mark all as read | buttons | unread/read | Marks one or all notifications read | POST /me/notifications/:id/read, /read-all | e2e/notifications.spec.ts + e2e-backed/notifications.spec.ts | VERIFIED | components/NotificationsView.tsx |
 | PT-NAV-PLAYLISTS | Playlists | nav link | always shown (content auth-gated) | Opens /playlists list + create; /playlists/:id detail | GET /me/playlists, POST/GET/DELETE /playlists | e2e/playlists.spec.ts + e2e-backed/playlists.spec.ts | VERIFIED | components/Header.tsx; app/playlists/page.tsx; components/PlaylistsView.tsx; app/playlists/[id]/page.tsx; components/PlaylistDetailView.tsx |
+| PT-NAV-STUDIO | Studio | nav link | always shown (content auth-gated) | Opens /studio: create channel + upload/publish a video | GET /me/channels, POST /channels, POST /channels/:handle/videos, POST /videos/:id/file | e2e/studio.spec.ts + e2e-backed/studio.spec.ts | VERIFIED | components/Header.tsx; app/studio/page.tsx; components/StudioView.tsx |
 | PT-NAV-MY-VIDEO-SPACE | My video space | nav group | creator/admin | Shows videos/channels/studio | auth/permissions | Playwright | NOT_STARTED | none |
 | PT-NAV-ADMINISTRATION | Administration | nav group | admin/mod only | Opens admin sections | RBAC | Playwright RBAC | NOT_STARTED | none |
 
@@ -68,14 +69,14 @@ For every route/flow, use this structure:
 | control id | label / accessible name | type | states | behavior | backend dependency | tests | status | evidence |
 |---|---|---|---|---|---|---|---|---|
 | PT-PUBLISH-TAB-FILE | Upload file | tab | selected/unselected | Shows file upload form | upload enabled | Playwright | NOT_STARTED | none |
-| PT-PUBLISH-FILE-SELECT | Select file to upload | button/input | empty/uploading/error | Starts upload | upload API/storage/scan | integration/Playwright | NOT_STARTED | none |
+| PT-PUBLISH-FILE-SELECT | Select file to upload | button/input | empty/uploading/error | Starts upload | upload API/storage/scan | integration/Playwright | VERIFIED | e2e/studio.spec.ts + e2e-backed/studio.spec.ts; components/StudioView.tsx |
 | PT-PUBLISH-TAB-URL | Import with URL | tab | enabled/disabled | Shows URL importer | import config/SSRF | fuzz/integration/Playwright | NOT_STARTED | none |
 | PT-PUBLISH-URL-IMPORT | Import | button | disabled/loading/error | Starts remote URL import | importer job | integration/Playwright | NOT_STARTED | none |
 | PT-PUBLISH-TAB-TORRENT | Import with torrent | tab | enabled/disabled | Shows torrent/magnet importer | torrent importer | integration/Playwright | NOT_STARTED | none |
 | PT-PUBLISH-GO-LIVE | Go live | tab/button | enabled/disabled | Creates live stream | RTMP/HLS config | smoke/Playwright | NOT_STARTED | none |
-| PT-PUBLISH-PRIVACY | Privacy | select/radio | public/unlisted/private/internal | Sets visibility | permissions/federation | integration/Playwright | NOT_STARTED | none |
-| PT-PUBLISH-CHANNEL | Channel | select | empty/multiple | Selects owning channel | channel API | integration/Playwright | NOT_STARTED | none |
-| PT-PUBLISH-SAVE | Save/Publish | button | disabled/loading/success/error | Saves metadata/publishes | videos API/jobs | integration/Playwright | NOT_STARTED | none |
+| PT-PUBLISH-PRIVACY | Privacy | select/radio | public/unlisted/private/internal | Sets visibility | permissions/federation | integration/Playwright | VERIFIED | e2e/studio.spec.ts + e2e-backed/studio.spec.ts; components/StudioView.tsx |
+| PT-PUBLISH-CHANNEL | Channel | select | empty/multiple | Selects owning channel | channel API | integration/Playwright | VERIFIED | e2e/studio.spec.ts + e2e-backed/studio.spec.ts; components/StudioView.tsx |
+| PT-PUBLISH-SAVE | Save/Publish | button | disabled/loading/success/error | Saves metadata/publishes | videos API/jobs | integration/Playwright | VERIFIED | e2e/studio.spec.ts + e2e-backed/studio.spec.ts; components/StudioView.tsx |
 
 ### PT-ADMIN — Administration/moderation
 

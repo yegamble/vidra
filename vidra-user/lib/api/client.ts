@@ -82,11 +82,15 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   const url = buildUrl(path, opts.query);
   const correlationId = crypto.randomUUID();
 
+  // A FormData body is a multipart upload: let the browser set the
+  // content-type (with its boundary) and send it as-is, no JSON encoding.
+  const isForm = typeof FormData !== "undefined" && opts.body instanceof FormData;
+
   const headers: Record<string, string> = {
     accept: "application/json",
     "x-correlation-id": correlationId,
   };
-  if (opts.body !== undefined) {
+  if (opts.body !== undefined && !isForm) {
     headers["content-type"] = "application/json";
   }
   // Explicit per-call token wins; otherwise attach the stored session token.
@@ -100,7 +104,12 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
     res = await fetch(url, {
       method,
       headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body:
+        opts.body === undefined
+          ? undefined
+          : isForm
+            ? (opts.body as FormData)
+            : JSON.stringify(opts.body),
       signal: opts.signal,
     });
   } catch (cause) {

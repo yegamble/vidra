@@ -151,4 +151,36 @@ describe("api endpoints", () => {
     expect(url).toBe("http://localhost:8080/api/v1/playlists/p1/videos/v1");
     expect(init.method).toBe("DELETE");
   });
+
+  it("getMyChannels targets the channels endpoint", async () => {
+    await api.getMyChannels();
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/me/channels");
+  });
+
+  it("createChannel POSTs the body to /channels", async () => {
+    await api.createChannel({ handle: "ada_makes", display_name: "Ada Makes" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/channels");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ handle: "ada_makes", display_name: "Ada Makes" });
+  });
+
+  it("createVideoDraft POSTs to the channel's videos endpoint", async () => {
+    await api.createVideoDraft("ada_makes", { title: "Hi", privacy: "public" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/channels/ada_makes/videos");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ title: "Hi", privacy: "public" });
+  });
+
+  it("uploadVideoFile POSTs multipart form data (no JSON content-type)", async () => {
+    const file = new File(["x"], "clip.mp4", { type: "video/mp4" });
+    await api.uploadVideoFile("v1", file);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Record<string, string> }];
+    expect(url).toBe("http://localhost:8080/api/v1/videos/v1/file");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get("file")).toBeInstanceOf(File);
+    expect(init.headers["content-type"]).toBeUndefined();
+  });
 });

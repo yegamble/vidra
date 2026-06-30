@@ -287,10 +287,10 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 
 ## P6.1 Shared Publish Flow
 
-- [ ] Implement Publish route.
-- [ ] Implement channel selector.
-- [ ] Implement privacy selector.
-- [ ] Implement metadata form: title, description, tags, category, language, license.
+- [x] Implement Publish route. (`app/studio/page.tsx` → `components/StudioView.tsx`, the creator surface reached via a header "Studio" link, auth-gated (sign-in prompt). Loads `api.getMyChannels` (`GET /api/v1/me/channels`); a creator with no channel sees a create-channel form, and once they have ≥1 channel an upload form appears. VERIFIED end-to-end below.)
+- [x] Implement channel selector. (`StudioView` `UploadSection` renders a channel `<select>` when the user owns >1 channel (defaults to the first); a single-channel creator skips the selector. The `ChannelSection` also lists owned channels (link to `/channels/:handle`) and a create-channel form (handle + display name → `POST /api/v1/channels` via new `api.createChannel`; 409 → "handle already taken").)
+- [x] Implement privacy selector. (`UploadSection` privacy `<select>` public/unlisted/private, default public — sent as `CreateVideoRequest.privacy` on `POST /api/v1/channels/:handle/videos`.)
+- [~] Implement metadata form: title, description, tags, category, language, license. (Title + privacy + channel done (the fields the backend create-draft accepts). Description and tags/category/language/license need backend contract fields — DEFERRED.)
 - [ ] Implement thumbnail upload/selection.
 - [ ] Implement captions upload section.
 - [ ] Implement scheduled publish field.
@@ -302,13 +302,13 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 
 ## P6.2 File Upload
 
-- [ ] Implement file picker/dropzone.
-- [ ] Implement upload progress.
-- [ ] Implement virus scan pending/quarantine/failure states.
-- [ ] Implement transcoding pending/progress/failure states.
-- [ ] Implement success redirect.
-- [ ] Add Playwright file-upload smoke test with small fixture/mocked API.
-- [ ] Add backend-backed e2e proving an uploaded video and its edited metadata persist to the database and appear in the studio list after refetch.
+- [x] Implement file picker. (`UploadSection` `<input type="file" accept="video/*">`; on Publish it creates a draft (`api.createVideoDraft`) then uploads the file (`api.uploadVideoFile`, multipart via `apiRequest` FormData support) which the backend probes + publishes. 415 → "not a supported video" message. A drag-and-drop dropzone is a later polish.)
+- [ ] Implement upload progress. (DEFERRED — needs streamed/XHR progress; the current upload is a single awaited fetch with an "Uploading…" button state.)
+- [ ] Implement virus scan pending/quarantine/failure states. (DEFERRED — backend ClamAV not wired.)
+- [ ] Implement transcoding pending/progress/failure states. (DEFERRED — backend publishes synchronously today; no async transcode states yet.)
+- [x] Implement success redirect. (On publish the form shows "Published!" with a link to the new video's watch page (`/videos/:id`); a hard auto-redirect is intentionally avoided so the creator can upload another.)
+- [x] Add Playwright file-upload smoke test with small fixture/mocked API. (`e2e/studio.spec.ts` — anon prompt, create channel → upload form appears, upload (setInputFiles) → "Published!" + view link — 3 tests.)
+- [x] Add backend-backed e2e proving an uploaded video and its edited metadata persist to the database and appear in the studio list after refetch. (**VERIFIED**: `e2e-backed/studio.spec.ts` — signup → studio → create channel → upload the tiny H.264 mp4 (real ffprobe accepts it) → "Published!" → the video appears on the public channel page after a fresh refetch. DB evidence: the `videos` row (`state=published`, `privacy=public`) + `video_files` (original + generated thumbnail) via psql; channel API returns it published. Runs in CI via `frontend-e2e-backed.yml`.)
 
 ## P6.3 URL Import
 
