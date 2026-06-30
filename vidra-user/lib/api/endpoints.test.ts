@@ -104,4 +104,51 @@ describe("api endpoints", () => {
     expect(url).toBe("http://localhost:8080/api/v1/me/notifications/read-all");
     expect(init.method).toBe("POST");
   });
+
+  it("getMyPlaylists targets the playlists endpoint", async () => {
+    await api.getMyPlaylists();
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/me/playlists");
+  });
+
+  it("createPlaylist POSTs the body to /playlists", async () => {
+    await api.createPlaylist({ title: "Faves", visibility: "public" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/playlists");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ title: "Faves", visibility: "public" });
+  });
+
+  it("getPlaylist targets the detail endpoint", async () => {
+    await api.getPlaylist("p1");
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/playlists/p1");
+  });
+
+  it("updatePlaylist PATCHes the playlist", async () => {
+    await api.updatePlaylist("p1", { title: "Renamed" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/playlists/p1");
+    expect(init.method).toBe("PATCH");
+  });
+
+  it("deletePlaylist DELETEs the playlist", async () => {
+    await api.deletePlaylist("p1");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/playlists/p1");
+    expect(init.method).toBe("DELETE");
+  });
+
+  it("addToPlaylist POSTs the video id", async () => {
+    await api.addToPlaylist("p1", "v1");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/playlists/p1/videos");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ video_id: "v1" });
+  });
+
+  it("removeFromPlaylist DELETEs the item", async () => {
+    await api.removeFromPlaylist("p1", "v1");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/playlists/p1/videos/v1");
+    expect(init.method).toBe("DELETE");
+  });
 });

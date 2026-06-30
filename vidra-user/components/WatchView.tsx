@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/auth/AuthProvider";
+import { AddToPlaylistButton } from "@/components/AddToPlaylistButton";
 import { CommentsSection } from "@/components/CommentsSection";
 import { RatingControls } from "@/components/RatingControls";
 import { SaveButton } from "@/components/SaveButton";
@@ -101,6 +102,7 @@ export function WatchView({ id }: { id: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <RatingControls videoId={video.id} />
             <SaveButton videoId={video.id} />
+            <AddToPlaylistButton videoId={video.id} />
           </div>
           {video.description ? (
             <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">

@@ -25,6 +25,9 @@ export function Header() {
           <Link href="/library" className="hover:text-zinc-900 dark:hover:text-zinc-100">
             Library
           </Link>
+          <Link href="/playlists" className="hover:text-zinc-900 dark:hover:text-zinc-100">
+            Playlists
+          </Link>
           <Link href="/history" className="hover:text-zinc-900 dark:hover:text-zinc-100">
             History
           </Link>

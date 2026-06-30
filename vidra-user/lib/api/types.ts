@@ -205,3 +205,40 @@ export interface NotificationListResponse {
 export interface UnreadCountResponse {
   unread_count: number;
 }
+
+export type PlaylistVisibility = "public" | "unlisted" | "private";
+
+/** A named, ordered collection of videos. Mirrors the backend Playlist schema. */
+export interface Playlist {
+  id: string;
+  title: string;
+  description: string;
+  visibility: PlaylistVisibility;
+  /** Number of public, published videos in the playlist. */
+  video_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlaylistListResponse {
+  playlists: Playlist[];
+}
+
+/** A playlist plus its ordered public video cards (the detail endpoint). */
+export interface PlaylistDetail extends Playlist {
+  videos: Video[];
+}
+
+/** POST /api/v1/playlists body. */
+export interface CreatePlaylistRequest {
+  title: string;
+  description?: string;
+  visibility?: PlaylistVisibility;
+}
+
+/** PATCH /api/v1/playlists/{id} body; omitted fields are unchanged. */
+export interface UpdatePlaylistRequest {
+  title?: string;
+  description?: string;
+  visibility?: PlaylistVisibility;
+}

@@ -38,6 +38,7 @@ For every route/flow, use this structure:
 | PT-NAV-HISTORY | History | nav link | always shown (content auth-gated) | Opens /history watch-history page | GET /me/history | e2e/history.spec.ts + e2e-backed/history.spec.ts | VERIFIED | components/Header.tsx; app/history/page.tsx; components/WatchHistoryView.tsx |
 | PT-NAV-NOTIFICATIONS | Notifications | bell icon link + unread badge | authed only; badge when unread>0 | Opens /notifications; badge = unread count | GET /me/notifications/unread-count | e2e/notifications.spec.ts + e2e-backed/notifications.spec.ts | VERIFIED | components/NotificationsBell.tsx; app/notifications/page.tsx; components/NotificationsView.tsx |
 | PT-NAV-NOTIF-MARK-READ | Mark read / Mark all as read | buttons | unread/read | Marks one or all notifications read | POST /me/notifications/:id/read, /read-all | e2e/notifications.spec.ts + e2e-backed/notifications.spec.ts | VERIFIED | components/NotificationsView.tsx |
+| PT-NAV-PLAYLISTS | Playlists | nav link | always shown (content auth-gated) | Opens /playlists list + create; /playlists/:id detail | GET /me/playlists, POST/GET/DELETE /playlists | e2e/playlists.spec.ts + e2e-backed/playlists.spec.ts | VERIFIED | components/Header.tsx; app/playlists/page.tsx; components/PlaylistsView.tsx; app/playlists/[id]/page.tsx; components/PlaylistDetailView.tsx |
 | PT-NAV-MY-VIDEO-SPACE | My video space | nav group | creator/admin | Shows videos/channels/studio | auth/permissions | Playwright | NOT_STARTED | none |
 | PT-NAV-ADMINISTRATION | Administration | nav group | admin/mod only | Opens admin sections | RBAC | Playwright RBAC | NOT_STARTED | none |
 
@@ -53,7 +54,7 @@ For every route/flow, use this structure:
 | PT-WATCH-CAPTIONS | Captions/Subtitles | player menu | captions/no captions | Select captions | captions API | Playwright | NOT_STARTED | none |
 | PT-WATCH-LIKE | Like | action button | logged-out/logged-in/liked | Like/unlike | ratings API | integration/Playwright | NOT_STARTED | none |
 | PT-WATCH-DISLIKE | Dislike | action button | logged-out/logged-in/disliked | Dislike/undo | ratings API | integration/Playwright | NOT_STARTED | none |
-| PT-WATCH-SAVE | Save to playlist / Watch later | menu/button | logged-out/logged-in/saved | Opens playlist save menu | playlist API | Playwright | NOT_STARTED | none |
+| PT-WATCH-SAVE | Save to playlist / Watch later | menu/button | logged-out/logged-in/saved | Opens playlist save menu (+ ★ watch-later) | playlist API + saved API | e2e/playlists.spec.ts + e2e-backed/playlists.spec.ts (+ save.spec.ts) | VERIFIED | components/AddToPlaylistButton.tsx; components/SaveButton.tsx |
 | PT-WATCH-SHARE | Share | button/modal | default/open/copied | Opens share/embed/download options | video URL/embed | Playwright | NOT_STARTED | none |
 | PT-WATCH-DOWNLOAD | Download | button/modal | allowed/forbidden | Select downloadable resolution | files/download API | Playwright | NOT_STARTED | none |
 | PT-WATCH-REPORT | Report | menu/modal | logged-out/logged-in | Opens report content flow | reports API | integration/Playwright | NOT_STARTED | none |

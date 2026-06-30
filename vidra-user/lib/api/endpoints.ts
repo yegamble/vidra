@@ -11,8 +11,13 @@ import type {
   Video,
   VideoFeedResponse,
   VideoListResponse,
+  CreatePlaylistRequest,
   NotificationListResponse,
+  Playlist,
+  PlaylistDetail,
+  PlaylistListResponse,
   UnreadCountResponse,
+  UpdatePlaylistRequest,
   VideoRating,
   VideoSearchResponse,
   WatchHistoryResponse,
@@ -174,6 +179,40 @@ export const api = {
   /** POST /api/v1/me/notifications/read-all — mark all notifications read (auth, idempotent). */
   markAllNotificationsRead: () =>
     apiRequest<void>("/api/v1/me/notifications/read-all", { method: "POST" }),
+
+  /** GET /api/v1/me/playlists — the caller's playlists, newest first (auth). */
+  getMyPlaylists: (signal?: AbortSignal) =>
+    apiRequest<PlaylistListResponse>("/api/v1/me/playlists", { signal }),
+
+  /** POST /api/v1/playlists — create a playlist (auth). */
+  createPlaylist: (body: CreatePlaylistRequest) =>
+    apiRequest<Playlist>("/api/v1/playlists", { method: "POST", body }),
+
+  /** GET /api/v1/playlists/{id} — a playlist + its ordered video cards. */
+  getPlaylist: (id: string, signal?: AbortSignal) =>
+    apiRequest<PlaylistDetail>(`/api/v1/playlists/${encodeURIComponent(id)}`, { signal }),
+
+  /** PATCH /api/v1/playlists/{id} — update a playlist (auth, owner). */
+  updatePlaylist: (id: string, body: UpdatePlaylistRequest) =>
+    apiRequest<Playlist>(`/api/v1/playlists/${encodeURIComponent(id)}`, { method: "PATCH", body }),
+
+  /** DELETE /api/v1/playlists/{id} — delete a playlist (auth, owner). */
+  deletePlaylist: (id: string) =>
+    apiRequest<void>(`/api/v1/playlists/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  /** POST /api/v1/playlists/{id}/videos — add a video to a playlist (auth, owner, idempotent). */
+  addToPlaylist: (id: string, videoId: string) =>
+    apiRequest<void>(`/api/v1/playlists/${encodeURIComponent(id)}/videos`, {
+      method: "POST",
+      body: { video_id: videoId },
+    }),
+
+  /** DELETE /api/v1/playlists/{id}/videos/{videoId} — remove a video (auth, owner, idempotent). */
+  removeFromPlaylist: (id: string, videoId: string) =>
+    apiRequest<void>(
+      `/api/v1/playlists/${encodeURIComponent(id)}/videos/${encodeURIComponent(videoId)}`,
+      { method: "DELETE" },
+    ),
 };
 
 /** Direct URL to a video's original stream (for a <video> src). Range-capable. */
