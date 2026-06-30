@@ -19,6 +19,8 @@ import type {
   Playlist,
   PlaylistDetail,
   PlaylistListResponse,
+  ReportListResponse,
+  ResolveReportRequest,
   UnreadCountResponse,
   UpdatePlaylistRequest,
   UpdateVideoRequest,
@@ -268,6 +270,30 @@ export const api = {
       `/api/v1/playlists/${encodeURIComponent(id)}/videos/${encodeURIComponent(videoId)}`,
       { method: "DELETE" },
     ),
+
+  /**
+   * GET /api/v1/admin/reports — the moderation queue, newest first (moderator/admin).
+   * Pass `openOnly` to return only unresolved reports.
+   */
+  getReports: (
+    params: { openOnly?: boolean; limit?: number; offset?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    apiRequest<ReportListResponse>("/api/v1/admin/reports", {
+      query: {
+        status: params.openOnly ? "open" : undefined,
+        limit: params.limit,
+        offset: params.offset,
+      },
+      signal,
+    }),
+
+  /** POST /api/v1/admin/reports/{id}/resolve — accept/reject a report (moderator/admin, 204). */
+  resolveReport: (id: string, body: ResolveReportRequest) =>
+    apiRequest<void>(`/api/v1/admin/reports/${encodeURIComponent(id)}/resolve`, {
+      method: "POST",
+      body,
+    }),
 };
 
 /** Direct URL to a video's original stream (for a <video> src). Range-capable. */

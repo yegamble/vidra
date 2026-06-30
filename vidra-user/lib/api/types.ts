@@ -144,6 +144,49 @@ export interface CreateReportRequest {
   reason: string;
 }
 
+export type ReportTargetType = "video" | "comment";
+export type ReportStatus = "open" | "accepted" | "rejected";
+
+/** Who filed a report (admin moderation queue view). */
+export interface ReportReporter {
+  username: string;
+}
+
+/**
+ * An abuse report as seen by a moderator/admin in the queue. Target context is
+ * type-dependent: a video report carries video_id/video_title, a comment report
+ * carries comment_id/comment_body. Mirrors the backend Report schema.
+ */
+export interface Report {
+  id: string;
+  target_type: ReportTargetType;
+  reason: string;
+  status: ReportStatus;
+  /** Internal moderator note (empty until resolved with one). */
+  moderator_note: string;
+  created_at: string;
+  resolved_at?: string;
+  reporter: ReportReporter;
+  // Video-report context.
+  video_id?: string;
+  video_title?: string;
+  // Comment-report context.
+  comment_id?: string;
+  comment_body?: string;
+}
+
+export interface ReportListResponse {
+  reports: Report[];
+  limit: number;
+  offset: number;
+}
+
+/** POST /api/v1/admin/reports/{id}/resolve body. */
+export interface ResolveReportRequest {
+  status: "accepted" | "rejected";
+  note?: string;
+}
+
 /** PATCH /api/v1/videos/{id} body; provide at least one field, omitted ones unchanged. */
 export interface UpdateVideoRequest {
   title?: string;

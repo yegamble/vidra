@@ -31,7 +31,11 @@ sign out. Search: header `SearchBox` → `/search?q=` (`app/search` → `compone
 client title search reusing the card + state primitives). The public channel page
 (`app/channels/[handle]` → `components/ChannelView.tsx`) loads `api.getChannel` +
 `api.listChannelVideos` and renders the channel header + a `VideoCard` grid with
-loading/not-found/error/empty states. Still TODO: the rest of P3 (password
+loading/not-found/error/empty states. Moderation: the moderator/admin queue
+(`app/moderation` → `components/ModerationQueue.tsx`, reached via the role-gated
+`ModerationNavLink`) lists abuse reports (`GET /admin/reports`, Open/All filter) and
+resolves them accept/reject with an internal note (`POST /admin/reports/:id/resolve`) —
+DB-effect VERIFIED in `e2e-backed/moderation.spec.ts`. Still TODO: the rest of P3 (password
 reset, MFA, settings/profile), more component primitives
 (Card/Badge/Skeleton/Input), custom player controls, the backend-backed Playwright profile
 (login/signup are mock-tested only — NOT `VERIFIED` until proven against a real backend+DB),

@@ -214,4 +214,22 @@ describe("api endpoints", () => {
     expect((init.body as FormData).get("file")).toBeInstanceOf(File);
     expect(init.headers["content-type"]).toBeUndefined();
   });
+
+  it("getReports defaults to all reports (no status filter)", async () => {
+    await api.getReports();
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/reports");
+  });
+
+  it("getReports adds status=open when openOnly is set", async () => {
+    await api.getReports({ openOnly: true, limit: 100 });
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/reports?status=open&limit=100");
+  });
+
+  it("resolveReport POSTs the status + note to the resolve endpoint", async () => {
+    await api.resolveReport("r1", { status: "accepted", note: "spam" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/admin/reports/r1/resolve");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ status: "accepted", note: "spam" });
+  });
 });

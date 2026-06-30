@@ -97,8 +97,10 @@ For every route/flow, use this structure:
 | PT-ADMIN-USERS-CREATE | Create user | button/modal | admin only | Creates local user | users API/RBAC | integration/Playwright | NOT_STARTED | none |
 | PT-ADMIN-USERS-EDIT | Edit user | row action | admin/mod perms | Opens user edit | users API/RBAC | integration/Playwright | NOT_STARTED | none |
 | PT-ADMIN-USERS-BAN | Ban | destructive action | confirm/cancel | Bans account | users API/audit | integration/Playwright | NOT_STARTED | none |
-| PT-ADMIN-REPORT-ACCEPT | Accept report | action | loading/success/error | Accepts report and notifies reporter | reports API/notifications | integration/Playwright | NOT_STARTED | none |
-| PT-ADMIN-REPORT-REJECT | Reject report | action | loading/success/error | Rejects report and notifies reporter | reports API/notifications | integration/Playwright | NOT_STARTED | none |
+| PT-ADMIN-MOD-QUEUE | Moderation (nav + queue) | route/list | mod/admin only (anon/regular → "Moderators only" gate; role-gated nav link); Open/All filter; loading/error/empty | Lists abuse reports (reporter, target link/quote, reason, status badge, relative time) | GET /admin/reports | e2e/moderation.spec.ts + e2e-backed/moderation.spec.ts | VERIFIED | app/moderation/page.tsx; components/ModerationQueue.tsx; components/ModerationNavLink.tsx |
+| PT-ADMIN-REPORT-ACCEPT | Accept report | action | loading/optimistic-remove/error | Accepts an open report with an optional internal note; row leaves the open queue | POST /admin/reports/:id/resolve | e2e/moderation.spec.ts + e2e-backed/moderation.spec.ts | VERIFIED | components/ModerationQueue.tsx |
+| PT-ADMIN-REPORT-REJECT | Reject report | action | loading/optimistic-remove/error | Rejects an open report with an optional internal note | POST /admin/reports/:id/resolve | e2e/moderation.spec.ts + e2e-backed/moderation.spec.ts | VERIFIED | components/ModerationQueue.tsx |
+| PT-ADMIN-REPORT-NOTE | Internal note | textarea | optional, ≤2000 | Internal moderator note attached on resolve (not shown to reporter) | POST /admin/reports/:id/resolve | e2e-backed/moderation.spec.ts | VERIFIED | components/ModerationQueue.tsx |
 | PT-ADMIN-VIDEO-BLOCK | Block video | action | local/remote | Blocks local/remote video | block API/federation | integration/Playwright | NOT_STARTED | none |
 | PT-ADMIN-WATCHED-WORDS-SAVE | Save watched words list | button | validation/loading/error | Saves moderation watched words | watched words API | integration/Playwright | NOT_STARTED | none |
 

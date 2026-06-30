@@ -98,6 +98,28 @@ export async function seedPublishedChannel(
   return { handle, displayName, videoId, videoTitle, token };
 }
 
+/**
+ * fileVideoReport registers a fresh reporter and files a report on a video via the
+ * API, returning the unique reason used (so a test can find it in the queue). Used
+ * to seed an open report for the moderation-resolve UI to act on.
+ */
+export async function fileVideoReport(
+  request: APIRequestContext,
+  videoId: string,
+): Promise<string> {
+  const id = uniqueId();
+  const reg = await request.post(`${API_URL}/api/v1/auth/register`, {
+    data: { username: `rep${id}`, email: `e2e-rep-${id}@example.test`, password: "supersecret-e2e" },
+  });
+  const token = ((await reg.json()) as { token: string }).token;
+  const reason = `mod-report-${id}`;
+  await request.post(`${API_URL}/api/v1/videos/${videoId}/report`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { reason },
+  });
+  return reason;
+}
+
 /** seedComment posts a comment on a video as the given user, returning its id. */
 export async function seedComment(
   request: APIRequestContext,
