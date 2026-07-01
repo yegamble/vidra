@@ -22,17 +22,23 @@ jobs:
           bash -n bootstrap.sh
           if command -v shellcheck >/dev/null 2>&1; then shellcheck bootstrap.sh || true; fi
 
-      # docker-compose.yml `include:`s ./vidra-core/docker-compose.yml, so the
-      # backend repo must be present to resolve the full config. Check it out the
-      # same way bootstrap.sh would (public repo, no token needed).
-      - name: Check out vidra-core (for compose include)
+      # docker-compose.yml `include:`s ./vidra-core/docker-compose.yml and builds the
+      # frontend from ./vidra-user, so both repos must be present to resolve the full
+      # config. Check them out the way bootstrap.sh would (public, no token needed).
+      - name: Check out vidra-core (compose include)
         uses: actions/checkout@v4
         with:
           repository: yegamble/vidra-core
           path: vidra-core
 
-      - name: Validate full-stack compose resolves
-        run: docker compose --profile core config -q
+      - name: Check out vidra-user (compose build context)
+        uses: actions/checkout@v4
+        with:
+          repository: yegamble/vidra-user
+          path: vidra-user
+
+      - name: Validate full-stack compose resolves (backend + frontend)
+        run: docker compose --profile core --profile web config -q
 
       - name: bootstrap.sh sees vidra-core already present (idempotent path)
         run: |
