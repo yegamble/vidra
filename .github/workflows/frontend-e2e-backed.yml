@@ -38,7 +38,10 @@ jobs:
         working-directory: vidra-core
         # Disable rate limiting for the e2e backend so the suite's many
         # register/login calls from one runner IP are not throttled.
-        run: RATE_LIMIT_ENABLED=false docker compose --profile core up -d --build
+        # DEV_MAIL_CAPTURE_ENABLED=true exposes the dev email-token endpoint so the
+        # backed suite can complete the password-reset / email-verify confirm flows
+        # (test seam only — never enabled in production).
+        run: RATE_LIMIT_ENABLED=false DEV_MAIL_CAPTURE_ENABLED=true docker compose --profile core up -d --build
 
       - name: Wait for the API to be healthy
         working-directory: vidra-core

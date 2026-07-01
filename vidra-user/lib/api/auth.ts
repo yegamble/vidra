@@ -2,6 +2,7 @@ import { apiRequest } from "./client";
 import type {
   AuthResponse,
   LoginRequest,
+  PasswordResetConfirmRequest,
   PasswordResetRequest,
   RegisterRequest,
   UpdateProfileRequest,
@@ -25,6 +26,14 @@ export const authApi = {
    */
   requestPasswordReset: (body: PasswordResetRequest) =>
     apiRequest<void>("/api/v1/auth/password-reset", { method: "POST", body }),
+
+  /**
+   * POST /api/v1/auth/password-reset/confirm — set a new password using the
+   * single-use token from the reset message. 204 on success (all the account's
+   * sessions are revoked server-side); 400 if the token is invalid/used/expired.
+   */
+  confirmPasswordReset: (body: PasswordResetConfirmRequest) =>
+    apiRequest<void>("/api/v1/auth/password-reset/confirm", { method: "POST", body }),
 
   /** POST /api/v1/auth/logout — revoke a session (idempotent, always 204). */
   logout: (refreshToken: string) =>

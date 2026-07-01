@@ -85,6 +85,15 @@ describe("authApi + auth-store", () => {
     expect(init.body).toBe(JSON.stringify({ email: "ada@example.test" }));
   });
 
+  it("confirmPasswordReset POSTs the token and new password", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await authApi.confirmPasswordReset({ token: "tok-123", password: "newpassword-2" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/auth/password-reset/confirm");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(JSON.stringify({ token: "tok-123", password: "newpassword-2" }));
+  });
+
   it("logout posts the refresh token", async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
     await authApi.logout("ref");

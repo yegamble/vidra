@@ -128,6 +128,12 @@ export interface PasswordResetRequest {
   email: string;
 }
 
+/** POST /api/v1/auth/password-reset/confirm — set a new password with a token. */
+export interface PasswordResetConfirmRequest {
+  token: string;
+  password: string;
+}
+
 /** PATCH /api/v1/auth/me — partial profile update; omitted fields are unchanged. */
 export interface UpdateProfileRequest {
   display_name?: string;

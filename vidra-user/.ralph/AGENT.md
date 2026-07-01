@@ -75,9 +75,13 @@ password?" from `LoginForm`) submits an email to `POST /auth/password-reset` (al
 enumeration-safe) and shows a neutral confirmation — DB-effect VERIFIED in
 `e2e-backed/password-reset.spec.ts` (a known account's `password_reset_tokens` row goes
 0→1 after the UI request; psql-confirmed, only a hash stored). The reset **complete** page
-and email-verify pages stay BLOCKED on a dev token-retrieval affordance (the raw token is
-mailer-only/hashed). Still TODO: the rest of P3 (reset-complete + MFA + email-verify),
-more component primitives
+(`app/reset-password/confirm?token=…` → `ResetPasswordConfirmForm`) sets a new password
+via `POST /auth/password-reset/confirm` — DB-effect VERIFIED in
+`e2e-backed/password-reset-confirm.spec.ts`, which retrieves the token from vidra-core's
+dev seam (`GET /api/v1/dev/email-token`, gated by `DEV_MAIL_CAPTURE_ENABLED` — the backed
+run/CI sets it) then proves the new password logs in and the old is refused. Still TODO:
+the rest of P3 (email-verify pages — unblocked, use the dev seam with `kind=verification`;
++ MFA), more component primitives
 (Card/Badge/Skeleton/Input), custom player controls, the backend-backed Playwright profile
 (login/signup are mock-tested only — NOT `VERIFIED` until proven against a real backend+DB),
 and `instrumentation.ts` for OTel.
@@ -137,9 +141,11 @@ a live backend. It is **never** part of `npm run ci` (which stays mocked and fas
 
 ```bash
 # 1. Start the real backend + database (from ../vidra-core), detached. Disable
-#    rate limiting so the suite's many register/login calls aren't throttled:
-( cd ../vidra-core && RATE_LIMIT_ENABLED=false docker compose --profile core up -d --build )  # pg+redis+migrate+api → :8080
-#    If host :8080 is taken, map another host port: RATE_LIMIT_ENABLED=false HTTP_PORT=8088 docker compose --profile core up -d
+#    rate limiting so the suite's many register/login calls aren't throttled, and
+#    enable the dev mail-capture seam so the email-token confirm specs
+#    (password-reset-confirm, email-verify) can read the token they need:
+( cd ../vidra-core && RATE_LIMIT_ENABLED=false DEV_MAIL_CAPTURE_ENABLED=true docker compose --profile core up -d --build )  # pg+redis+migrate+api → :8080
+#    If host :8080 is taken, map another host port: RATE_LIMIT_ENABLED=false DEV_MAIL_CAPTURE_ENABLED=true HTTP_PORT=8088 docker compose --profile core up -d
 #    (stale PG-version volume? `docker compose --profile core down -v` to reset the dev data.)
 # 2. Build the frontend pointed at it — NEXT_PUBLIC_* is baked at BUILD time, so a
 #    plain `npm run dev`/`start` will NOT pick up a new API URL; you must rebuild:

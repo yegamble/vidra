@@ -98,6 +98,64 @@ test("shows an error when the reset email is rejected", async ({ page }) => {
   await expect(page.getByText(/check your inbox/i)).toHaveCount(0);
 });
 
+const RESET_CONFIRM = /\/api\/v1\/auth\/password-reset\/confirm$/;
+
+test("completing a password reset shows success and links to sign in", async ({ page }) => {
+  let body: unknown;
+  await page.route(RESET_CONFIRM, async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({ status: 204, body: "" });
+  });
+
+  await page.goto("/reset-password/confirm?token=tok-123");
+  await page.getByLabel("New password", { exact: true }).fill("newpassword-2");
+  await page.getByLabel("Confirm new password", { exact: true }).fill("newpassword-2");
+  await page.getByRole("button", { name: "Reset password" }).click();
+
+  await expect(page.getByText(/your password has been reset/i)).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: "Sign in" })).toBeVisible();
+  expect(body).toEqual({ token: "tok-123", password: "newpassword-2" });
+});
+
+test("a mismatched confirmation is caught before submitting", async ({ page }) => {
+  let called = false;
+  await page.route(RESET_CONFIRM, async (route) => {
+    called = true;
+    await route.fulfill({ status: 204, body: "" });
+  });
+
+  await page.goto("/reset-password/confirm?token=tok-123");
+  await page.getByLabel("New password", { exact: true }).fill("newpassword-2");
+  await page.getByLabel("Confirm new password", { exact: true }).fill("different-3");
+  await page.getByRole("button", { name: "Reset password" }).click();
+
+  await expect(page.getByText("Passwords do not match.")).toBeVisible();
+  expect(called).toBe(false);
+});
+
+test("an invalid or expired reset token points back to request a new one", async ({ page }) => {
+  await page.route(RESET_CONFIRM, (route) =>
+    route.fulfill({
+      status: 400,
+      json: { error: { code: "bad_request", message: "invalid or expired reset token" } },
+    }),
+  );
+
+  await page.goto("/reset-password/confirm?token=stale");
+  await page.getByLabel("New password", { exact: true }).fill("newpassword-2");
+  await page.getByLabel("Confirm new password", { exact: true }).fill("newpassword-2");
+  await page.getByRole("button", { name: "Reset password" }).click();
+
+  await expect(page.getByText(/invalid or has expired/i)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Request a new reset link" })).toBeVisible();
+});
+
+test("the confirm page with no token shows the invalid-link state", async ({ page }) => {
+  await page.goto("/reset-password/confirm");
+  await expect(page.getByText(/invalid or has expired/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset password" })).toHaveCount(0);
+});
+
 const INSTANCE = /\/api\/v1\/instance$/;
 const REGISTER = /\/api\/v1\/auth\/register$/;
 

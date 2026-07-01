@@ -220,6 +220,23 @@ export async function seedCaption(
   });
 }
 
+/**
+ * devEmailToken reads the most recent captured account-security token for an
+ * email via the DEV-ONLY endpoint (requires DEV_MAIL_CAPTURE_ENABLED=true on the
+ * backend). Lets the backed suite complete the reset / email-verify confirm flows
+ * with the token the backend would otherwise only deliver out-of-band.
+ */
+export async function devEmailToken(
+  request: APIRequestContext,
+  email: string,
+  kind: "reset" | "verification" = "reset",
+): Promise<string> {
+  const res = await request.get(
+    `${API_URL}/api/v1/dev/email-token?email=${encodeURIComponent(email)}&kind=${kind}`,
+  );
+  return ((await res.json()) as { token: string }).token;
+}
+
 /** watchedWords reads the instance watched-words list as the given admin. */
 export async function watchedWords(
   request: APIRequestContext,
