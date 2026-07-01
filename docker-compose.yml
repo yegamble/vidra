@@ -1,0 +1,13 @@
+# Full local stack for Vidra.
+#
+# Brings up the vidra-core backend (postgres, redis, migrate, api on :8080) by
+# INCLUDING vidra-core's own compose file, so this stays a thin wrapper with the
+# backend definition living in exactly one place (vidra-core/docker-compose.yml).
+#
+# Run ./bootstrap.sh first so ./vidra-core exists, then:
+#   docker compose --profile core up --build
+#
+# The Next.js frontend has no container image; run it directly against the backend:
+#   cd vidra-user && npm ci && NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
+include:
+  - path: ./vidra-core/docker-compose.yml

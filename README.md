@@ -1,47 +1,85 @@
 # Vidra
 
-A clean-room, PeerTube-inspired federated video platform. Vidra is a **monorepo** (one
-git repository) containing two independently developed projects:
+A clean-room, PeerTube-inspired federated video platform. Vidra is split across
+**two independent repositories**, tied together by this lightweight **meta-repo**:
 
-```
-vidra/
-├── vidra-core/   # Go backend / HTTP API  (Echo, PostgreSQL, sqlc, Redis, Docker)
-└── vidra-user/   # Next.js + TypeScript frontend (Tailwind, custom components)
-```
+| Repo | What | Stack |
+|------|------|-------|
+| [`vidra-core`](https://github.com/yegamble/vidra-core) | Backend / HTTP API | Go, Echo, PostgreSQL, sqlc, Redis, Docker |
+| [`vidra-user`](https://github.com/yegamble/vidra-user) | Frontend | Next.js, TypeScript, Tailwind |
 
-Each project is self-contained — its own `go.mod` / `package.json`, its own Docker
-setup, and its own Ralph control plane (`.ralphrc` + `.ralph/`) with a separate
-`fix_plan.md`. The frontend consumes the backend's HTTP API contract.
+Each repo is self-contained — its own `go.mod` / `package.json`, its own Docker
+setup, its own GitHub Actions CI, and its own Ralph control plane (`.ralphrc` +
+`.ralph/`). The frontend consumes the backend's HTTP API **contract** at runtime
+(`NEXT_PUBLIC_API_BASE_URL`); there is no build-time coupling.
+
+> **Why a meta-repo and not git submodules?** The two components talk only over
+> HTTP at runtime, and the autonomous Ralph loop commits many times per hour. A
+> submodule pins a commit SHA and requires a strict commit-child → push-child →
+> bump-pointer → push-parent transaction on every sync, which fights the loop and
+> risks dangling pointers. The meta-repo gives the same "one place to clone and
+> run" without any of that: each repo's loop just commits and pushes its own tree.
 
 ## Getting started
-See each project's README:
-- Backend: [`vidra-core/README.md`](vidra-core/README.md)
-- Frontend: [`vidra-user/README.md`](vidra-user/README.md)
-
-## Autonomous development (Ralph)
-Ralph runs as a single **orchestrator from the monorepo root** and advances both
-projects, one vertical slice per loop:
 
 ```bash
-ralph --live            # run from the repo root — drives vidra-core AND vidra-user
+git clone https://github.com/yegamble/vidra.git
+cd vidra
+./bootstrap.sh            # clone/update vidra-core + vidra-user into ./vidra-core, ./vidra-user
+
+# Backend (postgres, redis, migrate, api on :8080):
+docker compose --profile core up --build
+
+# Frontend (in another shell) — Next.js dev against the live backend:
+cd vidra-user && npm ci && NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
 ```
 
-Each loop the orchestrator picks the highest-priority slice, works inside the target
-project (`vidra-core/` or `vidra-user/`), and follows that project's own `.ralph/`
-(PROMPT, fix_plan, specs). It reads the **root** `.ralphrc` for loop settings and the
-root `.ralph/PROMPT.md` + `.ralph/fix_plan.md` as the coarse orchestration gate; the
-root `.ralph/` is *not* idle — it coordinates the whole run. (It never writes code at
-the root — see the stop guard in `.ralph/PROMPT.md`.)
+`bootstrap.sh` is idempotent: it clones each component if missing, otherwise
+`git pull --ff-only`. The `./vidra-core` and `./vidra-user` directories are
+independent git checkouts and are **git-ignored by this repo**.
 
-You *may* instead run a focused single-project loop from inside a subdirectory
-(`cd vidra-core && ralph --live`), which uses that subdir's `.ralphrc`. Do **not** run
-a subdir loop and the root orchestrator at the same time — both projects share one git
-history and one `main`.
+## The frontend ⇄ backend contract
+
+`vidra-core/api/openapi.yaml` is the source of truth for the HTTP API. `vidra-user`
+hand-maintains `lib/api/types.ts` against it (no codegen yet) and guards drift with
+`scripts/check-contract.mjs`, which asserts every `/api/` path the frontend calls
+exists in the spec. In CI, `vidra-user`'s `contract-ci` fetches the spec from the
+public `vidra-core` repo; locally it resolves the sibling `../vidra-core` checkout.
+
+**Making a breaking API change spans two repos** — there is no longer one atomic
+commit. Stage it back-compat: land the additive backend change in `vidra-core`
+first (its `openapi` CI publishes the updated spec), then update `vidra-user`, then
+remove the old endpoint in a later `vidra-core` change.
 
 ## CI
-GitHub Actions workflows live at the repo root in [`.github/workflows/`](.github/workflows/)
-(GitHub only reads workflows from the root). They are path-filtered so backend changes
-run backend CI and frontend changes run frontend CI.
+
+Each repo runs its own GitHub Actions:
+- **vidra-core** — `backend-ci` (`make ci`), `backend-integration`, `openapi`, `ci-guard`.
+- **vidra-user** — `frontend-ci` (`npm run ci`), `contract-ci`, `frontend-e2e-backed`
+  (checks out `vidra-core` and runs the UI against the live backend), `ci-guard`.
+
+This meta-repo runs `meta-ci` (validates `bootstrap.sh` and the full-stack compose).
+
+## Autonomous development (Ralph)
+
+Run a **per-repo loop** inside each component checkout — this is Ralph's native
+single-working-tree model:
+
+```bash
+cd vidra-core && ralph --live      # uses vidra-core/.ralphrc
+cd vidra-user && ralph --live      # uses vidra-user/.ralphrc
+```
+
+Each loop's terminal step is a plain `git add -A && git commit && git push` against
+that repo's own `main` — no cross-repo pointer to bump. For a change that spans both
+(e.g. an API endpoint), run the two loops **sequentially, backend first** (see the
+contract note above).
+
+The former monorepo root orchestrator (`.ralphrc`, `.ralph/PROMPT.md`,
+`.ralph/fix_plan.md`) is **legacy** and no longer drives a loop from here. The
+cross-cutting product specs under [`.ralph/specs/`](.ralph/specs/) (architecture,
+PeerTube parity ledger, security, testing) are **preserved here as product docs**,
+since they describe the whole platform rather than either component.
 
 ## License
 TBD.

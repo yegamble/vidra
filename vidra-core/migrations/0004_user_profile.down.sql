@@ -1,3 +1,0 @@
--- 0004 down: drop the account profile fields.
-ALTER TABLE users DROP COLUMN IF EXISTS bio;
-ALTER TABLE users DROP COLUMN IF EXISTS display_name;

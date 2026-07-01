@@ -1,4 +1,9 @@
-# Ralph generated/runtime files (in ANY .ralph/ — root, vidra-core/, vidra-user/)
+# Component repositories — cloned by ./bootstrap.sh as INDEPENDENT git checkouts.
+# They are not tracked by this meta-repo (each has its own github.com/yegamble/<name> repo).
+/vidra-core/
+/vidra-user/
+
+# Ralph runtime/generated files (root .ralph/ is kept for its product specs/docs)
 **/.ralph/.call_count
 **/.ralph/.last_reset
 **/.ralph/.last_output_length
@@ -14,51 +19,18 @@
 **/.ralph/.response_analysis
 **/.ralph/.circuit_breaker_state
 **/.ralph/.circuit_breaker_history
-
-# Ralph logs and generated docs (in any .ralph/)
 **/.ralph/logs/*
 !**/.ralph/logs/.gitkeep
 **/.ralph/docs/generated/*
 !**/.ralph/docs/generated/.gitkeep
-
-# Ralph backup directories (created by migration)
 .ralph_backup_*
 
-# General logs
+# Logs / OS / temp
 *.log
-
-# OS files
 .DS_Store
 Thumbs.db
-
-# Temporary files
 *.tmp
 .temp/
-
-# --- Go (vidra-core) ---
-bin/
-dist/
-*.test
-*.out
-
-# --- Node / Next.js (vidra-user) ---
-node_modules/
-.next/
-out/
-coverage/
-playwright-report/
-test-results/
-*.tsbuildinfo
-.env
-.env.local
-.env.*.local
-
-# Python cache
-__pycache__/
-*.pyc
-
-# Rust build
-target/
 
 # IDE files
 .vscode/

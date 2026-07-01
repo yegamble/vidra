@@ -1,4 +1,0 @@
-ALTER TABLE videos
-    DROP COLUMN IF EXISTS category,
-    DROP COLUMN IF EXISTS language,
-    DROP COLUMN IF EXISTS license;
