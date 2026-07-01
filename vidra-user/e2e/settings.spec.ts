@@ -44,6 +44,22 @@ test("editing the profile shows a saved confirmation", async ({ page }) => {
   await expect(page.getByText("Profile saved.")).toBeVisible();
 });
 
+test("an unverified user can resend the verification email from settings", async ({ page }) => {
+  await signIn(page); // the mocked session user has email_verified: false
+  let verifyCalled = false;
+  await page.route(/\/api\/v1\/auth\/verify-email$/, async (route) => {
+    verifyCalled = true;
+    await route.fulfill({ status: 202, body: "" });
+  });
+
+  await page.getByRole("link", { name: "ada" }).click();
+  await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Resend verification email" }).click();
+  await expect(page.getByText("Verification email sent. Check your inbox.")).toBeVisible();
+  expect(verifyCalled).toBe(true);
+});
+
 test("maps a 422 field error inline", async ({ page }) => {
   await signIn(page);
   await page.route(ME, (route) =>

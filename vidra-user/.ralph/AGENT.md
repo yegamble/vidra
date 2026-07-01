@@ -79,9 +79,14 @@ enumeration-safe) and shows a neutral confirmation — DB-effect VERIFIED in
 via `POST /auth/password-reset/confirm` — DB-effect VERIFIED in
 `e2e-backed/password-reset-confirm.spec.ts`, which retrieves the token from vidra-core's
 dev seam (`GET /api/v1/dev/email-token`, gated by `DEV_MAIL_CAPTURE_ENABLED` — the backed
-run/CI sets it) then proves the new password logs in and the old is refused. Still TODO:
-the rest of P3 (email-verify pages — unblocked, use the dev seam with `kind=verification`;
-+ MFA), more component primitives
+run/CI sets it) then proves the new password logs in and the old is refused. Email
+**verification**: unverified signed-in users get a "Verify your email" resend prompt on
+`/settings` (`EmailVerificationSection` → `POST /auth/verify-email`), and the confirm page
+(`app/verify-email/confirm?token=…` → `VerifyEmailConfirmForm`, auto-submits →
+`POST /auth/verify-email/confirm`) flips `email_verified` and re-fetches the session
+(`useSession().reloadUser`) — DB-effect VERIFIED in `e2e-backed/email-verify.spec.ts`
+(resend → dev token `kind=verification` → confirm → a fresh sign-in shows the prompt gone).
+Still TODO: the rest of P3 (MFA/TOTP), more component primitives
 (Card/Badge/Skeleton/Input), custom player controls, the backend-backed Playwright profile
 (login/signup are mock-tested only — NOT `VERIFIED` until proven against a real backend+DB),
 and `instrumentation.ts` for OTel.

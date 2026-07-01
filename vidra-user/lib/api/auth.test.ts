@@ -94,6 +94,23 @@ describe("authApi + auth-store", () => {
     expect(init.body).toBe(JSON.stringify({ token: "tok-123", password: "newpassword-2" }));
   });
 
+  it("requestEmailVerification POSTs to the verify-email endpoint", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
+    await authApi.requestEmailVerification();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/auth/verify-email");
+    expect(init.method).toBe("POST");
+  });
+
+  it("confirmEmailVerification POSTs the token to the confirm endpoint", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await authApi.confirmEmailVerification({ token: "verify-tok" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/auth/verify-email/confirm");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(JSON.stringify({ token: "verify-tok" }));
+  });
+
   it("logout posts the refresh token", async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
     await authApi.logout("ref");

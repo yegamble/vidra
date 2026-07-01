@@ -156,6 +156,43 @@ test("the confirm page with no token shows the invalid-link state", async ({ pag
   await expect(page.getByRole("button", { name: "Reset password" })).toHaveCount(0);
 });
 
+const VERIFY_CONFIRM = /\/api\/v1\/auth\/verify-email\/confirm$/;
+const ME = /\/api\/v1\/auth\/me$/;
+
+test("following a valid verification link confirms the email", async ({ page }) => {
+  let body: unknown;
+  await page.route(VERIFY_CONFIRM, async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({ status: 204, body: "" });
+  });
+  // reloadUser() runs after success; anon here, so /me is 401 (swallowed).
+  await page.route(ME, (route) =>
+    route.fulfill({ status: 401, json: { error: { code: "unauthorized", message: "no" } } }),
+  );
+
+  await page.goto("/verify-email/confirm?token=vtok-1");
+
+  await expect(page.getByText(/your email has been verified/i)).toBeVisible();
+  expect(body).toEqual({ token: "vtok-1" });
+});
+
+test("an invalid or expired verification link shows an error", async ({ page }) => {
+  await page.route(VERIFY_CONFIRM, (route) =>
+    route.fulfill({
+      status: 400,
+      json: { error: { code: "bad_request", message: "invalid or expired verification token" } },
+    }),
+  );
+
+  await page.goto("/verify-email/confirm?token=stale");
+  await expect(page.getByText(/invalid or has expired/i)).toBeVisible();
+});
+
+test("the verification confirm page with no token shows the invalid state", async ({ page }) => {
+  await page.goto("/verify-email/confirm");
+  await expect(page.getByText(/invalid or has expired/i)).toBeVisible();
+});
+
 const INSTANCE = /\/api\/v1\/instance$/;
 const REGISTER = /\/api\/v1\/auth\/register$/;
 

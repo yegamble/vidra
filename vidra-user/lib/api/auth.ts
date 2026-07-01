@@ -1,6 +1,7 @@
 import { apiRequest } from "./client";
 import type {
   AuthResponse,
+  EmailVerificationConfirmRequest,
   LoginRequest,
   PasswordResetConfirmRequest,
   PasswordResetRequest,
@@ -34,6 +35,22 @@ export const authApi = {
    */
   confirmPasswordReset: (body: PasswordResetConfirmRequest) =>
     apiRequest<void>("/api/v1/auth/password-reset/confirm", { method: "POST", body }),
+
+  /**
+   * POST /api/v1/auth/verify-email — send an email-verification message to the
+   * signed-in account's own address (bearer required). Always 202; a no-op if the
+   * account is already verified.
+   */
+  requestEmailVerification: () =>
+    apiRequest<void>("/api/v1/auth/verify-email", { method: "POST" }),
+
+  /**
+   * POST /api/v1/auth/verify-email/confirm — mark the email verified using the
+   * single-use token from the verification message (public — the link may be
+   * followed while logged out). 204 on success; 400 if invalid/used/expired.
+   */
+  confirmEmailVerification: (body: EmailVerificationConfirmRequest) =>
+    apiRequest<void>("/api/v1/auth/verify-email/confirm", { method: "POST", body }),
 
   /** POST /api/v1/auth/logout — revoke a session (idempotent, always 204). */
   logout: (refreshToken: string) =>

@@ -22,6 +22,8 @@ interface SessionContextValue {
   updateProfile: (input: UpdateProfileRequest) => Promise<void>;
   deactivate: (password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Re-fetch the current account (e.g. after email verification flips a flag). */
+  reloadUser: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -58,6 +60,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(await authApi.updateMe(input));
   }, []);
 
+  const reloadUser = useCallback(async () => {
+    setUser(await authApi.me());
+  }, []);
+
   const deactivate = useCallback(async (password: string) => {
     await authApi.deactivate(password);
     // The backend already revoked every session; drop the local one too.
@@ -89,8 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateProfile,
       deactivate,
       logout,
+      reloadUser,
     }),
-    [user, login, register, updateProfile, deactivate, logout],
+    [user, login, register, updateProfile, deactivate, logout, reloadUser],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

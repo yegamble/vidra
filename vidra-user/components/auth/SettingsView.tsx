@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import { useSession } from "@/components/auth/AuthProvider";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ApiError } from "@/lib/api";
+import { ApiError, authApi } from "@/lib/api";
 import type { UpdateProfileRequest } from "@/lib/api";
 
 // SettingsView lets the signed-in user edit their profile (display name, bio)
@@ -40,6 +40,7 @@ export function SettingsView() {
           Signed in as @{user.username}
         </p>
       </header>
+      {user.email_verified ? null : <EmailVerificationSection email={user.email} />}
       <ProfileForm
         key={user.id}
         initialDisplayName={user.display_name}
@@ -62,6 +63,64 @@ export function SettingsView() {
       </section>
       <DeactivateSection deactivate={deactivate} />
     </div>
+  );
+}
+
+function EmailVerificationSection({ email }: { email: string }) {
+  const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function resend() {
+    setError(null);
+    setState("sending");
+    try {
+      await authApi.requestEmailVerification();
+      setState("sent");
+    } catch (err) {
+      setState("idle");
+      setError(
+        err instanceof ApiError ? err.message : "Something went wrong. Please try again.",
+      );
+    }
+  }
+
+  return (
+    <section className="flex max-w-xl flex-col gap-3 rounded-md border border-amber-300 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-semibold text-amber-800 dark:text-amber-300">
+          Verify your email
+        </h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Your email <span className="font-medium">{email}</span> is not verified yet. Check your
+          inbox for the verification link, or resend it below.
+        </p>
+      </div>
+      {error ? (
+        <p
+          role="alert"
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+        >
+          {error}
+        </p>
+      ) : null}
+      {state === "sent" ? (
+        <p
+          role="status"
+          className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-900/50 dark:bg-green-950/30 dark:text-green-300"
+        >
+          Verification email sent. Check your inbox.
+        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={() => void resend()}
+          disabled={state === "sending"}
+          className="self-start rounded-md border border-amber-400 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-60 dark:bg-transparent dark:text-amber-200 dark:hover:bg-amber-900/30"
+        >
+          {state === "sending" ? "Sending…" : "Resend verification email"}
+        </button>
+      )}
+    </section>
   );
 }
 

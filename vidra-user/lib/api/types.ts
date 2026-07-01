@@ -134,6 +134,11 @@ export interface PasswordResetConfirmRequest {
   password: string;
 }
 
+/** POST /api/v1/auth/verify-email/confirm — mark the email verified with a token. */
+export interface EmailVerificationConfirmRequest {
+  token: string;
+}
+
 /** PATCH /api/v1/auth/me — partial profile update; omitted fields are unchanged. */
 export interface UpdateProfileRequest {
   display_name?: string;
