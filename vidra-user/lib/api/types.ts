@@ -123,6 +123,11 @@ export interface LoginRequest {
   password: string;
 }
 
+/** POST /api/v1/auth/password-reset — start the reset flow (always 202). */
+export interface PasswordResetRequest {
+  email: string;
+}
+
 /** PATCH /api/v1/auth/me — partial profile update; omitted fields are unchanged. */
 export interface UpdateProfileRequest {
   display_name?: string;

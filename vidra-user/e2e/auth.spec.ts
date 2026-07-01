@@ -53,6 +53,51 @@ test("shows an error on bad credentials", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
 });
 
+const RESET = /\/api\/v1\/auth\/password-reset$/;
+
+test("the login page links to the password-reset page", async ({ page }) => {
+  await page.route(FEED, (route) =>
+    route.fulfill({ json: { videos: [], sort: "recent", limit: 20, offset: 0 } }),
+  );
+  await page.goto("/login");
+  await page.getByRole("link", { name: "Forgot your password?" }).click();
+  await expect(page).toHaveURL(/\/reset-password$/);
+  await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
+});
+
+test("requesting a password reset shows a neutral confirmation", async ({ page }) => {
+  let body: unknown;
+  await page.route(RESET, async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({ status: 202, body: "" });
+  });
+
+  await page.goto("/reset-password");
+  await page.getByLabel("Email").fill("ada@example.test");
+  await page.getByRole("button", { name: "Send reset link" }).click();
+
+  await expect(page.getByText(/check your inbox/i)).toBeVisible();
+  expect(body).toEqual({ email: "ada@example.test" });
+  // The email field is gone once the neutral confirmation replaces the form.
+  await expect(page.getByLabel("Email")).toHaveCount(0);
+});
+
+test("shows an error when the reset email is rejected", async ({ page }) => {
+  await page.route(RESET, (route) =>
+    route.fulfill({
+      status: 422,
+      json: { error: { code: "unprocessable_entity", message: "validation failed" } },
+    }),
+  );
+
+  await page.goto("/reset-password");
+  await page.getByLabel("Email").fill("not-an-email");
+  await page.getByRole("button", { name: "Send reset link" }).click();
+
+  await expect(page.getByText("Enter a valid email address.")).toBeVisible();
+  await expect(page.getByText(/check your inbox/i)).toHaveCount(0);
+});
+
 const INSTANCE = /\/api\/v1\/instance$/;
 const REGISTER = /\/api\/v1\/auth\/register$/;
 

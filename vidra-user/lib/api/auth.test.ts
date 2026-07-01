@@ -76,6 +76,15 @@ describe("authApi + auth-store", () => {
     expect((init.headers as Record<string, string>).authorization).toBeUndefined();
   });
 
+  it("requestPasswordReset POSTs the email to the reset endpoint", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
+    await authApi.requestPasswordReset({ email: "ada@example.test" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/auth/password-reset");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(JSON.stringify({ email: "ada@example.test" }));
+  });
+
   it("logout posts the refresh token", async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
     await authApi.logout("ref");

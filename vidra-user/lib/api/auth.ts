@@ -2,6 +2,7 @@ import { apiRequest } from "./client";
 import type {
   AuthResponse,
   LoginRequest,
+  PasswordResetRequest,
   RegisterRequest,
   UpdateProfileRequest,
   User,
@@ -16,6 +17,14 @@ export const authApi = {
   /** POST /api/v1/auth/login — exchange credentials for a session. */
   login: (body: LoginRequest) =>
     apiRequest<AuthResponse>("/api/v1/auth/login", { method: "POST", body }),
+
+  /**
+   * POST /api/v1/auth/password-reset — start the reset flow. Always 202
+   * (enumeration-safe): a matching active account is mailed a reset token
+   * out-of-band; the response never reveals whether the email exists.
+   */
+  requestPasswordReset: (body: PasswordResetRequest) =>
+    apiRequest<void>("/api/v1/auth/password-reset", { method: "POST", body }),
 
   /** POST /api/v1/auth/logout — revoke a session (idempotent, always 204). */
   logout: (refreshToken: string) =>

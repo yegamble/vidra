@@ -69,8 +69,15 @@ Admin: the admin-only users
 page (`app/admin/users` → `components/AdminUsersView.tsx`, reached via the admin-only
 `AdminNavLink`) lists/searches accounts (`GET /admin/users?q=`) and edits each user's
 role + active flag (`PATCH /admin/users/:id`), disabling the admin's own row — DB-effect
-VERIFIED in `e2e-backed/admin-users.spec.ts`. Still TODO: the rest of P3 (password
-reset, MFA, settings/profile), more component primitives
+VERIFIED in `e2e-backed/admin-users.spec.ts`. Auth recovery: the password-reset **request**
+page (`app/reset-password` → `components/auth/ResetPasswordForm.tsx`, linked "Forgot your
+password?" from `LoginForm`) submits an email to `POST /auth/password-reset` (always 202,
+enumeration-safe) and shows a neutral confirmation — DB-effect VERIFIED in
+`e2e-backed/password-reset.spec.ts` (a known account's `password_reset_tokens` row goes
+0→1 after the UI request; psql-confirmed, only a hash stored). The reset **complete** page
+and email-verify pages stay BLOCKED on a dev token-retrieval affordance (the raw token is
+mailer-only/hashed). Still TODO: the rest of P3 (reset-complete + MFA + email-verify),
+more component primitives
 (Card/Badge/Skeleton/Input), custom player controls, the backend-backed Playwright profile
 (login/signup are mock-tested only — NOT `VERIFIED` until proven against a real backend+DB),
 and `instrumentation.ts` for OTel.

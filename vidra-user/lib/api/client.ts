@@ -139,7 +139,9 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
     throw err;
   }
 
-  if (res.status === 204) {
+  // 204 No Content and 202 Accepted (e.g. the enumeration-safe password-reset
+  // request) carry no body — don't attempt to parse JSON.
+  if (res.status === 204 || res.status === 202) {
     return undefined as T;
   }
   return (await res.json()) as T;

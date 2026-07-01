@@ -189,8 +189,8 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [x] Implement signup disabled/closed registration state. (SignupForm reads `GET /api/v1/instance` `registration_enabled`; when false shows a "Registration is closed" notice instead of the form; instance-fetch failure falls back to showing the form.)
 - [ ] Implement terms-of-use signup step.
 - [ ] Implement email verification pending state.
-- [ ] Implement password reset request page.
-- [ ] Implement password reset complete page.
+- [x] Implement password reset request page. (`app/reset-password/page.tsx` → `components/auth/ResetPasswordForm.tsx`: email → `authApi.requestPasswordReset` (`POST /api/v1/auth/password-reset`, always 202); shows the same enumeration-safe neutral confirmation ("If an account exists for that email, we've sent a link…") on success regardless, a 422 → "Enter a valid email address." The login page links to it ("Forgot your password?"). API client gained `requestPasswordReset` + `PasswordResetRequest` (unit-tested); `apiRequest` now treats 202 as no-body like 204. Mocked `e2e/auth.spec.ts` (link nav + neutral confirmation asserting the `{email}` body + 422 error). **VERIFIED** end-to-end in `e2e-backed/password-reset.spec.ts`: the reset page drives a real 202 and shows the confirmation; the DB effect was proven via psql — a known registered account's `password_reset_tokens` rows went 0→1 after the UI request, storing only a 64-char SHA-256 hash (unused, unexpired). The raw token is never persisted, confirming there is no dev token-retrieval affordance.)
+- [ ] Implement password reset complete page. (BLOCKED — the confirm step (`POST /auth/password-reset/confirm`) needs the single-use token from the reset message, which vidra-core only delivers out-of-band via the mailer (noop in dev) and stores hashed. Cannot be backed-verified until a dev-only token-retrieval affordance exists in vidra-core; see the note on the backend-backed auth tests item below.)
 - [ ] Implement TOTP/MFA challenge page.
 - [ ] Implement TOTP enrollment page.
 - [ ] Implement recovery codes UI.

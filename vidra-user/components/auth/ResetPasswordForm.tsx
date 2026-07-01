@@ -1,36 +1,54 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
 
-import { useSession } from "@/components/auth/AuthProvider";
-import { ApiError } from "@/lib/api";
+import { ApiError, authApi } from "@/lib/api";
 
-export function LoginForm() {
-  const router = useRouter();
-  const { login } = useSession();
+// Requests a password-reset link. The backend always answers 202 (it never
+// reveals whether the email belongs to an account), so on success we show the
+// same neutral confirmation regardless — keeping the flow enumeration-safe.
+export function ResetPasswordForm() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
 
   async function submit() {
     setError(null);
     setSubmitting(true);
     try {
-      await login({ email, password });
-      router.push("/");
+      await authApi.requestPasswordReset({ email });
+      setSent(true);
     } catch (err) {
       setError(
         err instanceof ApiError
-          ? err.status === 401
-            ? "Invalid email or password."
+          ? err.status === 422
+            ? "Enter a valid email address."
             : err.message
           : "Something went wrong. Please try again.",
       );
       setSubmitting(false);
     }
+  }
+
+  if (sent) {
+    return (
+      <div className="flex flex-col gap-4">
+        <p
+          role="status"
+          className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-900/50 dark:bg-green-950/30 dark:text-green-300"
+        >
+          If an account exists for that email, we&apos;ve sent a link to reset your
+          password. Check your inbox.
+        </p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <Link href="/login" className="underline hover:text-zinc-700 dark:hover:text-zinc-200">
+            Back to sign in
+          </Link>
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -51,12 +69,16 @@ export function LoginForm() {
         </p>
       ) : null}
 
+      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        Enter your account email and we&apos;ll send you a link to reset your password.
+      </p>
+
       <div className="flex flex-col gap-1">
-        <label htmlFor="login-email" className="text-sm font-medium">
+        <label htmlFor="reset-email" className="text-sm font-medium">
           Email
         </label>
         <input
-          id="login-email"
+          id="reset-email"
           name="email"
           type="email"
           autoComplete="email"
@@ -67,40 +89,18 @@ export function LoginForm() {
         />
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="login-password" className="text-sm font-medium">
-          Password
-        </label>
-        <input
-          id="login-password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
-        />
-        <Link
-          href="/reset-password"
-          className="self-start text-sm text-zinc-500 underline hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-        >
-          Forgot your password?
-        </Link>
-      </div>
-
       <button
         type="submit"
         disabled={submitting}
         className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
       >
-        {submitting ? "Signing in…" : "Sign in"}
+        {submitting ? "Sending…" : "Send reset link"}
       </button>
 
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        No account?{" "}
-        <Link href="/signup" className="underline hover:text-zinc-700 dark:hover:text-zinc-200">
-          Create one
+        Remembered it?{" "}
+        <Link href="/login" className="underline hover:text-zinc-700 dark:hover:text-zinc-200">
+          Back to sign in
         </Link>
       </p>
     </form>
