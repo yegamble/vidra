@@ -258,6 +258,8 @@ export interface Comment {
   id: string;
   video_id: string;
   body: string;
+  /** The author's account id (so a signed-in viewer can mute them). */
+  author_id: string;
   author_username: string;
   author_display_name: string;
   created_at: string;
@@ -266,6 +268,20 @@ export interface Comment {
 
 export interface CommentListResponse {
   comments: Comment[];
+  limit: number;
+  offset: number;
+}
+
+/** An account the caller has muted. Mirrors the backend MutedAccount schema. */
+export interface MutedAccount {
+  user_id: string;
+  username: string;
+  display_name: string;
+  muted_at: string;
+}
+
+export interface MutedAccountListResponse {
+  accounts: MutedAccount[];
   limit: number;
   offset: number;
 }

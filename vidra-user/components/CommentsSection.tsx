@@ -70,6 +70,9 @@ export function CommentsSection({ videoId }: { videoId: string }) {
               key={c.id}
               comment={c}
               onDeleted={() => setComments((prev) => prev.filter((x) => x.id !== c.id))}
+              onMutedAuthor={(authorId) =>
+                setComments((prev) => prev.filter((x) => x.author_id !== authorId))
+              }
             />
           ))}
         </ul>
@@ -152,10 +155,20 @@ function CommentForm({
   );
 }
 
-// CommentItem renders one comment, with a Delete control only for its author.
-function CommentItem({ comment, onDeleted }: { comment: Comment; onDeleted: () => void }) {
+// CommentItem renders one comment. Its author gets a Delete control; any other
+// signed-in viewer gets Mute (hide this account's comments) + Report.
+function CommentItem({
+  comment,
+  onDeleted,
+  onMutedAuthor,
+}: {
+  comment: Comment;
+  onDeleted: () => void;
+  onMutedAuthor: (authorId: string) => void;
+}) {
   const { user, status } = useSession();
   const [busy, setBusy] = useState(false);
+  const [muting, setMuting] = useState(false);
   const isAuthor = user?.username === comment.author_username;
   const when = relativeTime(comment.created_at);
 
@@ -167,6 +180,17 @@ function CommentItem({ comment, onDeleted }: { comment: Comment; onDeleted: () =
     } catch {
       // Leave the comment in place on failure.
       setBusy(false);
+    }
+  }
+
+  async function mute() {
+    setMuting(true);
+    try {
+      await api.muteAccount(comment.author_id);
+      onMutedAuthor(comment.author_id);
+    } catch {
+      // Leave the comment in place on failure.
+      setMuting(false);
     }
   }
 
@@ -187,7 +211,15 @@ function CommentItem({ comment, onDeleted }: { comment: Comment; onDeleted: () =
             Delete
           </button>
         ) : status === "authed" ? (
-          <span className="ml-auto">
+          <span className="ml-auto flex items-center gap-3">
+            <button
+              type="button"
+              disabled={muting}
+              onClick={() => void mute()}
+              className="text-xs font-medium text-zinc-500 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:opacity-60 dark:text-zinc-400 dark:hover:text-zinc-100"
+            >
+              {muting ? "Muting…" : "Mute"}
+            </button>
             <ReportButton kind="comment" targetId={comment.id} variant="link" />
           </span>
         ) : null}

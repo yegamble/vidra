@@ -10,6 +10,7 @@ import type {
   ChannelListResponse,
   Comment,
   CommentListResponse,
+  MutedAccountListResponse,
   CreateChannelRequest,
   CreateVideoRequest,
   FeedSort,
@@ -150,6 +151,25 @@ export const api = {
   /** DELETE /api/v1/comments/{id} — delete your own comment (auth). */
   deleteComment: (id: string) =>
     apiRequest<void>(`/api/v1/comments/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  /** POST /api/v1/me/mutes/accounts/{id} — mute an account (auth; idempotent 204). */
+  muteAccount: (userId: string) =>
+    apiRequest<void>(`/api/v1/me/mutes/accounts/${encodeURIComponent(userId)}`, {
+      method: "POST",
+    }),
+
+  /** DELETE /api/v1/me/mutes/accounts/{id} — unmute an account (auth; idempotent 204). */
+  unmuteAccount: (userId: string) =>
+    apiRequest<void>(`/api/v1/me/mutes/accounts/${encodeURIComponent(userId)}`, {
+      method: "DELETE",
+    }),
+
+  /** GET /api/v1/me/mutes/accounts — the accounts the caller has muted, newest first (auth). */
+  getMutedAccounts: (params: { limit?: number; offset?: number } = {}, signal?: AbortSignal) =>
+    apiRequest<MutedAccountListResponse>("/api/v1/me/mutes/accounts", {
+      query: { limit: params.limit, offset: params.offset },
+      signal,
+    }),
 
   /** POST /api/v1/videos/{id}/report — file an abuse report on a video (auth; idempotent 204). */
   reportVideo: (id: string, reason: string) =>

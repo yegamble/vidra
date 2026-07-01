@@ -46,6 +46,20 @@ export function SettingsView() {
         initialBio={user.bio}
         updateProfile={updateProfile}
       />
+      <section className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <div>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Muted accounts</h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Accounts whose comments are hidden from you.
+          </p>
+        </div>
+        <Link
+          href="/settings/mutes"
+          className="shrink-0 rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+        >
+          Manage
+        </Link>
+      </section>
       <DeactivateSection deactivate={deactivate} />
     </div>
   );

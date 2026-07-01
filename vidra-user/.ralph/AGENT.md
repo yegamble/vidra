@@ -39,7 +39,12 @@ DB-effect VERIFIED in `e2e-backed/moderation.spec.ts`. A moderator can **block**
 and the moderation block-list (`app/moderation/blocked` → `components/BlockedVideosView.tsx`,
 reached via the role-gated `ModerationTabs` sub-nav) lists blocked videos
 (`GET /admin/videos/blocked`) and **unblocks** them (`DELETE /admin/videos/:id/block`) —
-both DB-effect VERIFIED in `e2e-backed/blocked-videos.spec.ts`.
+both DB-effect VERIFIED in `e2e-backed/blocked-videos.spec.ts`. Account mutes: a signed-in
+viewer **Mutes** a comment's author (`CommentsSection` → `POST /me/mutes/accounts/:author_id`,
+via `Comment.author_id`), hiding that account's comments; the muted-accounts page
+(`app/settings/mutes` → `components/MutedAccountsView.tsx`, linked from `/settings`) lists
+(`GET /me/mutes/accounts`) and **unmutes** (`DELETE …`) — DB-effect VERIFIED in
+`e2e-backed/mutes.spec.ts`.
 Admin: the admin-only users
 page (`app/admin/users` → `components/AdminUsersView.tsx`, reached via the admin-only
 `AdminNavLink`) lists/searches accounts (`GET /admin/users?q=`) and edits each user's

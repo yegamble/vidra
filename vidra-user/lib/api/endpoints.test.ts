@@ -270,4 +270,23 @@ describe("api endpoints", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({ reason: "copyright" });
   });
+
+  it("muteAccount POSTs to the mute endpoint for the user", async () => {
+    await api.muteAccount("u2");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/me/mutes/accounts/u2");
+    expect(init.method).toBe("POST");
+  });
+
+  it("unmuteAccount DELETEs the mute for the user", async () => {
+    await api.unmuteAccount("u2");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/me/mutes/accounts/u2");
+    expect(init.method).toBe("DELETE");
+  });
+
+  it("getMutedAccounts targets the mutes endpoint with pagination", async () => {
+    await api.getMutedAccounts({ limit: 100 });
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/me/mutes/accounts?limit=100");
+  });
 });
