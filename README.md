@@ -27,10 +27,11 @@ git clone https://github.com/yegamble/vidra.git
 cd vidra
 ./bootstrap.sh            # clone/update vidra-core + vidra-user into ./vidra-core, ./vidra-user
 
-# Backend (postgres, redis, migrate, api on :8080):
-docker compose --profile core up --build
+# Full stack in Docker (backend + frontend production image — :3000 and :8080):
+docker compose --profile core --profile web up --build
 
-# Frontend (in another shell) — Next.js dev against the live backend:
+# Or backend-only, with the frontend in dev mode (hot reload) in another shell:
+docker compose --profile core up --build
 cd vidra-user && npm ci && NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
 ```
 

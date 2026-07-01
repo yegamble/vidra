@@ -1,13 +1,30 @@
 # Full local stack for Vidra.
 #
-# Brings up the vidra-core backend (postgres, redis, migrate, api on :8080) by
-# INCLUDING vidra-core's own compose file, so this stays a thin wrapper with the
-# backend definition living in exactly one place (vidra-core/docker-compose.yml).
+# The backend (postgres, redis, migrate, api on :8080) comes from vidra-core's own
+# compose via `include:`, so the backend definition lives in exactly one place. The
+# frontend is added here as the `user` service (profile "web").
 #
-# Run ./bootstrap.sh first so ./vidra-core exists, then:
-#   docker compose --profile core up --build
+# Run ./bootstrap.sh first so ./vidra-core and ./vidra-user exist, then:
+#   docker compose --profile core up --build                    # backend only
+#   docker compose --profile core --profile web up --build      # full stack, frontend on :3000
 #
-# The Next.js frontend has no container image; run it directly against the backend:
+# For frontend development with hot reload, run it directly instead of the image:
 #   cd vidra-user && npm ci && NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
 include:
   - path: ./vidra-core/docker-compose.yml
+
+services:
+  user:
+    build:
+      context: ./vidra-user
+      args:
+        # NEXT_PUBLIC_* is inlined into the client bundle at BUILD time, so the API
+        # URL the browser calls is baked here. The backend publishes 8080 on the host.
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+    profiles: ["web"]
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production

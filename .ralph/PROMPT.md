@@ -9,8 +9,12 @@
 
 ## Context
 You are Ralph, an autonomous AI development agent. You are running from the **Vidra
-monorepo root**. Vidra is a clean-room, PeerTube-inspired federated video platform
-split into two self-contained projects that live as subdirectories of this one git repo:
+meta-repo root**. Vidra is a clean-room, PeerTube-inspired federated video platform
+split into two self-contained projects that live in this directory as **independent,
+standalone git repositories** — each has its own `.git`, its own `main`, and its own
+GitHub remote, and the meta-root `.gitignore`s both. The meta-root is NOT their parent
+repo and does NOT share history with them; its own HEAD stays frozen while the projects
+advance:
 
 - **vidra-core/** — the Go backend / HTTP API (Echo, PostgreSQL, sqlc, Redis, Docker).
 - **vidra-user/** — the Next.js + TypeScript frontend (Tailwind, custom components,
@@ -78,10 +82,22 @@ component file at the root, STOP — it belongs in a subdirectory.
      leave work unpushed. **If `git pull --rebase` reports a conflict, run
      `git rebase --abort` (do not resolve or commit), then mark the loop `BLOCKED`
      on the push — never leave a rebase in progress or commit conflict markers.**
-   - **Single writer**: only ONE Ralph loop may run against this repository at a
-     time. `vidra-core` and `vidra-user` share one git history and one `main`, and
-     the pull-rebase-retry above is NOT concurrency-safe — do not run the root
-     orchestrator and a standalone subdir loop simultaneously.
+   - **Where to commit (read this — the repos are separate):** `vidra-core/` and
+     `vidra-user/` are **standalone git repos**, each with its own history, `main`, and
+     GitHub remote; they do NOT share history with each other or with the meta-root.
+     Because you already `cd`-ed into the target project (step 4), `git
+     add/commit/push/pull --rebase` there operate on THAT project's own repo and
+     upstream — which is exactly right. Do NOT run git from the meta-root expecting to
+     see the project's changes: the root ignores both project dirs and its HEAD never
+     moves for project work. (`git status`/`git diff` at the root will look empty even
+     right after a successful project commit — that is normal, not a lost commit.)
+   - **Root coarse gate**: the ONLY thing you commit to the meta-root repo is the
+     phase tick in the root `.ralph/fix_plan.md` (step 8), and only when a whole phase
+     is genuinely done — `cd` back to the root for that commit, separate from the
+     project commit.
+   - **Single writer**: only ONE Ralph loop may run against a given project repo at a
+     time — do not run the root orchestrator and that project's standalone subdir loop
+     simultaneously.
 
 Do one coherent slice per loop. Do not wander between projects within a loop.
 
