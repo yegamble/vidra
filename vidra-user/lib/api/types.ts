@@ -242,6 +242,28 @@ export interface BlockedVideoListResponse {
   offset: number;
 }
 
+/**
+ * A video in the admin/moderator videos overview (any privacy/state), with its
+ * current block status. Mirrors the backend AdminVideo schema.
+ */
+export interface AdminVideo {
+  id: string;
+  title: string;
+  privacy: string;
+  state: string;
+  channel_handle: string;
+  channel_display_name: string;
+  views: number;
+  created_at: string;
+  blocked: boolean;
+}
+
+export interface AdminVideoListResponse {
+  videos: AdminVideo[];
+  limit: number;
+  offset: number;
+}
+
 /** PATCH /api/v1/videos/{id} body; provide at least one field, omitted ones unchanged. */
 export interface UpdateVideoRequest {
   title?: string;

@@ -4,6 +4,7 @@ import { apiRequest } from "./client";
 import type {
   AdminUser,
   AdminUserListResponse,
+  AdminVideoListResponse,
   BlockedVideoListResponse,
   BlockVideoRequest,
   Channel,
@@ -350,6 +351,19 @@ export const api = {
   ) =>
     apiRequest<BlockedVideoListResponse>("/api/v1/admin/videos/blocked", {
       query: { limit: params.limit, offset: params.offset },
+      signal,
+    }),
+
+  /**
+   * GET /api/v1/admin/videos — all videos (any privacy/state) newest first, each
+   * with its block status (moderator/admin). Optional `q` filters by title.
+   */
+  getAdminVideos: (
+    params: { q?: string; limit?: number; offset?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    apiRequest<AdminVideoListResponse>("/api/v1/admin/videos", {
+      query: { q: params.q, limit: params.limit, offset: params.offset },
       signal,
     }),
 

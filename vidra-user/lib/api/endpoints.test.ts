@@ -289,4 +289,14 @@ describe("api endpoints", () => {
     await api.getMutedAccounts({ limit: 100 });
     expect(calledUrl()).toBe("http://localhost:8080/api/v1/me/mutes/accounts?limit=100");
   });
+
+  it("getAdminVideos targets the admin videos overview with the q filter", async () => {
+    await api.getAdminVideos({ q: "cat", limit: 100 });
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/videos?q=cat&limit=100");
+  });
+
+  it("getAdminVideos omits q when not provided", async () => {
+    await api.getAdminVideos();
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/videos");
+  });
 });
