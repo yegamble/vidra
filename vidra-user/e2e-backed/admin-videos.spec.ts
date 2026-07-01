@@ -29,7 +29,7 @@ test("an admin blocks and unblocks a video from the videos overview", async ({ p
   // Moderation → All videos, then filter to the seeded video by title.
   await page.getByRole("link", { name: "Moderation" }).click();
   await page.getByRole("link", { name: "All videos" }).click();
-  await page.getByLabel("Search videos").fill(videoTitle);
+  await page.getByLabel("Search videos by title").fill(videoTitle);
   await page.getByRole("button", { name: "Search" }).click();
 
   const row = page.locator("article", { hasText: videoTitle });

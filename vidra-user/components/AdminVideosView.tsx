@@ -95,7 +95,7 @@ function VideosList() {
       >
         <input
           type="search"
-          aria-label="Search videos"
+          aria-label="Search videos by title"
           placeholder="Search by title"
           value={input}
           onChange={(e) => setInput(e.target.value)}
