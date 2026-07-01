@@ -42,7 +42,11 @@ reached via the role-gated `ModerationTabs` sub-nav) lists blocked videos
 both DB-effect VERIFIED in `e2e-backed/blocked-videos.spec.ts`. The **All videos** tab
 (`app/moderation/videos` → `components/AdminVideosView.tsx`) browses every video
 (`GET /admin/videos`, any privacy/state, with a `blocked` flag + title search) and
-block/unblocks any in place — DB-effect VERIFIED in `e2e-backed/admin-videos.spec.ts`. Account mutes: a signed-in
+block/unblocks any in place — DB-effect VERIFIED in `e2e-backed/admin-videos.spec.ts`.
+The **Comments** tab (`app/moderation/comments` → `components/AdminCommentsView.tsx`)
+browses every comment (`GET /admin/comments`, author + video link + body search) and
+deletes any (`DELETE /comments/:id`, moderator-allowed) — DB-effect VERIFIED in
+`e2e-backed/admin-comments.spec.ts`. Account mutes: a signed-in
 viewer **Mutes** a comment's author (`CommentsSection` → `POST /me/mutes/accounts/:author_id`,
 via `Comment.author_id`), hiding that account's comments; the muted-accounts page
 (`app/settings/mutes` → `components/MutedAccountsView.tsx`, linked from `/settings`) lists

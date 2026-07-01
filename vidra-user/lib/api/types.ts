@@ -264,6 +264,26 @@ export interface AdminVideoListResponse {
   offset: number;
 }
 
+/**
+ * A comment in the admin/moderator comments overview, with author + video
+ * context. Mirrors the backend AdminComment schema.
+ */
+export interface AdminComment {
+  id: string;
+  video_id: string;
+  video_title: string;
+  body: string;
+  author_username: string;
+  author_display_name: string;
+  created_at: string;
+}
+
+export interface AdminCommentListResponse {
+  comments: AdminComment[];
+  limit: number;
+  offset: number;
+}
+
 /** PATCH /api/v1/videos/{id} body; provide at least one field, omitted ones unchanged. */
 export interface UpdateVideoRequest {
   title?: string;

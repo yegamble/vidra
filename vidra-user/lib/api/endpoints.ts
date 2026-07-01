@@ -2,6 +2,7 @@ import { apiBaseUrl } from "@/lib/config";
 
 import { apiRequest } from "./client";
 import type {
+  AdminCommentListResponse,
   AdminUser,
   AdminUserListResponse,
   AdminVideoListResponse,
@@ -363,6 +364,19 @@ export const api = {
     signal?: AbortSignal,
   ) =>
     apiRequest<AdminVideoListResponse>("/api/v1/admin/videos", {
+      query: { q: params.q, limit: params.limit, offset: params.offset },
+      signal,
+    }),
+
+  /**
+   * GET /api/v1/admin/comments — all comments newest first, each with its author
+   * and the video it's on (moderator/admin). Optional `q` filters by body.
+   */
+  getAdminComments: (
+    params: { q?: string; limit?: number; offset?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    apiRequest<AdminCommentListResponse>("/api/v1/admin/comments", {
       query: { q: params.q, limit: params.limit, offset: params.offset },
       signal,
     }),

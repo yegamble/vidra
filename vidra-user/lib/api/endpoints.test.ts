@@ -299,4 +299,9 @@ describe("api endpoints", () => {
     await api.getAdminVideos();
     expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/videos");
   });
+
+  it("getAdminComments targets the admin comments overview with the q filter", async () => {
+    await api.getAdminComments({ q: "spam", limit: 100 });
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/comments?q=spam&limit=100");
+  });
 });

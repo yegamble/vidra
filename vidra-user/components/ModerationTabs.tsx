@@ -9,6 +9,7 @@ const TABS = [
   { href: "/moderation", label: "Reports" },
   { href: "/moderation/blocked", label: "Blocked videos" },
   { href: "/moderation/videos", label: "All videos" },
+  { href: "/moderation/comments", label: "Comments" },
 ];
 
 // ModerationTabs is the sub-navigation shared by the moderation surfaces (the
