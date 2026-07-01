@@ -63,7 +63,10 @@ test("a creator uploads and removes a caption in the studio", async ({ page, req
   );
   await page.getByRole("button", { name: "Upload" }).click();
   await capUploaded;
-  await expect(page.getByText("English")).toBeVisible();
+  // The uploaded track appears in the list — assert its Remove control rather
+  // than the "English" label, which now also matches the edit form's language
+  // <select> option (GET /videos/config).
+  await expect(page.getByRole("button", { name: "Remove en caption" })).toBeVisible();
 
   // Persisted: the public captions API shows the track.
   const videoId = (await channelVideos(request, handle)).find((v) => v.title === videoTitle)!.id;
