@@ -231,7 +231,7 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [x] Implement play/pause. (native controls)
 - [x] Implement timeline/seek. (native controls; backend serves HTTP Range so seeking works)
 - [x] Implement volume/mute. (native controls)
-- [ ] Implement captions toggle.
+- [x] Implement captions toggle. (The watch-page `Player` (`components/WatchView.tsx`) loads a video's caption tracks (`GET /videos/:id/captions`) and renders a `<track kind="captions">` per track inside the native `<video controls>`, which surfaces the browser CC toggle. Each WebVTT body is fetched and served via a same-origin blob URL (sidesteps the native cross-origin `<track>` restriction without adding `crossorigin` to the media element, so the Range stream is untouched); `videoCaptionUrl` helper added + unit-tested. Mocked `e2e/watch.spec.ts` asserts the `<track>` renders. **VERIFIED** end-to-end in `e2e-backed/captions-watch.spec.ts`: a published video with an uploaded WebVTT caption shows a `srclang=en`/blob-src `<track>` on the watch page — the cross-origin VTT fetch succeeds under the backend CORS (caption row confirmed via psql). A curated in-player caption *menu* with styling is a later custom-player slice.)
 - [ ] Implement quality selector.
 - [ ] Implement speed selector.
 - [x] Implement fullscreen. (native controls)
@@ -447,7 +447,7 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 # P12 — Captions, Accessibility, and Internationalization Readiness
 
 - [x] Implement captions management UI. (Studio caption upload/list/remove — `components/CaptionsManager.tsx` on the per-video edit surface (`GET`/`POST`/`DELETE /videos/:id/captions[/:lang]`). **VERIFIED** end-to-end in `e2e-backed/captions.spec.ts`: a creator uploads a WebVTT track from the studio → it persists (visible via the public captions API) → removing it deletes it (captions table confirmed via psql). See P6.1.)
-- [~] Implement captions language selector. (The caption manager's language input accepts any BCP-47-ish tag (validated backend-side); a curated language dropdown + the watch-page track selector/toggle (native `<track>` display) is a later slice.)
+- [~] Implement captions language selector. (The caption manager's language input accepts any BCP-47-ish tag (validated backend-side); the watch-page `<track>` display + native CC toggle now ship (see P8.2 "captions toggle", VERIFIED in `e2e-backed/captions-watch.spec.ts`). A curated language *dropdown* in the upload form remains a later polish slice.)
 - [ ] Implement Whisper auto-caption request UI if backend supports it.
 - [ ] Implement caption processing status states.
 - [ ] Audit keyboard navigation for core routes.

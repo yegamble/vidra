@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api, videoOriginalUrl, videoThumbnailUrl } from "./endpoints";
+import { api, videoCaptionUrl, videoOriginalUrl, videoThumbnailUrl } from "./endpoints";
 
 function okJson(): Response {
   return new Response(JSON.stringify({}), {
@@ -44,9 +44,12 @@ describe("api endpoints", () => {
     expect(calledUrl()).toBe("http://localhost:8080/api/v1/videos/v1");
   });
 
-  it("media URL helpers build direct stream/poster URLs", () => {
+  it("media URL helpers build direct stream/poster/caption URLs", () => {
     expect(videoOriginalUrl("v1")).toBe("http://localhost:8080/api/v1/videos/v1/original");
     expect(videoThumbnailUrl("v1")).toBe("http://localhost:8080/api/v1/videos/v1/thumbnail");
+    expect(videoCaptionUrl("v1", "pt-BR")).toBe(
+      "http://localhost:8080/api/v1/videos/v1/captions/pt-BR",
+    );
   });
 
   it("getWatchHistory targets the history endpoint with pagination", async () => {

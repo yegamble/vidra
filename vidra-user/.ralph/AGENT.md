@@ -57,7 +57,14 @@ via `Comment.author_id`), hiding that account's comments; the muted-accounts pag
 `e2e-backed/mutes.spec.ts`. Captions: the studio's per-video **Edit** surface embeds
 `components/CaptionsManager.tsx` — upload/list/remove WebVTT caption tracks
 (`GET/POST/DELETE /videos/:id/captions[/:lang]`) — DB-effect VERIFIED in
-`e2e-backed/captions.spec.ts`.
+`e2e-backed/captions.spec.ts`. On the viewer side, the watch-page `Player`
+(`WatchView.tsx`) renders a `<track kind="captions">` per caption inside the native
+`<video controls>` (surfacing the browser CC toggle); it fetches each WebVTT body and
+serves it via a same-origin blob URL — sidestepping the native cross-origin `<track>`
+restriction without adding `crossorigin` to the media element (the Range stream is
+untouched) — via the `videoCaptionUrl` helper. VERIFIED in
+`e2e-backed/captions-watch.spec.ts` (the cross-origin VTT fetch works under the
+backend CORS allowlist; that origin must be allowed — see the CORS caveat above).
 Admin: the admin-only users
 page (`app/admin/users` → `components/AdminUsersView.tsx`, reached via the admin-only
 `AdminNavLink`) lists/searches accounts (`GET /admin/users?q=`) and edits each user's

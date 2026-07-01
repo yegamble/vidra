@@ -198,6 +198,28 @@ export async function captions(
   return ((await res.json()) as { captions: Array<{ language: string; label: string }> }).captions;
 }
 
+/** seedCaption uploads a WebVTT caption track to a video as its owner (multipart). */
+export async function seedCaption(
+  request: APIRequestContext,
+  videoId: string,
+  token: string,
+  language: string,
+  label: string,
+): Promise<void> {
+  await request.post(`${API_URL}/api/v1/videos/${videoId}/captions`, {
+    headers: { Authorization: `Bearer ${token}` },
+    multipart: {
+      language,
+      label,
+      file: {
+        name: "cap.vtt",
+        mimeType: "text/vtt",
+        buffer: Buffer.from("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello\n"),
+      },
+    },
+  });
+}
+
 /** watchedWords reads the instance watched-words list as the given admin. */
 export async function watchedWords(
   request: APIRequestContext,

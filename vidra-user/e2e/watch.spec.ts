@@ -26,6 +26,9 @@ test("plays a video and shows its metadata", async ({ page }) => {
     }),
   );
   await page.route(ORIGINAL, (route) => route.abort());
+  await page.route(/\/api\/v1\/videos\/v1\/captions$/, (route) =>
+    route.fulfill({ json: { captions: [] } }),
+  );
   await page.route(/\/api\/v1\/videos\/v1\/comments/, (route) =>
     route.fulfill({ json: { comments: [], limit: 20, offset: 0 } }),
   );
@@ -43,6 +46,54 @@ test("plays a video and shows its metadata", async ({ page }) => {
 
   const src = await page.locator("video").getAttribute("src");
   expect(src).toBe("http://localhost:8080/api/v1/videos/v1/original");
+});
+
+test("renders caption tracks on the player for a video with captions", async ({ page }) => {
+  await page.route(DETAIL_OK, (route) =>
+    route.fulfill({
+      json: {
+        id: "v1",
+        channel_id: "c1",
+        title: "Captioned",
+        description: "",
+        privacy: "public",
+        state: "published",
+        created_at: new Date().toISOString(),
+        views: 1,
+        has_thumbnail: false,
+        duration_seconds: 10,
+      },
+    }),
+  );
+  await page.route(ORIGINAL, (route) => route.abort());
+  await page.route(/\/api\/v1\/videos\/v1\/comments/, (route) =>
+    route.fulfill({ json: { comments: [], limit: 20, offset: 0 } }),
+  );
+  await page.route(/\/api\/v1\/videos\/v1\/rating/, (route) =>
+    route.fulfill({ json: { like_count: 0, dislike_count: 0, my_rating: null } }),
+  );
+  // The captions list, then the per-track WebVTT body the player fetches into a blob.
+  await page.route(/\/api\/v1\/videos\/v1\/captions$/, (route) =>
+    route.fulfill({
+      json: { captions: [{ language: "en", label: "English", created_at: new Date().toISOString() }] },
+    }),
+  );
+  await page.route(/\/api\/v1\/videos\/v1\/captions\/en$/, (route) =>
+    route.fulfill({
+      contentType: "text/vtt",
+      body: "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello\n",
+    }),
+  );
+
+  await page.goto("/videos/v1");
+
+  const track = page.locator("video track");
+  await expect(track).toHaveCount(1);
+  await expect(track).toHaveAttribute("srclang", "en");
+  await expect(track).toHaveAttribute("label", "English");
+  await expect(track).toHaveAttribute("kind", "captions");
+  // Served from a same-origin blob (fetched VTT) — not the cross-origin backend URL.
+  expect(await track.getAttribute("src")).toMatch(/^blob:/);
 });
 
 test("shows a not-found state for a missing video", async ({ page }) => {

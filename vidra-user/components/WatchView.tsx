@@ -11,7 +11,7 @@ import { SaveButton } from "@/components/SaveButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError, api, videoOriginalUrl, videoThumbnailUrl } from "@/lib/api";
+import { ApiError, api, videoCaptionUrl, videoOriginalUrl, videoThumbnailUrl } from "@/lib/api";
 import type { Video } from "@/lib/api";
 import { formatCount, formatDuration, relativeTime } from "@/lib/format";
 
@@ -128,6 +128,9 @@ function Player({ video }: { video: Video }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastSentRef = useRef(0);
   const [resumeAt, setResumeAt] = useState<number | null>(null);
+  const [tracks, setTracks] = useState<
+    Array<{ language: string; label: string; url: string }>
+  >([]);
 
   // Report the current position (whole seconds). No-op unless signed in.
   const record = useCallback(() => {
@@ -163,6 +166,44 @@ function Player({ video }: { video: Video }) {
     return () => record();
   }, [record]);
 
+  // Load the video's caption tracks and expose each WebVTT body as a same-origin
+  // blob URL. Fetching the text ourselves (rather than pointing <track src> at the
+  // cross-origin backend) sidesteps the native cross-origin track restriction — no
+  // `crossorigin` on the media element, so the Range-based stream is untouched.
+  // Captions are small; loading them up front is cheap and revoked on cleanup.
+  useEffect(() => {
+    const controller = new AbortController();
+    const created: string[] = [];
+    let cancelled = false;
+    api
+      .getCaptions(video.id, controller.signal)
+      .then(async ({ captions }) => {
+        const loaded: Array<{ language: string; label: string; url: string }> = [];
+        for (const c of captions) {
+          try {
+            const res = await fetch(videoCaptionUrl(video.id, c.language), {
+              signal: controller.signal,
+            });
+            if (!res.ok) continue;
+            const url = URL.createObjectURL(
+              new Blob([await res.text()], { type: "text/vtt" }),
+            );
+            created.push(url);
+            loaded.push({ language: c.language, label: c.label || c.language, url });
+          } catch {
+            // Skip a track that fails to load; the others still work.
+          }
+        }
+        if (!cancelled) setTracks(loaded);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      controller.abort();
+      created.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [video.id]);
+
   function resume() {
     const el = videoRef.current;
     if (el && resumeAt !== null) {
@@ -185,6 +226,9 @@ function Player({ video }: { video: Video }) {
         onTimeUpdate={recordThrottled}
         onPause={record}
       >
+        {tracks.map((t) => (
+          <track key={t.language} kind="captions" srcLang={t.language} label={t.label} src={t.url} />
+        ))}
         Your browser does not support the video tag.
       </video>
       {resumeAt !== null ? (

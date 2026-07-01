@@ -453,3 +453,8 @@ export function videoOriginalUrl(id: string): string {
 export function videoThumbnailUrl(id: string): string {
   return `${apiBaseUrl}/api/v1/videos/${encodeURIComponent(id)}/thumbnail`;
 }
+
+/** Direct URL to a caption track's WebVTT body (text/vtt). */
+export function videoCaptionUrl(id: string, language: string): string {
+  return `${apiBaseUrl}/api/v1/videos/${encodeURIComponent(id)}/captions/${encodeURIComponent(language)}`;
+}
