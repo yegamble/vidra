@@ -101,8 +101,10 @@ test("a creator can upload and publish a video", async ({ page }) => {
     route.fulfill({ json: { channels: [channel("ada_makes", "Ada Makes")] } }),
   );
   // GET lists the channel's videos (the "Your videos" section); POST creates a draft.
+  let draftBody: unknown;
   await page.route(CHANNEL_VIDEOS, (route) => {
     if (route.request().method() === "POST") {
+      draftBody = route.request().postDataJSON();
       return route.fulfill({ json: video({ state: "draft" }) });
     }
     return route.fulfill({ json: { videos: [] } });
@@ -111,6 +113,7 @@ test("a creator can upload and publish a video", async ({ page }) => {
 
   await page.getByRole("link", { name: "Studio" }).click();
   await page.getByLabel("Video title").fill("My clip");
+  await page.getByLabel("Video description").fill("A short description.");
   await page.getByLabel("Video file").setInputFiles({
     name: "clip.mp4",
     mimeType: "video/mp4",
@@ -120,6 +123,7 @@ test("a creator can upload and publish a video", async ({ page }) => {
 
   await expect(page.getByText("Published!")).toBeVisible();
   await expect(page.getByRole("link", { name: /View .*My clip/ })).toBeVisible();
+  expect(draftBody).toMatchObject({ title: "My clip", description: "A short description." });
 });
 
 test("a creator can edit a video's title and privacy", async ({ page }) => {
@@ -130,8 +134,10 @@ test("a creator can edit a video's title and privacy", async ({ page }) => {
   await page.route(CHANNEL_VIDEOS, (route) =>
     route.fulfill({ json: { videos: [video({ title: "Old title", privacy: "public" })] } }),
   );
+  let patchBody: unknown;
   await page.route(VIDEO, (route) => {
     if (route.request().method() === "PATCH") {
+      patchBody = route.request().postDataJSON();
       return route.fulfill({ json: video({ title: "New title", privacy: "unlisted" }) });
     }
     return route.continue();
@@ -145,13 +151,16 @@ test("a creator can edit a video's title and privacy", async ({ page }) => {
   await expect(row.getByText("Public")).toBeVisible();
 
   await row.getByRole("button", { name: "Edit" }).click();
+  // The edit form is pre-filled from the video; the description is editable too.
   await page.getByLabel("Edit title").fill("New title");
+  await page.getByLabel("Edit description").fill("Updated description.");
   await page.getByLabel("Edit privacy").selectOption("unlisted");
   await page.getByRole("button", { name: "Save" }).click();
 
   const updatedRow = page.getByRole("listitem").filter({ hasText: "New title" });
   await expect(updatedRow.getByRole("link", { name: "New title" })).toBeVisible();
   await expect(updatedRow.getByText("Unlisted")).toBeVisible();
+  expect(patchBody).toMatchObject({ title: "New title", description: "Updated description." });
 });
 
 test("a creator can add and remove a caption from a video's edit surface", async ({ page }) => {

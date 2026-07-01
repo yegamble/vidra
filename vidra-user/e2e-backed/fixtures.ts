@@ -277,6 +277,15 @@ export async function videoComments(
   return ((await res.json()) as { comments: Array<{ body: string; author_username: string }> }).comments;
 }
 
+/** videoDetail reads a video's public detail (title + description) via the API. */
+export async function videoDetail(
+  request: APIRequestContext,
+  videoId: string,
+): Promise<{ title: string; description: string }> {
+  const res = await request.get(`${API_URL}/api/v1/videos/${videoId}`);
+  return (await res.json()) as { title: string; description: string };
+}
+
 /** channelVideos reads a channel's public videos via the public API. */
 export async function channelVideos(
   request: APIRequestContext,

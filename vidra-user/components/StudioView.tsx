@@ -190,6 +190,7 @@ type UploadState = "idle" | "uploading" | "done" | "error";
 function UploadSection({ channels }: { channels: Channel[] }) {
   const [handle, setHandle] = useState(channels[0]?.handle ?? "");
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [privacy, setPrivacy] = useState<VideoPrivacy>("public");
   const [state, setState] = useState<UploadState>("idle");
   const [published, setPublished] = useState<Video | null>(null);
@@ -204,11 +205,16 @@ function UploadSection({ channels }: { channels: Channel[] }) {
     setError(null);
     setPublished(null);
     try {
-      const draft = await api.createVideoDraft(handle, { title: title.trim(), privacy });
+      const draft = await api.createVideoDraft(handle, {
+        title: title.trim(),
+        description: description.trim(),
+        privacy,
+      });
       const res = await api.uploadVideoFile(draft.id, file);
       setPublished(res.video);
       setState("done");
       setTitle("");
+      setDescription("");
       if (fileRef.current) fileRef.current.value = "";
     } catch (err) {
       setError(
@@ -253,6 +259,18 @@ function UploadSection({ channels }: { channels: Channel[] }) {
             aria-label="Video title"
             maxLength={200}
             className="rounded border border-zinc-300 px-3 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Description</span>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Tell viewers about your video (optional)"
+            aria-label="Video description"
+            rows={3}
+            maxLength={5000}
+            className="resize-y rounded border border-zinc-300 px-3 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -406,6 +424,7 @@ function VideoRow({
 }) {
   const [mode, setMode] = useState<RowMode>("view");
   const [title, setTitle] = useState(video.title);
+  const [description, setDescription] = useState(video.description);
   const [privacy, setPrivacy] = useState<VideoPrivacy>(video.privacy);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -415,7 +434,11 @@ function VideoRow({
     setBusy(true);
     setError(null);
     try {
-      const updated = await api.updateVideo(video.id, { title: title.trim(), privacy });
+      const updated = await api.updateVideo(video.id, {
+        title: title.trim(),
+        description: description.trim(),
+        privacy,
+      });
       onUpdated(updated);
       setMode("view");
     } catch (err) {
@@ -428,6 +451,7 @@ function VideoRow({
   function cancelEdit() {
     setMode("view");
     setTitle(video.title);
+    setDescription(video.description);
     setPrivacy(video.privacy);
     setError(null);
   }
@@ -454,6 +478,17 @@ function VideoRow({
             aria-label="Edit title"
             maxLength={200}
             className="rounded border border-zinc-300 px-3 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Description</span>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            aria-label="Edit description"
+            rows={3}
+            maxLength={5000}
+            className="resize-y rounded border border-zinc-300 px-3 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
