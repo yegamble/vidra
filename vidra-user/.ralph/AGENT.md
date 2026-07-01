@@ -46,7 +46,10 @@ block/unblocks any in place — DB-effect VERIFIED in `e2e-backed/admin-videos.s
 The **Comments** tab (`app/moderation/comments` → `components/AdminCommentsView.tsx`)
 browses every comment (`GET /admin/comments`, author + video link + body search) and
 deletes any (`DELETE /comments/:id`, moderator-allowed) — DB-effect VERIFIED in
-`e2e-backed/admin-comments.spec.ts`. Account mutes: a signed-in
+`e2e-backed/admin-comments.spec.ts`. The **Watched words** tab (`app/moderation/watched-words`
+→ `components/WatchedWordsView.tsx`) adds/removes instance-wide watched terms
+(`GET/POST/DELETE /admin/watched-words`, 409 on duplicate) — DB-effect VERIFIED in
+`e2e-backed/watched-words.spec.ts`. Account mutes: a signed-in
 viewer **Mutes** a comment's author (`CommentsSection` → `POST /me/mutes/accounts/:author_id`,
 via `Comment.author_id`), hiding that account's comments; the muted-accounts page
 (`app/settings/mutes` → `components/MutedAccountsView.tsx`, linked from `/settings`) lists

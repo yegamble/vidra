@@ -35,6 +35,8 @@ import type {
   UploadVideoResult,
   VideoRating,
   VideoSearchResponse,
+  WatchedWord,
+  WatchedWordListResponse,
   WatchHistoryResponse,
   WatchProgress,
 } from "./types";
@@ -380,6 +382,24 @@ export const api = {
       query: { q: params.q, limit: params.limit, offset: params.offset },
       signal,
     }),
+
+  /** GET /api/v1/admin/watched-words — the watched-words list, newest first (moderator/admin). */
+  getWatchedWords: (params: { limit?: number; offset?: number } = {}, signal?: AbortSignal) =>
+    apiRequest<WatchedWordListResponse>("/api/v1/admin/watched-words", {
+      query: { limit: params.limit, offset: params.offset },
+      signal,
+    }),
+
+  /** POST /api/v1/admin/watched-words — add a watched term (moderator/admin; 409 on duplicate). */
+  addWatchedWord: (word: string) =>
+    apiRequest<WatchedWord>("/api/v1/admin/watched-words", {
+      method: "POST",
+      body: { word },
+    }),
+
+  /** DELETE /api/v1/admin/watched-words/{id} — remove a watched term (moderator/admin, idempotent). */
+  deleteWatchedWord: (id: string) =>
+    apiRequest<void>(`/api/v1/admin/watched-words/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   /**
    * POST /api/v1/admin/videos/{id}/block — block a video so it is hidden from

@@ -189,6 +189,17 @@ export async function videoIsPublic(request: APIRequestContext, videoId: string)
   return res.status() === 200;
 }
 
+/** watchedWords reads the instance watched-words list as the given admin. */
+export async function watchedWords(
+  request: APIRequestContext,
+  token: string,
+): Promise<Array<{ id: string; word: string }>> {
+  const res = await request.get(`${API_URL}/api/v1/admin/watched-words?limit=100`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return ((await res.json()) as { words: Array<{ id: string; word: string }> }).words;
+}
+
 /** seedComment posts a comment on a video as the given user, returning its id. */
 export async function seedComment(
   request: APIRequestContext,

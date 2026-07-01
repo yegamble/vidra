@@ -284,6 +284,26 @@ export interface AdminCommentListResponse {
   offset: number;
 }
 
+/** A term on the instance-wide watched-words list. Mirrors the backend WatchedWord schema. */
+export interface WatchedWord {
+  id: string;
+  word: string;
+  /** Username of the moderator who added it; omitted on the create response or if deleted. */
+  created_by_username?: string;
+  created_at: string;
+}
+
+export interface WatchedWordListResponse {
+  words: WatchedWord[];
+  limit: number;
+  offset: number;
+}
+
+/** POST /api/v1/admin/watched-words body. */
+export interface CreateWatchedWordRequest {
+  word: string;
+}
+
 /** PATCH /api/v1/videos/{id} body; provide at least one field, omitted ones unchanged. */
 export interface UpdateVideoRequest {
   title?: string;

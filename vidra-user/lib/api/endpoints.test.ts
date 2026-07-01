@@ -304,4 +304,24 @@ describe("api endpoints", () => {
     await api.getAdminComments({ q: "spam", limit: 100 });
     expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/comments?q=spam&limit=100");
   });
+
+  it("getWatchedWords targets the watched-words endpoint with pagination", async () => {
+    await api.getWatchedWords({ limit: 100 });
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/watched-words?limit=100");
+  });
+
+  it("addWatchedWord POSTs the word", async () => {
+    await api.addWatchedWord("spam");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/admin/watched-words");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ word: "spam" });
+  });
+
+  it("deleteWatchedWord DELETEs the word by id", async () => {
+    await api.deleteWatchedWord("w1");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/admin/watched-words/w1");
+    expect(init.method).toBe("DELETE");
+  });
 });
