@@ -194,6 +194,12 @@ export interface CreateChannelRequest {
   description?: string;
 }
 
+/** PATCH /api/v1/channels/{handle} body — partial; the handle is immutable. */
+export interface UpdateChannelRequest {
+  display_name?: string;
+  description?: string;
+}
+
 /** POST /api/v1/channels/{handle}/videos body (create a draft). */
 export interface CreateVideoRequest {
   title: string;

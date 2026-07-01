@@ -7,6 +7,7 @@ const FEED = /\/api\/v1\/videos(\?|$)/;
 const UNREAD = /\/api\/v1\/me\/notifications\/unread-count$/;
 const MY_CHANNELS = /\/api\/v1\/me\/channels$/;
 const CREATE_CHANNEL = /\/api\/v1\/channels$/;
+const CHANNEL_BY_HANDLE = /\/api\/v1\/channels\/ada_makes$/;
 const CHANNEL_VIDEOS = /\/api\/v1\/channels\/ada_makes\/videos$/;
 const UPLOAD = /\/api\/v1\/videos\/v1\/file$/;
 const VIDEO = /\/api\/v1\/videos\/v1$/;
@@ -116,6 +117,55 @@ test("a creator can create a channel", async ({ page }) => {
   await expect(page.getByRole("link", { name: /Ada Makes/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Upload a video" })).toBeVisible();
   await expect(page.getByText("No videos in this channel yet.")).toBeVisible();
+});
+
+test("a creator can edit a channel's name and description", async ({ page }) => {
+  await signIn(page);
+  await page.route(MY_CHANNELS, (route) =>
+    route.fulfill({ json: { channels: [channel("ada_makes", "Ada Makes")] } }),
+  );
+  await page.route(CHANNEL_VIDEOS, (route) => route.fulfill({ json: { videos: [] } }));
+  await page.route(VIDEO_CONFIG, (route) => route.fulfill({ json: videoConfig() }));
+  let patchBody: unknown;
+  await page.route(CHANNEL_BY_HANDLE, (route) => {
+    patchBody = route.request().postDataJSON();
+    return route.fulfill({
+      json: { ...channel("ada_makes", "Ada Builds"), description: "Now with more." },
+    });
+  });
+
+  await page.getByRole("link", { name: "Studio" }).click();
+  await page.getByRole("button", { name: "Edit ada_makes" }).click();
+  await page.getByLabel("Edit channel name").fill("Ada Builds");
+  await page.getByLabel("Edit channel description").fill("Now with more.");
+  await page.getByRole("button", { name: "Save" }).click();
+
+  await expect(page.getByRole("link", { name: "Ada Builds" })).toBeVisible();
+  expect(patchBody).toMatchObject({ display_name: "Ada Builds", description: "Now with more." });
+});
+
+test("a creator can delete a channel", async ({ page }) => {
+  await signIn(page);
+  await page.route(MY_CHANNELS, (route) =>
+    route.fulfill({ json: { channels: [channel("ada_makes", "Ada Makes")] } }),
+  );
+  await page.route(CHANNEL_VIDEOS, (route) => route.fulfill({ json: { videos: [] } }));
+  await page.route(VIDEO_CONFIG, (route) => route.fulfill({ json: videoConfig() }));
+  let deleteMethod: string | undefined;
+  await page.route(CHANNEL_BY_HANDLE, (route) => {
+    deleteMethod = route.request().method();
+    return route.fulfill({ status: 204, body: "" });
+  });
+
+  await page.getByRole("link", { name: "Studio" }).click();
+  await page.getByRole("button", { name: "Delete ada_makes" }).click();
+  await page.getByRole("button", { name: "Confirm" }).click();
+
+  // The only channel is gone → back to the create-your-first-channel empty state,
+  // and the upload form disappears with it.
+  await expect(page.getByText("Create your first channel to start publishing.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upload a video" })).toHaveCount(0);
+  expect(deleteMethod).toBe("DELETE");
 });
 
 test("a creator can upload and publish a video", async ({ page }) => {
@@ -284,8 +334,10 @@ test("a creator can delete a video", async ({ page }) => {
   await page.getByRole("link", { name: "Studio" }).click();
   await expect(page.getByRole("link", { name: "Doomed clip" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Delete" }).click();
-  await page.getByRole("button", { name: "Confirm" }).click();
+  // Scope to the video row — the channel row also has a Delete control now.
+  const row = page.getByRole("listitem").filter({ hasText: "Doomed clip" });
+  await row.getByRole("button", { name: "Delete" }).click();
+  await row.getByRole("button", { name: "Confirm" }).click();
 
   await expect(page.getByRole("link", { name: "Doomed clip" })).toHaveCount(0);
   await expect(page.getByText("No videos in this channel yet.")).toBeVisible();

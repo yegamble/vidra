@@ -16,6 +16,7 @@ import type {
   CommentListResponse,
   MutedAccountListResponse,
   CreateChannelRequest,
+  UpdateChannelRequest,
   CreateVideoRequest,
   FeedSort,
   InstanceResponse,
@@ -109,6 +110,14 @@ export const api = {
   /** POST /api/v1/channels — create a channel (auth). */
   createChannel: (body: CreateChannelRequest) =>
     apiRequest<Channel>("/api/v1/channels", { method: "POST", body }),
+
+  /** PATCH /api/v1/channels/{handle} — update a channel's name/description (auth, owner). */
+  updateChannel: (handle: string, body: UpdateChannelRequest) =>
+    apiRequest<Channel>(`/api/v1/channels/${encodeURIComponent(handle)}`, { method: "PATCH", body }),
+
+  /** DELETE /api/v1/channels/{handle} — delete a channel and its videos (auth, owner; 204). */
+  deleteChannel: (handle: string) =>
+    apiRequest<void>(`/api/v1/channels/${encodeURIComponent(handle)}`, { method: "DELETE" }),
 
   /** POST /api/v1/channels/{handle}/videos — create a draft video (auth, owner). */
   createVideoDraft: (handle: string, body: CreateVideoRequest) =>

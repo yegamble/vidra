@@ -268,6 +268,21 @@ export async function followerCount(request: APIRequestContext, handle: string):
   return ((await res.json()) as { follower_count: number }).follower_count;
 }
 
+/**
+ * channelDetail reads a channel via the public API, returning the HTTP status
+ * alongside the mutable fields — so a caller can assert both an edit (200 with
+ * new values) and a delete (404, channel gone).
+ */
+export async function channelDetail(
+  request: APIRequestContext,
+  handle: string,
+): Promise<{ status: number; display_name?: string; description?: string }> {
+  const res = await request.get(`${API_URL}/api/v1/channels/${handle}`);
+  if (!res.ok()) return { status: res.status() };
+  const body = (await res.json()) as { display_name: string; description: string };
+  return { status: res.status(), display_name: body.display_name, description: body.description };
+}
+
 /** videoComments reads a video's persisted comments via the public API. */
 export async function videoComments(
   request: APIRequestContext,

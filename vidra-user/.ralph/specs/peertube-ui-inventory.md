@@ -89,6 +89,9 @@ For every route/flow, use this structure:
 | PT-STUDIO-VIDEO-EDIT | Edit | row action → inline form | view/edit; title+privacy; 422/error | Updates a video's title & privacy | PATCH /videos/:id (owner) | integration/Playwright | VERIFIED | e2e/studio.spec.ts + e2e-backed/studio.spec.ts; components/StudioView.tsx |
 | PT-STUDIO-VIDEO-DELETE | Delete | destructive row action | confirm/cancel/loading | Deletes a video (two-step confirm) | DELETE /videos/:id (owner) | integration/Playwright | VERIFIED | e2e/studio.spec.ts + e2e-backed/studio.spec.ts; components/StudioView.tsx |
 | PT-STUDIO-VIDEO-STATE | Status badge | badge | draft/processing/published/failed | Shows lifecycle state | videos API | Playwright | VERIFIED | e2e/studio.spec.ts; components/StudioView.tsx |
+| PT-STUDIO-CHANNEL-LIST | Your channels | list + create form | empty/populated | Lists owned channels (name → /channels/:handle) and creates one (handle + display name; 409 → taken) | GET /me/channels, POST /channels | e2e/studio.spec.ts + e2e-backed/studio.spec.ts | VERIFIED | components/StudioView.tsx |
+| PT-STUDIO-CHANNEL-EDIT | Edit (channel) | row action → inline form | view/edit; display name + description; error | Updates a channel's display name & description (handle immutable) | PATCH /channels/:handle (owner) | e2e/studio.spec.ts + e2e-backed/channel-management.spec.ts | VERIFIED | components/StudioView.tsx |
+| PT-STUDIO-CHANNEL-DELETE | Delete (channel) | destructive row action | confirm/cancel/loading | Deletes a channel + its videos (two-step confirm; cascades) | DELETE /channels/:handle (owner) | e2e/studio.spec.ts + e2e-backed/channel-management.spec.ts | VERIFIED | components/StudioView.tsx |
 
 ### PT-ADMIN — Administration/moderation
 

@@ -173,6 +173,24 @@ describe("api endpoints", () => {
     expect(JSON.parse(init.body as string)).toEqual({ handle: "ada_makes", display_name: "Ada Makes" });
   });
 
+  it("updateChannel PATCHes the name/description to the channel endpoint", async () => {
+    await api.updateChannel("ada_makes", { display_name: "Ada Builds", description: "Now with more." });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/channels/ada_makes");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({
+      display_name: "Ada Builds",
+      description: "Now with more.",
+    });
+  });
+
+  it("deleteChannel DELETEs the channel by handle", async () => {
+    await api.deleteChannel("ada_makes");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/channels/ada_makes");
+    expect(init.method).toBe("DELETE");
+  });
+
   it("createVideoDraft POSTs to the channel's videos endpoint", async () => {
     await api.createVideoDraft("ada_makes", { title: "Hi", privacy: "public" });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];

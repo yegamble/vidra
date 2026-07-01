@@ -93,14 +93,26 @@ function Studio() {
     );
   }
 
+  // The upload/my-videos sections default their selected channel to channels[0];
+  // remount them when the set of channels changes (create/delete) so a stale
+  // selection can't point at a channel that no longer exists. Editing a channel
+  // keeps its id, so this key is stable across edits.
+  const channelsKey = channels.map((c) => c.id).join(",");
+
   return (
     <div className="flex flex-col gap-8">
       <ChannelSection
         channels={channels}
         onCreated={(ch) => setChannels((list) => [ch, ...list])}
+        onUpdated={(ch) => setChannels((list) => list.map((c) => (c.id === ch.id ? ch : c)))}
+        onDeleted={(id) => setChannels((list) => list.filter((c) => c.id !== id))}
       />
-      {channels.length > 0 ? <UploadSection channels={channels} config={config} /> : null}
-      {channels.length > 0 ? <MyVideosSection channels={channels} config={config} /> : null}
+      {channels.length > 0 ? (
+        <UploadSection key={`upload-${channelsKey}`} channels={channels} config={config} />
+      ) : null}
+      {channels.length > 0 ? (
+        <MyVideosSection key={`videos-${channelsKey}`} channels={channels} config={config} />
+      ) : null}
     </div>
   );
 }
@@ -108,9 +120,13 @@ function Studio() {
 function ChannelSection({
   channels,
   onCreated,
+  onUpdated,
+  onDeleted,
 }: {
   channels: Channel[];
   onCreated: (ch: Channel) => void;
+  onUpdated: (ch: Channel) => void;
+  onDeleted: (id: string) => void;
 }) {
   const [handle, setHandle] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -148,15 +164,7 @@ function ChannelSection({
       ) : (
         <ul className="flex flex-col divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
           {channels.map((ch) => (
-            <li key={ch.id}>
-              <Link
-                href={`/channels/${ch.handle}`}
-                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:hover:bg-zinc-900/40"
-              >
-                <span className="min-w-0 flex-1 truncate font-medium">{ch.display_name}</span>
-                <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">@{ch.handle}</span>
-              </Link>
-            </li>
+            <ChannelRow key={ch.id} channel={ch} onUpdated={onUpdated} onDeleted={onDeleted} />
           ))}
         </ul>
       )}
@@ -198,6 +206,163 @@ function ChannelSection({
       </form>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
     </section>
+  );
+}
+
+// ChannelRow renders one owned channel with inline Edit (display name +
+// description → PATCH /channels/:handle) and a two-step Delete (→ DELETE, which
+// cascades to the channel's videos). The server result is the source of truth.
+function ChannelRow({
+  channel,
+  onUpdated,
+  onDeleted,
+}: {
+  channel: Channel;
+  onUpdated: (ch: Channel) => void;
+  onDeleted: (id: string) => void;
+}) {
+  const [mode, setMode] = useState<RowMode>("view");
+  const [displayName, setDisplayName] = useState(channel.display_name);
+  const [description, setDescription] = useState(channel.description);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (displayName.trim() === "") return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await api.updateChannel(channel.handle, {
+        display_name: displayName.trim(),
+        description: description.trim(),
+      });
+      onUpdated(updated);
+      setMode("view");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save the channel.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function cancelEdit() {
+    setMode("view");
+    setDisplayName(channel.display_name);
+    setDescription(channel.description);
+    setError(null);
+  }
+
+  async function remove() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteChannel(channel.handle);
+      onDeleted(channel.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not delete the channel.");
+      setBusy(false);
+      setMode("view");
+    }
+  }
+
+  if (mode === "edit") {
+    return (
+      <li className="flex flex-col gap-3 px-4 py-3">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Display name</span>
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            aria-label="Edit channel name"
+            maxLength={50}
+            className="rounded border border-zinc-300 px-3 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Description</span>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            aria-label="Edit channel description"
+            rows={3}
+            maxLength={1000}
+            className="resize-y rounded border border-zinc-300 px-3 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+          />
+        </label>
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={busy || displayName.trim() === ""}
+            onClick={() => void save()}
+            className="rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={cancelEdit}
+            className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            Cancel
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-center gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium">
+          <Link href={`/channels/${channel.handle}`} className="hover:underline">
+            {channel.display_name}
+          </Link>
+        </p>
+        <span className="text-xs text-zinc-500 dark:text-zinc-400">@{channel.handle}</span>
+      </div>
+      {mode === "confirm-delete" ? (
+        <div className="flex shrink-0 items-center gap-2 text-sm">
+          <span className="text-zinc-600 dark:text-zinc-300">Delete channel?</span>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void remove()}
+            className="font-medium text-red-600 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:opacity-50 dark:text-red-400"
+          >
+            Confirm
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setMode("view")}
+            className="font-medium text-zinc-500 hover:text-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-200"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="flex shrink-0 items-center gap-2 text-sm">
+          <button
+            type="button"
+            aria-label={`Edit ${channel.handle}`}
+            onClick={() => setMode("edit")}
+            className="font-medium text-zinc-600 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:text-zinc-300 dark:hover:text-zinc-100"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            aria-label={`Delete ${channel.handle}`}
+            onClick={() => setMode("confirm-delete")}
+            className="font-medium text-zinc-500 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:text-zinc-400 dark:hover:text-red-400"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+    </li>
   );
 }
 
