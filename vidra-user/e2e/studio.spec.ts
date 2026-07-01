@@ -12,6 +12,29 @@ const UPLOAD = /\/api\/v1\/videos\/v1\/file$/;
 const VIDEO = /\/api\/v1\/videos\/v1$/;
 const CAPTIONS = /\/api\/v1\/videos\/v1\/captions$/;
 const CAPTION_LANG = /\/api\/v1\/videos\/v1\/captions\/[^/]+$/;
+const VIDEO_CONFIG = /\/api\/v1\/videos\/config$/;
+
+function videoConfig() {
+  return {
+    categories: [
+      { id: "1", label: "Music" },
+      { id: "7", label: "Gaming" },
+    ],
+    licenses: [
+      { id: "1", label: "Attribution (CC BY)" },
+      { id: "7", label: "Public Domain Dedication (CC0)" },
+    ],
+    languages: [
+      { id: "en", label: "English" },
+      { id: "fr", label: "French" },
+    ],
+    privacies: [
+      { id: "public", label: "Public" },
+      { id: "unlisted", label: "Unlisted" },
+      { id: "private", label: "Private" },
+    ],
+  };
+}
 
 function channel(handle: string, name: string) {
   return {
@@ -110,10 +133,14 @@ test("a creator can upload and publish a video", async ({ page }) => {
     return route.fulfill({ json: { videos: [] } });
   });
   await page.route(UPLOAD, (route) => route.fulfill({ json: { video: video() } }));
+  await page.route(VIDEO_CONFIG, (route) => route.fulfill({ json: videoConfig() }));
 
   await page.getByRole("link", { name: "Studio" }).click();
   await page.getByLabel("Video title").fill("My clip");
   await page.getByLabel("Video description").fill("A short description.");
+  await page.getByLabel("Video category").selectOption("7");
+  await page.getByLabel("Video language").selectOption("en");
+  await page.getByLabel("Video license").selectOption("1");
   await page.getByLabel("Video file").setInputFiles({
     name: "clip.mp4",
     mimeType: "video/mp4",
@@ -123,7 +150,13 @@ test("a creator can upload and publish a video", async ({ page }) => {
 
   await expect(page.getByText("Published!")).toBeVisible();
   await expect(page.getByRole("link", { name: /View .*My clip/ })).toBeVisible();
-  expect(draftBody).toMatchObject({ title: "My clip", description: "A short description." });
+  expect(draftBody).toMatchObject({
+    title: "My clip",
+    description: "A short description.",
+    category: "7",
+    language: "en",
+    license: "1",
+  });
 });
 
 test("a creator can edit a video's title and privacy", async ({ page }) => {
@@ -140,8 +173,10 @@ test("a creator can edit a video's title and privacy", async ({ page }) => {
       patchBody = route.request().postDataJSON();
       return route.fulfill({ json: video({ title: "New title", privacy: "unlisted" }) });
     }
-    return route.continue();
+    // GET: the edit form fetches the full detail to pre-fill (list lacks taxonomy).
+    return route.fulfill({ json: video({ title: "Old title", privacy: "public" }) });
   });
+  await page.route(VIDEO_CONFIG, (route) => route.fulfill({ json: videoConfig() }));
 
   await page.getByRole("link", { name: "Studio" }).click();
   // Scope privacy assertions to the video row — "Public"/"Unlisted" also appear as
@@ -151,16 +186,23 @@ test("a creator can edit a video's title and privacy", async ({ page }) => {
   await expect(row.getByText("Public")).toBeVisible();
 
   await row.getByRole("button", { name: "Edit" }).click();
-  // The edit form is pre-filled from the video; the description is editable too.
+  // The edit form is pre-filled from the video; description + taxonomy are editable.
   await page.getByLabel("Edit title").fill("New title");
   await page.getByLabel("Edit description").fill("Updated description.");
+  await page.getByLabel("Edit category").selectOption("1");
+  await page.getByLabel("Edit language").selectOption("fr");
   await page.getByLabel("Edit privacy").selectOption("unlisted");
   await page.getByRole("button", { name: "Save" }).click();
 
   const updatedRow = page.getByRole("listitem").filter({ hasText: "New title" });
   await expect(updatedRow.getByRole("link", { name: "New title" })).toBeVisible();
   await expect(updatedRow.getByText("Unlisted")).toBeVisible();
-  expect(patchBody).toMatchObject({ title: "New title", description: "Updated description." });
+  expect(patchBody).toMatchObject({
+    title: "New title",
+    description: "Updated description.",
+    category: "1",
+    language: "fr",
+  });
 });
 
 test("a creator can add and remove a caption from a video's edit surface", async ({ page }) => {
@@ -183,6 +225,14 @@ test("a creator can add and remove a caption from a video's edit surface", async
   });
   await page.route(CAPTION_LANG, (route) =>
     route.request().method() === "DELETE" ? route.fulfill({ status: 204, body: "" }) : route.continue(),
+  );
+  // Entering edit mode fetches the video detail to pre-fill the form. Mock the
+  // taxonomy config as empty so the dropdowns carry no options — this
+  // caption-focused test stays deterministically isolated from taxonomy labels
+  // (e.g. a "English" language option colliding with the caption label).
+  await page.route(VIDEO, (route) => route.fulfill({ json: video({ title: "Captioned clip" }) }));
+  await page.route(VIDEO_CONFIG, (route) =>
+    route.fulfill({ json: { categories: [], licenses: [], languages: [], privacies: [] } }),
   );
 
   await page.getByRole("link", { name: "Studio" }).click();

@@ -21,6 +21,7 @@ import type {
   InstanceResponse,
   RatingValue,
   Video,
+  VideoConfigResponse,
   VideoFeedResponse,
   VideoListResponse,
   CreatePlaylistRequest,
@@ -66,6 +67,10 @@ export const api = {
       query: { sort: params.sort, limit: params.limit, offset: params.offset },
       signal,
     }),
+
+  /** GET /api/v1/videos/config — static metadata taxonomy for the studio dropdowns. */
+  getVideoConfig: (signal?: AbortSignal) =>
+    apiRequest<VideoConfigResponse>("/api/v1/videos/config", { signal }),
 
   /** GET /api/v1/videos/{id} — video detail (private → owner only, else 404). */
   getVideo: (id: string, token?: string, signal?: AbortSignal) =>

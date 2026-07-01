@@ -9,7 +9,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
 import { ApiError, api } from "@/lib/api";
-import type { Channel, Video, VideoPrivacy, VideoState } from "@/lib/api";
+import type {
+  Channel,
+  Video,
+  VideoConfigOption,
+  VideoConfigResponse,
+  VideoPrivacy,
+  VideoState,
+} from "@/lib/api";
 
 type Status = "loading" | "error" | "ready";
 
@@ -40,6 +47,7 @@ export function StudioView() {
 function Studio() {
   const [status, setStatus] = useState<Status>("loading");
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [config, setConfig] = useState<VideoConfigResponse | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -57,6 +65,14 @@ function Studio() {
       });
     return () => controller.abort();
   }, [reloadKey]);
+
+  // The metadata taxonomy is static; load it once (non-blocking — the selects
+  // just render their options once it arrives).
+  useEffect(() => {
+    const controller = new AbortController();
+    api.getVideoConfig(controller.signal).then(setConfig).catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   if (status === "loading") {
     return (
@@ -83,8 +99,8 @@ function Studio() {
         channels={channels}
         onCreated={(ch) => setChannels((list) => [ch, ...list])}
       />
-      {channels.length > 0 ? <UploadSection channels={channels} /> : null}
-      {channels.length > 0 ? <MyVideosSection channels={channels} /> : null}
+      {channels.length > 0 ? <UploadSection channels={channels} config={config} /> : null}
+      {channels.length > 0 ? <MyVideosSection channels={channels} config={config} /> : null}
     </div>
   );
 }
@@ -187,10 +203,60 @@ function ChannelSection({
 
 type UploadState = "idle" | "uploading" | "done" | "error";
 
-function UploadSection({ channels }: { channels: Channel[] }) {
+// TaxonomySelect renders a labelled dropdown for an optional metadata field. An
+// empty value ("—") means unset.
+function TaxonomySelect({
+  label,
+  ariaLabel,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  ariaLabel: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: VideoConfigOption[];
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-sm">
+      <span className="font-medium">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
+        className="rounded border border-zinc-300 px-3 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+      >
+        <option value="">—</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+// taxonomyFields builds the optional metadata part of a create/update request,
+// including only the non-empty selections. Empty is omitted (not sent as ""),
+// which both keeps create payloads clean and avoids the backend's 422 on an
+// empty taxonomy value in a PATCH.
+function taxonomyFields(category: string, language: string, license: string) {
+  const out: { category?: string; language?: string; license?: string } = {};
+  if (category) out.category = category;
+  if (language) out.language = language;
+  if (license) out.license = license;
+  return out;
+}
+
+function UploadSection({ channels, config }: { channels: Channel[]; config: VideoConfigResponse | null }) {
   const [handle, setHandle] = useState(channels[0]?.handle ?? "");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const [language, setLanguage] = useState("");
+  const [license, setLicense] = useState("");
   const [privacy, setPrivacy] = useState<VideoPrivacy>("public");
   const [state, setState] = useState<UploadState>("idle");
   const [published, setPublished] = useState<Video | null>(null);
@@ -209,12 +275,16 @@ function UploadSection({ channels }: { channels: Channel[] }) {
         title: title.trim(),
         description: description.trim(),
         privacy,
+        ...taxonomyFields(category, language, license),
       });
       const res = await api.uploadVideoFile(draft.id, file);
       setPublished(res.video);
       setState("done");
       setTitle("");
       setDescription("");
+      setCategory("");
+      setLanguage("");
+      setLicense("");
       if (fileRef.current) fileRef.current.value = "";
     } catch (err) {
       setError(
@@ -273,6 +343,27 @@ function UploadSection({ channels }: { channels: Channel[] }) {
             className="resize-y rounded border border-zinc-300 px-3 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
           />
         </label>
+        <TaxonomySelect
+          label="Category"
+          ariaLabel="Video category"
+          value={category}
+          onChange={setCategory}
+          options={config?.categories ?? []}
+        />
+        <TaxonomySelect
+          label="Language"
+          ariaLabel="Video language"
+          value={language}
+          onChange={setLanguage}
+          options={config?.languages ?? []}
+        />
+        <TaxonomySelect
+          label="License"
+          ariaLabel="Video license"
+          value={license}
+          onChange={setLicense}
+          options={config?.licenses ?? []}
+        />
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">Privacy</span>
           <select
@@ -323,7 +414,13 @@ function UploadSection({ channels }: { channels: Channel[] }) {
 // view returns drafts/private too) and lets them edit metadata or delete a video.
 // It refetches on a remount/channel change; after an edit/delete the local list
 // is updated from the server result.
-function MyVideosSection({ channels }: { channels: Channel[] }) {
+function MyVideosSection({
+  channels,
+  config,
+}: {
+  channels: Channel[];
+  config: VideoConfigResponse | null;
+}) {
   const [handle, setHandle] = useState(channels[0]?.handle ?? "");
   const [status, setStatus] = useState<Status>("loading");
   const [videos, setVideos] = useState<Video[]>([]);
@@ -399,6 +496,7 @@ function MyVideosSection({ channels }: { channels: Channel[] }) {
             <VideoRow
               key={v.id}
               video={v}
+              config={config}
               onUpdated={(u) => setVideos((list) => list.map((x) => (x.id === u.id ? u : x)))}
               onDeleted={() => setVideos((list) => list.filter((x) => x.id !== v.id))}
             />
@@ -415,16 +513,21 @@ type RowMode = "view" | "edit" | "confirm-delete";
 // a two-step delete confirmation. The server result is the source of truth.
 function VideoRow({
   video,
+  config,
   onUpdated,
   onDeleted,
 }: {
   video: Video;
+  config: VideoConfigResponse | null;
   onUpdated: (v: Video) => void;
   onDeleted: () => void;
 }) {
   const [mode, setMode] = useState<RowMode>("view");
   const [title, setTitle] = useState(video.title);
   const [description, setDescription] = useState(video.description);
+  const [category, setCategory] = useState(video.category ?? "");
+  const [language, setLanguage] = useState(video.language ?? "");
+  const [license, setLicense] = useState(video.license ?? "");
   const [privacy, setPrivacy] = useState<VideoPrivacy>(video.privacy);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -438,6 +541,7 @@ function VideoRow({
         title: title.trim(),
         description: description.trim(),
         privacy,
+        ...taxonomyFields(category, language, license),
       });
       onUpdated(updated);
       setMode("view");
@@ -452,8 +556,30 @@ function VideoRow({
     setMode("view");
     setTitle(video.title);
     setDescription(video.description);
+    setCategory(video.category ?? "");
+    setLanguage(video.language ?? "");
+    setLicense(video.license ?? "");
     setPrivacy(video.privacy);
     setError(null);
+  }
+
+  // Open the edit form pre-filled from the full video detail. The "Your videos"
+  // list carries card data only (no category/language/license), so fetch the
+  // detail to populate those selects; fall back to the list data if it fails.
+  async function startEdit() {
+    setError(null);
+    try {
+      const full = await api.getVideo(video.id);
+      setTitle(full.title);
+      setDescription(full.description);
+      setCategory(full.category ?? "");
+      setLanguage(full.language ?? "");
+      setLicense(full.license ?? "");
+      setPrivacy(full.privacy);
+    } catch {
+      // Keep the list-derived defaults already in state.
+    }
+    setMode("edit");
   }
 
   async function remove() {
@@ -491,6 +617,27 @@ function VideoRow({
             className="resize-y rounded border border-zinc-300 px-3 py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
           />
         </label>
+        <TaxonomySelect
+          label="Category"
+          ariaLabel="Edit category"
+          value={category}
+          onChange={setCategory}
+          options={config?.categories ?? []}
+        />
+        <TaxonomySelect
+          label="Language"
+          ariaLabel="Edit language"
+          value={language}
+          onChange={setLanguage}
+          options={config?.languages ?? []}
+        />
+        <TaxonomySelect
+          label="License"
+          ariaLabel="Edit license"
+          value={license}
+          onChange={setLicense}
+          options={config?.licenses ?? []}
+        />
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">Privacy</span>
           <select
@@ -565,7 +712,7 @@ function VideoRow({
         <div className="flex shrink-0 items-center gap-2 text-sm">
           <button
             type="button"
-            onClick={() => setMode("edit")}
+            onClick={() => void startEdit()}
             className="font-medium text-zinc-600 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:text-zinc-300 dark:hover:text-zinc-100"
           >
             Edit

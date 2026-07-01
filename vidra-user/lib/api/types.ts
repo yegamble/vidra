@@ -50,6 +50,25 @@ export interface Video {
   // channel); omitted on the detail view.
   channel_handle?: string;
   channel_display_name?: string;
+  // Optional taxonomy ids (see GET /videos/config); present on create/update/
+  // detail when set, omitted otherwise.
+  category?: string;
+  language?: string;
+  license?: string;
+}
+
+/** One selectable value in a video-metadata taxonomy (GET /videos/config). */
+export interface VideoConfigOption {
+  id: string;
+  label: string;
+}
+
+/** GET /api/v1/videos/config — the taxonomy for the metadata dropdowns. */
+export interface VideoConfigResponse {
+  categories: VideoConfigOption[];
+  licenses: VideoConfigOption[];
+  languages: VideoConfigOption[];
+  privacies: VideoConfigOption[];
 }
 
 export type FeedSort = "recent" | "popular" | "trending";
@@ -180,6 +199,9 @@ export interface CreateVideoRequest {
   title: string;
   description?: string;
   privacy?: VideoPrivacy;
+  category?: string;
+  language?: string;
+  license?: string;
 }
 
 /** POST /api/v1/videos/{id}/report and /api/v1/comments/{id}/report body. */
@@ -325,6 +347,9 @@ export interface UpdateVideoRequest {
   title?: string;
   description?: string;
   privacy?: VideoPrivacy;
+  category?: string;
+  language?: string;
+  license?: string;
 }
 
 /** POST /api/v1/videos/{id}/file response (the published video + stored file). */

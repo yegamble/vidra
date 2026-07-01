@@ -44,6 +44,11 @@ describe("api endpoints", () => {
     expect(calledUrl()).toBe("http://localhost:8080/api/v1/videos/v1");
   });
 
+  it("getVideoConfig targets the video-config endpoint", async () => {
+    await api.getVideoConfig();
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/videos/config");
+  });
+
   it("media URL helpers build direct stream/poster/caption URLs", () => {
     expect(videoOriginalUrl("v1")).toBe("http://localhost:8080/api/v1/videos/v1/original");
     expect(videoThumbnailUrl("v1")).toBe("http://localhost:8080/api/v1/videos/v1/thumbnail");
