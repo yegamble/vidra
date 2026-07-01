@@ -305,6 +305,30 @@ describe("api endpoints", () => {
     expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/comments?q=spam&limit=100");
   });
 
+  it("getCaptions targets the video captions endpoint", async () => {
+    await api.getCaptions("v1");
+    expect(calledUrl()).toBe("http://localhost:8080/api/v1/videos/v1/captions");
+  });
+
+  it("uploadCaption POSTs multipart with language + file", async () => {
+    const file = new File(["WEBVTT"], "cap.vtt", { type: "text/vtt" });
+    await api.uploadCaption("v1", { language: "en", label: "English", file });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/videos/v1/captions");
+    expect(init.method).toBe("POST");
+    const form = init.body as FormData;
+    expect(form.get("language")).toBe("en");
+    expect(form.get("label")).toBe("English");
+    expect(form.get("file")).toBeInstanceOf(File);
+  });
+
+  it("deleteCaption DELETEs the language track", async () => {
+    await api.deleteCaption("v1", "en");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8080/api/v1/videos/v1/captions/en");
+    expect(init.method).toBe("DELETE");
+  });
+
   it("getWatchedWords targets the watched-words endpoint with pagination", async () => {
     await api.getWatchedWords({ limit: 100 });
     expect(calledUrl()).toBe("http://localhost:8080/api/v1/admin/watched-words?limit=100");

@@ -292,7 +292,7 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 - [x] Implement privacy selector. (`UploadSection` privacy `<select>` public/unlisted/private, default public — sent as `CreateVideoRequest.privacy` on `POST /api/v1/channels/:handle/videos`.)
 - [~] Implement metadata form: title, description, tags, category, language, license. (Title + privacy + channel done (the fields the backend create-draft accepts). Description and tags/category/language/license need backend contract fields — DEFERRED.)
 - [ ] Implement thumbnail upload/selection.
-- [ ] Implement captions upload section.
+- [x] Implement captions upload section. (`components/CaptionsManager.tsx`, embedded in the studio's per-video **Edit** surface (`StudioView` `VideoRow`): lists a video's caption tracks (`GET /videos/:id/captions`), an upload form (language + optional label + a `.vtt` file picker → `POST /videos/:id/captions`, replace-or-add by language; a 422 → "must be WebVTT and a valid language tag"), and a per-track **Remove** control (`DELETE /videos/:id/captions/:lang`). API client gained `getCaptions`/`uploadCaption`/`deleteCaption` + `Caption`/`CaptionListResponse` types (unit-tested). Mocked `e2e/studio.spec.ts` (edit → captions manager → upload → track appears → remove — 1). Backed `e2e-backed/captions.spec.ts` proves the round trip. **VERIFIED** — see below.)
 - [ ] Implement scheduled publish field.
 - [ ] Implement validation errors.
 - [ ] Implement save draft/publish controls where backed by API.
@@ -446,8 +446,8 @@ the item `BLOCKED` on the backend dependency — do not mark it `VERIFIED` on mo
 
 # P12 — Captions, Accessibility, and Internationalization Readiness
 
-- [ ] Implement captions management UI.
-- [ ] Implement captions language selector.
+- [x] Implement captions management UI. (Studio caption upload/list/remove — `components/CaptionsManager.tsx` on the per-video edit surface (`GET`/`POST`/`DELETE /videos/:id/captions[/:lang]`). **VERIFIED** end-to-end in `e2e-backed/captions.spec.ts`: a creator uploads a WebVTT track from the studio → it persists (visible via the public captions API) → removing it deletes it (captions table confirmed via psql). See P6.1.)
+- [~] Implement captions language selector. (The caption manager's language input accepts any BCP-47-ish tag (validated backend-side); a curated language dropdown + the watch-page track selector/toggle (native `<track>` display) is a later slice.)
 - [ ] Implement Whisper auto-caption request UI if backend supports it.
 - [ ] Implement caption processing status states.
 - [ ] Audit keyboard navigation for core routes.

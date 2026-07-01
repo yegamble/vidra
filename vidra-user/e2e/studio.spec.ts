@@ -10,6 +10,8 @@ const CREATE_CHANNEL = /\/api\/v1\/channels$/;
 const CHANNEL_VIDEOS = /\/api\/v1\/channels\/ada_makes\/videos$/;
 const UPLOAD = /\/api\/v1\/videos\/v1\/file$/;
 const VIDEO = /\/api\/v1\/videos\/v1$/;
+const CAPTIONS = /\/api\/v1\/videos\/v1\/captions$/;
+const CAPTION_LANG = /\/api\/v1\/videos\/v1\/captions\/[^/]+$/;
 
 function channel(handle: string, name: string) {
   return {
@@ -150,6 +152,61 @@ test("a creator can edit a video's title and privacy", async ({ page }) => {
   const updatedRow = page.getByRole("listitem").filter({ hasText: "New title" });
   await expect(updatedRow.getByRole("link", { name: "New title" })).toBeVisible();
   await expect(updatedRow.getByText("Unlisted")).toBeVisible();
+});
+
+test("a creator can add and remove a caption from a video's edit surface", async ({ page }) => {
+  await signIn(page);
+  await page.route(MY_CHANNELS, (route) =>
+    route.fulfill({ json: { channels: [channel("ada_makes", "Ada Makes")] } }),
+  );
+  await page.route(CHANNEL_VIDEOS, (route) =>
+    route.fulfill({ json: { videos: [video({ title: "Captioned clip" })] } }),
+  );
+  // The captions list starts empty; POST returns the created track.
+  await page.route(CAPTIONS, (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({
+        status: 201,
+        json: { language: "en", label: "English", created_at: new Date().toISOString() },
+      });
+    }
+    return route.fulfill({ json: { captions: [] } });
+  });
+  await page.route(CAPTION_LANG, (route) =>
+    route.request().method() === "DELETE" ? route.fulfill({ status: 204, body: "" }) : route.continue(),
+  );
+
+  await page.getByRole("link", { name: "Studio" }).click();
+  const row = page.getByRole("listitem").filter({ hasText: "Captioned clip" });
+  await row.getByRole("button", { name: "Edit" }).click();
+
+  // The captions manager appears (empty).
+  await expect(page.getByText("No captions yet.")).toBeVisible();
+
+  // Upload an English caption.
+  await page.getByLabel("Caption language").fill("en");
+  await page.getByLabel("Caption label").fill("English");
+  await page.getByLabel("Caption file").setInputFiles({
+    name: "cap.vtt",
+    mimeType: "text/vtt",
+    buffer: Buffer.from("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHi\n"),
+  });
+  const uploaded = page.waitForResponse(
+    (r) => CAPTIONS.test(r.url()) && r.request().method() === "POST" && r.ok(),
+  );
+  await page.getByRole("button", { name: "Upload" }).click();
+  await uploaded;
+
+  await expect(page.getByText("No captions yet.")).toHaveCount(0);
+  await expect(page.getByText("English")).toBeVisible();
+
+  // Remove it.
+  const removed = page.waitForResponse(
+    (r) => CAPTION_LANG.test(r.url()) && r.request().method() === "DELETE" && r.ok(),
+  );
+  await page.getByRole("button", { name: "Remove en caption" }).click();
+  await removed;
+  await expect(page.getByText("No captions yet.")).toBeVisible();
 });
 
 test("a creator can delete a video", async ({ page }) => {

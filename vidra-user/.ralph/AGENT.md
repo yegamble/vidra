@@ -54,7 +54,10 @@ viewer **Mutes** a comment's author (`CommentsSection` → `POST /me/mutes/accou
 via `Comment.author_id`), hiding that account's comments; the muted-accounts page
 (`app/settings/mutes` → `components/MutedAccountsView.tsx`, linked from `/settings`) lists
 (`GET /me/mutes/accounts`) and **unmutes** (`DELETE …`) — DB-effect VERIFIED in
-`e2e-backed/mutes.spec.ts`.
+`e2e-backed/mutes.spec.ts`. Captions: the studio's per-video **Edit** surface embeds
+`components/CaptionsManager.tsx` — upload/list/remove WebVTT caption tracks
+(`GET/POST/DELETE /videos/:id/captions[/:lang]`) — DB-effect VERIFIED in
+`e2e-backed/captions.spec.ts`.
 Admin: the admin-only users
 page (`app/admin/users` → `components/AdminUsersView.tsx`, reached via the admin-only
 `AdminNavLink`) lists/searches accounts (`GET /admin/users?q=`) and edits each user's

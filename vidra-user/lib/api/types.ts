@@ -334,6 +334,17 @@ export interface CommentListResponse {
   offset: number;
 }
 
+/** A WebVTT caption track's metadata. Mirrors the backend Caption schema. */
+export interface Caption {
+  language: string;
+  label: string;
+  created_at: string;
+}
+
+export interface CaptionListResponse {
+  captions: Caption[];
+}
+
 /** An account the caller has muted. Mirrors the backend MutedAccount schema. */
 export interface MutedAccount {
   user_id: string;

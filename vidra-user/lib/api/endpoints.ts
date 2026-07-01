@@ -8,6 +8,8 @@ import type {
   AdminVideoListResponse,
   BlockedVideoListResponse,
   BlockVideoRequest,
+  Caption,
+  CaptionListResponse,
   Channel,
   ChannelListResponse,
   Comment,
@@ -130,6 +132,29 @@ export const api = {
       body: form,
     });
   },
+
+  /** GET /api/v1/videos/{id}/captions — a video's caption tracks (public). */
+  getCaptions: (videoId: string, signal?: AbortSignal) =>
+    apiRequest<CaptionListResponse>(`/api/v1/videos/${encodeURIComponent(videoId)}/captions`, { signal }),
+
+  /** POST /api/v1/videos/{id}/captions — upload a WebVTT caption track (owner, multipart). */
+  uploadCaption: (videoId: string, input: { language: string; label?: string; file: File }) => {
+    const form = new FormData();
+    form.append("language", input.language);
+    if (input.label) form.append("label", input.label);
+    form.append("file", input.file);
+    return apiRequest<Caption>(`/api/v1/videos/${encodeURIComponent(videoId)}/captions`, {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  /** DELETE /api/v1/videos/{id}/captions/{lang} — remove a caption track (owner, idempotent). */
+  deleteCaption: (videoId: string, language: string) =>
+    apiRequest<void>(
+      `/api/v1/videos/${encodeURIComponent(videoId)}/captions/${encodeURIComponent(language)}`,
+      { method: "DELETE" },
+    ),
 
   /** GET /api/v1/me/subscriptions/videos — videos from followed channels (auth). */
   getSubscriptionVideos: (params: SearchParams = {}, signal?: AbortSignal) =>

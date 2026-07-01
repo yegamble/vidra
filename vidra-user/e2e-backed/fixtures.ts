@@ -189,6 +189,15 @@ export async function videoIsPublic(request: APIRequestContext, videoId: string)
   return res.status() === 200;
 }
 
+/** captions reads a video's caption tracks via the public API. */
+export async function captions(
+  request: APIRequestContext,
+  videoId: string,
+): Promise<Array<{ language: string; label: string }>> {
+  const res = await request.get(`${API_URL}/api/v1/videos/${videoId}/captions`);
+  return ((await res.json()) as { captions: Array<{ language: string; label: string }> }).captions;
+}
+
 /** watchedWords reads the instance watched-words list as the given admin. */
 export async function watchedWords(
   request: APIRequestContext,
