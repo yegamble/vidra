@@ -25,18 +25,45 @@ setup, its own GitHub Actions CI, and its own Ralph control plane (`.ralphrc` +
 ```bash
 git clone https://github.com/yegamble/vidra.git
 cd vidra
-./bootstrap.sh            # clone/update vidra-core + vidra-user into ./vidra-core, ./vidra-user
+make dev                  # bootstrap + backend stack (postgres, redis, migrate, api on :8080)
 
-# Backend (postgres, redis, migrate, api on :8080):
-docker compose --profile core up --build
-
-# Frontend (in another shell) — Next.js dev against the live backend:
+# Frontend (in another shell) — Next.js dev with HMR against the live backend:
 cd vidra-user && npm ci && NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
+
+make seed                 # optional: demo account (demo@vidra.local) + @demo channel
 ```
+
+Or run the **whole stack in containers** (frontend included, on :3000):
+
+```bash
+make up                   # == docker compose --profile core --profile frontend up -d --build
+```
+
+Other meta-repo commands: `make test` (both repos' canonical CI gates),
+`make e2e-backed` (the backend-backed Playwright suite against a fresh stack),
+`make logs`, `make down`, `make nuke` (also deletes data volumes). Run `make help`
+for the full list.
 
 `bootstrap.sh` is idempotent: it clones each component if missing, otherwise
 `git pull --ff-only`. The `./vidra-core` and `./vidra-user` directories are
 independent git checkouts and are **git-ignored by this repo**.
+
+## Environments
+
+The canonical environment matrix — **local, dev (remote), testing/QA (remote),
+staging, production** — lives in [`.ralph/specs/environments.md`](.ralph/specs/environments.md),
+with ready-to-copy per-environment templates under [`env/`](env/) and a reference
+single-host TLS deployment (compose + Caddy, backups, promotion rules) under
+[`deploy/`](deploy/):
+
+```bash
+cp env/staging.env.example env/staging.env   # fill in secrets
+docker compose --env-file env/staging.env --profile core --profile frontend up -d --build
+```
+
+Two rules worth internalizing: **staging is production config with throwaway
+data** (promote the exact image tags), and the frontend bakes
+`NEXT_PUBLIC_API_BASE_URL` at **build** time — one frontend image per environment.
 
 ## The frontend ⇄ backend contract
 

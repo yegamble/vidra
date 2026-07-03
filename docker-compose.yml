@@ -1,13 +1,40 @@
 # Full local stack for Vidra.
 #
-# Brings up the vidra-core backend (postgres, redis, migrate, api on :8080) by
-# INCLUDING vidra-core's own compose file, so this stays a thin wrapper with the
-# backend definition living in exactly one place (vidra-core/docker-compose.yml).
+# Brings up the vidra-core backend (postgres, redis, migrate, api) by INCLUDING
+# vidra-core's own compose file, so this stays a thin wrapper with the backend
+# definition living in exactly one place (vidra-core/docker-compose.yml). All of
+# vidra-core's profiles (core, storage, ...) work from here unchanged.
 #
-# Run ./bootstrap.sh first so ./vidra-core exists, then:
+# Run ./bootstrap.sh first so ./vidra-core and ./vidra-user exist, then:
+#
+#   make dev            # backend stack up; frontend via `npm run dev` for HMR
+#   make up             # backend stack + the containerised frontend (:3000)
+#
+# or raw compose:
 #   docker compose --profile core up --build
+#   docker compose --profile core --profile frontend up --build
 #
-# The Next.js frontend has no container image; run it directly against the backend:
-#   cd vidra-user && npm ci && NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
+# Environments: pass one of the env templates (see .ralph/specs/environments.md):
+#   docker compose --env-file env/local.env --profile core --profile frontend up -d
+#
+# NOTE: NEXT_PUBLIC_API_BASE_URL is baked into the frontend image at BUILD time
+# (Next.js inlines NEXT_PUBLIC_* into the client bundle) — changing it requires
+# rebuilding the frontend image, not just restarting it.
 include:
   - path: ./vidra-core/docker-compose.yml
+
+services:
+  frontend:
+    profiles: ["frontend"]
+    build:
+      context: ./vidra-user
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped

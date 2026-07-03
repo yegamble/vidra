@@ -1,0 +1,12 @@
+# Reference TLS reverse proxy for a single-host Vidra deployment (Caddy v2).
+# Replace the domains; Caddy provisions Let's Encrypt certificates automatically.
+
+api.example.com {
+	reverse_proxy localhost:8080
+	encode gzip
+}
+
+example.com {
+	reverse_proxy localhost:3000
+	encode gzip
+}
