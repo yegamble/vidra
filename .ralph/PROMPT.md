@@ -95,6 +95,14 @@ DB/API read). If the backend contract needed to prove persistence does not exist
 mark the item `BLOCKED` on that backend dependency — never `VERIFIED` on mocks. (See
 `vidra-user/.ralph/PROMPT.md` for the full rule.)
 
+## Design rule you must enforce (vidra-user)
+Every `vidra-user` UI change must conform to `vidra-user/.ralph/specs/design-system.md`
+(Apple HIG "quiet luxury": semantic tokens only, light/dark/system theming via
+`light-dark()`, mobile-first with bottom tabs + sidebar, no hamburger menus,
+pill/rounded shape language, WCAG 2.2 AA with axe as a hard gate). Raw palette
+classes (`zinc-*`, `red-*`, hex) or `dark:` variants in components, a missing
+theme check, or a 390px horizontal overflow are review defects — send them back.
+
 ## CI note (monorepo)
 GitHub Actions only reads workflows from the repo root, so CI workflows live in
 `.github/workflows/` and are path-filtered (`vidra-core/**`, `vidra-user/**`). This is
