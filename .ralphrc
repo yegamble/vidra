@@ -47,7 +47,11 @@ MAX_TOKENS_PER_HOUR=2000000
 # unrestricted curl is a network-egress/exfiltration vector for an unsupervised
 # on-host agent). If a loop legitimately needs external HTTP, re-add Bash(curl *).
 # Still broad and worth sandboxing (see SANDBOX_PROVIDER below): docker *, git push *.
-ALLOWED_TOOLS="Write,Read,Edit,Bash(git add *),Bash(git commit *),Bash(git diff *),Bash(git log *),Bash(git status),Bash(git status *),Bash(git push *),Bash(git pull *),Bash(git fetch *),Bash(git checkout *),Bash(git branch *),Bash(git stash *),Bash(git tag *),Bash(go *),Bash(gofmt *),Bash(golangci-lint *),Bash(staticcheck *),Bash(sqlc *),Bash(migrate *),Bash(newman *),Bash(npm *),Bash(npx *),Bash(pnpm *),Bash(node *),Bash(playwright *),Bash(make *),Bash(docker *),Bash(docker-compose *),Bash(curl localhost:*),Bash(curl 127.0.0.1:*),Bash(curl http://localhost:*),Bash(curl http://127.0.0.1:*),Bash(cd *)"
+# Monitor/TaskOutput/TaskStop: built-in background-task tools (newer Claude CLIs
+# block foreground `sleep` and steer the model to Monitor while waiting on
+# docker/dev-server startup). Safe — they only observe/stop the agent's own
+# background tasks. Omitting them halts the loop via the permission breaker.
+ALLOWED_TOOLS="Write,Read,Edit,Monitor,TaskOutput,TaskStop,Bash(git add *),Bash(git commit *),Bash(git diff *),Bash(git log *),Bash(git status),Bash(git status *),Bash(git push *),Bash(git pull *),Bash(git fetch *),Bash(git checkout *),Bash(git branch *),Bash(git stash *),Bash(git tag *),Bash(go *),Bash(gofmt *),Bash(golangci-lint *),Bash(staticcheck *),Bash(sqlc *),Bash(migrate *),Bash(newman *),Bash(npm *),Bash(npx *),Bash(pnpm *),Bash(node *),Bash(playwright *),Bash(make *),Bash(docker *),Bash(docker-compose *),Bash(curl localhost:*),Bash(curl 127.0.0.1:*),Bash(curl http://localhost:*),Bash(curl http://127.0.0.1:*),Bash(cd *)"
 
 # Sections in fix_plan.md whose unchecked items do NOT block Ralph exit.
 OPTIONAL_SECTIONS="Optional / Deferred / Non-Blocking,Optional,Future,Future Enhancements,Nice to Have"
