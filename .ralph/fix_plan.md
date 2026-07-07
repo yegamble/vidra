@@ -57,11 +57,25 @@
 
 ## Backport programme (`.ralph/specs/backport/PROGRAM.md`) — phase gate
 
-- [ ] W0 — Design/template parity with the Apple-HIG templates (`vidra-user`; tasks
+- [x] W0 — Design/template parity with the Apple-HIG templates (`vidra-user`; tasks
       W0.1–W0.13 in `vidra-user/.ralph/fix_plan.md`, spec
-      `vidra-user/.ralph/specs/backport-w0-design-parity.md`)
+      `vidra-user/.ralph/specs/backport-w0-design-parity.md`). **DONE 2026-07-07**:
+      all 13 tasks VERIFIED in the subplan (final commit `ec12836`, exit sweep
+      re-read 120 PNGs against the templates; full `npm run ci` green per slice).
+      W0.10 was upgraded mid-wave by user request from "restyle messages" to the
+      full Messaging v2 frontend build (spec `vidra-user/.ralph/specs/messaging-v2.md`).
+      Fresh-eyes audit: no blockers; one recorded template gap — the home "Live now"
+      rail — is a tracked BACKEND dependency (no public live-listing contract; see
+      W1 note below), plus two documented minors (deliberate extra filter row;
+      dev-overlay artifact in evidence PNGs — hygiene fix queued in W1 frontend).
+- [ ] W1 — Watch & player backports (both projects; specs
+      `vidra-*/.ralph/specs/backport-w1-watch-player.md`, seeded from
+      `.ralph/specs/backport/` programme; the vidra-user half includes the
+      user-mandated CUSTOM player build with the HLS quality selector). Includes
+      the W0 follow-ups: public live-listing contract + home Live-now rail, and
+      wiring the card IPFS badge to the shipped `ipfs_pinned` field (P19.3).
 
-> W1–W7 are defined in `.ralph/specs/backport/PROGRAM.md` §3 but are **not yet
+> W2–W7 are defined in `.ralph/specs/backport/PROGRAM.md` §3 but are **not yet
 > wired** — do not start them. Wire one wave at a time per PROGRAM.md §5, only after
 > the previous wave's box ticks.
 

@@ -1,7 +1,9 @@
 # Backport Program — mining `vidra-core-bk` / `vidra-user-bk` into the clean-room repos
 
-**Status:** ACTIVE — W0 wired 2026-07-07 (root gate + `vidra-user` fix_plan W0.1–W0.13);
-W1–W7 pending, wire one wave at a time (see §5–§6)
+**Status:** ACTIVE — W0 COMPLETE 2026-07-07 (all 13 tasks verified, exit sweep `ec12836`;
+Messaging v2 frontend folded in by user request). W1 wired 2026-07-07 (custom-player
+mandate; includes W0 follow-ups: live-listing contract + Live-now rail, IPFS card badge).
+W2–W7 pending, wire one wave at a time (see §5–§6)
 **Sources:** https://github.com/yegamble/vidra-core-bk, https://github.com/yegamble/vidra-user-bk (archived 2026)
 **Local reference copies:** this directory (`FEATURE_VISION.md`, `API-DEVIATIONS.md`, `plans/`, `api-reference/`)
 
