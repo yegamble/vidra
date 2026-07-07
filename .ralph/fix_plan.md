@@ -55,6 +55,16 @@
 - [ ] P14 — Frontend testing strategy (incl. backend-backed DB-effect e2e)
 - [ ] P15 — Frontend release gates
 
+## Backport programme (`.ralph/specs/backport/PROGRAM.md`) — phase gate
+
+- [ ] W0 — Design/template parity with the Apple-HIG templates (`vidra-user`; tasks
+      W0.1–W0.13 in `vidra-user/.ralph/fix_plan.md`, spec
+      `vidra-user/.ralph/specs/backport-w0-design-parity.md`)
+
+> W1–W7 are defined in `.ralph/specs/backport/PROGRAM.md` §3 but are **not yet
+> wired** — do not start them. Wire one wave at a time per PROGRAM.md §5, only after
+> the previous wave's box ticks.
+
 ## Cross-cutting
 
 - [x] Root CI workflows exist and are path-scoped (`backend-ci` for `vidra-core/**`,

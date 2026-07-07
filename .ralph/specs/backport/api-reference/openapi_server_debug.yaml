@@ -1,0 +1,240 @@
+openapi: 3.0.3
+info:
+  title: Vidra Core API - Server Debug & Logs
+  description: |
+    Admin endpoints for server debugging, log management, and client log submission.
+
+    ## Debug Commands
+
+    - `gc` - Trigger garbage collection
+    - `goroutines` - Get goroutine count
+    - `memstats` - Get memory statistics
+
+    ## Log Levels (Client Logs)
+
+    - debug
+    - info
+    - warn
+    - error
+  version: 1.0.0
+
+paths:
+  /api/v1/server/debug:
+    get:
+      summary: Get server debug information
+      operationId: getServerDebugInfo
+      tags: [Server Debug]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Debug information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebugInfoResponse'
+        '403':
+          description: Admin access required
+
+  /api/v1/server/debug/run-command:
+    post:
+      summary: Run a debug command
+      operationId: runDebugCommand
+      tags: [Server Debug]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [command]
+              properties:
+                command:
+                  type: string
+                  enum: [gc, goroutines, memstats]
+      responses:
+        '200':
+          description: Command result
+        '400':
+          description: Invalid or unknown command
+        '403':
+          description: Admin access required
+
+  /api/v1/server/logs:
+    get:
+      summary: Get server logs with date/level/tag filtering
+      operationId: getServerLogs
+      tags: [Server Logs]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Start of the date range (ISO 8601)
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: End of the date range (ISO 8601, defaults to now)
+        - name: level
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [debug, info, warn, error]
+            default: info
+          description: Minimum log level to return
+        - name: tagsOneOf
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Comma-separated list of tags; entries matching any tag are returned
+      responses:
+        '200':
+          description: Server log entries within the date range
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '400':
+          description: Missing or invalid startDate
+        '403':
+          description: Admin access required
+
+  /api/v1/server/audit-logs:
+    get:
+      summary: Get audit logs with date filtering
+      operationId: getAuditLogs
+      tags: [Server Logs]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Start of the date range (ISO 8601)
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: End of the date range (ISO 8601, defaults to now)
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        user:
+                          type: string
+                        domain:
+                          type: string
+                        action:
+                          type: string
+                          enum: [create, update, delete]
+        '400':
+          description: Missing or invalid startDate
+        '403':
+          description: Admin access required
+
+  /api/v1/server/logs/client:
+    post:
+      summary: Create a client log entry
+      operationId: createClientLog
+      tags: [Server Logs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                level:
+                  type: string
+                  enum: [debug, info, warn, error]
+                  default: info
+                message:
+                  type: string
+                meta:
+                  type: string
+      responses:
+        '204':
+          description: Log entry created
+        '400':
+          description: Invalid request
+        '403':
+          description: Client log submission is disabled (LOG_ACCEPT_CLIENT_LOG=false)
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    DebugInfoResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            goVersion:
+              type: string
+            numGoroutine:
+              type: integer
+            numCPU:
+              type: integer
+            memAlloc:
+              type: integer
+              format: int64
+            memTotalAlloc:
+              type: integer
+              format: int64
+            memSys:
+              type: integer
+              format: int64
+            memNumGC:
+              type: integer
+            uptime:
+              type: string
+            os:
+              type: string
+            arch:
+              type: string

@@ -1,0 +1,317 @@
+openapi: 3.0.3
+info:
+  title: Vidra Core Bitcoin Payments API
+  description: Bitcoin payment integration via BTCPay Server for Vidra Core video platform
+  version: 2.0.0
+servers:
+  - url: /api/v1
+    description: API v1
+tags:
+  - name: payments
+    description: Bitcoin payment invoice management via BTCPay Server
+
+paths:
+  /payments/invoices:
+    post:
+      tags:
+        - payments
+      summary: Create payment invoice
+      description: Creates a new Bitcoin payment invoice via BTCPay Server
+      operationId: createInvoice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvoiceRequest'
+      responses:
+        '201':
+          description: Invoice created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BTCPayInvoice'
+                  success: { type: boolean, example: true }
+                required: [data, success]
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      tags:
+        - payments
+      summary: List user invoices
+      description: Retrieves paginated list of invoices for the authenticated user
+      operationId: listInvoices
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: count
+          in: query
+          description: Maximum number of invoices to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 15
+        - name: start
+          in: query
+          description: Offset for pagination
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Invoices retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BTCPayInvoice'
+                  success: { type: boolean, example: true }
+                required: [data, success]
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /payments/invoices/{id}:
+    get:
+      tags:
+        - payments
+      summary: Get invoice
+      description: Retrieves a specific invoice by ID
+      operationId: getInvoice
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Invoice UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Invoice retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BTCPayInvoice'
+                  success: { type: boolean, example: true }
+                required: [data, success]
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /payments/webhooks/btcpay:
+    post:
+      tags:
+        - payments
+      summary: BTCPay Server webhook callback
+      description: |
+        Receives webhook notifications from BTCPay Server when invoice status changes.
+        Authenticates via HMAC-SHA256 signature in BTCPay-Sig header (no JWT required).
+      operationId: btcpayWebhook
+      parameters:
+        - name: BTCPay-Sig
+          in: header
+          description: HMAC-SHA256 signature of the request body
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BTCPayWebhookEvent'
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status: { type: string, example: "ok" }
+                  success: { type: boolean, example: true }
+        '401':
+          description: Invalid webhook signature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained from /auth/login or /auth/refresh
+
+  schemas:
+    CreateInvoiceRequest:
+      type: object
+      properties:
+        amount_sats:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Payment amount in satoshis (1 BTC = 100,000,000 sats)
+          example: 100000
+        currency:
+          type: string
+          default: "BTC"
+          description: Currency code (default BTC)
+        metadata:
+          type: object
+          description: Optional metadata (product info, video ID, etc.)
+          additionalProperties: true
+      required:
+        - amount_sats
+
+    BTCPayInvoice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Internal invoice UUID
+        btcpay_invoice_id:
+          type: string
+          description: BTCPay Server invoice ID
+        user_id:
+          type: string
+          format: uuid
+        amount_sats:
+          type: integer
+          format: int64
+          description: Amount in satoshis
+        currency:
+          type: string
+          example: "BTC"
+        status:
+          type: string
+          enum: [New, Processing, Settled, Invalid, Expired]
+          description: Invoice status
+        checkout_link:
+          type: string
+          description: BTCPay Server checkout page URL
+        bitcoin_address:
+          type: string
+          nullable: true
+          description: Bitcoin address for payment
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+        expires_at:
+          type: string
+          format: date-time
+        settled_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - btcpay_invoice_id
+        - user_id
+        - amount_sats
+        - currency
+        - status
+        - expires_at
+
+    BTCPayWebhookEvent:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Webhook event type
+          example: "InvoiceSettled"
+        invoiceId:
+          type: string
+          description: BTCPay Server invoice ID
+        storeId:
+          type: string
+          description: BTCPay Server store ID
+      required:
+        - type
+        - invoiceId
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Error code
+            message:
+              type: string
+              description: Error message
+      required:
+        - error
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: "UNAUTHORIZED"
+              message: "Authentication required"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: "INTERNAL_SERVER_ERROR"
+              message: "An unexpected error occurred"
