@@ -90,7 +90,14 @@
       adversarial privacy-audit rounds, `ipfs-private-integration` CI green with
       all four swarm-isolation proofs executing (guarded against silent skips).
 
-- [ ] W2 — Upload & import (both projects; specs
+- [x] W2 — Upload & import. **DONE 2026-07-08, dual audits PASS (backend security
+      + frontend design/truthfulness), zero blockers/majors.** Backend
+      (vidra-core `91405ae..3f3c6e6`): yt-dlp import resolver (sandboxed, admin
+      opt-in, EICAR-through-import proof in CI), server-side drafts, batch,
+      channel auto-sync, frame-pick. Frontend (vidra-user `27a2f77..15ebc69`):
+      resumable+draft-recovery UX, frame-pick, schedule/batch, import-from-URL,
+      sync UI. Six audit minors recorded in fix_plans. (original wiring note:)
+      (both projects; specs
       `vidra-*/.ralph/specs/backport-w2-upload-import.md`, seeded 2026-07-08).
       Net-new: yt-dlp URL import (marquee; admin opt-in, sandboxed, ClamAV-first),
       server-side draft recovery, batch upload, channel auto-sync, thumbnail
