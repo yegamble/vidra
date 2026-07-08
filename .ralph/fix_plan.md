@@ -90,7 +90,16 @@
       adversarial privacy-audit rounds, `ipfs-private-integration` CI green with
       all four swarm-isolation proofs executing (guarded against silent skips).
 
-> W2–W7 are defined in `.ralph/specs/backport/PROGRAM.md` §3 but are **not yet
+- [ ] W2 — Upload & import (both projects; specs
+      `vidra-*/.ralph/specs/backport-w2-upload-import.md`, seeded 2026-07-08).
+      Net-new: yt-dlp URL import (marquee; admin opt-in, sandboxed, ClamAV-first),
+      server-side draft recovery, batch upload, channel auto-sync, thumbnail
+      frame-pick + UI slices on the design-refresh studio vocabulary. Already
+      shipped & close-out-only: ClamAV scanning, scheduled publication,
+      resumable-upload backend, direct-URL import + SSRF guard. Torrent import
+      DEFERRED to W6 (security recommendation, user standing approval).
+
+> W3–W7 are defined in `.ralph/specs/backport/PROGRAM.md` §3 but are **not yet
 > wired** — do not start them. Wire one wave at a time per PROGRAM.md §5, only after
 > the previous wave's box ticks.
 
