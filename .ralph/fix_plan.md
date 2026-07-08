@@ -68,12 +68,27 @@
       rail — is a tracked BACKEND dependency (no public live-listing contract; see
       W1 note below), plus two documented minors (deliberate extra filter row;
       dev-overlay artifact in evidence PNGs — hygiene fix queued in W1 frontend).
-- [ ] W1 — Watch & player backports (both projects; specs
-      `vidra-*/.ralph/specs/backport-w1-watch-player.md`, seeded from
-      `.ralph/specs/backport/` programme; the vidra-user half includes the
-      user-mandated CUSTOM player build with the HLS quality selector). Includes
-      the W0 follow-ups: public live-listing contract + home Live-now rail, and
-      wiring the card IPFS badge to the shipped `ipfs_pinned` field (P19.3).
+- [x] W1 — Watch & player backports. **DONE 2026-07-08, both halves audited PASS.**
+      Backend (vidra-core `1c89c35..7440821`): playback-contract verification,
+      chapters, video passwords + embed privacy (token unlock incl. `?pt=`),
+      per-user player settings, public live-listing. Frontend (vidra-user):
+      bespoke custom player (chrome-less <video>, HLS quality selector, speed
+      0.25–4×, theater/PiP, shortcuts, storyboard previews, end card) + the
+      backend-unblocked completion trio (chapters UI `e38805f`, player-settings
+      `fb3d78c`, password UX `71004c1`). W0 follow-ups closed: Live-now rail +
+      IPFS card badge shipped in the design-refresh wave.
+- [x] Design-refresh wave (user-directed, 2026-07-08): the claude.ai/design
+      "Vidra streaming platform design" implemented across all surfaces in
+      vidra-user (18 slices, final audit PASS; closeout `3be27ba`). Includes the
+      SVG-icon migration (emoji ban enforced by a lint guard), comment-reply
+      @username attribution, IPFS watch-page source bar, crypto Support dialog,
+      admin consoles + `/admin/stats` binding. Recorded honest deferrals:
+      channel public-playlists contract, search-scope param, unified mobile
+      admin queues tab, reply notifications (awaiting user approval).
+- [x] IPFS media mirroring (user-directed, outside wave order): public tier
+      P19.1–P19.6 + private swarm tier P19.P1–P19.P4 in vidra-core, three
+      adversarial privacy-audit rounds, `ipfs-private-integration` CI green with
+      all four swarm-isolation proofs executing (guarded against silent skips).
 
 > W2–W7 are defined in `.ralph/specs/backport/PROGRAM.md` §3 but are **not yet
 > wired** — do not start them. Wire one wave at a time per PROGRAM.md §5, only after
