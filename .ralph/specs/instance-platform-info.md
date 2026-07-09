@@ -178,3 +178,21 @@ coverage; unit tests for Markdown + countries module. `npm run ci` must pass.
 - Header wordmark stays static (not instance name) — unchanged in this scope.
 - Design authority: vidra-user/.ralph/specs/design-system.md (tokens only, shape language, icons
   single-source, SegmentedControl for single-select).
+
+## Implementation status
+
+Ralph wave, 2026-07-09:
+
+- Backend implementation is on `vidra-core/main` at `584807b`
+  (`feat(core): implement instance platform info backend`).
+- Frontend implementation is on `vidra-user/main` at `b41850e`
+  (`feat(user): implement instance platform info UI`).
+- Root spec update is on `vidra/main` at `1d7c187`
+  (`docs(ralph): add instance platform info spec`).
+- Follow-up CI hardening: `vidra-user` `contract-ci` was updated to checkout
+  `yegamble/vidra-core` with `actions/checkout` instead of anonymously fetching
+  `raw.githubusercontent.com`, after GitHub returned HTTP 429 during the contract
+  gate. Local contract verification passed against `../vidra-core/api/openapi.yaml`.
+- Playwright design guardrails for the frontend passed locally on Chromium:
+  `e2e/a11y.spec.ts`, `e2e/responsive.spec.ts`, `e2e/about.spec.ts`,
+  `e2e/admin-config.spec.ts`, and `e2e/sensitive-content.spec.ts`.
