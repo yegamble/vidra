@@ -193,6 +193,11 @@ Ralph wave, 2026-07-09:
   `yegamble/vidra-core` with `actions/checkout` instead of anonymously fetching
   `raw.githubusercontent.com`, after GitHub returned HTTP 429 during the contract
   gate. Local contract verification passed against `../vidra-core/api/openapi.yaml`.
+- Follow-up backed-e2e hardening: `e2e-backed/instance-settings.spec.ts` was
+  updated from the pre-redesign `Instance identity`/`Instance name` selectors to
+  the current `Platform`/`Name` admin config UI. Local real-backend verification
+  passed: `E2E_API_URL=http://localhost:8080 npm run e2e:backed --
+  e2e-backed/instance-settings.spec.ts` (3 passed).
 - Playwright design guardrails for the frontend passed locally on Chromium:
   `e2e/a11y.spec.ts`, `e2e/responsive.spec.ts`, `e2e/about.spec.ts`,
   `e2e/admin-config.spec.ts`, and `e2e/sensitive-content.spec.ts`.
