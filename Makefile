@@ -26,6 +26,32 @@ dev: bootstrap ## Backend stack up (postgres+redis+migrate+api); run the fronten
 up: bootstrap ## Full stack incl. the containerised frontend (:3000)
 	docker compose --profile core --profile frontend up -d --build
 
+# Dev hot-reload overlay: air-rebuilt Go api + next dev HMR frontend, both with
+# bind-mounted source so code changes reflect WITHOUT down+rebuild. Applied on
+# top of the base compose via -f docker-compose.dev.yml (see that file).
+DEV_HOT_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.dev.yml
+
+.PHONY: dev-hot
+dev-hot: bootstrap ## Full stack with hot reload: air-rebuilt Go api (:8080) + next dev HMR frontend (:3000)
+	$(DEV_HOT_COMPOSE) --profile core --profile frontend up -d --build
+	@echo ""
+	@echo "Hot-reload stack up:"
+	@echo "  api      http://localhost:$${HTTP_PORT:-8080}   (edit vidra-core/**/*.go -> air rebuilds)"
+	@echo "  frontend http://localhost:$${FRONTEND_PORT:-3000} (edit vidra-user/** -> HMR)"
+	@echo "First run is slow: go mod download + cold compile, npm volume seed. Watch: make dev-hot-logs"
+
+.PHONY: dev-hot-down
+dev-hot-down: ## Stop the hot-reload stack (db data + go/npm cache volumes preserved)
+	$(DEV_HOT_COMPOSE) --profile core --profile frontend --profile storage down
+
+.PHONY: dev-hot-logs
+dev-hot-logs: ## Tail hot-reload stack logs
+	$(DEV_HOT_COMPOSE) --profile core --profile frontend logs -f --tail=100
+
+.PHONY: dev-hot-nuke
+dev-hot-nuke: ## Stop hot-reload stack AND delete ALL volumes (db data + go/npm caches)
+	$(DEV_HOT_COMPOSE) --profile core --profile frontend --profile storage down -v
+
 .PHONY: down
 down: ## Stop the stack (data volumes preserved)
 	docker compose --profile core --profile frontend --profile storage down
