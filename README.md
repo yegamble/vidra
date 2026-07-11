@@ -39,6 +39,32 @@ Or run the **whole stack in containers** (frontend included, on :3000):
 make up                   # == docker compose --profile core --profile frontend up -d --build
 ```
 
+### Hot-reload dev stack (`make dev-hot`)
+
+`make dev-hot` runs the **whole stack in Docker with live reload** — no image
+rebuilds while developing:
+
+- **api**: `air` watches the bind-mounted `vidra-core/` tree; saving a `.go`
+  file recompiles (`go build ./cmd/api`, caches in named volumes) and restarts
+  the server in ~1–3s. Same postgres/redis/migrate deps, same port (`:8080`).
+- **frontend**: `next dev` (webpack + polling, for macOS bind-mount reliability)
+  against bind-mounted `vidra-user/`; saving a `.tsx` HMRs instantly.
+  `node_modules` and `.next` live in named volumes so the host's macOS-arch
+  installs never leak into the Linux container; a `package-lock.json` change is
+  auto-detected and reinstalled on container start, and the olm-wasm prebuild
+  runs automatically.
+- `NEXT_PUBLIC_API_BASE_URL` is a **runtime** env in dev (default
+  `http://localhost:8080`, a browser-reachable host URL — not `http://api:8080`).
+  If you override `HTTP_PORT`, match it:
+  `HTTP_PORT=8088 NEXT_PUBLIC_API_BASE_URL=http://localhost:8088 make dev-hot`.
+
+Commands: `make dev-hot` / `make dev-hot-logs` / `make dev-hot-down` /
+`make dev-hot-nuke` (also deletes db data + caches). **First run is slow** (once):
+npm volume seed, `go mod download`, cold compile — a few minutes; later starts
+and rebuilds are fast. The production paths (`make up`, `make dev`, both
+Dockerfiles, the base compose files) are untouched — the overlay only applies
+when `-f docker-compose.dev.yml` is passed.
+
 Other meta-repo commands: `make test` (both repos' canonical CI gates),
 `make e2e-backed` (the backend-backed Playwright suite against a fresh stack),
 `make logs`, `make down`, `make nuke` (also deletes data volumes). Run `make help`

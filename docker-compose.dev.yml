@@ -1,0 +1,60 @@
+# DEV HOT-RELOAD OVERLAY — never used alone. Apply on top of the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+#     --profile core --profile frontend up -d --build
+#
+# (= `make dev-hot`). It overrides only `api` and `frontend`:
+#   - api: golang+air image, source bind-mounted, go build/module caches in
+#     named volumes -> editing a .go file rebuilds+restarts the server in-place.
+#   - frontend: `next dev` (HMR) with bind-mounted source; node_modules and
+#     .next live in named volumes so the host's macOS-arch node_modules never
+#     clobbers the container's. NEXT_PUBLIC_API_BASE_URL is a RUNTIME env here
+#     (next dev compiles on the fly), unlike prod where it's a build arg.
+#
+# postgres / redis / migrate and every depends_on edge, env default, and port
+# mapping are inherited unchanged from the base + included compose files.
+services:
+  api:
+    build:
+      context: ./vidra-core
+      dockerfile: Dockerfile.dev
+    image: vidra-api-dev
+    volumes:
+      - ./vidra-core:/app:cached
+      - go_build_cache:/root/.cache/go-build
+      - go_mod_cache:/go/pkg/mod
+    # The dev image has no baked HEALTHCHECK (prod's lives in Dockerfile), so
+    # define one here. Generous start_period covers the cold first build
+    # (go mod download + full compile) before the caches are warm.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 300s
+
+  frontend:
+    build:
+      context: ./vidra-user
+      dockerfile: Dockerfile.dev
+    image: vidra-frontend-dev
+    volumes:
+      - ./vidra-user:/app:cached
+      - frontend_node_modules:/app/node_modules
+      - frontend_next:/app/.next
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Polling: macOS bind mounts drop FS events across the mount boundary;
+      # webpack honours WATCHPACK_POLLING (see scripts/dev-entrypoint.sh).
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+      # Runtime (dev) — must be reachable from the BROWSER, i.e. the
+      # host-published api port, NOT http://api:8080 (container-only DNS).
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+
+volumes:
+  go_build_cache:
+  go_mod_cache:
+  frontend_node_modules:
+  frontend_next:
