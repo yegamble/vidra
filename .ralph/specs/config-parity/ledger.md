@@ -179,3 +179,12 @@ the verified numbers:
   `internal/federation/notes.go:38` (`handleCreateNote`); spec's "inbox.go:42" is stale.
 - Follow auto-accept: `internal/federation/inbox.go:128-151` (spec's ":31" points at the
   doc comment, not the code site).
+
+## W9 decisions (2026-07-12)
+
+| item | decision | rationale |
+|---|---|---|
+| `default_video_privacy` registry default | `private` (NOT PeerTube's `public`) | omit-means-private was the shipped API behaviour; loosening it silently as a side effect of adding the knob was rejected in W9 review (vidra-core d2b8cd9). Admins opt into public-by-default via the setting. |
+| `default_download_enabled` registry default | `true` | shipped behaviour: every video downloadable while the instance-wide `downloads_enabled` gate (84b5a38) is on; per-video flag layers under it. |
+| Federation `pt:commentsPolicy`/`pt:downloadEnabled` | not emitted | vidra emits plain-AS video objects; rationale documented at videoObject in internal/federation/outbox.go; goldens unchanged. |
+| PT comment `requires_approval` tier | still deferred | no comment-approval queue in v1 (see §13). |
