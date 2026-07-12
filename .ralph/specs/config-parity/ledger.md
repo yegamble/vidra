@@ -161,6 +161,22 @@ freeze naming before the subsystem is designed.
 | `search.search_index.disable_local_search` | deferred | Trivially cheap UI flag but meaningless without the index — shipping it standalone would let an admin disable local search with no replacement. | Same. | Same. |
 | `search.search_index.is_default_search` | deferred | Same dependency. | Same. | Same. |
 
+## 16. Login / external auth (W5 as-built correction, 2026-07-12)
+
+| peertube_key | verdict | rationale | evidence | revisit-when |
+|---|---|---|---|---|
+| `client.menu.login.redirect_on_single_external_auth` (planned `login_redirect_single_oauth`) | deferred | waves.md W5 (line 129) said "implement the branch, note dependency", but vidra has NO OAuth/external-auth subsystem to redirect to, and shipping the key would violate the no-dormant-keys rule (architecture note 7) every other wave held. As built, W5 shipped nothing for this key; this row supersedes the waves.md instruction so the ledger matches the code. | No OAuth/external-auth code under `vidra-core/internal/auth`; no `login_redirect_single_oauth` key in `internal/instancesettings/service.go` (grep-confirmed 2026-07-12 at 74cecb1). | OAuth/external-auth ships — implement the redirect branch then. |
+
+## As-built deviations recorded at program close (2026-07-12)
+
+| item | as-built deviation | evidence |
+|---|---|---|
+| W6 `CUSTOM_JS_ALLOWED` kill-switch | The OPTIONAL boot env kill-switch described in waves.md (notes 6 and W6 items) was NOT built. Custom JS is gated instead by admin-only auth + the typed-confirmation warning flow + audit-enveloped writes with hash. Not a shipped-but-missing control. | No `CUSTOM_JS_ALLOWED` in `internal/config/config.go` (grep-confirmed); confirmation flow + audit in the W6 slice (fdd02d6). |
+| W10 `transcoding_max_fps` semantics | Applied UNIFORMLY to all rungs (not per-rung like PeerTube), and only when the KNOWN source fps exceeds the cap. Documented in code but previously absent here. | `internal/media/hls.go:73-77`. |
+| W11 `live_max_duration_secs` force-close | waves.md (W11 lines 223/228) says force-close "via nginx-rtmp control"; AS BUILT there is NO nginx-rtmp control/drop endpoint (`deploy/media/nginx.conf.template:39-40` has only on_publish/on_publish_done). The watchdog is a SERVER-SIDE state flip: it immediately stops live HLS serving and delists the session; the publisher's RTMP ingest socket lingers until disconnect, which then drives the normal stop/replay path. Enforcement is real and effective for its documented scope. | `internal/live/service.go:648-658`; `cmd/api/main.go:1484-1487`. |
+| W2/W4 layout.tsx seam invariant | The "later waves never edit layout.tsx" invariant (layout.tsx:19, waves.md:85) was contradicted ONCE: W4 (`a2965c6`) made a sanctioned 2-line wiring edit (`<Header />` → `<Header instance={instance} />` + a seam comment) because the header-branding seam was not in W2's pre-provisioned list. The seam design otherwise held for all waves; the in-code comment is being softened to "edits here are limited to wiring a new seam consumer's props". | `git log -- app/layout.tsx` shows only a464b5f (W2) and a2965c6 (W4). |
+| W8 storyboards gate location | The runtime gate for `storyboards_enabled` is the `storyboardGate` seam consulted at `internal/video/service.go:918` (and the duplicate publish path at `:826`), wired in `cmd/api/main.go:529-531`. `internal/media/storyboard.go` is only the generator implementation — citations pointing at it as the gate are stale. | as cited. |
+
 ---
 
 ## Corrections to gap-matrix/spec line numbers (verified 2026-07-11)
@@ -180,6 +196,35 @@ the verified numbers:
 - Follow auto-accept: `internal/federation/inbox.go:128-151` (spec's ":31" points at the
   doc comment, not the code site).
 
+## Corrections re-verified at the W14 tip (2026-07-12)
+
+The 2026-07-11 corrections block above has itself gone stale — every cited file grew during
+W8–W14. Verified against vidra-core `74cecb1` / vidra-user `3d03c23`:
+
+- Extension allowlist gate: `internal/httpapi/uploads.go:172`, now calling
+  `video.AcceptedVideoExtGated` (the W10 gated variant honoring
+  `upload_additional_extensions_enabled`), not plain `AcceptedVideoExt`; `AcceptedVideoExt`
+  at `internal/video/service.go:1406`, `AcceptedVideoExtGated` at `:1415`.
+- HLS ladder: `DefaultHLSResolutionHeights` at `internal/media/hls.go:57` (W10 parameterized
+  it); x264 preset at `hls.go:265`.
+- Import single-ticker worker: `DrainJobs` at `internal/videoimport/service.go:312`.
+- Inbox comment ingest implementation: `handleCreateNote` at `internal/federation/notes.go:43`.
+- Follow auto-accept: `handleFollow` at `internal/federation/inbox.go:147-189` (W12 gates now
+  inline; auto-accept branch at `:178-188`); §11's "non-channel follows ignored" is `inbox.go:154`.
+- §6 web_videos equivalence: `handleStreamVideoOriginal` at `internal/httpapi/videos.go:1083`;
+  `http.ServeContent` at `:1154`/`:1168`. §6/§14 original download:
+  `handleDownloadVideoOriginal` at `internal/httpapi/downloads.go:194`.
+- §13: `KeyCommentsEnabled` at `internal/instancesettings/service.go:56`.
+- §14: mail send seam at `internal/mail/smtp.go:156`.
+- §8: `maxThumbnailBytes` still `internal/federation/ingest.go:29-30`; the storage cite is now `:247`.
+- waves.md architecture notes 2/6 write the public document routes without the API prefix
+  (`/instance/custom.css` etc.); AS BUILT all public routes live under `/api/v1/instance/...`
+  (contract "Documents" section — the contract examples are already fully prefixed).
+- `gap-matrix.json` `vidra_status` fields are the FROZEN 2026-07-11 pre-implementation snapshot
+  that fed this wave plan. They are superseded by W1–W15 as shipped (e.g. broadcast_*,
+  default_* publish, storyboards_enabled, live_allow_replay, federation_* gates all read
+  "missing" there but exist in the registry) and MUST NOT be read as a live tracker.
+
 ## W9 decisions (2026-07-12)
 
 | item | decision | rationale |
@@ -188,3 +233,10 @@ the verified numbers:
 | `default_download_enabled` registry default | `true` | shipped behaviour: every video downloadable while the instance-wide `downloads_enabled` gate (84b5a38) is on; per-video flag layers under it. |
 | Federation `pt:commentsPolicy`/`pt:downloadEnabled` | not emitted | vidra emits plain-AS video objects; rationale documented at videoObject in internal/federation/outbox.go; goldens unchanged. |
 | PT comment `requires_approval` tier | still deferred | no comment-approval queue in v1 (see §13). |
+
+## W14 + W15 as-built record (2026-07-12)
+
+| item | as built |
+|---|---|
+| `video_replace_enabled` (W14) | Registry bool, default **false** (PT parity with `video_file.update.enabled`), page `vod`, section `uploads`. Enforcement: `internal/httpapi/replace.go` — `POST /videos/{id}/replace` + `POST /videos/{id}/replace-session`, gated by `videoReplaceAvailable()` (`replace.go:35-38`; 403 `feature_disabled`, also requires uploads on) with owner/moderator auth and state/extension gates. Source-version model in `internal/media/hls.go` + `ReplaceSource` in `internal/video/service.go`; re-transcode re-enqueues through the W10 parameterized pipeline (atomic promotion, invalidate fallback); `internal/mediagc` collects old generations + the old source blob; quota on replacement is charged to the video OWNER. `features.video_replace` on GET /instance mirrors the gate; URL/id/metadata stay stable across replacement and mid-swap playback is addressed. Shipped: vidra-core `74cecb1` + vidra-user `3d03c23` (StudioView replace flow incl. prefill-race fix). |
+| W15 reconciliation | vidra-user `b216134`: (a) follower-approval admin queue UI (`app/admin/federation/follower-requests/page.tsx` + `AdminFederationFollowerRequestsView.tsx` + AdminTabs/AdminConsole nav + `e2e/admin-federation-followers.spec.ts`) — closes the W12 contract note "pending frontend slice"; (b) watch-page SSR metadata (`app/videos/[id]/page.tsx` generateMetadata via `lib/video.server.ts` + `lib/watch-metadata.ts`; og:image prefers the video thumbnail, falls back to the instance opengraph logo; missing/private videos emit nothing) — closes the W4 precedence item. The W4 deviation comment in `lib/layout-metadata.ts:18-22` ("watch page has no server-side generateMetadata") is now stale; fix queued. |
