@@ -30,11 +30,11 @@ yet shipped, frontend must tolerate absence. Documents are referenced by hash/UR
     "theme": "system",                // enum: system|light|dark
     "player_autoplay": true,
     "miniature_prefer_author_display_name": false,
-    "publish": {                      // W9
-      "privacy": "public",
+    "publish": {                      // W9 (AS BUILT)
+      "privacy": "private",           // keeps shipped omit-means-private; admins opt into public-by-default
       "licence": 0,                   // 0 = no default
       "comment_policy": "enabled",    // enum: enabled|disabled
-      "download_enabled": false
+      "download_enabled": true        // shipped behaviour: downloadable while the instance downloads gate is on
     }
   },
 
