@@ -84,7 +84,9 @@ within ~a minute).
   drives disabled-with-explanation on email_subject_prefix / email_body_signature admin rows.
 - Follower approval admin API: `GET /api/v1/admin/federation/follower-requests`,
   `POST /api/v1/admin/federation/follower-requests/{id}/approve|reject` (audit actions
-  `admin.federation.follower_approve/reject`). Admin UI page for this queue is a pending frontend slice.
+  `admin.federation.follower_approve/reject`). Admin UI SHIPPED in W15 (vidra-user b216134):
+  `app/admin/federation/follower-requests/page.tsx` + `components/AdminFederationFollowerRequestsView.tsx`,
+  nav entries in `AdminTabs.tsx`/`AdminConsole.tsx`, e2e coverage in `e2e/admin-federation-followers.spec.ts`.
 - Auto-follow-back is signed by the FOLLOWED CHANNEL's actor (no instance actor exists).
 
 ## W13 backfills (AS BUILT)
@@ -97,6 +99,35 @@ within ~a minute).
   degrades silently to local-only. The q<=100-char cap still applies to shaped queries.
 - Registry keys `search_remote_uri_users` (default true) / `search_remote_uri_anonymous`
   (default false), page `federation`, section `search`.
+
+## W7 backfills (AS BUILT)
+
+- GET /instance gains additive top-level fields: `registration_requires_email_verification`
+  (bool; EFFECTIVE = setting AND mail wired — `internal/httpapi/instance.go:201`),
+  `registration_minimum_age` (int; 0 = off — `instance.go:205`), and
+  `registration_disabled_reason` (string; `""` or `"user_limit_reached"` — `instance.go:197`).
+  `registration_enabled` is now the EFFECTIVE value: it reads false once
+  `registration_user_limit` headroom is exhausted.
+
+## W8/W10/W14 backfills (AS BUILT)
+
+- The `features` block gains six W8 flags — `import_http`, `channel_sync`, `storyboards`,
+  `transcription`, `user_import`, `user_export` — plus `transcoding` and
+  `upload_additional_extensions` (W10) and `video_replace` (W14)
+  (`internal/httpapi/instance.go:39-59`, populated at `:328-337`). Each is the EFFECTIVE
+  availability: the runtime setting AND (where one exists) the boot capability (yt-dlp for
+  import_http, Whisper + caption worker for transcription, ffmpeg pipeline for transcoding),
+  matching the server's 403 `feature_disabled` gate — the UI hides/disables in lock-step.
+- `features.video_replace` (bool): true when `video_replace_enabled` AND uploads are both on.
+  W14 endpoints: `POST /api/v1/videos/{id}/replace` (multipart source swap, dynamic body
+  limit) and `POST /api/v1/videos/{id}/replace-session` (resumable), both `requireAuth` +
+  owner/moderator gated and 403 `feature_disabled` via `videoReplaceAvailable()`
+  (`internal/httpapi/replace.go:35-38`; routes `server.go:1010`/`:1020`).
+- NOTE for the admin UI: because these flags are EFFECTIVE (setting AND capability), they
+  cannot drive the disabled-with-explanation HIG pattern on the config pages — that pattern
+  needs the bare boot capability, which today is exposed only for mail (`features.mail` is
+  pure capability, which is why the email rows work). A raw transcoding/whisper capability
+  signal is future work if that pattern is wanted for the transcription/transcoding rows.
 
 ## Documents (W1 store, W6 consumers)
 
@@ -125,6 +156,12 @@ Pages: `general | vod | live | federation | customization | homepage | advanced`
 `vidra-user/lib/instance-config.server.ts`: server-side fetch of `GET /instance` with React `cache()`
 + ~60s revalidate; consumed by `generateMetadata`, theme bootstrap, layout injection seams, `/` landing
 switch. Client-side consumers keep using the same payload — one source of truth.
+
+AS BUILT note (W11): the typed `InstanceConfigSnapshot` in `lib/instance-config.server.ts`
+(lines 97-105) deliberately omits the `live` block that GET /instance now returns
+(`internal/httpapi/instance.go:250`, `:351-357`). Live limits are consumed by the live UI via a
+separate client-side fetch of the same payload, not the SSR snapshot type — the omission is
+intentional, not a contract gap.
 
 ## Conventions (all waves)
 
