@@ -1,0 +1,1588 @@
+{
+  "sections": [
+    {
+      "name": "1. BRANDING ASSETS",
+      "items": [
+        {
+          "setting": "Instance avatars",
+          "peertube_key": "instance.avatars",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "(not a registry key) POST/DELETE /api/v1/admin/instance-avatar",
+          "kind": "asset",
+          "apply_points": [
+            "vidra-core/internal/profileimage/service.go (reuse multi-size pipeline)",
+            "new vidra-core/internal/httpapi admin instance-image endpoints",
+            "GET /instance response (avatar URLs)",
+            "vidra-user app/layout.tsx + Header.tsx"
+          ],
+          "size": "M",
+          "notes": "PT sets these via a dedicated pick/delete API, not a yaml key \u2014 vidra should do the same, not force file bytes into instancesettings. User/channel avatar+banner storage (profileimage, migration 0040) is directly reusable; needs an instance-scoped owner row. backing=partial because the image pipeline exists but has no instance-level subject."
+        },
+        {
+          "setting": "Instance banner",
+          "peertube_key": "instance.banners",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "(asset endpoint) /api/v1/admin/instance-banner",
+          "kind": "asset",
+          "apply_points": [
+            "vidra-core/internal/profileimage/service.go",
+            "GET /instance",
+            "vidra-user components/InstanceAboutView.tsx (about header)",
+            "vidra-user app/page.tsx (optional hero)"
+          ],
+          "size": "M",
+          "notes": "Same reuse story as avatar. Frontend currently has zero instance imagery (public/ contains only olm wasm)."
+        },
+        {
+          "setting": "Instance logos (favicon / header-wide / header-square / opengraph)",
+          "peertube_key": "instance.logo (LogoType: favicon|header-wide|header-square|opengraph)",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "(asset endpoints) /api/v1/admin/instance-logo/{type}",
+          "kind": "asset",
+          "apply_points": [
+            "vidra-core/internal/profileimage/service.go (storage)",
+            "GET /instance (logo URL map with isFallback)",
+            "vidra-user app/layout.tsx generateMetadata (icons + og:image \u2014 currently NO favicon or app/icon.* exists at all)",
+            "vidra-user components/Header.tsx (logo)"
+          ],
+          "size": "L",
+          "notes": "L because it spans backend asset storage + typed logo slots + SSR metadata wiring (vidra-user fetches instance config client-side only today; generateMetadata needs a server-side fetch). The 'opengraph' slot doubles as the social-card image for section 16. Highest-visibility branding gap."
+        },
+        {
+          "setting": "Client asset overrides directory",
+          "peertube_key": "storage.client_overrides",
+          "vidra_status": "missing",
+          "backing_feature": "n/a",
+          "proposed_key": "(recommend N/A)",
+          "kind": "asset",
+          "apply_points": [],
+          "size": "S",
+          "notes": "Legacy PT boot-yaml file-drop mechanism superseded by the upload API even in PT. Recommend explicitly marking N/A in vidra's parity ledger rather than implementing."
+        }
+      ]
+    },
+    {
+      "name": "2. GENERAL BEHAVIOUR",
+      "items": [
+        {
+          "setting": "Default landing page",
+          "peertube_key": "instance.default_client_route",
+          "vidra_status": "missing",
+          "backing_feature": "n/a",
+          "proposed_key": "default_landing_page",
+          "kind": "enum",
+          "apply_points": [
+            "GET /instance (new field)",
+            "vidra-user app/page.tsx (redirect/render switch)",
+            "vidra-user lib/feed-url.ts"
+          ],
+          "size": "M",
+          "notes": "Pure UI default; vidra's route universe is smaller than PT's (options today: home-recent, trending, local; '/home' custom homepage only becomes an option if the section-13 homepage document ships). M not S because honoring it at / needs a server-side instance fetch or client redirect, which doesn't exist yet."
+        }
+      ]
+    },
+    {
+      "name": "3. BROWSE VIDEOS + BROADCAST MESSAGE",
+      "items": [
+        {
+          "setting": "Default browse sort",
+          "peertube_key": "client.browse_videos.default_sort",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "default_feed_sort",
+          "kind": "enum",
+          "apply_points": [
+            "GET /instance",
+            "vidra-user app/page.tsx toFeedSort() fallback (hardcoded 'recent')",
+            "vidra-user lib/feed-url.ts",
+            "components/FeedSortTabs.tsx"
+          ],
+          "size": "S",
+          "notes": "Vidra's feed already supports recent|popular|trending \u2014 enum maps to those three, not PT's seven sort strings (deliberate deviation; vidra has no -originallyPublishedAt/name sorts)."
+        },
+        {
+          "setting": "Default browse scope",
+          "peertube_key": "client.browse_videos.default_scope",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "default_feed_scope",
+          "kind": "enum",
+          "apply_points": [
+            "GET /instance",
+            "vidra-user app/page.tsx scope fallback (hardcoded 'local')",
+            "components/FeedScopeToggle.tsx",
+            "lib/feed-url.ts"
+          ],
+          "size": "S",
+          "notes": "local|all already exist as URL params; only the fallback is hardcoded. PT default is 'federated'; vidra's is local \u2014 keep local as shipped default."
+        },
+        {
+          "setting": "Enabled trending algorithms",
+          "peertube_key": "trending.videos.algorithms.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; would be trending_algorithms_enabled)",
+          "kind": "list",
+          "apply_points": [
+            "vidra-core feed query layer (new hot/most-liked implementations)",
+            "app/trending/page.tsx"
+          ],
+          "size": "L",
+          "notes": "Vidra has exactly one backend trending implementation. A setting choosing among hot/most-viewed/most-liked requires building the alternative algorithms first. Recommend N/A until a second algorithm exists."
+        },
+        {
+          "setting": "Default trending algorithm",
+          "peertube_key": "trending.videos.algorithms.default",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; trending_algorithm_default)",
+          "kind": "enum",
+          "apply_points": [
+            "same as above"
+          ],
+          "size": "L",
+          "notes": "Bundled with the item above; meaningless with a single algorithm."
+        },
+        {
+          "setting": "Trending interval days",
+          "peertube_key": "trending.videos.interval_days",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(env-only if ever: TRENDING_INTERVAL_DAYS)",
+          "kind": "int",
+          "apply_points": [
+            "vidra-core feed/trending query"
+          ],
+          "size": "M",
+          "notes": "Boot-yaml-only in PT (not in CustomConfig) \u2014 parity does NOT require admin mutability. Only relevant if a windowed most-viewed algorithm is built."
+        },
+        {
+          "setting": "Broadcast message enabled",
+          "peertube_key": "broadcast_message.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "broadcast_enabled",
+          "kind": "bool",
+          "apply_points": [
+            "vidra-core internal/instancesettings/service.go registry",
+            "GET /instance (new broadcast block)",
+            "new vidra-user Banner component mounted in app/layout.tsx above Header",
+            "AdminInstanceConfigView.tsx new group"
+          ],
+          "size": "M",
+          "notes": "Designated NEXT slice per config-parity-2026-07 memory note: 4 keys, all existing registry kinds, surfaced via GET /instance. M only because the frontend banner component (plus per-user dismissal persistence) is new; the other 3 keys ride along as S."
+        },
+        {
+          "setting": "Broadcast message body",
+          "peertube_key": "broadcast_message.message",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "broadcast_message",
+          "kind": "string",
+          "apply_points": [
+            "registry",
+            "GET /instance",
+            "Banner component (render via components/Markdown.tsx)"
+          ],
+          "size": "S",
+          "notes": "Markdown string; vidra already has markdown registry strings (terms etc.) and a Markdown renderer + admin markdown control with preview modal to reuse."
+        },
+        {
+          "setting": "Broadcast message level",
+          "peertube_key": "broadcast_message.level",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "broadcast_level",
+          "kind": "enum",
+          "apply_points": [
+            "registry (enum info|warning|error)",
+            "Banner component styling"
+          ],
+          "size": "S",
+          "notes": "Registry already supports enum kind with options[] (sensitive_content_policy precedent)."
+        },
+        {
+          "setting": "Broadcast message dismissable",
+          "peertube_key": "broadcast_message.dismissable",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "broadcast_dismissable",
+          "kind": "bool",
+          "apply_points": [
+            "registry",
+            "Banner component (localStorage dismissal keyed by message hash)"
+          ],
+          "size": "S",
+          "notes": "Dismissal state is client-side; key the dismissal on a hash of the message so edits re-show the banner (PT behavior)."
+        }
+      ]
+    },
+    {
+      "name": "4. NEW USERS",
+      "items": [
+        {
+          "setting": "Enable signup",
+          "peertube_key": "signup.enabled",
+          "vidra_status": "exists",
+          "backing_feature": "exists",
+          "proposed_key": "registration_enabled (shipped)",
+          "kind": "bool",
+          "apply_points": [
+            "already wired: auth registration path, GET /instance, SignupForm.tsx open/closed state"
+          ],
+          "size": "S",
+          "notes": "Full parity today (runtime DB overlay over REGISTRATION_ENABLED env)."
+        },
+        {
+          "setting": "Signup requires moderator approval",
+          "peertube_key": "signup.requires_approval",
+          "vidra_status": "exists",
+          "backing_feature": "exists",
+          "proposed_key": "registration_require_approval (shipped)",
+          "kind": "bool",
+          "apply_points": [
+            "already wired: internal/auth/registration.go approval queue (migration 0028), admin registration-requests page, SignupForm 202 flow"
+          ],
+          "size": "S",
+          "notes": "Full parity including admin review UI."
+        },
+        {
+          "setting": "Signup requires email verification",
+          "peertube_key": "signup.requires_email_verification",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "registration_require_email_verification",
+          "kind": "bool",
+          "apply_points": [
+            "vidra-core internal/auth/registration.go (hold activation until verified)",
+            "GET /instance",
+            "vidra-user SignupForm.tsx + VerifyEmailConfirmForm.tsx"
+          ],
+          "size": "M",
+          "notes": "Verification flow already exists post-signup (VerifyEmailConfirmForm); the gap is a gate making it mandatory. Must be effective only when MAIL_ENABLED (boot env) is true \u2014 surface that dependency in the admin UI help text. On the memory note's prioritized-next list."
+        },
+        {
+          "setting": "Signup limit (total users)",
+          "peertube_key": "signup.limit",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "registration_user_limit",
+          "kind": "int",
+          "apply_points": [
+            "internal/auth/registration.go (count users, refuse when reached)",
+            "GET /instance (effective registration_enabled should reflect limit reached)",
+            "SignupForm"
+          ],
+          "size": "S",
+          "notes": "Trivial enforcement (user count query). DEVIATION: vidra int keys use 0=unlimited, PT uses -1 \u2014 keep vidra's 0 convention (matches default_user_quota_bytes). Prioritized-next list."
+        },
+        {
+          "setting": "Minimum required age",
+          "peertube_key": "signup.minimum_age",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "registration_minimum_age",
+          "kind": "int",
+          "apply_points": [
+            "internal/auth registration validation",
+            "GET /instance",
+            "SignupForm.tsx (attestation checkbox/field \u2014 no birthdate field exists today)"
+          ],
+          "size": "M",
+          "notes": "PT enforces this as a signup-form attestation, not identity verification \u2014 cheap to match. Prioritized-next list."
+        },
+        {
+          "setting": "Signup CIDR filters",
+          "peertube_key": "signup.filters.cidr.whitelist/.blacklist",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(env-only if ever: REGISTRATION_CIDR_ALLOW/DENY)",
+          "kind": "list",
+          "apply_points": [
+            "internal/auth/registration.go remote-IP check"
+          ],
+          "size": "M",
+          "notes": "Boot-yaml-only in PT (not admin-editable) \u2014 env-only is full parity. Low priority."
+        },
+        {
+          "setting": "Default video quota for new users",
+          "peertube_key": "user.video_quota",
+          "vidra_status": "exists",
+          "backing_feature": "exists",
+          "proposed_key": "default_user_quota_bytes (shipped)",
+          "kind": "int",
+          "apply_points": [
+            "already wired: internal/quota WithDefaultBytesFunc dynamic overlay, admin Limits group 'bytes' control"
+          ],
+          "size": "S",
+          "notes": "Shipped 2026-07-11 as a runtime int key. Vidra uses 0=unlimited vs PT -1."
+        },
+        {
+          "setting": "Default DAILY upload limit",
+          "peertube_key": "user.video_quota_daily",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "default_user_daily_quota_bytes",
+          "kind": "int",
+          "apply_points": [
+            "internal/quota/service.go (new rolling-24h/-calendar-day usage accounting)",
+            "upload session creation gate",
+            "vidra-user upload UI quota display"
+          ],
+          "size": "M",
+          "notes": "Zero daily-accounting exists (grep-confirmed by backing reader). Needs a daily-usage window in the quota service, not just a key. Prioritized-next list."
+        },
+        {
+          "setting": "Default channel name template",
+          "peertube_key": "user.default_channel_name",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "default_channel_name",
+          "kind": "string",
+          "apply_points": [
+            "signup channel-creation path in vidra-core (location depends on whether signup auto-creates a channel \u2014 NOT confirmed by any reader; verify before sizing)"
+          ],
+          "size": "S",
+          "notes": "UNCERTAIN: no reader established that vidra auto-creates a channel at signup. If it doesn't, this setting is N/A until that behavior exists. Flagging rather than inventing."
+        },
+        {
+          "setting": "Auto-enable video history for new users",
+          "peertube_key": "user.history.videos.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "new_user_history_enabled",
+          "kind": "bool",
+          "apply_points": [
+            "watch-history write path (migration 0017 table exists)",
+            "new per-user history-enabled preference + settings UI (components/auth/SettingsView.tsx)"
+          ],
+          "size": "M",
+          "notes": "History recording exists but there is no per-user on/off preference to default \u2014 that preference must be built first, then this key seeds it."
+        },
+        {
+          "setting": "History max age (pruning)",
+          "peertube_key": "history.videos.max_age",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "(env-only: HISTORY_MAX_AGE)",
+          "kind": "string",
+          "apply_points": [
+            "a history-pruning sweeper (pattern: SweepExpiredExports in internal/account/export.go)"
+          ],
+          "size": "M",
+          "notes": "Boot-yaml-only in PT; env-only is parity. History table exists, sweeper doesn't."
+        }
+      ]
+    },
+    {
+      "name": "5. VIDEO IMPORTS",
+      "items": [
+        {
+          "setting": "Import jobs concurrency",
+          "peertube_key": "import.videos.concurrency",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "import_jobs_concurrency",
+          "kind": "int",
+          "apply_points": [
+            "internal/videoimport/service.go worker loop (service.go:268 \u2014 single ticker worker today; needs a bounded worker pool)"
+          ],
+          "size": "M",
+          "notes": "The setting is easy; the enforcement requires refactoring the single in-process ticker worker into an N-worker pool. Use the provider-func seam pattern so it's runtime-adjustable."
+        },
+        {
+          "setting": "Allow HTTP URL import (yt-dlp)",
+          "peertube_key": "import.videos.http.enabled",
+          "vidra_status": "partial",
+          "backing_feature": "exists",
+          "proposed_key": "import_http_enabled",
+          "kind": "bool",
+          "apply_points": [
+            "internal/videoimport/resolver.go / import-create handler (gate ytdlp resolver)",
+            "GET /instance features block",
+            "StudioView import UI"
+          ],
+          "size": "S",
+          "notes": "Pipeline fully built (internal/ytdlp); YTDLP_IMPORT_ENABLED is env-boot-only. Overlay it like the shipped feature toggles; keep YTDLP_PATH/TIMEOUT/PROXY env-only (PT keeps its youtube_dl_release/proxy companions boot-only too). imports_enabled (runtime, shipped) remains the master imports switch above this."
+        },
+        {
+          "setting": "Allow torrent/magnet import",
+          "peertube_key": "import.videos.torrent.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; import_torrent_enabled)",
+          "kind": "bool",
+          "apply_points": [
+            "would need a whole torrent ingestion backend in internal/videoimport"
+          ],
+          "size": "L",
+          "notes": "Feature absent entirely (grep-confirmed). Recommend explicit N/A/deferred in the ledger \u2014 building a BitTorrent client for this is out of proportion to demand."
+        },
+        {
+          "setting": "Allow channel synchronization",
+          "peertube_key": "import.video_channel_synchronization.enabled",
+          "vidra_status": "partial",
+          "backing_feature": "exists",
+          "proposed_key": "channel_sync_enabled",
+          "kind": "bool",
+          "apply_points": [
+            "internal/channelsync/service.go (sync-create endpoint + ticker gate)",
+            "GET /instance",
+            "channel settings UI in vidra-user"
+          ],
+          "size": "S",
+          "notes": "channelsync service fully built (migration 0081); CHANNEL_SYNC_ENABLED is env-boot-only. Straight overlay; keep INTERVAL/BATCH/COOLDOWN env-only (PT keeps check_interval/limits boot-only)."
+        },
+        {
+          "setting": "Max channel synchronizations per user",
+          "peertube_key": "import.video_channel_synchronization.max_per_user",
+          "vidra_status": "partial",
+          "backing_feature": "exists",
+          "proposed_key": "channel_sync_max_per_user",
+          "kind": "int",
+          "apply_points": [
+            "internal/channelsync/service.go:112-236 (existing per-user cap read site \u2014 swap to provider-func seam)"
+          ],
+          "size": "S",
+          "notes": "Enforcement already exists against CHANNEL_SYNC_MAX_PER_USER (default 5; PT default 10). Textbook application of the shipped int-key + seam pattern."
+        }
+      ]
+    },
+    {
+      "name": "6. VIDEOS",
+      "items": [
+        {
+          "setting": "Quarantine new videos until review",
+          "peertube_key": "auto_blacklist.videos.of_users.enabled",
+          "vidra_status": "exists",
+          "backing_feature": "exists",
+          "proposed_key": "quarantine_new_uploads (shipped)",
+          "kind": "bool",
+          "apply_points": [
+            "already wired: upload pipeline + users.bypass_quarantine + moderation queue + admin Moderation group toggle"
+          ],
+          "size": "S",
+          "notes": "Full parity; vidra's quarantine_new_uploads is the exact equivalent of PT autoBlacklist.ofUsers, with a per-user bypass column PT lacks as a column (PT uses a role/trust flag)."
+        },
+        {
+          "setting": "Allow replacing video file (new version)",
+          "peertube_key": "video_file.update.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "video_replace_enabled",
+          "kind": "bool",
+          "apply_points": [
+            "new replace-source endpoint + re-transcode flow in internal/video + internal/transcode",
+            "StudioView edit page"
+          ],
+          "size": "L",
+          "notes": "No replace endpoint or source-version model exists (only a passing comment at videos.go:826). Whole feature to build; the setting rides on it."
+        },
+        {
+          "setting": "Enable video storyboards",
+          "peertube_key": "storyboards.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "storyboards_enabled",
+          "kind": "bool",
+          "apply_points": [
+            "internal/media/storyboard.go generation call site in the process pipeline",
+            "internal/httpapi/storyboard.go"
+          ],
+          "size": "S",
+          "notes": "READER CONFLICT resolved in favor of the codebase backing reader: the settings reader claimed 'feature absent', but storyboard generation + endpoint + migration 0060 exist and the player uses them. Only the on/off knob is missing \u2014 cheap gate at the generation call site."
+        },
+        {
+          "setting": "Storyboards via remote runners",
+          "peertube_key": "storyboards.remote_runners.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A \u2014 no runner system)",
+          "kind": "bool",
+          "apply_points": [],
+          "size": "L",
+          "notes": "Vidra has no remote-runner protocol at all; all jobs are in-process. Mark N/A alongside every other remote_runners key (sections 14/15) until/unless a runner subsystem is designed."
+        },
+        {
+          "setting": "Enable video transcription (auto subtitles)",
+          "peertube_key": "video_transcription.enabled",
+          "vidra_status": "partial",
+          "backing_feature": "exists",
+          "proposed_key": "transcription_enabled",
+          "kind": "bool",
+          "apply_points": [
+            "internal/captionjob enqueue site (gate auto-caption job creation)",
+            "GET /instance features",
+            "StudioView captions UI"
+          ],
+          "size": "M",
+          "notes": "Whisper pipeline shipped (captionjob + media/whisper.go + captions_auto.go); WHISPER_ENABLED is env-boot-only. Overlay it, but effective value must be settingBool AND WHISPER_ENDPOINT configured \u2014 same pattern as contact_form_enabled (toggle AND mailer wired). WHISPER_ENDPOINT/model stay env (PT keeps engine/model boot-only too)."
+        },
+        {
+          "setting": "Transcription via remote runners",
+          "peertube_key": "video_transcription.remote_runners.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "(N/A)",
+          "kind": "bool",
+          "apply_points": [],
+          "size": "L",
+          "notes": "DEVIATION: vidra's Whisper is ALREADY an external HTTP service the instance pushes audio to (WHISPER_ENDPOINT) \u2014 architecturally it's always 'offloaded'. A PT-style runner toggle is meaningless here; mark N/A with this rationale."
+        },
+        {
+          "setting": "Default video privacy",
+          "peertube_key": "defaults.publish.privacy",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "default_video_privacy",
+          "kind": "enum",
+          "apply_points": [
+            "video-create handler default in internal/httpapi/videos.go",
+            "GET /videos/config or /instance",
+            "StudioView upload form prefill"
+          ],
+          "size": "S",
+          "notes": "Privacy model fully built (incl. password + embed privacy, migration 0074); clients currently must send explicit values. Pure default seeding. Prioritized-next list (defaults.*)."
+        },
+        {
+          "setting": "Default video licence",
+          "peertube_key": "defaults.publish.licence",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "default_video_licence",
+          "kind": "int",
+          "apply_points": [
+            "video-create default (nullable license column, migration 0025, validated against PT-compatible map in internal/video/config.go)",
+            "StudioView form prefill"
+          ],
+          "size": "S",
+          "notes": "Licence IDs are already PT-compatible ints. Registry has no nullable-int kind \u2014 use 0 = 'no default licence' (mirrors PT null). Prioritized-next list."
+        },
+        {
+          "setting": "Default comment policy",
+          "peertube_key": "defaults.publish.comments_policy",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "default_comment_policy",
+          "kind": "enum",
+          "apply_points": [
+            "needs per-video comments policy field FIRST (only instance-wide comments_enabled exists)",
+            "comment-create gate in vidra-core",
+            "StudioView form"
+          ],
+          "size": "M",
+          "notes": "Blocked on building per-video comment policy (enabled/disabled; PT also has requires_approval which implies a comment-approval queue \u2014 consider shipping only enabled|disabled first as a deliberate deviation). Prioritized-next list."
+        },
+        {
+          "setting": "Default download policy",
+          "peertube_key": "defaults.publish.download_enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "default_download_enabled",
+          "kind": "bool",
+          "apply_points": [
+            "needs per-video download_enabled column + enforcement in internal/httpapi/downloads.go (downloads unconditionally allowed today)",
+            "StudioView form"
+          ],
+          "size": "M",
+          "notes": "Per-video download policy doesn't exist; build column + gate, then the default is trivial. Prioritized-next list."
+        }
+      ]
+    },
+    {
+      "name": "7. VIDEO CHANNELS",
+      "items": [
+        {
+          "setting": "Max video channels per user",
+          "peertube_key": "video_channels.max_per_user",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "max_channels_per_user",
+          "kind": "int",
+          "apply_points": [
+            "internal/channel/service.go create path (count + refuse)",
+            "StudioView channel-create UI (surface the limit)"
+          ],
+          "size": "S",
+          "notes": "Channel CRUD exists with no cap (CHANNEL_SYNC_MAX_PER_USER caps syncs, not channels \u2014 don't confuse them). One count-check. On the prioritized-next list. 0=unlimited per vidra convention."
+        },
+        {
+          "setting": "Max collaborators per channel",
+          "peertube_key": "video_channels.max_collaborators_per_channel",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A \u2014 no collaborators feature)",
+          "kind": "int",
+          "apply_points": [],
+          "size": "L",
+          "notes": "PT-develop-only, boot-yaml-only there, and vidra has no channel-collaborators feature. Explicit N/A."
+        }
+      ]
+    },
+    {
+      "name": "8. FEDERATION",
+      "items": [
+        {
+          "setting": "Accept remote comments",
+          "peertube_key": "video_comments.accept_remote_comments",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "federation_accept_remote_comments",
+          "kind": "bool",
+          "apply_points": [
+            "internal/federation/inbox.go:42 comment ingest (drop when off, after existing blocked-domain check)"
+          ],
+          "size": "S",
+          "notes": "Ingest path exists with sig verification + domain blocking; adding a global gate is one check. Not retroactive (matches PT)."
+        },
+        {
+          "setting": "Remote actors can follow channels",
+          "peertube_key": "followers.channels.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "federation_allow_channel_followers",
+          "kind": "bool",
+          "apply_points": [
+            "internal/federation/inbox.go:31 (send Reject instead of the current unconditional auto-Accept)"
+          ],
+          "size": "S",
+          "notes": "Inbound channel follows are auto-accepted today; the gate is a branch at the Accept site."
+        },
+        {
+          "setting": "Remote actors can follow the platform",
+          "peertube_key": "followers.instance.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; federation_allow_instance_followers)",
+          "kind": "bool",
+          "apply_points": [
+            "would require an instance-level AP actor, which no reader found evidence of"
+          ],
+          "size": "M",
+          "notes": "Vidra federates channels; no instance actor surfaced by readers. Verify whether one exists before scoping; if not, N/A until it does. Inbound-federation policy work is design-gated per project memory."
+        },
+        {
+          "setting": "Manually approve platform followers",
+          "peertube_key": "followers.instance.manual_approval",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "federation_follower_approval",
+          "kind": "bool",
+          "apply_points": [
+            "inbox.go Follow handling (pending state instead of auto-Accept)",
+            "new admin followers-queue page in vidra-user (pattern: registration-requests page)"
+          ],
+          "size": "M",
+          "notes": "Needs a pending-follower state + admin review UI. Depends on the instance-actor question above; can also apply to channel followers as a vidra deviation."
+        },
+        {
+          "setting": "Auto-follow-back followers",
+          "peertube_key": "followings.instance.auto_follow_back.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "federation_auto_follow_back",
+          "kind": "bool",
+          "apply_points": [
+            "inbox.go Follow handler (trigger outbound follow via internal/federation/follow.go machinery)"
+          ],
+          "size": "M",
+          "notes": "Outbound follow machinery exists (WebFinger resolve, pending, Accept/Reject) but is per-user; instance-initiated follow-back is new plumbing. PT docs warn it needs a reactive moderation team \u2014 surface that in help text."
+        },
+        {
+          "setting": "Auto-follow a public index",
+          "peertube_key": "followings.instance.auto_follow_index.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; federation_auto_follow_index)",
+          "kind": "bool",
+          "apply_points": [
+            "new index-polling job (no analogue exists)"
+          ],
+          "size": "L",
+          "notes": "Requires an index-consumer subsystem. Deferred per project memory (inbound federation design-gated). DEVIATION note: vidra also has ATProto federation (ATPROTO_ENABLED) with no PT analogue \u2014 any federation settings group should say which protocol each key governs."
+        },
+        {
+          "setting": "Public index URL",
+          "peertube_key": "followings.instance.auto_follow_index.index_url",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; federation_follow_index_url)",
+          "kind": "string",
+          "apply_points": [
+            "same as above"
+          ],
+          "size": "L",
+          "notes": "Bundled with auto_follow_index."
+        },
+        {
+          "setting": "Federation master switch",
+          "peertube_key": "federation.enabled",
+          "vidra_status": "partial",
+          "backing_feature": "exists",
+          "proposed_key": "(keep env-only: FEDERATION_ENABLED)",
+          "kind": "bool",
+          "apply_points": [
+            "already wired: unmounts AP routes at boot; exposed read-only as federation_enabled in GET /instance"
+          ],
+          "size": "S",
+          "notes": "PT also keeps this boot-yaml-only (read-only in ServerConfig, not in CustomConfig) \u2014 vidra is ALREADY at parity here. Do not move to registry; route mounting is inherently boot-time."
+        }
+      ]
+    },
+    {
+      "name": "9. PLAYER",
+      "items": [
+        {
+          "setting": "Autoplay videos",
+          "peertube_key": "defaults.player.auto_play",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "default_player_autoplay",
+          "kind": "bool",
+          "apply_points": [
+            "GET /instance",
+            "vidra-user lib/player-settings.ts DEFAULTS + lib/player-autoplay.ts (session store defaults ON today)",
+            "components/player/VideoPlayer.tsx"
+          ],
+          "size": "S",
+          "notes": "Custom player + per-user autoplay_next (migration 0075) exist; instance default just seeds the anonymous/unset case. Note PT's auto_play is start-on-open while vidra's stored pref is autoplay-NEXT \u2014 decide whether the instance key seeds one or both (recommend both, documented)."
+        },
+        {
+          "setting": "P2P default (web app)",
+          "peertube_key": "defaults.p2p.webapp.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A \u2014 no P2P layer)",
+          "kind": "bool",
+          "apply_points": [],
+          "size": "L",
+          "notes": "DELIBERATE DEVIATION: vidra's custom player is plain HLS with zero P2P/webtorrent code. Mark N/A in the ledger unless a P2P layer is ever built."
+        },
+        {
+          "setting": "P2P default (embeds)",
+          "peertube_key": "defaults.p2p.embed.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A)",
+          "kind": "bool",
+          "apply_points": [],
+          "size": "L",
+          "notes": "Same N/A rationale; vidra embeds (embed_privacy exists) have no P2P."
+        },
+        {
+          "setting": "BitTorrent tracker",
+          "peertube_key": "tracker.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A)",
+          "kind": "bool",
+          "apply_points": [],
+          "size": "L",
+          "notes": "Boot-yaml-only even in PT, and predicated on P2P. N/A."
+        }
+      ]
+    },
+    {
+      "name": "10. SEARCH",
+      "items": [
+        {
+          "setting": "Remote URI search (logged-in users)",
+          "peertube_key": "search.remote_uri.users",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "search_remote_uri_users",
+          "kind": "bool",
+          "apply_points": [
+            "expose WebFinger/URL resolution (exists inside internal/federation/follow.go) as a search-endpoint capability in internal/httpapi/videos.go handleSearchVideos",
+            "vidra-user components/SearchResults.tsx + lib/search-url.ts"
+          ],
+          "size": "M",
+          "notes": "The resolution machinery exists but only in the follow flow; wiring it into search (detect URI/handle-shaped queries) is real work. Local search already returns cached remote videos from followed channels \u2014 a vidra head start."
+        },
+        {
+          "setting": "Remote URI search (anonymous)",
+          "peertube_key": "search.remote_uri.anonymous",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "search_remote_uri_anonymous",
+          "kind": "bool",
+          "apply_points": [
+            "same search endpoint, auth-state branch"
+          ],
+          "size": "M",
+          "notes": "Rides on the item above; PT defaults this to false (SSRF/abuse surface for anonymous traffic \u2014 vidra should too, and reuse its SSRF-guarded fetcher)."
+        },
+        {
+          "setting": "Enable global search index",
+          "peertube_key": "search.search_index.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; search_index_enabled)",
+          "kind": "bool",
+          "apply_points": [
+            "new external search-index client (Sepia-compatible API)",
+            "SearchResults fetch switch"
+          ],
+          "size": "L",
+          "notes": "Feature absent entirely; explicitly deferred in the config-parity memory note. All four search_index keys land together if ever built."
+        },
+        {
+          "setting": "Search index URL",
+          "peertube_key": "search.search_index.url",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; search_index_url)",
+          "kind": "string",
+          "apply_points": [
+            "same subsystem"
+          ],
+          "size": "L",
+          "notes": "Bundled with search_index.enabled."
+        },
+        {
+          "setting": "Disable local search in search bar",
+          "peertube_key": "search.search_index.disable_local_search",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; search_index_disable_local)",
+          "kind": "bool",
+          "apply_points": [
+            "vidra-user search page scope logic"
+          ],
+          "size": "S",
+          "notes": "Trivially cheap UI flag but only meaningful after the L-sized index feature exists \u2014 do not ship standalone."
+        },
+        {
+          "setting": "Search bar defaults to global index",
+          "peertube_key": "search.search_index.is_default_search",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; search_index_is_default)",
+          "kind": "bool",
+          "apply_points": [
+            "vidra-user search page default scope"
+          ],
+          "size": "S",
+          "notes": "Same dependency as above."
+        }
+      ]
+    },
+    {
+      "name": "11. USER IMPORT/EXPORT",
+      "items": [
+        {
+          "setting": "Allow users to import a data archive",
+          "peertube_key": "import.users.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "user_import_enabled",
+          "kind": "bool",
+          "apply_points": [
+            "internal/account/import.go endpoint gate (403 feature_disabled pattern)",
+            "GET /instance features",
+            "components/auth/AccountDataSection.tsx"
+          ],
+          "size": "S",
+          "notes": "Feature fully shipped (safe subsets: profile/playlists/follows/prefs \u2014 DEVIATION from PT, which imports videos/channels and quota-checks; vidra imports no media so no quota check needed). Only the admin toggle is missing."
+        },
+        {
+          "setting": "Allow users to export their data",
+          "peertube_key": "export.users.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "user_export_enabled",
+          "kind": "bool",
+          "apply_points": [
+            "internal/account/export.go request gate",
+            "AccountDataSection.tsx"
+          ],
+          "size": "S",
+          "notes": "Export with one-active-per-account + polling + download fully shipped; just add the toggle."
+        },
+        {
+          "setting": "Max user quota allowed to generate export",
+          "peertube_key": "export.users.max_user_video_quota",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "user_export_max_quota_bytes",
+          "kind": "int",
+          "apply_points": [
+            "export-request handler (compare user's quota usage via internal/quota before building archive)"
+          ],
+          "size": "S",
+          "notes": "Both halves exist (quota accounting + export); the gate is one comparison. Less critical for vidra since its archives exclude media and are small \u2014 consider N/A with rationale as an alternative."
+        },
+        {
+          "setting": "Export expiration period",
+          "peertube_key": "export.users.export_expiration",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "user_export_expiration_hours",
+          "kind": "int",
+          "apply_points": [
+            "internal/account/export.go ExportTTL (hardcoded 7 days at export.go:35-37 \u2014 swap to provider-func seam)",
+            "SweepExpiredExports sweeper"
+          ],
+          "size": "S",
+          "notes": "TTL + sweeper + ErrExportExpired all exist; the constant just needs the shipped seam pattern. Vidra default 7d vs PT 2d \u2014 keep 7d as the registry default."
+        }
+      ]
+    },
+    {
+      "name": "12. PLATFORM CUSTOMIZATION",
+      "items": [
+        {
+          "setting": "Default platform theme",
+          "peertube_key": "theme.default",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "default_theme",
+          "kind": "enum",
+          "apply_points": [
+            "GET /instance",
+            "vidra-user lib/theme.ts readThemePreference() fallback (localStorage system/light/dark store)",
+            "THEME_BOOTSTRAP_SCRIPT in app/layout.tsx"
+          ],
+          "size": "M",
+          "notes": "DEVIATION: vidra has no plugin themes \u2014 enum is system|light|dark over the shipped light-dark() token architecture. M because the pre-paint bootstrap script currently can't see instance config (client-only fetch); needs SSR fetch or an inlined config snapshot to avoid theme flash."
+        },
+        {
+          "setting": "Primary color",
+          "peertube_key": "theme.customization.primary_color",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "theme_primary_color",
+          "kind": "string",
+          "apply_points": [
+            "app/layout.tsx (inject --accent CSS-var override)",
+            "app/globals.css (--accent is hardcoded light-dark(#18181b,#f4f4f5))"
+          ],
+          "size": "M",
+          "notes": "Token architecture makes injection mechanically easy, but explicitly design-gated/deferred in the config-parity memory (WCAG contrast deltas were hand-tuned in the redesign \u2014 an arbitrary admin hex can break them). Validate hex + document contrast risk. PT-develop's full 10-color palette: treat as out of scope; one primary color max."
+        },
+        {
+          "setting": "Prefer author display name in miniatures",
+          "peertube_key": "client.videos.miniature.prefer_author_display_name",
+          "vidra_status": "missing",
+          "backing_feature": "n/a",
+          "proposed_key": "miniature_prefer_author_display_name",
+          "kind": "bool",
+          "apply_points": [
+            "GET /instance",
+            "components/VideoCard.tsx:55 (channelName = channel_display_name || channel_handle)",
+            "components/SearchResults.tsx",
+            "components/ChannelVideoCard.tsx"
+          ],
+          "size": "M",
+          "notes": "Pure UI toggle BUT feed/search payloads may not carry an uploader/author display name (cards are channel-only today) \u2014 if the field is absent, the API response needs it added, which is what pushes this to M."
+        },
+        {
+          "setting": "Player theme",
+          "peertube_key": "defaults.player.theme",
+          "vidra_status": "missing",
+          "backing_feature": "n/a",
+          "proposed_key": "(N/A recommended)",
+          "kind": "enum",
+          "apply_points": [],
+          "size": "M",
+          "notes": "DEVIATION: vidra's custom-built player uses the global token system; PT's galaxy/lucide player themes have no analogue. Recommend N/A unless distinct player skins are ever designed."
+        },
+        {
+          "setting": "Email subject prefix",
+          "peertube_key": "email.subject.prefix",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "email_subject_prefix",
+          "kind": "string",
+          "apply_points": [
+            "internal/mail/smtp.go Send (prepend at the single sender; callers currently compose raw subjects)"
+          ],
+          "size": "S",
+          "notes": "Support {instance_name} template variable like PT's {{instanceName}}. Effective only when MAIL_ENABLED; SMTP wiring itself stays env (secrets)."
+        },
+        {
+          "setting": "Email body signature",
+          "peertube_key": "email.body.signature",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "email_body_signature",
+          "kind": "string",
+          "apply_points": [
+            "internal/mail/smtp.go Send (append to plaintext body)"
+          ],
+          "size": "S",
+          "notes": "Same single-sender apply point; vidra mail is plaintext-only which makes this trivial."
+        },
+        {
+          "setting": "Hide instance name in header",
+          "peertube_key": "client.header.hide_instance_name",
+          "vidra_status": "missing",
+          "backing_feature": "n/a",
+          "proposed_key": "header_hide_instance_name",
+          "kind": "bool",
+          "apply_points": [
+            "GET /instance",
+            "components/Header.tsx"
+          ],
+          "size": "S",
+          "notes": "PT-develop-only nicety; only worth shipping alongside the instance-logo asset (section 1) since name-next-to-logo is the scenario it exists for."
+        },
+        {
+          "setting": "Redirect login to single external auth",
+          "peertube_key": "client.menu.login.redirect_on_single_external_auth",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "login_redirect_single_oauth",
+          "kind": "bool",
+          "apply_points": [
+            "components/auth/LoginForm.tsx (oauth_providers[] already in InstanceResponse)"
+          ],
+          "size": "S",
+          "notes": "OAuth provider list already exposed; auto-redirect when exactly one provider and local login disabled. Low priority until OAuth itself ships (per status memory OAuth is unstarted)."
+        }
+      ]
+    },
+    {
+      "name": "13. ADVANCED CUSTOMIZATION",
+      "items": [
+        {
+          "setting": "Custom JavaScript injection",
+          "peertube_key": "instance.customizations.javascript",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "custom_javascript",
+          "kind": "document",
+          "apply_points": [
+            "app/layout.tsx (SSR script injection \u2014 today the only dangerouslySetInnerHTML is THEME_BOOTSTRAP_SCRIPT; requires server-side instance fetch)",
+            "admin editor (new textarea/code control in AdminInstanceConfigView or a dedicated page)"
+          ],
+          "size": "M",
+          "notes": "Explicitly deferred for security in the config-parity memory \u2014 admin-supplied JS eval'd on every page is an XSS-as-a-feature; if shipped, gate behind a loud warning and consider CSP implications. Registry string kinds cap at 10k chars; likely wants document-scale storage."
+        },
+        {
+          "setting": "Custom CSS injection",
+          "peertube_key": "instance.customizations.css",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "custom_css",
+          "kind": "document",
+          "apply_points": [
+            "app/layout.tsx (SSR <style> injection)",
+            "admin editor"
+          ],
+          "size": "M",
+          "notes": "Much lower risk than JS; could ship first. Same SSR-instance-fetch prerequisite (shared with default_theme, primary color, section-1 metadata \u2014 build that fetch once for all of them)."
+        },
+        {
+          "setting": "Custom homepage content",
+          "peertube_key": "custom-pages homepage (PUT /api/v1/custom-pages/homepage/instance)",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "instance_homepage",
+          "kind": "document",
+          "apply_points": [
+            "app/page.tsx (render markdown block \u2014 homepage renders NO admin markdown today)",
+            "components/Markdown.tsx (renderer exists)",
+            "new admin homepage-editor page (AdminTabs.TABS + AdminConsole SECONDARY + app/admin/homepage/page.tsx per established pattern)",
+            "GET /instance homepage.enabled flag"
+          ],
+          "size": "M",
+          "notes": "PT stores this via a custom-pages API, not config yaml \u2014 vidra can either add a document-scale registry key or a tiny custom_pages store. Its existence unlocks '/home' as a default_landing_page option (section 2). Markdown pipeline fully reusable from the About page."
+        }
+      ]
+    },
+    {
+      "name": "14. VOD TRANSCODING + VIDEO STUDIO",
+      "items": [
+        {
+          "setting": "Transcoding enabled (master)",
+          "peertube_key": "transcoding.enabled",
+          "vidra_status": "partial",
+          "backing_feature": "exists",
+          "proposed_key": "transcoding_enabled",
+          "kind": "bool",
+          "apply_points": [
+            "internal/transcode/service.go job-enqueue site (NOT the main.go worker wiring)",
+            "config.go:118 TRANSCODING_ENABLED default"
+          ],
+          "size": "M",
+          "notes": "KNOWN GOTCHA from config-parity memory: worker is wired at main.go boot \u2014 the seam must gate job enqueue/pickup at read time, not worker existence. Always keep the worker constructed; check the setting per job."
+        },
+        {
+          "setting": "Allow additional upload extensions",
+          "peertube_key": "transcoding.allow_additional_extensions",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "upload_additional_extensions_enabled",
+          "kind": "bool",
+          "apply_points": [
+            "upload validation in vidra-core (accepted-extension policy not established by readers \u2014 verify current allowlist first)",
+            "StudioView upload accept attr"
+          ],
+          "size": "M",
+          "notes": "No reader documented vidra's current extension allowlist; scope depends on whether validation is extension-based or ffprobe-based. Flagged for verification rather than assumed."
+        },
+        {
+          "setting": "Allow audio-file upload (merge with image)",
+          "peertube_key": "transcoding.allow_audio_files",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; upload_audio_files_enabled)",
+          "kind": "bool",
+          "apply_points": [
+            "new audio+still-image merge step in internal/media"
+          ],
+          "size": "L",
+          "notes": "Pipeline capability absent. Defer with the rest of the deep transcoding work."
+        },
+        {
+          "setting": "Keep original input file",
+          "peertube_key": "transcoding.original_file.keep",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "keep_original_file",
+          "kind": "bool",
+          "apply_points": [
+            "post-transcode cleanup in internal/transcode/internal/media",
+            "internal/httpapi/downloads.go (original is in the download list)"
+          ],
+          "size": "M",
+          "notes": "INVERTED DEVIATION: vidra ALWAYS keeps the original (and serves it progressively + downloadable); PT defaults to deleting it. The setting here would add a delete-after-transcode option for disk savings \u2014 but deleting the original breaks vidra's progressive playback of the source (see web_videos below). Decide jointly."
+        },
+        {
+          "setting": "Web Videos (progressive MP4) output",
+          "peertube_key": "transcoding.web_videos.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "(defer; transcoding_web_videos_enabled)",
+          "kind": "bool",
+          "apply_points": [
+            "would add progressive MP4 renditions to internal/media pipeline"
+          ],
+          "size": "L",
+          "notes": "DEVIATION: vidra serves the retained ORIGINAL progressively, which covers most of what PT's web_videos provides without doubling storage. Recommend documenting that equivalence as N/A-for-now rather than building transcoded MP4 renditions."
+        },
+        {
+          "setting": "HLS output enabled",
+          "peertube_key": "transcoding.hls.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "(recommend N/A \u2014 always on)",
+          "kind": "bool",
+          "apply_points": [
+            "internal/media/hls.go"
+          ],
+          "size": "S",
+          "notes": "HLS is vidra's ONLY ABR format; a toggle to disable it would leave transcoding meaningless. Recommend N/A: transcoding_enabled IS the HLS toggle in vidra."
+        },
+        {
+          "setting": "Split audio and video streams",
+          "peertube_key": "transcoding.hls.split_audio_and_video",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer)",
+          "kind": "bool",
+          "apply_points": [
+            "hls.go packaging"
+          ],
+          "size": "L",
+          "notes": "Muxed HLS only today. Defer; PT itself flags compat caveats."
+        },
+        {
+          "setting": "Always generate podcast-optimized audio",
+          "peertube_key": "transcoding.always_transcode_podcast_optimized_audio",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer)",
+          "kind": "bool",
+          "apply_points": [
+            "new audio-output step in internal/media"
+          ],
+          "size": "L",
+          "notes": "PT-develop-only; no audio-only outputs exist in vidra. Defer/N-A."
+        },
+        {
+          "setting": "Max transcoded FPS",
+          "peertube_key": "transcoding.fps.max",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "transcoding_max_fps",
+          "kind": "int",
+          "apply_points": [
+            "internal/media/hls.go ffmpeg args (no FPS handling today)"
+          ],
+          "size": "M",
+          "notes": "Straightforward ffmpeg -r/fps-filter wiring once the ladder is parameterized; bundle with the resolutions item."
+        },
+        {
+          "setting": "Resolutions to generate (ladder)",
+          "peertube_key": "transcoding.resolutions.{0p,144p,240p,360p,480p,720p,1080p,1440p,2160p}",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "transcoding_resolutions",
+          "kind": "list",
+          "apply_points": [
+            "internal/media/hls.go:24-28 (hardcoded 1080/720/480/360 ladder with fixed bitrates)",
+            "internal/transcode/service.go rendition planning"
+          ],
+          "size": "M",
+          "notes": "Ladder exists but is hardcoded and narrower than PT's (no 144/240/1440/2160, no 0p audio-only). Parameterizing it is the single highest-leverage transcoding-parity item: list kind validated against a known rung set, only rungs <= source resolution generated (matches current behavior). 0p audio-only rung is L \u2014 exclude from v1."
+        },
+        {
+          "setting": "Also transcode original resolution",
+          "peertube_key": "transcoding.always_transcode_original_resolution",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "transcoding_original_resolution",
+          "kind": "bool",
+          "apply_points": [
+            "rendition planning in internal/transcode"
+          ],
+          "size": "M",
+          "notes": "Semantics differ from PT: vidra keeps the original file anyway, so viewers can already get source quality via progressive/download. Only matters for getting an HLS rung ABOVE the ladder max. Bundle with ladder work."
+        },
+        {
+          "setting": "Remote runners for VOD",
+          "peertube_key": "transcoding.remote_runners.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A \u2014 no runner system)",
+          "kind": "bool",
+          "apply_points": [],
+          "size": "L",
+          "notes": "Runner protocol absent (all in-process). Single ledger decision covers all four remote_runners keys."
+        },
+        {
+          "setting": "Transcoding threads",
+          "peertube_key": "transcoding.threads",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "transcoding_threads",
+          "kind": "int",
+          "apply_points": [
+            "internal/media/hls.go ffmpeg invocation (-threads), read per-job via provider seam"
+          ],
+          "size": "S",
+          "notes": "Read at job start \u2014 clean seam, no worker restructure needed."
+        },
+        {
+          "setting": "Transcoding jobs concurrency",
+          "peertube_key": "transcoding.concurrency",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "transcoding_concurrency",
+          "kind": "int",
+          "apply_points": [
+            "internal/transcode/service.go queue worker (needs bounded worker pool, like import concurrency)"
+          ],
+          "size": "M",
+          "notes": "Same worker-pool refactor shape as import_jobs_concurrency \u2014 consider doing both in one pass."
+        },
+        {
+          "setting": "Transcoding profile",
+          "peertube_key": "transcoding.profile",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A \u2014 no plugin system)",
+          "kind": "enum",
+          "apply_points": [],
+          "size": "L",
+          "notes": "Plugin-extensible in PT; vidra hardcodes x264 veryfast (hls.go:117) and has no plugins. N/A. (VP9 side-output exists via env TRANSCODING_VP9_ENABLED \u2014 vidra-specific, keep env-only.)"
+        },
+        {
+          "setting": "Video studio enabled",
+          "peertube_key": "video_studio.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; video_studio_enabled)",
+          "kind": "bool",
+          "apply_points": [
+            "entire editing pipeline (cut/intro-outro/watermark) would be new"
+          ],
+          "size": "L",
+          "notes": "Feature absent (vidra's 'studio' pages are metadata editing only; chapters exist but are metadata). Explicitly deferred in the config-parity memory."
+        },
+        {
+          "setting": "Remote runners for studio",
+          "peertube_key": "video_studio.remote_runners.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A)",
+          "kind": "bool",
+          "apply_points": [],
+          "size": "L",
+          "notes": "Doubly absent (no studio, no runners)."
+        }
+      ]
+    },
+    {
+      "name": "15. LIVE STREAMING",
+      "items": [
+        {
+          "setting": "Allow live streaming",
+          "peertube_key": "live.enabled",
+          "vidra_status": "exists",
+          "backing_feature": "exists",
+          "proposed_key": "live_enabled (shipped)",
+          "kind": "bool",
+          "apply_points": [
+            "already wired: runtime toggle over FEATURE_LIVE_ENABLED; RTMP infra via nginx-rtmp (deploy/media/nginx.conf.template)"
+          ],
+          "size": "S",
+          "notes": "Parity achieved for the toggle. RTMP wiring (LIVE_RTMP_URL/INGEST_SECRET/HLS_ROOT) stays env \u2014 matches PT, whose rtmp/rtmps blocks are boot-yaml-only."
+        },
+        {
+          "setting": "Allow users to publish a replay",
+          "peertube_key": "live.allow_replay",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "live_allow_replay",
+          "kind": "bool",
+          "apply_points": [
+            "internal/live/recording.go + replay.go (gate replay creation)",
+            "GET /instance",
+            "live-create UI in vidra-user"
+          ],
+          "size": "S",
+          "notes": "Replay pipeline shipped (migrations 0061/0076 \u2014 recording republished as VOD). Just gate it. PT ties replay to transcoding.enabled; vidra's replay doesn't require live transcoding \u2014 simpler."
+        },
+        {
+          "setting": "DVR max window",
+          "peertube_key": "live.dvr.max_window",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; live_dvr_max_window_mins)",
+          "kind": "int",
+          "apply_points": [
+            "nginx-rtmp HLS window config + player seekable-live support"
+          ],
+          "size": "L",
+          "notes": "No DVR/seekable live exists (passthrough packaging). PT-develop feature. Defer."
+        },
+        {
+          "setting": "Publish replay by default",
+          "peertube_key": "defaults.live.save_replay",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "live_default_save_replay",
+          "kind": "bool",
+          "apply_points": [
+            "live-create handler default",
+            "live-create form in vidra-user"
+          ],
+          "size": "S",
+          "notes": "Pure default seeding over the existing replay feature; no effect when live_allow_replay is off (mirror PT)."
+        },
+        {
+          "setting": "Allow latency setting",
+          "peertube_key": "live.latency_setting.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A)",
+          "kind": "bool",
+          "apply_points": [],
+          "size": "L",
+          "notes": "PT's latency modes are P2P-ratio tradeoffs; vidra has no P2P and no latency modes in nginx-rtmp packaging. N/A."
+        },
+        {
+          "setting": "Max simultaneous lives (platform)",
+          "peertube_key": "live.max_instance_lives",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "live_max_instance_lives",
+          "kind": "int",
+          "apply_points": [
+            "internal/live/service.go RTMP publish callback (count active sessions, reject)"
+          ],
+          "size": "M",
+          "notes": "Enforcement point exists (secret-handled nginx-rtmp callbacks). 0=unlimited per vidra convention (PT -1). Config-parity memory defers live limits pending live-service enforcement design \u2014 this is that work."
+        },
+        {
+          "setting": "Max simultaneous lives (per user)",
+          "peertube_key": "live.max_user_lives",
+          "vidra_status": "missing",
+          "backing_feature": "exists",
+          "proposed_key": "live_max_user_lives",
+          "kind": "int",
+          "apply_points": [
+            "same publish-callback gate, per-user count"
+          ],
+          "size": "M",
+          "notes": "Bundle with the platform cap \u2014 one enforcement pass."
+        },
+        {
+          "setting": "Max live duration",
+          "peertube_key": "live.max_duration",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "live_max_duration_secs",
+          "kind": "int",
+          "apply_points": [
+            "a duration-watchdog against live_stream started_at (migration 0076) that terminates the session",
+            "internal/live/service.go"
+          ],
+          "size": "M",
+          "notes": "started_at is tracked; needs a sweeper/watchdog that can force-close an RTMP session via nginx-rtmp control. 0=no limit."
+        },
+        {
+          "setting": "Live transcoding enabled",
+          "peertube_key": "live.transcoding.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; live_transcoding_enabled)",
+          "kind": "bool",
+          "apply_points": [
+            "media server (nginx-rtmp is passthrough packaging today \u2014 a live ffmpeg ladder is a new subsystem)"
+          ],
+          "size": "L",
+          "notes": "Vidra live is ingest-passthrough HLS; no live ABR ladder exists. The whole live.transcoding.* cluster below is one L-sized feature decision."
+        },
+        {
+          "setting": "Max live FPS",
+          "peertube_key": "live.transcoding.fps.max",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer)",
+          "kind": "int",
+          "apply_points": [
+            "live transcoding subsystem"
+          ],
+          "size": "L",
+          "notes": "Bundled with live transcoding."
+        },
+        {
+          "setting": "Live resolutions ladder",
+          "peertube_key": "live.transcoding.resolutions.{0p..2160p}",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer; live_transcoding_resolutions)",
+          "kind": "list",
+          "apply_points": [
+            "live transcoding subsystem"
+          ],
+          "size": "L",
+          "notes": "Bundled."
+        },
+        {
+          "setting": "Live: also transcode original resolution",
+          "peertube_key": "live.transcoding.always_transcode_original_resolution",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer)",
+          "kind": "bool",
+          "apply_points": [
+            "live transcoding subsystem"
+          ],
+          "size": "L",
+          "notes": "Bundled. (Passthrough today already delivers original resolution \u2014 note the partial equivalence.)"
+        },
+        {
+          "setting": "Remote runners for lives",
+          "peertube_key": "live.transcoding.remote_runners.enabled",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A)",
+          "kind": "bool",
+          "apply_points": [],
+          "size": "L",
+          "notes": "No runner system; N/A with the other runner keys."
+        },
+        {
+          "setting": "Live transcoding threads",
+          "peertube_key": "live.transcoding.threads",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(defer)",
+          "kind": "int",
+          "apply_points": [
+            "live transcoding subsystem"
+          ],
+          "size": "L",
+          "notes": "Bundled."
+        },
+        {
+          "setting": "Live transcoding profile",
+          "peertube_key": "live.transcoding.profile",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A \u2014 no plugin system)",
+          "kind": "enum",
+          "apply_points": [],
+          "size": "L",
+          "notes": "Same N/A rationale as VOD profile."
+        }
+      ]
+    },
+    {
+      "name": "16. ADVANCED (CACHE + SOCIAL META)",
+      "items": [
+        {
+          "setting": "Cached remote previews count",
+          "peertube_key": "cache.previews.size",
+          "vidra_status": "missing",
+          "backing_feature": "partial",
+          "proposed_key": "(recommend N/A \u2014 deprecated upstream)",
+          "kind": "int",
+          "apply_points": [
+            "internal/federation/ingest.go remote-thumbnail cache (per-file size-capped via maxThumbnailBytes, no count cap)",
+            "internal/mediagc/service.go"
+          ],
+          "size": "M",
+          "notes": "PT REMOVED the whole cache.* block on develop (post-7.2) \u2014 implementing count-based eviction to match a deprecated knob is wasted work. If remote-thumbnail disk use ever matters, add eviction to mediagc as vidra-native design, not PT parity."
+        },
+        {
+          "setting": "Cached remote captions count",
+          "peertube_key": "cache.captions.size",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A \u2014 deprecated + no remote caption caching)",
+          "kind": "int",
+          "apply_points": [],
+          "size": "M",
+          "notes": "Vidra doesn't cache remote captions at all; knob deprecated upstream. N/A."
+        },
+        {
+          "setting": "Cached remote storyboards count",
+          "peertube_key": "cache.storyboards.size",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A)",
+          "kind": "int",
+          "apply_points": [],
+          "size": "M",
+          "notes": "Local storyboards exist but remote-storyboard caching does not; knob deprecated upstream. N/A."
+        },
+        {
+          "setting": "Cached remote torrents count",
+          "peertube_key": "cache.torrents.size",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "(N/A)",
+          "kind": "int",
+          "apply_points": [],
+          "size": "S",
+          "notes": "No torrents anywhere in vidra (see section 5); doubly N/A."
+        },
+        {
+          "setting": "Twitter/X username for link cards",
+          "peertube_key": "services.twitter.username",
+          "vidra_status": "missing",
+          "backing_feature": "missing",
+          "proposed_key": "social_meta_twitter_username",
+          "kind": "string",
+          "apply_points": [
+            "GET /instance",
+            "vidra-user app/layout.tsx generateMetadata + video watch page metadata (twitter:site) \u2014 requires the shared SSR instance fetch",
+            "note: x_link registry key exists but is an About-page profile link, NOT this"
+          ],
+          "size": "S",
+          "notes": "Distinct from the existing x_link setting (profile link vs meta-tag handle) \u2014 don't conflate. Cheap once the SSR instance fetch (shared prerequisite with sections 1/12/13) exists; pairs naturally with the section-1 opengraph logo for complete link cards. PT-develop dropped services.twitter.whitelisted \u2014 only username needed."
+        }
+      ]
+    }
+  ],
+  "overall_summary": "Per-setting gap matrix across all 16 PeerTube admin-config sections: 105 settings assessed against vidra-core's 37-key instance_settings DB-overlay registry, its env-only config surface, and vidra-user's metadata-driven /admin/config UI. Scoreboard: only 6 settings are at full admin-mutable parity today (signup.enabled, signup.requires_approval, user.video_quota, auto_blacklist/quarantine, live.enabled, plus federation.enabled which is boot-only in PeerTube too, so env-only IS parity); ~7 more are env-only knobs over shipped features that just need the established provider-func-seam overlay (HTTP import, channel-sync enable + max-per-user, transcription/Whisper, transcoding master toggle with the boot-baked-worker gotcha). The largest cheap wins are settings over features that ALREADY exist but have no knob: storyboards (settings reader wrongly called the feature absent \u2014 internal/media/storyboard.go exists; codebase reader preferred), user import/export toggles + export TTL/quota gate (internal/account fully shipped), live replay + save-replay default, defaults.publish privacy/licence, max channels per user, signup limit, email subject-prefix/signature, and the broadcast-message 4-key slice already designated as the next increment. Medium items need real wiring: email-verification gate, daily quota accounting, per-video comment/download policies, import+transcoding concurrency worker pools, parameterizing the hardcoded HLS ladder/FPS/threads, live simultaneous/duration caps at the nginx-rtmp callback, inbound-federation policy gates at inbox.go, remote-URI search, homepage document + custom CSS/JS + theme/primary-color (all sharing one prerequisite: a server-side instance-config fetch in vidra-user, which today fetches /instance client-side only \u2014 build it once for branding metadata, twitter:site, theme, and injection). L/defer/N-A items are honest feature absences or deliberate deviations worth recording in the ledger: no P2P (custom plain-HLS player \u2014 all p2p/tracker keys N/A), no remote-runner protocol (all 4 remote_runners keys N/A), no torrent import, no video studio, no live transcoding ladder (passthrough packaging), no plugin system (transcoding profiles N/A), Whisper is already an external endpoint (transcription runners moot), vidra always keeps originals and serves them progressively (inverts original_file.keep and substitutes for web_videos), and PT's cache.* block is deprecated upstream on develop so cache-count knobs should be skipped. Vidra conventions to hold: 0=unlimited (not PT's -1), null-PATCH-clears-override, new keys auto-render in AdminInstanceConfigView. One flagged uncertainty: whether signup auto-creates a channel (determines default_channel_name applicability) \u2014 no reader confirmed it; verify in vidra-core before scoping that key."
+}
