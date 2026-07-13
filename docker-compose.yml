@@ -34,6 +34,9 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
+      # Server Components call the API over compose DNS; the browser keeps
+      # using NEXT_PUBLIC_API_BASE_URL through the host-published port.
+      INTERNAL_API_BASE_URL: http://api:8080
     depends_on:
       api:
         condition: service_started
