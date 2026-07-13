@@ -17,9 +17,17 @@ Put TLS in front with the provided [`Caddyfile`](./Caddyfile) (or any proxy):
 the api serves plain HTTP on `HTTP_PORT`, the frontend on `FRONTEND_PORT`.
 `PUBLIC_BASE_URL`/`CORS_ALLOWED_ORIGINS` must match the public domains.
 
+**`vidra-search` is an internal service** — only `vidra-core` talks to it, over the
+compose network (HMAC-authenticated). Do **not** add a Caddyfile site for it or
+publish its port past the host; it stays behind the api gateway. Its host port
+(`SEARCH_HTTP_PORT`, default `:8081`) is for local inspection only.
+
 Environment rules that the backend enforces for you (fail-secure):
 - `VIDRA_ENV=production` refuses the dev `JWT_SECRET`, refuses `DEV_MAIL_CAPTURE_ENABLED`,
   requires `FEDERATION_KEY_KEK` when federation is enabled, and marks auth cookies `Secure`.
+- `SEARCH_INTERNAL_SECRET` is a shared HMAC secret (core ⇄ search); set a strong
+  (≥32-byte) value from the secret store when the search integration is enabled, and
+  keep it identical on both services. Never commit a real value.
 - The frontend image bakes `NEXT_PUBLIC_API_BASE_URL` at **build** time — build one
   image per environment (CI tags `vidra-user:<env>-<sha>`); a restart does not repoint it.
 
@@ -33,6 +41,8 @@ except the frontend image if the API URL differs (unavoidable with build-time ba
 
 - **PostgreSQL**: nightly `docker exec <postgres> pg_dump -U vidra -Fc vidra > vidra-$(date +%F).dump`;
   restore with `pg_restore -U vidra -d vidra --clean`. Keep 14 daily + 8 weekly.
+  This whole-database dump already includes `vidra-search`'s `search` schema (it
+  shares the `vidra` DB), so no separate search backup is needed.
 - **Media**: `STORAGE_BACKEND=s3` → use the object store's replication/lifecycle;
   `local` → snapshot the media volume (`docker volume`/filesystem snapshot) on the
   same cadence as the DB so references stay consistent.

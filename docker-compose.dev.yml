@@ -54,8 +54,31 @@ services:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
       INTERNAL_API_BASE_URL: http://api:8080
 
+  # search: air-rebuilt Go service, same pattern as api above — bind-mounted
+  # source + go build/module caches in named volumes, so editing a
+  # vidra-search/**/*.go file recompiles+restarts in-place. The dev image has no
+  # baked HEALTHCHECK, so define one here with a generous start_period for the
+  # cold first build (go mod download + full compile).
+  search:
+    build:
+      context: ./vidra-search
+      dockerfile: Dockerfile.dev
+    image: vidra-search-dev
+    volumes:
+      - ./vidra-search:/app:cached
+      - search_go_build_cache:/root/.cache/go-build
+      - search_go_mod_cache:/go/pkg/mod
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 300s
+
 volumes:
   go_build_cache:
   go_mod_cache:
   frontend_node_modules:
   frontend_next:
+  search_go_build_cache:
+  search_go_mod_cache:
