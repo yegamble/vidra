@@ -1,0 +1,28 @@
+# Auto-loaded override — every plain `docker compose ...` in this repo implicitly
+# merges `-f docker-compose.yml -f docker-compose.override.yml`.
+#
+# Its ONE job: EXTEND the `api` service (which is DEFINED in the INCLUDED
+# vidra-core/docker-compose.yml) with the vidra-search wiring. This lives in a
+# SEPARATE override file rather than in docker-compose.yml because redeclaring an
+# included service inside the same file that `include:`s it is rejected by some
+# Compose versions with "services.api conflicts with imported resource". The `-f`
+# override-merge path (this file) is instead ADDITIVE for the `environment` map and
+# works across Compose versions — the same mechanism docker-compose.dev.yml already
+# uses to override `api`. Verify: `docker compose --profile core config | grep SEARCH`.
+#
+# SEARCH_SERVICE_URL is the vidra-search origin (empty would disable the whole
+# integration; here it points at the compose `search` service). SEARCH_INTERNAL_SECRET
+# is the shared HMAC secret that MUST equal the search service's INTERNAL_SECRET — the
+# single ${SEARCH_INTERNAL_SECRET} substitution feeds both sides so they always match.
+#
+# NOTE: `make dev-hot` and the CI dev-overlay check use an explicit `-f` chain, which
+# disables auto-loading of this file, so they pass it explicitly (see the Makefile's
+# DEV_HOT_COMPOSE and .github/workflows/meta-ci.yml).
+#
+# NOTE: until vidra-core PR #1 (the search integration) merges, core main's image
+# simply ignores these unknown env vars — harmless.
+services:
+  api:
+    environment:
+      SEARCH_SERVICE_URL: http://search:8080
+      SEARCH_INTERNAL_SECRET: ${SEARCH_INTERNAL_SECRET:-dev-insecure-internal-secret-change-me-0000}
