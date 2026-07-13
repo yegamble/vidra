@@ -16,10 +16,13 @@ bootstrap: ## Clone/update both sub-repos
 	./bootstrap.sh
 
 .PHONY: dev
-dev: bootstrap ## Backend stack up (postgres+redis+migrate+api); run the frontend on the host for HMR
+dev: bootstrap ## Backend + search stack up (postgres+redis+migrate+api+search); run the frontend on the host for HMR
 	docker compose --profile core up -d --build
 	@echo ""
-	@echo "Backend up. For frontend hot-reload development:"
+	@echo "Backend up:"
+	@echo "  api      http://localhost:$${HTTP_PORT:-8080}"
+	@echo "  search   http://localhost:$${SEARCH_HTTP_PORT:-8081}   (internal service; core calls it over the compose network)"
+	@echo "For frontend hot-reload development:"
 	@echo "  cd vidra-user && npm ci && NEXT_PUBLIC_API_BASE_URL=http://localhost:$${HTTP_PORT:-8080} npm run dev"
 
 .PHONY: up
@@ -28,8 +31,10 @@ up: bootstrap ## Full stack incl. the containerised frontend (:3000)
 
 # Dev hot-reload overlay: air-rebuilt Go api + next dev HMR frontend, both with
 # bind-mounted source so code changes reflect WITHOUT down+rebuild. Applied on
-# top of the base compose via -f docker-compose.dev.yml (see that file).
-DEV_HOT_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.dev.yml
+# top of the base compose via -f docker-compose.dev.yml (see that file). The
+# explicit -f chain disables auto-loading of docker-compose.override.yml, so it is
+# passed explicitly (it carries the api's SEARCH_SERVICE_URL/SEARCH_INTERNAL_SECRET).
+DEV_HOT_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.dev.yml
 
 .PHONY: dev-hot
 dev-hot: bootstrap ## Full stack with hot reload: air-rebuilt Go api (:8080) + next dev HMR frontend (:3000)
@@ -37,6 +42,7 @@ dev-hot: bootstrap ## Full stack with hot reload: air-rebuilt Go api (:8080) + n
 	@echo ""
 	@echo "Hot-reload stack up:"
 	@echo "  api      http://localhost:$${HTTP_PORT:-8080}   (edit vidra-core/**/*.go -> air rebuilds)"
+	@echo "  search   http://localhost:$${SEARCH_HTTP_PORT:-8081}   (edit vidra-search/**/*.go -> air rebuilds)"
 	@echo "  frontend http://localhost:$${FRONTEND_PORT:-3000} (edit vidra-user/** -> HMR)"
 	@echo "First run is slow: go mod download + cold compile, npm volume seed. Watch: make dev-hot-logs"
 
@@ -65,8 +71,9 @@ logs: ## Tail all service logs
 	docker compose --profile core --profile frontend logs -f --tail=100
 
 .PHONY: test
-test: ## Run both repos' canonical CI gates (backend needs the dockerised postgres/redis)
+test: ## Run all three repos' canonical CI gates (backend/search need the dockerised postgres/redis)
 	cd vidra-core && $(MAKE) ci
+	cd vidra-search && $(MAKE) ci
 	cd vidra-user && npm run ci
 
 .PHONY: e2e-backed
