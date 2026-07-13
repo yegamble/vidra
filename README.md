@@ -1,19 +1,22 @@
 # Vidra
 
 A clean-room, PeerTube-inspired federated video platform. Vidra is split across
-**two independent repositories**, tied together by this lightweight **meta-repo**:
+**three independent repositories**, tied together by this lightweight **meta-repo**:
 
 | Repo | What | Stack |
 |------|------|-------|
 | [`vidra-core`](https://github.com/yegamble/vidra-core) | Backend / HTTP API | Go, Echo, PostgreSQL, sqlc, Redis, Docker |
 | [`vidra-user`](https://github.com/yegamble/vidra-user) | Frontend | Next.js, TypeScript, Tailwind |
+| [`vidra-search`](https://github.com/yegamble/vidra-search) | Search, autosuggest & recommendations service | Go, PostgreSQL, Redis |
 
 Each repo is self-contained — its own `go.mod` / `package.json`, its own Docker
 setup, its own GitHub Actions CI, and its own Ralph control plane (`.ralphrc` +
 `.ralph/`). The frontend consumes the backend's HTTP API **contract** at runtime
-(`NEXT_PUBLIC_API_BASE_URL`); there is no build-time coupling.
+(`NEXT_PUBLIC_API_BASE_URL`); there is no build-time coupling. `vidra-search` is an
+**internal** service that only `vidra-core` calls (HMAC-authenticated, over the
+compose network) — it is never exposed to the browser.
 
-> **Why a meta-repo and not git submodules?** The two components talk only over
+> **Why a meta-repo and not git submodules?** The components talk only over
 > HTTP at runtime, and the autonomous Ralph loop commits many times per hour. A
 > submodule pins a commit SHA and requires a strict commit-child → push-child →
 > bump-pointer → push-parent transaction on every sync, which fights the loop and
@@ -25,7 +28,7 @@ setup, its own GitHub Actions CI, and its own Ralph control plane (`.ralphrc` +
 ```bash
 git clone https://github.com/yegamble/vidra.git
 cd vidra
-make dev                  # bootstrap + backend stack (postgres, redis, migrate, api on :8080)
+make dev                  # bootstrap + backend stack (postgres, redis, migrate, api :8080, search :8081)
 
 # Frontend (in another shell) — Next.js dev with HMR against the live backend:
 cd vidra-user && npm ci && NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
@@ -47,6 +50,10 @@ rebuilds while developing:
 - **api**: `air` watches the bind-mounted `vidra-core/` tree; saving a `.go`
   file recompiles (`go build ./cmd/api`, caches in named volumes) and restarts
   the server in ~1–3s. Same postgres/redis/migrate deps, same port (`:8080`).
+- **search**: same `air` pattern for the bind-mounted `vidra-search/` tree
+  (own go build/module cache volumes); reachable on `:8081`. It shares the core
+  Postgres (schema `search`) and Redis (DB 1) and is migrated by a one-shot
+  `search-migrate` service before it starts.
 - **frontend**: `next dev` (webpack + polling, for macOS bind-mount reliability)
   against bind-mounted `vidra-user/`; saving a `.tsx` HMRs instantly.
   `node_modules` and `.next` live in named volumes so the host's macOS-arch
@@ -71,8 +78,8 @@ Other meta-repo commands: `make test` (both repos' canonical CI gates),
 for the full list.
 
 `bootstrap.sh` is idempotent: it clones each component if missing, otherwise
-`git pull --ff-only`. The `./vidra-core` and `./vidra-user` directories are
-independent git checkouts and are **git-ignored by this repo**.
+`git pull --ff-only`. The `./vidra-core`, `./vidra-user` and `./vidra-search`
+directories are independent git checkouts and are **git-ignored by this repo**.
 
 ## Environments
 
@@ -104,12 +111,18 @@ commit. Stage it back-compat: land the additive backend change in `vidra-core`
 first (its `openapi` CI publishes the updated spec), then update `vidra-user`, then
 remove the old endpoint in a later `vidra-core` change.
 
+`vidra-search` exposes a **separate, internal** contract at
+`vidra-search/api/openapi.yaml` (all under `/internal/v1`, HMAC-authenticated). It
+is consumed **only by `vidra-core`** — never the frontend — so changes there are a
+`vidra-core` ⇄ `vidra-search` two-repo concern, staged the same back-compat way.
+
 ## CI
 
 Each repo runs its own GitHub Actions:
 - **vidra-core** — `backend-ci` (`make ci`), `backend-integration`, `openapi`, `ci-guard`.
 - **vidra-user** — `frontend-ci` (`npm run ci`), `contract-ci`, `frontend-e2e-backed`
   (checks out `vidra-core` and runs the UI against the live backend), `ci-guard`.
+- **vidra-search** — `search-ci` (`make ci`), `search-integration`, `openapi`, `ci-guard`.
 
 This meta-repo runs `meta-ci` (validates `bootstrap.sh` and the full-stack compose).
 

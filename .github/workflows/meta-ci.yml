@@ -22,19 +22,38 @@ jobs:
           bash -n bootstrap.sh
           if command -v shellcheck >/dev/null 2>&1; then shellcheck bootstrap.sh || true; fi
 
-      # docker-compose.yml `include:`s ./vidra-core/docker-compose.yml, so the
-      # backend repo must be present to resolve the full config. Check it out the
-      # same way bootstrap.sh would (public repo, no token needed).
+      # docker-compose.yml `include:`s ./vidra-core/docker-compose.yml and adds
+      # `search`/`search-migrate` services with build context ./vidra-search, so
+      # BOTH component repos must be present to resolve the full config. Check them
+      # out the same way bootstrap.sh would (public repos, no token needed).
       - name: Check out vidra-core (for compose include)
         uses: actions/checkout@v4
         with:
           repository: yegamble/vidra-core
           path: vidra-core
 
+      - name: Check out vidra-search (for the search service + migrations)
+        uses: actions/checkout@v4
+        with:
+          repository: yegamble/vidra-search
+          path: vidra-search
+
+      # The `core` profile includes postgres/redis/migrate/api + the new search
+      # and search-migrate services (build context ./vidra-search). The frontend
+      # profile is intentionally NOT activated here — vidra-user isn't checked out,
+      # and its e2e/contract CI lives in that repo. This plain `docker compose`
+      # auto-loads docker-compose.override.yml (the api's SEARCH_* wiring).
       - name: Validate full-stack compose resolves
         run: docker compose --profile core config -q
 
-      - name: bootstrap.sh sees vidra-core already present (idempotent path)
+      # The explicit -f chain disables override auto-loading, so pass it explicitly
+      # exactly as `make dev-hot` (DEV_HOT_COMPOSE) does.
+      - name: Validate hot-reload overlay compose resolves
+        run: docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.dev.yml --profile core config -q
+
+      - name: bootstrap.sh sees both component repos present (idempotent path)
         run: |
-          # vidra-core is checked out above; bootstrap should treat it as present.
+          # vidra-core and vidra-search are checked out above; bootstrap should
+          # treat both as present (fast-forward pull path, no clone).
           test -d vidra-core/.git && echo "OK: vidra-core is a git checkout."
+          test -d vidra-search/.git && echo "OK: vidra-search is a git checkout."
