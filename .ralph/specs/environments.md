@@ -15,10 +15,14 @@ make dev                      # full stack: postgres+redis+migrate+api+frontend 
 ```
 
 The meta-repo `docker-compose.yml` becomes the FULL-STACK compose: it includes
-vidra-core's services (build context `./vidra-core`) and adds a `frontend` service
-(build context `./vidra-user`, build-arg `NEXT_PUBLIC_API_BASE_URL`). Profiles:
+vidra-core's services (build context `./vidra-core`), adds a `frontend` service
+(build context `./vidra-user`, build-arg `NEXT_PUBLIC_API_BASE_URL`), and adds the
+`vidra-search` service + its one-shot `search-migrate` (build context
+`./vidra-search`). Profiles:
 
-- *(default / `core`)*: postgres, redis, migrate, api
+- *(default / `core`)*: postgres, redis, migrate, api, **search-migrate, search**
+  (search shares the `vidra` DB via schema `search` and Redis DB 1; the api gets
+  `SEARCH_SERVICE_URL=http://search:8080` + `SEARCH_INTERNAL_SECRET`)
 - `frontend`: the Next.js production container (dev iteration still uses `npm run dev`
   on the host for HMR — document both)
 - `storage`: MinIO; `media`: RTMP media server; `scan`: clamd; `captions`: whisper;
@@ -48,6 +52,8 @@ procedure), `make seed` (demo user/channel/video via the API).
 | `STORAGE_BACKEND` | local | local or s3 | local | s3 | s3 |
 | `FEDERATION_ENABLED` (+KEK) | opt-in | opt-in | true (loop tests) | per rollout | per rollout |
 | Registration | open | open | open (approval-mode job flips it) | per policy | per policy |
+| `SEARCH_HTTP_PORT` | 8081 | 8081 | 8081 | 8081 | 8081 |
+| `SEARCH_INTERNAL_SECRET` | dev default | secret store | dev default (test) | secret store | secret store |
 | Secrets source | `.env` (gitignored) | host env / secret store | CI secrets | secret store | secret store |
 
 Per-environment templates live as `env/<env>.env.example` in the meta-repo (values
@@ -83,6 +89,9 @@ vidra-user's README. CI publishes `vidra-user:<env>-<sha>` images per environmen
 
 1. Fresh machine → running full stack: `git clone …/vidra && cd vidra &&
    ./bootstrap.sh && make dev` (documented time budget: < 10 min incl. image builds).
+   `make dev`/`make dev-hot` bring up the `vidra-search` service in the `core`
+   profile automatically (migrated by `search-migrate`); no extra profile or step —
+   the api is wired to it out of the box.
 2. Backend-only iteration: `cd vidra-core && make dev` (compose deps + `go run`).
 3. Frontend-only iteration against any env: `cd vidra-user &&
    NEXT_PUBLIC_API_BASE_URL=<env url> npm run dev`.
