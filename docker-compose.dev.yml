@@ -52,6 +52,7 @@ services:
       # Runtime (dev) — must be reachable from the BROWSER, i.e. the
       # host-published api port, NOT http://api:8080 (container-only DNS).
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+      INTERNAL_API_BASE_URL: http://api:8080
 
 volumes:
   go_build_cache:
