@@ -9,6 +9,18 @@ Vidra HTTP API. The frontend (`vidra-user`, Next.js) is a separate repo that
 consumes this API. The API contract is the source of truth; the frontend never
 shadow-copies guessed DTOs.
 
+A third service, **`vidra-search`** (separate Go repo), provides autosuggest,
+search, and recommendations. It is **internal**: only vidra-core calls it, over an
+HMAC-authenticated `/internal/v1` API — the frontend never talks to it. It shares
+this instance's infrastructure rather than standing up its own: its tables live in
+a dedicated **`search` schema** inside the shared `vidra` Postgres DB (its
+golang-migrate ledger is isolated in `vidra_search_migrations` via the
+`x-migrations-table` URL param, so it never collides with core's
+`schema_migrations`), and it uses **Redis DB index 1** (core uses DB 0). Search
+returns ranked video IDs only; core applies the per-viewer visibility predicate
+when hydrating, and fails soft to local SQL if search is unavailable. See
+[`search.md`](search.md) for the full system spec.
+
 ## Stack
 
 - Go (stable) — application language.
