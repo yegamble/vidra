@@ -24,6 +24,12 @@ include:
   - path: ./vidra-core/docker-compose.yml
 
 services:
+  # The api service is DEFINED in the included vidra-core/docker-compose.yml. It is
+  # EXTENDED with the vidra-search wiring (SEARCH_SERVICE_URL + SEARCH_INTERNAL_SECRET)
+  # in docker-compose.override.yml — NOT here — because redeclaring an included
+  # service inside the SAME file that `include:`s it is rejected by some Compose
+  # versions ("services.api conflicts with imported resource"). The override file is
+  # auto-loaded by every plain `docker compose` command; see its header for details.
   frontend:
     profiles: ["frontend"]
     build:
@@ -40,4 +46,56 @@ services:
     depends_on:
       api:
         condition: service_started
+    restart: unless-stopped
+
+  # One-shot search-schema migration. vidra-search shares the core `vidra`
+  # database but lives in its own `search` schema (migration 0001 creates it).
+  # The x-migrations-table URL param lands golang-migrate's version ledger in
+  # `vidra_search_migrations` (in public) so it never collides with core's
+  # `schema_migrations`. Joins the `core` profile so `make dev`/`dev-hot` run it.
+  search-migrate:
+    image: migrate/migrate:v4.17.1
+    profiles: ["core"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./vidra-search/migrations:/migrations:ro
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://${POSTGRES_USER:-vidra}:${POSTGRES_PASSWORD:-vidra}@postgres:5432/${POSTGRES_DB:-vidra}?sslmode=disable&x-migrations-table=vidra_search_migrations"
+      - "up"
+
+  # vidra-search: internal autosuggest / search / recommendations service. Only
+  # vidra-core talks to it (HMAC S2S); it is NEVER exposed to the browser. Shares
+  # the core Postgres (schema `search`) and Redis (DB index 1). Env mirrors the
+  # api service style: VIDRA_ENV overridable, HTTP_PORT fixed to the in-container
+  # 8080; LOG_LEVEL/LOG_FORMAT/METRICS_ENABLED are left to the service's config
+  # defaults exactly like the api service (no explicit override here).
+  search:
+    build: ./vidra-search
+    profiles: ["core"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      search-migrate:
+        condition: service_completed_successfully
+    environment:
+      VIDRA_ENV: ${VIDRA_ENV:-development}
+      HTTP_PORT: "8080"
+      DATABASE_URL: postgres://${POSTGRES_USER:-vidra}:${POSTGRES_PASSWORD:-vidra}@postgres:5432/${POSTGRES_DB:-vidra}?sslmode=disable
+      REDIS_URL: redis://redis:6379/1
+      # Shared HMAC secret for core↔search auth. Compose-local dev default ONLY;
+      # a real deployment sets a strong (>=32 byte) value and never commits it.
+      # MUST match the api service's SEARCH_INTERNAL_SECRET above.
+      INTERNAL_SECRET: ${SEARCH_INTERNAL_SECRET:-dev-insecure-internal-secret-change-me-0000}
+    ports:
+      - "${SEARCH_HTTP_PORT:-8081}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
