@@ -7,7 +7,7 @@
 set -euo pipefail
 
 OWNER="${VIDRA_GH_OWNER:-yegamble}"
-COMPONENTS=(vidra-core vidra-user)
+COMPONENTS=(vidra-core vidra-user vidra-search)
 
 for r in "${COMPONENTS[@]}"; do
   if [ -d "$r/.git" ]; then
@@ -24,6 +24,6 @@ done
 cat <<'EOF'
 
 Done. Next:
-  docker compose --profile core up --build                         # backend on http://localhost:8080
+  docker compose --profile core up --build                         # backend + search on http://localhost:8080 (search :8081)
   cd vidra-user && npm ci && NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
 EOF

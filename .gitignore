@@ -2,6 +2,7 @@
 # They are not tracked by this meta-repo (each has its own github.com/yegamble/<name> repo).
 /vidra-core/
 /vidra-user/
+/vidra-search/
 
 # Ralph runtime/generated files (root .ralph/ is kept for its product specs/docs)
 **/.ralph/.call_count
