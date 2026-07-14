@@ -54,7 +54,7 @@ services:
   # `vidra_search_migrations` (in public) so it never collides with core's
   # `schema_migrations`. Joins the `core` profile so `make dev`/`dev-hot` run it.
   search-migrate:
-    image: migrate/migrate:v4.17.1
+    image: migrate/migrate:v4.19.1
     profiles: ["core"]
     depends_on:
       postgres:
