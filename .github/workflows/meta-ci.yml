@@ -11,37 +11,67 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: External actions use immutable commit pins
+        run: |
+          bad=$(
+            grep -rnE '^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]+' .github/workflows \
+              | grep -vE 'uses:[[:space:]]+\./' \
+              | grep -vE '@[0-9a-f]{40}([[:space:]]+#.*)?[[:space:]]*$' || true
+          )
+          if [ -n "$bad" ]; then
+            echo "::error::External actions must be pinned to a full 40-character commit SHA:" >&2
+            echo "$bad" >&2
+            exit 1
+          fi
+          echo "OK: every external action uses an immutable commit pin."
 
       - name: Lint bootstrap.sh
         run: |
           bash -n bootstrap.sh
-          if command -v shellcheck >/dev/null 2>&1; then shellcheck bootstrap.sh || true; fi
+          shellcheck bootstrap.sh
 
       # docker-compose.yml `include:`s ./vidra-core/docker-compose.yml and adds
       # `search`/`search-migrate` services with build context ./vidra-search, so
       # BOTH component repos must be present to resolve the full config. Check them
       # out the same way bootstrap.sh would (public repos, no token needed).
       - name: Check out vidra-core (for compose include)
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: yegamble/vidra-core
           path: vidra-core
+          persist-credentials: false
 
       - name: Check out vidra-search (for the search service + migrations)
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: yegamble/vidra-search
           path: vidra-search
+          persist-credentials: false
+
+      - name: Check out vidra-user (for bootstrap idempotency)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: yegamble/vidra-user
+          path: vidra-user
+          persist-credentials: false
 
       # The `core` profile includes postgres/redis/migrate/api + the new search
       # and search-migrate services (build context ./vidra-search). The frontend
-      # profile is intentionally NOT activated here — vidra-user isn't checked out,
-      # and its e2e/contract CI lives in that repo. This plain `docker compose`
+      # profile is intentionally NOT activated here; its e2e/contract CI lives in
+      # vidra-user. This plain `docker compose`
       # auto-loads docker-compose.override.yml (the api's SEARCH_* wiring).
       - name: Validate full-stack compose resolves
         run: docker compose --profile core config -q
@@ -51,9 +81,9 @@ jobs:
       - name: Validate hot-reload overlay compose resolves
         run: docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.dev.yml --profile core config -q
 
-      - name: bootstrap.sh sees both component repos present (idempotent path)
+      - name: Exercise bootstrap.sh's idempotent update path
         run: |
-          # vidra-core and vidra-search are checked out above; bootstrap should
-          # treat both as present (fast-forward pull path, no clone).
-          test -d vidra-core/.git && echo "OK: vidra-core is a git checkout."
-          test -d vidra-search/.git && echo "OK: vidra-search is a git checkout."
+          ./bootstrap.sh
+          test -d vidra-core/.git
+          test -d vidra-search/.git
+          test -d vidra-user/.git

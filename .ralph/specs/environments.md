@@ -43,7 +43,7 @@ procedure), `make seed` (demo user/channel/video via the API).
 | TLS | none (localhost) | proxy TLS | proxy TLS | required | required |
 | `PUBLIC_BASE_URL` | http://localhost:8088 | https://dev-api.… | https://qa-api.… | https://stg-api.… | https://api.… |
 | Frontend API URL (build arg) | http://localhost:8088 | https://dev-api.… | https://qa-api.… | https://stg-api.… | https://api.… |
-| `RATE_LIMIT_ENABLED` | true (false for backed runs) | true | **false** | true | true |
+| `RATE_LIMIT_ENABLED` | **false** (opt in for limiter testing) | true | **false** | true | true |
 | `DEV_MAIL_CAPTURE_ENABLED` | opt-in | opt-in | **true** | **false (prod refuses)** | **false (prod refuses)** |
 | `HTTP_IMPORT_ALLOW_PRIVATE_URLS` | opt-in | false | **true** | false | false |
 | `MAIL_ENABLED` (SMTP) | false | optional | false | true | true |

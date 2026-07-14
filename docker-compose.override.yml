@@ -1,8 +1,9 @@
 # Auto-loaded override — every plain `docker compose ...` in this repo implicitly
 # merges `-f docker-compose.yml -f docker-compose.override.yml`.
 #
-# Its ONE job: EXTEND the `api` service (which is DEFINED in the INCLUDED
-# vidra-core/docker-compose.yml) with the vidra-search wiring. This lives in a
+# Its job: EXTEND the `api` service (which is DEFINED in the INCLUDED
+# vidra-core/docker-compose.yml) with local-development defaults and the
+# vidra-search wiring. This lives in a
 # SEPARATE override file rather than in docker-compose.yml because redeclaring an
 # included service inside the same file that `include:`s it is rejected by some
 # Compose versions with "services.api conflicts with imported resource". The `-f`
@@ -24,5 +25,9 @@
 services:
   api:
     environment:
+      # Browser HMR and server rendering can easily exceed the shared per-IP
+      # budget during local development. Production-like environments opt back
+      # in through their env file; limiter tests exercise the limiter directly.
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-false}
       SEARCH_SERVICE_URL: http://search:8080
       SEARCH_INTERNAL_SECRET: ${SEARCH_INTERNAL_SECRET:-dev-insecure-internal-secret-change-me-0000}
