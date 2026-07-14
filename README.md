@@ -36,6 +36,11 @@ cd vidra-user && npm ci && NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm ru
 make seed                 # optional: demo account (demo@vidra.local) + @demo channel
 ```
 
+The local stack disables the global API rate limiter so HMR and repeated server
+renders do not exhaust one shared localhost bucket. To exercise rate limiting
+manually, start it with `RATE_LIMIT_ENABLED=true make dev` (or `make dev-hot`).
+Dedicated backend limiter tests remain enabled and are unaffected.
+
 Or run the **whole stack in containers** (frontend included, on :3000):
 
 ```bash
