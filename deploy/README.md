@@ -57,6 +57,40 @@ except the frontend image if the API URL differs (unavoidable with build-time ba
   dependency health, effective non-secret config.
 - Optional OTel: set the `OTEL_*` env vars to point at your collector.
 
+## Media delivery and CDN policy
+
+The API is the visibility gate for originals, HLS, and thumbnails. Do not apply
+a blanket public/immutable rule to `/api/v1/videos/*`: a video can become private
+or be deleted, and password playback tokens can appear in the query string.
+
+Vidra emits cache policy by asset shape:
+
+| Asset | API policy | Reason |
+|---|---|---|
+| Versioned VOD HLS (`?v=<generation>`) | `private, max-age=31536000, immutable` | A completed generation never changes; master/variant rewrites propagate the version to every child request. |
+| Unversioned VOD HLS compatibility URL | `private, max-age=0, must-revalidate` | The route can point at a newer transcode generation. |
+| Authenticated or `?pt=` media | `private, no-store` | Prevents credentials or protected media from entering a shared/browser cache. |
+| Live playlist | `no-cache, no-store` | The manifest changes continuously. |
+| Live segment | `private, max-age=12` | Short reuse window; nginx-rtmp can reuse sequence names after a restart. |
+| Replaceable thumbnail | `private, max-age=300, must-revalidate` | The stable thumbnail URL can receive new bytes. |
+
+The original-file route already supports `Accept-Ranges: bytes` and `206 Partial
+Content` on local and S3 storage, so a CDN or reverse proxy must preserve Range
+requests and responses.
+
+For a shared CDN, use an origin shield and bypass caching whenever
+`Authorization`, cookies, or `pt` are present. Promoting versioned public-video
+HLS from `private` to shared `public` caching is safe only after the deployment
+can purge every old URL on privacy changes and deletion; otherwise an old CDN
+entry can outlive the API authorization decision. Keep live playlists uncached
+and use a short TTL for live segments. Configure vendor-specific shield and
+purge hooks outside the application—the reference stack deliberately does not
+pretend a particular CDN exists.
+
+The frontend's Next.js `assetPrefix` is a separate static-JS/CSS lever. Set it
+only when those assets are actually published at a CDN origin; it does not alter
+video-media headers or replace the media delivery policy above.
+
 ## QA environment
 
 QA mirrors `vidra-user/.github/workflows/frontend-e2e-backed.yml` exactly — that
