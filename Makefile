@@ -5,6 +5,7 @@
 SHELL := /bin/bash
 
 ENV_FILE ?= env/local.env
+IPFS_PUBLIC_GATEWAY_URL ?= https://ipfs.io
 
 .PHONY: help
 help: ## Show this help
@@ -28,6 +29,18 @@ dev: bootstrap ## Backend + search stack up (postgres+redis+migrate+api+search);
 .PHONY: up
 up: bootstrap ## Full stack incl. the containerised frontend (:3000)
 	docker compose --profile core --profile frontend up -d --build
+
+.PHONY: ipfs-live
+ipfs-live: bootstrap ## Core stack + live public IPFS mirror + separate private mirror
+	IPFS_ENABLED=true IPFS_PUBLIC_NETWORK=true \
+		IPFS_GATEWAY_URL="$(IPFS_PUBLIC_GATEWAY_URL)" IPFS_MIRROR_PRIVATE=true \
+		docker compose --profile core --profile ipfs --profile ipfs-private up -d --build
+	@echo ""
+	@echo "IPFS live mode enabled:"
+	@echo "  public provider  http://localhost:$${IPFS_API_PORT:-5001} (RPC; loopback only)"
+	@echo "  public gateway   $(IPFS_PUBLIC_GATEWAY_URL) (emitted in video API responses)"
+	@echo "  private mirror   http://localhost:$${IPFS_PRIVATE_API_PORT:-5002} (RPC; loopback only)"
+	@echo "WARNING: public CIDs may remain retrievable after this node unpins them."
 
 # Dev hot-reload overlay: air-rebuilt Go api + next dev HMR frontend, both with
 # bind-mounted source so code changes reflect WITHOUT down+rebuild. Applied on

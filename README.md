@@ -82,6 +82,14 @@ Other meta-repo commands: `make test` (both repos' canonical CI gates),
 `make logs`, `make down`, `make nuke` (also deletes data volumes). Run `make help`
 for the full list.
 
+To exercise real IPFS distribution, run `make ipfs-live`. It enables the public
+mirror on a live Kubo node, emits `https://ipfs.io` as the client gateway by
+default, and starts the separate swarm-keyed private mirror at the same time.
+Kubo's RPC ports are loopback-only; only the libp2p swarm port is public. This is
+an intentional disclosure boundary: a public CID may remain retrievable after
+the local node unpins it. Override the client gateway with
+`IPFS_PUBLIC_GATEWAY_URL=https://your-gateway.example make ipfs-live`.
+
 `bootstrap.sh` is idempotent: it clones each component if missing, otherwise
 `git pull --ff-only`. The `./vidra-core`, `./vidra-user` and `./vidra-search`
 directories are independent git checkouts and are **git-ignored by this repo**.
