@@ -9,21 +9,22 @@ A clean-room, PeerTube-inspired federated video platform. Vidra is split across
 | [`vidra-user`](https://github.com/yegamble/vidra-user) | Frontend | Next.js, TypeScript, Tailwind |
 | [`vidra-search`](https://github.com/yegamble/vidra-search) | Search, autosuggest & recommendations service | Go, PostgreSQL, Redis |
 
-Each repo is self-contained — its own `go.mod` / `package.json`, its own Docker
-setup, its own GitHub Actions CI, and its own Ralph control plane (`.ralphrc` +
-`.ralph/`). The frontend consumes the backend's HTTP API **contract** at runtime
-(`NEXT_PUBLIC_API_BASE_URL`); there is no build-time coupling. `vidra-search` is an
-**internal** service that only `vidra-core` calls (HMAC-authenticated, over the
-compose network) — it is never exposed to the browser.
+Each repo is self-contained — its own `go.mod` / `package.json`, Docker setup, and
+GitHub Actions CI. The frontend consumes the backend's HTTP API at runtime via
+`NEXT_PUBLIC_API_BASE_URL`, with no build-time coupling. `vidra-search` is an
+**internal-only** service — HMAC-authenticated, called only by `vidra-core`, never
+exposed to the browser.
 
-> **Why a meta-repo and not git submodules?** The components talk only over
-> HTTP at runtime, and the autonomous Ralph loop commits many times per hour. A
-> submodule pins a commit SHA and requires a strict commit-child → push-child →
-> bump-pointer → push-parent transaction on every sync, which fights the loop and
-> risks dangling pointers. The meta-repo gives the same "one place to clone and
-> run" without any of that: each repo's loop just commits and pushes its own tree.
+## Prerequisites
 
-## Getting started
+- **Docker** with Compose **v2.20+** (the root compose uses `include:` and profiles).
+- **GNU make** and **git**.
+- **Node.js 20+** and **npm**, for host-side frontend dev.
+
+`bootstrap.sh` clones the three sibling checkouts (`vidra-core`, `vidra-user`,
+`vidra-search`) automatically; they are git-ignored by this repo.
+
+## Quick start
 
 ```bash
 git clone https://github.com/yegamble/vidra.git
@@ -33,132 +34,149 @@ make dev                  # bootstrap + backend stack (postgres, redis, migrate,
 # Frontend (in another shell) — Next.js dev with HMR against the live backend:
 cd vidra-user && npm ci && NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
 
-make seed                 # optional: demo account (demo@vidra.local) + @demo channel
+make seed                 # optional: demo account (demo@vidra.local / demo-password-123) + @demo channel
 ```
 
-The local stack disables the global API rate limiter so HMR and repeated server
-renders do not exhaust one shared localhost bucket. To exercise rate limiting
-manually, start it with `RATE_LIMIT_ENABLED=true make dev` (or `make dev-hot`).
-Dedicated backend limiter tests remain enabled and are unaffected.
+Run the whole stack in containers (frontend on :3000) with `make up`. The local
+stack disables the global API rate limiter by default — re-enable it with
+`RATE_LIMIT_ENABLED=true make dev`.
 
-Or run the **whole stack in containers** (frontend included, on :3000):
+## Everyday commands
 
-```bash
-make up                   # == docker compose --profile core --profile frontend up -d --build
-```
+| Command | What it does |
+|---------|--------------|
+| `make dev` | Backend + search stack (postgres, redis, migrate, api :8080, search :8081); run the frontend on the host for HMR. |
+| `make up` | Full stack in containers, including the frontend on :3000. |
+| `make dev-hot` | Full stack in Docker with live reload (see below); tail with `make dev-hot-logs`. |
+| `make dev-hot-down` | Stop the hot-reload stack; data volumes preserved. |
+| `make dev-hot-nuke` | **Destructive.** Stop hot-reload stack and delete all volumes (db data + caches). |
+| `make seed` | Seed a demo account (`demo@vidra.local` / `demo-password-123`) + `@demo` channel. |
+| `make test` | Run **all three** repos' canonical CI gates: `vidra-core` `make ci`, `vidra-search` `make ci`, `vidra-user` `npm run ci`. |
+| `make e2e-backed` | Run the backend-backed Playwright suite against **`vidra-core`'s own compose stack** (no search service). |
+| `make logs` | Tail all service logs. |
+| `make down` | Stop the stack; data volumes preserved. |
+| `make nuke` | **Destructive.** Stop the stack and delete data volumes (fresh start). |
+| `make ipfs-live` | Core stack + live public IPFS mirror + separate private mirror (see below). |
+| `make env-check` | Show which env template the compose commands would use. |
+| `make help` | List all targets. |
 
-### Hot-reload dev stack (`make dev-hot`)
+## Hot reload (`make dev-hot`)
 
 `make dev-hot` runs the **whole stack in Docker with live reload** — no image
 rebuilds while developing:
 
-- **api**: `air` watches the bind-mounted `vidra-core/` tree; saving a `.go`
-  file recompiles (`go build ./cmd/api`, caches in named volumes) and restarts
-  the server in ~1–3s. Same postgres/redis/migrate deps, same port (`:8080`).
-- **search**: same `air` pattern for the bind-mounted `vidra-search/` tree
-  (own go build/module cache volumes); reachable on `:8081`. It shares the core
-  Postgres (schema `search`) and Redis (DB 1) and is migrated by a one-shot
-  `search-migrate` service before it starts.
-- **frontend**: `next dev` (webpack + polling, for macOS bind-mount reliability)
-  against bind-mounted `vidra-user/`; saving a `.tsx` HMRs instantly.
-  `node_modules` and `.next` live in named volumes so the host's macOS-arch
-  installs never leak into the Linux container; a `package-lock.json` change is
-  auto-detected and reinstalled on container start, and the olm-wasm prebuild
-  runs automatically.
-- `NEXT_PUBLIC_API_BASE_URL` is a **runtime** env in dev (default
-  `http://localhost:8080`, a browser-reachable host URL — not `http://api:8080`).
-  If you override `HTTP_PORT`, match it:
-  `HTTP_PORT=8088 NEXT_PUBLIC_API_BASE_URL=http://localhost:8088 make dev-hot`.
+- **api**: `air` on the bind-mounted `vidra-core/` tree recompiles and restarts
+  in ~1–3s, on the same port `:8080`.
+- **search**: same `air` pattern on `:8081`; it shares the core Postgres (schema
+  `search`) and Redis (DB 1), migrated by a one-shot `search-migrate` service.
+- **frontend**: `next dev` (webpack + polling) on bind-mounted `vidra-user/` HMRs
+  instantly; `node_modules` and `.next` live in named volumes.
 
-Commands: `make dev-hot` / `make dev-hot-logs` / `make dev-hot-down` /
-`make dev-hot-nuke` (also deletes db data + caches). **First run is slow** (once):
-npm volume seed, `go mod download`, cold compile — a few minutes; later starts
-and rebuilds are fast. The production paths (`make up`, `make dev`, both
-Dockerfiles, the base compose files) are untouched — the overlay only applies
-when `-f docker-compose.dev.yml` is passed.
+**First run is slow** (once): volume seed, `go mod download`, cold compile — a few
+minutes; later starts are fast. `NEXT_PUBLIC_API_BASE_URL` is a **runtime** env
+here and must be a browser-reachable host URL, **not** `http://api:8080`; if you
+override `HTTP_PORT`, match it:
+`HTTP_PORT=8088 NEXT_PUBLIC_API_BASE_URL=http://localhost:8088 make dev-hot`. The
+dev overlay only applies when `-f docker-compose.dev.yml` is passed; `make up`,
+`make dev`, and both Dockerfiles are untouched.
 
-Other meta-repo commands: `make test` (both repos' canonical CI gates),
-`make e2e-backed` (the backend-backed Playwright suite against a fresh stack),
-`make logs`, `make down`, `make nuke` (also deletes data volumes). Run `make help`
-for the full list.
+## IPFS live mode
 
-To exercise real IPFS distribution, run `make ipfs-live`. It enables the public
-mirror on a live Kubo node, emits `https://ipfs.io` as the client gateway by
-default, and starts the separate swarm-keyed private mirror at the same time.
-Kubo's RPC ports are loopback-only; only the libp2p swarm port is public. This is
-an intentional disclosure boundary: a public CID may remain retrievable after
-the local node unpins it. Override the client gateway with
-`IPFS_PUBLIC_GATEWAY_URL=https://your-gateway.example make ipfs-live`.
-
-`bootstrap.sh` is idempotent: it clones each component if missing, otherwise
-`git pull --ff-only`. The `./vidra-core`, `./vidra-user` and `./vidra-search`
-directories are independent git checkouts and are **git-ignored by this repo**.
+`make ipfs-live` enables the public mirror on a live Kubo node — the client gateway
+defaults to `https://ipfs.io` (override with
+`IPFS_PUBLIC_GATEWAY_URL=https://your-gateway.example make ipfs-live`) — and starts
+the swarm-keyed private mirror alongside it. Kubo's RPC ports are loopback-only;
+only the libp2p swarm port is public. This is an intentional disclosure boundary:
+**a public CID may remain retrievable after the local node unpins it.**
 
 ## Environments
 
-The canonical environment matrix — **local, dev (remote), testing/QA (remote),
-staging, production** — lives in [`.ralph/specs/environments.md`](.ralph/specs/environments.md),
-with ready-to-copy per-environment templates under [`env/`](env/) and a reference
-single-host TLS deployment (compose + Caddy, backups, promotion rules) under
-[`deploy/`](deploy/):
+The canonical environment matrix lives in
+[`.ralph/specs/environments.md`](.ralph/specs/environments.md), with ready-to-copy
+per-environment templates under [`env/`](env/) and a reference single-host TLS
+deployment (compose + Caddy) under [`deploy/`](deploy/):
 
 ```bash
 cp env/staging.env.example env/staging.env   # fill in secrets
 docker compose --env-file env/staging.env --profile core --profile frontend up -d --build
 ```
 
-Two rules worth internalizing: **staging is production config with throwaway
-data** (promote the exact image tags), and the frontend bakes
+Two rules worth internalizing: **staging is production config with throwaway data**
+(promote the exact image tags), and the containerized frontend bakes
 `NEXT_PUBLIC_API_BASE_URL` at **build** time — one frontend image per environment.
+Production is fail-secure (`VIDRA_ENV=production` refuses dev secrets and dev mail
+capture); see [`deploy/README.md`](deploy/README.md), which also covers backups,
+promotion, and health probes (`/healthz`, `/readyz`).
 
-## The frontend ⇄ backend contract
+## The API contract
 
 `vidra-core/api/openapi.yaml` is the source of truth for the HTTP API. `vidra-user`
-hand-maintains `lib/api/types.ts` against it (no codegen yet) and guards drift with
-`scripts/check-contract.mjs`, which asserts every `/api/` path the frontend calls
-exists in the spec. In CI, `vidra-user`'s `contract-ci` fetches the spec from the
-public `vidra-core` repo; locally it resolves the sibling `../vidra-core` checkout.
+regenerates `lib/api/generated.ts` from it with `npm run codegen`, and
+`lib/api/types.ts` is derived from that — **never hand-edit shapes**. `contract-ci`
+guards drift twice: `scripts/check-contract.mjs` asserts every `/api/` path the
+frontend calls exists in the spec, and a codegen step fails if `generated.ts` is
+stale. In CI the spec is fetched from the public `vidra-core` repo; locally the
+sibling `../vidra-core` checkout is used.
 
-**Making a breaking API change spans two repos** — there is no longer one atomic
-commit. Stage it back-compat: land the additive backend change in `vidra-core`
-first (its `openapi` CI publishes the updated spec), then update `vidra-user`, then
-remove the old endpoint in a later `vidra-core` change.
+A breaking API change spans two repos with no atomic commit — stage it back-compat:
+
+1. Land the additive, back-compat change in `vidra-core` (its `openapi` CI publishes the updated spec).
+2. Update `vidra-user` to the new shape.
+3. Remove the old endpoint in a later `vidra-core` change.
 
 `vidra-search` exposes a **separate, internal** contract at
-`vidra-search/api/openapi.yaml` (all under `/internal/v1`, HMAC-authenticated). It
-is consumed **only by `vidra-core`** — never the frontend — so changes there are a
-`vidra-core` ⇄ `vidra-search` two-repo concern, staged the same back-compat way.
+`vidra-search/api/openapi.yaml` (all under `/internal/v1`, HMAC-authenticated),
+consumed only by `vidra-core`, staged the same back-compat way.
 
 ## CI
 
 Each repo runs its own GitHub Actions:
 - **vidra-core** — `backend-ci` (`make ci`), `backend-integration`, `openapi`, `ci-guard`.
-- **vidra-user** — `frontend-ci` (`npm run ci`), `contract-ci`, `frontend-e2e-backed`
-  (checks out `vidra-core` and runs the UI against the live backend), `ci-guard`.
+- **vidra-user** — `frontend-ci` (`npm run ci`), `contract-ci`, `frontend-e2e-backed`, `ci-guard`.
 - **vidra-search** — `search-ci` (`make ci`), `search-integration`, `openapi`, `ci-guard`.
 
-This meta-repo runs `meta-ci` (validates `bootstrap.sh` and the full-stack compose).
+Each repo also carries additional workflows (fuzzing, IPFS integration, container
+publishing, search model training) — see each repo's `.github/workflows/`. This
+meta-repo runs `meta-ci` (validates `bootstrap.sh` and the full-stack compose config).
+
+## Repo layout & docs
+
+`bootstrap.sh` is idempotent: it clones each component if missing, otherwise
+`git pull --ff-only`. The `./vidra-core`, `./vidra-user`, and `./vidra-search`
+directories are independent git checkouts, git-ignored by this repo.
+
+| Doc | What |
+|-----|------|
+| [`.ralph/specs/architecture.md`](.ralph/specs/architecture.md) | Living architecture doc: subsystems and the shared Postgres/Redis topology across the three services. |
+| [`.ralph/specs/security.md`](.ralph/specs/security.md) | Security posture and planned controls (CORS allow-list, config hygiene, token hashing, fail-secure prod). |
+| [`.ralph/specs/testing.md`](.ralph/specs/testing.md) | Test strategy: unit / integration / migration / fuzz / benchmark layers and how to run them. |
+| [`.ralph/specs/search.md`](.ralph/specs/search.md) | Cross-repo map of the `vidra-search` service and how it plugs into core and user. |
+| [`.ralph/specs/peertube-feature-ledger.md`](.ralph/specs/peertube-feature-ledger.md) | PeerTube feature-parity ledger with per-feature status and evidence. |
+| [`.ralph/specs/environments.md`](.ralph/specs/environments.md) | Canonical environment matrix (local / dev / QA / staging / production) and the DX contract. |
+| [`deploy/README.md`](deploy/README.md) | Reference single-host deployment: compose + Caddy TLS, env rules, backups, promotion, health probes. |
 
 ## Autonomous development (Ralph)
 
-Run a **per-repo loop** inside each component checkout — this is Ralph's native
-single-working-tree model:
+Run a **per-repo loop** inside each component checkout (`vidra-search` has no Ralph
+control plane):
 
 ```bash
-cd vidra-core && ralph --live      # uses vidra-core/.ralphrc
-cd vidra-user && ralph --live      # uses vidra-user/.ralphrc
+cd vidra-core && ralph --live
+cd vidra-user && ralph --live
 ```
 
-Each loop's terminal step is a plain `git add -A && git commit && git push` against
-that repo's own `main` — no cross-repo pointer to bump. For a change that spans both
-(e.g. an API endpoint), run the two loops **sequentially, backend first** (see the
-contract note above).
+Each loop commits and pushes its own repo's `main` — no cross-repo pointer to bump.
+For an API change that spans both, run the loops sequentially, backend first (see
+[The API contract](#the-api-contract)). The root `.ralphrc`, `.ralph/PROMPT.md`,
+and `.ralph/fix_plan.md` are **legacy** and drive nothing; `.ralph/specs/` is
+preserved here as product docs.
 
-The former monorepo root orchestrator (`.ralphrc`, `.ralph/PROMPT.md`,
-`.ralph/fix_plan.md`) is **legacy** and no longer drives a loop from here. The
-cross-cutting product specs under [`.ralph/specs/`](.ralph/specs/) (architecture,
-PeerTube parity ledger, security, testing) are **preserved here as product docs**,
-since they describe the whole platform rather than either component.
+## Why a meta-repo, not submodules?
+
+The components talk only over HTTP at runtime, and each repo's loop commits and
+pushes independently. A submodule pins a commit SHA and forces a
+commit-child → bump-pointer → push-parent transaction on every sync. The meta-repo
+gives the same "one place to clone and run" without any of that.
 
 ## License
 TBD.
