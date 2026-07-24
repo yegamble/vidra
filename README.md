@@ -179,4 +179,5 @@ commit-child → bump-pointer → push-parent transaction on every sync. The met
 gives the same "one place to clone and run" without any of that.
 
 ## License
-TBD.
+Vidra is free software licensed under the [GNU Affero General Public License v3.0](LICENSE).
+Each component repo (vidra-core, vidra-user, vidra-search) carries the same license.
