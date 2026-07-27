@@ -40,3 +40,7 @@ Thumbs.db
 *.swo
 .gstack/
 .playwright-mcp/
+
+# Stray package-manager artifacts from ad-hoc npx/pnpm-dlx runs (no JS package at the meta-repo root)
+/node_modules/
+/.pnpm-store/
