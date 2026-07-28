@@ -100,7 +100,7 @@ Every wave's fix_plan tasks MUST carry these, so a Ralph loop cannot tick a box 
 ## 5. Ralph execution mechanics
 
 - Run from the monorepo root (`ralph` → root orchestrator). `.ralphrc` already pins
-  `CLAUDE_MODEL="opus"`, `CLAUDE_EFFORT="xhigh"`, 2M tokens/hour governor — no changes needed.
+  `CLAUDE_MODEL="claude-opus-5"`, `CLAUDE_EFFORT="xhigh"`, 2M tokens/hour governor — no changes needed.
 - **Wire exactly one wave at a time** into the subdirectory `fix_plan.md` files (+ one
   phase line in the root gate). Multiple open waves = the convergence failures seen
   before. A wave's spec lives at `vidra-<core|user>/.ralph/specs/backport-w<N>-<name>.md`.

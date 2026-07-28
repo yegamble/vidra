@@ -20,13 +20,14 @@ CLAUDE_CODE_CMD="claude"
 
 # Model + reasoning effort applied to every Ralph invocation. ralph_loop.sh
 # appends `--model "$CLAUDE_MODEL"` and `--effort "$CLAUDE_EFFORT"` (Issue #228).
-#   CLAUDE_MODEL="opus"  -> the latest Opus (alias auto-tracks newest; pin to
-#                           "claude-opus-4-8" for determinism).
-#   CLAUDE_EFFORT="xhigh"-> highest reasoning effort Opus 4.8 supports; this is
+#   CLAUDE_MODEL="claude-opus-5"
+#                        -> Opus 5, pinned for determinism. Use the bare alias
+#                           "opus" instead to auto-track the newest Opus.
+#   CLAUDE_EFFORT="xhigh"-> highest reasoning effort Opus 5 supports; this is
 #                           the headless equivalent of `/effort ultracode`
 #                           (valid: low|medium|high|xhigh|max).
 # Changing these requires restarting Ralph (config is read at launch).
-CLAUDE_MODEL="opus"
+CLAUDE_MODEL="claude-opus-5"
 CLAUDE_EFFORT="xhigh"
 
 # Loop settings
