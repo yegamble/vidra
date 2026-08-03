@@ -38,10 +38,28 @@ jobs:
           fi
           echo "OK: every external action uses an immutable commit pin."
 
-      - name: Lint bootstrap.sh
+      # Step 0 of the readiness plan. `env/*.env` holds real secrets, and
+      # deploy/rollback.sh writes `env/production.env.bak` — a byte-for-byte copy
+      # of them that the `env/*.env` glob does NOT match on its own. Both must
+      # stay ignored, and the *.example templates must stay tracked.
+      - name: Filled-in env files (and their .bak copies) are git-ignored
         run: |
-          bash -n bootstrap.sh
-          shellcheck bootstrap.sh
+          git check-ignore -q env/production.env \
+            || { echo "::error::env/production.env is NOT git-ignored"; exit 1; }
+          git check-ignore -q env/production.env.bak \
+            || { echo "::error::env/production.env.bak is NOT git-ignored (deploy/rollback.sh writes it)"; exit 1; }
+          if git check-ignore -q env/production.env.example; then
+            echo "::error::env/production.env.example must stay TRACKED, but it is ignored" >&2
+            exit 1
+          fi
+          echo "OK: concrete env files and their .bak copies are ignored; templates are not."
+
+      - name: Lint shell scripts
+        run: |
+          for f in bootstrap.sh deploy/*.sh; do
+            bash -n "$f"
+            shellcheck "$f"
+          done
 
       # docker-compose.yml `include:`s ./vidra-core/docker-compose.yml and adds
       # `search`/`search-migrate` services with build context ./vidra-search, so
@@ -81,9 +99,197 @@ jobs:
       - name: Validate hot-reload overlay compose resolves
         run: docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.dev.yml --profile core config -q
 
+      # Two steps below parse a rendered compose model with PyYAML. It is not
+      # guaranteed on the runner image, and a missing import would surface as a
+      # traceback rather than as the assertion failing — so install it once, here,
+      # before first use.
+      - name: Ensure PyYAML is available
+        run: python3 -c 'import yaml' 2>/dev/null || pip3 install --quiet pyyaml
+
+      # The chain deploy/deploy.sh, deploy/rollback.sh, deploy/restore.sh and
+      # `make prod-config` all use. Every `${VAR:?}` in it must be satisfied, so
+      # dummy values are injected below — that list IS the contract: adding a new
+      # required variable to docker-compose.prod.yml without adding it here turns
+      # this step red, which is the point.
+      #
+      # `:?` fails on an EMPTY value too, which is why JWT_SECRET must be passed:
+      # env/production.env.example deliberately ships it blank so a copied-but-
+      # unedited env file fails the render instead of the api's boot.
+      - name: Validate production overlay compose resolves
+        env:
+          JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
+          REDIS_PASSWORD: ci-dummy-redis-password
+          VIDRA_CORE_TAG: ci-dummy
+          VIDRA_USER_TAG: ci-dummy
+          VIDRA_SEARCH_TAG: ci-dummy
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            --env-file env/production.env.example \
+            --profile core --profile frontend config -q
+
+      # The overlay's entire security value is that it closes ports, and it does
+      # that with `!reset` / `!override` — merge tags that a Compose older than
+      # 2.24 IGNORES SILENTLY. The render step above still passes in that case, so
+      # assert on the rendered result rather than on a version string.
+      - name: Production overlay actually closes the internal ports
+        env:
+          JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
+          REDIS_PASSWORD: ci-dummy-redis-password
+          VIDRA_CORE_TAG: ci-dummy
+          VIDRA_USER_TAG: ci-dummy
+          VIDRA_SEARCH_TAG: ci-dummy
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            --env-file env/production.env.example \
+            --profile core --profile frontend config > /tmp/prod-config.yml
+          python3 - <<'PY'
+          import sys, yaml
+          svcs = yaml.safe_load(open('/tmp/prod-config.yml'))['services']
+          bad = []
+          for name in ('postgres', 'redis', 'search'):
+              published = svcs[name].get('ports') or []
+              if published:
+                  bad.append(f'{name} still publishes {published}')
+          for name in ('api', 'frontend'):
+              for p in svcs[name].get('ports') or []:
+                  host = p.get('host_ip') if isinstance(p, dict) else p
+                  if host not in ('127.0.0.1', '::1'):
+                      bad.append(f'{name} publishes on {host!r}, not loopback')
+          if bad:
+              print('::error::the production overlay is NOT closing the internal ports')
+              print('(a Compose older than 2.24 ignores !reset/!override silently)')
+              print('\n'.join(bad))
+              sys.exit(1)
+          print('OK: postgres/redis/search publish nothing; api/frontend are loopback-only.')
+          PY
+
+      # Readiness plan step 1: vidra-core's api `environment:` map is an explicit
+      # allow-list and there is no `env_file:` anywhere in the stack, so a key the
+      # Go config reads but the map does not pass through is UNSETTABLE — silently,
+      # and invisibly to every other gate. That is the class of bug that left
+      # JWT_SECRET with no path into the container.
+      - name: Every config key vidra-core reads has a compose consumer
+        run: |
+          docker compose --profile core config > /tmp/base-config.yml
+          grep -oE 'getEnv[A-Za-z]*\("[A-Z0-9_]+"' vidra-core/internal/config/config.go \
+            | sed 's/.*"\(.*\)"/\1/' | sort -u > /tmp/go-keys.txt
+          python3 - <<'PY'
+          import sys, yaml
+          env = yaml.safe_load(open('/tmp/base-config.yml'))['services']['api'].get('environment') or {}
+          go = [k.strip() for k in open('/tmp/go-keys.txt') if k.strip()]
+          missing = sorted(k for k in go if k not in env)
+          if missing:
+              print('::error::config keys read by vidra-core with NO consumer in the rendered api environment:')
+              print('\n'.join(missing))
+              print('Add them to the api `environment:` map in vidra-core/docker-compose.yml.')
+              sys.exit(1)
+          print(f'OK: all {len(go)} config keys reach the container ({len(env)} entries in the map).')
+          PY
+
       - name: Exercise bootstrap.sh's idempotent update path
         run: |
           ./bootstrap.sh
           test -d vidra-core/.git
           test -d vidra-search/.git
           test -d vidra-user/.git
+
+  # Readiness plan step 2's "Verify": render a template with dummy secrets, boot
+  # the api in PRODUCTION mode, and assert /readyz 200. Separate job because it
+  # compiles vidra-core, and the `validate` job above must stay fast.
+  #
+  # What this actually proves, and nothing else does: that every value the api
+  # needs in production mode has a path from an env file, through compose
+  # substitution, into the container, and past `config.validate()`. That is the
+  # exact failure JWT_SECRET had — invisible to `config -q`, invisible to every
+  # sub-repo's CI, visible only at boot.
+  boot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out vidra-core (build context + compose include)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yegamble/vidra-core
+          path: vidra-core
+          persist-credentials: false
+
+      - name: Check out vidra-search (for the search service + migrations)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yegamble/vidra-search
+          path: vidra-search
+          persist-credentials: false
+
+      # Not built here, but docker-compose.yml declares its build context, so the
+      # directory has to exist for the model to load.
+      - name: Check out vidra-user (frontend build context)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yegamble/vidra-user
+          path: vidra-user
+          persist-credentials: false
+
+      # Dummy secrets, real shapes. Deliberately NOT env/production.env.example
+      # verbatim: that template ships blank/`<generate: …>` placeholders for the
+      # secrets and Spaces keys, so it cannot boot until an operator edits it —
+      # which is the intended UX, not a defect. What is under test here is the
+      # plumbing, so the externals it would otherwise need (S3, SMTP, ClamAV) are
+      # switched off and everything else is production.
+      #
+      # The search integration is off because SEARCH_SERVICE_URL is unset here and
+      # the compose default is empty — but ONLY as long as every compose call
+      # below passes an explicit `-f docker-compose.yml`. A bare `docker compose`
+      # auto-loads docker-compose.override.yml, which forces RATE_LIMIT_ENABLED
+      # false and injects the dev SEARCH_SERVICE_URL + SEARCH_INTERNAL_SECRET; the
+      # api would then boot in a hybrid dev/production config and this job would
+      # prove less than it claims. The explicit `-f` is the same thing production
+      # does, for the same reason (see deploy/README.md).
+      - name: Write a bootable production env file
+        run: |
+          cat > env/ci-boot.env <<EOF
+          VIDRA_ENV=production
+          HTTP_PORT=8099
+          PUBLIC_BASE_URL=https://ci.example.invalid
+          CORS_ALLOWED_ORIGINS=https://ci.example.invalid
+          JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
+          MFA_KEY_KEK=$(openssl rand -base64 32 | tr -d '\n')
+          POSTGRES_USER=vidra
+          POSTGRES_PASSWORD=ci-dummy-password
+          POSTGRES_DB=vidra
+          STORAGE_BACKEND=local
+          MAIL_ENABLED=false
+          MALWARE_SCAN_ENABLED=false
+          FEDERATION_ENABLED=false
+          TRANSCODING_ENABLED=false
+          REGISTRATION_ENABLED=false
+          METRICS_ENABLED=true
+          LOG_FORMAT=json
+          EOF
+
+      # `up api` (not the whole profile) starts exactly postgres, redis, migrate
+      # and api via depends_on — the search service is not part of what this job
+      # is testing and building it too would double the job's runtime.
+      - name: Boot the api in production mode
+        run: docker compose -f docker-compose.yml --env-file env/ci-boot.env --profile core up -d --build api
+
+      - name: /readyz returns 200
+        run: |
+          for _ in $(seq 1 40); do
+            if curl -fsS -m 5 http://127.0.0.1:8099/readyz; then
+              echo
+              echo "OK: the api booted with VIDRA_ENV=production and /readyz is 200."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::the api never became ready" >&2
+          docker compose -f docker-compose.yml --env-file env/ci-boot.env --profile core logs --tail=100 api >&2
+          exit 1
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.yml --env-file env/ci-boot.env --profile core down -v

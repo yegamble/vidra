@@ -18,6 +18,10 @@ exposed to the browser.
 ## Prerequisites
 
 - **Docker** with Compose **v2.20+** (the root compose uses `include:` and profiles).
+  Deploying with `docker-compose.prod.yml` additionally needs **v2.24+** — it uses
+  the `!reset`/`!override` merge tags, without which the production overlay
+  silently fails to close the published database ports
+  (see [`deploy/README.md`](deploy/README.md#host-prerequisites)).
 - **GNU make** and **git**.
 - **Node.js 20+** and **npm**, for host-side frontend dev.
 
@@ -55,10 +59,21 @@ stack disables the global API rate limiter by default — re-enable it with
 | `make e2e-backed` | Run the backend-backed Playwright suite against **`vidra-core`'s own compose stack** (no search service). |
 | `make logs` | Tail all service logs. |
 | `make down` | Stop the stack; data volumes preserved. |
-| `make nuke` | **Destructive.** Stop the stack and delete data volumes (fresh start). |
+| `make nuke` | **Destructive.** Stop the stack and delete data volumes (fresh start). Prompts, or needs `CONFIRM=1`. |
 | `make ipfs-live` | Core stack + live public IPFS mirror + separate private mirror (see below). |
 | `make env-check` | Show which env template the compose commands would use. |
 | `make help` | List all targets. |
+
+Production/staging operations (all honour `PROD_ENV_FILE=env/staging.env`):
+
+| Command | What it does |
+|---------|--------------|
+| `make prod-config` | Render + validate the production compose chain; catches missing required secrets. |
+| `make deploy` | `deploy/deploy.sh`: pre-deploy dump → pull → gated migrations → `up -d --no-build` → probe. |
+| `make rollback TAG=v0.1.0` | Rewrite the three `VIDRA_*_TAG` values, pull, restart, re-probe. App only — no schema change. |
+| `make backup` | `deploy/backup.sh`: `pg_dump -Fc` → gzip → optional off-site → 14 daily + 8 weekly retention. |
+| `make restore DUMP=… CONFIRM=1` | **Destructive.** `deploy/restore.sh`: drop, recreate, `pg_restore -j4`, migrate, probe. Prompts, or needs `CONFIRM=1`. |
+| `make prod-logs` / `make prod-down` | Tail / stop the production stack. |
 
 ## Hot reload (`make dev-hot`)
 
@@ -94,19 +109,39 @@ only the libp2p swarm port is public. This is an intentional disclosure boundary
 The canonical environment matrix lives in
 [`.ralph/specs/environments.md`](.ralph/specs/environments.md), with ready-to-copy
 per-environment templates under [`env/`](env/) and a reference single-host TLS
-deployment (compose + Caddy) under [`deploy/`](deploy/):
+deployment (compose overlay + Caddy + deploy/backup/rollback scripts) under
+[`deploy/`](deploy/).
+
+A **real deployment never builds on the box** — it pulls tagged images from GHCR
+and applies [`docker-compose.prod.yml`](docker-compose.prod.yml), which is what
+binds the api/frontend to `127.0.0.1`, removes the Postgres/Redis/search port
+publishes entirely, and adds restart policies, log caps and TLS:
 
 ```bash
-cp env/staging.env.example env/staging.env   # fill in secrets
-docker compose --env-file env/staging.env --profile core --profile frontend up -d --build
+cp env/production.env.example env/production.env   # fill in secrets; it is git-ignored
+git check-ignore -v env/production.env             # must match, or stop
+
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  --env-file env/production.env --profile core --profile frontend pull
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  --env-file env/production.env --profile core --profile frontend up -d --no-build
 ```
 
-Two rules worth internalizing: **staging is production config with throwaway data**
-(promote the exact image tags), and the containerized frontend bakes
-`NEXT_PUBLIC_API_BASE_URL` at **build** time — one frontend image per environment.
-Production is fail-secure (`VIDRA_ENV=production` refuses dev secrets and dev mail
-capture); see [`deploy/README.md`](deploy/README.md), which also covers backups,
-promotion, and health probes (`/healthz`, `/readyz`).
+In practice use `./deploy/deploy.sh` (= `make deploy`), which wraps that with a
+pre-deploy dump, exit-code-gated migrations and health probes. Note the explicit
+`-f` chain **disables** auto-loading of `docker-compose.override.yml` — intended,
+but it means production must set `SEARCH_SERVICE_URL` and `SEARCH_INTERNAL_SECRET`
+in the env file itself.
+
+Three rules worth internalizing: **staging is production config with throwaway
+data** (promote the exact image tags); the containerized frontend bakes
+`NEXT_PUBLIC_API_BASE_URL` at **build** time, so a restart cannot repoint it; and
+**register the owner account before opening registration** — the first account on
+an empty `users` table is auto-granted admin. Production is fail-secure
+(`VIDRA_ENV=production` refuses dev secrets and dev mail capture); see
+[`deploy/README.md`](deploy/README.md) for first-boot ordering, host
+prerequisites, the firewall caveat, backups/restore, secret rotation, and the
+dirty-migration runbook.
 
 ## The API contract
 
@@ -153,7 +188,8 @@ directories are independent git checkouts, git-ignored by this repo.
 | [`.ralph/specs/search.md`](.ralph/specs/search.md) | Cross-repo map of the `vidra-search` service and how it plugs into core and user. |
 | [`.ralph/specs/peertube-feature-ledger.md`](.ralph/specs/peertube-feature-ledger.md) | PeerTube feature-parity ledger with per-feature status and evidence. |
 | [`.ralph/specs/environments.md`](.ralph/specs/environments.md) | Canonical environment matrix (local / dev / QA / staging / production) and the DX contract. |
-| [`deploy/README.md`](deploy/README.md) | Reference single-host deployment: compose + Caddy TLS, env rules, backups, promotion, health probes. |
+| [`deploy/README.md`](deploy/README.md) | Reference single-host deployment: first-boot ordering, host prerequisites + firewall, droplet sizing, the prod compose overlay + Caddy TLS, deploy/rollback/backup/restore scripts, dirty-migration runbook, secret-rotation table, email. |
+| [`docs/production-readiness-2026-07.md`](docs/production-readiness-2026-07.md) | Launch-gate audit: what must be done before a public deploy, and what is already handled. |
 
 ## Autonomous development (Ralph)
 

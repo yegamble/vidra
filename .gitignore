@@ -26,6 +26,26 @@
 !**/.ralph/docs/generated/.gitkeep
 .ralph_backup_*
 
+# Filled-in environment files. `deploy/README.md` tells the operator to
+# `cp env/production.env.example env/production.env` and then paste real
+# secrets (JWT_SECRET, POSTGRES_PASSWORD, the envelope KEKs) into it, so the
+# concrete *.env files must never be committable. Only the *.example templates
+# — which carry placeholders and generation recipes — stay tracked.
+env/*.env
+!env/*.env.example
+# ...and their backups. `deploy/rollback.sh` does `cp "$ENV_FILE" "$ENV_FILE.bak"`
+# before it rewrites the image tags, producing `env/production.env.bak` — a
+# byte-for-byte copy of every production secret that the `env/*.env` glob above
+# does NOT match (the name does not end in `.env`). Listed after the
+# `.env.example` negation so the ordering is explicit; `.env.example` files are
+# unaffected because they do not end in `.env.bak`.
+env/*.env.bak
+
+# Local backup artifacts written by deploy/backup.sh and deploy/deploy.sh.
+# These are full pg_dumps: they contain every user row and every secret the
+# application persists, so they are never allowed near git.
+/backups/
+
 # Logs / OS / temp
 *.log
 .DS_Store

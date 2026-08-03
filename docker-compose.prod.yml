@@ -1,0 +1,298 @@
+# PRODUCTION OVERLAY — never used alone, and never auto-loaded.
+#
+# Apply it on top of the base file with an EXPLICIT -f chain:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     --env-file env/production.env --profile core --profile frontend pull
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     --env-file env/production.env --profile core --profile frontend up -d --no-build
+#
+# (= what deploy/deploy.sh runs). An explicit -f chain DISABLES auto-loading of
+# docker-compose.override.yml — which is exactly what production wants, because
+# that file carries local-development defaults (RATE_LIMIT_ENABLED=false above
+# all). The one thing it also carries is the api's SEARCH_SERVICE_URL /
+# SEARCH_INTERNAL_SECRET wiring, so production MUST set SEARCH_SERVICE_URL
+# (=http://search:8080) and SEARCH_INTERNAL_SECRET in env/production.env or the
+# search integration silently degrades to local SQL. See deploy/README.md.
+#
+# What this file changes versus the dev stack, and why:
+#   1. Nothing but Caddy is reachable from off-host. postgres/redis/search lose
+#      their published ports entirely; api and frontend publish on 127.0.0.1
+#      only. This is the ONLY firewall that actually works: Docker installs its
+#      DOCKER-USER iptables rules AHEAD of ufw, so a host firewall does not
+#      filter published container ports. (The same technique is already used for
+#      the IPFS RPC ports in vidra-core/docker-compose.yml.)
+#   2. Images are PULLED from GHCR by immutable tag instead of built on the box.
+#   3. restart: unless-stopped everywhere long-lived, so a reboot returns the
+#      stack unattended. Requires `systemctl enable --now docker` on the host.
+#   4. Capped json-file logging on every service — the daemon default is
+#      UNBOUNDED, and the api emits a JSON line per request onto the same disk
+#      as Postgres and the media volume.
+#   5. Named volumes for everything that must survive `up -d`, including Caddy's
+#      ACME account+certificates (re-issuing on every deploy hits Let's Encrypt
+#      rate limits fast).
+#   6. A Caddy TLS terminator that does single-origin path routing (deploy/Caddyfile).
+
+# Capped container logs. Anchored once and applied to every service below; a
+# service that forgets it inherits the daemon default, which is uncapped.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  # ---------------------------------------------------------------------------
+  # One-shot volume preparation. MUST run before api/search.
+  #
+  # WHY THIS EXISTS: all three application images run as non-root uid 10001
+  # (vidra-core/Dockerfile:39,56 and vidra-search/Dockerfile:17,19). Docker
+  # creates a named volume's mount point owned by root:root 0755 whenever that
+  # path does NOT already exist inside the image — and /app/data, /scratch and
+  # /var/lib/vidra-search/models do not. Verified empirically: without this
+  # service the api gets "permission denied" on the very first os.MkdirTemp in
+  # /scratch (every transcode fails) and on creating STORAGE_LOCAL_ROOT.
+  #
+  # Idempotent and non-recursive on purpose: it only fixes the mount points, so
+  # it stays instant even once the media volume is large. Content created later
+  # is already owned by uid 10001.
+  #
+  # live_hls is deliberately NOT touched: the api only READS it, and the
+  # `media`-profile rtmp server writes it as its own user.
+  prep-volumes:
+    image: alpine:3.24
+    profiles: ["core"]
+    restart: "no"
+    logging: *logging
+    user: "0:0"
+    command:
+      - "sh"
+      - "-euc"
+      - |
+        mkdir -p /app/data/media /scratch /var/lib/vidra-search/models
+        chown 10001:10001 /app/data /app/data/media /scratch /var/lib/vidra-search/models
+        chmod 0750 /app/data /app/data/media /scratch /var/lib/vidra-search/models
+    volumes:
+      - media_data:/app/data
+      - transcode_tmp:/scratch
+      - search_models:/var/lib/vidra-search/models
+
+  postgres:
+    # Nothing off the compose network needs Postgres. `!reset` is REQUIRED here:
+    # Compose MERGES sequence fields across a -f chain, so a plain `ports: []`
+    # appends nothing and the base file's 0.0.0.0:5432 publish survives (verified
+    # with `config`). `!reset` is what actually closes the port — after bring-up,
+    # `nmap -Pn -p 5432 <droplet>` must report closed or this overlay is not
+    # being applied. Needs Compose >= 2.24; see deploy/README.md prerequisites.
+    ports: !reset []
+    restart: unless-stopped
+    logging: *logging
+    # Tuning defaults are sized for the plan's PUBLIC-LAUNCH droplet (8 vCPU /
+    # 16 GB). On the 4 vCPU / 8 GB floor droplet set
+    # POSTGRES_SHARED_BUFFERS=512MB and POSTGRES_EFFECTIVE_CACHE_SIZE=3GB in the
+    # env file, otherwise Postgres reserves memory the api + ffmpeg need.
+    # effective_cache_size is a planner hint only; it allocates nothing.
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=${POSTGRES_SHARED_BUFFERS:-2GB}"
+      - "-c"
+      - "effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-6GB}"
+      - "-c"
+      - "max_connections=${POSTGRES_MAX_CONNECTIONS:-100}"
+
+  redis:
+    # `!reset`, not `[]` — see the postgres note above.
+    ports: !reset []
+    restart: unless-stopped
+    logging: *logging
+    # Redis holds nothing durable (cache + rate-limit/dedup counters), so
+    # persistence is off on purpose: no RDB snapshots, no AOF, and a hard
+    # 256 MB ceiling with LRU eviction rather than an OOM kill.
+    #
+    # requirepass is NOT optional here — an unauthenticated Redis on a shared
+    # bridge network is a remote-code-execution primitive. Because this changes
+    # the DSN shape, the api and search REDIS_URL values are rewritten below to
+    # carry the password; do not set REDIS_URL/SEARCH_REDIS_URL by hand unless
+    # you include the credentials yourself.
+    command:
+      - "redis-server"
+      - "--save"
+      - ""
+      - "--appendonly"
+      - "no"
+      - "--requirepass"
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD is required in production (openssl rand -hex 32 - hex not base64, because the value is substituted into a redis:// DSN)}"
+      - "--maxmemory"
+      - "${REDIS_MAXMEMORY:-256mb}"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+    healthcheck:
+      # The base healthcheck runs a bare `redis-cli ping`, which returns NOAUTH
+      # once requirepass is set — the container would never become healthy and
+      # api/search would wait forever on their service_healthy dependency.
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?REDIS_PASSWORD is required in production (openssl rand -hex 32 - hex not base64, because the value is substituted into a redis:// DSN)}", "--no-auth-warning", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Both migration one-shots keep their base definition (image, path, database
+  # arg); they only need capped logs. deploy/deploy.sh runs them as discrete,
+  # exit-code-gated `run --rm` steps BEFORE `up -d`, so a failed migration never
+  # fans out into a half-started stack.
+  migrate:
+    logging: *logging
+
+  search-migrate:
+    logging: *logging
+
+  api:
+    # Pull the release image instead of building on the droplet. The base file
+    # still declares `build:` (it is the dev definition); `pull_policy: always`
+    # plus `up -d --no-build` guarantees the registry image wins and the droplet
+    # never compiles Go or runs `next build`.
+    image: ghcr.io/yegamble/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    pull_policy: always
+    # Loopback publish only — Caddy reaches the api over the compose network as
+    # `api:8080`, so this mapping exists purely for local curl/probes on the box
+    # (deploy.sh, restore.sh and the runbook use it). `!override` REPLACES the
+    # base file's 0.0.0.0:8080 publish; without it Compose would merge the two
+    # and the api would still be listening on every interface.
+    ports: !override
+      - "127.0.0.1:${HTTP_PORT:-8080}:8080"
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - "no-new-privileges:true"
+    # ffmpeg runs INSIDE this container, so it is the one service that needs a
+    # real resource envelope. Defaults target the 8 vCPU / 16 GB public-launch
+    # droplet and leave one core for Postgres + the API itself.
+    # IMPORTANT: Docker REJECTS a cpus value above the host's core count — on
+    # the 4 vCPU floor droplet set API_CPUS=3.0 and API_MEM_LIMIT=4g.
+    cpus: "${API_CPUS:-7.0}"
+    mem_limit: ${API_MEM_LIMIT:-6g}
+    # HTTP_SHUTDOWN_TIMEOUT defaults to 20s but Docker's default stop grace is
+    # 10s, so without this the graceful drain is SIGKILLed halfway.
+    stop_grace_period: 30s
+    depends_on:
+      prep-volumes:
+        condition: service_completed_successfully
+    environment:
+      # THE production assertion. The base file deliberately declares
+      # `JWT_SECRET: ${JWT_SECRET:-}` (vidra-core/docker-compose.yml) because it
+      # is `include:`d by `make dev`, `make up` and meta-ci, all of which render
+      # with no env file at all — and a required-variable reference aborts
+      # RENDERING outright, not just booting. Production is where the assertion
+      # belongs, and this is it.
+      #
+      # `:?` fails on EMPTY as well as unset, which is the case that matters:
+      # env/production.env.example ships `JWT_SECRET=` blank, so without this
+      # line `$COMPOSE config -q` (deploy.sh step 0, `make prod-config`) renders
+      # exit-0 on an unedited env file and the failure only surfaces later as an
+      # api boot-loop against validate().
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in production - generate with `openssl rand -base64 48` and put it in env/production.env (>=32 bytes; the dev default is rejected at api boot)}
+      # Redirects all nine MkdirTemp/CreateTemp sites (HLS ladder, VP9 second
+      # encode, the uncompressed PCM wav Whisper needs, trick-play I-frames) off
+      # the container writable layer and onto the transcode_tmp volume. Budget
+      # ~4x UPLOAD_MAX_SIZE per concurrent transcode; back this volume with a
+      # Block Storage device, not the root disk Postgres lives on.
+      TMPDIR: /scratch
+      # Rewritten because redis now requires a password. ${REDIS_URL} still wins
+      # if the operator points at a managed Redis (use a rediss:// URL there).
+      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required in production (openssl rand -hex 32 - hex not base64, because the value is substituted into a redis:// DSN)}@redis:6379/0}
+    volumes:
+      # Only load-bearing with STORAGE_BACKEND=local. Without it, media lands on
+      # the container writable layer and `up -d` destroys it while the Postgres
+      # rows survive, pointing at nothing.
+      - media_data:/app/data
+      - transcode_tmp:/scratch
+    healthcheck:
+      # Stricter than the image's baked HEALTHCHECK (/healthz, liveness only):
+      # /readyz also proves Postgres and Redis are reachable. The frontend's
+      # depends_on condition is service_healthy, so this gates first render.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    image: ghcr.io/yegamble/vidra-user:${VIDRA_USER_TAG:?VIDRA_USER_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    pull_policy: always
+    # !override — replaces the base 0.0.0.0:3000 publish, see the api note.
+    ports: !override
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - "no-new-privileges:true"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  search:
+    image: ghcr.io/yegamble/vidra-search:${VIDRA_SEARCH_TAG:?VIDRA_SEARCH_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    pull_policy: always
+    # Internal service: HMAC-authenticated, called only by vidra-core, never by
+    # a browser. The base file publishes SEARCH_HTTP_PORT for local inspection;
+    # production removes the publish entirely (`!reset`, see the postgres note).
+    ports: !reset []
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - "no-new-privileges:true"
+    depends_on:
+      prep-volumes:
+        condition: service_completed_successfully
+    environment:
+      REDIS_URL: ${SEARCH_REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required in production (openssl rand -hex 32 - hex not base64, because the value is substituted into a redis:// DSN)}@redis:6379/1}
+    volumes:
+      # Trained ranking models. Losing them is recoverable (the model-loader job
+      # rebuilds), but a rebuild costs a full retraining cycle of degraded
+      # ranking, so they get a volume.
+      - search_models:/var/lib/vidra-search/models
+
+  caddy:
+    image: caddy:2-alpine
+    # No profile: this file is only ever applied to a production deploy, and the
+    # TLS terminator must come up with every one of them.
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      # The only two ports on the droplet that face the internet. 80 is required
+      # even for an HTTPS-only site: Let's Encrypt's HTTP-01 challenge uses it,
+      # and Caddy redirects everything else to 443.
+      - "80:80"
+      - "443:443"
+    depends_on:
+      # required: false so a `caddy`-only restart still works if the app
+      # services happen to be down; Caddy resolves upstreams at request time and
+      # answers 502 until they return, which is the behaviour you want.
+      api:
+        condition: service_started
+        required: false
+      frontend:
+        condition: service_started
+        required: false
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # ACME account key + issued certificates. MUST be a named volume: an
+      # ephemeral /data means a fresh certificate order on every `up -d`, and
+      # Let's Encrypt's duplicate-certificate limit (5/week) is reached in a
+      # single afternoon of deploys.
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  # STORAGE_BACKEND=local media root (/app/data/media). Unused with s3.
+  media_data:
+  # ffmpeg scratch (TMPDIR). Back this with Block Storage — see deploy/README.md.
+  transcode_tmp:
+  # vidra-search trained ranking models (MODEL_DIR).
+  search_models:
+  # Caddy ACME account + certificates. Destroying this re-issues certificates.
+  caddy_data:
+  caddy_config:

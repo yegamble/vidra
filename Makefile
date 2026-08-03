@@ -7,6 +7,11 @@ SHELL := /bin/bash
 ENV_FILE ?= env/local.env
 IPFS_PUBLIC_GATEWAY_URL ?= https://ipfs.io
 
+# Production targets operate on a DIFFERENT env file and a DIFFERENT compose
+# chain from every dev target above; nothing below can touch a local stack by
+# accident. Override with `make deploy PROD_ENV_FILE=env/staging.env`.
+PROD_ENV_FILE ?= env/production.env
+
 .PHONY: help
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -75,8 +80,24 @@ dev-hot-nuke: ## Stop hot-reload stack AND delete ALL volumes (db data + go/npm 
 down: ## Stop the stack (data volumes preserved)
 	docker compose --profile core --profile frontend --profile storage down
 
+# `nuke` is one character away from `down` and it deletes postgres_data — every
+# account, video row and moderation decision on the machine. The guard makes the
+# destructive variant impossible to reach by typo: it needs either CONFIRM=1 or
+# the word "nuke" typed at an interactive prompt, and it refuses outright when
+# there is no terminal (CI, a script, an editor task runner).
 .PHONY: nuke
-nuke: ## Stop the stack AND delete data volumes (fresh start)
+nuke: ## Stop the stack AND delete data volumes (fresh start) — needs CONFIRM=1
+	@if [ "$(CONFIRM)" = "1" ]; then \
+		echo "CONFIRM=1 given — proceeding."; \
+	elif [ -t 0 ]; then \
+		echo "This DELETES all local data volumes (postgres_data, media, caches)."; \
+		read -r -p 'Type "nuke" to confirm: ' answer; \
+		[ "$$answer" = "nuke" ] || { echo "Aborted."; exit 1; }; \
+	else \
+		echo "Refusing: 'make nuke' deletes all local data volumes."; \
+		echo "Re-run interactively, or pass CONFIRM=1 if you really mean it."; \
+		exit 1; \
+	fi
 	docker compose --profile core --profile frontend --profile storage down -v
 
 .PHONY: logs
@@ -106,3 +127,61 @@ seed: ## Seed a demo account + channel against the running local api
 .PHONY: env-check
 env-check: ## Show which env template the compose commands would use
 	@echo "ENV_FILE=$(ENV_FILE)"; test -f $(ENV_FILE) && echo "exists" || echo "missing — copy env/<env>.env.example"
+
+# ---------------------------------------------------------------------------
+# Production / staging operations. Thin wrappers over deploy/*.sh so the runbook
+# and muscle memory agree; every script works standalone too. All of them use
+# the explicit -f chain (base + prod overlay), which deliberately DISABLES
+# auto-loading of docker-compose.override.yml — that file carries dev defaults
+# such as RATE_LIMIT_ENABLED=false. See deploy/README.md.
+# ---------------------------------------------------------------------------
+PROD_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+	--env-file $(PROD_ENV_FILE) --profile core --profile frontend
+
+.PHONY: prod-config
+prod-config: ## Render+validate the production compose chain (catches missing required vars)
+	$(PROD_COMPOSE) config -q && echo "OK: $(PROD_ENV_FILE) renders cleanly"
+
+.PHONY: deploy
+deploy: ## Deploy the tags pinned in PROD_ENV_FILE: dump -> pull -> gated migrate -> up -> probe
+	ENV_FILE=$(PROD_ENV_FILE) ./deploy/deploy.sh
+
+.PHONY: rollback
+rollback: ## Roll the app back to a released tag: make rollback TAG=v0.1.0
+	@test -n "$(TAG)" || { echo "usage: make rollback TAG=v0.1.0"; exit 1; }
+	ENV_FILE=$(PROD_ENV_FILE) ./deploy/rollback.sh $(TAG)
+
+.PHONY: backup
+backup: ## Take a database dump now (same script the systemd timer runs)
+	ENV_FILE=$(PROD_ENV_FILE) ./deploy/backup.sh
+
+# restore.sh refuses to run without --yes or RESTORE_CONFIRM=<db name>, and that
+# refusal is the whole point of the script — so the target has to supply the
+# confirmation itself, and therefore has to ask for one first. Same convention as
+# `make nuke`: CONFIRM=1, or the word typed at an interactive prompt, and a flat
+# refusal when there is no terminal.
+.PHONY: restore
+restore: ## DESTRUCTIVE. Restore a dump: make restore DUMP=backups/vidra-<ts>.dump.gz — needs CONFIRM=1
+	@test -n "$(DUMP)" || { echo "usage: make restore DUMP=backups/vidra-<ts>.dump.gz CONFIRM=1"; exit 1; }
+	@test -f "$(DUMP)" || { echo "dump not found: $(DUMP)"; exit 1; }
+	@if [ "$(CONFIRM)" = "1" ]; then \
+		echo "CONFIRM=1 given — proceeding."; \
+	elif [ -t 0 ]; then \
+		echo "This DROPS the database of the stack described by $(PROD_ENV_FILE)"; \
+		echo "and replaces it with $(DUMP). Everything written since is lost."; \
+		read -r -p 'Type "restore" to confirm: ' answer; \
+		[ "$$answer" = "restore" ] || { echo "Aborted."; exit 1; }; \
+	else \
+		echo "Refusing: 'make restore' drops and recreates the $(PROD_ENV_FILE) database."; \
+		echo "Re-run interactively, or pass CONFIRM=1 if you really mean it."; \
+		exit 1; \
+	fi
+	ENV_FILE=$(PROD_ENV_FILE) ./deploy/restore.sh --yes $(DUMP)
+
+.PHONY: prod-logs
+prod-logs: ## Tail production stack logs
+	$(PROD_COMPOSE) logs -f --tail=100
+
+.PHONY: prod-down
+prod-down: ## Stop the production stack (data volumes preserved)
+	$(PROD_COMPOSE) down
