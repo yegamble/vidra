@@ -23,7 +23,7 @@ below were checked against the tree, not against this document.
 | 2 — bootable env templates | ✅ done | Both templates rewritten. meta-ci's new `boot` job writes a production env file with dummy secrets, boots the api with `VIDRA_ENV=production` and asserts `/readyz` 200 — the plan's "Verify" for this step. |
 | 3 — `docker-compose.prod.yml` | ✅ done | Overlay ships. **Correction to the recipe above:** the port closes are `ports: !reset []` / `ports: !override [...]`, not `ports: []` — Compose *merges* sequence fields across a `-f` chain, so a bare `[]` appends nothing and the base publish survives. That raises the floor to Compose ≥ 2.24, and `deploy/{deploy,rollback,restore}.sh` now refuse to run on anything older (an old Compose ignores the tags silently and leaves Postgres/Redis on `0.0.0.0`). |
 | 4.1 / 4.2 / 4.4 / 4.5 | ✅ done | `vidra-core/Dockerfile` stamps `VERSION`/`COMMIT`/`BUILD_DATE`; the frontend release build fails loudly on an unset `NEXT_PUBLIC_API_BASE_URL`; `.ralph/specs/environments.md §2` corrected; `bootstrap.sh` takes `VIDRA_REF=<tag\|sha>` and detaches all three components onto it (default behaviour unchanged). |
-| **4.3 — tag `v0.1.0` ×3, cut GHCR releases** | 🔴 **NOT DONE — blocks every deploy** | `git tag \| wc -l` is still **0** in all four repos. Every `image:` line in `docker-compose.prod.yml` is inert, and `deploy.sh` step 2 (`pull`) cannot succeed until three images exist in GHCR. This is the one remaining launch-gate item. |
+| **4.3 — tag ×3, cut GHCR releases** | ⚠️ **first cut done, superseded** | `0.1.0` (**unprefixed** tag, marked pre-release) was cut in `vidra-core` / `vidra-user` / `vidra-search` on 2026-08-02 and all three images published. They were built from **pre-merge `main`**, so none of them carries this branch: in particular `vidra-user:0.1.0` was built by the old workflow's `\|\| 'http://localhost:8080'` build-arg fallback (the repository variable is unset), which is exactly the silent breakage step 4.2 exists to prevent. **`v0.1.1`, cut from `main` after this branch merges, is the first deployable set** and is what every `image:` line here should pin; treat `0.1.0` as archival. |
 | 5 — request shape, fail-secure, requeue | ✅ done | `IPExtractor` set in `NewServer`; media/stream deadline exemptions; the two production refusals at `config.go:950,953`; `internal/jobrecovery` does the boot-time requeue. |
 | 6 — deploy / rollback / backup / restore | ⚠️ done **except the drill** | All four scripts, the systemd `.service`/`.timer`, the Make wrappers, the dirty-migration runbook and the `make nuke` guard ship (and `make restore` now supplies `restore.sh --yes` behind its own `CONFIRM=1`/prompt, so it can actually succeed). **`deploy/restore.sh` has still never been run against a real dump.** |
 | 7 — host prerequisites + firewall + Caddyfile | ✅ done | `deploy/README.md` "Host prerequisites"; Caddyfile proxies the compose service names, 404s `/metrics`, keeps `encode` off the api routes. `deploy.sh` now refuses to run while a **non-comment** line of `deploy/Caddyfile` still says `example.com`. |
@@ -42,9 +42,12 @@ cannot leak into what it calls a production boot).
 
 ### Still open, in order
 
-1. **Step 4.3 — releases.** Tag `v0.1.0` and cut a GitHub Release in `vidra-core`,
-   `vidra-user` and `vidra-search`; confirm three images land in GHCR. Nothing can
-   be deployed before this.
+1. **Step 4.3 — the `v0.1.1` releases.** The `0.1.0` pre-releases above do not carry
+   this branch. Cut `v0.1.1` in `vidra-core`, `vidra-user` and `vidra-search` from
+   post-merge `main` and confirm three images land in GHCR. `vidra-user`'s release
+   build will refuse to run until the repository variable
+   `NEXT_PUBLIC_API_BASE_URL` is set to the real public api origin — by design; do
+   not restore the loopback fallback to get past it.
 2. **The restore drill.** Run `./deploy/restore.sh` once against a real dump on a
    scratch stack. It is the only part of step 6 no script can prove, and neither it
    nor the 101 down-migrations have ever been exercised end to end.
