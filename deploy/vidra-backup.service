@@ -1,0 +1,47 @@
+# Nightly Vidra database backup. Triggered by vidra-backup.timer, never enabled
+# directly (a Type=oneshot unit with no timer just runs once at boot).
+#
+# Install on the droplet:
+#
+#   sudo cp deploy/vidra-backup.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now vidra-backup.timer
+#   systemctl list-timers vidra-backup.timer      # confirm the next run
+#   sudo systemctl start vidra-backup.service     # prove it works NOW
+#   journalctl -u vidra-backup.service -n 50      # read the output
+#
+# Adjust User= and WorkingDirectory= if the checkout is not the recipe's
+# /opt/vidra owned by the `vidra` user. The user MUST be in the `docker` group:
+# the script talks to the daemon socket.
+
+[Unit]
+Description=Vidra nightly PostgreSQL backup
+Documentation=https://github.com/yegamble/vidra/blob/main/deploy/README.md
+# The script resolves containers through the Docker daemon, so it is pointless
+# before docker is up — and Requires= (not just After=) makes a failed docker
+# start fail the backup loudly instead of producing a confusing socket error.
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=vidra
+Group=vidra
+WorkingDirectory=/opt/vidra
+# ENV_FILE selects the stack; BACKUP_RCLONE_REMOTE / BACKUP_S3_URI (+
+# BACKUP_S3_ENDPOINT and the AWS_* credentials) enable the off-site copy;
+# HEALTHCHECKS_URL turns a MISSING backup into an alert. Put the secrets in a
+# root-owned 0600 file rather than inline here — this unit is world-readable.
+Environment=ENV_FILE=env/production.env
+# EnvironmentFile=-/etc/vidra/backup.env
+ExecStart=/opt/vidra/deploy/backup.sh
+# A dump of a large database can legitimately take a while; the default
+# (infinity for oneshot) is fine, but a bound stops a wedged pg_dump from
+# blocking the next night's run forever.
+TimeoutStartSec=2h
+# Backups must never compete with a transcode for CPU or disk.
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

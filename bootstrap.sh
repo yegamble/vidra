@@ -9,15 +9,39 @@ set -euo pipefail
 OWNER="${VIDRA_GH_OWNER:-yegamble}"
 COMPONENTS=(vidra-core vidra-user vidra-search)
 
+# Optional ref pin (readiness plan step 4.5). Unset — the default — keeps the
+# historical behaviour exactly: clone the default branch, or fast-forward an
+# existing checkout. Set VIDRA_REF to a tag or a commit sha to put all three
+# components on precisely that ref instead:
+#
+#   VIDRA_REF=v0.1.0 ./bootstrap.sh
+#
+# That is what a production host wants. The droplet runs the meta-repo's compose
+# files, but `docker-compose.yml` `include:`s vidra-core's — so a floating
+# component checkout means the compose definition being applied is not the one
+# that was reviewed with the release. The checkout is detached on purpose: a
+# deploy host tracks a release, not a branch.
+VIDRA_REF="${VIDRA_REF:-}"
+
 for r in "${COMPONENTS[@]}"; do
   if [ -d "$r/.git" ]; then
-    echo "==> updating $r"
-    git -C "$r" pull --ff-only
+    if [ -n "$VIDRA_REF" ]; then
+      echo "==> updating $r -> $VIDRA_REF"
+      git -C "$r" fetch --tags --prune origin
+      git -C "$r" checkout --detach "$VIDRA_REF"
+    else
+      echo "==> updating $r"
+      git -C "$r" pull --ff-only
+    fi
   elif [ -e "$r" ]; then
     echo "!!  $r exists but is not a git checkout — skipping (move it aside and re-run)." >&2
   else
     echo "==> cloning $r"
     git clone "https://github.com/$OWNER/$r.git" "$r"
+    if [ -n "$VIDRA_REF" ]; then
+      echo "==> pinning $r to $VIDRA_REF"
+      git -C "$r" checkout --detach "$VIDRA_REF"
+    fi
   fi
 done
 

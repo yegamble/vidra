@@ -1,0 +1,23 @@
+# Runs vidra-backup.service once a day. See vidra-backup.service for install
+# instructions — enable THIS unit, not the service.
+
+[Unit]
+Description=Daily Vidra PostgreSQL backup
+Documentation=https://github.com/yegamble/vidra/blob/main/deploy/README.md
+
+[Timer]
+# 03:15 local time. Deliberately not OnCalendar=daily (midnight): the nightly
+# orphaned-media GC and the abandoned-chunk sweeper are busiest right after
+# midnight, and a dump is cheapest when the box is idle.
+OnCalendar=*-*-* 03:15:00
+# Spread the load if this recipe is ever used for more than one droplet, and
+# stop every instance from hammering the same off-site bucket at once.
+RandomizedDelaySec=15m
+# If the droplet was off (or rebooting) at 03:15, run the backup as soon as it
+# comes back rather than skipping a day. This is what makes a reboot during the
+# backup window a non-event.
+Persistent=true
+AccuracySec=1m
+
+[Install]
+WantedBy=timers.target
