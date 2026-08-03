@@ -289,16 +289,70 @@ $COMPOSE stop api frontend
 ./deploy/rollback.sh v0.1.0
 ```
 
-Equivalent Make targets: `make prod-config`, `make deploy`,
-`make rollback TAG=v0.1.0`, `make backup`,
-`make restore DUMP=… CONFIRM=1`, `make prod-logs`, `make prod-down`. All of them
-honour `PROD_ENV_FILE=env/staging.env`.
+Equivalent Make targets: `make release VERSION=…`, `make prod-config`,
+`make deploy`, `make rollback TAG=v0.1.0`, `make backup`,
+`make restore DUMP=… CONFIRM=1`, `make prod-logs`, `make prod-down`. All the
+compose-based ones honour `PROD_ENV_FILE=env/staging.env`.
 
 `make restore` is the one that asks first: like `make nuke` it wants `CONFIRM=1`
 or the word `restore` typed at an interactive prompt, and refuses outright with
 no terminal (CI, a cron job, an editor task runner). It then invokes
 `deploy/restore.sh --yes`, which is what satisfies that script's own refusal —
 so the confirmation happens exactly once, at the layer the operator is typing at.
+
+### Cutting a release
+
+The "tag a release in the component repo" line above is one command:
+
+```bash
+make release VERSION=v0.2.0                    # all three repos; prompts first
+make release VERSION=v0.2.0 CONFIRM=1          # same, unattended
+make release VERSION=v0.2.0 REPOS="vidra-core" # one repo only
+./deploy/release.sh --yes v0.2.0               # the script directly
+```
+
+Each component repo's `publish-container.yml` runs on `release: published` and
+pushes `ghcr.io/yegamble/<repo>:<tag>`, so cutting the release *is* building the
+image. `deploy/release.sh` creates the release in each repo
+(`--generate-notes --latest`), watches the resulting workflow run to its
+conclusion, and then verifies the image is really in GHCR
+(`docker manifest inspect`, falling back to the GitHub packages API and saying
+which check it used). It exits non-zero with a per-image summary if any repo
+fails, and it does **not** deploy anything — bump `VIDRA_*_TAG` and run
+`./deploy/deploy.sh` when you want the release live.
+
+**Release the three repos at the same version.** Nothing enforces it, but
+`./deploy/rollback.sh v0.1.0` sets all three `VIDRA_*_TAG` values from one
+argument, staging→production promotion copies three identical lines, and "which
+build is running?" during an incident has one answer instead of three. Skipping
+a component that did not change means its tag no longer exists — release it
+anyway.
+
+Guards, all of which fire *before* the first release is created (a release
+notifies watchers and is not meant to be deleted):
+
+- the tag must match `^v[0-9]+\.[0-9]+\.[0-9]+$` — the leading `v` is what
+  `VIDRA_*_TAG` and every image reference here assume;
+- `gh` must be authenticated;
+- the tag must not already exist in **any** target repo;
+- **`vidra-user` needs the `NEXT_PUBLIC_API_BASE_URL` repository variable set**,
+  because its workflow refuses to build without one (the origin is inlined into
+  the browser bundle at build time — see *Staging → production promotion*
+  below). Set it once with
+  `gh variable set NEXT_PUBLIC_API_BASE_URL -R yegamble/vidra-user -b https://your.origin`.
+  Until it is set, `vidra-user` has **no published image** for any tag.
+
+**Re-publishing a tag that already exists** — a build that failed on a transient
+registry error, or a tag released before its workflow existed — does not need a
+new release. Each `publish-container.yml` also takes a `workflow_dispatch` with
+a required `tag` input, checks out that tag, and refuses if the tag does not
+exist (so a typo can never publish the default branch):
+
+```bash
+gh workflow run publish-container.yml -R yegamble/vidra-search -f tag=v0.1.1
+gh run watch "$(gh run list -R yegamble/vidra-search --workflow=publish-container.yml \
+  --limit 1 --json databaseId --jq '.[0].databaseId')" -R yegamble/vidra-search
+```
 
 ### Migration failed mid-deploy
 
