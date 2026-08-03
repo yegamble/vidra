@@ -130,11 +130,23 @@ env-check: ## Show which env template the compose commands would use
 
 # ---------------------------------------------------------------------------
 # Production / staging operations. Thin wrappers over deploy/*.sh so the runbook
-# and muscle memory agree; every script works standalone too. All of them use
-# the explicit -f chain (base + prod overlay), which deliberately DISABLES
-# auto-loading of docker-compose.override.yml — that file carries dev defaults
-# such as RATE_LIMIT_ENABLED=false. See deploy/README.md.
+# and muscle memory agree; every script works standalone too. The compose-based
+# ones all use the explicit -f chain (base + prod overlay), which deliberately
+# DISABLES auto-loading of docker-compose.override.yml — that file carries dev
+# defaults such as RATE_LIMIT_ENABLED=false. See deploy/README.md.
 # ---------------------------------------------------------------------------
+
+# The one prod target that touches GitHub rather than this host: it cuts the
+# releases that BUILD the images every other target here pulls. Publishing is
+# outward-facing and a release is not meant to be deleted, so release.sh asks
+# before it publishes. Same CONFIRM=1 convention as `nuke`/`restore`: CONFIRM=1
+# answers that prompt in advance (it passes --yes); without it the script
+# prompts, and refuses outright when there is no terminal.
+.PHONY: release
+release: ## Cut a release + GHCR images in all three repos: make release VERSION=v0.2.0 [REPOS="vidra-core"]
+	@test -n "$(VERSION)" || { echo "usage: make release VERSION=v0.2.0 [REPOS=\"vidra-core vidra-search\"] [CONFIRM=1]"; exit 1; }
+	./deploy/release.sh $(if $(filter 1,$(CONFIRM)),--yes) $(VERSION) $(REPOS)
+
 PROD_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.prod.yml \
 	--env-file $(PROD_ENV_FILE) --profile core --profile frontend
 

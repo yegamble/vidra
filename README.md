@@ -68,6 +68,7 @@ Production/staging operations (all honour `PROD_ENV_FILE=env/staging.env`):
 
 | Command | What it does |
 |---------|--------------|
+| `make release VERSION=v0.2.0` | `deploy/release.sh`: guarded `gh release create` in all three repos → watch each `publish-container` run → verify the GHCR image. Prompts, or needs `CONFIRM=1`. |
 | `make prod-config` | Render + validate the production compose chain; catches missing required secrets. |
 | `make deploy` | `deploy/deploy.sh`: pre-deploy dump → pull → gated migrations → `up -d --no-build` → probe. |
 | `make rollback TAG=v0.1.0` | Rewrite the three `VIDRA_*_TAG` values, pull, restart, re-probe. App only — no schema change. |
