@@ -186,7 +186,7 @@ watch_publish_run() {
   done
   url="$(gh run view "$run_id" -R "${OWNER}/${repo}" --json url --jq .url)"
   log "watching ${url}"
-  gh run watch "$run_id" -R "${OWNER}/${repo}" --exit-status >/dev/null || {
+  gh run watch "$run_id" -R "${OWNER}/${repo}" --exit-status || {
     printf '[release] ERROR: %s\n' "publish-container failed for ${repo} ${TAG}: ${url}" >&2
     return 1
   }
