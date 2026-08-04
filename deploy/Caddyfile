@@ -126,6 +126,48 @@ example.com {
 			# Caddy from the text/event-stream content type and flushed
 			# immediately; add `flush_interval -1` here if you ever proxy a
 			# streaming response Caddy cannot classify.
+
+			# -------------------------------------------------------------
+			# Deploy-window buffering: hold the request instead of 502ing
+			# while this container is being recreated.
+			#
+			# deploy/deploy.sh step 4/5 (`up -d --no-build`) stops and
+			# recreates api and frontend, so for a few seconds `api:8080`
+			# refuses connections and every request landing in that window
+			# would be a hard 502. With a try duration set, Caddy re-dials
+			# every lb_try_interval for up to that long and the client sees
+			# a slow response instead of an error.
+			#
+			# SAFE FOR EVERY METHOD, POST/PUT/DELETE included, because these
+			# retries only ever fire at DIAL time. Per the reverse_proxy
+			# docs on lb_retry_match: "A request must match this condition
+			# in order to be retried if the connection to the upstream
+			# succeeded but the subsequent round-trip failed. If the
+			# connection to the upstream failed, a retry is always allowed."
+			# A refused dial means the api never received the request, so
+			# replaying it cannot double-charge, double-upload or
+			# double-delete anything. lb_retry_match is deliberately NOT set
+			# here: its default already limits the *mid-request* case to GET
+			# ("By default, only GET requests are retried"), which is the
+			# conservative half of the behaviour and the half we want kept.
+			#
+			# 30s covers a whole recreate — stop (a drained api exits well
+			# inside its 30s stop_grace_period), start, Go boot, /readyz
+			# green. docker-compose.prod.yml budgets the api healthcheck the
+			# same 30s start_period.
+			#
+			# lb_retries is left unset on purpose: it caps retries by COUNT,
+			# and "retries may stop early if the duration is reached … the
+			# retry duration takes precedence over the retry count", so a
+			# count could only end the wait early. 250ms is the documented
+			# default, written out because it is the knob that decides how
+			# fast the returning api is picked up (never set it to 0 — the
+			# docs warn a zero interval with a non-zero duration can spin
+			# the CPU). Each attempt is itself bounded by the transport's
+			# 3s default dial_timeout, but a refused connection fails
+			# immediately, so the interval is what paces the loop.
+			lb_try_duration 30s
+			lb_try_interval 250ms
 		}
 	}
 
@@ -138,7 +180,19 @@ example.com {
 	# for clients that support it.
 	handle {
 		encode zstd gzip
-		reverse_proxy frontend:3000
+		reverse_proxy frontend:3000 {
+			# Same deploy-window buffering as the api block above (see there
+			# for why dial-time retries are safe for every method), with a
+			# larger budget: the frontend is NOT recreated in parallel with
+			# the api, it waits for it. docker-compose.yml declares
+			# `depends_on: api: condition: service_healthy`, so its outage is
+			# the api's whole recreate PLUS its own boot. The api healthcheck
+			# is allowed a 30s start_period and the frontend's own is 20s, so
+			# 45s is a realistic ceiling for the pair without holding a
+			# browser tab open absurdly long.
+			lb_try_duration 45s
+			lb_try_interval 250ms
+		}
 	}
 }
 
