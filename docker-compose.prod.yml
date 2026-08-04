@@ -269,8 +269,10 @@ services:
       - "443:443"
     depends_on:
       # required: false so a `caddy`-only restart still works if the app
-      # services happen to be down; Caddy resolves upstreams at request time and
-      # answers 502 until they return, which is the behaviour you want.
+      # services happen to be down; Caddy resolves upstreams at request time,
+      # holds each request for deploy/Caddyfile's lb_try_duration waiting for
+      # them to come back, and only answers 502 once that expires — which is the
+      # behaviour you want.
       api:
         condition: service_started
         required: false

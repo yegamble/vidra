@@ -61,6 +61,22 @@ jobs:
             shellcheck "$f"
           done
 
+      # deploy/Caddyfile is bind-mounted read-only into the `caddy` service by
+      # docker-compose.prod.yml, and Caddy parses it only when that container
+      # starts — so a typo or an unknown directive does not surface as a failed
+      # deploy step, it surfaces as a crash-looping TLS terminator, which is the
+      # whole site down. `docker compose config` cannot see inside a mounted
+      # file, so nothing else in this job covers it. `caddy validate` adapts the
+      # Caddyfile to JSON and provisions every module exactly as a real start
+      # would, which is precisely the failure being pre-empted. Same image the
+      # overlay runs; `--network none` because adapting must not need DNS, the
+      # network, or an ACME round-trip.
+      - name: deploy/Caddyfile is a valid Caddy config
+        run: |
+          docker run --rm --network none \
+            -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+
       # docker-compose.yml `include:`s ./vidra-core/docker-compose.yml and adds
       # `search`/`search-migrate` services with build context ./vidra-search, so
       # BOTH component repos must be present to resolve the full config. Check them
