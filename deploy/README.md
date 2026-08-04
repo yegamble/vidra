@@ -300,6 +300,33 @@ no terminal (CI, a cron job, an editor task runner). It then invokes
 `deploy/restore.sh --yes`, which is what satisfies that script's own refusal —
 so the confirmation happens exactly once, at the layer the operator is typing at.
 
+### The restart window
+
+Step 4/5 of a deploy recreates the api and frontend containers, so both are
+briefly gone. Caddy buffers that window rather than exposing it: `Caddyfile`
+sets `lb_try_duration` on both reverse-proxy blocks (30s for the api; 45s for
+the frontend, which cannot start until the api is *healthy*), so a request
+arriving mid-deploy is held and re-dialled every 250ms until the container
+answers. Callers get a slow response instead of a 502.
+
+What that is, precisely, and what it is not:
+
+- **It retries connection failures.** A dial that failed is retried for *any*
+  method, because the upstream never received the request — replaying it cannot
+  duplicate an upload or a delete. A request that reached the container and then
+  failed mid-round-trip is retried only if it matches `lb_retry_match`, which
+  defaults to GET. That split is the whole safety argument; do not widen it.
+- **It is not blue-green.** There is one instance of each service and nothing
+  serves while the replacement boots. The wait is real — it is merely spent
+  inside Caddy instead of in an error page.
+- **Requests already in flight are not covered.** They are mid-response on the
+  old container when it gets SIGTERM, so their fate is the graceful drain
+  (`HTTP_SHUTDOWN_TIMEOUT`, 20s by default, inside the 30s
+  `stop_grace_period`), and anything still running when that expires is cut off.
+  Caddy will not replay those: the connection had already succeeded.
+- **Past the duration it is a 502 again.** The buffer covers a normal recreate,
+  not a deploy that is failing — a boot-looping api still surfaces, ~30s later.
+
 ### Cutting a release
 
 The "tag a release in the component repo" line above is one command:
