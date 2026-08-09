@@ -255,6 +255,21 @@ services:
       # ranking, so they get a volume.
       - search_models:/var/lib/vidra-search/models
 
+  # ---------------------------------------------------------------------------
+  # Public IPFS mirror node (base definition: vidra-core/docker-compose.yml).
+  # Not started by default: it lives behind the "ipfs" profile — set
+  # EXTRA_COMPOSE_PROFILES=ipfs in the env file (deploy.sh appends it) or pass
+  # --profile ipfs by hand. The base file already binds the RPC (5001) and the
+  # local gateway (9090) to 127.0.0.1; the libp2p swarm port 4001 (tcp+udp) is
+  # deliberately public — open it in the cloud firewall or the node runs
+  # outbound-only. IPFS_PUBLIC_NETWORK=true announces content to the global
+  # DHT; that disclosure is one-way per published object.
+  ipfs:
+    restart: unless-stopped
+    logging: *logging
+    cpus: ${IPFS_CPUS:-1.0}
+    mem_limit: ${IPFS_MEM_LIMIT:-1g}
+
   caddy:
     image: caddy:2-alpine
     # No profile: this file is only ever applied to a production deploy, and the

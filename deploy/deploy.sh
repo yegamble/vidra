@@ -113,6 +113,13 @@ COMPOSE=(docker compose
   --env-file "$ENV_FILE"
   --profile core --profile frontend)
 
+# Optional extra compose profiles from the env file (space-separated), e.g.
+# EXTRA_COMPOSE_PROFILES=ipfs — kept in the env file so a profile enabled once
+# stays enabled on every subsequent deploy instead of relying on operator memory.
+for extra_profile in $(env_get EXTRA_COMPOSE_PROFILES ""); do
+  COMPOSE+=(--profile "$extra_profile")
+done
+
 step "0/5 pre-flight"
 require_compose_version
 require_real_domain
