@@ -115,6 +115,20 @@ set_key VIDRA_CORE_TAG   "$CORE_TAG"
 set_key VIDRA_USER_TAG   "$USER_TAG"
 set_key VIDRA_SEARCH_TAG "$SEARCH_TAG"
 
+for repo in vidra-core vidra-search vidra-user; do
+  [ -e "$repo" ] || continue
+  [ -d "$repo/.git" ] || die "$repo exists but is not a git checkout"
+  case "$repo" in
+    vidra-core)   tag="$(env_get VIDRA_CORE_TAG '?')" ;;
+    vidra-search) tag="$(env_get VIDRA_SEARCH_TAG '?')" ;;
+    vidra-user)   tag="$(env_get VIDRA_USER_TAG '?')" ;;
+  esac
+  [ "$tag" != "?" ] || continue
+  log "syncing $repo to $tag"
+  git -C "$repo" fetch --tags --quiet || die "git fetch failed in $repo"
+  git -C "$repo" checkout --detach --quiet "$tag" || die "failed to checkout tag $tag in $repo"
+done
+
 COMPOSE=(docker compose
   -f docker-compose.yml
   -f docker-compose.prod.yml
