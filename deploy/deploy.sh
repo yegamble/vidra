@@ -193,6 +193,7 @@ mrc=0; "${COMPOSE[@]}" run --rm migrate || mrc=$?
 
 PG_CID="$("${COMPOSE[@]}" ps -q postgres || true)"
 [ -n "$PG_CID" ] || die "postgres container missing during migration verification"
+# shellcheck disable=SC2012  # ls is deliberate: filenames are numeric by construction, and sort -n works correctly.
 expected_version="$(ls -1 vidra-core/migrations/*.up.sql 2>/dev/null | awk -F/ '{print $NF}' | awk -F_ '{print $1}' | sort -n | tail -1)"
 [ -n "$expected_version" ] || die "failed to determine expected core migration version"
 expected_version_int="$((10#$expected_version))"
