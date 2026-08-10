@@ -125,6 +125,20 @@ require_compose_version
 require_real_domain
 log "compose $(docker compose version --short), deploy/Caddyfile has a real domain"
 
+for repo in vidra-core vidra-search vidra-user; do
+  [ -e "$repo" ] || continue
+  [ -d "$repo/.git" ] || die "$repo exists but is not a git checkout"
+  case "$repo" in
+    vidra-core)   tag="$(env_get VIDRA_CORE_TAG '?')" ;;
+    vidra-search) tag="$(env_get VIDRA_SEARCH_TAG '?')" ;;
+    vidra-user)   tag="$(env_get VIDRA_USER_TAG '?')" ;;
+  esac
+  [ "$tag" != "?" ] || continue
+  log "syncing $repo to $tag"
+  git -C "$repo" fetch --tags --quiet || die "git fetch failed in $repo"
+  git -C "$repo" checkout --detach --quiet "$tag" || die "failed to checkout tag $tag in $repo"
+done
+
 # The render check catches every `${VAR:?}` reference in the chain BEFORE
 # anything is touched. Those are, exhaustively: JWT_SECRET (asserted by
 # docker-compose.prod.yml's api environment), REDIS_PASSWORD (asserted by the
@@ -176,6 +190,26 @@ log "core schema (schema_migrations)"
 # (inside `if ! cmd`, $? is the status of the negation, i.e. always 0).
 mrc=0; "${COMPOSE[@]}" run --rm migrate || mrc=$?
 [ "$mrc" -eq 0 ] || die "CORE MIGRATION FAILED (exit $mrc). The stack has NOT been restarted; the previous release is still serving. See 'Migration failed mid-deploy' in deploy/README.md."
+
+PG_CID="$("${COMPOSE[@]}" ps -q postgres || true)"
+[ -n "$PG_CID" ] || die "postgres container missing during migration verification"
+# shellcheck disable=SC2012  # ls is deliberate: filenames are numeric by construction, and sort -n works correctly.
+expected_version="$(ls -1 vidra-core/migrations/*.up.sql 2>/dev/null | awk -F/ '{print $NF}' | awk -F_ '{print $1}' | sort -n | tail -1)"
+[ -n "$expected_version" ] || die "failed to determine expected core migration version"
+expected_version_int="$((10#$expected_version))"
+
+ledger="$(docker exec -i "$PG_CID" psql -U "$PGUSER" -d "$PGDB" -t -c "SELECT version, dirty FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' ')"
+[ -n "$ledger" ] || die "could not read schema_migrations ledger"
+db_version="${ledger%|*}"
+db_dirty="${ledger#*|}"
+
+if [ "$db_dirty" = "t" ] || [ "$db_dirty" = "true" ]; then
+  die "schema_migrations is DIRTY after migrate step. See 'Migration failed mid-deploy' in deploy/README.md."
+fi
+if [ "$db_version" != "$expected_version_int" ]; then
+  die "schema_migrations version mismatch: expected $expected_version_int, found $db_version. The stack has NOT been restarted."
+fi
+log "core schema OK (version $db_version)"
 
 log "search schema (vidra_search_migrations)"
 src=0; "${COMPOSE[@]}" run --rm search-migrate || src=$?
