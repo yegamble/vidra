@@ -8,7 +8,7 @@ stack plus a production overlay, behind Caddy for TLS.
 |---|---|
 | [`../docker-compose.prod.yml`](../docker-compose.prod.yml) | Production overlay: loopback binds, GHCR images, restart policies, log caps, resource limits, named volumes, Caddy. |
 | [`Caddyfile`](./Caddyfile) | Single-origin TLS reverse proxy (path routing to api/frontend). |
-| [`deploy.sh`](./deploy.sh) | dump → pull → gated migrations → up → probe. |
+| [`deploy.sh`](./deploy.sh) | pin checkouts → dump → pull → gated migrations → up → probe. |
 | [`rollback.sh`](./rollback.sh) | Rewrite the image tags, pull, restart, re-probe. |
 | [`backup.sh`](./backup.sh) | `pg_dump -Fc` → gzip → optional off-site → retention → success marker. |
 | [`restore.sh`](./restore.sh) | **Destructive.** Drop, recreate, `pg_restore -j4`, migrate, re-probe. |
@@ -389,6 +389,8 @@ the api gates on `migrate: condition: service_completed_successfully`, the site
 stays down and each retry fails identically. `deploy.sh` runs the two migrators as
 separate gated steps precisely so you see *which* one failed before anything is
 restarted.
+
+`deploy.sh` also pins nested checkouts to `VIDRA_*_TAG` so the migrators run the matching schema versions, and asserts the final ledger state against `vidra-core/migrations` to ensure it is correctly updated and `dirty=false`.
 
 There are **two independent ledgers**:
 
