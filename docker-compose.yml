@@ -17,9 +17,11 @@
 # Environments: pass one of the env templates (see .ralph/specs/environments.md):
 #   docker compose --env-file env/local.env --profile core --profile frontend up -d
 #
-# NOTE: NEXT_PUBLIC_API_BASE_URL is baked into the frontend image at BUILD time
-# (Next.js inlines NEXT_PUBLIC_* into the client bundle) — changing it requires
-# rebuilding the frontend image, not just restarting it.
+# NOTE: the browser-facing API origin is resolved at RUNTIME — the frontend
+# server injects PUBLIC_API_BASE_URL per request (vidra-user lib/config.ts +
+# app/runtime-config.js), so changing it only needs a restart. The
+# NEXT_PUBLIC_API_BASE_URL build arg below remains solely for images built from
+# older vidra-user code, which baked the origin into the client bundle.
 include:
   - path: ./vidra-core/docker-compose.yml
     # env_file: /dev/null is LOAD-BEARING, not decoration.
@@ -64,8 +66,16 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
+      # Browser-facing API origin, read at RUNTIME by the frontend server (a
+      # restart applies a change; no rebuild). It MUST stay set here: the local
+      # `make up` topology is cross-origin — frontend on :3000, api on :8080 —
+      # so same-origin relative URLs (the unset default) would 404. Production
+      # is the opposite case: docker-compose.prod.yml serves both behind Caddy
+      # on ONE origin and deliberately relies on the env file leaving
+      # NEXT_PUBLIC_API_BASE_URL pointed at that same origin.
+      PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
       # Server Components call the API over compose DNS; the browser keeps
-      # using NEXT_PUBLIC_API_BASE_URL through the host-published port.
+      # using PUBLIC_API_BASE_URL through the host-published port.
       INTERNAL_API_BASE_URL: http://api:8080
       # Server-side log verbosity (lib/logger.ts:62). Same name, semantics and
       # default as the api and search services, so one ${LOG_LEVEL} in the env
