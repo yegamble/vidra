@@ -91,22 +91,16 @@ lightweight **meta-repo**:
 
 ```mermaid
 flowchart LR
-    B["Browser / PWA"] --> U["vidra-user
-    Next.js frontend"]
-    U -->|"HTTP JSON API"| C["vidra-core
-    Go API"]
+    B["Browser / PWA"] --> U["vidra-user<br/>Next.js frontend"]
+    U -->|"HTTP JSON API"| C["vidra-core<br/>Go API"]
     C --> P[("PostgreSQL")]
     C --> R[("Redis")]
-    C -->|"HMAC · ranked IDs"| S["vidra-search
-    search & recommendations"]
+    C -->|"HMAC · ranked IDs"| S["vidra-search<br/>search & recommendations"]
     S --> P
     S --> R
-    C --> M["media storage
-    local / S3-compatible"]
-    C -.->|"optional"| I["IPFS mirrors
-    public + private"]
-    T["nginx-rtmp
-    live ingest"] -.->|"optional"| C
+    C --> M["media storage<br/>local / S3-compatible"]
+    C -.->|"optional"| I["IPFS mirrors<br/>public + private"]
+    T["nginx-rtmp<br/>live ingest"] -.->|"optional"| C
     C -.->|"outbound"| F["Bluesky / ATProto"]
 ```
 
