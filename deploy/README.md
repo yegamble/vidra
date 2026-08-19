@@ -216,6 +216,12 @@ nmap -Pn -p 5432,6379,8080,3000 <droplet-ip>   # must all be closed
 sequence with a pre-deploy dump and health gates and is what you should use for
 every subsequent deploy.
 
+**`POSTGRES_PASSWORD` on a host with an existing database volume:** Postgres
+reads the env value only at initdb — it initializes a *fresh* volume and is
+ignored afterwards. If the volume already exists, set the database's **current**
+password in the env file, not a freshly generated one; rotate by running
+`ALTER USER` inside the container first (see the rotation table below).
+
 Then, before you need them:
 
 ```bash

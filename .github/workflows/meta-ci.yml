@@ -128,13 +128,15 @@ jobs:
       # required variable to docker-compose.prod.yml without adding it here turns
       # this step red, which is the point.
       #
-      # `:?` fails on an EMPTY value too, which is why JWT_SECRET must be passed:
-      # env/production.env.example deliberately ships it blank so a copied-but-
-      # unedited env file fails the render instead of the api's boot.
+      # `:?` fails on an EMPTY value too, which is why JWT_SECRET, REDIS_PASSWORD
+      # and POSTGRES_PASSWORD must be passed: env/production.env.example
+      # deliberately ships them blank so a copied-but-unedited env file fails the
+      # render instead of the api's boot.
       - name: Validate production overlay compose resolves
         env:
           JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
           REDIS_PASSWORD: ci-dummy-redis-password
+          POSTGRES_PASSWORD: ci-dummy-password
           VIDRA_CORE_TAG: ci-dummy
           VIDRA_USER_TAG: ci-dummy
           VIDRA_SEARCH_TAG: ci-dummy
@@ -151,6 +153,7 @@ jobs:
         env:
           JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
           REDIS_PASSWORD: ci-dummy-redis-password
+          POSTGRES_PASSWORD: ci-dummy-password
           VIDRA_CORE_TAG: ci-dummy
           VIDRA_USER_TAG: ci-dummy
           VIDRA_SEARCH_TAG: ci-dummy

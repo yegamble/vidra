@@ -109,7 +109,7 @@ services:
       # password. `:?` fails the RENDER on an empty value as well as an unset
       # one, and it binds here — in this overlay only — so no dev flow ever
       # sees it.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in production (openssl rand -hex 32 - hex not base64, because the value is substituted into a postgres:// DSN)}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in production (openssl rand -hex 32 - hex not base64, because the value is substituted into a postgres:// DSN); on a host with an EXISTING database volume set the database's CURRENT password - the value only initializes a fresh volume, see deploy/README.md}
 
   redis:
     # `!reset`, not `[]` — see the postgres note above.
