@@ -125,7 +125,9 @@ for repo in vidra-core vidra-search vidra-user; do
   esac
   [ "$tag" != "?" ] || continue
   log "syncing $repo to $tag"
-  git -C "$repo" fetch --tags --quiet || die "git fetch failed in $repo"
+  # --force: a tag re-pointed upstream is otherwise refused and the checkout
+  # pins the stale object. Kept identical in deploy.sh.
+  git -C "$repo" fetch --tags --force --quiet || die "git fetch failed in $repo"
   git -C "$repo" checkout --detach --quiet "$tag" || die "failed to checkout tag $tag in $repo"
 done
 

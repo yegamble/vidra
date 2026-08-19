@@ -27,7 +27,9 @@ for r in "${COMPONENTS[@]}"; do
   if [ -d "$r/.git" ]; then
     if [ -n "$VIDRA_REF" ]; then
       echo "==> updating $r -> $VIDRA_REF"
-      git -C "$r" fetch --tags --prune origin
+      # --force: without it git refuses to move a tag this checkout already
+      # has, so a tag re-pointed upstream would pin the stale object forever.
+      git -C "$r" fetch --tags --force --prune origin
       git -C "$r" checkout --detach "$VIDRA_REF"
     else
       echo "==> updating $r"

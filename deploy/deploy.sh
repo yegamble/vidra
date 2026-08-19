@@ -135,7 +135,10 @@ for repo in vidra-core vidra-search vidra-user; do
   esac
   [ "$tag" != "?" ] || continue
   log "syncing $repo to $tag"
-  git -C "$repo" fetch --tags --quiet || die "git fetch failed in $repo"
+  # --force: without it git refuses to move a tag the host already has, so a
+  # tag re-pointed upstream (e.g. after a history rewrite) would silently pin
+  # the STALE object forever. Kept identical in rollback.sh.
+  git -C "$repo" fetch --tags --force --quiet || die "git fetch failed in $repo"
   git -C "$repo" checkout --detach --quiet "$tag" || die "failed to checkout tag $tag in $repo"
 done
 
