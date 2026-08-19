@@ -345,8 +345,9 @@ make release VERSION=v0.2.0 REPOS="vidra-core" # one repo only
 ```
 
 Each component repo's `publish-container.yml` runs on `release: published` and
-pushes `ghcr.io/yegamble/<repo>:<tag>`, so cutting the release *is* building the
-image. `deploy/release.sh` creates the release in each repo
+pushes `ghcr.io/<owner>/<repo>:<tag>` — the owner `deploy/release.sh` targets
+via `GITHUB_OWNER`, which must agree with the `VIDRA_IMAGE_OWNER` the deploy
+overlay pulls from — so cutting the release *is* building the image. `deploy/release.sh` creates the release in each repo
 (`--generate-notes --latest`), watches the resulting workflow run to its
 conclusion, and then verifies the image is really in GHCR
 (`docker manifest inspect`, falling back to the GitHub packages API and saying
