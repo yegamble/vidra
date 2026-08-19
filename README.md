@@ -93,15 +93,17 @@ lightweight **meta-repo**:
 flowchart LR
     B["Browser / PWA"] --> U["vidra-user<br/>Next.js frontend"]
     U -->|"HTTP JSON API"| C["vidra-core<br/>Go API"]
-    C --> P[("PostgreSQL")]
-    C --> R[("Redis")]
     C -->|"HMAC · ranked IDs"| S["vidra-search<br/>search & recommendations"]
-    S --> P
-    S --> R
     C --> M["media storage<br/>local / S3-compatible"]
     C -.->|"optional"| I["IPFS mirrors<br/>public + private"]
     T["nginx-rtmp<br/>live ingest"] -.->|"optional"| C
     C -.->|"outbound"| F["Bluesky / ATProto"]
+    subgraph D["shared datastores"]
+        P[("PostgreSQL")]
+        R[("Redis")]
+    end
+    C --> D
+    S --> D
 ```
 
 | Repo | What | Stack |
