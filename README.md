@@ -40,8 +40,7 @@ on anything S3-compatible if you want it to, and it is free software under AGPL 
   metrics, tracing, backup/restore/rollback scripts.
 
 Vidra is a clean-room, PeerTube-inspired implementation — not a fork, and not a
-hosted service. See it running at [beta.example.com](https://beta.example.com),
-the first public beta instance.
+hosted service.
 
 ## Features
 
