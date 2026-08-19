@@ -151,7 +151,7 @@ services:
     # still declares `build:` (it is the dev definition); `pull_policy: always`
     # plus `up -d --no-build` guarantees the registry image wins and the droplet
     # never compiles Go or runs `next build`.
-    image: ghcr.io/yegamble/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     # Loopback publish only — Caddy reaches the api over the compose network as
     # `api:8080`, so this mapping exists purely for local curl/probes on the box
@@ -217,7 +217,7 @@ services:
       start_period: 30s
 
   frontend:
-    image: ghcr.io/yegamble/vidra-user:${VIDRA_USER_TAG:?VIDRA_USER_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-user:${VIDRA_USER_TAG:?VIDRA_USER_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     # !override — replaces the base 0.0.0.0:3000 publish, see the api note.
     ports: !override
@@ -234,7 +234,7 @@ services:
       start_period: 20s
 
   search:
-    image: ghcr.io/yegamble/vidra-search:${VIDRA_SEARCH_TAG:?VIDRA_SEARCH_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-search:${VIDRA_SEARCH_TAG:?VIDRA_SEARCH_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     # Internal service: HMAC-authenticated, called only by vidra-core, never by
     # a browser. The base file publishes SEARCH_HTTP_PORT for local inspection;
