@@ -173,6 +173,11 @@ docker exec -i "$PG_CID" pg_restore -U "$PGUSER" -d "$PGDB" -j "$JOBS" "$CONTAIN
 # both migrators brings it to HEAD if the dump is older than the deployed code,
 # and is a no-op otherwise. If a migrator reports "dirty", follow the
 # "Migration failed mid-deploy" runbook section in deploy/README.md.
+#
+# Each call passes NO command: the compose `command:` is `migrate up` on that
+# service's own release image, whose migrations are compiled in (no CLI
+# container, no bind-mounted migrations directory). `set -e` is the gate — a
+# non-zero exit from either migrator aborts before api/frontend are started.
 log "running core migrations"
 "${COMPOSE[@]}" run --rm migrate
 log "running search migrations"

@@ -189,6 +189,14 @@ step "3/5 migrations"
 # Two separate ledgers, two separate gates. The search migrator writes
 # vidra_search_migrations; core writes schema_migrations. Either can go dirty
 # independently — see "Migration failed mid-deploy" in deploy/README.md.
+#
+# Both `run --rm` calls below deliberately pass NO command: each service's
+# compose `command:` is `migrate up` on that service's OWN release image (the
+# migrations are compiled into the api and search binaries — no golang-migrate
+# CLI container, no bind-mounted migrations directory), and the image is pinned
+# from the same VIDRA_*_TAG as the running service by docker-compose.prod.yml.
+# Overriding the command here would silently change WHICH migrator runs, so the
+# gate stays "the service binary's own exit code".
 log "core schema (schema_migrations)"
 # `|| mrc=$?` rather than `if ! ...` so the real migrator exit code survives
 # (inside `if ! cmd`, $? is the status of the negation, i.e. always 0).
@@ -197,6 +205,11 @@ mrc=0; "${COMPOSE[@]}" run --rm migrate || mrc=$?
 
 PG_CID="$("${COMPOSE[@]}" ps -q postgres || true)"
 [ -n "$PG_CID" ] || die "postgres container missing during migration verification"
+# The expected version still comes from the FILENAMES in the vidra-core checkout,
+# which the pre-flight above pinned to VIDRA_CORE_TAG — the same tag the api
+# image (and therefore its embedded copy of these files) was built from, so the
+# two agree by construction. This is an independent second opinion on purpose:
+# reading it out of the migrator would only prove the migrator agrees with itself.
 # shellcheck disable=SC2012  # ls is deliberate: filenames are numeric by construction, and sort -n works correctly.
 expected_version="$(ls -1 vidra-core/migrations/*.up.sql 2>/dev/null | awk -F/ '{print $NF}' | awk -F_ '{print $1}' | sort -n | tail -1)"
 [ -n "$expected_version" ] || die "failed to determine expected core migration version"

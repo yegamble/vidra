@@ -178,9 +178,12 @@ import pool = 24 connections, above the smallest DO Managed plan's cap. Run the
 bundled Postgres 18 with the nightly dump to Spaces; migrate to Managed once a
 `DATABASE_MAX_CONNS` knob exists. The DSN indirection is already in place —
 setting `DATABASE_URL` (with `sslmode=require`) in the env file overrides the
-constructed compose default for both core and search, and
-`SEARCH_MIGRATE_DATABASE_URL` overrides the search migrator's, which must keep
-its `&x-migrations-table=vidra_search_migrations` suffix.
+constructed compose default for core, search **and both migration one-shots**.
+It is a single variable: the search migrator carries its `vidra_search_migrations`
+ledger name in the binary, so it no longer needs the separate
+`SEARCH_MIGRATE_DATABASE_URL` that existed only to append
+`&x-migrations-table=…` (a DSN that still carries the parameter is accepted; one
+naming a different table is refused).
 
 ---
 
@@ -390,7 +393,12 @@ gh run watch "$(gh run list -R yegamble/vidra-search --workflow=publish-containe
 
 ### Migration failed mid-deploy
 
-golang-migrate marks its version ledger `dirty = true` when a migration fails
+Both migrators drive golang-migrate as a **library inside the service binary**
+(`api migrate up` / the search image's `migrate up`), with the SQL compiled into
+the image — there is no CLI container and nothing is bind-mounted from a
+checkout, so applying a schema never depends on the repo layout on disk.
+
+That library marks its version ledger `dirty = true` when a migration fails
 part-way and then **refuses every subsequent `up`** with an opaque error. Because
 the api gates on `migrate: condition: service_completed_successfully`, the site
 stays down and each retry fails identically. `deploy.sh` runs the two migrators as
@@ -409,7 +417,12 @@ There are **two independent ledgers**:
 Either can go dirty without the other. Recovery, for whichever failed:
 
 ```bash
-# 1. Find out where it stopped.
+# 1. Find out where it stopped. Either migrator reports its own ledger without
+#    changing anything — note the REPEATED word: `docker compose run <service>
+#    <args>` REPLACES the service's command, so the subcommand must be restated.
+$COMPOSE run --rm migrate        migrate version   # core   -> version=42 dirty=true
+$COMPOSE run --rm search-migrate migrate version   # search -> version=… dirty=…
+#    Straight from the ledger, if you are already in psql:
 $COMPOSE exec postgres psql -U vidra -d vidra -c 'SELECT * FROM schema_migrations;'
 #    search ledger:                              SELECT * FROM vidra_search_migrations;
 #    -> version | dirty
@@ -421,23 +434,19 @@ $COMPOSE exec postgres psql -U vidra -d vidra -c 'SELECT * FROM schema_migration
 #    vidra-core/migrations/ (or vidra-search/migrations/).
 $COMPOSE exec postgres psql -U vidra -d vidra
 
-# 3. Point the ledger at the last CLEAN version, i.e. N-1.
-#    CAUTION: `docker compose run <service> <args>` REPLACES the service's whole
-#    command, so -path and -database must be repeated in full — the compose
-#    definition's flags are NOT inherited.
-DSN='postgres://vidra:<POSTGRES_PASSWORD>@postgres:5432/vidra?sslmode=disable'
-$COMPOSE run --rm migrate -path=/migrations -database="$DSN" force 41
-#    search ledger: use the search-migrate service and append
-#    &x-migrations-table=vidra_search_migrations to the DSN.
-#    Equivalent, and simpler if the DSN is awkward to quote:
-#      UPDATE schema_migrations SET version = 41, dirty = false;
+# 3. Point the ledger at the last CLEAN version, i.e. N-1. Neither binary
+#    exposes `force` on purpose — rewriting a version counter is a one-typo
+#    operation and it is a plain UPDATE:
+$COMPOSE exec postgres psql -U vidra -d vidra \
+  -c 'UPDATE schema_migrations SET version = 41, dirty = false;'
+#    search ledger: same statement against vidra_search_migrations.
 
-# 4. Re-run the normal migrator (its own -path/-database from compose).
+# 4. Re-run the normal migrator (the compose `command:` is `migrate up`).
 $COMPOSE run --rm migrate
 ```
 
-Never `force` to `N` — that claims the broken migration succeeded and the next
-deploy will build on a schema that does not exist.
+Never point the ledger at `N` — that claims the broken migration succeeded and the
+next deploy will build on a schema that does not exist.
 
 Note that **none** of the 101 up-migrations use `CREATE INDEX CONCURRENTLY` and
 none sets `lock_timeout`, so a data-dependent migration against a populated table

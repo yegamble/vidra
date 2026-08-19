@@ -101,29 +101,43 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # One-shot search-schema migration. vidra-search shares the core `vidra`
-  # database but lives in its own `search` schema (migration 0001 creates it).
-  # The x-migrations-table URL param lands golang-migrate's version ledger in
+  # One-shot search-schema migration, run by the SEARCH IMAGE ITSELF: the
+  # migrations are compiled into the vidra-search binary, so there is no
+  # golang-migrate CLI image and no bind-mounted ./vidra-search/migrations —
+  # applying the schema no longer needs a git checkout of the SQL files, and the
+  # migrator can no longer drift from the binary that expects them.
+  # Joins the `core` profile so `make dev`/`dev-hot` run it.
+  #
+  # vidra-search shares the core `vidra` database but lives in its own `search`
+  # schema (migration 0001 creates it), and its version ledger stays
   # `vidra_search_migrations` (in public) so it never collides with core's
-  # `schema_migrations`. Joins the `core` profile so `make dev`/`dev-hot` run it.
+  # `schema_migrations`. That name is now COMPILED IN (vidra-search
+  # internal/dbmigrate) instead of riding along as an `x-migrations-table` URL
+  # parameter — which is exactly why this service can read the same
+  # ${DATABASE_URL} as the api and the search service and needs no DSN variable
+  # of its own. An inherited DSN that still carries
+  # &x-migrations-table=vidra_search_migrations is accepted (the binary strips
+  # it); one naming a DIFFERENT table is refused rather than silently ignored.
   search-migrate:
-    image: migrate/migrate:v4.19.1
+    build: ./vidra-search
     profiles: ["core"]
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./vidra-search/migrations:/migrations:ro
-    command:
-      - "-path=/migrations"
-      # SEARCH_MIGRATE_DATABASE_URL, not DATABASE_URL: the ledger override is a
-      # query parameter, and it cannot be appended to an operator-supplied DSN
-      # that may already carry its own `?sslmode=require` (DO Managed Postgres).
-      # Whatever you set here MUST keep &x-migrations-table=vidra_search_migrations
-      # or golang-migrate lands the search ledger in core's `schema_migrations`
-      # and the two version counters corrupt each other.
-      - "-database=${SEARCH_MIGRATE_DATABASE_URL:-postgres://${POSTGRES_USER:-vidra}:${POSTGRES_PASSWORD:-vidra}@postgres:5432/${POSTGRES_DB:-vidra}?sslmode=disable&x-migrations-table=vidra_search_migrations}"
-      - "up"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-vidra}:${POSTGRES_PASSWORD:-vidra}@postgres:5432/${POSTGRES_DB:-vidra}?sslmode=disable}
+    # Applies all pending migrations and exits: 0 when the schema is current
+    # (including "nothing to do"), non-zero on any failure or a dirty ledger, so
+    # the search service's `service_completed_successfully` dependency and
+    # deploy.sh's exit-code-gated `run --rm search-migrate` gate on it exactly as
+    # before.
+    #
+    # To read the ledger without changing it, note that `compose run` REPLACES
+    # this command instead of appending to it — the subcommand must be repeated:
+    #   docker compose run --rm search-migrate migrate version
+    # (`run --rm search-migrate version` alone would pass "version" as argv[1],
+    # which the binary refuses rather than treating as a server start.)
+    command: ["migrate", "up"]
 
   # vidra-search: internal autosuggest / search / recommendations service. Only
   # vidra-core talks to it (HMAC S2S); it is NEVER exposed to the browser. Shares
