@@ -146,14 +146,24 @@ services:
       timeout: 5s
       retries: 10
 
-  # Both migration one-shots keep their base definition (image, path, database
-  # arg); they only need capped logs. deploy/deploy.sh runs them as discrete,
-  # exit-code-gated `run --rm` steps BEFORE `up -d`, so a failed migration never
-  # fans out into a half-started stack.
+  # Both migration one-shots run the RELEASE image of the service whose schema
+  # they own — the migrations are compiled into those binaries, so `migrate up`
+  # is a command on the api / search image rather than a third-party CLI. The
+  # base file declares `build:` for them (the dev definition), so they need the
+  # same image + `pull_policy: always` pin as api/search/frontend below:
+  # deploy/deploy.sh runs them as discrete, exit-code-gated `run --rm` steps
+  # BEFORE `up -d --no-build`, and `run` has no --no-build of its own, so without
+  # these two lines a droplet whose image cache is cold would compile Go instead
+  # of migrating. The tags come from the SAME variables as the services, which is
+  # what keeps schema and code versions identical.
   migrate:
+    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    pull_policy: always
     logging: *logging
 
   search-migrate:
+    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-search:${VIDRA_SEARCH_TAG:?VIDRA_SEARCH_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    pull_policy: always
     logging: *logging
 
   api:
