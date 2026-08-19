@@ -1,3 +1,10 @@
+<p align="center">
+  <a href="https://github.com/yegamble/vidra">
+    <img src="https://raw.githubusercontent.com/yegamble/vidra-branding/main/assets/readme/banner.svg"
+         alt="Vidra — a federated video platform you install yourself" width="100%">
+  </a>
+</p>
+
 # Vidra
 
 A clean-room, PeerTube-inspired federated video platform. Vidra is split across
