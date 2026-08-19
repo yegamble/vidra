@@ -145,8 +145,9 @@ done
 # The render check catches every `${VAR:?}` reference in the chain BEFORE
 # anything is touched. Those are, exhaustively: JWT_SECRET (asserted by
 # docker-compose.prod.yml's api environment), REDIS_PASSWORD (asserted by the
-# redis command, its healthcheck, and both REDIS_URL rewrites) and the three
-# VIDRA_*_TAG image tags. `:?` fails on an EMPTY value as well as an unset one,
+# redis command, its healthcheck, and both REDIS_URL rewrites),
+# POSTGRES_PASSWORD (asserted by the overlay's postgres environment) and the
+# three VIDRA_*_TAG image tags. `:?` fails on an EMPTY value as well as an unset one,
 # which is what makes it catch the shipped `JWT_SECRET=` blank in an env file
 # that was copied but never edited.
 "${COMPOSE[@]}" config -q || die "compose config is invalid — fix $ENV_FILE and retry"

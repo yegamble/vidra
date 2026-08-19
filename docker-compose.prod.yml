@@ -100,6 +100,16 @@ services:
       - "effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-6GB}"
       - "-c"
       - "max_connections=${POSTGRES_MAX_CONNECTIONS:-100}"
+    environment:
+      # Same assertion pattern as the api's JWT_SECRET below. The base file
+      # deliberately declares `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vidra}`
+      # (vidra-core/docker-compose.yml) because dev flows render with no env
+      # file at all — but left alone in production, an env file that omits or
+      # blanks the key silently ships the dev default `vidra` as the database
+      # password. `:?` fails the RENDER on an empty value as well as an unset
+      # one, and it binds here — in this overlay only — so no dev flow ever
+      # sees it.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in production (openssl rand -hex 32 - hex not base64, because the value is substituted into a postgres:// DSN)}
 
   redis:
     # `!reset`, not `[]` — see the postgres note above.
