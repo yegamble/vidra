@@ -1,14 +1,114 @@
 <p align="center">
-  <a href="https://github.com/yegamble/vidra">
-    <img src="https://raw.githubusercontent.com/yegamble/vidra-branding/main/assets/readme/banner.svg"
-         alt="Vidra — a federated video platform you install yourself" width="100%">
-  </a>
+  <img src="https://raw.githubusercontent.com/yegamble/vidra-branding/main/assets/readme/banner.svg"
+       alt="Vidra — run your own video platform" width="100%">
 </p>
 
-# Vidra
+<h3 align="center">Run your own video platform.</h3>
 
-A clean-room, PeerTube-inspired federated video platform. Vidra is split across
-**three independent repositories**, tied together by this lightweight **meta-repo**:
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#environments">Deployment</a> ·
+  <a href="https://github.com/yegamble/vidra-branding/blob/main/design-system/README.md">Design system</a> ·
+  <a href="https://github.com/yegamble/vidra-branding">Brand</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/yegamble/vidra-core/releases"><img src="https://img.shields.io/github/v/release/yegamble/vidra-core?label=release" alt="Latest release"></a>
+  <a href="https://github.com/yegamble/vidra/actions/workflows/meta-ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/yegamble/vidra/meta-ci.yml?label=meta-ci" alt="meta-ci"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/yegamble/vidra" alt="License: AGPL-3.0"></a>
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26">
+  <img src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs" alt="Next.js 16">
+  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 16">
+  <img src="https://img.shields.io/badge/Redis-7-FF4438?logo=redis&logoColor=white" alt="Redis 7">
+</p>
+
+Vidra is a federated video platform you install yourself, the way you would install
+WordPress. One low-cost server serves your viewers because distribution is designed
+to be offloaded — HLS from your own box, a CDN in front of it, or IPFS gateways
+carrying public media. It federates identity over ATProto (Bluesky), stores media
+on anything S3-compatible if you want it to, and it is free software under AGPL v3.
+
+- **Yours to run.** AGPL v3, one compose file, no vendor between you and your
+  viewers. A one-way importer brings a whole PeerTube instance with it.
+- **A real creator pipeline.** Resumable uploads, an H.264/AAC HLS ladder, live
+  streaming over RTMP with replay-to-VOD, Whisper auto-captions, chapters,
+  storyboards.
+- **Not a science project.** 209-path OpenAPI contract, drift-guarded codegen,
+  race-detected CI in every repo, axe accessibility as a hard gate, health probes,
+  metrics, tracing, backup/restore/rollback scripts.
+
+Vidra is a clean-room, PeerTube-inspired implementation — not a fork, and not a
+hosted service. See it running at [beta.example.com](https://beta.example.com),
+the first public beta instance.
+
+## Features
+
+**Publish.** Direct, chunked/resumable, and async URL uploads (SSRF-guarded,
+optional sandboxed yt-dlp extractor) with per-user storage quotas and optional
+ClamAV scanning. Transcoding to an H.264/AAC HLS ladder with I-frame trick-play
+playlists and an optional VP9/WebM download alternate, plus thumbnails,
+storyboards, and chapters. Live streaming over RTMP with privacy-gated HLS and
+replay-to-VOD. Channel auto-sync can mirror an external channel's uploads.
+
+**Watch.** A bespoke player with keyboard shortcuts, picture-in-picture and
+theatre mode; WebVTT captions with optional Whisper auto-generation; clickable
+timestamps; playlists, subscriptions, history, and a trending home feed.
+Password-protected videos mint scoped playback tokens; embeds, RSS, oEmbed, and
+a sitemap are built in, and the app installs as a PWA.
+
+**Find.** A dedicated [search service](https://github.com/yegamble/vidra-search):
+hybrid full-text + trigram search, typo-tolerant autosuggest, decayed-counter
+trending, co-visitation recommendations, and a learned LightGBM ranker that is
+shadow-evaluated online before manual activation. If it is ever down, core falls
+back to its own SQL — search never takes the site with it.
+
+**Connect.** Sign in with Bluesky or any ATProto PDS; optional outbound
+cross-posting of public videos to Bluesky. OAuth/OIDC login and TOTP two-factor.
+1:1 direct messages with attachments and opt-in end-to-end encryption (client-side
+Olm — the server only stores opaque envelopes) with disappearing messages.
+
+**Moderate.** Reports that actually notify staff, per-user sensitive-content
+policy with creator content warnings, registration approval, admin console with
+runtime-mutable instance settings, and audit-enveloped job observability.
+
+**Operate.** One compose file; health/readiness probes; Prometheus metrics and
+OpenTelemetry tracing; local or S3-compatible storage with optional dual-tier
+IPFS mirroring (public gateway offload plus a private swarm-keyed tier);
+scripted deploy, rollback, backup, and restore. WCAG 2.2 AA is enforced by axe
+as a hard CI gate, on the tokens of a documented
+[design system](https://github.com/yegamble/vidra-branding/blob/main/design-system/README.md).
+
+Feature-by-feature detail lives in
+[`vidra-core/docs/features.md`](https://github.com/yegamble/vidra-core/blob/main/docs/features.md)
+and the [PeerTube parity ledger](.ralph/specs/peertube-feature-ledger.md).
+
+## Architecture
+
+Vidra is split across **three independent repositories**, tied together by this
+lightweight **meta-repo**:
+
+```mermaid
+flowchart LR
+    B["Browser / PWA"] --> U["vidra-user
+    Next.js frontend"]
+    U -->|"HTTP JSON API"| C["vidra-core
+    Go API"]
+    C --> P[("PostgreSQL")]
+    C --> R[("Redis")]
+    C -->|"HMAC · ranked IDs"| S["vidra-search
+    search & recommendations"]
+    S --> P
+    S --> R
+    C --> M["media storage
+    local / S3-compatible"]
+    C -.->|"optional"| I["IPFS mirrors
+    public + private"]
+    T["nginx-rtmp
+    live ingest"] -.->|"optional"| C
+    C -.->|"outbound"| F["Bluesky / ATProto"]
+```
 
 | Repo | What | Stack |
 |------|------|-------|
@@ -222,6 +322,20 @@ pushes independently. A submodule pins a commit SHA and forces a
 commit-child → bump-pointer → push-parent transaction on every sync. The meta-repo
 gives the same "one place to clone and run" without any of that.
 
+## Brand & design
+
+The visual identity lives in
+[`vidra-branding`](https://github.com/yegamble/vidra-branding): brand guidelines,
+the identity system, governance, README assets, and the design-system reference.
+The living component library is authored as the Claude Design project
+**"Vidra Design System"**.
+
+<p align="center">
+  <a href="https://github.com/yegamble/vidra">
+    <img src="https://raw.githubusercontent.com/yegamble/vidra-branding/main/assets/readme/powered-by-vidra.svg" height="28" alt="powered by Vidra">
+  </a>
+</p>
+
 ## License
+
 Vidra is free software licensed under the [GNU Affero General Public License v3.0](LICENSE).
-Each component repo (vidra-core, vidra-user, vidra-search) carries the same license.
