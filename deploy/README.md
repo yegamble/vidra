@@ -180,10 +180,19 @@ bundled Postgres 18 with the nightly dump to Spaces; migrate to Managed once a
 setting `DATABASE_URL` (with `sslmode=require`) in the env file overrides the
 constructed compose default for core, search **and both migration one-shots**.
 It is a single variable: the search migrator carries its `vidra_search_migrations`
-ledger name in the binary, so it no longer needs the separate
-`SEARCH_MIGRATE_DATABASE_URL` that existed only to append
-`&x-migrations-table=…` (a DSN that still carries the parameter is accepted; one
-naming a different table is refused).
+ledger name (and the `public` schema it lives in) in the binary, so it no longer
+needs the separate `SEARCH_MIGRATE_DATABASE_URL` that existed only to append
+`&x-migrations-table=…`.
+
+**That tolerance is the *search* migrator's alone.** `vidra-search`'s
+`internal/dbmigrate` normalizes a DSN that still carries
+`x-migrations-table=vidra_search_migrations` (it strips it) and *refuses* one
+naming a different table or moving the schema (`search_path`, `options`).
+`vidra-core`'s migrator does neither: it hands the DSN to golang-migrate
+verbatim, and that driver reads `x-migrations-table` itself — so a
+`DATABASE_URL` carrying the search ledger name would make **core** write its
+version counter into `vidra_search_migrations`. Keep the shared `DATABASE_URL`
+free of migrator parameters.
 
 ---
 
@@ -196,7 +205,7 @@ cp env/production.env.example env/production.env
 $EDITOR env/production.env              # JWT_SECRET, POSTGRES_PASSWORD, REDIS_PASSWORD,
                                         # MFA_KEY_KEK, SEARCH_INTERNAL_SECRET, SMTP_*,
                                         # STORAGE_S3_*, INSTANCE_NAME, PUBLIC_BASE_URL,
-                                        # VIDRA_*_TAG=v0.1.0, REGISTRATION_ENABLED=false
+                                        # VIDRA_*_TAG=v0.2.0, REGISTRATION_ENABLED=false
 git check-ignore -v env/production.env  # MUST match, or stop and fix .gitignore
 $EDITOR deploy/Caddyfile                # replace example.com with your domain —
                                         # deploy.sh refuses while a non-comment
@@ -290,16 +299,49 @@ $EDITOR env/production.env                     # VIDRA_CORE_TAG=v0.2.0
 ./deploy/deploy.sh                             # dump -> pull -> gated migrate -> up -> probe
 
 # ROLLBACK — app only, no schema change (see the one-release rule below):
-./deploy/rollback.sh v0.1.0
+./deploy/rollback.sh v0.2.0
 
 # ROLLBACK across an incompatible schema change:
 $COMPOSE stop api frontend
 ./deploy/restore.sh backups/pre-deploy-<ts>.dump.gz
-./deploy/rollback.sh v0.1.0
+./deploy/rollback.sh v0.2.0
 ```
 
+### Upgrade notes: the embedded-migrator tag floor
+
+**Both migration one-shots are the service image itself**, running its compiled-in
+`migrate up`. That has a hard consequence for which tags this compose revision can
+run at all:
+
+- `deploy/deploy.sh` and `deploy/rollback.sh` carry a
+  **`MIN_EMBEDDED_MIGRATE_TAG`** constant (`v0.2.0` — the first release cut with
+  the embedded subcommand; raise it, never lower it) and refuse a
+  `VIDRA_CORE_TAG` / `VIDRA_SEARCH_TAG` below it. An older image's `main()`
+  **ignores the `migrate up` argv and starts an API server**, so the one-shot never
+  exits: `deploy.sh` would hang on step 3/5, and `rollback.sh` on the
+  `service_completed_successfully` edges inside `up -d`. A hang with no error is
+  worse than a refusal, hence the gate.
+- To run a component release *older* than the floor you must also check out the
+  meta-repo revision that shipped with it — the pre-embedded compose files drove a
+  `migrate/migrate` CLI container and bind-mounted `migrations/`.
+- `VIDRA_USER_TAG` is not gated: the frontend has no migrator.
+
+**Merge order — component releases land BEFORE this compose revision.** The chain
+is `bootstrap.sh` → component checkouts → `docker-compose.yml` `include:`s
+vidra-core's compose file. Until **vidra-core and vidra-search have both released
+a tag whose image carries `migrate up`** (and `bootstrap.sh`'s default branch
+sync therefore has it), a host on this revision runs `migrate up` against a binary
+that does not know the word — locally that hangs `make dev` / `make dev-hot` on
+the `migrate` one-shot, and in production `deploy.sh` refuses at pre-flight. Ship
+in this order:
+
+1. `vidra-core` — release the embedded migrator (`migrate up|version|force`).
+2. `vidra-search` — same.
+3. this meta-repo revision, with `MIN_EMBEDDED_MIGRATE_TAG` set to the tags from
+   1 and 2, then `VIDRA_CORE_TAG` / `VIDRA_SEARCH_TAG` bumped in the env file.
+
 Equivalent Make targets: `make release VERSION=…`, `make prod-config`,
-`make deploy`, `make rollback TAG=v0.1.0`, `make backup`,
+`make deploy`, `make rollback TAG=v0.2.0`, `make backup`,
 `make restore DUMP=… CONFIRM=1`, `make prod-logs`, `make prod-down`. All the
 compose-based ones honour `PROD_ENV_FILE=env/staging.env`.
 
@@ -359,7 +401,7 @@ fails, and it does **not** deploy anything — bump `VIDRA_*_TAG` and run
 `./deploy/deploy.sh` when you want the release live.
 
 **Release the three repos at the same version.** Nothing enforces it, but
-`./deploy/rollback.sh v0.1.0` sets all three `VIDRA_*_TAG` values from one
+`./deploy/rollback.sh v0.2.0` sets all three `VIDRA_*_TAG` values from one
 argument, staging→production promotion copies three identical lines, and "which
 build is running?" during an incident has one answer instead of three. Skipping
 a component that did not change means its tag no longer exists — release it
@@ -434,12 +476,19 @@ $COMPOSE exec postgres psql -U vidra -d vidra -c 'SELECT * FROM schema_migration
 #    vidra-core/migrations/ (or vidra-search/migrations/).
 $COMPOSE exec postgres psql -U vidra -d vidra
 
-# 3. Point the ledger at the last CLEAN version, i.e. N-1. Neither binary
-#    exposes `force` on purpose — rewriting a version counter is a one-typo
-#    operation and it is a plain UPDATE:
-$COMPOSE exec postgres psql -U vidra -d vidra \
-  -c 'UPDATE schema_migrations SET version = 41, dirty = false;'
-#    search ledger: same statement against vidra_search_migrations.
+# 3. Point the ledger at the last CLEAN version, i.e. N-1, with the migrator's
+#    own `force` — it stamps the version and clears `dirty` WITHOUT running any
+#    migration SQL, so it is an assertion about the schema you just repaired.
+#    --yes-i-know is mandatory and is checked before the database is touched: a
+#    refusal means nothing happened. Whichever ledger is dirty, the command is
+#    the same shape — each service forces its OWN table:
+$COMPOSE run --rm migrate        migrate force 41 --yes-i-know   # core
+$COMPOSE run --rm search-migrate migrate force 41 --yes-i-know   # search
+#    Each prints the ledger state before and after (core: `before:`/`after:`,
+#    search: `migrate force: before/after … table=…`) — keep it for the incident
+#    notes. `force -1` is the right target when it was the FIRST migration that
+#    died (that is golang-migrate's "empty ledger"), and both migrators refuse
+#    anything below -1.
 
 # 4. Re-run the normal migrator (the compose `command:` is `migrate up`).
 $COMPOSE run --rm migrate

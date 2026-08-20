@@ -3,7 +3,8 @@
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml \
 #     --profile core --profile frontend up -d --build
 #
-# (= `make dev-hot`). It overrides only `api` and `frontend`:
+# (= `make dev-hot`). It hot-reloads `api`, `frontend` and `search`, and points
+# the two migration one-shots at the same dev images (see further down):
 #   - api: golang+air image, source bind-mounted, go build/module caches in
 #     named volumes -> editing a .go file rebuilds+restarts the server in-place.
 #   - frontend: `next dev` (HMR) with bind-mounted source; node_modules and
@@ -11,8 +12,24 @@
 #     clobbers the container's. NEXT_PUBLIC_API_BASE_URL is a RUNTIME env here
 #     (next dev compiles on the fly), unlike prod where it's a build arg.
 #
-# postgres / redis / migrate and every depends_on edge, env default, and port
-# mapping are inherited unchanged from the base + included compose files.
+# The two migration one-shots are overridden too — NOT for hot reload (they exit
+# in a second) but because without it they are the only services left pointing at
+# the production build, and in THIS chain that is broken as well as slow.
+# Rendered without the overrides below (verified with `config`):
+#   search-migrate -> build ./vidra-search/Dockerfile, i.e. a full multi-stage
+#                     release image compiled on every `make dev-hot --build`,
+#                     again after every dependency bump, to run `migrate up`.
+#   migrate        -> image vidra-core-api:local and NO build section (vidra-core's
+#                     compose puts the build on `api`, which this overlay redirects
+#                     to Dockerfile.dev + vidra-api-dev). Nothing in the hot chain
+#                     produces that tag, so Compose tries to PULL it and dies with
+#                     "pull access denied" — or, worse, silently reuses a stale
+#                     vidra-core-api:local left over from an earlier `make up` and
+#                     migrates the dev database with an old binary.
+# Reusing the dev images the api/search already build fixes both.
+#
+# postgres / redis and every depends_on edge, env default, and port mapping are
+# inherited unchanged from the base + included compose files.
 services:
   api:
     build:
@@ -32,6 +49,51 @@ services:
       timeout: 3s
       retries: 10
       start_period: 300s
+
+  # Core schema one-shot on the api's DEV image. That image's default command is
+  # `air` and it holds no compiled binary, so the migrator is `go run` — and
+  # `command:` alone is enough to replace air because vidra-core/Dockerfile.dev
+  # sets CMD, not ENTRYPOINT (checked; an ENTRYPOINT would need overriding too).
+  # `go run ./cmd/api migrate up` is the SAME embedded-migration code
+  # path the release image runs, taken from the bind-mounted source instead of
+  # from a baked binary — so a migration added on a branch applies with no
+  # rebuild at all. Compose replaces `command:` rather than merging it, so the
+  # base file's `["migrate", "up"]` is gone, not appended to.
+  #
+  # The build/module caches are the same named volumes as api, so this compiles
+  # once for both. Nothing else is inherited from the api override above —
+  # `depends_on: postgres healthy`, the DSN and `healthcheck: disable: true` all
+  # come from the base definition in vidra-core/docker-compose.yml.
+  #
+  # ONE DIFFERENCE FROM PROD to know about: there is no `migrate` binary on PATH
+  # in these images, so the runbook's ad-hoc form (`run --rm migrate migrate
+  # version`, which works against the release image because the binary is the
+  # entrypoint) fails here with "executable file not found". In this chain the
+  # ledger read is:
+  #   docker compose … run --rm migrate go run ./cmd/api migrate version
+  # It fails loudly either way — exec error, exit 1 — never silently.
+  migrate:
+    build:
+      context: ./vidra-core
+      dockerfile: Dockerfile.dev
+    image: vidra-api-dev
+    volumes:
+      - ./vidra-core:/app:cached
+      - go_build_cache:/root/.cache/go-build
+      - go_mod_cache:/go/pkg/mod
+    command: ["go", "run", "./cmd/api", "migrate", "up"]
+
+  # Search schema one-shot, same pattern against the search dev image.
+  search-migrate:
+    build:
+      context: ./vidra-search
+      dockerfile: Dockerfile.dev
+    image: vidra-search-dev
+    volumes:
+      - ./vidra-search:/app:cached
+      - search_go_build_cache:/root/.cache/go-build
+      - search_go_mod_cache:/go/pkg/mod
+    command: ["go", "run", "./cmd/api", "migrate", "up"]
 
   frontend:
     build:

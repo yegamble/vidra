@@ -182,6 +182,48 @@ jobs:
           print('OK: postgres/redis/search publish nothing; api/frontend are loopback-only.')
           PY
 
+      # The migration one-shots are the ONLY services whose base definition is a
+      # build with no published image, and deploy.sh runs them with `compose run`
+      # — which has no `--no-build`. So `pull_policy: always` alone cannot stop a
+      # cold droplet from COMPILING Go instead of migrating: the `build:` section
+      # has to be gone from the rendered model, which is what `build: !reset null`
+      # does (and what a Compose older than 2.24 would silently ignore, exactly
+      # like the `ports:` resets asserted above).
+      - name: Production overlay pins both migration one-shots to published images
+        env:
+          JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
+          REDIS_PASSWORD: ci-dummy-redis-password
+          POSTGRES_PASSWORD: ci-dummy-password
+          VIDRA_CORE_TAG: ci-dummy
+          VIDRA_USER_TAG: ci-dummy
+          VIDRA_SEARCH_TAG: ci-dummy
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            --env-file env/production.env.example \
+            --profile core --profile frontend config > /tmp/prod-config.yml
+          python3 - <<'PY'
+          import sys, yaml
+          svcs = yaml.safe_load(open('/tmp/prod-config.yml'))['services']
+          expected = {'migrate': 'vidra-core', 'search-migrate': 'vidra-search'}
+          bad = []
+          for name, repo in expected.items():
+              s = svcs[name]
+              image = s.get('image') or ''
+              if f'/{repo}:' not in image:
+                  bad.append(f'{name} image is {image!r}, not a published {repo} tag')
+              if 'build' in s:
+                  bad.append(f'{name} still carries build: {s["build"]!r} — `compose run` would compile on the host')
+              if s.get('pull_policy') != 'always':
+                  bad.append(f'{name} pull_policy is {s.get("pull_policy")!r}, not always')
+              if 'no-new-privileges:true' not in (s.get('security_opt') or []):
+                  bad.append(f'{name} is missing security_opt no-new-privileges:true')
+          if bad:
+              print('::error::the production overlay does not pin the migration one-shots')
+              print('\n'.join(bad))
+              sys.exit(1)
+          print('OK: migrate + search-migrate pull published images, cannot build, and drop privilege escalation.')
+          PY
+
       # Readiness plan step 1: vidra-core's api `environment:` map is an explicit
       # allow-list and there is no `env_file:` anywhere in the stack, so a key the
       # Go config reads but the map does not pass through is UNSETTABLE — silently,
@@ -220,7 +262,10 @@ jobs:
   # needs in production mode has a path from an env file, through compose
   # substitution, into the container, and past `config.validate()`. That is the
   # exact failure JWT_SECRET had — invisible to `config -q`, invisible to every
-  # sub-repo's CI, visible only at boot.
+  # sub-repo's CI, visible only at boot. Its last step proves the same class of
+  # thing for the schema: that BOTH migration one-shots really do apply their
+  # migrations from the service image (`migrate up`), which `config -q` can only
+  # assume.
   boot:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -308,6 +353,43 @@ jobs:
           echo "::error::the api never became ready" >&2
           docker compose -f docker-compose.yml --env-file env/ci-boot.env --profile core logs --tail=100 api >&2
           exit 1
+
+      # THE MERGE-ORDER CONTRACT, EXECUTED. Both one-shots run `migrate up` on
+      # their own SERVICE image, so a component release whose binary predates the
+      # embedded subcommand does not fail here — it ignores the argv, starts an
+      # API server and never exits (which is why deploy.sh/rollback.sh gate on
+      # MIN_EMBEDDED_MIGRATE_TAG, and why vidra-core + vidra-search must release
+      # BEFORE this meta revision lands; see deploy/README.md "Upgrade notes").
+      # `up api` above already runs `migrate` as a depends_on edge, but nothing
+      # covered `search-migrate` at all, and nothing exercised the repeated-argv
+      # form the runbook documents. This step is the whole contract, run for real
+      # against the throwaway postgres — a hang here fails the job on timeout,
+      # which is the intended signal.
+      - name: Both migration one-shots run from their service images
+        run: |
+          COMPOSE=(docker compose -f docker-compose.yml --env-file env/ci-boot.env --profile core)
+          # The search one-shot owns a build context, so build it here — the api
+          # step above did not touch it. The core one-shot deliberately gets NO
+          # `--build`: it shares the api's `vidra-core-api:local` image and
+          # carries no build section of its own (api is the single producer), so
+          # `run --build migrate` makes Compose try to PULL that local-only tag
+          # and the step dies with "pull access denied". Verified, not assumed.
+          "${COMPOSE[@]}" build search-migrate
+          # Idempotent re-run for core (the api's depends_on edge already applied
+          # it); first and only run for search.
+          "${COMPOSE[@]}" run --rm migrate
+          "${COMPOSE[@]}" run --rm search-migrate
+          # `compose run` REPLACES the service command, so the subcommand is
+          # repeated — the exact shape deploy/README.md's recovery steps use.
+          # Both exit non-zero on a dirty ledger, so this also asserts clean.
+          "${COMPOSE[@]}" run --rm migrate        migrate version
+          "${COMPOSE[@]}" run --rm search-migrate migrate version
+          # Independent second opinion: the two ledger tables the binaries carry
+          # compiled-in (no x-migrations-table URL param anywhere) really exist.
+          "${COMPOSE[@]}" exec -T postgres psql -U vidra -d vidra \
+            -c 'SELECT version, dirty FROM schema_migrations;' \
+            -c 'SELECT version, dirty FROM vidra_search_migrations;'
+          echo "OK: core + search schemas applied by the service images themselves."
 
       - name: Tear down
         if: always()

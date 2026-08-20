@@ -40,6 +40,13 @@ env/*.env
 # `.env.example` negation so the ordering is explicit; `.env.example` files are
 # unaffected because they do not end in `.env.bak`.
 env/*.env.bak
+# ...and the setup engine's atomic-write temp files. `vidra setup` writes an env
+# file through `os.CreateTemp(dir, "."+base+".tmp*")` + rename (vidra-core
+# internal/setup/setup.go), i.e. `env/.production.env.tmpNNNNN`. A crash between
+# create and rename leaves that file behind holding every generated secret, and
+# neither `env/*.env` nor the global `*.tmp` rule above matches the name (the
+# random suffix comes AFTER `.tmp`). Ignore the shape, not one instance.
+env/.*.tmp*
 
 # Local backup artifacts written by deploy/backup.sh and deploy/deploy.sh.
 # These are full pg_dumps: they contain every user row and every secret the

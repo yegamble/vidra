@@ -143,10 +143,14 @@ environment.
 - **Postgres runs in the compose stack, not managed** — including staging and
   production. `internal/store/store.go:53` hardcodes `MaxConns=10` after
   `ParseConfig`, so core + search + the import pool total 24 connections, above
-  the smallest DO Managed plan's cap. The DSN indirection is in place
-  (`DATABASE_URL` / `SEARCH_MIGRATE_DATABASE_URL` override the constructed
-  defaults), so the move is a config change once a `DATABASE_MAX_CONNS` knob
-  exists — see "Managed Postgres — not at launch" in `deploy/README.md`.
+  the smallest DO Managed plan's cap. The DSN indirection is in place — a single
+  `DATABASE_URL` overrides the constructed default for the api, the search
+  service and BOTH migration one-shots (the search migrator carries its
+  `vidra_search_migrations` ledger name in the binary, so the second
+  `SEARCH_MIGRATE_DATABASE_URL` variable that used to append
+  `&x-migrations-table=…` is gone) — so the move is a config change once a
+  `DATABASE_MAX_CONNS` knob exists; see "Managed Postgres — not at launch" in
+  `deploy/README.md`.
 - Backup/restore (prod/staging): nightly `deploy/backup.sh` via the systemd timer,
   plus media volume/bucket sync (the dump covers vidra-search too — it shares the
   database in the `search` schema). Restore drill and the dirty-migration runbook
