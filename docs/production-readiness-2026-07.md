@@ -2,6 +2,8 @@
 
 # VIDRA — PRODUCTION READINESS PLAN (DigitalOcean)
 
+> **Archival — 2026-08-20.** Superseded by [`docs/productionization/`](productionization/README.md) and [`deploy/README.md`](../deploy/README.md). The VERDICT section and the `101 migrations` count below are stale: `vidra-core` now has **104** migrations and `deploy/{deploy,rollback,backup,restore}.sh` + `docker-compose.prod.yml` ship. Kept for history.
+
 ## VERDICT
 
 The application is production-grade; the deployment is not. Every hard problem — auth, SSRF, path traversal, durable job queues, fail-closed malware scanning, non-root images, structured logging, RED metrics, quota enforcement, HLS/Range serving, CDN policy — is already solved and tested well above the norm for self-hosted software. What is missing is the last mile between "the code is correct" and "a droplet runs it safely": the shipped `env/production.env.example` **cannot boot** (JWT_SECRET has no path into the container; ClamAV is enabled pointing at a hostname that does not exist in a profile nobody starts), the documented deploy command **publishes Postgres with password `vidra` and an unauthenticated Redis to the public internet**, and there is **no backup script, no deploy script, no rollback, no restart policy, no TLS service, and no image tags** — the entire deploy story is one `up -d --build` line. On top of that, the blanket 120-req/min per-IP limiter has no media exemption and no client-IP forwarding from the Next.js server, so a single frontend container consumes one shared bucket and the site starts 429-ing at roughly two server-rendered page loads per second.

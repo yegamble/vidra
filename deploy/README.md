@@ -23,9 +23,10 @@ stack plus a production overlay, behind Caddy for TLS.
 release` exec the script of the same name with `ENV_FILE` injected and your terminal
 attached, and return its exit code unchanged — same gates, same refusals, no second
 copy of any of them; `vidra logs` / `restart <service>` / `status` go through
-`compose.sh`. Build it with `make build-vidra` in `vidra-core` until the one-command
-installer ships it. **The scripts below remain the source of truth** — every rule
-documented here is enforced in them, not in the CLI.
+`compose.sh`. [`../install.sh`](../install.sh) installs it from vidra-core's release
+assets (checksum verified); `make build-vidra` in `vidra-core` still builds one for a
+release cut before those assets existed. **The scripts below remain the source of
+truth** — every rule documented here is enforced in them, not in the CLI.
 
 ---
 
@@ -285,6 +286,51 @@ free of migrator parameters.
 
 ## First bring-up
 
+### One-command install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yegamble/vidra/main/install.sh | sh
+```
+
+[`../install.sh`](../install.sh) does everything down to `vidra setup`: detects the
+platform (Linux amd64/arm64; on macOS it prints the dev quick start and stops),
+installs `git`, `curl`, Docker Engine and the Compose v2 plugin from **Docker's own
+apt repository** when they are missing, resolves vidra-core's latest release, clones
+this repo into `/opt/vidra`, runs `./bootstrap.sh` with `VIDRA_REF` set to that
+release so all three component checkouts are pinned to it, downloads
+`vidra_<tag>_linux_<arch>` with its `SHA256SUMS` and **refuses to install it on a
+checksum mismatch**, then hands the terminal to `vidra setup`.
+
+Everything it would change is behind **one** confirmation, read from `/dev/tty`
+because under `curl … | sh` stdin is the script. `--yes` skips it and is *required*
+where there is no terminal at all (cron, a Docker build, `</dev/null`) — an
+installer that silently installs Docker onto an unattended host is the wrong
+default. Other flags: `--ref vX.Y.Z` to pin a release, `--dir` (default
+`/opt/vidra`), `--owner` for a fork; `VIDRA_YES` / `VIDRA_REF` / `VIDRA_HOME` /
+`VIDRA_GH_OWNER` are the environment equivalents, and `sh install.sh --help` prints
+the lot.
+
+It is **safe to re-run**, and that is the design: it reports what it found and
+skipped, fast-forwards the checkout only while it is clean (a dirty tree is left
+alone and warned about, never reset), leaves `/usr/local/bin/vidra` alone when it is
+already the same bytes, and **never** writes or overwrites `env/production.env` —
+`vidra setup` owns that file, refuses to rewrite an existing one without `--yes`, and
+the installer never passes `--yes` to it. Re-running an installer must not re-mint
+the KEKs that seal data already in the database. If it stops early — a release with
+no CLI assets (v0.2.0 and older predate them; it names `make build-vidra` as the
+fallback), a checksum mismatch, no terminal for the interview — whatever it created
+stays where it is and the next run continues from there.
+
+What it deliberately leaves to you: it starts **no containers** (`vidra deploy`
+does that, with the pre-deploy dump and the health gates), opens **no ports**, and
+does not run [`provision.sh`](./provision.sh) — swap, the service user and the
+backup timer are a separate, root-only decision.
+
+### By hand
+
+Advanced users can do exactly the same thing manually, and this is what the
+installer automates:
+
 ```bash
 git clone https://github.com/yegamble/vidra.git /opt/vidra && cd /opt/vidra
 ./bootstrap.sh                          # clones the three component repos
@@ -294,8 +340,15 @@ $EDITOR env/production.env              # JWT_SECRET, POSTGRES_PASSWORD, REDIS_P
                                         # STORAGE_S3_*, INSTANCE_NAME, PUBLIC_BASE_URL,
                                         # VIDRA_*_TAG=v0.2.0, REGISTRATION_ENABLED=false
 git check-ignore -v env/production.env  # MUST match, or stop and fix .gitignore
-vidra setup                             # renders deploy/Caddyfile.local from the
+vidra setup --template env/production.env.example --yes
+                                        # renders deploy/Caddyfile.local from the
                                         # template + PUBLIC_BASE_URL/VIDRA_TLS_MODE.
+                                        # --template is required (it is the input
+                                        # format); --yes only because the cp above
+                                        # already created the output file, and every
+                                        # value that file sets is still preserved.
+                                        # Skip the cp/$EDITOR and let the interview
+                                        # write it instead, and neither is needed.
                                         # By hand instead:
                                         #   cp deploy/Caddyfile deploy/Caddyfile.local
                                         #   $EDITOR deploy/Caddyfile.local   # your domain
