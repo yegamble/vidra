@@ -27,6 +27,7 @@
 #   env_get KEY [DEFAULT]  value from the process env, else $ENV_FILE, else DEFAULT
 #   is_true VALUE          exit 0 for the spellings of "yes" an operator types
 #   vidra_compose_chain    sets COMPOSE=(...), EXTERNAL_POSTGRES, EXTERNAL_REDIS
+#   env_snapshot FILE ROOT keeps 10 timestamped generations of an env file
 
 # Reads KEY from the env file WITHOUT sourcing it — that file is operator-edited
 # and holds secrets; `source`ing it would execute whatever is in there. A real
@@ -121,5 +122,71 @@ vidra_compose_chain() {
 
   if [ "$EXTERNAL_POSTGRES" -eq 1 ] || [ "$EXTERNAL_REDIS" -eq 1 ]; then
     log "external datastores: postgres=${EXTERNAL_POSTGRES} redis=${EXTERNAL_REDIS} (the bundled service is disabled by its overlay)"
+  fi
+}
+
+# env_snapshot <env-file> <repo-root> — copy the env file into
+# <repo-root>/backups/env-history/<basename>.<UTC %Y%m%dT%H%M%SZ> and keep the
+# ten newest snapshots OF THAT BASENAME.
+#
+# WHY A DIRECTORY AND NOT ANOTHER .bak: `cp "$ENV_FILE" "$ENV_FILE.bak"` records
+# exactly ONE generation, and it is overwritten by the next run. Two rollbacks in
+# an incident — v0.3.0 is bad, roll to v0.2.1, that is bad too, roll to v0.2.0 —
+# and the .bak now holds v0.2.1, the state nobody wants to return to. The tags
+# you were serving before the incident started are gone, and they are exactly
+# what the incident notes need. Ten generations is cheap (an env file is a couple
+# of kilobytes) and covers any plausible run of rollbacks.
+#
+# THE PATH SHAPE IS A CROSS-LANGUAGE CONTRACT. `vidra update` writes the same
+# history from Go; both must agree on the directory, the separator and the stamp
+# format or the two halves prune each other's snapshots (or, worse, neither
+# prunes and the directory grows without bound). Change it in one place only by
+# changing it in both.
+#
+# The stamp is UTC and fixed-width for the same reason backup.sh's is: these
+# names sort lexicographically exactly as they sort chronologically, so the
+# retention pass below needs no stat(1), no `date -d` and no mktime().
+#
+# 0700 on the directory and 0600 on each file because these ARE the secrets —
+# JWT_SECRET, POSTGRES_PASSWORD, MFA_KEY_KEK. `cat >` under `umask 077`, not
+# `cp` then `chmod`: cp creates the destination with the SOURCE's mode (so a
+# hand-created 0644 env file would be copied 0644), and a later chmod leaves a
+# window, however short, in which the whole host can read the key-encryption key.
+#
+# shellcheck disable=SC2154  # log() is the caller's, per the contract above.
+env_snapshot() {
+  local src="$1" root="$2" base dir stamp dest keep stale
+  base="$(basename "$src")"
+  dir="$root/backups/env-history"
+  keep="${VIDRA_ENV_HISTORY_KEEP:-10}"
+
+  mkdir -p "$dir"
+  chmod 700 "$dir"
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  dest="$dir/${base}.${stamp}"
+  ( umask 077; cat "$src" > "$dest" )
+  log "env snapshot: backups/env-history/${base}.${stamp}"
+
+  # Only this basename's own snapshots, and only names whose suffix really is a
+  # stamp: env/staging.env and env/production.env share the directory, and
+  # `production.env.*` would otherwise also sweep a hypothetical
+  # `production.env.old.<stamp>`. The character classes are spelled out instead
+  # of using {8}/{6} because mawk — Ubuntu's default awk, which is what runs this
+  # on a droplet — has not always supported interval expressions.
+  stale="$(
+    { ls -1 -- "$dir" 2>/dev/null || true; } | awk -v b="$base" '
+      {
+        n = length(b)
+        if (substr($0, 1, n + 1) != b ".") next
+        s = substr($0, n + 2)
+        if (s ~ /^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z$/) print
+      }
+    ' | sort -r | tail -n +"$((keep + 1))"
+  )"
+  if [ -n "$stale" ]; then
+    printf '%s\n' "$stale" | while IFS= read -r f; do
+      log "pruning env snapshot $f"
+      rm -f -- "$dir/$f"
+    done
   fi
 }
