@@ -201,14 +201,16 @@ caddyfile_site_address() {
 # and require_caddyfile_local. Those two run during an incident, and refusing an
 # emergency rollback over a cosmetic file check would be the wrong trade.
 #
-# The placeholder match is anchored on the left so a real domain that merely
-# ENDS in one (myexample.com) is not refused, while a subdomain OF it
-# (sub.example.com) still is — '.' is intentionally absent from the excluded
-# character class for exactly that reason.
+# The placeholder match is anchored on BOTH sides so a real domain that merely
+# ENDS in one (myexample.com) or CONTINUES past one (video.example.company) is
+# not refused, while a subdomain OF it (sub.example.com) still is — '.' is
+# intentionally absent from the excluded character classes for exactly that
+# reason. Must stay identical to setup.PlaceholderDomainPattern in
+# vidra-core/internal/setup/caddyfile.go, which vidra doctor uses.
 require_real_domain() {
   local f="$REPO_ROOT/deploy/Caddyfile.local" site addr host matched=0
   [ -f "$f" ] || return 0
-  if grep -vE '^[[:space:]]*#' "$f" | grep -qE '(^|[^A-Za-z0-9-])(example\.(com|org|net)|your-domain|yourdomain|YOUR_DOMAIN)'; then
+  if grep -vE '^[[:space:]]*#' "$f" | grep -qE '(^|[^A-Za-z0-9-])(example\.(com|org|net)|your-domain|yourdomain|YOUR_DOMAIN)([^A-Za-z0-9-]|$)'; then
     die "deploy/Caddyfile.local still contains a placeholder domain (example.com / your-domain / YOUR_DOMAIN) — replace it with your real domain, or re-run 'vidra setup' (comments may keep it). Caddy would order a certificate for the placeholder and fail."
   fi
 
