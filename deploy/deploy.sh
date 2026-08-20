@@ -314,88 +314,20 @@ require_dns_points_here() {
   die "$host resolves to [$(printf '%s' "$resolved" | tr '\n' ' ' | sed 's/ *$//')] but this host is $ip. Caddy would fail the HTTP-01 challenge (the CA connects to whatever the A record names) and burn Let's Encrypt rate limit. Point the A record at $ip and wait for the TTL to expire, or — if this box really is behind a proxy/NAT — set VIDRA_PUBLIC_IP to the address the record uses. VIDRA_SKIP_DNS_PREFLIGHT=1 skips this check entirely."
 }
 
-# See backup.sh: read, never source, an operator-edited secrets file.
-env_get() {
-  local key="$1" def="${2-}" val
-  val="$(printenv "$key" 2>/dev/null || true)"
-  if [ -z "$val" ]; then
-    val="$(sed -n "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//p" "$ENV_FILE" | tail -n1 | tr -d '\r')"
-    case "$val" in
-      \"*\") val="${val%\"}"; val="${val#\"}" ;;
-      \'*\') val="${val%\'}"; val="${val#\'}" ;;
-    esac
-  fi
-  printf '%s' "${val:-$def}"
-}
+# env_get, is_true and the compose chain live in deploy/lib.sh — every script
+# that addresses the running stack must assemble the SAME project. Sourced here,
+# after log/die and ENV_FILE, which is the contract lib.sh documents. The
+# functions defined above call env_get, but none of them RUNS before this line.
+# shellcheck source=deploy/lib.sh
+. "$REPO_ROOT/deploy/lib.sh"
 
 PGUSER="$(env_get POSTGRES_USER vidra)"
 PGDB="$(env_get POSTGRES_DB vidra)"
 HTTP_PORT="$(env_get HTTP_PORT 8080)"
 FRONTEND_PORT="$(env_get FRONTEND_PORT 3000)"
 
-# The compose invocation, assembled from the env file rather than hardcoded so
-# `vidra setup` can change the SHAPE of the stack (external datastores, extra
-# profiles) without editing these scripts. Kept TEXTUALLY IDENTICAL in
-# deploy.sh, rollback.sh, restore.sh and backup.sh: the four must address the
-# same project, or `ps -q postgres` and `up -d` resolve against different
-# renderings of it.
-#
-# An env file that predates these keys — or sets them empty — produces exactly
-# the command line these scripts used before:
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-#     --env-file "$ENV_FILE" --profile core --profile frontend
-COMPOSE=(docker compose
-  -f docker-compose.yml
-  -f docker-compose.prod.yml)
-
-# External/managed datastores. Each overlay parks the bundled service on a
-# profile nothing enables and deletes every depends_on edge that named it —
-# leaving one in place makes the whole project INVALID, not merely wasteful
-# ("service search-migrate depends on undefined service postgres"). See the
-# header of docker-compose.external-postgres.yml for the merge-tag reasoning.
-#
-# Both overlays MUST come after docker-compose.prod.yml (they build on its
-# `!reset` tags and `${...:?}` assertions), and postgres before redis so every
-# host renders the same chain. `is_true` rather than `= true` because operators
-# type true/yes/1 interchangeably and a typo here silently starts a second,
-# empty database next to the managed one.
-is_true() {
-  case "$1" in
-    true|TRUE|True|yes|YES|Yes|1|on|ON|On) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-EXTERNAL_POSTGRES=0
-EXTERNAL_REDIS=0
-if is_true "$(env_get VIDRA_EXTERNAL_POSTGRES false)"; then
-  EXTERNAL_POSTGRES=1
-  COMPOSE+=(-f docker-compose.external-postgres.yml)
-fi
-if is_true "$(env_get VIDRA_EXTERNAL_REDIS false)"; then
-  EXTERNAL_REDIS=1
-  COMPOSE+=(-f docker-compose.external-redis.yml)
-fi
-
-COMPOSE+=(--env-file "$ENV_FILE")
-
-# Profiles: VIDRA_COMPOSE_PROFILES (default `core frontend` — exactly what these
-# scripts hardcoded before) plus EXTRA_COMPOSE_PROFILES, which stays a separate
-# key because `vidra setup` rewrites the first and the operator owns the second.
-# Both are space-separated lists, so the command substitutions are deliberately
-# unquoted. Duplicates are collapsed in first-seen order: passing --profile core
-# twice changes nothing, but it makes two `ps` outputs annoying to compare.
-seen_profiles=""
-for profile in $(env_get VIDRA_COMPOSE_PROFILES "core frontend") $(env_get EXTRA_COMPOSE_PROFILES ""); do
-  case " $seen_profiles " in
-    *" $profile "*) continue ;;
-  esac
-  seen_profiles="$seen_profiles $profile"
-  COMPOSE+=(--profile "$profile")
-done
-
-if [ "$EXTERNAL_POSTGRES" -eq 1 ] || [ "$EXTERNAL_REDIS" -eq 1 ]; then
-  log "external datastores: postgres=${EXTERNAL_POSTGRES} redis=${EXTERNAL_REDIS} (the bundled service is disabled by its overlay)"
-fi
+# Sets COMPOSE, EXTERNAL_POSTGRES and EXTERNAL_REDIS.
+vidra_compose_chain
 
 step "0/6 pre-flight"
 require_compose_version

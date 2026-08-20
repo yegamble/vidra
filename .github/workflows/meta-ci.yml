@@ -54,11 +54,16 @@ jobs:
           fi
           echo "OK: concrete env files and their .bak copies are ignored; templates are not."
 
+      # `-x` so shellcheck FOLLOWS the `. "$REPO_ROOT/deploy/lib.sh"` in the four
+      # stack scripts and deploy/compose.sh (each carries a `# shellcheck
+      # source=deploy/lib.sh` directive). Without it every caller reports SC1091
+      # and, worse, nothing checks that the library's contract — ENV_FILE and
+      # log() defined before the source line — is actually met at each call site.
       - name: Lint shell scripts
         run: |
           for f in bootstrap.sh deploy/*.sh; do
             bash -n "$f"
-            shellcheck "$f"
+            shellcheck -x "$f"
           done
 
       # deploy/Caddyfile is bind-mounted read-only into the `caddy` service by
@@ -171,11 +176,18 @@ jobs:
           print('OK: migrate + search-migrate run the dev images, built from Dockerfile.dev.')
           PY
 
-      # The chain deploy/deploy.sh, deploy/rollback.sh, deploy/restore.sh and
-      # `make prod-config` all use. Every `${VAR:?}` in it must be satisfied, so
-      # dummy values are injected below — that list IS the contract: adding a new
-      # required variable to docker-compose.prod.yml without adding it here turns
-      # this step red, which is the point.
+      # The chain every script that addresses the running stack assembles —
+      # deploy/deploy.sh, rollback.sh, restore.sh, backup.sh and the
+      # `make prod-config` / `prod-logs` / `prod-down` wrapper — from the single
+      # copy in deploy/lib.sh. Spelled out literally HERE, and only here, so this
+      # step still fails if lib.sh itself is what regresses.
+      #
+      # This is the DEFAULT shape (no external datastores, core+frontend), which
+      # is what an unedited env/production.env.example selects. Every `${VAR:?}`
+      # in it must be satisfied, so dummy values are injected below — that list
+      # IS the contract: adding a new required variable to
+      # docker-compose.prod.yml without adding it here turns this step red, which
+      # is the point.
       #
       # `:?` fails on an EMPTY value too, which is why JWT_SECRET, REDIS_PASSWORD
       # and POSTGRES_PASSWORD must be passed: env/production.env.example
