@@ -172,8 +172,8 @@ services:
   # schema and code versions identical. Tag FLOOR: an image published before the
   # embedded `migrate` subcommand existed ignores the argv and boots an API
   # SERVER here, so the one-shot never exits and the deploy hangs — the
-  # MIN_EMBEDDED_MIGRATE_TAG gate in deploy/deploy.sh + deploy/rollback.sh
-  # refuses those tags before anything runs.
+  # MIN_EMBEDDED_MIGRATE_TAG gate in deploy/{deploy,rollback,restore}.sh refuses
+  # those tags before anything runs.
   migrate:
     image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always

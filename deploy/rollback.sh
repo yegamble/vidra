@@ -45,7 +45,7 @@ READY_TIMEOUT="${READY_TIMEOUT:-120}"
 # ignores argv completely and starts the API SERVER instead. The one-shot then
 # never exits, so the rollback hangs with the broken release still serving,
 # instead of failing fast. Refusing the tag is the readable outcome.
-# Kept identical in deploy.sh.
+# Kept identical in deploy.sh and restore.sh.
 MIN_EMBEDDED_MIGRATE_TAG="v0.2.0"
 
 log() { printf '[rollback] %s\n' "$*"; }
@@ -92,7 +92,7 @@ require_compose_version
 # semver-shaped at all (so the caller can say "cannot check" instead of guessing).
 # A prerelease/build suffix is ignored on purpose: v0.2.0-rc1 is built from the
 # v0.2.0 code and carries the same migrator, so it counts as v0.2.0 here.
-# Kept identical in deploy.sh.
+# Kept identical in deploy.sh and restore.sh.
 semver_ge() {
   local a="${1#v}" b="${2#v}" i ai bi
   a="${a%%-*}"; a="${a%%+*}"
@@ -115,7 +115,8 @@ semver_ge() {
 # MIN_EMBEDDED_MIGRATE_TAG above for what such an image does to a rollback.
 # An empty tag is left alone: `rollback.sh --user vX` legitimately leaves the two
 # migrator tags untouched, and an unset one is reported by the render check.
-# Kept identical in deploy.sh.
+# Kept identical in deploy.sh and restore.sh, apart from the closing sentence of
+# the final message, which names the operation each one would have hung.
 require_embedded_migrate_tag() {
   local what="$1" tag="$2" rc=0
   [ -n "$tag" ] || return 0

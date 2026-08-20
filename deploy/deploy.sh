@@ -50,7 +50,7 @@ PREDEPLOY_KEEP="${PREDEPLOY_KEEP:-10}"
 # `up -d` blocks on the api/search `service_completed_successfully` edges. Both
 # failure modes are a hang with no error message, which is the worst kind. The
 # tag comparison below turns them into a refusal before anything is touched.
-# Kept identical in rollback.sh.
+# Kept identical in rollback.sh and restore.sh.
 MIN_EMBEDDED_MIGRATE_TAG="v0.2.0"
 
 log()  { printf '[deploy] %s\n' "$*"; }
@@ -84,7 +84,7 @@ require_compose_version() {
 # semver-shaped at all (so the caller can say "cannot check" instead of guessing).
 # A prerelease/build suffix is ignored on purpose: v0.2.0-rc1 is built from the
 # v0.2.0 code and carries the same migrator, so it counts as v0.2.0 here.
-# Kept identical in rollback.sh.
+# Kept identical in rollback.sh and restore.sh.
 semver_ge() {
   local a="${1#v}" b="${2#v}" i ai bi
   a="${a%%-*}"; a="${a%%+*}"
@@ -107,7 +107,8 @@ semver_ge() {
 # MIN_EMBEDDED_MIGRATE_TAG above for what such an image does to a deploy.
 # An empty tag is left alone: the compose render check reports unset image tags
 # with a better message than this can (`${VIDRA_*_TAG:?}`).
-# Kept identical in rollback.sh.
+# Kept identical in rollback.sh and restore.sh, apart from the closing sentence of
+# the final message, which names the operation each one would have hung.
 require_embedded_migrate_tag() {
   local what="$1" tag="$2" rc=0
   [ -n "$tag" ] || return 0
