@@ -48,6 +48,14 @@ env/*.env.bak
 # random suffix comes AFTER `.tmp`). Ignore the shape, not one instance.
 env/.*.tmp*
 
+# The GENERATED reverse-proxy config. `vidra setup` renders
+# deploy/Caddyfile.local from the committed deploy/Caddyfile template plus the
+# env file, and docker-compose.prod.yml mounts ONLY the .local file. It carries
+# the operator's real domain and ACME contact address, and every host's copy
+# differs, so it is deliberately not committable — the template is what this
+# repo ships and reviews.
+deploy/Caddyfile.local
+
 # Local backup artifacts written by deploy/backup.sh and deploy/deploy.sh.
 # These are full pg_dumps: they contain every user row and every secret the
 # application persists, so they are never allowed near git.

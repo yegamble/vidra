@@ -71,11 +71,31 @@ jobs:
       # would, which is precisely the failure being pre-empted. Same image the
       # overlay runs; `--network none` because adapting must not need DNS, the
       # network, or an ACME round-trip.
+      #
+      # The tag is PINNED and must stay identical to docker-compose.prod.yml's
+      # caddy image — validating against a different Caddy than production runs
+      # is validating nothing. Bump both in one commit.
       - name: deploy/Caddyfile is a valid Caddy config
         run: |
           docker run --rm --network none \
             -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
-            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+            caddy:2.11.4-alpine caddy validate --config /etc/caddy/Caddyfile
+
+      # …and the two pins really are the same tag. A drift here is invisible
+      # otherwise: both jobs stay green while CI parses the Caddyfile with a
+      # parser production does not use.
+      - name: The Caddy pin in CI matches the one production runs
+        run: |
+          # Comment lines are stripped first: docker-compose.prod.yml's comment
+          # records which floating tag the pin was taken from, and that is not a
+          # second pin.
+          ci_tag=$(grep -vE '^[[:space:]]*#' .github/workflows/meta-ci.yml | grep -oE 'caddy:[0-9][0-9A-Za-z._-]*' | sort -u)
+          prod_tag=$(grep -vE '^[[:space:]]*#' docker-compose.prod.yml | grep -oE 'caddy:[0-9][0-9A-Za-z._-]*' | sort -u)
+          if [ "$ci_tag" != "$prod_tag" ] || [ -z "$prod_tag" ]; then
+            echo "::error::caddy image pin drift — meta-ci.yml has '$ci_tag', docker-compose.prod.yml has '$prod_tag'" >&2
+            exit 1
+          fi
+          echo "OK: both pin $prod_tag."
 
       # docker-compose.yml `include:`s ./vidra-core/docker-compose.yml and adds
       # `search`/`search-migrate` services with build context ./vidra-search, so

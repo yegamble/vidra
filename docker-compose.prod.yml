@@ -318,7 +318,17 @@ services:
     mem_limit: ${IPFS_MEM_LIMIT:-1g}
 
   caddy:
-    image: caddy:2-alpine
+    # PINNED, not `caddy:2-alpine`. The floating tag moves under the deploy:
+    # the TLS terminator is the one container whose failure is the whole site,
+    # and it is also the only one whose config this repo hand-writes, so a
+    # silent minor bump is exactly the change that must not arrive unannounced.
+    # 2.11.4 is what `caddy:2-alpine` resolved to when this was pinned
+    # (digest sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648).
+    # Bump deliberately, and bump .github/workflows/meta-ci.yml's `caddy
+    # validate` step to the SAME tag in the same commit — otherwise CI is
+    # validating deploy/Caddyfile against a different parser than production
+    # runs.
+    image: caddy:2.11.4-alpine
     # No profile: this file is only ever applied to a production deploy, and the
     # TLS terminator must come up with every one of them.
     restart: unless-stopped
@@ -342,7 +352,20 @@ services:
         condition: service_started
         required: false
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The GENERATED file, not the committed deploy/Caddyfile template.
+      # `vidra setup` renders deploy/Caddyfile.local from the template + the env
+      # file (site address from PUBLIC_BASE_URL, ACME email and TLS mode at the
+      # `# vidra:global-options` / `# vidra:tls` markers), and it is gitignored
+      # so an operator's real domain never becomes a commit.
+      #
+      # It MUST exist before `up -d`: Docker creates a missing bind-mount source
+      # as an empty DIRECTORY, and Caddy then crash-loops on a config path that
+      # is not a file — the whole site down with every app container healthy.
+      # deploy/{deploy,rollback,restore}.sh refuse to start without it.
+      #
+      # Editing it does NOT recreate this container (same image, same mount), so
+      # deploy.sh follows `up -d` with an explicit `caddy reload`.
+      - ./deploy/Caddyfile.local:/etc/caddy/Caddyfile:ro
       # ACME account key + issued certificates. MUST be a named volume: an
       # ephemeral /data means a fresh certificate order on every `up -d`, and
       # Let's Encrypt's duplicate-certificate limit (5/week) is reached in a

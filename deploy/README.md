@@ -7,7 +7,8 @@ stack plus a production overlay, behind Caddy for TLS.
 | File | What |
 |---|---|
 | [`../docker-compose.prod.yml`](../docker-compose.prod.yml) | Production overlay: loopback binds, GHCR images, restart policies, log caps, resource limits, named volumes, Caddy. |
-| [`Caddyfile`](./Caddyfile) | Single-origin TLS reverse proxy (path routing to api/frontend). |
+| [`Caddyfile`](./Caddyfile) | **Template.** Single-origin TLS reverse proxy (path routing to api/frontend). `vidra setup` renders it to `deploy/Caddyfile.local` — the real domain and ACME settings go there, at the `# vidra:global-options` / `# vidra:tls` markers. |
+| `Caddyfile.local` | **Generated, gitignored, and the only file mounted into the caddy container.** Must exist before `up -d`: a missing bind-mount source is created by Docker as a directory and Caddy crash-loops on it. `deploy.sh`, `rollback.sh` and `restore.sh` all refuse to start without it. |
 | [`deploy.sh`](./deploy.sh) | pin checkouts → dump → pull → gated migrations → up → probe. |
 | [`rollback.sh`](./rollback.sh) | Rewrite the image tags, pull, restart, re-probe. |
 | [`backup.sh`](./backup.sh) | `pg_dump -Fc` → gzip → optional off-site → retention → success marker. |
@@ -207,9 +208,17 @@ $EDITOR env/production.env              # JWT_SECRET, POSTGRES_PASSWORD, REDIS_P
                                         # STORAGE_S3_*, INSTANCE_NAME, PUBLIC_BASE_URL,
                                         # VIDRA_*_TAG=v0.2.0, REGISTRATION_ENABLED=false
 git check-ignore -v env/production.env  # MUST match, or stop and fix .gitignore
-$EDITOR deploy/Caddyfile                # replace example.com with your domain —
-                                        # deploy.sh refuses while a non-comment
-                                        # line still says example.com
+vidra setup                             # renders deploy/Caddyfile.local from the
+                                        # template + PUBLIC_BASE_URL/VIDRA_TLS_MODE.
+                                        # By hand instead:
+                                        #   cp deploy/Caddyfile deploy/Caddyfile.local
+                                        #   $EDITOR deploy/Caddyfile.local   # your domain
+                                        # deploy.sh refuses while Caddyfile.local is
+                                        # missing, still says example.com, or serves a
+                                        # different host than PUBLIC_BASE_URL. It also
+                                        # refuses an ACME deploy whose domain does not
+                                        # yet resolve to this host (Let's Encrypt rate
+                                        # limits); VIDRA_SKIP_DNS_PREFLIGHT=1 overrides.
 
 export COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml \
   --env-file env/production.env --profile core --profile frontend"
