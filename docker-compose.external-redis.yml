@@ -1,0 +1,51 @@
+# EXTERNAL / MANAGED REDIS OVERLAY — never used alone, and never auto-loaded.
+#
+# Applied by deploy/{deploy,rollback,restore,backup}.sh when the env file says
+# VIDRA_EXTERNAL_REDIS=true, after docker-compose.prod.yml (and after
+# docker-compose.external-postgres.yml when that one is active too):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     -f docker-compose.external-redis.yml --env-file env/production.env …
+#
+# WHAT IT DOES: the bundled `redis` service never starts, and every depends_on
+# edge pointing at it is removed, so the api and the search service talk
+# straight to ${REDIS_URL} / ${SEARCH_REDIS_URL}.
+#
+# The merge-tag reasoning is identical to docker-compose.external-postgres.yml
+# — read the long comment there. In short, both verified with
+# `docker compose … config`: `profiles:` is a sequence and MERGES, so it needs
+# `!override` (a `!reset` would delete the key and make the service start
+# unconditionally); `depends_on:` is a map, so `!reset` on the single `redis`
+# key removes exactly that edge, and leaving it in place makes the whole
+# project invalid ("service X depends on undefined service redis").
+#
+# STILL REQUIRED IN THE ENV FILE: REDIS_PASSWORD. docker-compose.prod.yml's
+# bundled redis `command:` carries a `${REDIS_PASSWORD:?…}` assertion, and
+# Compose interpolates that file as it LOADS it — before profiles are evaluated
+# and before this overlay is merged — so the assertion fires even though the
+# service never starts. Set it to the managed instance's password; the two DSNs
+# below are what actually reach the containers.
+#
+# USE A rediss:// URL: a managed Redis is reached over the public network or a
+# VPC peering link, not the compose bridge. The api and search MUST NOT share a
+# keyspace — keep them on different logical databases (…/0 and …/1), or on two
+# separate instances if the provider does not expose SELECT.
+
+services:
+  # The bundled Redis, parked on a profile nothing enables.
+  redis:
+    profiles: !override ["external-disabled"]
+
+  api:
+    depends_on:
+      redis: !reset null
+    environment:
+      REDIS_URL: ${REDIS_URL:?VIDRA_EXTERNAL_REDIS=true, so REDIS_URL must name the managed instance (rediss://:PASSWORD@HOST:6379/0) - the bundled redis service is disabled by docker-compose.external-redis.yml}
+
+  search:
+    depends_on:
+      redis: !reset null
+    environment:
+      # vidra-search reads REDIS_URL; the value is fed from SEARCH_REDIS_URL so
+      # it stays on its own logical database (see the base compose file).
+      REDIS_URL: ${SEARCH_REDIS_URL:?VIDRA_EXTERNAL_REDIS=true, so SEARCH_REDIS_URL must name the managed instance on a DIFFERENT logical database from the api (rediss://:PASSWORD@HOST:6379/1) - the bundled redis service is disabled by docker-compose.external-redis.yml}

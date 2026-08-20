@@ -63,14 +63,82 @@ env_get() {
 PGUSER="$(env_get POSTGRES_USER vidra)"
 PGDB="$(env_get POSTGRES_DB vidra)"
 
-# The same explicit -f chain deploy.sh uses. It must match, or `ps -q` resolves
-# against a different rendering of the stack. `--profile core` is what makes the
-# postgres service visible to `ps`.
+# The compose invocation, assembled from the env file rather than hardcoded so
+# `vidra setup` can change the SHAPE of the stack (external datastores, extra
+# profiles) without editing these scripts. Kept TEXTUALLY IDENTICAL in
+# deploy.sh, rollback.sh, restore.sh and backup.sh: the four must address the
+# same project, or `ps -q postgres` and `up -d` resolve against different
+# renderings of it.
+#
+# An env file that predates these keys — or sets them empty — produces exactly
+# the command line these scripts used before:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     --env-file "$ENV_FILE" --profile core --profile frontend
 COMPOSE=(docker compose
   -f docker-compose.yml
-  -f docker-compose.prod.yml
-  --env-file "$ENV_FILE"
-  --profile core --profile frontend)
+  -f docker-compose.prod.yml)
+
+# External/managed datastores. Each overlay parks the bundled service on a
+# profile nothing enables and deletes every depends_on edge that named it —
+# leaving one in place makes the whole project INVALID, not merely wasteful
+# ("service search-migrate depends on undefined service postgres"). See the
+# header of docker-compose.external-postgres.yml for the merge-tag reasoning.
+#
+# Both overlays MUST come after docker-compose.prod.yml (they build on its
+# `!reset` tags and `${...:?}` assertions), and postgres before redis so every
+# host renders the same chain. `is_true` rather than `= true` because operators
+# type true/yes/1 interchangeably and a typo here silently starts a second,
+# empty database next to the managed one.
+is_true() {
+  case "$1" in
+    true|TRUE|True|yes|YES|Yes|1|on|ON|On) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+EXTERNAL_POSTGRES=0
+EXTERNAL_REDIS=0
+if is_true "$(env_get VIDRA_EXTERNAL_POSTGRES false)"; then
+  EXTERNAL_POSTGRES=1
+  COMPOSE+=(-f docker-compose.external-postgres.yml)
+fi
+if is_true "$(env_get VIDRA_EXTERNAL_REDIS false)"; then
+  EXTERNAL_REDIS=1
+  COMPOSE+=(-f docker-compose.external-redis.yml)
+fi
+
+COMPOSE+=(--env-file "$ENV_FILE")
+
+# Profiles: VIDRA_COMPOSE_PROFILES (default `core frontend` — exactly what these
+# scripts hardcoded before) plus EXTRA_COMPOSE_PROFILES, which stays a separate
+# key because `vidra setup` rewrites the first and the operator owns the second.
+# Both are space-separated lists, so the command substitutions are deliberately
+# unquoted. Duplicates are collapsed in first-seen order: passing --profile core
+# twice changes nothing, but it makes two `ps` outputs annoying to compare.
+seen_profiles=""
+for profile in $(env_get VIDRA_COMPOSE_PROFILES "core frontend") $(env_get EXTRA_COMPOSE_PROFILES ""); do
+  case " $seen_profiles " in
+    *" $profile "*) continue ;;
+  esac
+  seen_profiles="$seen_profiles $profile"
+  COMPOSE+=(--profile "$profile")
+done
+
+if [ "$EXTERNAL_POSTGRES" -eq 1 ] || [ "$EXTERNAL_REDIS" -eq 1 ]; then
+  log "external datastores: postgres=${EXTERNAL_POSTGRES} redis=${EXTERNAL_REDIS} (the bundled service is disabled by its overlay)"
+fi
+
+# This script dumps by `docker exec`-ing pg_dump inside the BUNDLED postgres
+# container. With VIDRA_EXTERNAL_POSTGRES=true there is no such container, so
+# refuse in one sentence rather than fail at `ps -q postgres` with a message
+# about a stack that is not running.
+#
+# Deliberately placed BEFORE the healthchecks.io trap and the /start ping: a
+# refusal is not a backup attempt, so the dead-man's switch stays silent and
+# the "no ping since <t>" alert fires — which is the correct signal, because
+# this host is genuinely taking no backups from here.
+if [ "$EXTERNAL_POSTGRES" -eq 1 ]; then
+  die "VIDRA_EXTERNAL_POSTGRES=true in $ENV_FILE — external Postgres: use your provider's backup/restore (automated backups + point-in-time recovery), and point HEALTHCHECKS_URL at that schedule instead of this script. Backing up a managed database is deliberately not reimplemented here. Nothing was written."
+fi
 
 # Dead-man's switch. A backup that never runs is the failure mode monitoring
 # usually misses, so the ping is what alerts — not the script. Configure

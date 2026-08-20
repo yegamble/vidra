@@ -1,0 +1,86 @@
+# EXTERNAL / MANAGED POSTGRES OVERLAY — never used alone, and never auto-loaded.
+#
+# Applied by deploy/{deploy,rollback,restore,backup}.sh when the env file says
+# VIDRA_EXTERNAL_POSTGRES=true, immediately after docker-compose.prod.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     -f docker-compose.external-postgres.yml --env-file env/production.env …
+#
+# WHAT IT DOES: the bundled `postgres` service never starts, and every
+# depends_on edge pointing at it is removed, so the api, the two migration
+# one-shots and the search service talk straight to ${DATABASE_URL}.
+#
+# ---------------------------------------------------------------------------
+# THE TWO MERGE TAGS, AND WHY EACH ONE IS THE ONE IT IS (verified with
+# `docker compose … config` on Compose v5.1.0, not assumed):
+#
+#   profiles: !override ["external-disabled"]
+#     `profiles` is a SEQUENCE, and Compose merges sequences across a -f chain:
+#     a plain `profiles: ["external-disabled"]` here renders
+#     `['core', 'external-disabled']`, so `--profile core` still starts the
+#     bundled Postgres — the exact failure this file exists to prevent.
+#     `!override` REPLACES the list. `!reset` is WRONG here and dangerously so:
+#     it deletes the key outright (its value is ignored), leaving a service with
+#     NO profiles at all — i.e. one that starts on EVERY invocation. Verified:
+#     `profiles: !reset ["external-disabled"]` renders `profiles: None` and the
+#     service is present in the model.
+#     "external-disabled" is a profile nothing ever enables; naming it (rather
+#     than an empty list) keeps `--profile external-disabled` as a deliberate
+#     escape hatch for inspecting the dormant definition.
+#
+#   depends_on: { postgres: !reset null }
+#     depends_on is a MAP, so `!reset` on the single key removes exactly that
+#     edge and leaves the others intact. This is not optional bookkeeping:
+#     without it the whole project is invalid, not merely wasteful — Compose
+#     refuses to load it with
+#       service "search-migrate" depends on undefined service "postgres":
+#       invalid compose project
+#     (verified: `config -q` exits 1). Every service in the prod chain that
+#     names postgres is listed below; adding a new one means adding it here.
+#
+# ---------------------------------------------------------------------------
+# STILL REQUIRED IN THE ENV FILE, EVEN THOUGH THE BUNDLED SERVICE NEVER STARTS:
+# POSTGRES_PASSWORD. Compose interpolates docker-compose.prod.yml as it LOADS
+# it — before profiles are evaluated and before this file is merged — so the
+# `${POSTGRES_PASSWORD:?…}` assertion on the bundled postgres service fires
+# regardless. Set it to the managed instance's password (it is otherwise
+# unused). Same story for REDIS_PASSWORD in the redis overlay.
+#
+# BACKUPS ARE YOURS NOW: deploy/backup.sh and deploy/restore.sh exec pg_dump /
+# pg_restore INSIDE the bundled container, so they refuse to run under this
+# overlay. Use the provider's automated backups + point-in-time restore, and
+# keep taking a pre-upgrade snapshot before every deploy.
+
+services:
+  # The bundled Postgres, parked on a profile nothing enables. See above.
+  postgres:
+    profiles: !override ["external-disabled"]
+
+  # ---------------------------------------------------------------------------
+  # Every depends_on edge on postgres in the prod chain, removed. The matching
+  # DATABASE_URL assertion turns "I forgot the DSN" into a render-time error
+  # instead of a container that boots and then dials a `postgres` host which no
+  # longer exists in the project.
+  api:
+    depends_on:
+      postgres: !reset null
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?VIDRA_EXTERNAL_POSTGRES=true, so DATABASE_URL must name the managed database (postgres://USER:PASSWORD@HOST:5432/DB?sslmode=require) - the bundled postgres service is disabled by docker-compose.external-postgres.yml}
+
+  migrate:
+    depends_on:
+      postgres: !reset null
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?VIDRA_EXTERNAL_POSTGRES=true, so DATABASE_URL must name the managed database (postgres://USER:PASSWORD@HOST:5432/DB?sslmode=require) - the bundled postgres service is disabled by docker-compose.external-postgres.yml}
+
+  search:
+    depends_on:
+      postgres: !reset null
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?VIDRA_EXTERNAL_POSTGRES=true, so DATABASE_URL must name the managed database (postgres://USER:PASSWORD@HOST:5432/DB?sslmode=require) - the bundled postgres service is disabled by docker-compose.external-postgres.yml}
+
+  search-migrate:
+    depends_on:
+      postgres: !reset null
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?VIDRA_EXTERNAL_POSTGRES=true, so DATABASE_URL must name the managed database (postgres://USER:PASSWORD@HOST:5432/DB?sslmode=require) - the bundled postgres service is disabled by docker-compose.external-postgres.yml}
