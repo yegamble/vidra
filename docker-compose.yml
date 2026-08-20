@@ -118,7 +118,24 @@ services:
   # of its own. An inherited DSN that still carries
   # &x-migrations-table=vidra_search_migrations is accepted (the binary strips
   # it); one naming a DIFFERENT table is refused rather than silently ignored.
+  #
+  # This service owns this chain's ONLY vidra-search build; the `search` service
+  # below runs the same image by NAME, so one build serves both. Declaring the
+  # build twice against one tag is what this replaces: it mints the same image
+  # twice, and on a cold cache buildx bake fails the second target outright with
+  # "image already exists". A shared name is also what lets
+  # docker-compose.prod.yml pin ONE published tag onto both services.
+  #
+  # The build sits on the one-shot rather than on `search` so the deps-only
+  # workflow (`docker compose … up -d postgres redis migrate search-migrate`)
+  # still builds it — the same shape vidra-search's own docker-compose.yml
+  # settled on. vidra-core's file puts its single build on `api` and lets its
+  # one-shot inherit the name; either side works here because
+  # docker-compose.prod.yml strips the build off BOTH one-shots (`build: !reset
+  # null`) before production ever runs them. The invariant is one producer and
+  # one image name per repo.
   search-migrate:
+    image: vidra-search:local
     build: ./vidra-search
     profiles: ["core"]
     depends_on:
@@ -157,7 +174,8 @@ services:
   # LOG_FORMAT and METRICS_ENABLED do share one variable across all three services
   # — identical semantics and identical defaults, so one knob is correct there.
   search:
-    build: ./vidra-search
+    # Built by the search-migrate one-shot above (same image, one build).
+    image: vidra-search:local
     profiles: ["core"]
     depends_on:
       postgres:
