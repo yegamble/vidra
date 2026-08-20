@@ -338,26 +338,40 @@ services:
   # inherits the daemon default, which is UNBOUNDED (header note 4). clamd's
   # freshclam chatter and the collector's per-batch logs are the two most likely
   # things on the box to fill a disk that also holds Postgres.
+  # `restart: unless-stopped` for the same reason as postgres/redis/api: header
+  # note 3 promises it "everywhere long-lived", and every one of these five IS
+  # long-lived. Without it they are the compose default `no` — one OOM kill or
+  # one host reboot and they never come back, while the api that depends on them
+  # restarts perfectly. The failure is silent by construction: uploads stop being
+  # scanned, captions stop being generated and traces stop being exported, and
+  # none of that surfaces as an error on the request path.
   clamav:
     ports: !reset []
+    restart: unless-stopped
     logging: *logging
 
   whisper:
     ports: !reset []
+    restart: unless-stopped
     logging: *logging
 
   otel-collector:
     ports: !reset []
+    restart: unless-stopped
     logging: *logging
 
   jaeger:
     ports: !reset []
+    restart: unless-stopped
     logging: *logging
 
   # rtmp keeps its publish: 1935 is the ingest port streamers push to, so it is
   # deliberately internet-facing (open it in the cloud firewall) — same standing
-  # exception as the IPFS swarm port below. Only the log cap is added.
+  # exception as the IPFS swarm port below. The log cap and the restart policy
+  # are added; a live-ingest server that stays down after a reboot means every
+  # streamer's push is refused with nothing in the app logs to say why.
   rtmp:
+    restart: unless-stopped
     logging: *logging
 
   # ---------------------------------------------------------------------------

@@ -269,6 +269,23 @@ jobs:
           for name in sorted(allp):
               if 'logging' not in allp[name]:
                   bad.append(f'{name} has no logging cap — it inherits the UNBOUNDED daemon default')
+          # And the header's note 3, asserted the same way and for the same
+          # reason the log-cap check exists: the overlay claimed
+          # `restart: unless-stopped` "everywhere long-lived" while the five
+          # optional-profile services had no policy at all, i.e. the compose
+          # default `no`. One OOM kill or one reboot and clamav/whisper/otel
+          # never come back, silently — uploads stop being scanned and traces
+          # stop being exported with nothing failing on the request path.
+          # The three one-shots are the deliberate inverse: a restarting
+          # migrator is an infinite loop, and api/search wait on it exiting.
+          one_shots = {'prep-volumes', 'migrate', 'search-migrate'}
+          for name in sorted(allp):
+              policy = allp[name].get('restart')
+              if name in one_shots:
+                  if policy not in (None, 'no'):
+                      bad.append(f'{name} is a one-shot but has restart={policy!r} — it would loop forever')
+              elif policy != 'unless-stopped':
+                  bad.append(f'{name} has restart={policy!r}, not unless-stopped — it will not survive a reboot')
           if bad:
               print('::error::the production overlay is NOT closing the internal ports')
               print('(a Compose older than 2.24 ignores !reset/!override silently)')
@@ -276,7 +293,9 @@ jobs:
               sys.exit(1)
           print(f'OK: postgres/redis/search publish nothing; api/frontend are loopback-only; '
                 f'with scan+captions+otel+media+ipfs enabled, all {len(allp)} services are '
-                f'log-capped and only caddy 80/443, rtmp 1935 and ipfs 4001 face the network.')
+                f'log-capped, every long-lived one restarts unless-stopped (the {len(one_shots)} '
+                f'one-shots deliberately do not), and only caddy 80/443, rtmp 1935 and '
+                f'ipfs 4001 face the network.')
           PY
 
       # The migration one-shots are the services deploy.sh runs with `compose run`

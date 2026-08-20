@@ -250,14 +250,23 @@ resolve_host() {
 # discover_public_ip — this host's address as the internet sees it. The env
 # override comes first (a NAT'd or air-gapped box cannot ask), then two
 # independent echo services so one being down is not a deploy blocker.
+#
+# The two services and their ORDER are kept identical to vidra-core's
+# internal/preflight/dns.go, so `vidra doctor` and this script cannot disagree
+# about what this host's address is — a mismatch there reads as a DNS problem
+# and sends the operator after the wrong thing.
+#
+# The override is whitespace-stripped exactly like the echo replies: a trailing
+# space in the env file otherwise fails the comparison below with two
+# identical-looking addresses printed in the message.
 discover_public_ip() {
   local ip svc
-  ip="$(env_get VIDRA_PUBLIC_IP '')"
+  ip="$(env_get VIDRA_PUBLIC_IP '' | tr -d '[:space:]')"
   if [ -n "$ip" ]; then
     printf '%s' "$ip"
     return 0
   fi
-  for svc in https://api.ipify.org https://ifconfig.me/ip; do
+  for svc in https://api.ipify.org https://icanhazip.com; do
     ip="$(curl -fsS -m 5 "$svc" 2>/dev/null | tr -d '[:space:]' || true)"
     case "$ip" in
       [0-9]*.[0-9]*.[0-9]*.[0-9]*) printf '%s' "$ip"; return 0 ;;
@@ -291,7 +300,13 @@ require_dns_points_here() {
       ;;
   esac
 
-  case "${VIDRA_SKIP_DNS_PREFLIGHT:-0}" in
+  # Read through env_get, not straight off the process env: env/production.env
+  # documents this key right next to VIDRA_PUBLIC_IP, and `vidra doctor` honours
+  # both places — so an operator who sets it in the FILE (which is what the
+  # template shows) had it silently ignored here while doctor reported it as
+  # active. env_get still gives the process env precedence, so
+  # `VIDRA_SKIP_DNS_PREFLIGHT=1 ./deploy/deploy.sh` is unchanged.
+  case "$(env_get VIDRA_SKIP_DNS_PREFLIGHT 0)" in
     ""|0|false|no) ;;
     *)
       printf '[deploy] WARNING: VIDRA_SKIP_DNS_PREFLIGHT is set — NOT checking that the domain resolves here. A wrong A record now costs a Let'"'"'s Encrypt rate-limit lockout (5 failed authorisations per hostname per hour) instead of one refusal.\n' >&2
