@@ -20,8 +20,8 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/yegamble/vidra" alt="License: AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26">
   <img src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs" alt="Next.js 16">
-  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 16">
-  <img src="https://img.shields.io/badge/Redis-7-FF4438?logo=redis&logoColor=white" alt="Redis 7">
+  <img src="https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 18">
+  <img src="https://img.shields.io/badge/Redis-8-FF4438?logo=redis&logoColor=white" alt="Redis 8">
 </p>
 
 Vidra is a federated video platform you install yourself, the way you would install
@@ -35,9 +35,10 @@ on anything S3-compatible if you want it to, and it is free software under AGPL 
 - **A real creator pipeline.** Resumable uploads, an H.264/AAC HLS ladder, live
   streaming over RTMP with replay-to-VOD, Whisper auto-captions, chapters,
   storyboards.
-- **Not a science project.** 209-path OpenAPI contract, drift-guarded codegen,
-  race-detected CI in every repo, axe accessibility as a hard gate, health probes,
-  metrics, tracing, backup/restore/rollback scripts.
+- **Not a science project.** 214-path OpenAPI contract, drift-guarded codegen,
+  race-detected CI in every repo, axe accessibility as a hard gate, health/readiness
+  probes (`/healthz`, `/readyz`, `/schemaz`, `/version`), metrics, tracing,
+  backup/restore/rollback scripts.
 
 Vidra is a clean-room, PeerTube-inspired implementation — not a fork, and not a
 hosted service.
@@ -72,10 +73,10 @@ Olm — the server only stores opaque envelopes) with disappearing messages.
 policy with creator content warnings, registration approval, admin console with
 runtime-mutable instance settings, and audit-enveloped job observability.
 
-**Operate.** One compose file; health/readiness probes; Prometheus metrics and
+**Operate.** One compose file; health/readiness probes (`/healthz`, `/readyz`, `/schemaz` migration probe, `/admin/system` 6-component status); Prometheus metrics and
 OpenTelemetry tracing; local or S3-compatible storage with optional dual-tier
 IPFS mirroring (public gateway offload plus a private swarm-keyed tier);
-scripted deploy, rollback, backup, and restore. WCAG 2.2 AA is enforced by axe
+scripted deploy, rollback, backup, and restore plus the `vidra` operator CLI (`doctor` 18 checks, `status`, `logs`). WCAG 2.2 AA is enforced by axe
 as a hard CI gate, on the tokens of a documented
 [design system](https://github.com/yegamble/vidra-branding/blob/main/design-system/README.md).
 
@@ -173,7 +174,7 @@ Production/staging operations (all honour `PROD_ENV_FILE=env/staging.env`):
 | `make release VERSION=v0.2.0` | `deploy/release.sh`: guarded `gh release create` in all three repos → watch each `publish-container` run → verify the GHCR image. Prompts, or needs `CONFIRM=1`. |
 | `make prod-config` | Render + validate the production compose chain; catches missing required secrets. |
 | `make deploy` | `deploy/deploy.sh`: pre-deploy dump → pull → gated migrations → `up -d --no-build` → probe. |
-| `make rollback TAG=v0.1.0` | Rewrite the three `VIDRA_*_TAG` values, pull, restart, re-probe. App only — no schema change. |
+| `make rollback TAG=v0.2.0` | Rewrite the three `VIDRA_*_TAG` values, pull, restart, re-probe. App only — no schema change. |
 | `make backup` | `deploy/backup.sh`: `pg_dump -Fc` → gzip → optional off-site → 14 daily + 8 weekly retention. |
 | `make restore DUMP=… CONFIRM=1` | **Destructive.** `deploy/restore.sh`: drop, recreate, `pg_restore -j4`, migrate, probe. Prompts, or needs `CONFIRM=1`. |
 | `make prod-logs` / `make prod-down` | Tail / stop the production stack. |
@@ -236,11 +237,27 @@ pre-deploy dump, exit-code-gated migrations and health probes. Note the explicit
 but it means production must set `SEARCH_SERVICE_URL` and `SEARCH_INTERNAL_SECRET`
 in the env file itself.
 
+**One command per thing an operator does.** `vidra` is a host-side binary — build
+it with `make build-vidra` in `vidra-core` (a one-line curl installer is planned):
+
+```bash
+vidra setup                  # interview → env/production.env + deploy/Caddyfile.local
+vidra setup --answers a.txt  # or --non-interactive with the answers as flags
+vidra doctor                 # 18 checks: compose, port exposure, config, backups, reachability
+vidra status                 # what is running, and whether it answers
+vidra logs [service] | vidra restart <service>
+vidra deploy | rollback <tag> | backup | restore <dump> | release <tag>
+```
+
+Those last five **exec `deploy/*.sh`** and return its exit code unchanged — same
+gates, same refusals, one copy of each.
+
 Three rules worth internalizing: **staging is production config with throwaway
-data** (promote the exact image tags); the containerized frontend bakes
-`NEXT_PUBLIC_API_BASE_URL` at **build** time, so a restart cannot repoint it; and
-**register the owner account before opening registration** — the first account on
-an empty `users` table is auto-granted admin. Production is fail-secure
+data** (promote the exact image tags); the containerized frontend resolves its
+origin at **runtime** (`PUBLIC_API_BASE_URL` via `/runtime-config.js`), so one
+image serves any domain; and **claim the owner account first** — on a fresh
+install every signup path refuses until the one-time owner-claim token from the
+api's boot log is redeemed at `/setup/claim`. Production is fail-secure
 (`VIDRA_ENV=production` refuses dev secrets and dev mail capture); see
 [`deploy/README.md`](deploy/README.md) for first-boot ordering, host
 prerequisites, the firewall caveat, backups/restore, secret rotation, and the
@@ -269,12 +286,11 @@ consumed only by `vidra-core`, staged the same back-compat way.
 ## CI
 
 Each repo runs its own GitHub Actions:
-- **vidra-core** — `backend-ci` (`make ci`), `backend-integration`, `openapi`, `ci-guard`.
-- **vidra-user** — `frontend-ci` (`npm run ci`), `contract-ci`, `frontend-e2e-backed`, `ci-guard`.
-- **vidra-search** — `search-ci` (`make ci`), `search-integration`, `openapi`, `ci-guard`.
+- **vidra-core** — `backend-ci` (`make ci`), `backend-integration`, `openapi`, `schema-compat` (previous-release compat), `ci-guard`; plus `bench-fuzz`, `ipfs-integration`, `publish-container` on release.
+- **vidra-user** — `frontend-ci` (`npm run ci`), `contract-ci`, `frontend-e2e-backed`, `ci-guard`; plus `publish-container`.
+- **vidra-search** — `search-ci` (`make ci`), `search-integration`, `openapi`, `training-ci`, `ci-guard`; plus `publish-container`.
 
-Each repo also carries additional workflows (fuzzing, IPFS integration, container
-publishing, search model training) — see each repo's `.github/workflows/`. This
+Each repo also carries additional workflows — see each repo's `.github/workflows/`. This
 meta-repo runs `meta-ci` (validates `bootstrap.sh` and the full-stack compose config).
 
 ## Repo layout & docs
@@ -285,6 +301,7 @@ directories are independent git checkouts, git-ignored by this repo.
 
 | Doc | What |
 |-----|------|
+| [`docs/productionization/README.md`](docs/productionization/README.md) | Productionization program: phases 1–5, interfaces, risks, architecture-today (source of truth for waves 4–5). |
 | [`.ralph/specs/architecture.md`](.ralph/specs/architecture.md) | Living architecture doc: subsystems and the shared Postgres/Redis topology across the three services. |
 | [`.ralph/specs/security.md`](.ralph/specs/security.md) | Security posture and planned controls (CORS allow-list, config hygiene, token hashing, fail-secure prod). |
 | [`.ralph/specs/testing.md`](.ralph/specs/testing.md) | Test strategy: unit / integration / migration / fuzz / benchmark layers and how to run them. |

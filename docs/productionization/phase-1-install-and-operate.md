@@ -98,6 +98,43 @@ when closing items.
 > verbatim — **before** its next deploy; deploy.sh, rollback.sh and restore.sh refuse up front
 > and print exactly those two options.
 
+> **Wave 4 (2026-08-20): items 10, 13, 16 and 19 implemented** — the running-it half of the
+> operator CLI, the schema-compat policy turned from prose into a blocking gate, the health
+> surface host tooling reads, and `vidra setup` made survivable for an operator who mistypes
+> or has no terminal. **Branches:** `vidra-core prod/phase1-wave4` (tip a041e1e — waves 2+3
+> landed first as core#45), `vidra-search prod/phase1-wave4` (tip 262d70e), `vidra-user
+> prod/phase1-wave4` (tip 1f7ba04), meta `prod/phase1-wave4` (the compose healthcheck fix
+> df1523f, the doc commits 156f299/adea171/6e364df/a62c3fa, and this note's own commit).
+> **Adversarially verified same day:** six independent verifiers attacked every lane, each
+> serious finding then re-attacked by a skeptic that had to reproduce it. Two majors were
+> confirmed and FIXED the same day — a line-split `DROP\nCONSTRAINT` evaded migrate-lint
+> (statement-level matching now; a 26-case attack matrix passes under both onetrueawk and
+> mawk, fixed in core 7ff807b + search 262d70e, copies still byte-identical), and the CLI
+> honored an exported `ENV_FILE` for child scripts while its own reads used the flag default
+> (one resolution rule now, invariant-tested, bae8747) — plus six minor sweeps (openapi
+> description, restart arity message, answers-file validation of argv-overridden lines,
+> INSTANCE_NAME still-the-example warning, stray root binary gitignored, stale gate comment).
+> **Gates run in the meta lane:** `shellcheck -x
+> deploy/deploy.sh` clean; the prod chain rendered against a synthetic production env
+> (`-f docker-compose.yml -f docker-compose.prod.yml --profile core --profile frontend
+> config`, exit 0) with the rendered frontend healthcheck asserted to be the CMD-SHELL
+> `/healthz`-then-`/` form; and meta-ci's own production-overlay render step re-run verbatim
+> against `env/production.env.example`. **Component gates, per their lanes:** core `make ci`
+> (which now carries migrate-lint) with the schema-compat job rehearsed locally *and*
+> negative-controlled — HEAD's migrations applied to a fresh postgres 18, then v0.2.0's
+> `go test -tags=integration -race ./internal/store/...` 38/38 PASS, versus exit 1 with
+> `column "description" does not exist` from six tests once `videos.description` was dropped
+> to stand in for a destructive 0105; search `make ci` (lint verified byte-identical to
+> core's under both onetrueawk and mawk); user `npm run ci` with a unit test pinning that
+> `app/healthz/route.ts` contains no import at all. **Merge order is waves 2–3's, plus one
+> new edge:** vidra-core and vidra-search land and release before meta, and vidra-core must
+> also merge before vidra-user — contract-ci regenerates `lib/api/generated.ts` against
+> vidra-core@main, so the user branch (which carries the `/schemaz` + `/admin/system` regen)
+> stays red until core's branch is on main. **This wave adds no new tag
+> floor:** the compose healthcheck falls back to `/` when `/healthz` 404s, so the meta change
+> needs no minimum `VIDRA_USER_TAG` and a rollback to v0.2.0 stays healthy — the one design
+> decision that keeps the hard merge order from growing a fourth constraint.
+
 - [x] **6. Remove runtime git dependence (migrations half)** *(implemented 2026-08-19, wave 2)* —
   migrations are embedded in both Go binaries (`//go:embed` + golang-migrate as a library) with
   `migrate up | version | force <v> --yes-i-know` subcommands; ledgers unchanged
@@ -200,8 +237,72 @@ when closing items.
   **Prerequisite for the rest is still unmet:** item 7's open follow-ups — semantic `validate()`
   reports first-error-only and the instancesettings validators remain unexposed — so per-field
   validation of *proposed* answers still has no callable surface.
-- [ ] **10. Terminal wizard + non-interactive install** — same engine, `vidra setup` in a TTY;
-  flags/answers-file for automation. Works without a browser.
+  **Wave-4 update (partial):** the *answer-shape* trio is now callable — `setup.NormalizeOrigin`,
+  `setup.NormalizeTLSMode` and `setup.CheckAcmeEmail` are exported wrappers over the engine's
+  own unexported validators (item 10 uses them to re-ask at the prompt), so domain, TLS mode
+  and ACME address can be validated one field at a time by the same code that would later
+  reject the file. Two caveats: they live in `internal/setup`, so a web wizard reaches them
+  through an endpoint that has yet to be written; and the instancesettings half — the runtime
+  settings the wizard's Optional Features step edits — is still unexposed.
+- [x] **10. Terminal wizard + non-interactive install** *(implemented 2026-08-20, wave 4:
+  `vidra-core prod/phase1-wave4` 992e2e3 + 395e84f + d173baa + c85f320 + 4b20b61 + 75a88fb +
+  ff164fc)* — the engine and the TTY interview shipped with item 8; this is the six things
+  standing between them and an install that survives a real operator.
+  **(1) A non-TTY stdin is refused before the first question.** `curl … | sh` holds stdin, so
+  the interview used to print question one, read EOF, and die with "no answer for …" —
+  halfway through a run the operator had watched start, having written nothing. The mode is
+  knowable up front, so it is answered up front, naming both ways forward (a real terminal,
+  or `--non-interactive` with the answers as flags). The file-ness test is one-sided on
+  purpose: only a stdin that *positively* reports it is not a character device is refused, so
+  a test's `strings.Reader` or an in-process pipe behaves exactly as before — "not provably a
+  terminal" must never become "refuse the install".
+  **(2) `--answers <file>`** — one `flag-name = value` line per answer, because the
+  alternative to a file is one enormous shell line retyped correctly on the next host. The
+  vocabulary is the flag names themselves, so `-h` is its documentation and there is no
+  second spelling to keep in step. Two rules make it safe: **argv always wins** (the file is
+  applied through `fs.Set` only for names `fs.Visit` did not report, so a flag beside a file
+  that disagrees is an override, not a conflict), and **it implies nothing else** — not
+  `--non-interactive`, not `--yes` — so a partial file is a pre-seeded interview. Every line
+  is validated even when argv overrides it (a typo is a typo), unknown names are reported
+  with file and line number, and `-` (stdin) for the four secret flags is refused *from
+  inside a file*: stdin belongs to the terminal and only one flag may ever claim it.
+  **(3) `--instance-name` plus one interview question** kills the silently-shipped
+  `INSTANCE_NAME=Example Video`. That value is not a `<…>` placeholder — it is plausible — so
+  the placeholder pass had nothing to say about it and `Check` had no grounds to reject it,
+  and **every unattended install to date served it**: at `GET /api/v1/instance`, in NodeInfo,
+  and as the TOTP issuer label in every user's authenticator app. Empty still means
+  unanswered, so a re-run about a release tag cannot reset the name the instance is known by.
+  **(4) The interview's storage default flips to `local`** when the S3 key pair it would fall
+  back to is still the template's `<your Spaces access key>` placeholders — a default that
+  cannot pass `Check` is not a default, and the old one refused to write *anything* after
+  every other question had been answered (the wave-3 note recorded this as a pre-existing
+  template gap; this is the fix). The template's `s3` remains the recommendation the moment
+  real keys are behind it, a re-run on an S3 instance is offered s3 back, and non-interactive
+  behaviour is untouched — with nobody to offer an alternative to, the refusal naming the
+  placeholder key is still the right answer.
+  **(5) Prompt-time re-ask validation** for the three answers that have a shape.
+  `https://*.example.org` used to be accepted at the prompt, carried through every remaining
+  question, and then rejected by `Generate` — which writes nothing, so one typo cost the
+  whole interview. Origin, TLS mode and ACME address are now checked where they are typed and
+  re-asked until usable, through **exported wrappers around the engine's own validators**
+  (`NormalizeOrigin`, `NormalizeTLSMode`, `CheckAcmeEmail`) rather than a second, friendlier
+  opinion — a prompt that accepts what `Generate` rejects is the bug being removed, and two
+  implementations is how it comes back. The domain then gets **one non-blocking ✓/⚠ DNS
+  line** (5s bound, `preflight.CheckDomain` behind one indirection so the tests need no
+  nameserver): DNS that does not point here yet is an ordinary state of a fresh install —
+  it is what `VIDRA_TLS_MODE=internal` exists for — and a check that could not *complete* is
+  ⚠, never ✗, per `internal/preflight`'s doctrine.
+  **(6) The report ends with the owner-claim handoff** — where the one-time token is printed,
+  where to redeem it, and that a restart mints a fresh one and invalidates the previous
+  (which is what turns a copied-too-late token into a confusing failure). Generating the env
+  file otherwise left an operator two commands away from an instance nobody can log into,
+  with nothing naming the two. The quoted log command is `./deploy/compose.sh logs api` and
+  never a bare `docker compose logs api`, which on a deployment host auto-loads the dev
+  override and addresses a different project.
+  **Test-shape change worth keeping:** the interactive tests no longer script stdin as a
+  fixed count of newlines. They answer **by question** and assert *which* question was asked,
+  so the next question added cannot break five unrelated tests — and the pre-seeded-interview
+  case (what a partial `--answers` file leaves to ask) becomes assertable at all.
 
 ### Managed edge
 
@@ -253,12 +354,47 @@ when closing items.
 
 ### The `vidra` CLI
 
-- [ ] **13. `vidra` CLI core** — thin, gate-preserving orchestrator over the existing scripts
-  (never a rewrite): `vidra deploy/rollback/backup/restore/release` wrap deploy/*.sh semantics
-  verbatim (Compose≥2.24 refusal, dump-abort, gated migrators + ledger assertion,
-  probe-or-fail, read-never-source env access, CONFIRM conventions). `vidra logs` = per-service
-  selection; `vidra restart <service>` maps product names → compose services;
-  `vidra status` aggregates /readyz + admin system endpoint + search /readyz + compose ps.
+- [x] **13. `vidra` CLI core** *(implemented 2026-08-20, wave 4: `vidra-core prod/phase1-wave4`
+  470b691 + 62d3906 + 86c5029, `cmd/vidra`)* — an operator now learns `vidra <verb>` instead
+  of a directory of scripts, and every verb works from anywhere via `-C/--repo`.
+  **The five deploy commands are wrappers, not re-implementations.** `deploy`, `rollback`,
+  `backup`, `restore` and `release` resolve `deploy/<name>.sh` under `--repo`, **exec** it
+  through bash with the operator's own terminal attached, and return its exit code unchanged.
+  There is no Go copy of `MIN_EMBEDDED_MIGRATE_TAG`, no second `Caddyfile.local` check, no
+  added prompt: a transcription of any gate is a second opinion that has to be hand-synced,
+  and the first symptom of it drifting is a deploy `vidra` allows and `deploy.sh` would have
+  refused. `restore.sh` and `release.sh` each keep their one confirmation, and
+  `--yes` / `RESTORE_CONFIRM` reach them verbatim. **Exec, not run**, is also what preserves
+  exit-code fidelity for `vidra deploy || vidra rollback …`, and TTY passthrough is what keeps
+  the scripts' own prompts and progress usable.
+  **`ENV_FILE` precedence is preserved rather than reinvented:** each script already reads
+  `${ENV_FILE:-env/production.env}` from its environment, so `vidra` injects only a *default*
+  — an `ENV_FILE` the operator exported (`ENV_FILE=env/staging.env vidra deploy`) is never
+  overwritten, and an exported-but-empty value counts as unset because that is how `:-` reads
+  it. Flag parsing is a hand-written loop that stops at the first token it does not know
+  (`--` ends `vidra`'s half explicitly), precisely so a `FlagSet` cannot eat `restore.sh`'s
+  `--yes` or reorder `release.sh`'s repo list.
+  **`vidra logs`** is `deploy/compose.sh` with `make prod-logs`'s own `-f --tail=100`, so both
+  show the same 100 lines of the same project. **`vidra restart <service>`** maps product
+  names → compose services and adds the three refusals compose cannot give, because compose's
+  own error sends the operator to the wrong place: a one-shot (`migrate`, `search-migrate`,
+  `prep-volumes`) restarts happily and does nothing; postgres/redis on a `VIDRA_EXTERNAL_*`
+  deployment answer "no such service", which reads as "your deployment is broken" rather than
+  "that database is managed elsewhere"; and so does a service outside
+  `VIDRA_COMPOSE_PROFILES`, when the answer is one key in the env file. Restarting caddy says
+  first that `vidra deploy` reloads the config with no dropped connection and this does not.
+  **`vidra status`** answers "is it up": compose `ps`, the api's `/readyz` (with its
+  per-dependency line) and `/schemaz`, the search service's `/readyz` **exec'd from inside the
+  network** (where in production it is reachable at all), and the frontend's `/healthz` with a
+  `/` fallback — all on 127.0.0.1, in doctor's ✓/⚠/✗ glyphs and doctor's exit rule (1 iff any
+  ✗). A stack that is simply down is ⚠ with the reason, an image too old for `/schemaz` or for
+  the frontend `/healthz` is ⚠ and never a failure, and a raw Go error never reaches the
+  operator.
+  **Deliberately deferred:** the spec's "admin system endpoint" half of `status`. It stays
+  **unauthenticated** — a CLI that stored an admin JWT to render a status screen would be a
+  credential on disk in exchange for a nicer table; the richer per-dependency view
+  (object store, SMTP, search, ffmpeg — item 19) is a page an admin opens, and `vidra doctor`
+  already probes those from the host without a token.
 - [x] **14. `vidra doctor`** *(implemented 2026-08-20, wave 3: core f337b0c + daa976a,
   `internal/doctor` + `cmd/vidra doctor`)* — the runbook, executed. **18 checks** in four
   sections: docker & compose (compose version, published ports, log caps, dev override, stray
@@ -299,15 +435,60 @@ when closing items.
   allow-list doctor keeps, instead of the core+frontend render that could never have seen this.
 - [ ] **15. `vidra update`** — release discovery (GitHub releases/GHCR tags), VIDRA_*_TAG bump,
   then the deploy.sh pipeline **plus what it lacks**: automatic tag-flip rollback on failed
-  health probes (safe *only* under the schema-compat policy — see item 16), and
+  health probes (safe *only* under the schema-compat policy — that prerequisite is now
+  **enforced**, not trusted: item 16 shipped the lint and the N−1 job), and
   multi-generation rollback history (single `.bak` loses state after two rollbacks).
-- [ ] **16. CI-enforce the one-release schema-compat policy** — currently documentation-only;
-  one destructive migration turns every rollback into old-code-on-new-schema corruption.
-  Migration lint rejecting destructive DDL in new files + an N−1-binary-vs-N-schema integration
-  job (extend the existing populated-DB migration fixture test). **Highest-leverage
-  prerequisite for auto-rollback, not optional hardening.** Also: inject VERSION ldflags into
-  vidra-search's Dockerfile (its /version reports 0.1.0 forever); align the golang-migrate pin
-  (CI 4.17.1 vs compose 4.19.1).
+- [x] **16. CI-enforce the one-release schema-compat policy** *(implemented 2026-08-20,
+  wave 4: `vidra-core prod/phase1-wave4` 464c6dd + d68faa9 + f10957f + fc164a9 + d098e34,
+  `vidra-search prod/phase1-wave4` dcded14 + cf12454 + c12d17a + 3da1d91)* — the policy
+  ("release N−1's code must keep running against release N's schema", deploy/README.md) was
+  documentation only, and it is the sole reason `rollback.sh` can be a 60-second tag flip
+  that never touches the database. It now has a cheap static half and an expensive dynamic
+  half.
+  **The lint** — `scripts/migrate-lint.sh`, byte-identical in both Go repos and wired into
+  each one's canonical `make ci` (which `backend-ci.yml`/`search-ci.yml` run and `ci-guard`
+  forces them to keep running, so it blocks locally and on GitHub at the same time, in the
+  first second rather than after `test-race`). It rejects DROP TABLE/COLUMN, RENAME,
+  TRUNCATE, SET NOT NULL, `ALTER … TYPE`, DELETE FROM and dropping a
+  type/view/function/trigger/sequence/schema in any `*.up.sql`; down files are exempt because
+  they **are** the rollback path. Matching runs per *statement* on a normalised copy
+  (comments and single-quoted literals stripped, uppercased, every non-identifier character
+  turned into a space) so `CHECK (policy IN ('rename', …))` and a column named `rename_count`
+  cannot false-positive. Three constructs are deliberately legal: **DROP CONSTRAINT judged at
+  end-of-file, allowed only when the same file re-ADDs the same constraint name** (the
+  widen-a-CHECK idiom, 10 sites in core's history), `DROP NOT NULL` (relaxing is
+  additive-safe), and `DROP INDEX` (invisible to application code). `-- migrate-lint:allow`
+  is the escape hatch, mirroring `# ci-guard:allow`. **All 104 core and 14 search up
+  migrations pass with zero grandfathered exceptions** — nothing had to be waived to turn it
+  on, which is what makes the rule enforceable.
+  **The N−1 job** — vidra-core's new `.github/workflows/schema-compat.yml`, path-filtered to
+  `migrations/**`: apply HEAD's migrations to a fresh database, check the highest `v*` release
+  tag into a worktree, and run **that tree's** `make test-integration` against the
+  already-migrated schema. sqlc emits explicit column lists, so a column this PR drops,
+  renames, narrows or makes NOT NULL fails the previous release's store tests hard — the exact
+  breakage an operator hits halfway through a rollback. clamav and ffmpeg are provided and
+  `DATABASE_URL` is set so the old suite cannot silently self-skip (a suite that skips proves
+  nothing), and a missing `v*` tag is a loud failure rather than a vacuous pass. Rehearsed
+  locally before shipping, **with a negative control**: 38/38 PASS against v0.2.0's store
+  suite, versus exit 1 and `column "description" does not exist` from six tests once
+  `videos.description` was dropped to stand in for a destructive 0105.
+  **Search CI stopped downloading the golang-migrate CLI** and migrates with
+  `go run ./cmd/api migrate up` — the same embedded migrator the published image runs, so CI
+  exercises the production code path and there is no CLI version left to keep pinned.
+  **Core CI now runs postgres 18 / redis 8**, the versions the compose files and production
+  ship: a gate on 16/7 can pass a migration that stalls or fails on the major operators
+  actually boot, and a rollback proof on the wrong major proves the wrong thing.
+  **The two stale sub-items were verified already done, not skipped:** vidra-search's
+  Dockerfile has injected `VERSION`/`COMMIT`/`BUILD_DATE` ldflags since wave 2 (`/version` no
+  longer reports 0.1.0 forever), and the golang-migrate pin skew (CI 4.17.1 vs compose 4.19.1)
+  no longer exists anywhere — wave 2's embedded migrator removed every CLI download from both
+  repos' workflows, and wave 4 removed the last two in search.
+  **Residual, both known:** the two `migrate-lint.sh` copies are **hand-synced with nothing
+  asserting it** (they carry no repo-specific strings precisely so they can stay identical; a
+  cross-repo checksum assertion would be cheap and does not exist), and the second half of the
+  policy — the two-release drop cycle — remains unenforceable by lint and invisible to the
+  N−1 job, which proves N−1 still *reads and writes* fine but not that N−1 had already stopped
+  writing what N removes. Staged drops still need a reviewer.
 
 ### Installer + host
 
@@ -328,10 +509,58 @@ when closing items.
   reimplemented. backup.sh's refusal is placed *before* the healthchecks.io trap on purpose, so
   the dead-man's switch goes silent and the inactivity alert fires, which is the honest signal
   for a host that genuinely takes no backups from here.
-- [ ] **19. Health surface hardening** — cheap health route for vidra-user (prod healthcheck
-  GETs `/` — a full Next render that false-fails under transcode CPU load); machine-readable
-  version + schema-version surface on core so update/doctor can ask "what is this instance at"
-  without psql; add S3/SMTP/search/ffmpeg readiness detail to the admin system endpoint.
+- [x] **19. Health surface hardening** *(implemented 2026-08-20, wave 4: `vidra-core
+  prod/phase1-wave4` 986a794 + fabda52 + b2b6f18 + dce4ed4, `vidra-user prod/phase1-wave4`
+  f3a25d4 + 280fcf5, meta df1523f)* — all three halves.
+  **`GET /schemaz` on core** — `{"software":{name,version,commit,build_date,go},
+  "schema":{"version","dirty","applied"}}`, root-mounted and unthrottled beside `/healthz`,
+  `/readyz` and `/version`. `applied` exists because a fresh install and a database at
+  version 0 are the same integer and must not be the same answer, and the comparison is
+  numeric so `vidra update` can refuse an image whose embedded migrations are older than the
+  database it is pointed at. It **always answers 200**, including when the database cannot be
+  read (the error goes *inside* the document): a caller that gets a 5xx cannot tell "no api
+  here" from "api here, database gone", which is the one distinction the probe exists to
+  draw. The ledger read goes over the server's own pool with a context — `dbmigrate.Version`
+  was the obvious call and the wrong one, because it opens a connection per probe and
+  **creates** the ledger table when missing, i.e. a write on a read path; the table name comes
+  from `dbmigrate.Table` so nothing re-spells the literal. **Deliberately not edge-routed:**
+  `deploy/Caddyfile` proxies a root-path allow-list and this is not on it, so it is host-local
+  tooling's surface (`vidra status`, `vidra doctor`, the future `vidra update`) dialing
+  127.0.0.1 — an operations endpoint that names build and schema has no business being on the
+  public internet. It is still declared in `api/openapi.yaml`, because
+  `TestOpenAPIContract` enumerates every unconditionally registered route and `/version` set
+  the precedent.
+  **Four components on `GET /api/v1/admin/system`** — object store, SMTP relay, search
+  service and the ffmpeg binary, i.e. the four dependencies operators actually get wrong,
+  which were invisible until something failed downstream. Probed concurrently under their own
+  3s deadlines so a relay that accepts a connection and then stops talking cannot decide how
+  long the page takes; `not_configured` (local storage, mail off, no search service) never
+  degrades the instance, because those are supported deployments and not faults; the search
+  probe asks the service's own `/readyz` rather than the background prober's cached flag,
+  since an admin looking at the page wants the answer now; and storage is `BucketExists`,
+  never `EnsureBucket` — a diagnostic that creates the bucket it could not find turns a typo
+  in `STORAGE_S3_BUCKET` into a new, empty, silently-wrong store. `/readyz` keeps its cheap
+  two-dependency contract: it runs on every orchestrator tick, this runs when someone opens a
+  page. `preflight.CheckSMTP` is doctor's dial lifted out whole rather than copied — two
+  implementations would eventually disagree about one mail server.
+  **The finding that made the frontend route load-bearing:** `GET /` was never a
+  frontend-only test. vidra-user's root layout **and** its home page both await
+  `getInstanceConfig()`, which fetches vidra-core over `INTERNAL_API_BASE_URL` — so a degraded
+  api marked the *frontend* container unhealthy (a cascading false-fail that restarts a
+  container that is fine), on top of the known false-fail of a full render missing a 5s
+  timeout under transcode load. `app/healthz/route.ts` is the cheapest possible answer: a
+  route handler skips the root layout, and this one **imports nothing at all** (the unit test
+  asserts exactly that, alongside `force-dynamic` and the 200 body). At the public edge
+  `deploy/Caddyfile` routes `/healthz` to the api, so the route is reachable only
+  container-internally — a shadow that is known and accepted.
+  **The CMD-SHELL fallback trick (meta):** `docker-compose.prod.yml`'s frontend healthcheck is
+  now `CMD-SHELL` with `wget … /healthz || wget … /`. The fallback is what keeps this off the
+  hard merge order — images older than the route 404 the first wget and pass on the second, so
+  no `MIN_*_TAG`-style floor is needed and a rollback to v0.2.0 stays healthy. `CMD-SHELL`
+  rather than `CMD` because the fallback is a shell `||`, not a wget flag. `deploy.sh`'s
+  one-shot probe deliberately stays on `/`: a deploy gate runs once and wants the strongest
+  signal (a full render, with the api proven ready one line above), while the recurring
+  container check wants the cheapest one that cannot lie about whose fault it is.
 - [ ] **20. Admin infra visibility** — read-only Server/Storage/Networking/Backups panels in the
   admin UI (env-derived, guidance-oriented, consistent with the env-vs-DB doctrine) + the
   feature-discovery pattern ("Optional: Enable DASH / Connect CDN / …") for capabilities that

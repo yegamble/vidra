@@ -142,6 +142,45 @@ jobs:
       - name: Ensure PyYAML is available
         run: python3 -c 'import yaml' 2>/dev/null || pip3 install --quiet pyyaml
 
+      # deploy/cloud-init.yaml.example is pasted into a provider's user-data box
+      # and never executed by anything here, so nothing else in this repo would
+      # notice it rotting. Both failure modes it has are silent at the far end:
+      # cloud-init treats a payload whose first line is not `#cloud-config` as
+      # something other than cloud-config and runs NONE of it, and DigitalOcean
+      # rejects user-data containing non-ASCII bytes the same quiet way. This
+      # repo's prose is full of em dashes and curly quotes; one copied into that
+      # file produces a droplet that boots with no provisioning and no error.
+      - name: deploy/cloud-init.yaml.example is valid, ASCII cloud-config
+        run: |
+          python3 - <<'PY'
+          import sys, yaml
+          path = 'deploy/cloud-init.yaml.example'
+          raw = open(path, 'rb').read()
+          bad = []
+          nonascii = [(i + 1, line) for i, line in enumerate(raw.split(b'\n'))
+                      if any(b > 0x7F for b in line)]
+          for lineno, line in nonascii:
+              bad.append(f'{path}:{lineno} has non-ASCII bytes: {line[:80]!r}')
+          if not raw.startswith(b'#cloud-config'):
+              bad.append(f'{path} does not start with #cloud-config, so cloud-init would ignore it entirely')
+          try:
+              doc = yaml.safe_load(raw.decode('ascii', 'replace'))
+          except yaml.YAMLError as e:
+              bad.append(f'{path} is not parseable YAML: {e}')
+              doc = None
+          if isinstance(doc, dict):
+              for key in ('runcmd', 'users'):
+                  if key not in doc:
+                      bad.append(f'{path} lost its {key!r} block')
+          elif doc is not None:
+              bad.append(f'{path} is not a YAML mapping')
+          if bad:
+              print('::error::deploy/cloud-init.yaml.example would fail silently on a real host')
+              print('\n'.join(bad))
+              sys.exit(1)
+          print('OK: #cloud-config, pure ASCII, parses, and still provisions.')
+          PY
+
       # The explicit -f chain disables override auto-loading, so pass it explicitly
       # exactly as `make dev-hot` (DEV_HOT_COMPOSE) does.
       #

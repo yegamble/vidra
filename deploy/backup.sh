@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 #
-# Nightly PostgreSQL backup for a single-host Vidra deployment.
+# Nightly PostgreSQL + configuration backup for a single-host Vidra deployment.
 #
 #   ./deploy/backup.sh
 #   ENV_FILE=env/staging.env ./deploy/backup.sh
 #
-# Produces backups/vidra-<UTC timestamp>.dump.gz — a custom-format (-Fc) dump,
-# which is what pg_restore's parallel (-j) restore requires; a plain SQL dump
-# cannot be restored in parallel and takes far longer on a real dataset.
+# Produces TWO files per run, sharing one UTC stamp:
+#
+#   backups/vidra-<stamp>.dump.gz          the database, custom-format (-Fc),
+#                                          which is what pg_restore's parallel
+#                                          (-j) restore requires; a plain SQL
+#                                          dump cannot be restored in parallel
+#                                          and takes far longer on real data.
+#   backups/vidra-config-<stamp>.tar.gz    $ENV_FILE + deploy/Caddyfile.local,
+#                                          stored repo-relative so recovery is
+#                                          `tar -xzf … -C /opt/vidra`.
 #
 # ONE dump covers BOTH services: vidra-search shares the core database and lives
 # in its own `search` schema, so a database-wide pg_dump already contains it.
@@ -16,7 +23,8 @@
 #
 # What this script does NOT back up: media. With STORAGE_BACKEND=s3 use the
 # object store's own versioning/replication; with `local`, snapshot the
-# media_data volume on the same cadence so DB rows and files stay consistent.
+# media_data volume on the same cadence so DB rows and files stay consistent —
+# see "Local media volume snapshots" in deploy/README.md for the one-liner.
 #
 # Safe to re-run at any time, and safe to run while the stack is serving traffic
 # (pg_dump takes a consistent MVCC snapshot; it does not lock writers out).
@@ -116,24 +124,98 @@ mv "$TMP" "$OUT"
 SIZE="$(du -h "$OUT" | cut -f1)"
 log "wrote $OUT ($SIZE)"
 
+# --- configuration archive -----------------------------------------------------
+# The dump is only half a recovery. Restoring it needs the env file — every
+# secret, every image tag, and MFA_KEY_KEK, which is the key-encryption key for
+# stored TOTP secrets and is generated once and never derivable again — plus
+# deploy/Caddyfile.local, which `vidra setup` generates and .gitignore keeps out
+# of the repo on purpose. Before this, an off-site bucket full of dumps survived
+# the host and the configuration needed to read them did not: a rebuild meant
+# re-running setup, minting a NEW MFA_KEY_KEK, and discovering that every
+# restored user's second factor was undecryptable.
+#
+# Members are stored RELATIVE TO THE REPO ROOT so recovery is one command with no
+# path surgery — `tar -xzf backups/vidra-config-<stamp>.tar.gz -C /opt/vidra`
+# lands env/production.env and deploy/Caddyfile.local exactly where the compose
+# chain looks for them.
+#
+# Same STAMP as the dump, deliberately: the pair is one point in time, they
+# retain into the same daily/weekly buckets, and an operator matching a config
+# archive to a dump does it by reading, not by guessing at mtimes.
+CONFIG_OUT="$BACKUP_DIR/vidra-config-${STAMP}.tar.gz"
+CONFIG_MEMBERS=()
+CONFIG_MISSING=()
+
+# The env file may be given as an absolute path. tar members have to be
+# repo-relative for the extract command above to be true, so an env file outside
+# the checkout is named as UNCOVERED rather than silently stored under a path
+# that would extract to the wrong place.
+if [ -f "$REPO_ROOT/$ENV_FILE" ]; then
+  CONFIG_MEMBERS+=("$ENV_FILE")
+elif [ "${ENV_FILE#"$REPO_ROOT"/}" != "$ENV_FILE" ]; then
+  CONFIG_MEMBERS+=("${ENV_FILE#"$REPO_ROOT"/}")
+else
+  CONFIG_MISSING+=("$ENV_FILE (outside $REPO_ROOT — cannot be stored repo-relative)")
+fi
+
+if [ -f "$REPO_ROOT/deploy/Caddyfile.local" ]; then
+  CONFIG_MEMBERS+=(deploy/Caddyfile.local)
+else
+  CONFIG_MISSING+=("deploy/Caddyfile.local (not generated yet — run 'vidra setup')")
+fi
+
+if [ ${#CONFIG_MEMBERS[@]} -eq 0 ]; then
+  log "WARNING: no configuration file could be archived: ${CONFIG_MISSING[*]}"
+  CONFIG_OUT=""
+else
+  if [ ${#CONFIG_MISSING[@]} -gt 0 ]; then
+    log "WARNING: config archive is INCOMPLETE, missing: ${CONFIG_MISSING[*]}"
+  fi
+  CONFIG_TMP="${CONFIG_OUT}.part"
+  # `umask 077` around the create, not chmod afterwards: this archive contains
+  # JWT_SECRET and MFA_KEY_KEK in plaintext, and a chmod leaves a window in which
+  # every account on the host can read them. The .part + verify + rename dance is
+  # the dump's, for the dump's reason — a half-written archive must never be
+  # mistaken for a usable one.
+  ( umask 077; tar -czf "$CONFIG_TMP" -C "$REPO_ROOT" "${CONFIG_MEMBERS[@]}" )
+  tar -tzf "$CONFIG_TMP" > /dev/null \
+    || die "config archive failed tar -tzf — NOT keeping $CONFIG_TMP"
+  chmod 600 "$CONFIG_TMP"
+  mv "$CONFIG_TMP" "$CONFIG_OUT"
+  log "wrote $CONFIG_OUT ($(du -h "$CONFIG_OUT" | cut -f1)): ${CONFIG_MEMBERS[*]}"
+fi
+
 # --- optional off-site copy ----------------------------------------------------
 # A dump that only exists on the droplet dies with the droplet. Put it in a
 # DIFFERENT region from the media Space so one regional incident cannot take both.
 # Both paths are opt-in: configure one, or neither.
+#
+# The config archive rides along on the SAME target. Sending the dump off-site
+# and leaving its configuration on the dead host is the exact failure the archive
+# exists to close, so there is deliberately no separate knob to get that wrong.
+OFFSITE=("$OUT")
+if [ -n "$CONFIG_OUT" ]; then
+  OFFSITE+=("$CONFIG_OUT")
+fi
+
 if [ -n "${BACKUP_RCLONE_REMOTE:-}" ]; then
   if command -v rclone >/dev/null 2>&1; then
-    log "uploading to rclone remote ${BACKUP_RCLONE_REMOTE}"
-    rclone copyto "$OUT" "${BACKUP_RCLONE_REMOTE%/}/$(basename "$OUT")"
+    for f in "${OFFSITE[@]}"; do
+      log "uploading $(basename "$f") to rclone remote ${BACKUP_RCLONE_REMOTE}"
+      rclone copyto "$f" "${BACKUP_RCLONE_REMOTE%/}/$(basename "$f")"
+    done
   else
     die "BACKUP_RCLONE_REMOTE is set but rclone is not installed"
   fi
 elif [ -n "${BACKUP_S3_URI:-}" ]; then
   if command -v aws >/dev/null 2>&1; then
-    log "uploading to ${BACKUP_S3_URI}"
-    # BACKUP_S3_ENDPOINT is required for DO Spaces / MinIO and must include the
-    # scheme here (unlike the application's STORAGE_S3_ENDPOINT, which must not).
-    aws ${BACKUP_S3_ENDPOINT:+--endpoint-url "$BACKUP_S3_ENDPOINT"} \
-      s3 cp "$OUT" "${BACKUP_S3_URI%/}/$(basename "$OUT")"
+    for f in "${OFFSITE[@]}"; do
+      log "uploading $(basename "$f") to ${BACKUP_S3_URI}"
+      # BACKUP_S3_ENDPOINT is required for DO Spaces / MinIO and must include the
+      # scheme here (unlike the application's STORAGE_S3_ENDPOINT, which must not).
+      aws ${BACKUP_S3_ENDPOINT:+--endpoint-url "$BACKUP_S3_ENDPOINT"} \
+        s3 cp "$f" "${BACKUP_S3_URI%/}/$(basename "$f")"
+    done
   else
     die "BACKUP_S3_URI is set but the aws CLI is not installed"
   fi
@@ -142,61 +224,94 @@ else
 fi
 
 # --- retention -----------------------------------------------------------------
+# prune_generation <label> <stamp-offset> <file>... — apply the 14-daily +
+# 8-weekly policy to ONE family of generated filenames. Called once per family
+# (dumps, config archives) rather than forked into two awk programs: two copies
+# of a bucketing rule drift, and a retention rule that keeps 8 weeks of dumps
+# next to 3 weeks of the configuration needed to restore them is a recovery
+# that fails at exactly the moment it is being relied on.
+#
+# <stamp-offset> is the 1-based index of the UTC stamp's first character in the
+# basename, which is all that differs between the families:
+#   vidra-YYYYMMDDTHHMMSSZ.dump.gz            -> 7   ("vidra-"        is 6)
+#   vidra-config-YYYYMMDDTHHMMSSZ.tar.gz      -> 14  ("vidra-config-" is 13)
+#
 # Newest-first listing; the timestamp format sorts lexicographically the same way
 # it sorts chronologically, so no stat(1) portability problems.
 #
 # The week bucket is computed as a Julian day number divided by 7. Deliberately
 # pure arithmetic: `date -d` is GNU-only and mawk (Ubuntu's default awk) has no
 # mktime(), so anything else would be silently wrong on one platform or the other.
-log "pruning: keeping ${KEEP_DAILY} daily + ${KEEP_WEEKLY} weekly"
-DELETE_LIST="$(
-  # shellcheck disable=SC2012  # ls is deliberate: these names are generated by this
-  # script (vidra-<UTC stamp>.dump.gz), so they are alphanumeric by construction, and
-  # `sort -r` on them is exactly reverse-chronological. find(1) would need -printf
-  # (GNU-only) to sort the same way.
-  ls -1 "$BACKUP_DIR"/vidra-*.dump.gz 2>/dev/null | sort -r | awk -v kd="$KEEP_DAILY" -v kw="$KEEP_WEEKLY" '
-    function jdn(y, m, d,   a) {
-      a = int((m - 14) / 12)
-      return int((1461 * (y + 4800 + a)) / 4) \
-           + int((367 * (m - 2 - 12 * a)) / 12) \
-           - int((3 * int((y + 4900 + a) / 100)) / 4) \
-           + d - 32075
-    }
-    {
-      n = split($0, parts, "/"); f = parts[n]
-      # f = vidra-YYYYMMDDTHHMMSSZ.dump.gz
-      y = substr(f, 7, 4) + 0; mo = substr(f, 11, 2) + 0; da = substr(f, 13, 2) + 0
-      if (y == 0) next                      # unrecognised name: never delete it
-      day  = substr(f, 7, 8)
-      week = int(jdn(y, mo, da) / 7)
-
-      keep = 0
-      if (!(day in seenDay)) { seenDay[day] = ++nDay }
-      if (seenDay[day] <= kd) keep = 1      # every dump on the newest kd days
-
-      if (!(week in seenWeek)) {            # newest dump of the newest kw weeks
-        seenWeek[week] = ++nWeek
-        if (nWeek <= kw) keep = 1
+prune_generation() {
+  local label="$1" off="$2" delete_list
+  shift 2
+  delete_list="$(
+    # shellcheck disable=SC2012  # ls is deliberate: these names are generated by this
+    # script, so they are alphanumeric by construction and `sort -r` on them is exactly
+    # reverse-chronological. find(1) would need -printf (GNU-only) to sort the same way.
+    # `|| true` because an unmatched glob arrives here as a literal and must be an empty
+    # list, not a failed pipeline under `set -o pipefail`.
+    { ls -1 -- "$@" 2>/dev/null || true; } | sort -r | awk -v kd="$KEEP_DAILY" -v kw="$KEEP_WEEKLY" -v off="$off" '
+      function jdn(y, m, d,   a) {
+        a = int((m - 14) / 12)
+        return int((1461 * (y + 4800 + a)) / 4) \
+             + int((367 * (m - 2 - 12 * a)) / 12) \
+             - int((3 * int((y + 4900 + a) / 100)) / 4) \
+             + d - 32075
       }
+      {
+        n = split($0, parts, "/"); f = parts[n]
+        y = substr(f, off, 4) + 0; mo = substr(f, off + 4, 2) + 0; da = substr(f, off + 6, 2) + 0
+        if (y == 0) next                      # unrecognised name: never delete it
+        day  = substr(f, off, 8)
+        week = int(jdn(y, mo, da) / 7)
 
-      if (!keep) print $0
-    }
-  '
-)"
-if [ -n "$DELETE_LIST" ]; then
-  printf '%s\n' "$DELETE_LIST" | while IFS= read -r f; do
-    log "pruning $(basename "$f")"
-    rm -f -- "$f"
-  done
-else
-  log "nothing to prune"
-fi
+        keep = 0
+        if (!(day in seenDay)) { seenDay[day] = ++nDay }
+        if (seenDay[day] <= kd) keep = 1      # every file on the newest kd days
+
+        if (!(week in seenWeek)) {            # newest file of the newest kw weeks
+          seenWeek[week] = ++nWeek
+          if (nWeek <= kw) keep = 1
+        }
+
+        if (!keep) print $0
+      }
+    '
+  )"
+  if [ -n "$delete_list" ]; then
+    printf '%s\n' "$delete_list" | while IFS= read -r f; do
+      log "pruning $(basename "$f")"
+      rm -f -- "$f"
+    done
+  else
+    log "nothing to prune among the ${label}"
+  fi
+}
+
+log "pruning: keeping ${KEEP_DAILY} daily + ${KEEP_WEEKLY} weekly"
+prune_generation "database dumps"   7  "$BACKUP_DIR"/vidra-*.dump.gz
+prune_generation "config archives" 14  "$BACKUP_DIR"/vidra-config-*.tar.gz
 
 # --- success marker ------------------------------------------------------------
 # Machine-readable "when did a backup last actually succeed". Point a file-age
 # check or the RUNBOOK at this rather than at the directory listing, which also
 # contains failures from before the .part rename.
+#
+# THE FORMAT IS `<RFC3339Z> <basename-of-dump>` AND IT IS PARSED ELSEWHERE:
+# vidra-core's doctor (internal/doctor/checks_state.go) splits on the first
+# space and time.Parse's field one as RFC3339, failing back to the file's mtime,
+# to decide whether the newest backup is inside its 26-hour window. The config
+# archive deliberately does NOT change this line — it gets its own log line
+# instead. A second filename here would either be swallowed by that split (a
+# silent no-op) or, if the format were "improved" to a list, break an age check
+# whose whole job is to be the last thing that still works when everything else
+# has stopped reporting.
 printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(basename "$OUT")" > "$BACKUP_DIR/last_success"
 
 hc_ping
-log "done"
+if [ -n "$CONFIG_OUT" ]; then
+  log "done — database $(basename "$OUT"), config $(basename "$CONFIG_OUT")"
+else
+  log "done — database $(basename "$OUT"); NO config archive (see the warning above)"
+fi

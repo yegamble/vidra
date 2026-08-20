@@ -17,6 +17,14 @@ stack plus a production overlay, behind Caddy for TLS.
 | [`restore.sh`](./restore.sh) | **Destructive.** Drop, recreate, `pg_restore -j4`, migrate, re-probe. |
 | [`vidra-backup.service`](./vidra-backup.service) / [`.timer`](./vidra-backup.timer) | systemd units for the nightly backup. |
 
+**The `vidra` CLI wraps these 1:1.** `vidra deploy | rollback | backup | restore |
+release` exec the script of the same name with `ENV_FILE` injected and your terminal
+attached, and return its exit code unchanged — same gates, same refusals, no second
+copy of any of them; `vidra logs` / `restart <service>` / `status` go through
+`compose.sh`. Build it with `make build-vidra` in `vidra-core` until the one-command
+installer ships it. **The scripts below remain the source of truth** — every rule
+documented here is enforced in them, not in the CLI.
+
 ---
 
 ## First boot — do these in order
@@ -327,6 +335,12 @@ $EDITOR env/production.env                     # VIDRA_CORE_TAG=v0.2.0
 ./deploy/rollback.sh v0.2.0
 ```
 
+`vidra deploy`, `vidra rollback v0.2.0`, `vidra backup`, `vidra restore <dump>` and
+`vidra release v0.2.0` are the same four lines: each execs the script above with
+`ENV_FILE` set and returns its exit code, so `--yes` / `RESTORE_CONFIRM` and every
+refusal reach you unchanged. `vidra logs [service]`, `vidra restart <service>` and
+`vidra status` cover the read side.
+
 ### Upgrade notes: the embedded-migrator tag floor
 
 **Both migration one-shots are the service image itself**, running its compiled-in
@@ -407,6 +421,7 @@ make release VERSION=v0.2.0                    # all three repos; prompts first
 make release VERSION=v0.2.0 CONFIRM=1          # same, unattended
 make release VERSION=v0.2.0 REPOS="vidra-core" # one repo only
 ./deploy/release.sh --yes v0.2.0               # the script directly
+vidra release --yes v0.2.0                     # the CLI, which execs that script
 ```
 
 Each component repo's `publish-container.yml` runs on `release: published` and
@@ -522,7 +537,7 @@ Either can go dirty without the other. Recovery, for whichever failed:
 Never point the ledger at `N` — that claims the broken migration succeeded and the
 next deploy will build on a schema that does not exist.
 
-Note that **none** of the 101 up-migrations use `CREATE INDEX CONCURRENTLY` and
+Note that **none** of the 104 up-migrations use `CREATE INDEX CONCURRENTLY` and
 none sets `lock_timeout`, so a data-dependent migration against a populated table
 *stalls* rather than fails, and api boot is gated behind it. If a migration hangs,
 look for a blocking lock (`pg_stat_activity`, `pg_locks`) before assuming it
@@ -534,6 +549,19 @@ Release *N−1*'s code must run against release *N*'s schema. That is what makes
 a true schema rollback is "restore the pre-deploy dump" rather than "migrate
 down". Additive columns, additive tables, and a two-release drop cycle
 (stop writing → deploy → drop) are the way to keep it true.
+
+**This is now mechanically enforced, not just documented.** `make ci` in *both* Go
+repos runs `scripts/migrate-lint.sh`, which rejects destructive forward DDL (DROP
+TABLE/COLUMN, RENAME, TRUNCATE, SET NOT NULL, ALTER … TYPE, DELETE FROM, DROP of a
+schema object) in any `*.up.sql`; down migrations are exempt, since they *are* the
+rollback path, and a line carrying `-- migrate-lint:allow` is the escape hatch for a
+compat break the team has accepted. On top of that, vidra-core's `schema-compat`
+workflow runs on every migrations change: it applies HEAD's migrations to a fresh
+database, then runs the **previous release tag's** integration suite against that
+schema — the exact breakage an operator would hit halfway through a rollback. Its
+blind spot is the second half of the drop cycle: it proves N−1 still reads and writes
+fine, not that N−1 had already stopped writing what N removes. Staged drops still need
+a reviewer to confirm the write path went away in the prior release.
 
 ### Secret rotation
 
@@ -639,8 +667,25 @@ schema to HEAD, restarts, and polls `/readyz`.
   postgres/redis). Point an external uptime check at `https://<domain>/healthz`
   **and** at the site root — an internal check cannot tell you the certificate
   expired.
+- `GET /schemaz` (core, unauthenticated) reports the running build **and** the
+  migration ledger — `{"software":{…},"schema":{"version","dirty","applied"}}` — so
+  `vidra status`/`doctor` can ask "what is this instance at" without psql. Always
+  200, including when the database is unreachable (the error goes inside the
+  document: a 5xx cannot distinguish "no api" from "api up, database gone").
+  Deliberately **not** edge-routed — `deploy/Caddyfile` proxies a root-path
+  allow-list and this is not on it — so it is host-local only:
+  `curl -s http://127.0.0.1:${HTTP_PORT}/schemaz`.
+- The **frontend** container has its own `/healthz` (`app/healthz/route.ts`),
+  reachable only inside the container — the edge routes `/healthz` to the api. It is
+  what `docker-compose.prod.yml`'s healthcheck probes, because a `/` render awaits
+  the api and so cannot report on the frontend alone.
 - Operator snapshot: `GET /api/v1/admin/system` (admin JWT) — status, versions,
-  uptime, dependency health, effective non-secret config.
+  uptime, dependency health, effective non-secret config. Dependency health now
+  covers the object store, the SMTP relay, the search service and the ffmpeg binary
+  alongside postgres/redis (probed concurrently, 3s each, only when the page is
+  opened); `not_configured` — local storage, mail off, no search service — is a
+  supported deployment and never degrades the instance. `/readyz` keeps its cheap
+  two-dependency contract, because that one runs on every orchestrator tick.
 - `METRICS_ENABLED=true` exposes Prometheus RED metrics at `/metrics`. That route
   is root-mounted with **no auth** (`internal/httpapi/server.go:806`), which is
   why `deploy/Caddyfile` answers 404 for it unconditionally. Scrape it from

@@ -279,7 +279,15 @@ services:
     security_opt:
       - "no-new-privileges:true"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      # `/healthz` is vidra-user's dependency-free route (app/healthz/route.ts:
+      # imports nothing, skips the root layout). A `/` render does NOT stand
+      # alone — layout and home both await getInstanceConfig(), which fetches
+      # vidra-core — so probing `/` marked the FRONTEND unhealthy whenever the
+      # api was down, and false-failed a full render under transcode CPU load.
+      # The `|| /` fallback keeps images older than that route (≤ v0.2.0)
+      # passing, so this needs no minimum-tag gate and a rollback stays safe.
+      # CMD-SHELL, not CMD: the fallback is shell `||`, not a wget flag.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz >/dev/null 2>&1 || wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1"]
       interval: 15s
       timeout: 5s
       retries: 5
