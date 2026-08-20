@@ -68,8 +68,12 @@ queries; one queue (`media_ipfs_pins`) already uses the multi-node-safe
 tag-flip rollback protected only by a documentation-only one-release schema-compat policy;
 strong bounded-cardinality metrics/audit/job-run observability (shipped 2026-07).
 
-**CLI:** `vidra-core/cmd` contains only `api` and `peertube-import`. No installer, CLI, wizard,
-doctor, or update command exists anywhere.
+**CLI:** `vidra-core/cmd` carries `api`, `peertube-import` and `vidra` — the operator CLI
+(`setup`, `doctor`, `status`, `logs`, `restart`, `update`, plus thin wrappers over the deploy
+scripts), shipped as a checksum-verified release asset. The meta repo has `install.sh`
+(`curl … | sh`), `deploy/provision.sh` and a cloud-init template. The terminal setup wizard is
+done; the *web* wizard is still only its owner-claim step. See the phase-1 worklist for what
+each command does and what remains open.
 
 ## Do-not-touch inventory
 

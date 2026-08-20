@@ -135,6 +135,73 @@ when closing items.
 > needs no minimum `VIDRA_USER_TAG` and a rollback to v0.2.0 stays healthy — the one design
 > decision that keeps the hard merge order from growing a fourth constraint.
 
+> **Wave 5 (2026-08-20): items 15, 17 and 18 implemented — and, unlike every wave before it,
+> already MERGED to main in both repos** (`vidra-core` main d9b1634 via PRs #46–#52, meta main
+> 2da03b2 via meta#15/#16 plus three direct merges). This is the installing-it half: the
+> command that moves an instance between releases, the command that creates one from a bare
+> VPS, and the host prep and backup coverage that make the result survivable. **Shipped:**
+> `vidra update` (release discovery over `net/http`, `/schemaz`'s numeric refusal of an image
+> older than the database, one-release-step automatic tag-flip rollback, ten generations of env
+> history at `backups/env-history/<basename>.<UTC stamp>` shared byte-for-byte with
+> `deploy/lib.sh`); `install.sh` (`curl … | sh` with the `/dev/tty` reattach that lets the
+> wizard run at all, checksum-verified CLI binaries from vidra-core's new `release-assets.yml`,
+> a resumable tree, and secrets that are never re-minted); `deploy/provision.sh` +
+> `deploy/cloud-init.yaml.example`; `vidra-config-<stamp>.tar.gz` beside every dump on the same
+> off-site path under the same retention rule; and **the two hand-sync residuals wave 4
+> recorded are now asserted in meta-ci** — `MIN_EMBEDDED_MIGRATE_TAG` must agree across
+> deploy.sh/rollback.sh/restore.sh (eb5a694) and both Go repos must ship a byte-identical
+> `scripts/migrate-lint.sh` (3c654ba). Neither was a defect yet; both were a comment saying "a
+> CI assertion would be cheap", and cheap things that stay uncosted are how a policy stops being
+> enforced in half the platform without anyone noticing.
+>
+> **The adversarial-verification catch, and why it needed five PRs.** `vidra update` originally
+> armed its tag-flip rollback on the arithmetic alone — one release step, therefore safe — and
+> never asked whether `deploy/rollback.sh` would *accept* the flip. It would not: rollback.sh
+> refuses any core or search tag below `MIN_EMBEDDED_MIGRATE_TAG` (v0.2.0, the first image
+> carrying the embedded migrator) before it reads anything else. So a v0.1.x instance updating
+> to v0.2.0 was promised an automatic rollback that could not run, and then — on failure —
+> handed the manual command, which is refused for the same reason. A promise kept only while
+> nothing goes wrong is worse than no promise, because it is believed during the incident.
+> **Fixed on vidra-core main (d9b1634, PRs #48–#52):** the CLI now parses the floor out of
+> `rollback.sh` at runtime and **deliberately does not become a fourth hand-synced constant** —
+> item 13's whole argument is that a transcribed gate drifts and its first symptom is a
+> divergence during an outage. Below the floor the rollback is disarmed *with the reason stated
+> up front*, and an unreadable rollback.sh disarms it too, since "cannot verify" and "verified
+> safe" must not print the same sentence. The floor is also gated on the **migrators only**
+> (core and search own migrations; the frontend tag has no such constraint), and the
+> partial-downgrade hole found in the same pass — mixed tags with `--tag` equal to the oldest,
+> which is arithmetically "not a downgrade" while silently walking two components backwards —
+> now refuses and **names the components that would move back**, with `vidra rollback` as the
+> honest verb. **Release consequence: v0.2.1 must be tagged at or after vidra-core d9b1634**, so
+> that the first `vidra` binaries anyone downloads from a release asset carry this rather than
+> the version that promised a rollback it could not perform.
+>
+> **Deviations recorded honestly, because a checked box that overstates itself is a trap:**
+> **(a)** item 17's *"(no git clone)"* shipped as *"no MANUAL git"* — the installer drives git
+> and bootstrap itself, and three hard dependencies (the unconditional `include:` of
+> `./vidra-core/docker-compose.yml`, the bind-mounted
+> `vidra-core/deploy/media/nginx.conf.template`, and deploy.sh's schema version from
+> `ls vidra-core/migrations/*.up.sql` plus its `.git`-requiring checkout sync) make a git-free
+> install impossible today. The artifact bundle that would fix it **stays open** — item 12 or a
+> follow-up. **(b)** The installer's happy path begins at v0.2.1, the first release cut after
+> `release-assets.yml` landed; v0.2.0 and earlier have no assets, and the installer says so and
+> names `make build-vidra` rather than failing opaquely. **(c)** A fully-refusing
+> external-Postgres host gets **no config archive either** — the refusal is placed before the
+> dead-man's-switch trap on purpose and that ordering is preserved, so provider-side config
+> backup is documented and not automated. **(d)** `vidra setup` requires `--template`; the
+> runbook's bare `vidra setup` was simply wrong and was corrected this wave (8f01f1b). **(e)**
+> rollback.sh used to `cp "$ENV_FILE" "${ENV_FILE}.bak"` **before** `require_caddyfile_local`,
+> so a rollback the Caddyfile gate then refused had already destroyed the only previous
+> generation — the gates are hoisted above the write now, and the write is a history rather than
+> a single file.
+>
+> **What wave 5 leaves for wave 6:** item 9 (the rest of the web wizard — still blocked on the
+> same prerequisite it has had since wave 2: the instancesettings validators are not exposed, so
+> per-field validation of *proposed* answers has no callable surface), item 12 (plain-HTTP and
+> external-proxy modes: `config.CookieSecure()`, unconditional HSTS, and giving caddy a compose
+> profile — the item that also unblocks the loopback half of pre-TLS bring-up and the no-git
+> artifact bundle above), and item 20 (the admin infra panels).
+
 - [x] **6. Remove runtime git dependence (migrations half)** *(implemented 2026-08-19, wave 2)* —
   migrations are embedded in both Go binaries (`//go:embed` + golang-migrate as a library) with
   `migrate up | version | force <v> --yes-i-know` subcommands; ledgers unchanged
@@ -433,11 +500,54 @@ when closing items.
   gained the missing log caps and `restart: unless-stopped` (9672976); and meta-ci's port step now
   renders with **every** optional profile and walks every service against the same three-entry
   allow-list doctor keeps, instead of the core+frontend render that could never have seen this.
-- [ ] **15. `vidra update`** — release discovery (GitHub releases/GHCR tags), VIDRA_*_TAG bump,
-  then the deploy.sh pipeline **plus what it lacks**: automatic tag-flip rollback on failed
-  health probes (safe *only* under the schema-compat policy — that prerequisite is now
-  **enforced**, not trusted: item 16 shipped the lint and the N−1 job), and
-  multi-generation rollback history (single `.bak` loses state after two rollbacks).
+- [x] **15. `vidra update`** *(implemented 2026-08-20, wave 5: `vidra-core` 3012ad0 + 0f523a8 +
+  4083e8f, hardened by 8c13b24 + 4aaee44 + f373ffa; on main via core#46→#52, meta 77f9758)* —
+  the one CLI verb that is **not** a wrapper, and `cmd/vidra/main.go` says why: there is no
+  script under `deploy/` for *choose a version, decide whether it is safe, write it down, and
+  clean up after a failure*. Everything that already exists is still run by the thing that owns
+  it — the pre-deploy dump, `MIN_EMBEDDED_MIGRATE_TAG`, the Caddyfile and DNS preflights, the
+  migration steps and every probe stay in `deploy/deploy.sh`, invoked through the same
+  Passthrough as item 13's five wrappers so the operator watches their own terminal.
+  **Release discovery is `net/http` against api.github.com, not `gh`** (3012ad0) — the CLI is
+  a static binary an installer drops on a droplet, and a version check that first needs a
+  second tool installed is a version check nobody runs. `githubAPIBase` is a package variable
+  so the tests serve their own releases from `httptest` and nothing in the suite leaves the
+  machine. **All three components must carry the same tag**: a release that exists in two of
+  them is a broken release, and pinning it turns into a `docker compose pull` failure halfway
+  through a deploy instead of a refusal before it.
+  **The schema floor is the reason item 19 made `/schemaz` numeric.** `vidra deploy` will ship
+  an image whose embedded migrations are older than the database's ledger and notice nothing:
+  `migrate up` on a behind image is a no-op, the stack comes up green, and the fault surfaces
+  later as code reading columns added after it was built. deploy.sh cannot catch this because
+  it checks the ledger against the checkout it just moved to the *same* tag — it compares the
+  image with itself. So this command reads the running api's `/schemaz` on loopback and
+  **refuses** an image that carries fewer migrations than the database has applied. Every other
+  outcome is a note, not a refusal: an api that is down, or an image predating `/schemaz`, or a
+  malformed document leaves the update ungated and says so, because refusing on what could not
+  be read makes a probe an outage.
+  **The automatic tag-flip rollback is armed for exactly one release step.** deploy.sh's
+  failure text correctly tells the operator to run `rollback.sh`; it is a bad moment to be
+  reading an instruction, because the site is down and the previous tags are in the file that
+  was just overwritten. They are held in memory here and flipped back without being asked —
+  but only when the target is one release ahead of what is running, since a tag flip does not
+  touch the database and the one-release schema-compat policy (item 16's lint, now enforced in
+  both migration-owning repos) is precisely the guarantee that makes flipping back *one*
+  release safe. It says nothing about flipping back three, so three is not offered.
+  **Multi-generation env history replaces the single `.bak`** (0f523a8 in Go, 77f9758 in
+  `deploy/lib.sh`'s `env_snapshot`, both wired into rollback.sh). One `.bak` records one
+  generation and the next run overwrites it: `rollback.sh v0.2.1` then `rollback.sh v0.2.0`
+  and the `.bak` holds v0.2.1 — the middle of the incident, the one state nobody wants back —
+  while the tags served *before* it started, which is what the incident notes need, are gone.
+  Snapshots now land at `backups/env-history/<env-basename>.<UTC %Y%m%dT%H%M%SZ>`, ten
+  generations of that basename, `VIDRA_ENV_HISTORY_KEEP` to change it. **The path shape is a
+  cross-language contract**: the Go half and the shell half write and prune the same directory,
+  so a disagreement about the separator or the stamp means each prunes the other's history (or
+  neither prunes and it grows without bound). They are byte-for-byte agreed on directory,
+  separator and format, the keep variable is read by both, and the tests state keep-vs-left
+  explicitly rather than counting survivors. Files are `cat >` under `umask 077` into a 0700
+  directory, never `cp` then `chmod` — `cp` takes the *source's* mode, so a hand-created 0644
+  env file would be copied world-readable and a later chmod leaves a window, however short, in
+  which the whole host can read `MFA_KEY_KEK`.
 - [x] **16. CI-enforce the one-release schema-compat policy** *(implemented 2026-08-20,
   wave 4: `vidra-core prod/phase1-wave4` 464c6dd + d68faa9 + f10957f + fc164a9 + d098e34,
   `vidra-search prod/phase1-wave4` dcded14 + cf12454 + c12d17a + 3da1d91)* — the policy
@@ -492,23 +602,84 @@ when closing items.
 
 ### Installer + host
 
-- [ ] **17. One-command installer** — `curl -fsSL <url> | sh`: detect OS/platform; check/install
-  Docker + Compose (≥2.24); fetch the `vidra` CLI + deployment artifacts (no git clone);
-  start setup; print the setup URL/SSH-tunnel instruction. Advanced users can still install
-  manually.
-- [ ] **18. Host provisioning + backup completeness** — provisioning script/cloud-init template
-  for the manual runbook steps (firewall incl. 1935 when the media profile is on, swap,
-  /opt/vidra + service user, systemd backup timer install with verification). Extend backup to
-  cover `env/production.env` + generated Caddyfile (today the off-site dumps survive host loss
-  but the config to use them doesn't) and document/automate local-media volume snapshots.
-  **Wave-3 update:** `deploy/Caddyfile.local` is now a real generated file that needs that
-  coverage, not a hypothetical one. And external-Postgres deployments now **refuse** backup.sh
-  and restore.sh outright — both work by `docker exec` inside the bundled container, which
-  `docker-compose.external-postgres.yml` keeps out of the project — with provider
-  snapshot/PITR guidance instead; backing up a managed database is deliberately not
-  reimplemented. backup.sh's refusal is placed *before* the healthchecks.io trap on purpose, so
-  the dead-man's switch goes silent and the inactivity alert fires, which is the honest signal
-  for a host that genuinely takes no backups from here.
+- [x] **17. One-command installer** *(implemented 2026-08-20, wave 5: meta `install.sh` +
+  CI at 8f01f1b/1d40827; `vidra-core` release-assets workflow e8ceb3b/ce9b5fe)* —
+  `curl -fsSL <url> | sh` now detects the platform, checks or installs Docker and Compose,
+  puts the checksum-verified `vidra` binary in `/usr/local/bin`, lands the deployment tree in
+  `/opt/vidra`, and hands the terminal to `vidra setup`.
+  **The `/dev/tty` reattach is the whole trick.** Under `curl … | sh`, stdin *is* the script,
+  which is exactly the state item 10 taught the wizard to refuse before its first question —
+  so an installer that shells out to `vidra setup` with stdin as it found it would print a
+  correct refusal at the end of an otherwise successful install. Every question, including the
+  installer's own, is read from `/dev/tty` instead. The terminal test is `( true < /dev/tty )`
+  and not `[ -t 0 ]`, which is false for every piped install, nor `[ -r /dev/tty ]`, which is
+  true on a host with no controlling terminal at all; when it genuinely cannot be opened the
+  installer says so and names `--yes`, rather than failing one question at a time.
+  **Binaries are verified or not installed.** `SHA256SUMS` is fetched from the release, the
+  single line for this asset is extracted, and `sha256sum -c` gates the install — a missing
+  `sha256sum`, a missing sums file, an unlisted asset and a mismatch are each a `die` with the
+  binary discarded, because an unverified binary about to hold the instance's secrets is not
+  worth having. A `/usr/local/bin/vidra` that is already byte-for-byte the download is left
+  alone. `vidra-core`'s new `release-assets.yml` is what makes any of this exist: it
+  cross-compiles `cmd/vidra` for linux and darwin on amd64 and arm64, writes bare-name
+  `SHA256SUMS` so `sha256sum -c` works from any directory, and uploads both to the release.
+  **The tree is resumable and secrets are never re-minted.** Whatever a failed run already
+  created is left in place and re-running continues; a checkout with uncommitted changes or on
+  a non-`main` branch is reported and not touched rather than fast-forwarded over; and the env
+  file belongs to `vidra setup`, which refuses to rewrite an existing one without `--yes` —
+  re-minting `MFA_KEY_KEK` orphans every MFA, federation and ATProto secret already sealed
+  under the old one.
+  **Deviation from the item as written — "(no git clone)" shipped as "no MANUAL git".** The
+  installer drives git and `bootstrap.sh` itself, so the operator never types a git command,
+  but the tree really is a checkout. Three hard dependencies make a git-free install impossible
+  today: `docker-compose.yml` `include:`s `./vidra-core/docker-compose.yml` unconditionally, so
+  the core repo must be on disk before compose parses anything at all;
+  `vidra-core/deploy/media/nginx.conf.template` is bind-mounted by the media profile's
+  nginx-rtmp service; and `deploy.sh` derives its expected schema version from
+  `ls vidra-core/migrations/*.up.sql` and keeps the checkouts in step with `git -C … fetch
+  --tags --force`, refusing a `vidra-core` that is not a git checkout. A true artifact bundle
+  (the compose files, the Caddyfile and nginx templates, the migration inventory, shipped as
+  release assets rather than repositories) is a real piece of work and **stays open** — fold it
+  into item 12's compose surgery or carry it as a follow-up. Meta-ci covers what it can without
+  a host: `sh install.sh --help` runs under `/bin/sh`, needs no network, no root and no clone,
+  and is asserted to document every flag and environment variable it accepts.
+  **Timing caveat, stated by the installer itself:** its happy path begins with the first
+  release cut *after* `release-assets.yml` landed — v0.2.1. v0.2.0 and everything before it
+  have no assets to download, and rather than failing opaquely the installer names the
+  situation and points at `make build-vidra` in the checkout it has already made.
+- [x] **18. Host provisioning + backup completeness** *(implemented 2026-08-20, wave 5: meta
+  d1393f4 + 7669b80 + a5b7584 + 5f7a3f5 + 7e3c77f + 762262d)* — both halves.
+  **`deploy/provision.sh`** is the runbook's host-prep section, executed: firewall, swap,
+  `/opt/vidra` and the service user, the systemd backup timer installed *and verified*. The
+  media profile's 1935 is opened only when it is on, because a permanently open RTMP port on a
+  host that does not ingest RTMP is an attack surface bought with nothing.
+  **`deploy/cloud-init.yaml.example`** is the same work at first boot for anyone whose provider
+  has a user-data box. Meta-ci validates it as **ASCII** cloud-config with `#cloud-config` on
+  line one — cloud-init treats a payload whose first line is anything else as not-a-config and
+  silently ignores it, which is a provisioning failure that looks like a successful boot, and
+  the ASCII rule is the DigitalOcean user-data trap this program has already been bitten by
+  once.
+  **The backup gap is closed by `vidra-config-<stamp>.tar.gz`** (5f7a3f5): the env file plus
+  `deploy/Caddyfile.local`, written beside each dump, shipped to the **same** off-site
+  destination in the same rclone/scp pass, and pruned by the **same** daily+weekly retention
+  rule. That last point is why the archive is not a separate mechanism with its own schedule:
+  eight weeks of dumps sitting next to three weeks of the configuration required to restore
+  them is a recovery that fails at exactly the moment it is being relied on. The prune helper
+  is one function parameterised by the stamp's offset in the basename (7 for `vidra-`, 14 for
+  `vidra-config-`) precisely so the two families cannot drift apart. `deploy/README.md` now
+  carries the restore order this unblocks, and names the volumes still backed up by nothing.
+  **Wave-3 note, carried forward and now with a wave-5 consequence:** external-Postgres
+  deployments **refuse** backup.sh and restore.sh outright — both work by `docker exec` inside
+  the bundled container, which `docker-compose.external-postgres.yml` keeps out of the project
+  — with provider snapshot/PITR guidance instead; backing up a managed database is deliberately
+  not reimplemented. backup.sh's refusal is placed *before* the healthchecks.io trap on purpose,
+  so the dead-man's switch goes silent and the inactivity alert fires, which is the honest
+  signal for a host that genuinely takes no backups from here. **That ordering is preserved,
+  and it costs the config archive too**: a fully-refusing external-Postgres host writes no
+  archive either, because the refusal comes first by design and moving the archive above it
+  would restore the dead-man's ping on a host that backs up nothing. Backing that instance's
+  config up is documented (`deploy/README.md`) and not automated — the honest state, rather
+  than a half-backup that pings green.
 - [x] **19. Health surface hardening** *(implemented 2026-08-20, wave 4: `vidra-core
   prod/phase1-wave4` 986a794 + fabda52 + b2b6f18 + dce4ed4, `vidra-user prod/phase1-wave4`
   f3a25d4 + 280fcf5, meta df1523f)* — all three halves.
