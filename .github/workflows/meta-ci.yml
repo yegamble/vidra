@@ -59,12 +59,42 @@ jobs:
       # source=deploy/lib.sh` directive). Without it every caller reports SC1091
       # and, worse, nothing checks that the library's contract — ENV_FILE and
       # log() defined before the source line — is actually met at each call site.
+      #
+      # The root scripts are listed BY NAME because `deploy/*.sh` does not reach
+      # them, and a new one added to the repo root is otherwise linted by nothing.
       - name: Lint shell scripts
         run: |
-          for f in bootstrap.sh deploy/*.sh; do
+          for f in bootstrap.sh install.sh deploy/*.sh; do
             bash -n "$f"
             shellcheck -x "$f"
           done
+
+      # install.sh is the only script here that runs on a machine which has
+      # nothing yet: no clone, no docker, no vidra, and — under
+      # `curl … | sh` — /bin/sh rather than bash. So the smoke test is `sh`, not
+      # `bash`: on this runner that is dash, and dash is what a Debian or Ubuntu
+      # host pipes the script into. A bashism in the argument parser is invisible
+      # to shellcheck (the shebang says bash) and fatal in production.
+      #
+      # `--help` is the whole test surface on purpose. It is parsed before the
+      # platform check, before the privilege check and before the first network
+      # call, so this step needs no network, no root and no docker — and if that
+      # ordering ever regresses, the step goes red instead of an operator's
+      # `--help` trying to apt-get install Docker.
+      - name: install.sh --help needs no network, no root and no clone
+        run: |
+          out="$(sh install.sh --help)"
+          case "$out" in
+            *"usage:"*"install.sh"*) ;;
+            *) echo "::error::sh install.sh --help printed no usage line" >&2; exit 1 ;;
+          esac
+          for flag in --yes --ref --dir --owner VIDRA_YES VIDRA_REF VIDRA_HOME VIDRA_GH_OWNER; do
+            case "$out" in
+              *"$flag"*) ;;
+              *) echo "::error::sh install.sh --help does not document $flag" >&2; exit 1 ;;
+            esac
+          done
+          echo "OK: install.sh --help exits 0 under /bin/sh ($(readlink -f /bin/sh)) and documents every flag and environment variable."
 
       # deploy/Caddyfile is bind-mounted read-only into the `caddy` service by
       # docker-compose.prod.yml, and Caddy parses it only when that container

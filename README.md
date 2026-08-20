@@ -216,6 +216,23 @@ per-environment templates under [`env/`](env/) and a reference single-host TLS
 deployment (compose overlay + Caddy + deploy/backup/rollback scripts) under
 [`deploy/`](deploy/).
 
+**On a fresh Ubuntu or Debian server, the whole install is one command:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yegamble/vidra/main/install.sh | sh
+```
+
+[`install.sh`](install.sh) detects the platform, installs Docker Engine and the
+Compose v2 plugin (≥2.24) if they are missing, clones this repo and the three
+component checkouts into `/opt/vidra` pinned to the latest release, verifies and
+installs the `vidra` CLI into `/usr/local/bin`, then runs the `vidra setup`
+interview. It asks once before touching anything (`--yes` skips the question,
+and is required when there is no terminal to ask on), starts no containers, and
+**never overwrites an existing `env/production.env`** — re-running it is safe and
+resumable. `--ref vX.Y.Z` pins a release; `--dir` and `--owner` cover the rest;
+`sh install.sh --help` lists them. Everything below is that install by hand, and
+stays supported.
+
 A **real deployment never builds on the box** — it pulls tagged images from GHCR
 and applies [`docker-compose.prod.yml`](docker-compose.prod.yml), which is what
 binds the api/frontend to `127.0.0.1`, removes the Postgres/Redis/search and
@@ -241,11 +258,13 @@ pre-deploy dump, exit-code-gated migrations and health probes. Note the explicit
 but it means production must set `SEARCH_SERVICE_URL` and `SEARCH_INTERNAL_SECRET`
 in the env file itself.
 
-**One command per thing an operator does.** `vidra` is a host-side binary — build
-it with `make build-vidra` in `vidra-core` (a one-line curl installer is planned):
+**One command per thing an operator does.** `vidra` is a host-side binary —
+`install.sh` puts it in `/usr/local/bin` from the release assets (checksum
+verified); for a release cut before those existed, `make build-vidra` in
+`vidra-core` still builds it:
 
 ```bash
-vidra setup                  # interview → env/production.env + deploy/Caddyfile.local
+vidra setup --template env/production.env.example   # interview → env/production.env + deploy/Caddyfile.local
 vidra setup --answers a.txt  # or --non-interactive with the answers as flags
 vidra doctor                 # 18 checks: compose, port exposure, config, backups, reachability
 vidra status                 # what is running, and whether it answers
@@ -313,7 +332,7 @@ directories are independent git checkouts, git-ignored by this repo.
 | [`.ralph/specs/peertube-feature-ledger.md`](.ralph/specs/peertube-feature-ledger.md) | PeerTube feature-parity ledger with per-feature status and evidence. |
 | [`.ralph/specs/environments.md`](.ralph/specs/environments.md) | Canonical environment matrix (local / dev / QA / staging / production) and the DX contract. |
 | [`deploy/README.md`](deploy/README.md) | Reference single-host deployment: first-boot ordering, host prerequisites + firewall, droplet sizing, the prod compose overlay + Caddy TLS, deploy/rollback/backup/restore scripts, dirty-migration runbook, secret-rotation table, email. |
-| [`docs/production-readiness-2026-07.md`](docs/production-readiness-2026-07.md) | Launch-gate audit: what must be done before a public deploy, and what is already handled. |
+| [`docs/production-readiness-2026-07.md`](docs/production-readiness-2026-07.md) | **Archival** launch-gate audit (2026-07-28 → 2026-08-02) — superseded by `docs/productionization/`; VERDICT and `101 migrations` count are stale, kept for history. |
 
 ## Autonomous development (Ralph)
 
