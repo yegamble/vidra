@@ -74,6 +74,20 @@ services:
       # on ONE origin and deliberately relies on the env file leaving
       # NEXT_PUBLIC_API_BASE_URL pointed at that same origin.
       PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+      # THE SITE origin — a DIFFERENT concept from the two API origins above and
+      # easy to conflate with them. It is the same PUBLIC_BASE_URL the api reads,
+      # and the frontend needs it for exactly one decision: whether to emit
+      # Strict-Transport-Security. HSTS over an `http://` origin is a promise the
+      # deployment cannot keep — and with VIDRA_TLS_MODE=plain-http (lab, LAN,
+      # air-gap) there deliberately is no TLS to promise — so middleware.ts emits
+      # the header only when this is not an http:// origin.
+      #
+      # UNSET MUST STAY FAIL-SECURE: an empty value means "emit", because the
+      # dangerous mistake is a real TLS deployment that silently stops sending
+      # HSTS, not a plain-HTTP one that sends a header browsers ignore over plain
+      # HTTP anyway (RFC 6797). `:-` and not `:?` for the same reason: no env file
+      # that predates this key should fail its render over it.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
       # Server Components call the API over compose DNS; the browser keeps
       # using PUBLIC_API_BASE_URL through the host-published port.
       INTERNAL_API_BASE_URL: http://api:8080
