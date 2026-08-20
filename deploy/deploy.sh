@@ -560,6 +560,11 @@ probe() {
 
 rc=0
 probe "api /readyz"  "http://127.0.0.1:${HTTP_PORT}/readyz" || rc=1
+# Deliberately `/` and not `/healthz`: a deploy gate runs ONCE and wants the
+# strongest signal it can get — a full page render, with the api already proven
+# ready one line above. The RECURRING container healthcheck in
+# docker-compose.prod.yml is the cheap `/healthz` instead, so steady-state
+# health never depends on render cost or on the api being up.
 probe "frontend"     "http://127.0.0.1:${FRONTEND_PORT}/"   || rc=1
 
 # EDGE PROBE. THE GAP THIS CLOSES: both probes above connect to 127.0.0.1 —
