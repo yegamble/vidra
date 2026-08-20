@@ -561,11 +561,27 @@ trap 'rm -rf "$WORK"' EXIT INT TERM
 # left to look like a binary.
 LAST_HTTP_CODE=""
 http_get() {
-  LAST_HTTP_CODE="$(curl -sSL -o "$2" -w '%{http_code}' "$1" 2>/dev/null || echo 000)"
+  # curl prints the code through -w even when the transfer failed - "000" when
+  # there was no HTTP response at all - so what has to be discarded here is its
+  # EXIT STATUS, not its output. The obvious `|| echo 000` appends a second code
+  # to the first and reports "HTTP 000000", which is not a number anyone can look
+  # up; `|| true` after the assignment keeps `set -e` happy without inventing one.
+  LAST_HTTP_CODE="$(curl -sSL -o "$2" -w '%{http_code}' "$1" 2>/dev/null)" || true
   case "$LAST_HTTP_CODE" in
     200) return 0 ;;
     404) rm -f "$2"; return 44 ;;
     *)   rm -f "$2"; return 1 ;;
+  esac
+}
+
+# What to put in a failure message. A bare code is the right answer when there IS
+# one; "000" means the request never got an HTTP response at all, and printing it
+# as a status sends an operator looking up a code that does not exist instead of
+# checking the thing that is actually broken.
+http_why() {
+  case "$LAST_HTTP_CODE" in
+    000|"") printf 'the transfer never completed - DNS, connectivity, a proxy or TLS' ;;
+    *)      printf 'HTTP %s' "$LAST_HTTP_CODE" ;;
   esac
 }
 
@@ -600,11 +616,11 @@ EOF
 log "downloading ${ASSET}"
 if ! http_get "${BASE_URL}/${ASSET}" "${WORK}/${ASSET}"; then
   [ "$LAST_HTTP_CODE" != "404" ] || no_assets
-  die "downloading ${BASE_URL}/${ASSET} failed (HTTP ${LAST_HTTP_CODE}). ${DIR} is intact - re-run when the network is."
+  die "downloading ${BASE_URL}/${ASSET} failed ($(http_why)). ${DIR} is intact - re-run when the network is."
 fi
 if ! http_get "${BASE_URL}/SHA256SUMS" "${WORK}/SHA256SUMS"; then
   [ "$LAST_HTTP_CODE" != "404" ] || no_assets
-  die "downloading ${BASE_URL}/SHA256SUMS failed (HTTP ${LAST_HTTP_CODE}). The binary is NOT installed unverified - re-run when the network is."
+  die "downloading ${BASE_URL}/SHA256SUMS failed ($(http_why)). The binary is NOT installed unverified - re-run when the network is."
 fi
 
 # One line, matched on the exact file NAME rather than by a regex over the whole
