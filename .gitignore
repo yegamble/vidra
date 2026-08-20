@@ -63,6 +63,19 @@ deploy/Caddyfile.local
 # deploy/ half of `env/.*.tmp*` — env/ had both patterns, deploy/ only the first.
 deploy/.*.tmp*
 
+# The no-git deployment bundle: deploy/make-bundle.sh's output, and the marker
+# file it puts at the root of the tree it produces.
+#
+# `vidra-bundle.manifest` is ignored because its PRESENCE IS A STATEMENT: it is
+# how deploy.sh and rollback.sh tell an unpacked bundle from a git checkout, and
+# they behave differently for each (a bundle has no component checkouts to sync
+# and no migrations directory to read the expected schema version from). A
+# manifest committed to this repository would make every clone claim to be a
+# bundle, and the two would be indistinguishable exactly where it matters.
+vidra-bundle.manifest
+vidra-bundle_*.tar.gz
+/dist/
+
 # Local backup artifacts written by deploy/backup.sh and deploy/deploy.sh.
 # These are full pg_dumps: they contain every user row and every secret the
 # application persists, so they are never allowed near git.
