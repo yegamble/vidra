@@ -236,6 +236,21 @@ pre-deploy dump, exit-code-gated migrations and health probes. Note the explicit
 but it means production must set `SEARCH_SERVICE_URL` and `SEARCH_INTERNAL_SECRET`
 in the env file itself.
 
+**One command per thing an operator does.** `vidra` is a host-side binary — build
+it with `make build-vidra` in `vidra-core` until the one-command installer ships it:
+
+```bash
+vidra setup                  # interview → env/production.env + deploy/Caddyfile.local
+vidra setup --answers a.txt  # or --non-interactive with the answers as flags
+vidra doctor                 # 18 checks: compose, port exposure, config, backups, reachability
+vidra status                 # what is running, and whether it answers
+vidra logs [service] | vidra restart <service>
+vidra deploy | rollback <tag> | backup | restore <dump> | release <tag>
+```
+
+Those last five **exec `deploy/*.sh`** and return its exit code unchanged — same
+gates, same refusals, one copy of each.
+
 Three rules worth internalizing: **staging is production config with throwaway
 data** (promote the exact image tags); the containerized frontend bakes
 `NEXT_PUBLIC_API_BASE_URL` at **build** time, so a restart cannot repoint it; and
