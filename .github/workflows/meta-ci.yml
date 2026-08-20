@@ -102,6 +102,40 @@ jobs:
           fi
           echo "OK: both pin $prod_tag."
 
+      # The same shape, for the other constant three files agree on by hand.
+      # MIN_EMBEDDED_MIGRATE_TAG is the floor below which deploy.sh, rollback.sh
+      # and restore.sh refuse a core/search tag, and all three carry their own
+      # copy with a "Kept identical in …" comment asking the next editor to
+      # remember. Drift here is not cosmetic and it is not loud: an operator who
+      # bumped the floor in deploy.sh and not in rollback.sh gets a rollback that
+      # accepts a pre-embedded-migrator image, whose main() ignores the one-shot's
+      # `migrate up` argv and starts an API server that never exits — so the
+      # rollback HANGS, mid-incident, with the broken release still serving.
+      # Refusing the tag is the whole point of the constant; a stale copy of it
+      # is the same as not having it.
+      - name: The embedded-migrator tag floor is identical in all three scripts
+        run: |
+          # Comments stripped first, exactly as above: all three files explain
+          # the constant at length and quote it in their die() messages, and
+          # neither is a second declaration.
+          values=$(
+            for f in deploy/deploy.sh deploy/rollback.sh deploy/restore.sh; do
+              v=$(grep -vE '^[[:space:]]*#' "$f" | grep -oE 'MIN_EMBEDDED_MIGRATE_TAG="[^"]+"' | sort -u)
+              if [ -z "$v" ]; then
+                echo "::error::$f declares no MIN_EMBEDDED_MIGRATE_TAG=\"vX.Y.Z\" — that is the gate that stops a rollback or a restore hanging on an image with no embedded migrator" >&2
+                exit 1
+              fi
+              printf '%s\t%s\n' "$f" "$v"
+            done
+          ) || exit 1
+          distinct=$(printf '%s\n' "$values" | cut -f2 | sort -u)
+          if [ "$(printf '%s\n' "$distinct" | wc -l)" -ne 1 ]; then
+            echo "::error::MIN_EMBEDDED_MIGRATE_TAG has drifted between the deploy scripts — they must all name the same release:" >&2
+            printf '%s\n' "$values" >&2
+            exit 1
+          fi
+          echo "OK: deploy.sh, rollback.sh and restore.sh all floor at $distinct."
+
       # docker-compose.yml `include:`s ./vidra-core/docker-compose.yml and adds
       # `search`/`search-migrate` services with build context ./vidra-search, so
       # BOTH component repos must be present to resolve the full config. Check them
