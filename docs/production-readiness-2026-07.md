@@ -122,6 +122,8 @@ Also make the DSNs overridable — four literal sites block DO Managed Postgres 
 - `docker-compose.yml:88-89` (search; keep redis DB index **1**)
 - the two migrate services' `-database=` args (`vidra-core:181`, `docker-compose.yml:66` — preserve `&x-migrations-table=vidra_search_migrations`)
 
+> **Superseded 2026-08-19:** both migrators are now embedded in the service images (`migrate up` on the api / search binary), so there are no `-database=` args and no `x-migrations-table` URL parameter — the ledger table names are compiled in. Both one-shots read the same `${DATABASE_URL}` as their service, which satisfies the overridable-DSN goal above. See `deploy/README.md`. The rest of this section stands as the 2026-07 audit recorded it.
+
 **Verify:** `docker compose --env-file env/production.env --profile core --profile frontend config | grep -c JWT_SECRET` must return ≥1. Add a meta-ci step that diffs `getEnv*("KEY"` in `vidra-core/internal/config/config.go` against the rendered compose environment and fails on any key with no consumer — this class of rot is invisible to every existing gate.
 
 ---

@@ -7,8 +7,11 @@ stack plus a production overlay, behind Caddy for TLS.
 | File | What |
 |---|---|
 | [`../docker-compose.prod.yml`](../docker-compose.prod.yml) | Production overlay: loopback binds, GHCR images, restart policies, log caps, resource limits, named volumes, Caddy. |
-| [`Caddyfile`](./Caddyfile) | Single-origin TLS reverse proxy (path routing to api/frontend). |
-| [`deploy.sh`](./deploy.sh) | pin checkouts → dump → pull → gated migrations → up → probe. |
+| [`Caddyfile`](./Caddyfile) | **Template.** Single-origin TLS reverse proxy (path routing to api/frontend). `vidra setup` renders it to `deploy/Caddyfile.local` — the real domain and ACME settings go there, at the `# vidra:global-options` / `# vidra:tls` markers. |
+| `Caddyfile.local` | **Generated, gitignored, and the only file mounted into the caddy container.** Must exist before `up -d`: a missing bind-mount source is created by Docker as a directory and Caddy crash-loops on it. `deploy.sh`, `rollback.sh` and `restore.sh` all refuse to start without it. |
+| [`lib.sh`](./lib.sh) | **Sourced, not run.** The one copy of `env_get`, `is_true` and the compose-chain assembly. Every script below builds the SAME `-f` chain and `--profile` set from the env file through it. |
+| [`compose.sh`](./compose.sh) | `docker compose` against that chain: `./deploy/compose.sh ps \| logs -f \| config -q \| down`. Gates nothing — use it to read and to stop, `deploy.sh` to change. |
+| [`deploy.sh`](./deploy.sh) | pin checkouts → dump → pull → gated migrations → up → Caddy reload → probe (api, frontend **and the TLS edge**). |
 | [`rollback.sh`](./rollback.sh) | Rewrite the image tags, pull, restart, re-probe. |
 | [`backup.sh`](./backup.sh) | `pg_dump -Fc` → gzip → optional off-site → retention → success marker. |
 | [`restore.sh`](./restore.sh) | **Destructive.** Drop, recreate, `pg_restore -j4`, migrate, re-probe. |
@@ -178,9 +181,21 @@ import pool = 24 connections, above the smallest DO Managed plan's cap. Run the
 bundled Postgres 18 with the nightly dump to Spaces; migrate to Managed once a
 `DATABASE_MAX_CONNS` knob exists. The DSN indirection is already in place —
 setting `DATABASE_URL` (with `sslmode=require`) in the env file overrides the
-constructed compose default for both core and search, and
-`SEARCH_MIGRATE_DATABASE_URL` overrides the search migrator's, which must keep
-its `&x-migrations-table=vidra_search_migrations` suffix.
+constructed compose default for core, search **and both migration one-shots**.
+It is a single variable: the search migrator carries its `vidra_search_migrations`
+ledger name (and the `public` schema it lives in) in the binary, so it no longer
+needs the separate `SEARCH_MIGRATE_DATABASE_URL` that existed only to append
+`&x-migrations-table=…`.
+
+**That tolerance is the *search* migrator's alone.** `vidra-search`'s
+`internal/dbmigrate` normalizes a DSN that still carries
+`x-migrations-table=vidra_search_migrations` (it strips it) and *refuses* one
+naming a different table or moving the schema (`search_path`, `options`).
+`vidra-core`'s migrator does neither: it hands the DSN to golang-migrate
+verbatim, and that driver reads `x-migrations-table` itself — so a
+`DATABASE_URL` carrying the search ledger name would make **core** write its
+version counter into `vidra_search_migrations`. Keep the shared `DATABASE_URL`
+free of migrator parameters.
 
 ---
 
@@ -193,28 +208,51 @@ cp env/production.env.example env/production.env
 $EDITOR env/production.env              # JWT_SECRET, POSTGRES_PASSWORD, REDIS_PASSWORD,
                                         # MFA_KEY_KEK, SEARCH_INTERNAL_SECRET, SMTP_*,
                                         # STORAGE_S3_*, INSTANCE_NAME, PUBLIC_BASE_URL,
-                                        # VIDRA_*_TAG=v0.1.0, REGISTRATION_ENABLED=false
+                                        # VIDRA_*_TAG=v0.2.0, REGISTRATION_ENABLED=false
 git check-ignore -v env/production.env  # MUST match, or stop and fix .gitignore
-$EDITOR deploy/Caddyfile                # replace example.com with your domain —
-                                        # deploy.sh refuses while a non-comment
-                                        # line still says example.com
+vidra setup                             # renders deploy/Caddyfile.local from the
+                                        # template + PUBLIC_BASE_URL/VIDRA_TLS_MODE.
+                                        # By hand instead:
+                                        #   cp deploy/Caddyfile deploy/Caddyfile.local
+                                        #   $EDITOR deploy/Caddyfile.local   # your domain
+                                        # deploy.sh refuses while Caddyfile.local is
+                                        # missing, still says example.com, or serves a
+                                        # different host than PUBLIC_BASE_URL. It also
+                                        # refuses an ACME deploy whose domain does not
+                                        # yet resolve to this host (Let's Encrypt rate
+                                        # limits); VIDRA_SKIP_DNS_PREFLIGHT=1 overrides.
 
-export COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-  --env-file env/production.env --profile core --profile frontend"
-
-$COMPOSE config -q                      # render check — catches missing required vars
-$COMPOSE pull
-$COMPOSE run --rm migrate && $COMPOSE run --rm search-migrate
-$COMPOSE up -d --no-build
+./deploy/compose.sh config -q           # render check — catches missing required vars
+./deploy/compose.sh pull
+./deploy/compose.sh run --rm migrate && ./deploy/compose.sh run --rm search-migrate
+./deploy/compose.sh up -d --no-build
 
 curl -fsS http://127.0.0.1:8080/readyz  # {"status":"ok"} incl. postgres + redis
 curl -fsS https://example.com/          # Caddy + certificate + frontend
 nmap -Pn -p 5432,6379,8080,3000 <droplet-ip>   # must all be closed
 ```
 
-`make prod-config` is the same render check; `./deploy/deploy.sh` does the whole
-sequence with a pre-deploy dump and health gates and is what you should use for
-every subsequent deploy.
+**Never hand-spell the `docker compose -f … --profile …` chain.** `deploy/compose.sh`
+is a thin wrapper that reads the SHAPE of the stack — which overlays, which
+profiles — out of `env/production.env`, exactly as `deploy.sh`, `rollback.sh`,
+`restore.sh` and `backup.sh` do (they all share `deploy/lib.sh`). A typed-out
+chain is a copy that drifts: an operator on managed Postgres who types the plain
+two-file chain gets a render containing the **bundled** postgres, so `config -q`
+goes green for a stack that is not the one running and `up -d` starts a second,
+empty database next to the managed one. Use `ENV_FILE=env/staging.env
+./deploy/compose.sh …` for another environment.
+
+`make prod-config` is the same render check through the same wrapper;
+`./deploy/deploy.sh` does the whole sequence with a pre-deploy dump, a
+Compose-version floor, the migrator-tag gate, the DNS preflight, a Caddy reload
+and health gates — it is what you should use for every subsequent deploy.
+`compose.sh` gates **nothing**; it is for reading and for stopping.
+
+**`POSTGRES_PASSWORD` on a host with an existing database volume:** Postgres
+reads the env value only at initdb — it initializes a *fresh* volume and is
+ignored afterwards. If the volume already exists, set the database's **current**
+password in the env file, not a freshly generated one; rotate by running
+`ALTER USER` inside the container first (see the rotation table below).
 
 Then, before you need them:
 
@@ -247,7 +285,7 @@ ignored. Keep the droplet clean (`rm -f vidra-core/.env`) and verify after any
 compose change:
 
 ```bash
-$COMPOSE config | grep -E 'DATABASE_URL|REDIS_URL'   # every DSN must name postgres/redis
+./deploy/compose.sh config | grep -E 'DATABASE_URL|REDIS_URL'   # every DSN must name postgres/redis
 ```
 
 ### Important: the explicit `-f` chain disables `docker-compose.override.yml`
@@ -281,16 +319,49 @@ $EDITOR env/production.env                     # VIDRA_CORE_TAG=v0.2.0
 ./deploy/deploy.sh                             # dump -> pull -> gated migrate -> up -> probe
 
 # ROLLBACK — app only, no schema change (see the one-release rule below):
-./deploy/rollback.sh v0.1.0
+./deploy/rollback.sh v0.2.0
 
 # ROLLBACK across an incompatible schema change:
-$COMPOSE stop api frontend
+./deploy/compose.sh stop api frontend
 ./deploy/restore.sh backups/pre-deploy-<ts>.dump.gz
-./deploy/rollback.sh v0.1.0
+./deploy/rollback.sh v0.2.0
 ```
 
+### Upgrade notes: the embedded-migrator tag floor
+
+**Both migration one-shots are the service image itself**, running its compiled-in
+`migrate up`. That has a hard consequence for which tags this compose revision can
+run at all:
+
+- `deploy/deploy.sh` and `deploy/rollback.sh` carry a
+  **`MIN_EMBEDDED_MIGRATE_TAG`** constant (`v0.2.0` — the first release cut with
+  the embedded subcommand; raise it, never lower it) and refuse a
+  `VIDRA_CORE_TAG` / `VIDRA_SEARCH_TAG` below it. An older image's `main()`
+  **ignores the `migrate up` argv and starts an API server**, so the one-shot never
+  exits: `deploy.sh` would hang on step 3/5, and `rollback.sh` on the
+  `service_completed_successfully` edges inside `up -d`. A hang with no error is
+  worse than a refusal, hence the gate.
+- To run a component release *older* than the floor you must also check out the
+  meta-repo revision that shipped with it — the pre-embedded compose files drove a
+  `migrate/migrate` CLI container and bind-mounted `migrations/`.
+- `VIDRA_USER_TAG` is not gated: the frontend has no migrator.
+
+**Merge order — component releases land BEFORE this compose revision.** The chain
+is `bootstrap.sh` → component checkouts → `docker-compose.yml` `include:`s
+vidra-core's compose file. Until **vidra-core and vidra-search have both released
+a tag whose image carries `migrate up`** (and `bootstrap.sh`'s default branch
+sync therefore has it), a host on this revision runs `migrate up` against a binary
+that does not know the word — locally that hangs `make dev` / `make dev-hot` on
+the `migrate` one-shot, and in production `deploy.sh` refuses at pre-flight. Ship
+in this order:
+
+1. `vidra-core` — release the embedded migrator (`migrate up|version|force`).
+2. `vidra-search` — same.
+3. this meta-repo revision, with `MIN_EMBEDDED_MIGRATE_TAG` set to the tags from
+   1 and 2, then `VIDRA_CORE_TAG` / `VIDRA_SEARCH_TAG` bumped in the env file.
+
 Equivalent Make targets: `make release VERSION=…`, `make prod-config`,
-`make deploy`, `make rollback TAG=v0.1.0`, `make backup`,
+`make deploy`, `make rollback TAG=v0.2.0`, `make backup`,
 `make restore DUMP=… CONFIRM=1`, `make prod-logs`, `make prod-down`. All the
 compose-based ones honour `PROD_ENV_FILE=env/staging.env`.
 
@@ -339,8 +410,9 @@ make release VERSION=v0.2.0 REPOS="vidra-core" # one repo only
 ```
 
 Each component repo's `publish-container.yml` runs on `release: published` and
-pushes `ghcr.io/yegamble/<repo>:<tag>`, so cutting the release *is* building the
-image. `deploy/release.sh` creates the release in each repo
+pushes `ghcr.io/<owner>/<repo>:<tag>` — the owner `deploy/release.sh` targets
+via `GITHUB_OWNER`, which must agree with the `VIDRA_IMAGE_OWNER` the deploy
+overlay pulls from — so cutting the release *is* building the image. `deploy/release.sh` creates the release in each repo
 (`--generate-notes --latest`), watches the resulting workflow run to its
 conclusion, and then verifies the image is really in GHCR
 (`docker manifest inspect`, falling back to the GitHub packages API and saying
@@ -349,7 +421,7 @@ fails, and it does **not** deploy anything — bump `VIDRA_*_TAG` and run
 `./deploy/deploy.sh` when you want the release live.
 
 **Release the three repos at the same version.** Nothing enforces it, but
-`./deploy/rollback.sh v0.1.0` sets all three `VIDRA_*_TAG` values from one
+`./deploy/rollback.sh v0.2.0` sets all three `VIDRA_*_TAG` values from one
 argument, staging→production promotion copies three identical lines, and "which
 build is running?" during an incident has one answer instead of three. Skipping
 a component that did not change means its tag no longer exists — release it
@@ -383,7 +455,12 @@ gh run watch "$(gh run list -R yegamble/vidra-search --workflow=publish-containe
 
 ### Migration failed mid-deploy
 
-golang-migrate marks its version ledger `dirty = true` when a migration fails
+Both migrators drive golang-migrate as a **library inside the service binary**
+(`api migrate up` / the search image's `migrate up`), with the SQL compiled into
+the image — there is no CLI container and nothing is bind-mounted from a
+checkout, so applying a schema never depends on the repo layout on disk.
+
+That library marks its version ledger `dirty = true` when a migration fails
 part-way and then **refuses every subsequent `up`** with an opaque error. Because
 the api gates on `migrate: condition: service_completed_successfully`, the site
 stays down and each retry fails identically. `deploy.sh` runs the two migrators as
@@ -402,8 +479,18 @@ There are **two independent ledgers**:
 Either can go dirty without the other. Recovery, for whichever failed:
 
 ```bash
-# 1. Find out where it stopped.
-$COMPOSE exec postgres psql -U vidra -d vidra -c 'SELECT * FROM schema_migrations;'
+# 1. Find out where it stopped. Either migrator reports its own ledger and runs
+#    no migration SQL. It is not quite read-only: on a database that has NEVER
+#    been migrated, opening the migrator CREATEs the empty ledger table first
+#    (golang-migrate's ensureVersionTable, plus a brief advisory lock). Harmless
+#    here — you are in this runbook because a ledger already exists — but do not
+#    reach for it to probe a database you did not mean to touch.
+#    Note the REPEATED word: `docker compose run <service> <args>` REPLACES the
+#    service's command, so the subcommand must be restated.
+./deploy/compose.sh run --rm migrate        migrate version   # core   -> version=42 dirty=true
+./deploy/compose.sh run --rm search-migrate migrate version   # search -> version=… dirty=…
+#    Straight from the ledger, if you are already in psql:
+./deploy/compose.sh exec postgres psql -U vidra -d vidra -c 'SELECT * FROM schema_migrations;'
 #    search ledger:                              SELECT * FROM vidra_search_migrations;
 #    -> version | dirty
 #          42   | t
@@ -412,25 +499,28 @@ $COMPOSE exec postgres psql -U vidra -d vidra -c 'SELECT * FROM schema_migration
 #    partial effect BY HAND. golang-migrate does not roll back for you — a failed
 #    migration leaves whatever it managed to commit. The .up.sql is in
 #    vidra-core/migrations/ (or vidra-search/migrations/).
-$COMPOSE exec postgres psql -U vidra -d vidra
+./deploy/compose.sh exec postgres psql -U vidra -d vidra
 
-# 3. Point the ledger at the last CLEAN version, i.e. N-1.
-#    CAUTION: `docker compose run <service> <args>` REPLACES the service's whole
-#    command, so -path and -database must be repeated in full — the compose
-#    definition's flags are NOT inherited.
-DSN='postgres://vidra:<POSTGRES_PASSWORD>@postgres:5432/vidra?sslmode=disable'
-$COMPOSE run --rm migrate -path=/migrations -database="$DSN" force 41
-#    search ledger: use the search-migrate service and append
-#    &x-migrations-table=vidra_search_migrations to the DSN.
-#    Equivalent, and simpler if the DSN is awkward to quote:
-#      UPDATE schema_migrations SET version = 41, dirty = false;
+# 3. Point the ledger at the last CLEAN version, i.e. N-1, with the migrator's
+#    own `force` — it stamps the version and clears `dirty` WITHOUT running any
+#    migration SQL, so it is an assertion about the schema you just repaired.
+#    --yes-i-know is mandatory and is checked before the database is touched: a
+#    refusal means nothing happened. Whichever ledger is dirty, the command is
+#    the same shape — each service forces its OWN table:
+./deploy/compose.sh run --rm migrate        migrate force 41 --yes-i-know   # core
+./deploy/compose.sh run --rm search-migrate migrate force 41 --yes-i-know   # search
+#    Each prints the ledger state before and after (core: `before:`/`after:`,
+#    search: `migrate force: before/after … table=…`) — keep it for the incident
+#    notes. `force -1` is the right target when it was the FIRST migration that
+#    died (that is golang-migrate's "empty ledger"), and both migrators refuse
+#    anything below -1.
 
-# 4. Re-run the normal migrator (its own -path/-database from compose).
-$COMPOSE run --rm migrate
+# 4. Re-run the normal migrator (the compose `command:` is `migrate up`).
+./deploy/compose.sh run --rm migrate
 ```
 
-Never `force` to `N` — that claims the broken migration succeeded and the next
-deploy will build on a schema that does not exist.
+Never point the ledger at `N` — that claims the broken migration succeeded and the
+next deploy will build on a schema that does not exist.
 
 Note that **none** of the 101 up-migrations use `CREATE INDEX CONCURRENTLY` and
 none sets `lock_timeout`, so a data-dependent migration against a populated table

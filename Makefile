@@ -147,8 +147,15 @@ release: ## Cut a release + GHCR images in all three repos: make release VERSION
 	@test -n "$(VERSION)" || { echo "usage: make release VERSION=v0.2.0 [REPOS=\"vidra-core vidra-search\"] [CONFIRM=1]"; exit 1; }
 	./deploy/release.sh $(if $(filter 1,$(CONFIRM)),--yes) $(VERSION) $(REPOS)
 
-PROD_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-	--env-file $(PROD_ENV_FILE) --profile core --profile frontend
+# Delegated, NOT re-spelled. This used to be a literal `docker compose -f ... -f
+# ... --profile core --profile frontend`, i.e. a fifth copy of a chain that
+# deploy/lib.sh now owns — and it had already drifted: it hardcoded the two
+# profiles (so an env file with EXTRA_COMPOSE_PROFILES=ipfs was validated
+# without ipfs) and applied neither external-datastore overlay (so an operator
+# on managed Postgres got "renders cleanly" for a render containing the BUNDLED
+# postgres). deploy/compose.sh reads the shape out of $(PROD_ENV_FILE), exactly
+# as the deploy scripts do.
+PROD_COMPOSE := ENV_FILE=$(PROD_ENV_FILE) ./deploy/compose.sh
 
 .PHONY: prod-config
 prod-config: ## Render+validate the production compose chain (catches missing required vars)

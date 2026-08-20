@@ -29,9 +29,14 @@ or decides policy.
 
 - **Postgres**: `vidra-search` owns a dedicated `search` schema inside the shared
   `vidra` DB (migration `0001` creates it). golang-migrate's version ledger lands
-  in `vidra_search_migrations` (in `public`) via the `x-migrations-table` URL
-  param, so it never collides with core's `schema_migrations`. A one-shot
-  `search-migrate` compose service (mirroring core's `migrate`) applies it.
+  in `vidra_search_migrations` (in `public`), so it never collides with core's
+  `schema_migrations`. Both names are **compiled in** (`internal/dbmigrate`), not
+  carried by an `x-migrations-table` URL param — a DSN that still has that
+  parameter is normalized away, one naming a different table (or moving the
+  schema via `search_path`/`options`) is refused. A one-shot `search-migrate`
+  compose service (mirroring core's `migrate`) applies the SQL, which is embedded
+  in the service image: `migrate up` on the search binary, no CLI container and
+  no bind-mounted `migrations/`.
 - **Redis**: same instance as core, **DB index 1** (`redis://redis:6379/1`); core
   uses DB 0.
 - **Auth**: HMAC over `(ts, method, path)` with a shared secret —

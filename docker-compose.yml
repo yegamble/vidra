@@ -17,9 +17,11 @@
 # Environments: pass one of the env templates (see .ralph/specs/environments.md):
 #   docker compose --env-file env/local.env --profile core --profile frontend up -d
 #
-# NOTE: NEXT_PUBLIC_API_BASE_URL is baked into the frontend image at BUILD time
-# (Next.js inlines NEXT_PUBLIC_* into the client bundle) — changing it requires
-# rebuilding the frontend image, not just restarting it.
+# NOTE: the browser-facing API origin is resolved at RUNTIME — the frontend
+# server injects PUBLIC_API_BASE_URL per request (vidra-user lib/config.ts +
+# app/runtime-config.js), so changing it only needs a restart. The
+# NEXT_PUBLIC_API_BASE_URL build arg below remains solely for images built from
+# older vidra-user code, which baked the origin into the client bundle.
 include:
   - path: ./vidra-core/docker-compose.yml
     # env_file: /dev/null is LOAD-BEARING, not decoration.
@@ -64,8 +66,16 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
+      # Browser-facing API origin, read at RUNTIME by the frontend server (a
+      # restart applies a change; no rebuild). It MUST stay set here: the local
+      # `make up` topology is cross-origin — frontend on :3000, api on :8080 —
+      # so same-origin relative URLs (the unset default) would 404. Production
+      # is the opposite case: docker-compose.prod.yml serves both behind Caddy
+      # on ONE origin and deliberately relies on the env file leaving
+      # NEXT_PUBLIC_API_BASE_URL pointed at that same origin.
+      PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
       # Server Components call the API over compose DNS; the browser keeps
-      # using NEXT_PUBLIC_API_BASE_URL through the host-published port.
+      # using PUBLIC_API_BASE_URL through the host-published port.
       INTERNAL_API_BASE_URL: http://api:8080
       # Server-side log verbosity (lib/logger.ts:62). Same name, semantics and
       # default as the api and search services, so one ${LOG_LEVEL} in the env
@@ -91,29 +101,60 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # One-shot search-schema migration. vidra-search shares the core `vidra`
-  # database but lives in its own `search` schema (migration 0001 creates it).
-  # The x-migrations-table URL param lands golang-migrate's version ledger in
+  # One-shot search-schema migration, run by the SEARCH IMAGE ITSELF: the
+  # migrations are compiled into the vidra-search binary, so there is no
+  # golang-migrate CLI image and no bind-mounted ./vidra-search/migrations —
+  # applying the schema no longer needs a git checkout of the SQL files, and the
+  # migrator can no longer drift from the binary that expects them.
+  # Joins the `core` profile so `make dev`/`dev-hot` run it.
+  #
+  # vidra-search shares the core `vidra` database but lives in its own `search`
+  # schema (migration 0001 creates it), and its version ledger stays
   # `vidra_search_migrations` (in public) so it never collides with core's
-  # `schema_migrations`. Joins the `core` profile so `make dev`/`dev-hot` run it.
+  # `schema_migrations`. That name is now COMPILED IN (vidra-search
+  # internal/dbmigrate) instead of riding along as an `x-migrations-table` URL
+  # parameter — which is exactly why this service can read the same
+  # ${DATABASE_URL} as the api and the search service and needs no DSN variable
+  # of its own. An inherited DSN that still carries
+  # &x-migrations-table=vidra_search_migrations is accepted (the binary strips
+  # it); one naming a DIFFERENT table is refused rather than silently ignored.
+  #
+  # This service owns this chain's ONLY vidra-search build; the `search` service
+  # below runs the same image by NAME, so one build serves both. Declaring the
+  # build twice against one tag is what this replaces: it mints the same image
+  # twice, and on a cold cache buildx bake fails the second target outright with
+  # "image already exists". A shared name is also what lets
+  # docker-compose.prod.yml pin ONE published tag onto both services.
+  #
+  # The build sits on the one-shot rather than on `search` so the deps-only
+  # workflow (`docker compose … up -d postgres redis migrate search-migrate`)
+  # still builds it — the same shape vidra-search's own docker-compose.yml
+  # settled on. vidra-core's file puts its single build on `api` and lets its
+  # one-shot inherit the name; either side works here because
+  # docker-compose.prod.yml strips the build off BOTH one-shots (`build: !reset
+  # null`) before production ever runs them. The invariant is one producer and
+  # one image name per repo.
   search-migrate:
-    image: migrate/migrate:v4.19.1
+    image: vidra-search:local
+    build: ./vidra-search
     profiles: ["core"]
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./vidra-search/migrations:/migrations:ro
-    command:
-      - "-path=/migrations"
-      # SEARCH_MIGRATE_DATABASE_URL, not DATABASE_URL: the ledger override is a
-      # query parameter, and it cannot be appended to an operator-supplied DSN
-      # that may already carry its own `?sslmode=require` (DO Managed Postgres).
-      # Whatever you set here MUST keep &x-migrations-table=vidra_search_migrations
-      # or golang-migrate lands the search ledger in core's `schema_migrations`
-      # and the two version counters corrupt each other.
-      - "-database=${SEARCH_MIGRATE_DATABASE_URL:-postgres://${POSTGRES_USER:-vidra}:${POSTGRES_PASSWORD:-vidra}@postgres:5432/${POSTGRES_DB:-vidra}?sslmode=disable&x-migrations-table=vidra_search_migrations}"
-      - "up"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-vidra}:${POSTGRES_PASSWORD:-vidra}@postgres:5432/${POSTGRES_DB:-vidra}?sslmode=disable}
+    # Applies all pending migrations and exits: 0 when the schema is current
+    # (including "nothing to do"), non-zero on any failure or a dirty ledger, so
+    # the search service's `service_completed_successfully` dependency and
+    # deploy.sh's exit-code-gated `run --rm search-migrate` gate on it exactly as
+    # before.
+    #
+    # To read the ledger without changing it, note that `compose run` REPLACES
+    # this command instead of appending to it — the subcommand must be repeated:
+    #   docker compose run --rm search-migrate migrate version
+    # (`run --rm search-migrate version` alone would pass "version" as argv[1],
+    # which the binary refuses rather than treating as a server start.)
+    command: ["migrate", "up"]
 
   # vidra-search: internal autosuggest / search / recommendations service. Only
   # vidra-core talks to it (HMAC S2S); it is NEVER exposed to the browser. Shares
@@ -133,7 +174,8 @@ services:
   # LOG_FORMAT and METRICS_ENABLED do share one variable across all three services
   # — identical semantics and identical defaults, so one knob is correct there.
   search:
-    build: ./vidra-search
+    # Built by the search-migrate one-shot above (same image, one build).
+    image: vidra-search:local
     profiles: ["core"]
     depends_on:
       postgres:

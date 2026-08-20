@@ -43,34 +43,30 @@ die()  { printf '[backup] ERROR: %s\n' "$*" >&2; exit 1; }
 
 [ -f "$ENV_FILE" ] || die "env file not found: $ENV_FILE (cp env/production.env.example env/production.env)"
 
-# Reads KEY from the env file WITHOUT sourcing it — that file is operator-edited
-# and holds secrets; `source`ing it would execute whatever is in there. A real
-# exported environment variable of the same name wins, so
-# `POSTGRES_DB=other ./deploy/backup.sh` works for one-off runs.
-env_get() {
-  local key="$1" def="${2-}" val
-  val="$(printenv "$key" 2>/dev/null || true)"
-  if [ -z "$val" ]; then
-    val="$(sed -n "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//p" "$ENV_FILE" | tail -n1 | tr -d '\r')"
-    case "$val" in
-      \"*\") val="${val%\"}"; val="${val#\"}" ;;
-      \'*\') val="${val%\'}"; val="${val#\'}" ;;
-    esac
-  fi
-  printf '%s' "${val:-$def}"
-}
+# env_get, is_true and the compose chain live in deploy/lib.sh — every script
+# that addresses the running stack must assemble the SAME project. Sourced here,
+# after log/die and ENV_FILE, which is the contract lib.sh documents.
+# shellcheck source=deploy/lib.sh
+. "$REPO_ROOT/deploy/lib.sh"
 
 PGUSER="$(env_get POSTGRES_USER vidra)"
 PGDB="$(env_get POSTGRES_DB vidra)"
 
-# The same explicit -f chain deploy.sh uses. It must match, or `ps -q` resolves
-# against a different rendering of the stack. `--profile core` is what makes the
-# postgres service visible to `ps`.
-COMPOSE=(docker compose
-  -f docker-compose.yml
-  -f docker-compose.prod.yml
-  --env-file "$ENV_FILE"
-  --profile core --profile frontend)
+# Sets COMPOSE, EXTERNAL_POSTGRES and EXTERNAL_REDIS.
+vidra_compose_chain
+
+# This script dumps by `docker exec`-ing pg_dump inside the BUNDLED postgres
+# container. With VIDRA_EXTERNAL_POSTGRES=true there is no such container, so
+# refuse in one sentence rather than fail at `ps -q postgres` with a message
+# about a stack that is not running.
+#
+# Deliberately placed BEFORE the healthchecks.io trap and the /start ping: a
+# refusal is not a backup attempt, so the dead-man's switch stays silent and
+# the "no ping since <t>" alert fires — which is the correct signal, because
+# this host is genuinely taking no backups from here.
+if [ "$EXTERNAL_POSTGRES" -eq 1 ]; then
+  die "VIDRA_EXTERNAL_POSTGRES=true in $ENV_FILE — external Postgres: use your provider's backup/restore (automated backups + point-in-time recovery), and point HEALTHCHECKS_URL at that schedule instead of this script. Backing up a managed database is deliberately not reimplemented here. Nothing was written."
+fi
 
 # Dead-man's switch. A backup that never runs is the failure mode monitoring
 # usually misses, so the ping is what alerts — not the script. Configure

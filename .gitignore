@@ -40,6 +40,28 @@ env/*.env
 # `.env.example` negation so the ordering is explicit; `.env.example` files are
 # unaffected because they do not end in `.env.bak`.
 env/*.env.bak
+# ...and the setup engine's atomic-write temp files. `vidra setup` writes an env
+# file through `os.CreateTemp(dir, "."+base+".tmp*")` + rename (vidra-core
+# internal/setup/setup.go), i.e. `env/.production.env.tmpNNNNN`. A crash between
+# create and rename leaves that file behind holding every generated secret, and
+# neither `env/*.env` nor the global `*.tmp` rule above matches the name (the
+# random suffix comes AFTER `.tmp`). Ignore the shape, not one instance.
+env/.*.tmp*
+
+# The GENERATED reverse-proxy config. `vidra setup` renders
+# deploy/Caddyfile.local from the committed deploy/Caddyfile template plus the
+# env file, and docker-compose.prod.yml mounts ONLY the .local file. It carries
+# the operator's real domain and ACME contact address, and every host's copy
+# differs, so it is deliberately not committable — the template is what this
+# repo ships and reviews.
+deploy/Caddyfile.local
+# ...and the same atomic-write temp files the env rule above covers. The setup
+# engine renders the Caddyfile through `os.CreateTemp(dir, "."+base+".tmp*")` +
+# rename, i.e. `deploy/.Caddyfile.local.tmpNNNNN`. A crash between create and
+# rename leaves it behind, and neither `deploy/Caddyfile.local` nor the global
+# `*.tmp` rule below matches (the random suffix comes AFTER `.tmp`). This is the
+# deploy/ half of `env/.*.tmp*` — env/ had both patterns, deploy/ only the first.
+deploy/.*.tmp*
 
 # Local backup artifacts written by deploy/backup.sh and deploy/deploy.sh.
 # These are full pg_dumps: they contain every user row and every secret the

@@ -54,11 +54,16 @@ jobs:
           fi
           echo "OK: concrete env files and their .bak copies are ignored; templates are not."
 
+      # `-x` so shellcheck FOLLOWS the `. "$REPO_ROOT/deploy/lib.sh"` in the four
+      # stack scripts and deploy/compose.sh (each carries a `# shellcheck
+      # source=deploy/lib.sh` directive). Without it every caller reports SC1091
+      # and, worse, nothing checks that the library's contract — ENV_FILE and
+      # log() defined before the source line — is actually met at each call site.
       - name: Lint shell scripts
         run: |
           for f in bootstrap.sh deploy/*.sh; do
             bash -n "$f"
-            shellcheck "$f"
+            shellcheck -x "$f"
           done
 
       # deploy/Caddyfile is bind-mounted read-only into the `caddy` service by
@@ -71,11 +76,31 @@ jobs:
       # would, which is precisely the failure being pre-empted. Same image the
       # overlay runs; `--network none` because adapting must not need DNS, the
       # network, or an ACME round-trip.
+      #
+      # The tag is PINNED and must stay identical to docker-compose.prod.yml's
+      # caddy image — validating against a different Caddy than production runs
+      # is validating nothing. Bump both in one commit.
       - name: deploy/Caddyfile is a valid Caddy config
         run: |
           docker run --rm --network none \
             -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
-            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+            caddy:2.11.4-alpine caddy validate --config /etc/caddy/Caddyfile
+
+      # …and the two pins really are the same tag. A drift here is invisible
+      # otherwise: both jobs stay green while CI parses the Caddyfile with a
+      # parser production does not use.
+      - name: The Caddy pin in CI matches the one production runs
+        run: |
+          # Comment lines are stripped first: docker-compose.prod.yml's comment
+          # records which floating tag the pin was taken from, and that is not a
+          # second pin.
+          ci_tag=$(grep -vE '^[[:space:]]*#' .github/workflows/meta-ci.yml | grep -oE 'caddy:[0-9][0-9A-Za-z._-]*' | sort -u)
+          prod_tag=$(grep -vE '^[[:space:]]*#' docker-compose.prod.yml | grep -oE 'caddy:[0-9][0-9A-Za-z._-]*' | sort -u)
+          if [ "$ci_tag" != "$prod_tag" ] || [ -z "$prod_tag" ]; then
+            echo "::error::caddy image pin drift — meta-ci.yml has '$ci_tag', docker-compose.prod.yml has '$prod_tag'" >&2
+            exit 1
+          fi
+          echo "OK: both pin $prod_tag."
 
       # docker-compose.yml `include:`s ./vidra-core/docker-compose.yml and adds
       # `search`/`search-migrate` services with build context ./vidra-search, so
@@ -110,31 +135,69 @@ jobs:
       - name: Validate full-stack compose resolves
         run: docker compose --profile core config -q
 
-      # The explicit -f chain disables override auto-loading, so pass it explicitly
-      # exactly as `make dev-hot` (DEV_HOT_COMPOSE) does.
-      - name: Validate hot-reload overlay compose resolves
-        run: docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.dev.yml --profile core config -q
-
-      # Two steps below parse a rendered compose model with PyYAML. It is not
+      # Three steps below parse a rendered compose model with PyYAML. It is not
       # guaranteed on the runner image, and a missing import would surface as a
       # traceback rather than as the assertion failing — so install it once, here,
       # before first use.
       - name: Ensure PyYAML is available
         run: python3 -c 'import yaml' 2>/dev/null || pip3 install --quiet pyyaml
 
-      # The chain deploy/deploy.sh, deploy/rollback.sh, deploy/restore.sh and
-      # `make prod-config` all use. Every `${VAR:?}` in it must be satisfied, so
-      # dummy values are injected below — that list IS the contract: adding a new
-      # required variable to docker-compose.prod.yml without adding it here turns
-      # this step red, which is the point.
+      # The explicit -f chain disables override auto-loading, so pass it explicitly
+      # exactly as `make dev-hot` (DEV_HOT_COMPOSE) does.
       #
-      # `:?` fails on an EMPTY value too, which is why JWT_SECRET must be passed:
-      # env/production.env.example deliberately ships it blank so a copied-but-
-      # unedited env file fails the render instead of the api's boot.
+      # `config` alone only proves the chain PARSES. The thing that rots silently
+      # is which image each one-shot ends up on: the base file's search-migrate
+      # builds the multi-stage RELEASE Dockerfile, so a dev overlay that stopped
+      # redirecting it would still render fine while `make dev-hot` recompiled a
+      # production image on every run and migrated the dev database with a binary
+      # that is not the one being hot-reloaded. Same for `migrate`, which inherits
+      # vidra-core's `vidra-core-api:local` when the overlay misses it. Assert the
+      # rendered model instead, exactly as the prod one-shot step below does.
+      - name: Validate hot-reload overlay compose resolves
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.dev.yml \
+            --profile core config > /tmp/dev-config.yml
+          python3 - <<'PY'
+          import sys, yaml
+          svcs = yaml.safe_load(open('/tmp/dev-config.yml'))['services']
+          expected = {'migrate': 'vidra-api-dev', 'search-migrate': 'vidra-search-dev'}
+          bad = []
+          for name, image in expected.items():
+              s = svcs[name]
+              if s.get('image') != image:
+                  bad.append(f'{name} image is {s.get("image")!r}, not {image!r}')
+              dockerfile = (s.get('build') or {}).get('dockerfile')
+              if dockerfile != 'Dockerfile.dev':
+                  bad.append(f'{name} builds {dockerfile!r}, not Dockerfile.dev')
+          if bad:
+              print('::error::the hot-reload overlay does not redirect the migration one-shots to the dev images')
+              print('\n'.join(bad))
+              sys.exit(1)
+          print('OK: migrate + search-migrate run the dev images, built from Dockerfile.dev.')
+          PY
+
+      # The chain every script that addresses the running stack assembles —
+      # deploy/deploy.sh, rollback.sh, restore.sh, backup.sh and the
+      # `make prod-config` / `prod-logs` / `prod-down` wrapper — from the single
+      # copy in deploy/lib.sh. Spelled out literally HERE, and only here, so this
+      # step still fails if lib.sh itself is what regresses.
+      #
+      # This is the DEFAULT shape (no external datastores, core+frontend), which
+      # is what an unedited env/production.env.example selects. Every `${VAR:?}`
+      # in it must be satisfied, so dummy values are injected below — that list
+      # IS the contract: adding a new required variable to
+      # docker-compose.prod.yml without adding it here turns this step red, which
+      # is the point.
+      #
+      # `:?` fails on an EMPTY value too, which is why JWT_SECRET, REDIS_PASSWORD
+      # and POSTGRES_PASSWORD must be passed: env/production.env.example
+      # deliberately ships them blank so a copied-but-unedited env file fails the
+      # render instead of the api's boot.
       - name: Validate production overlay compose resolves
         env:
           JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
           REDIS_PASSWORD: ci-dummy-redis-password
+          POSTGRES_PASSWORD: ci-dummy-password
           VIDRA_CORE_TAG: ci-dummy
           VIDRA_USER_TAG: ci-dummy
           VIDRA_SEARCH_TAG: ci-dummy
@@ -147,10 +210,21 @@ jobs:
       # that with `!reset` / `!override` — merge tags that a Compose older than
       # 2.24 IGNORES SILENTLY. The render step above still passes in that case, so
       # assert on the rendered result rather than on a version string.
+      #
+      # EVERY optional profile is enabled for this render, not just core+frontend.
+      # `vidra setup` offers scan/captions/otel as first-class answers and
+      # deploy.sh turns them into `--profile` flags, so a droplet really can be
+      # running clamd and Jaeger — and their base definitions publish on 0.0.0.0.
+      # An assertion that only ever renders core+frontend cannot see that, which
+      # is exactly how those four services stayed open. The allow-list below is
+      # the whole contract: caddy 80/443, plus the two protocols remote peers dial
+      # directly (RTMP ingest 1935, IPFS libp2p swarm 4001). Anything else that
+      # wants a host port has to argue for it here first.
       - name: Production overlay actually closes the internal ports
         env:
           JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
           REDIS_PASSWORD: ci-dummy-redis-password
+          POSTGRES_PASSWORD: ci-dummy-password
           VIDRA_CORE_TAG: ci-dummy
           VIDRA_USER_TAG: ci-dummy
           VIDRA_SEARCH_TAG: ci-dummy
@@ -158,9 +232,15 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.prod.yml \
             --env-file env/production.env.example \
             --profile core --profile frontend config > /tmp/prod-config.yml
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            --env-file env/production.env.example \
+            --profile core --profile frontend --profile scan --profile captions \
+            --profile otel --profile media --profile ipfs \
+            config > /tmp/prod-config-all-profiles.yml
           python3 - <<'PY'
           import sys, yaml
           svcs = yaml.safe_load(open('/tmp/prod-config.yml'))['services']
+          allp = yaml.safe_load(open('/tmp/prod-config-all-profiles.yml'))['services']
           bad = []
           for name in ('postgres', 'redis', 'search'):
               published = svcs[name].get('ports') or []
@@ -171,12 +251,93 @@ jobs:
                   host = p.get('host_ip') if isinstance(p, dict) else p
                   if host not in ('127.0.0.1', '::1'):
                       bad.append(f'{name} publishes on {host!r}, not loopback')
+          # Every service in the fully-enabled render, not a hand-kept list: a new
+          # optional service with a stray publish must fail here on arrival.
+          off_host_ok = {'caddy': {'80', '443'}, 'rtmp': {'1935'}, 'ipfs': {'4001'}}
+          for name in sorted(allp):
+              for p in allp[name].get('ports') or []:
+                  host = p.get('host_ip') if isinstance(p, dict) else None
+                  pub = str(p.get('published')) if isinstance(p, dict) else str(p)
+                  if host in ('127.0.0.1', '::1'):
+                      continue
+                  if pub in off_host_ok.get(name, set()):
+                      continue
+                  bad.append(f'{name} publishes {pub} off-host (host_ip={host!r}) with every profile enabled')
+          # The overlay header's own rule: the logging anchor applies to EVERY
+          # service, because a service that forgets it gets the daemon default,
+          # which is uncapped, on the disk Postgres and the media volume share.
+          for name in sorted(allp):
+              if 'logging' not in allp[name]:
+                  bad.append(f'{name} has no logging cap — it inherits the UNBOUNDED daemon default')
+          # And the header's note 3, asserted the same way and for the same
+          # reason the log-cap check exists: the overlay claimed
+          # `restart: unless-stopped` "everywhere long-lived" while the five
+          # optional-profile services had no policy at all, i.e. the compose
+          # default `no`. One OOM kill or one reboot and clamav/whisper/otel
+          # never come back, silently — uploads stop being scanned and traces
+          # stop being exported with nothing failing on the request path.
+          # The three one-shots are the deliberate inverse: a restarting
+          # migrator is an infinite loop, and api/search wait on it exiting.
+          one_shots = {'prep-volumes', 'migrate', 'search-migrate'}
+          for name in sorted(allp):
+              policy = allp[name].get('restart')
+              if name in one_shots:
+                  if policy not in (None, 'no'):
+                      bad.append(f'{name} is a one-shot but has restart={policy!r} — it would loop forever')
+              elif policy != 'unless-stopped':
+                  bad.append(f'{name} has restart={policy!r}, not unless-stopped — it will not survive a reboot')
           if bad:
               print('::error::the production overlay is NOT closing the internal ports')
               print('(a Compose older than 2.24 ignores !reset/!override silently)')
               print('\n'.join(bad))
               sys.exit(1)
-          print('OK: postgres/redis/search publish nothing; api/frontend are loopback-only.')
+          print(f'OK: postgres/redis/search publish nothing; api/frontend are loopback-only; '
+                f'with scan+captions+otel+media+ipfs enabled, all {len(allp)} services are '
+                f'log-capped, every long-lived one restarts unless-stopped (the {len(one_shots)} '
+                f'one-shots deliberately do not), and only caddy 80/443, rtmp 1935 and '
+                f'ipfs 4001 face the network.')
+          PY
+
+      # The migration one-shots are the services deploy.sh runs with `compose run`
+      # — which has no `--no-build`, unlike the `up -d --no-build` that starts
+      # everything else. So `pull_policy: always` alone cannot stop a
+      # cold droplet from COMPILING Go instead of migrating: the `build:` section
+      # has to be gone from the rendered model, which is what `build: !reset null`
+      # does (and what a Compose older than 2.24 would silently ignore, exactly
+      # like the `ports:` resets asserted above).
+      - name: Production overlay pins both migration one-shots to published images
+        env:
+          JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
+          REDIS_PASSWORD: ci-dummy-redis-password
+          POSTGRES_PASSWORD: ci-dummy-password
+          VIDRA_CORE_TAG: ci-dummy
+          VIDRA_USER_TAG: ci-dummy
+          VIDRA_SEARCH_TAG: ci-dummy
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            --env-file env/production.env.example \
+            --profile core --profile frontend config > /tmp/prod-config.yml
+          python3 - <<'PY'
+          import sys, yaml
+          svcs = yaml.safe_load(open('/tmp/prod-config.yml'))['services']
+          expected = {'migrate': 'vidra-core', 'search-migrate': 'vidra-search'}
+          bad = []
+          for name, repo in expected.items():
+              s = svcs[name]
+              image = s.get('image') or ''
+              if f'/{repo}:' not in image:
+                  bad.append(f'{name} image is {image!r}, not a published {repo} tag')
+              if 'build' in s:
+                  bad.append(f'{name} still carries build: {s["build"]!r} — `compose run` would compile on the host')
+              if s.get('pull_policy') != 'always':
+                  bad.append(f'{name} pull_policy is {s.get("pull_policy")!r}, not always')
+              if 'no-new-privileges:true' not in (s.get('security_opt') or []):
+                  bad.append(f'{name} is missing security_opt no-new-privileges:true')
+          if bad:
+              print('::error::the production overlay does not pin the migration one-shots')
+              print('\n'.join(bad))
+              sys.exit(1)
+          print('OK: migrate + search-migrate pull published images, cannot build, and drop privilege escalation.')
           PY
 
       # Readiness plan step 1: vidra-core's api `environment:` map is an explicit
@@ -217,7 +378,10 @@ jobs:
   # needs in production mode has a path from an env file, through compose
   # substitution, into the container, and past `config.validate()`. That is the
   # exact failure JWT_SECRET had — invisible to `config -q`, invisible to every
-  # sub-repo's CI, visible only at boot.
+  # sub-repo's CI, visible only at boot. Its last step proves the same class of
+  # thing for the schema: that BOTH migration one-shots really do apply their
+  # migrations from the service image (`migrate up`), which `config -q` can only
+  # assume.
   boot:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -305,6 +469,43 @@ jobs:
           echo "::error::the api never became ready" >&2
           docker compose -f docker-compose.yml --env-file env/ci-boot.env --profile core logs --tail=100 api >&2
           exit 1
+
+      # THE MERGE-ORDER CONTRACT, EXECUTED. Both one-shots run `migrate up` on
+      # their own SERVICE image, so a component release whose binary predates the
+      # embedded subcommand does not fail here — it ignores the argv, starts an
+      # API server and never exits (which is why deploy.sh/rollback.sh gate on
+      # MIN_EMBEDDED_MIGRATE_TAG, and why vidra-core + vidra-search must release
+      # BEFORE this meta revision lands; see deploy/README.md "Upgrade notes").
+      # `up api` above already runs `migrate` as a depends_on edge, but nothing
+      # covered `search-migrate` at all, and nothing exercised the repeated-argv
+      # form the runbook documents. This step is the whole contract, run for real
+      # against the throwaway postgres — a hang here fails the job on timeout,
+      # which is the intended signal.
+      - name: Both migration one-shots run from their service images
+        run: |
+          COMPOSE=(docker compose -f docker-compose.yml --env-file env/ci-boot.env --profile core)
+          # The search one-shot owns a build context, so build it here — the api
+          # step above did not touch it. The core one-shot deliberately gets NO
+          # `--build`: it shares the api's `vidra-core-api:local` image and
+          # carries no build section of its own (api is the single producer), so
+          # `run --build migrate` makes Compose try to PULL that local-only tag
+          # and the step dies with "pull access denied". Verified, not assumed.
+          "${COMPOSE[@]}" build search-migrate
+          # Idempotent re-run for core (the api's depends_on edge already applied
+          # it); first and only run for search.
+          "${COMPOSE[@]}" run --rm migrate
+          "${COMPOSE[@]}" run --rm search-migrate
+          # `compose run` REPLACES the service command, so the subcommand is
+          # repeated — the exact shape deploy/README.md's recovery steps use.
+          # Both exit non-zero on a dirty ledger, so this also asserts clean.
+          "${COMPOSE[@]}" run --rm migrate        migrate version
+          "${COMPOSE[@]}" run --rm search-migrate migrate version
+          # Independent second opinion: the two ledger tables the binaries carry
+          # compiled-in (no x-migrations-table URL param anywhere) really exist.
+          "${COMPOSE[@]}" exec -T postgres psql -U vidra -d vidra \
+            -c 'SELECT version, dirty FROM schema_migrations;' \
+            -c 'SELECT version, dirty FROM vidra_search_migrations;'
+          echo "OK: core + search schemas applied by the service images themselves."
 
       - name: Tear down
         if: always()

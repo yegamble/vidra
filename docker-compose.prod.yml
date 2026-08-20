@@ -16,12 +16,17 @@
 # search integration silently degrades to local SQL. See deploy/README.md.
 #
 # What this file changes versus the dev stack, and why:
-#   1. Nothing but Caddy is reachable from off-host. postgres/redis/search lose
-#      their published ports entirely; api and frontend publish on 127.0.0.1
-#      only. This is the ONLY firewall that actually works: Docker installs its
-#      DOCKER-USER iptables rules AHEAD of ufw, so a host firewall does not
-#      filter published container ports. (The same technique is already used for
-#      the IPFS RPC ports in vidra-core/docker-compose.yml.)
+#   1. Nothing but Caddy is reachable from off-host. postgres/redis/search and
+#      the optional-profile services (clamav, whisper, otel-collector, jaeger)
+#      lose their published ports entirely; api and frontend publish on
+#      127.0.0.1 only. This is the ONLY firewall that actually works: Docker
+#      installs its DOCKER-USER iptables rules AHEAD of ufw, so a host firewall
+#      does not filter published container ports. (The same technique is already
+#      used for the IPFS RPC ports in vidra-core/docker-compose.yml.) The two
+#      DELIBERATE exceptions are the RTMP ingest port 1935 (`media` profile) and
+#      the IPFS libp2p swarm port 4001 (`ipfs` profile): both are protocols
+#      remote peers dial directly, so they stay published and are gated in the
+#      cloud firewall instead.
 #   2. Images are PULLED from GHCR by immutable tag instead of built on the box.
 #   3. restart: unless-stopped everywhere long-lived, so a reboot returns the
 #      stack unattended. Requires `systemctl enable --now docker` on the host.
@@ -100,6 +105,16 @@ services:
       - "effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-6GB}"
       - "-c"
       - "max_connections=${POSTGRES_MAX_CONNECTIONS:-100}"
+    environment:
+      # Same assertion pattern as the api's JWT_SECRET below. The base file
+      # deliberately declares `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vidra}`
+      # (vidra-core/docker-compose.yml) because dev flows render with no env
+      # file at all — but left alone in production, an env file that omits or
+      # blanks the key silently ships the dev default `vidra` as the database
+      # password. `:?` fails the RENDER on an empty value as well as an unset
+      # one, and it binds here — in this overlay only — so no dev flow ever
+      # sees it.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in production (openssl rand -hex 32 - hex not base64, because the value is substituted into a postgres:// DSN); on a host with an EXISTING database volume set the database's CURRENT password - the value only initializes a fresh volume, see deploy/README.md}
 
   redis:
     # `!reset`, not `[]` — see the postgres note above.
@@ -136,22 +151,59 @@ services:
       timeout: 5s
       retries: 10
 
-  # Both migration one-shots keep their base definition (image, path, database
-  # arg); they only need capped logs. deploy/deploy.sh runs them as discrete,
-  # exit-code-gated `run --rm` steps BEFORE `up -d`, so a failed migration never
-  # fans out into a half-started stack.
+  # Both migration one-shots run the RELEASE image of the service whose schema
+  # they own — the migrations are compiled into those binaries, so `migrate up`
+  # is a command on the api / search image rather than a third-party CLI. The
+  # base file declares `build:` for them (the dev definition), so they need the
+  # same image + `pull_policy: always` pin as api/search/frontend below, PLUS a
+  # `build: !reset null` the long-lived services do not need:
+  #
+  # deploy/deploy.sh runs these two as discrete, exit-code-gated `run --rm` steps
+  # BEFORE `up -d --no-build` — and `docker compose run` has no `--no-build` flag
+  # of its own. With a `build:` section still merged in from the base file, a cold
+  # image cache makes `run` COMPILE (`pull_policy` is not consulted for a service
+  # Compose considers buildable), which on a droplet means an OOM instead of a
+  # migration, from a source checkout production is not even guaranteed to have.
+  # `!reset` deletes the inherited mapping outright — a plain `build: null` would
+  # be merged, not replaced. Needs Compose >= 2.24, same floor as the `ports:`
+  # resets above; `deploy/{deploy,rollback,restore}.sh` refuse to run below it.
+  #
+  # Verify after any change to this block (both must hold):
+  #   make prod-config          # or the meta-ci "production overlay" step
+  #   docker compose -f docker-compose.yml -f docker-compose.prod.yml … config \
+  #     | python3 -c '…'        # migrate/search-migrate: image set, build absent
+  #
+  # The tags come from the SAME variables as the services, which is what keeps
+  # schema and code versions identical. Tag FLOOR: an image published before the
+  # embedded `migrate` subcommand existed ignores the argv and boots an API
+  # SERVER here, so the one-shot never exits and the deploy hangs — the
+  # MIN_EMBEDDED_MIGRATE_TAG gate in deploy/{deploy,rollback,restore}.sh refuses
+  # those tags before anything runs.
   migrate:
+    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    pull_policy: always
+    build: !reset null
     logging: *logging
+    # Hardening parity with api/search/frontend: this one-shot connects to the
+    # production database with the same image and privileges the api has, so it
+    # gets the same setuid/setgid escalation block.
+    security_opt:
+      - "no-new-privileges:true"
 
   search-migrate:
+    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-search:${VIDRA_SEARCH_TAG:?VIDRA_SEARCH_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    pull_policy: always
+    build: !reset null
     logging: *logging
+    security_opt:
+      - "no-new-privileges:true"
 
   api:
     # Pull the release image instead of building on the droplet. The base file
     # still declares `build:` (it is the dev definition); `pull_policy: always`
     # plus `up -d --no-build` guarantees the registry image wins and the droplet
     # never compiles Go or runs `next build`.
-    image: ghcr.io/yegamble/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     # Loopback publish only — Caddy reaches the api over the compose network as
     # `api:8080`, so this mapping exists purely for local curl/probes on the box
@@ -217,7 +269,7 @@ services:
       start_period: 30s
 
   frontend:
-    image: ghcr.io/yegamble/vidra-user:${VIDRA_USER_TAG:?VIDRA_USER_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-user:${VIDRA_USER_TAG:?VIDRA_USER_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     # !override — replaces the base 0.0.0.0:3000 publish, see the api note.
     ports: !override
@@ -234,7 +286,7 @@ services:
       start_period: 20s
 
   search:
-    image: ghcr.io/yegamble/vidra-search:${VIDRA_SEARCH_TAG:?VIDRA_SEARCH_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-search:${VIDRA_SEARCH_TAG:?VIDRA_SEARCH_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     # Internal service: HMAC-authenticated, called only by vidra-core, never by
     # a browser. The base file publishes SEARCH_HTTP_PORT for local inspection;
@@ -256,6 +308,73 @@ services:
       - search_models:/var/lib/vidra-search/models
 
   # ---------------------------------------------------------------------------
+  # OPTIONAL-PROFILE SERVICES (base definitions: vidra-core/docker-compose.yml).
+  #
+  # None of these start unless their profile is enabled — `vidra setup` writes
+  # the answers into VIDRA_COMPOSE_PROFILES / EXTRA_COMPOSE_PROFILES and
+  # deploy/{deploy,rollback,restore,backup}.sh append every entry as `--profile`.
+  # That is precisely why they belong in this overlay: the moment an operator
+  # says yes to virus scanning, captions or tracing, the base file's publishes
+  # go live on 0.0.0.0 and a host firewall does NOT filter them (DOCKER-USER
+  # sits ahead of ufw — overlay header note 1). clamd on :3310 takes unauthenticated
+  # commands, and the Jaeger UI on :16686 is an unauthenticated read of every
+  # request the api traced.
+  #
+  # Removing the publish costs nothing operationally: the api reaches all of them
+  # over the compose network by SERVICE NAME, which is what the base file's own
+  # documented wiring already uses — CLAMAV_ADDR=clamav:3310,
+  # WHISPER_ENDPOINT=http://whisper:8080,
+  # OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317 — and the collector forwards
+  # to `jaeger` the same way. Nothing here is ever addressed as localhost:<port>.
+  # To read the Jaeger UI from a workstation, add a loopback publish in a local,
+  # untracked overlay and `ssh -L 16686:127.0.0.1:16686 <droplet>`; do not undo
+  # the reset here.
+  #
+  # `!reset []`, not `[]` — Compose MERGES sequence fields across a -f chain, so
+  # a plain empty list appends nothing and the base publish survives. See the
+  # postgres note above; needs Compose >= 2.24.
+  #
+  # The `logging:` lines are not optional either: a service that omits the anchor
+  # inherits the daemon default, which is UNBOUNDED (header note 4). clamd's
+  # freshclam chatter and the collector's per-batch logs are the two most likely
+  # things on the box to fill a disk that also holds Postgres.
+  # `restart: unless-stopped` for the same reason as postgres/redis/api: header
+  # note 3 promises it "everywhere long-lived", and every one of these five IS
+  # long-lived. Without it they are the compose default `no` — one OOM kill or
+  # one host reboot and they never come back, while the api that depends on them
+  # restarts perfectly. The failure is silent by construction: uploads stop being
+  # scanned, captions stop being generated and traces stop being exported, and
+  # none of that surfaces as an error on the request path.
+  clamav:
+    ports: !reset []
+    restart: unless-stopped
+    logging: *logging
+
+  whisper:
+    ports: !reset []
+    restart: unless-stopped
+    logging: *logging
+
+  otel-collector:
+    ports: !reset []
+    restart: unless-stopped
+    logging: *logging
+
+  jaeger:
+    ports: !reset []
+    restart: unless-stopped
+    logging: *logging
+
+  # rtmp keeps its publish: 1935 is the ingest port streamers push to, so it is
+  # deliberately internet-facing (open it in the cloud firewall) — same standing
+  # exception as the IPFS swarm port below. The log cap and the restart policy
+  # are added; a live-ingest server that stays down after a reboot means every
+  # streamer's push is refused with nothing in the app logs to say why.
+  rtmp:
+    restart: unless-stopped
+    logging: *logging
+
+  # ---------------------------------------------------------------------------
   # Public IPFS mirror node (base definition: vidra-core/docker-compose.yml).
   # Not started by default: it lives behind the "ipfs" profile — set
   # EXTRA_COMPOSE_PROFILES=ipfs in the env file (deploy.sh appends it) or pass
@@ -271,7 +390,17 @@ services:
     mem_limit: ${IPFS_MEM_LIMIT:-1g}
 
   caddy:
-    image: caddy:2-alpine
+    # PINNED, not `caddy:2-alpine`. The floating tag moves under the deploy:
+    # the TLS terminator is the one container whose failure is the whole site,
+    # and it is also the only one whose config this repo hand-writes, so a
+    # silent minor bump is exactly the change that must not arrive unannounced.
+    # 2.11.4 is what `caddy:2-alpine` resolved to when this was pinned
+    # (digest sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648).
+    # Bump deliberately, and bump .github/workflows/meta-ci.yml's `caddy
+    # validate` step to the SAME tag in the same commit — otherwise CI is
+    # validating deploy/Caddyfile against a different parser than production
+    # runs.
+    image: caddy:2.11.4-alpine
     # No profile: this file is only ever applied to a production deploy, and the
     # TLS terminator must come up with every one of them.
     restart: unless-stopped
@@ -295,7 +424,20 @@ services:
         condition: service_started
         required: false
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The GENERATED file, not the committed deploy/Caddyfile template.
+      # `vidra setup` renders deploy/Caddyfile.local from the template + the env
+      # file (site address from PUBLIC_BASE_URL, ACME email and TLS mode at the
+      # `# vidra:global-options` / `# vidra:tls` markers), and it is gitignored
+      # so an operator's real domain never becomes a commit.
+      #
+      # It MUST exist before `up -d`: Docker creates a missing bind-mount source
+      # as an empty DIRECTORY, and Caddy then crash-loops on a config path that
+      # is not a file — the whole site down with every app container healthy.
+      # deploy/{deploy,rollback,restore}.sh refuse to start without it.
+      #
+      # Editing it does NOT recreate this container (same image, same mount), so
+      # deploy.sh follows `up -d` with an explicit `caddy reload`.
+      - ./deploy/Caddyfile.local:/etc/caddy/Caddyfile:ro
       # ACME account key + issued certificates. MUST be a named volume: an
       # ephemeral /data means a fresh certificate order on every `up -d`, and
       # Let's Encrypt's duplicate-certificate limit (5/week) is reached in a

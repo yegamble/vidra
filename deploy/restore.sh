@@ -20,6 +20,11 @@
 #
 # Run this at least once against a real dump BEFORE you need it. Neither the 101
 # down-migrations nor this path have ever been exercised end to end.
+#
+# It REFUSES a core/search tag below MIN_EMBEDDED_MIGRATE_TAG (set below): those
+# images have no embedded `migrate` subcommand, so the two migrators run after the
+# drop would boot API servers that never exit, hanging the restore with the
+# database already replaced.
 
 set -euo pipefail
 
@@ -30,6 +35,20 @@ ENV_FILE="${ENV_FILE:-env/production.env}"
 READY_TIMEOUT="${READY_TIMEOUT:-120}"
 JOBS="${RESTORE_JOBS:-4}"
 
+# The FIRST release whose vidra-core / vidra-search images carry the embedded
+# `migrate` subcommand. ADJUST THIS AT RELEASE TIME — set it to the tag actually
+# cut with the embedded migrator, and never lower it afterwards.
+#
+# WHY IT IS A HARD GATE, HERE OF ALL PLACES: this script drops the database and
+# then runs BOTH migration one-shots to bring the restored dump up to HEAD.
+# docker-compose.prod.yml runs them from the SERVICE image, whose compose command
+# is `migrate up`, and an OLDER image's main() ignores argv completely and starts
+# the API SERVER instead. The one-shot never exits, so the restore HANGS after the
+# drop — with the archive already restored but the schema unverified and the site
+# still down. Refusing the tag up front is the readable outcome.
+# Kept identical in deploy.sh and rollback.sh.
+MIN_EMBEDDED_MIGRATE_TAG="v0.2.0"
+
 log() { printf '[restore] %s\n' "$*"; }
 die() { printf '[restore] ERROR: %s\n' "$*" >&2; exit 1; }
 
@@ -38,7 +57,7 @@ DUMP=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --yes|-y) FORCE=1 ;;
-    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *)  DUMP="$1" ;;
   esac
@@ -71,30 +90,106 @@ require_compose_version() {
 }
 require_compose_version
 
-# See the identical helper in backup.sh: read, never source, an operator-edited
-# secrets file.
-env_get() {
-  local key="$1" def="${2-}" val
-  val="$(printenv "$key" 2>/dev/null || true)"
-  if [ -z "$val" ]; then
-    val="$(sed -n "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//p" "$ENV_FILE" | tail -n1 | tr -d '\r')"
-    case "$val" in
-      \"*\") val="${val%\"}"; val="${val#\"}" ;;
-      \'*\') val="${val%\'}"; val="${val#\'}" ;;
-    esac
-  fi
-  printf '%s' "${val:-$def}"
+# semver_ge <tag> <floor> — numeric MAJOR.MINOR.PATCH comparison of two vX.Y.Z
+# tags. Exit 0 when <tag> >= <floor>, 1 when it is older, and 2 when <tag> is not
+# semver-shaped at all (so the caller can say "cannot check" instead of guessing).
+# A prerelease/build suffix is ignored on purpose: v0.2.0-rc1 is built from the
+# v0.2.0 code and carries the same migrator, so it counts as v0.2.0 here.
+# Kept identical in deploy.sh and rollback.sh.
+semver_ge() {
+  local a="${1#v}" b="${2#v}" i ai bi
+  a="${a%%-*}"; a="${a%%+*}"
+  b="${b%%-*}"; b="${b%%+*}"
+  local -a A B
+  IFS=. read -r -a A <<<"$a"
+  IFS=. read -r -a B <<<"$b"
+  [ "${#A[@]}" -eq 3 ] || return 2
+  for i in 0 1 2; do
+    case "${A[i]}" in ''|*[!0-9]*) return 2 ;; esac
+    ai=$((10#${A[i]}))
+    bi=$((10#${B[i]:-0}))
+    if [ "$ai" -gt "$bi" ]; then return 0; fi
+    if [ "$ai" -lt "$bi" ]; then return 1; fi
+  done
+  return 0
 }
+
+# Refuse a tag whose image predates the embedded `migrate` subcommand — see
+# MIN_EMBEDDED_MIGRATE_TAG above for what such an image does to a restore.
+# An empty tag is left alone: the compose render reports unset image tags with a
+# better message than this can (`${VIDRA_*_TAG:?}`).
+# Kept identical in deploy.sh and rollback.sh.
+require_embedded_migrate_tag() {
+  local what="$1" tag="$2" rc=0
+  [ -n "$tag" ] || return 0
+  semver_ge "$tag" "$MIN_EMBEDDED_MIGRATE_TAG" || rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    2) die "$what=$tag is not a vMAJOR.MINOR.PATCH tag, so it cannot be checked against the ${MIN_EMBEDDED_MIGRATE_TAG} floor. Releases are semver tags (see 'Cutting a release' in deploy/README.md). An image built before the embedded 'migrate' subcommand ignores the one-shots' 'migrate up' command and boots an API server that never exits, hanging this run with no error. Retag the release, or probe the image by hand and WATCH the output: 'docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file $ENV_FILE run --rm migrate migrate version' prints 'version=N dirty=false' on an image that has the subcommand, and starts an HTTP server you have to interrupt on one that does not" ;;
+  esac
+  die "$what=$tag is older than $MIN_EMBEDDED_MIGRATE_TAG, the first release whose image carries the embedded 'migrate' subcommand. docker-compose.prod.yml runs the migration one-shots from the SERVICE image with the command 'migrate up'; an older binary ignores those arguments and starts the API server instead, so the one-shot never exits and this run would HANG after the database has already been dropped and reloaded. Restore with $MIN_EMBEDDED_MIGRATE_TAG or newer pinned in $ENV_FILE. Going further back means also checking out that release's compose files, which drove the golang-migrate CLI container instead."
+}
+
+# env_get, is_true and the compose chain live in deploy/lib.sh — every script
+# that addresses the running stack must assemble the SAME project. Sourced here,
+# after log/die and ENV_FILE, which is the contract lib.sh documents.
+# shellcheck source=deploy/lib.sh
+. "$REPO_ROOT/deploy/lib.sh"
 
 PGUSER="$(env_get POSTGRES_USER vidra)"
 PGDB="$(env_get POSTGRES_DB vidra)"
 HTTP_PORT="$(env_get HTTP_PORT 8080)"
 
-COMPOSE=(docker compose
-  -f docker-compose.yml
-  -f docker-compose.prod.yml
-  --env-file "$ENV_FILE"
-  --profile core --profile frontend)
+# Before the confirmation prompt, and long before the drop: the two migrators run
+# at the far end of this script, and a tag below the floor would hang there with
+# the database already gone. These are the same pins the restored stack comes
+# back up on, so gating them here also gates what `up -d` starts at the end.
+require_embedded_migrate_tag VIDRA_CORE_TAG   "$(env_get VIDRA_CORE_TAG '')"
+require_embedded_migrate_tag VIDRA_SEARCH_TAG "$(env_get VIDRA_SEARCH_TAG '')"
+
+# Sets COMPOSE, EXTERNAL_POSTGRES and EXTERNAL_REDIS.
+vidra_compose_chain
+
+# This whole script is `docker exec` into the BUNDLED postgres container:
+# dropdb, createdb, pg_restore. With VIDRA_EXTERNAL_POSTGRES=true that container
+# does not exist, and every step below would fail one after another with
+# container-not-found noise instead of one sentence. Refuse before the
+# confirmation prompt, not after it. Restoring a managed database is the
+# provider's job and deliberately NOT reimplemented here.
+if [ "$EXTERNAL_POSTGRES" -eq 1 ]; then
+  die "VIDRA_EXTERNAL_POSTGRES=true in $ENV_FILE — external Postgres: use your provider's backup/restore (point-in-time recovery or a snapshot), then bring the stack back with ./deploy/deploy.sh. This script only knows how to restore into the bundled postgres container, which docker-compose.external-postgres.yml keeps stopped. Nothing was changed."
+fi
+
+# docker-compose.prod.yml mounts deploy/Caddyfile.local — generated by
+# `vidra setup`, gitignored, and NOT the committed deploy/Caddyfile template.
+# The file must exist BEFORE `up -d`: a bind-mount source that is missing is
+# created by Docker as an empty DIRECTORY, and Caddy then crash-loops on a
+# config path that is not a file, i.e. the whole site is down with the app
+# containers perfectly healthy. Refusing up front is the readable outcome.
+#
+# The dirty-template branch is the legacy-install case: a host set up before
+# this layout has its real domain hand-edited into deploy/Caddyfile itself.
+# Kept identical in deploy.sh, rollback.sh and restore.sh.
+caddyfile_template_is_dirty() {
+  command -v git >/dev/null 2>&1 || return 1
+  git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1 || return 1
+  [ -n "$(git -C "$REPO_ROOT" status --porcelain -- deploy/Caddyfile 2>/dev/null)" ]
+}
+require_caddyfile_local() {
+  # An explicit `if`, not `[ -f … ] && return 0`: under `set -e` a failing
+  # AND-list is itself a failing command and would kill the script here.
+  if [ -f "$REPO_ROOT/deploy/Caddyfile.local" ]; then
+    return 0
+  fi
+  if caddyfile_template_is_dirty; then
+    die "deploy/Caddyfile.local is missing and deploy/Caddyfile has UNCOMMITTED edits — this looks like an install from before the managed-Caddy layout, with a real domain hand-written into the template. docker-compose.prod.yml now mounts deploy/Caddyfile.local only. Two ways forward:
+  1. keep the hand edits verbatim:  cp deploy/Caddyfile deploy/Caddyfile.local
+  2. regenerate from the template:  vidra setup
+Option 1 changes nothing about how the site is served, which is what you want mid-incident."
+  fi
+  die "deploy/Caddyfile.local is missing. docker-compose.prod.yml mounts it (not the committed deploy/Caddyfile template) into the caddy container, and a missing bind-mount source is created as a DIRECTORY, which crash-loops Caddy. Generate it with 'vidra setup'."
+}
+require_caddyfile_local
 
 # --- CONFIRMATION --------------------------------------------------------------
 # Two accepted forms, because the two callers are different: a human at a
@@ -173,6 +268,11 @@ docker exec -i "$PG_CID" pg_restore -U "$PGUSER" -d "$PGDB" -j "$JOBS" "$CONTAIN
 # both migrators brings it to HEAD if the dump is older than the deployed code,
 # and is a no-op otherwise. If a migrator reports "dirty", follow the
 # "Migration failed mid-deploy" runbook section in deploy/README.md.
+#
+# Each call passes NO command: the compose `command:` is `migrate up` on that
+# service's own release image, whose migrations are compiled in (no CLI
+# container, no bind-mounted migrations directory). `set -e` is the gate — a
+# non-zero exit from either migrator aborts before api/frontend are started.
 log "running core migrations"
 "${COMPOSE[@]}" run --rm migrate
 log "running search migrations"
