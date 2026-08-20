@@ -110,17 +110,46 @@ jobs:
       - name: Validate full-stack compose resolves
         run: docker compose --profile core config -q
 
-      # The explicit -f chain disables override auto-loading, so pass it explicitly
-      # exactly as `make dev-hot` (DEV_HOT_COMPOSE) does.
-      - name: Validate hot-reload overlay compose resolves
-        run: docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.dev.yml --profile core config -q
-
-      # Two steps below parse a rendered compose model with PyYAML. It is not
+      # Three steps below parse a rendered compose model with PyYAML. It is not
       # guaranteed on the runner image, and a missing import would surface as a
       # traceback rather than as the assertion failing — so install it once, here,
       # before first use.
       - name: Ensure PyYAML is available
         run: python3 -c 'import yaml' 2>/dev/null || pip3 install --quiet pyyaml
+
+      # The explicit -f chain disables override auto-loading, so pass it explicitly
+      # exactly as `make dev-hot` (DEV_HOT_COMPOSE) does.
+      #
+      # `config` alone only proves the chain PARSES. The thing that rots silently
+      # is which image each one-shot ends up on: the base file's search-migrate
+      # builds the multi-stage RELEASE Dockerfile, so a dev overlay that stopped
+      # redirecting it would still render fine while `make dev-hot` recompiled a
+      # production image on every run and migrated the dev database with a binary
+      # that is not the one being hot-reloaded. Same for `migrate`, which inherits
+      # vidra-core's `vidra-core-api:local` when the overlay misses it. Assert the
+      # rendered model instead, exactly as the prod one-shot step below does.
+      - name: Validate hot-reload overlay compose resolves
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.dev.yml \
+            --profile core config > /tmp/dev-config.yml
+          python3 - <<'PY'
+          import sys, yaml
+          svcs = yaml.safe_load(open('/tmp/dev-config.yml'))['services']
+          expected = {'migrate': 'vidra-api-dev', 'search-migrate': 'vidra-search-dev'}
+          bad = []
+          for name, image in expected.items():
+              s = svcs[name]
+              if s.get('image') != image:
+                  bad.append(f'{name} image is {s.get("image")!r}, not {image!r}')
+              dockerfile = (s.get('build') or {}).get('dockerfile')
+              if dockerfile != 'Dockerfile.dev':
+                  bad.append(f'{name} builds {dockerfile!r}, not Dockerfile.dev')
+          if bad:
+              print('::error::the hot-reload overlay does not redirect the migration one-shots to the dev images')
+              print('\n'.join(bad))
+              sys.exit(1)
+          print('OK: migrate + search-migrate run the dev images, built from Dockerfile.dev.')
+          PY
 
       # The chain deploy/deploy.sh, deploy/rollback.sh, deploy/restore.sh and
       # `make prod-config` all use. Every `${VAR:?}` in it must be satisfied, so
@@ -182,9 +211,9 @@ jobs:
           print('OK: postgres/redis/search publish nothing; api/frontend are loopback-only.')
           PY
 
-      # The migration one-shots are the ONLY services whose base definition is a
-      # build with no published image, and deploy.sh runs them with `compose run`
-      # — which has no `--no-build`. So `pull_policy: always` alone cannot stop a
+      # The migration one-shots are the services deploy.sh runs with `compose run`
+      # — which has no `--no-build`, unlike the `up -d --no-build` that starts
+      # everything else. So `pull_policy: always` alone cannot stop a
       # cold droplet from COMPILING Go instead of migrating: the `build:` section
       # has to be gone from the rendered model, which is what `build: !reset null`
       # does (and what a Compose older than 2.24 would silently ignore, exactly
