@@ -459,9 +459,14 @@ There are **two independent ledgers**:
 Either can go dirty without the other. Recovery, for whichever failed:
 
 ```bash
-# 1. Find out where it stopped. Either migrator reports its own ledger without
-#    changing anything — note the REPEATED word: `docker compose run <service>
-#    <args>` REPLACES the service's command, so the subcommand must be restated.
+# 1. Find out where it stopped. Either migrator reports its own ledger and runs
+#    no migration SQL. It is not quite read-only: on a database that has NEVER
+#    been migrated, opening the migrator CREATEs the empty ledger table first
+#    (golang-migrate's ensureVersionTable, plus a brief advisory lock). Harmless
+#    here — you are in this runbook because a ledger already exists — but do not
+#    reach for it to probe a database you did not mean to touch.
+#    Note the REPEATED word: `docker compose run <service> <args>` REPLACES the
+#    service's command, so the subcommand must be restated.
 $COMPOSE run --rm migrate        migrate version   # core   -> version=42 dirty=true
 $COMPOSE run --rm search-migrate migrate version   # search -> version=… dirty=…
 #    Straight from the ledger, if you are already in psql:
