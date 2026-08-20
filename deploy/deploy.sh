@@ -431,22 +431,38 @@ require_embedded_migrate_tag VIDRA_CORE_TAG   "$(env_get VIDRA_CORE_TAG '')"
 require_embedded_migrate_tag VIDRA_SEARCH_TAG "$(env_get VIDRA_SEARCH_TAG '')"
 log "compose $(docker compose version --short), VIDRA_TLS_MODE=$TLS_MODE serving $(url_host "$(env_get PUBLIC_BASE_URL '')"), migrator tags >= $MIN_EMBEDDED_MIGRATE_TAG"
 
-for repo in vidra-core vidra-search vidra-user; do
-  [ -e "$repo" ] || continue
-  [ -d "$repo/.git" ] || die "$repo exists but is not a git checkout"
-  case "$repo" in
-    vidra-core)   tag="$(env_get VIDRA_CORE_TAG '?')" ;;
-    vidra-search) tag="$(env_get VIDRA_SEARCH_TAG '?')" ;;
-    vidra-user)   tag="$(env_get VIDRA_USER_TAG '?')" ;;
-  esac
-  [ "$tag" != "?" ] || continue
-  log "syncing $repo to $tag"
-  # --force: without it git refuses to move a tag the host already has, so a
-  # tag re-pointed upstream (e.g. after a history rewrite) would silently pin
-  # the STALE object forever. Kept identical in rollback.sh.
-  git -C "$repo" fetch --tags --force --quiet || die "git fetch failed in $repo"
-  git -C "$repo" checkout --detach --quiet "$tag" || die "failed to checkout tag $tag in $repo"
-done
+# THE CHECKOUT SYNC, AND THE ONE TREE THAT HAS NOTHING TO SYNC.
+#
+# An unpacked release bundle carries vidra-core/docker-compose.yml and the files
+# the model bind-mounts, at the same relative paths a checkout has them — and no
+# .git anywhere, on purpose. Every file in it came out of one tarball built from
+# one tag, so there is no drift for this loop to correct and no remote to fetch
+# from; the images are pinned by the VIDRA_*_TAG values in the env file exactly
+# as they are on a checkout. Running the loop would just die on the missing .git.
+#
+# A git checkout keeps today's behaviour to the letter. A tree that is NEITHER
+# still reaches the refusal below: an unidentifiable copy of a deployment tree is
+# not something to deploy from silently.
+if is_bundle_tree "$REPO_ROOT"; then
+  log "vidra-bundle.manifest is present and vidra-core is not a git checkout, so this tree was UNPACKED from the $(bundle_manifest_get "$REPO_ROOT" tag '(unknown)') bundle rather than cloned. Skipping the component checkout sync: there is nothing here to fetch or move, and the images are pinned by the VIDRA_*_TAG values in $ENV_FILE just as they are on a checkout."
+else
+  for repo in vidra-core vidra-search vidra-user; do
+    [ -e "$repo" ] || continue
+    [ -d "$repo/.git" ] || die "$repo exists but is not a git checkout"
+    case "$repo" in
+      vidra-core)   tag="$(env_get VIDRA_CORE_TAG '?')" ;;
+      vidra-search) tag="$(env_get VIDRA_SEARCH_TAG '?')" ;;
+      vidra-user)   tag="$(env_get VIDRA_USER_TAG '?')" ;;
+    esac
+    [ "$tag" != "?" ] || continue
+    log "syncing $repo to $tag"
+    # --force: without it git refuses to move a tag the host already has, so a
+    # tag re-pointed upstream (e.g. after a history rewrite) would silently pin
+    # the STALE object forever. Kept identical in rollback.sh.
+    git -C "$repo" fetch --tags --force --quiet || die "git fetch failed in $repo"
+    git -C "$repo" checkout --detach --quiet "$tag" || die "failed to checkout tag $tag in $repo"
+  done
+fi
 
 # The render check catches every `${VAR:?}` reference in the chain BEFORE
 # anything is touched. Those are, exhaustively: JWT_SECRET (asserted by
@@ -533,9 +549,29 @@ else
   # image (and therefore its embedded copy of these files) was built from, so the
   # two agree by construction. This is an independent second opinion on purpose:
   # reading it out of the migrator would only prove the migrator agrees with itself.
-  # shellcheck disable=SC2012  # ls is deliberate: filenames are numeric by construction, and sort -n works correctly.
-  expected_version="$(ls -1 vidra-core/migrations/*.up.sql 2>/dev/null | awk -F/ '{print $NF}' | awk -F_ '{print $1}' | sort -n | tail -1)"
-  [ -n "$expected_version" ] || die "failed to determine expected core migration version"
+  #
+  # A BUNDLE HAS NO MIGRATIONS DIRECTORY — it ships neither the SQL nor a git
+  # checkout, because the migrations are compiled into the images and shipping a
+  # second copy of them would invite exactly the drift this check exists to catch.
+  # So the value comes from vidra-bundle.manifest, where make-bundle.sh wrote it
+  # using this same pipeline against the core checkout the release was built
+  # from. It is still an independent opinion: it was computed from the FILENAMES
+  # at build time, not read out of the binary that is about to claim a version.
+  # The zero-padding is preserved on both paths and `10#` is applied to both, so
+  # `0104` and `0104` compare as 104 either way.
+  if is_bundle_tree "$REPO_ROOT"; then
+    expected_version="$(bundle_manifest_get "$REPO_ROOT" core_schema_version '')"
+    [ -n "$expected_version" ] \
+      || die "vidra-bundle.manifest has no core_schema_version, so the migrator's ledger cannot be checked against anything. The manifest is generated by deploy/make-bundle.sh and is not meant to be edited; re-download the $(bundle_manifest_get "$REPO_ROOT" tag 'release') bundle rather than hand-writing a value this check would then simply agree with."
+    case "$expected_version" in
+      ''|*[!0-9]*) die "vidra-bundle.manifest's core_schema_version is '$expected_version', which is not a migration number. Re-download the bundle." ;;
+    esac
+    log "expected core schema $expected_version (from vidra-bundle.manifest — this tree has no migrations directory)"
+  else
+    # shellcheck disable=SC2012  # ls is deliberate: filenames are numeric by construction, and sort -n works correctly.
+    expected_version="$(ls -1 vidra-core/migrations/*.up.sql 2>/dev/null | awk -F/ '{print $NF}' | awk -F_ '{print $1}' | sort -n | tail -1)"
+    [ -n "$expected_version" ] || die "failed to determine expected core migration version"
+  fi
   expected_version_int="$((10#$expected_version))"
 
   ledger="$(docker exec -i "$PG_CID" psql -U "$PGUSER" -d "$PGDB" -t -c "SELECT version, dirty FROM schema_migrations LIMIT 1;" 2>/dev/null | tr -d ' ')"

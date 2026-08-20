@@ -28,6 +28,8 @@
 #   is_true VALUE          exit 0 for the spellings of "yes" an operator types
 #   edge_profile           prints `edge` unless VIDRA_TLS_MODE=external
 #   vidra_compose_chain    sets COMPOSE=(...), EXTERNAL_POSTGRES, EXTERNAL_REDIS
+#   is_bundle_tree ROOT    exit 0 when ROOT was unpacked, not cloned
+#   bundle_manifest_get ROOT KEY [DEFAULT]   one value from vidra-bundle.manifest
 #   env_snapshot FILE ROOT keeps 10 timestamped generations of an env file
 
 # Reads KEY from the env file WITHOUT sourcing it — that file is operator-edited
@@ -149,6 +151,40 @@ vidra_compose_chain() {
   if [ "$EXTERNAL_POSTGRES" -eq 1 ] || [ "$EXTERNAL_REDIS" -eq 1 ]; then
     log "external datastores: postgres=${EXTERNAL_POSTGRES} redis=${EXTERNAL_REDIS} (the bundled service is disabled by its overlay)"
   fi
+}
+
+# is_bundle_tree ROOT — exit 0 when ROOT was UNPACKED from a release bundle
+# rather than cloned, and 1 when it is an ordinary git checkout.
+#
+# TWO CONDITIONS, AND BOTH MATTER. `vidra-bundle.manifest` is written only by
+# deploy/make-bundle.sh and is gitignored, so its presence says "unpacked". But
+# an operator may perfectly well `git clone` this repo INTO a directory that
+# still has an old manifest lying around, or unpack a bundle on top of a
+# checkout — and in that tree the component checkouts really are there, with
+# their tags and their migrations, so the git path is both available and better.
+# Requiring vidra-core/.git to be ABSENT makes the answer describe the tree that
+# actually exists instead of an artefact of how it was made.
+#
+# Neither marker — no manifest and no vidra-core/.git, i.e. somebody copied a
+# directory tree by hand — is deliberately NOT a bundle: the callers then reach
+# their original "exists but is not a git checkout" refusal, which is still the
+# right answer for a tree nobody can identify.
+is_bundle_tree() {
+  [ -f "$1/vidra-bundle.manifest" ] && [ ! -d "$1/vidra-core/.git" ]
+}
+
+# bundle_manifest_get ROOT KEY [DEFAULT] — one value out of the manifest.
+#
+# Read the same way env_get reads the env file, and for a weaker version of the
+# same reason: the file is `key=value` lines with comments, it is not shell, and
+# sourcing a file that arrived inside a downloaded tarball to extract four
+# strings would be an extraordinary way to execute somebody else's code. Unlike
+# env_get there is no process-env precedence — these values describe the artefact
+# on disk, and an environment variable cannot change what a tarball contains.
+bundle_manifest_get() {
+  local root="$1" key="$2" def="${3-}" val
+  val="$(sed -n "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//p" "$root/vidra-bundle.manifest" 2>/dev/null | tail -n1 | tr -d '\r')"
+  printf '%s' "${val:-$def}"
 }
 
 # env_snapshot <env-file> <repo-root> — copy the env file into

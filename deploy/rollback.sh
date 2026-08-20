@@ -244,21 +244,32 @@ set_key VIDRA_CORE_TAG   "$CORE_TAG"
 set_key VIDRA_USER_TAG   "$USER_TAG"
 set_key VIDRA_SEARCH_TAG "$SEARCH_TAG"
 
-for repo in vidra-core vidra-search vidra-user; do
-  [ -e "$repo" ] || continue
-  [ -d "$repo/.git" ] || die "$repo exists but is not a git checkout"
-  case "$repo" in
-    vidra-core)   tag="$(env_get VIDRA_CORE_TAG '?')" ;;
-    vidra-search) tag="$(env_get VIDRA_SEARCH_TAG '?')" ;;
-    vidra-user)   tag="$(env_get VIDRA_USER_TAG '?')" ;;
-  esac
-  [ "$tag" != "?" ] || continue
-  log "syncing $repo to $tag"
-  # --force: a tag re-pointed upstream is otherwise refused and the checkout
-  # pins the stale object. Kept identical in deploy.sh.
-  git -C "$repo" fetch --tags --force --quiet || die "git fetch failed in $repo"
-  git -C "$repo" checkout --detach --quiet "$tag" || die "failed to checkout tag $tag in $repo"
-done
+# An unpacked release bundle has no .git anywhere and nothing to sync — see the
+# same block in deploy.sh for the reasoning. It matters more here than there:
+# this script runs mid-incident, and dying on a missing .git while rolling back
+# would strand the operator on the broken release for the sake of a checkout that
+# was never going to exist. The env file has already been rewritten at this
+# point, so the tags are pinned; a bundle simply has no second copy of the source
+# to move alongside them.
+if is_bundle_tree "$REPO_ROOT"; then
+  log "vidra-bundle.manifest is present and vidra-core is not a git checkout — this tree was unpacked from the $(bundle_manifest_get "$REPO_ROOT" tag '(unknown)') bundle. Nothing to sync; the rollback is the VIDRA_*_TAG rewrite above plus the pull below."
+else
+  for repo in vidra-core vidra-search vidra-user; do
+    [ -e "$repo" ] || continue
+    [ -d "$repo/.git" ] || die "$repo exists but is not a git checkout"
+    case "$repo" in
+      vidra-core)   tag="$(env_get VIDRA_CORE_TAG '?')" ;;
+      vidra-search) tag="$(env_get VIDRA_SEARCH_TAG '?')" ;;
+      vidra-user)   tag="$(env_get VIDRA_USER_TAG '?')" ;;
+    esac
+    [ "$tag" != "?" ] || continue
+    log "syncing $repo to $tag"
+    # --force: a tag re-pointed upstream is otherwise refused and the checkout
+    # pins the stale object. Kept identical in deploy.sh.
+    git -C "$repo" fetch --tags --force --quiet || die "git fetch failed in $repo"
+    git -C "$repo" checkout --detach --quiet "$tag" || die "failed to checkout tag $tag in $repo"
+  done
+fi
 
 # Sets COMPOSE, EXTERNAL_POSTGRES and EXTERNAL_REDIS.
 vidra_compose_chain
