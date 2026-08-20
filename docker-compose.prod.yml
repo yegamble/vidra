@@ -16,12 +16,17 @@
 # search integration silently degrades to local SQL. See deploy/README.md.
 #
 # What this file changes versus the dev stack, and why:
-#   1. Nothing but Caddy is reachable from off-host. postgres/redis/search lose
-#      their published ports entirely; api and frontend publish on 127.0.0.1
-#      only. This is the ONLY firewall that actually works: Docker installs its
-#      DOCKER-USER iptables rules AHEAD of ufw, so a host firewall does not
-#      filter published container ports. (The same technique is already used for
-#      the IPFS RPC ports in vidra-core/docker-compose.yml.)
+#   1. Nothing but Caddy is reachable from off-host. postgres/redis/search and
+#      the optional-profile services (clamav, whisper, otel-collector, jaeger)
+#      lose their published ports entirely; api and frontend publish on
+#      127.0.0.1 only. This is the ONLY firewall that actually works: Docker
+#      installs its DOCKER-USER iptables rules AHEAD of ufw, so a host firewall
+#      does not filter published container ports. (The same technique is already
+#      used for the IPFS RPC ports in vidra-core/docker-compose.yml.) The two
+#      DELIBERATE exceptions are the RTMP ingest port 1935 (`media` profile) and
+#      the IPFS libp2p swarm port 4001 (`ipfs` profile): both are protocols
+#      remote peers dial directly, so they stay published and are gated in the
+#      cloud firewall instead.
 #   2. Images are PULLED from GHCR by immutable tag instead of built on the box.
 #   3. restart: unless-stopped everywhere long-lived, so a reboot returns the
 #      stack unattended. Requires `systemctl enable --now docker` on the host.
@@ -301,6 +306,59 @@ services:
       # rebuilds), but a rebuild costs a full retraining cycle of degraded
       # ranking, so they get a volume.
       - search_models:/var/lib/vidra-search/models
+
+  # ---------------------------------------------------------------------------
+  # OPTIONAL-PROFILE SERVICES (base definitions: vidra-core/docker-compose.yml).
+  #
+  # None of these start unless their profile is enabled — `vidra setup` writes
+  # the answers into VIDRA_COMPOSE_PROFILES / EXTRA_COMPOSE_PROFILES and
+  # deploy/{deploy,rollback,restore,backup}.sh append every entry as `--profile`.
+  # That is precisely why they belong in this overlay: the moment an operator
+  # says yes to virus scanning, captions or tracing, the base file's publishes
+  # go live on 0.0.0.0 and a host firewall does NOT filter them (DOCKER-USER
+  # sits ahead of ufw — overlay header note 1). clamd on :3310 takes unauthenticated
+  # commands, and the Jaeger UI on :16686 is an unauthenticated read of every
+  # request the api traced.
+  #
+  # Removing the publish costs nothing operationally: the api reaches all of them
+  # over the compose network by SERVICE NAME, which is what the base file's own
+  # documented wiring already uses — CLAMAV_ADDR=clamav:3310,
+  # WHISPER_ENDPOINT=http://whisper:8080,
+  # OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317 — and the collector forwards
+  # to `jaeger` the same way. Nothing here is ever addressed as localhost:<port>.
+  # To read the Jaeger UI from a workstation, add a loopback publish in a local,
+  # untracked overlay and `ssh -L 16686:127.0.0.1:16686 <droplet>`; do not undo
+  # the reset here.
+  #
+  # `!reset []`, not `[]` — Compose MERGES sequence fields across a -f chain, so
+  # a plain empty list appends nothing and the base publish survives. See the
+  # postgres note above; needs Compose >= 2.24.
+  #
+  # The `logging:` lines are not optional either: a service that omits the anchor
+  # inherits the daemon default, which is UNBOUNDED (header note 4). clamd's
+  # freshclam chatter and the collector's per-batch logs are the two most likely
+  # things on the box to fill a disk that also holds Postgres.
+  clamav:
+    ports: !reset []
+    logging: *logging
+
+  whisper:
+    ports: !reset []
+    logging: *logging
+
+  otel-collector:
+    ports: !reset []
+    logging: *logging
+
+  jaeger:
+    ports: !reset []
+    logging: *logging
+
+  # rtmp keeps its publish: 1935 is the ingest port streamers push to, so it is
+  # deliberately internet-facing (open it in the cloud firewall) — same standing
+  # exception as the IPFS swarm port below. Only the log cap is added.
+  rtmp:
+    logging: *logging
 
   # ---------------------------------------------------------------------------
   # Public IPFS mirror node (base definition: vidra-core/docker-compose.yml).

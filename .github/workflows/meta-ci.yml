@@ -198,6 +198,16 @@ jobs:
       # that with `!reset` / `!override` — merge tags that a Compose older than
       # 2.24 IGNORES SILENTLY. The render step above still passes in that case, so
       # assert on the rendered result rather than on a version string.
+      #
+      # EVERY optional profile is enabled for this render, not just core+frontend.
+      # `vidra setup` offers scan/captions/otel as first-class answers and
+      # deploy.sh turns them into `--profile` flags, so a droplet really can be
+      # running clamd and Jaeger — and their base definitions publish on 0.0.0.0.
+      # An assertion that only ever renders core+frontend cannot see that, which
+      # is exactly how those four services stayed open. The allow-list below is
+      # the whole contract: caddy 80/443, plus the two protocols remote peers dial
+      # directly (RTMP ingest 1935, IPFS libp2p swarm 4001). Anything else that
+      # wants a host port has to argue for it here first.
       - name: Production overlay actually closes the internal ports
         env:
           JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
@@ -210,9 +220,15 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.prod.yml \
             --env-file env/production.env.example \
             --profile core --profile frontend config > /tmp/prod-config.yml
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            --env-file env/production.env.example \
+            --profile core --profile frontend --profile scan --profile captions \
+            --profile otel --profile media --profile ipfs \
+            config > /tmp/prod-config-all-profiles.yml
           python3 - <<'PY'
           import sys, yaml
           svcs = yaml.safe_load(open('/tmp/prod-config.yml'))['services']
+          allp = yaml.safe_load(open('/tmp/prod-config-all-profiles.yml'))['services']
           bad = []
           for name in ('postgres', 'redis', 'search'):
               published = svcs[name].get('ports') or []
@@ -223,12 +239,32 @@ jobs:
                   host = p.get('host_ip') if isinstance(p, dict) else p
                   if host not in ('127.0.0.1', '::1'):
                       bad.append(f'{name} publishes on {host!r}, not loopback')
+          # Every service in the fully-enabled render, not a hand-kept list: a new
+          # optional service with a stray publish must fail here on arrival.
+          off_host_ok = {'caddy': {'80', '443'}, 'rtmp': {'1935'}, 'ipfs': {'4001'}}
+          for name in sorted(allp):
+              for p in allp[name].get('ports') or []:
+                  host = p.get('host_ip') if isinstance(p, dict) else None
+                  pub = str(p.get('published')) if isinstance(p, dict) else str(p)
+                  if host in ('127.0.0.1', '::1'):
+                      continue
+                  if pub in off_host_ok.get(name, set()):
+                      continue
+                  bad.append(f'{name} publishes {pub} off-host (host_ip={host!r}) with every profile enabled')
+          # The overlay header's own rule: the logging anchor applies to EVERY
+          # service, because a service that forgets it gets the daemon default,
+          # which is uncapped, on the disk Postgres and the media volume share.
+          for name in sorted(allp):
+              if 'logging' not in allp[name]:
+                  bad.append(f'{name} has no logging cap — it inherits the UNBOUNDED daemon default')
           if bad:
               print('::error::the production overlay is NOT closing the internal ports')
               print('(a Compose older than 2.24 ignores !reset/!override silently)')
               print('\n'.join(bad))
               sys.exit(1)
-          print('OK: postgres/redis/search publish nothing; api/frontend are loopback-only.')
+          print(f'OK: postgres/redis/search publish nothing; api/frontend are loopback-only; '
+                f'with scan+captions+otel+media+ipfs enabled, all {len(allp)} services are '
+                f'log-capped and only caddy 80/443, rtmp 1935 and ipfs 4001 face the network.')
           PY
 
       # The migration one-shots are the services deploy.sh runs with `compose run`
