@@ -13,9 +13,11 @@ stack plus a production overlay, behind Caddy for TLS.
 | [`compose.sh`](./compose.sh) | `docker compose` against that chain: `./deploy/compose.sh ps \| logs -f \| config -q \| down`. Gates nothing — use it to read and to stop, `deploy.sh` to change. |
 | [`deploy.sh`](./deploy.sh) | pin checkouts → dump → pull → gated migrations → up → Caddy reload → probe (api, frontend **and the TLS edge**). |
 | [`rollback.sh`](./rollback.sh) | Rewrite the image tags, pull, restart, re-probe. |
-| [`backup.sh`](./backup.sh) | `pg_dump -Fc` → gzip → optional off-site → retention → success marker. |
+| [`backup.sh`](./backup.sh) | `pg_dump -Fc` → gzip → **config archive** → optional off-site → retention → success marker. |
 | [`restore.sh`](./restore.sh) | **Destructive.** Drop, recreate, `pg_restore -j4`, migrate, re-probe. |
-| [`vidra-backup.service`](./vidra-backup.service) / [`.timer`](./vidra-backup.timer) | systemd units for the nightly backup. |
+| [`provision.sh`](./provision.sh) | Host prep, idempotent, as root: swap, service user, `/opt/vidra`, log cap, unattended-upgrades, backup timer (installed **and verified**). Warns about sshd and the firewall; edits neither. |
+| [`cloud-init.yaml.example`](./cloud-init.yaml.example) | The same, as provider user-data, for a host that does not exist yet. Pure ASCII on purpose. |
+| [`vidra-backup.service`](./vidra-backup.service) / [`.timer`](./vidra-backup.timer) | systemd units for the nightly backup. `provision.sh` installs them. |
 
 **The `vidra` CLI wraps these 1:1.** `vidra deploy | rollback | backup | restore |
 release` exec the script of the same name with `ENV_FILE` injected and your terminal
@@ -29,35 +31,58 @@ documented here is enforced in them, not in the CLI.
 
 ## First boot — do these in order
 
-The ordering here is not cosmetic. `vidra-core/internal/auth/service.go:244-246`
-grants the **admin** role to the first account created while the `users` table is
-empty (`if n, err := s.repo.CountUsers(ctx); err == nil && n == 0 { role = "admin" }`),
-and it does so on **every** signup path. There is no CLI to create or promote an
-admin — `vidra-core/cmd/` contains only `api` and `peertube-import` — so if a
-signup bot beats you to the first registration, it owns your instance and the
-only recovery is hand-written SQL against the `users` table.
+**The first admin is claimed, not registered.** This used to be a race: the api
+granted the admin role to whichever account was created while the `users` table
+was empty, on every signup path, so a signup bot that beat you to the first
+registration owned your instance. It does not work that way any more
+(`vidra-core/internal/auth/ownerclaim.go`). While the instance is unclaimed —
+empty `users` table plus an unredeemed token — **every** signup path answers
+`403 owner_claim_required`, and the only way in is a one-time token the api
+mints at boot and prints to its own log.
 
-1. **Ship with registration closed.** Set `REGISTRATION_ENABLED=false` in
-   `env/production.env` *before* the first `up -d`. (Step 1 of the readiness plan
-   is what made this variable reachable from the env file at all; the code
-   default is `true`.)
-2. **Bring the stack up** and confirm `/readyz` is 200 — see
-   [First bring-up](#first-bring-up) below.
-3. **Register the owner account.** Registration is closed, so do it while the
-   flag is still `false` by flipping it for exactly this one step:
-   temporarily set `REGISTRATION_ENABLED=true`, run
-   `docker compose … up -d api`, register, then set it back to `false` and
-   restart the api again. Do this **before DNS propagates**, or over the
-   loopback port (`http://127.0.0.1:8080`) through an SSH tunnel, so the window
-   is not publicly reachable.
+1. **Bring the stack up** and confirm `/readyz` is 200 — see
+   [First bring-up](#first-bring-up) below. `vidra setup` prints these same two
+   steps at the end of its run, for the same reason they are here: generating an
+   env file otherwise leaves you two commands away from an instance nobody can
+   log into.
+2. **Read the token out of the api log:**
+   ```bash
+   ./deploy/compose.sh logs api | grep 'FIRST-RUN SETUP REQUIRED'
+   ```
+   Use `compose.sh`, never a bare `docker compose logs api` — on a deployment
+   host the bare form auto-loads `docker-compose.override.yml` and addresses a
+   different project than the deploy scripts do. **Take the newest line.** Every
+   api restart mints a fresh token and *invalidates* the previous one, which is
+   what turns a token copied ten minutes and one deploy ago into a confusing
+   `owner_claim_invalid`.
+3. **Redeem it**, at `https://<your domain>/setup/claim` in the UI, or directly:
+   ```bash
+   curl -X POST https://example.com/api/v1/setup/claim-owner \
+     -H 'Content-Type: application/json' \
+     -d '{"token":"<the token>","username":"...","email":"...","password":"..."}'
+   ```
+   Only the token's **hash** is stored, so a lost token is re-minted (restart the
+   api), never recovered.
 4. **Verify you actually got admin** before you trust it:
    `GET /api/v1/admin/system` with your access token must return 200 (a
    non-admin gets 403), and `/admin` in the UI must render.
-5. **Only now** decide your registration policy — leave it closed for a private
-   launch, or set `REGISTRATION_ENABLED=true` (optionally with
-   `REGISTRATION_REQUIRE_APPROVAL=true`, which files signups into the admin
-   approval queue instead of creating accounts) and `up -d` again.
+5. **Decide your registration policy.** `REGISTRATION_ENABLED=false` is still the
+   right default for a private launch, but it is now a *policy* choice, not the
+   thing standing between a bot and your admin account — set it to `true`
+   (optionally with `REGISTRATION_REQUIRE_APPROVAL=true`, which files signups
+   into the admin approval queue instead of creating accounts) and `up -d` again
+   when you want the doors open.
 6. **Announce the domain.**
+
+> An instance that already has users and no outstanding token is *implicitly
+> claimed* and never mints one — upgrading an existing install does not suddenly
+> print a bootstrap credential. The inverse also holds and is deliberate: if
+> users exist but the owner was never claimed, the api re-mints on **every**
+> boot, so an unclaimed token sitting in an old log can never stay a live admin
+> credential.
+>
+> `OWNER_CLAIM_TOKEN` pins the mint to a fixed value for test harnesses.
+> `config.validate()` **refuses it in production**; it is not an operator knob.
 
 ---
 
@@ -66,6 +91,40 @@ only recovery is hand-written SQL against the `users` table.
 `ufw`, `unattended-upgrades` and SSH hardening are not mentioned anywhere else in
 this repo, and one of the items below (the DOCKER-USER warning) is the reason a
 host firewall will *not* save you.
+
+### The short version: `deploy/provision.sh`
+
+Everything in this section except Docker itself is applied by one idempotent
+script:
+
+```bash
+sudo ./deploy/provision.sh          # asks once, then applies
+sudo ./deploy/provision.sh --yes    # no prompt (cloud-init, CI, re-runs)
+```
+
+It does the swapfile **and** its `/etc/fstab` line, the `vidra` service user in
+the `docker` group, `/opt/vidra` with the right owner, the daemon log cap,
+`unattended-upgrades`, and the backup timer — which it then *verifies* with
+`systemctl is-enabled`/`is-active` and prints the next elapse for. Re-run it
+after enabling a compose profile and it re-prints the firewall requirements for
+the profiles you actually have on.
+
+It **never** edits sshd and it opens **no** ports; both are checked and
+reported. It **never** overwrites an `/etc/docker/daemon.json` that says
+something else — it prints the keys to merge. Those refusals are the point: the
+first two are how a host gets locked out or silently left open, and the third is
+a much bigger outage than uncapped logs.
+
+For a host you have not created yet, [`cloud-init.yaml.example`](./cloud-init.yaml.example)
+is the same thing as provider user-data: paste it into the "user data" box, edit
+the SSH key, and the server comes up already provisioned. It is deliberately
+pure ASCII (DigitalOcean rejects non-ASCII user-data, silently) and meta-ci
+asserts that it stays that way.
+
+**The manual steps below remain the source of truth** and are worth reading
+before you run the script — they say *why*, and the script only says *what*.
+Follow them by hand on a non-apt host, which `provision.sh` refuses rather than
+half-provisions.
 
 ### Docker
 
@@ -106,6 +165,23 @@ host firewall will *not* save you.
   **22** (from your admin IP only), **80** and **443** (`0.0.0.0/0, ::/0` — port
   80 is required for the ACME HTTP-01 challenge). Deny everything else; leave
   outbound open.
+- **Two more ports, but only with the profiles that need them.** The prod
+  overlay resets every other publish to nothing, and deliberately does *not*
+  reset these two, because remote peers dial them directly and a reverse proxy
+  cannot stand in front of either:
+
+  | Port | Open it when | Why it cannot be loopback |
+  |---|---|---|
+  | **1935/tcp** | `VIDRA_COMPOSE_PROFILES` contains `media` | RTMP ingest. OBS on a creator's laptop connects to it from the internet. |
+  | **4001/tcp+udp** | …contains `ipfs` | libp2p swarm. Peers dial in; a node nobody can reach only ever pushes. |
+
+  Both stay **closed** on an instance that has not enabled those profiles, which
+  is the default. `deploy/provision.sh` reads the profiles out of your env file
+  and prints exactly the list your firewall needs, so re-run it after changing
+  them rather than working it out again. meta-ci renders the overlay with
+  *every* optional profile enabled and fails if anything other than caddy 80/443,
+  rtmp 1935 and ipfs 4001 faces the network — that allow-list is the contract,
+  and a new service wanting a host port has to argue for it there first.
 - **A host `ufw` does NOT filter Docker-published ports.** Docker installs its
   own `DOCKER-USER` iptables chain and it is traversed *before* ufw's rules, so
   `ufw deny 5432` has no effect on a container publishing 5432. Running ufw as
@@ -265,12 +341,26 @@ password in the env file, not a freshly generated one; rotate by running
 Then, before you need them:
 
 ```bash
-sudo cp deploy/vidra-backup.{service,timer} /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now vidra-backup.timer
+sudo ./deploy/provision.sh --yes                     # installs AND verifies the timer
 ./deploy/backup.sh                                   # prove it works
 RESTORE_CONFIRM=vidra ./deploy/restore.sh backups/<latest>.dump.gz   # on a SCRATCH stack
 sudo reboot                                          # confirm every container returns
 ```
+
+By hand instead of `provision.sh` (it does exactly this, plus the verification
+step people skip):
+
+```bash
+sudo cp deploy/vidra-backup.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now vidra-backup.timer
+systemctl is-enabled vidra-backup.timer && systemctl is-active vidra-backup.timer
+systemctl list-timers vidra-backup.timer             # when does it next run
+```
+
+`enable --now` on a timer whose `.service` fails to parse can still exit 0, and
+that failure surfaces as "no backups have ever run" — six weeks later, during a
+restore. `vidra doctor` checks both the timer and the age of
+`backups/last_success` for the same reason.
 
 **Run `restore.sh` once against a real dump before launch.** The 101 down
 migrations have never been executed and the restore path has never been exercised
