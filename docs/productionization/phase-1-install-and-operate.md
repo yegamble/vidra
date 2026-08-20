@@ -101,11 +101,20 @@ when closing items.
 > **Wave 4 (2026-08-20): items 10, 13, 16 and 19 implemented** — the running-it half of the
 > operator CLI, the schema-compat policy turned from prose into a blocking gate, the health
 > surface host tooling reads, and `vidra setup` made survivable for an operator who mistypes
-> or has no terminal. **Branches:** `vidra-core prod/phase1-wave4` (19 commits over main,
-> tip ff164fc — waves 2+3 landed first as core#45), `vidra-search prod/phase1-wave4`
-> (4 commits over main, tip 3da1d91), `vidra-user prod/phase1-wave4` (2 commits over main,
-> tip 280fcf5), meta `prod/phase1-wave4` (4 commits over main: df1523f, 156f299, adea171 and
-> the commit carrying this note). **Gates run in the meta lane:** `shellcheck -x
+> or has no terminal. **Branches:** `vidra-core prod/phase1-wave4` (tip a041e1e — waves 2+3
+> landed first as core#45), `vidra-search prod/phase1-wave4` (tip 262d70e), `vidra-user
+> prod/phase1-wave4` (tip 1f7ba04), meta `prod/phase1-wave4` (the compose healthcheck fix
+> df1523f, the doc commits 156f299/adea171/6e364df/a62c3fa, and this note's own commit).
+> **Adversarially verified same day:** six independent verifiers attacked every lane, each
+> serious finding then re-attacked by a skeptic that had to reproduce it. Two majors were
+> confirmed and FIXED the same day — a line-split `DROP\nCONSTRAINT` evaded migrate-lint
+> (statement-level matching now; a 26-case attack matrix passes under both onetrueawk and
+> mawk, fixed in core 7ff807b + search 262d70e, copies still byte-identical), and the CLI
+> honored an exported `ENV_FILE` for child scripts while its own reads used the flag default
+> (one resolution rule now, invariant-tested, bae8747) — plus six minor sweeps (openapi
+> description, restart arity message, answers-file validation of argv-overridden lines,
+> INSTANCE_NAME still-the-example warning, stray root binary gitignored, stale gate comment).
+> **Gates run in the meta lane:** `shellcheck -x
 > deploy/deploy.sh` clean; the prod chain rendered against a synthetic production env
 > (`-f docker-compose.yml -f docker-compose.prod.yml --profile core --profile frontend
 > config`, exit 0) with the rendered frontend healthcheck asserted to be the CMD-SHELL
@@ -117,8 +126,11 @@ when closing items.
 > `column "description" does not exist` from six tests once `videos.description` was dropped
 > to stand in for a destructive 0105; search `make ci` (lint verified byte-identical to
 > core's under both onetrueawk and mawk); user `npm run ci` with a unit test pinning that
-> `app/healthz/route.ts` contains no import at all. **Merge order is waves 2–3's, unchanged:**
-> vidra-core and vidra-search land and release before meta. **This wave adds no new tag
+> `app/healthz/route.ts` contains no import at all. **Merge order is waves 2–3's, plus one
+> new edge:** vidra-core and vidra-search land and release before meta, and vidra-core must
+> also merge before vidra-user — contract-ci regenerates `lib/api/generated.ts` against
+> vidra-core@main, so the user branch (which carries the `/schemaz` + `/admin/system` regen)
+> stays red until core's branch is on main. **This wave adds no new tag
 > floor:** the compose healthcheck falls back to `/` when `/healthz` 404s, so the meta change
 > needs no minimum `VIDRA_USER_TAG` and a rollback to v0.2.0 stays healthy — the one design
 > decision that keeps the hard merge order from growing a fourth constraint.
