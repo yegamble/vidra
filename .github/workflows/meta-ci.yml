@@ -161,6 +161,49 @@ jobs:
           path: vidra-user
           persist-credentials: false
 
+      # The last hand-synced pair in the platform, and the only one that spans
+      # two repositories. `scripts/migrate-lint.sh` is the static half of the
+      # one-release schema-compat policy: it rejects a destructive statement in
+      # any `*.up.sql`, and it is wired into each Go repo's canonical `make ci`.
+      # The two copies carry no repo-specific strings PRECISELY so they can stay
+      # byte-identical, and wave 4 shipped them with nothing asserting that they
+      # do. Neither repo's CI can check it — each sees only itself. This is the
+      # only job that has both trees checked out, so this is the only place the
+      # check can live.
+      #
+      # Why it matters that they not diverge: rollback.sh is a 60-second tag flip
+      # that never touches the database, and it is only safe because release N-1's
+      # code keeps running against release N's schema. If search's copy quietly
+      # stops rejecting `DROP COLUMN` while core's still does, half the platform
+      # loses the guarantee the rollback path is built on, and nothing anywhere
+      # goes red until an operator rolls back across a search migration and finds
+      # the previous release cannot read the schema.
+      #
+      # KNOWN RED UNTIL THE WAVE-4 COMPONENT PRs MERGE. The checkouts above take
+      # each component's DEFAULT branch (main), where scripts/migrate-lint.sh does
+      # not exist yet — it lives on `prod/phase1-wave4` in both Go repos. This
+      # step therefore fails on the wave-5 meta PR by design, exactly as
+      # vidra-user's contract-ci does against an unmerged core, and goes green the
+      # moment vidra-core and vidra-search land. A missing file is reported as a
+      # missing file, not as a difference, so the message says which state it is.
+      - name: vidra-core and vidra-search ship the same migrate-lint.sh
+        run: |
+          core=vidra-core/scripts/migrate-lint.sh
+          search=vidra-search/scripts/migrate-lint.sh
+          missing=""
+          [ -f "$core" ]   || missing="$missing $core"
+          [ -f "$search" ] || missing="$missing $search"
+          if [ -n "$missing" ]; then
+            echo "::error::the schema-compat lint is missing:$missing — both repos must ship scripts/migrate-lint.sh, byte-identical, wired into their own 'make ci'. (Expected while the wave-4 component PRs are unmerged: this job checks out each component's main.)" >&2
+            exit 1
+          fi
+          if ! cmp -s "$core" "$search"; then
+            echo "::error::vidra-core and vidra-search carry DIFFERENT scripts/migrate-lint.sh — change one, change the other. They are hand-synced and deliberately free of repo-specific strings so that they can be identical; a divergence means half the platform has stopped enforcing the one-release schema-compat policy that rollback.sh depends on." >&2
+            diff -u "$core" "$search" >&2 || true
+            exit 1
+          fi
+          echo "OK: both repos ship the same $(wc -l < "$core" | tr -d ' ')-line migrate-lint.sh."
+
       # The `core` profile includes postgres/redis/migrate/api + the new search
       # and search-migrate services (build context ./vidra-search). The frontend
       # profile is intentionally NOT activated here; its e2e/contract CI lives in
