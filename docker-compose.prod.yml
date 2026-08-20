@@ -150,21 +150,48 @@ services:
   # they own — the migrations are compiled into those binaries, so `migrate up`
   # is a command on the api / search image rather than a third-party CLI. The
   # base file declares `build:` for them (the dev definition), so they need the
-  # same image + `pull_policy: always` pin as api/search/frontend below:
-  # deploy/deploy.sh runs them as discrete, exit-code-gated `run --rm` steps
-  # BEFORE `up -d --no-build`, and `run` has no --no-build of its own, so without
-  # these two lines a droplet whose image cache is cold would compile Go instead
-  # of migrating. The tags come from the SAME variables as the services, which is
-  # what keeps schema and code versions identical.
+  # same image + `pull_policy: always` pin as api/search/frontend below, PLUS a
+  # `build: !reset null` the long-lived services do not need:
+  #
+  # deploy/deploy.sh runs these two as discrete, exit-code-gated `run --rm` steps
+  # BEFORE `up -d --no-build` — and `docker compose run` has no `--no-build` flag
+  # of its own. With a `build:` section still merged in from the base file, a cold
+  # image cache makes `run` COMPILE (`pull_policy` is not consulted for a service
+  # Compose considers buildable), which on a droplet means an OOM instead of a
+  # migration, from a source checkout production is not even guaranteed to have.
+  # `!reset` deletes the inherited mapping outright — a plain `build: null` would
+  # be merged, not replaced. Needs Compose >= 2.24, same floor as the `ports:`
+  # resets above; `deploy/{deploy,rollback,restore}.sh` refuse to run below it.
+  #
+  # Verify after any change to this block (both must hold):
+  #   make prod-config          # or the meta-ci "production overlay" step
+  #   docker compose -f docker-compose.yml -f docker-compose.prod.yml … config \
+  #     | python3 -c '…'        # migrate/search-migrate: image set, build absent
+  #
+  # The tags come from the SAME variables as the services, which is what keeps
+  # schema and code versions identical. Tag FLOOR: an image published before the
+  # embedded `migrate` subcommand existed ignores the argv and boots an API
+  # SERVER here, so the one-shot never exits and the deploy hangs — the
+  # MIN_EMBEDDED_MIGRATE_TAG gate in deploy/deploy.sh + deploy/rollback.sh
+  # refuses those tags before anything runs.
   migrate:
     image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
+    build: !reset null
     logging: *logging
+    # Hardening parity with api/search/frontend: this one-shot connects to the
+    # production database with the same image and privileges the api has, so it
+    # gets the same setuid/setgid escalation block.
+    security_opt:
+      - "no-new-privileges:true"
 
   search-migrate:
     image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-search:${VIDRA_SEARCH_TAG:?VIDRA_SEARCH_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
+    build: !reset null
     logging: *logging
+    security_opt:
+      - "no-new-privileges:true"
 
   api:
     # Pull the release image instead of building on the droplet. The base file
