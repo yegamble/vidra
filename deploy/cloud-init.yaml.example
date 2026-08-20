@@ -1,0 +1,104 @@
+#cloud-config
+#
+# Vidra host bootstrap, as cloud-init user-data. Paste this into a provider's
+# "user data" box (DigitalOcean, Hetzner, EC2, Vultr) when creating the server,
+# and it arrives with the runbook's host prep already applied: swap, the vidra
+# service user, /opt/vidra, the Docker log cap, unattended security upgrades and
+# the nightly backup timer.
+#
+# IT IS AN EXAMPLE. Edit at least the ssh_authorized_keys entry before using it;
+# a server created from this file verbatim has no key that can log in.
+#
+# PURE ASCII, ON PURPOSE. DigitalOcean's user-data field rejects a payload with
+# non-ASCII bytes, and the failure is silent: the droplet boots with no
+# cloud-init having run at all. Keep it that way when editing - no smart quotes,
+# no em dashes, no accents.
+#
+# WHAT THIS DOES NOT DO:
+#   * install Docker. Start from your provider's Docker image, or run the
+#     one-command installer below, which checks for Docker Engine >= 24 and
+#     Compose >= 2.24 (the prod overlay's !reset merge tags need 2.24, and an
+#     older Compose ignores them silently and leaves Postgres on 0.0.0.0).
+#   * open any port. Attach a CLOUD firewall - allow 22 from your admin IP, 80
+#     and 443 from everywhere, plus 1935 if you enable the media profile and
+#     4001 if you enable ipfs. A host ufw does not filter Docker-published
+#     ports; provision.sh prints the whole list for the profiles you chose.
+#   * generate secrets or a Caddyfile. That is `vidra setup`, and it is
+#     interactive on purpose: it wants a domain and an ACME contact address.
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - git
+
+# The service user is created HERE rather than left to provision.sh because this
+# is the only stage that can also install an SSH key for it. provision.sh finds
+# it already present and moves on; it is idempotent, and it is what adds the
+# docker group membership once Docker exists.
+users:
+  - name: vidra
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIREPLACEMEREPLACEMEREPLACEMEREPLA you@example.com"
+
+write_files:
+  - path: /root/VIDRA-NEXT-STEPS.txt
+    permissions: "0644"
+    content: |
+      This host was provisioned by deploy/cloud-init.yaml.example.
+
+      Already done (see /var/log/cloud-init-output.log):
+        swap + fstab, the vidra user, /opt/vidra, the Docker log cap,
+        unattended-upgrades, and the vidra-backup systemd timer.
+
+      Still to do:
+
+      1. Install Vidra. The one-command installer checks the platform, Docker
+         and Compose versions, fetches the CLI and the deployment artifacts,
+         and starts setup:
+
+           curl -fsSL https://raw.githubusercontent.com/yegamble/vidra/main/install.sh | sh
+
+         Or by hand, from the checkout this file's cloud-init already made:
+
+           cd /opt/vidra && ./bootstrap.sh
+           cp env/production.env.example env/production.env
+           $EDITOR env/production.env
+           vidra setup
+
+      2. Point your domain's A/AAAA records at this host BEFORE deploying with
+         ACME. deploy.sh refuses a deploy whose domain does not resolve here,
+         because a failed order spends the instance's Let's Encrypt rate limit.
+
+      3. ./deploy/deploy.sh
+
+      4. Claim the owner account. The api mints a one-time token at boot and
+         prints it in its own log; every restart mints a fresh one and
+         invalidates the previous, so take the newest line:
+
+           ./deploy/compose.sh logs api
+           https://<your domain>/setup/claim
+
+      5. Attach a cloud firewall. This host has none. Allow 22 (your admin IP
+         only), 80 and 443; add 1935 for the media profile and 4001 for ipfs.
+
+      6. Prove the backup works before you need it:
+
+           sudo systemctl start vidra-backup.service
+           journalctl -u vidra-backup.service -n 50
+
+runcmd:
+  # A shallow clone: the deployment artifacts are wanted, the history is not.
+  # bootstrap.sh (run later, by you or by the installer) clones the three
+  # component repos into it.
+  - [git, clone, --depth, "1", "https://github.com/yegamble/vidra.git", /opt/vidra]
+  # --yes because there is no terminal here to answer the prompt. provision.sh
+  # refuses to run non-interactively without it, precisely so that a stray pipe
+  # elsewhere cannot provision a host by accident.
+  - [/opt/vidra/deploy/provision.sh, --yes]
+
+final_message: "Vidra host prep finished after $UPTIME seconds. Read /root/VIDRA-NEXT-STEPS.txt"
