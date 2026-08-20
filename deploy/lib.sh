@@ -26,6 +26,7 @@
 # PROVIDES
 #   env_get KEY [DEFAULT]  value from the process env, else $ENV_FILE, else DEFAULT
 #   is_true VALUE          exit 0 for the spellings of "yes" an operator types
+#   edge_profile           prints `edge` unless VIDRA_TLS_MODE=external
 #   vidra_compose_chain    sets COMPOSE=(...), EXTERNAL_POSTGRES, EXTERNAL_REDIS
 #   env_snapshot FILE ROOT keeps 10 timestamped generations of an env file
 
@@ -63,6 +64,29 @@ is_true() {
   esac
 }
 
+# edge_profile — prints `edge` when this deployment runs Vidra's own Caddy, and
+# nothing when it does not. Called unquoted inside the profile loop below, so
+# "nothing" contributes no word at all.
+#
+# WHY THE ENGINE DECIDES AND NOT THE OPERATOR: docker-compose.prod.yml's caddy
+# service is on the `edge` profile, and if that profile had to be typed into
+# VIDRA_COMPOSE_PROFILES then every env file written before this change — every
+# one in existence — would silently stop starting the TLS terminator on its next
+# deploy. The whole site, gone, because a compose file grew a profile. So the
+# rule is inverted: caddy is ON unless the env file says somebody else is
+# terminating TLS.
+#
+# `external` is the ONLY mode that turns it off. plain-http still runs Caddy (as
+# a plain-HTTP site — one managed front door, whatever the scheme), and an unset
+# or unrecognised value keeps it too: an operator who typos the mode gets a
+# refusal from deploy.sh's mode switch, not a silently edge-less stack.
+edge_profile() {
+  case "$(env_get VIDRA_TLS_MODE acme)" in
+    external) ;;
+    *) printf 'edge' ;;
+  esac
+}
+
 # vidra_compose_chain — build the compose invocation from the env file rather
 # than hardcoding it, so `vidra setup` can change the SHAPE of the stack
 # (external datastores, extra profiles) without editing any of these scripts.
@@ -72,9 +96,11 @@ is_true() {
 # when Postgres is managed elsewhere).
 #
 # An env file that predates these keys — or sets them empty — produces exactly
-# the command line these scripts used before there were any:
+# the command line these scripts used before there were any, plus the `edge`
+# profile that now carries the caddy service (see edge_profile above; the
+# service used to have no profile, so this is the same set of containers):
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-#     --env-file "$ENV_FILE" --profile core --profile frontend
+#     --env-file "$ENV_FILE" --profile core --profile frontend --profile edge
 vidra_compose_chain() {
   local profile seen_profiles=""
 
@@ -112,7 +138,7 @@ vidra_compose_chain() {
   # --profile core twice changes nothing, but it makes two `ps` outputs annoying
   # to compare.
   # shellcheck disable=SC2046  # word splitting is the point: these are lists.
-  for profile in $(env_get VIDRA_COMPOSE_PROFILES "core frontend") $(env_get EXTRA_COMPOSE_PROFILES ""); do
+  for profile in $(env_get VIDRA_COMPOSE_PROFILES "core frontend") $(env_get EXTRA_COMPOSE_PROFILES "") $(edge_profile); do
     case " $seen_profiles " in
       *" $profile "*) continue ;;
     esac
