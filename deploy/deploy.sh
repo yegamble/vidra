@@ -34,6 +34,12 @@ cd "$REPO_ROOT"
 ENV_FILE="${ENV_FILE:-env/production.env}"
 BACKUP_DIR="${BACKUP_DIR:-$REPO_ROOT/backups}"
 READY_TIMEOUT="${READY_TIMEOUT:-120}"
+# How long to wait for the TLS EDGE specifically, which is a different question
+# from "is the api up". Longer than READY_TIMEOUT because on a first deploy Caddy
+# is still obtaining a certificate at this point: an ACME HTTP-01 round-trip is
+# usually seconds but can take the better part of a minute, and none of it starts
+# until the site is loaded — i.e. after everything READY_TIMEOUT covers.
+EDGE_TIMEOUT="${EDGE_TIMEOUT:-180}"
 # How many pre-deploy dumps to keep. These are separate from backup.sh's nightly
 # family and are pruned by count, because their cadence is "however often you
 # deploy" rather than daily.
@@ -489,9 +495,16 @@ step "5/6 reload Caddy"
 # admin endpoint is not listening yet. Five attempts at 2s covers that without
 # turning a wedged Caddy into a five-minute wait.
 #
-# Failure is a WARNING, not a die: at this point the stack is already up and
-# the previous config is still being served. The health probes below are the
-# gate that matters, and an operator can always `docker compose restart caddy`.
+# Exhausting those five attempts is FATAL. It used to be a warning, on the
+# reasoning that the stack was up and the previous config was still serving —
+# but that reasoning does not survive the two cases that actually produce this
+# failure. On a FIRST deploy there is no previous config: caddy is not running
+# at all (or is crash-looping on a Caddyfile.local it cannot adapt), and the
+# site is down. On a subsequent deploy it means the edge is still routing the
+# PREVIOUS release's configuration while the operator's shell reported success.
+# Both are exactly the "green deploy, dead site" outcome this script exists to
+# prevent, and neither is visible in the loopback probes below — they connect
+# to api and frontend directly, behind Caddy.
 reload_caddy() {
   local attempt
   for attempt in 1 2 3 4 5; do
@@ -504,8 +517,12 @@ reload_caddy() {
   return 1
 }
 if ! reload_caddy; then
-  printf '[deploy] WARNING: caddy reload did not succeed after 5 attempts. The stack is up and Caddy is serving its PREVIOUS configuration; a change to deploy/Caddyfile.local has NOT taken effect. Check it by hand:\n  %s exec caddy caddy validate --config /etc/caddy/Caddyfile\n  %s logs --tail=50 caddy\n  %s restart caddy\n' \
-    "${COMPOSE[*]}" "${COMPOSE[*]}" "${COMPOSE[*]}" >&2
+  "${COMPOSE[@]}" logs --tail=50 caddy >&2 || true
+  die "caddy reload did not succeed after 5 attempts, so the TLS edge is NOT serving deploy/Caddyfile.local — either it never started, or it is still serving the PREVIOUS configuration. The application containers are up and the database has already been migrated; nothing was rolled back. Caddy's last 50 log lines are above. Reproduce the adapt failure by hand:
+  ./deploy/compose.sh exec caddy caddy validate --config /etc/caddy/Caddyfile
+  ./deploy/compose.sh logs --tail=50 caddy
+  ./deploy/compose.sh restart caddy
+then re-run ./deploy/deploy.sh — it is idempotent."
 fi
 
 step "6/6 health probes"
@@ -527,6 +544,54 @@ probe() {
 rc=0
 probe "api /readyz"  "http://127.0.0.1:${HTTP_PORT}/readyz" || rc=1
 probe "frontend"     "http://127.0.0.1:${FRONTEND_PORT}/"   || rc=1
+
+# EDGE PROBE. THE GAP THIS CLOSES: both probes above connect to 127.0.0.1 —
+# INSIDE the box, to the loopback publishes, BYPASSING Caddy completely. They
+# pass in full while the site serves nothing: a Caddyfile.local that adapts but
+# reverse_proxies to the wrong upstream, a certificate that never issued, a
+# caddy container that exited, a site address that does not match the hostname
+# users type. Combined with a reload failure that was only ever a warning, a
+# deploy could exit 0 with the public site dark. This is the one probe that
+# answers the question the operator actually has.
+#
+# --resolve pins the connection to THIS host, so it tests the edge that was just
+# deployed rather than whatever the public A record resolves to right now (it
+# may still be propagating, or point at a proxy). /healthz is routed to the api
+# by deploy/Caddyfile's @api matcher, so a 200 proves TLS termination, the site
+# address, and one reverse_proxy hop all work.
+#
+# -k because the certificate is NOT what is under test and all three
+# VIDRA_TLS_MODE values have to pass here: `internal` issues from Caddy's own
+# CA and `acme-staging` from a deliberately untrusted root, neither of which
+# curl has any reason to trust. A genuinely broken chain still fails loudly in a
+# browser; this asks only "does the edge answer for this domain".
+#
+# The probe does not trigger extra ACME orders — Caddy manages issuance on its
+# own schedule — so retrying it costs nothing against Let's Encrypt's limits.
+EDGE_HOST="$(url_host "$(env_get PUBLIC_BASE_URL '')")"
+probe_edge() {
+  local host="$1" deadline
+  deadline=$(( $(date +%s) + EDGE_TIMEOUT ))
+  log "waiting up to ${EDGE_TIMEOUT}s for the TLS edge at https://${host}/healthz (pinned to 127.0.0.1)"
+  until curl -fsSk -m 5 -o /dev/null --resolve "${host}:443:127.0.0.1" "https://${host}/healthz"; do
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      printf '[deploy] ERROR: the TLS edge never answered for %s. The api and frontend are healthy on the loopback, so this is Caddy: a Caddyfile.local that adapts but routes wrong, a certificate that never issued, or a container that is not running. Recent caddy logs:\n' "$host" >&2
+      "${COMPOSE[@]}" logs --tail=50 caddy >&2 || true
+      printf '[deploy] Check by hand:\n  ./deploy/compose.sh ps caddy\n  ./deploy/compose.sh exec caddy caddy validate --config /etc/caddy/Caddyfile\n  ./deploy/compose.sh logs --tail=100 caddy\n' >&2
+      return 1
+    fi
+    sleep 3
+  done
+  log "TLS edge OK"
+}
+if [ -n "$EDGE_HOST" ]; then
+  probe_edge "$EDGE_HOST" || rc=1
+else
+  # Unreachable in practice: require_real_domain and the DNS preflight both die
+  # on an empty PUBLIC_BASE_URL long before this. Kept so a future edit to those
+  # gates cannot turn this probe into a silent no-op.
+  printf '[deploy] WARNING: PUBLIC_BASE_URL is empty, so the TLS edge was NOT probed. The checks above only cover the loopback ports, behind Caddy.\n' >&2
+fi
 
 if [ "$rc" -ne 0 ]; then
   cat >&2 <<EOF

@@ -11,7 +11,7 @@ stack plus a production overlay, behind Caddy for TLS.
 | `Caddyfile.local` | **Generated, gitignored, and the only file mounted into the caddy container.** Must exist before `up -d`: a missing bind-mount source is created by Docker as a directory and Caddy crash-loops on it. `deploy.sh`, `rollback.sh` and `restore.sh` all refuse to start without it. |
 | [`lib.sh`](./lib.sh) | **Sourced, not run.** The one copy of `env_get`, `is_true` and the compose-chain assembly. Every script below builds the SAME `-f` chain and `--profile` set from the env file through it. |
 | [`compose.sh`](./compose.sh) | `docker compose` against that chain: `./deploy/compose.sh ps \| logs -f \| config -q \| down`. Gates nothing — use it to read and to stop, `deploy.sh` to change. |
-| [`deploy.sh`](./deploy.sh) | pin checkouts → dump → pull → gated migrations → up → probe. |
+| [`deploy.sh`](./deploy.sh) | pin checkouts → dump → pull → gated migrations → up → Caddy reload → probe (api, frontend **and the TLS edge**). |
 | [`rollback.sh`](./rollback.sh) | Rewrite the image tags, pull, restart, re-probe. |
 | [`backup.sh`](./backup.sh) | `pg_dump -Fc` → gzip → optional off-site → retention → success marker. |
 | [`restore.sh`](./restore.sh) | **Destructive.** Drop, recreate, `pg_restore -j4`, migrate, re-probe. |
