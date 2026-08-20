@@ -17,7 +17,7 @@
 #
 # What this file changes versus the dev stack, and why:
 #   1. Nothing but Caddy is reachable from off-host. postgres/redis/search and
-#      the optional-profile services (clamav, whisper, otel-collector, jaeger)
+#      the optional-profile services (minio, clamav, whisper, otel-collector, jaeger)
 #      lose their published ports entirely; api and frontend publish on
 #      127.0.0.1 only. This is the ONLY firewall that actually works: Docker
 #      installs its DOCKER-USER iptables rules AHEAD of ufw, so a host firewall
@@ -353,6 +353,11 @@ services:
   # restarts perfectly. The failure is silent by construction: uploads stop being
   # scanned, captions stop being generated and traces stop being exported, and
   # none of that surfaces as an error on the request path.
+  minio:
+    ports: !reset []
+    restart: unless-stopped
+    logging: *logging
+
   clamav:
     ports: !reset []
     restart: unless-stopped
