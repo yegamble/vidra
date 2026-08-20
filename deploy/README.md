@@ -537,7 +537,7 @@ Either can go dirty without the other. Recovery, for whichever failed:
 Never point the ledger at `N` — that claims the broken migration succeeded and the
 next deploy will build on a schema that does not exist.
 
-Note that **none** of the 101 up-migrations use `CREATE INDEX CONCURRENTLY` and
+Note that **none** of the 104 up-migrations use `CREATE INDEX CONCURRENTLY` and
 none sets `lock_timeout`, so a data-dependent migration against a populated table
 *stalls* rather than fails, and api boot is gated behind it. If a migration hangs,
 look for a blocking lock (`pg_stat_activity`, `pg_locks`) before assuming it
