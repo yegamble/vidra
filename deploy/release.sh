@@ -101,21 +101,6 @@ for repo in "${REPOS[@]}"; do
 done
 log "tag ${TAG} is free in: ${REPOS[*]}"
 
-# vidra-user's publish-container.yml refuses to build without this repository
-# variable, because NEXT_PUBLIC_* is inlined into the CLIENT bundle at build time
-# and an image built without it calls the visitor's own machine forever. That
-# gate firing AFTER the release is published is the worst outcome: the release
-# is announced and there is no image. Check it here instead.
-for repo in "${REPOS[@]}"; do
-  [ "$repo" = "vidra-user" ] || continue
-  if ! gh api "repos/${OWNER}/vidra-user/actions/variables/NEXT_PUBLIC_API_BASE_URL" >/dev/null 2>&1; then
-    die "repository variable NEXT_PUBLIC_API_BASE_URL is not set on ${OWNER}/vidra-user, so its publish-container workflow will refuse to build. Set it to the public vidra-core origin first:
-    gh variable set NEXT_PUBLIC_API_BASE_URL -R ${OWNER}/vidra-user -b https://api.example.com
-  (or Settings > Secrets and variables > Actions > Variables). It is baked into the browser bundle, so it must be the real production origin — not localhost."
-  fi
-  log "vidra-user origin gate: NEXT_PUBLIC_API_BASE_URL is set"
-done
-
 # A GitHub release notifies watchers and shows up on the repo's front page. It is
 # the one step in this file that reaches people outside the machine, so it asks.
 if [ "$ASSUME_YES" = "1" ]; then
