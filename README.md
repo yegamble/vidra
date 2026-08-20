@@ -218,17 +218,21 @@ deployment (compose overlay + Caddy + deploy/backup/rollback scripts) under
 
 A **real deployment never builds on the box** — it pulls tagged images from GHCR
 and applies [`docker-compose.prod.yml`](docker-compose.prod.yml), which is what
-binds the api/frontend to `127.0.0.1`, removes the Postgres/Redis/search port
-publishes entirely, and adds restart policies, log caps and TLS:
+binds the api/frontend to `127.0.0.1`, removes the Postgres/Redis/search and
+optional-profile (minio, clamav, whisper, otel) port publishes entirely, and
+adds restart policies, log caps and TLS:
 
 ```bash
 cp env/production.env.example env/production.env   # fill in secrets; it is git-ignored
 git check-ignore -v env/production.env             # must match, or stop
 
-docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-  --env-file env/production.env --profile core --profile frontend pull
-docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-  --env-file env/production.env --profile core --profile frontend up -d --no-build
+# Never hand-type the -f / --profile chain — it omits the external-postgres/
+# external-redis overlays and EXTRA_COMPOSE_PROFILES (e.g. ipfs, storage).
+# Use the wrapper which builds the chain from the env file:
+ENV_FILE=env/production.env ./deploy/compose.sh config -q  # validate
+ENV_FILE=env/production.env ./deploy/compose.sh pull
+ENV_FILE=env/production.env ./deploy/compose.sh up -d --no-build
+# Or simply: make prod-config / make deploy
 ```
 
 In practice use `./deploy/deploy.sh` (= `make deploy`), which wraps that with a
