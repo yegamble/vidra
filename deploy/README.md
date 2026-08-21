@@ -8,10 +8,11 @@ stack plus a production overlay, behind Caddy for TLS.
 |---|---|
 | [`../docker-compose.prod.yml`](../docker-compose.prod.yml) | Production overlay: loopback binds, GHCR images, restart policies, log caps, resource limits, named volumes, Caddy. |
 | [`Caddyfile`](./Caddyfile) | **Template.** Single-origin TLS reverse proxy (path routing to api/frontend). `vidra setup` renders it to `deploy/Caddyfile.local` — the real domain and ACME settings go there, at the `# vidra:global-options` / `# vidra:tls` markers. |
-| `Caddyfile.local` | **Generated, gitignored, and the only file mounted into the caddy container.** Must exist before `up -d`: a missing bind-mount source is created by Docker as a directory and Caddy crash-loops on it. `deploy.sh`, `rollback.sh` and `restore.sh` all refuse to start without it. |
+| `Caddyfile.local` | **Generated, gitignored, and the only file mounted into the caddy container.** Must exist before `up -d`: a missing bind-mount source is created by Docker as a directory and Caddy crash-loops on it. `deploy.sh`, `rollback.sh` and `restore.sh` all refuse to start without it — except under `VIDRA_TLS_MODE=external`, where there is no caddy service to mount it into. |
 | [`lib.sh`](./lib.sh) | **Sourced, not run.** The one copy of `env_get`, `is_true` and the compose-chain assembly. Every script below builds the SAME `-f` chain and `--profile` set from the env file through it. |
 | [`compose.sh`](./compose.sh) | `docker compose` against that chain: `./deploy/compose.sh ps \| logs -f \| config -q \| down`. Gates nothing — use it to read and to stop, `deploy.sh` to change. |
-| [`deploy.sh`](./deploy.sh) | pin checkouts → dump → pull → gated migrations → up → Caddy reload → probe (api, frontend **and the TLS edge**). |
+| [`deploy.sh`](./deploy.sh) | pin checkouts → dump → pull → gated migrations → up → Caddy reload → probe (api, frontend **and the edge**). Mode-aware: `VIDRA_TLS_MODE` decides which of those still apply, and every skip is printed. |
+| [`make-bundle.sh`](./make-bundle.sh) | **Release-time, not host-time.** Assembles `vidra-bundle_<tag>.tar.gz`: this deployment tree plus the six files a deploy needs out of vidra-core, at the same relative paths a checkout has them. Deterministic; `install.sh` unpacks it instead of cloning. |
 | [`rollback.sh`](./rollback.sh) | Rewrite the image tags, pull, restart, re-probe. |
 | [`backup.sh`](./backup.sh) | `pg_dump -Fc` → gzip → **config archive** → optional off-site → retention → success marker. |
 | [`restore.sh`](./restore.sh) | **Destructive.** Drop, recreate, `pg_restore -j4`, migrate, re-probe. |
@@ -294,26 +295,45 @@ curl -fsSL https://raw.githubusercontent.com/yegamble/vidra/main/install.sh | sh
 
 [`../install.sh`](../install.sh) does everything down to `vidra setup`: detects the
 platform (Linux amd64/arm64; on macOS it prints the dev quick start and stops),
-installs `git`, `curl`, Docker Engine and the Compose v2 plugin from **Docker's own
-apt repository** when they are missing, resolves vidra-core's latest release, clones
-this repo into `/opt/vidra`, runs `./bootstrap.sh` with `VIDRA_REF` set to that
-release so all three component checkouts are pinned to it, downloads
-`vidra_<tag>_linux_<arch>` with its `SHA256SUMS` and **refuses to install it on a
-checksum mismatch**, then hands the terminal to `vidra setup`.
+installs `curl`, Docker Engine and the Compose v2 plugin from **Docker's own apt
+repository** when they are missing, resolves vidra-core's latest release,
+downloads that release's `vidra-bundle_<tag>.tar.gz`, verifies it against the
+release's `SHA256SUMS` and unpacks it into `/opt/vidra`, then downloads
+`vidra_<tag>_linux_<arch>` the same way — **refusing to install either on a
+checksum mismatch** — and hands the terminal to `vidra setup`.
+
+**No git.** The bundle is a complete deployment tree: the compose files, the
+`deploy/` scripts, the env templates, and `vidra-core/docker-compose.yml` plus
+the files it bind-mounts, at exactly the paths a checkout would have them. Its
+root carries `vidra-bundle.manifest`, which is how `deploy.sh` and `rollback.sh`
+recognise the tree (they skip the component-checkout sync, which has nothing to
+sync, and read the expected schema version from the manifest instead of from a
+`migrations/` directory the bundle deliberately does not ship).
+
+**The clone path is still there**, and is reached two ways: `--git`, and a
+release that carries no bundle asset — every release cut before the bundle
+existed, which must keep installing. Both say so. That path is the old one
+exactly: clone this repo, run `./bootstrap.sh` with `VIDRA_REF` set so all three
+component checkouts are pinned to the release. Take it deliberately if you want
+history, local patches, or to follow `main`; `git` is installed only if that path
+is actually taken.
 
 Everything it would change is behind **one** confirmation, read from `/dev/tty`
 because under `curl … | sh` stdin is the script. `--yes` skips it and is *required*
 where there is no terminal at all (cron, a Docker build, `</dev/null`) — an
 installer that silently installs Docker onto an unattended host is the wrong
 default. Other flags: `--ref vX.Y.Z` to pin a release, `--dir` (default
-`/opt/vidra`), `--owner` for a fork; `VIDRA_YES` / `VIDRA_REF` / `VIDRA_HOME` /
-`VIDRA_GH_OWNER` are the environment equivalents, and `sh install.sh --help` prints
-the lot.
+`/opt/vidra`), `--owner` for a fork, `--git` for a checkout; `VIDRA_YES` /
+`VIDRA_REF` / `VIDRA_HOME` / `VIDRA_GH_OWNER` / `VIDRA_INSTALL_GIT` are the
+environment equivalents, and `sh install.sh --help` prints the lot.
 
 It is **safe to re-run**, and that is the design: it reports what it found and
-skipped, fast-forwards the checkout only while it is clean (a dirty tree is left
-alone and warned about, never reset), leaves `/usr/local/bin/vidra` alone when it is
-already the same bytes, and **never** writes or overwrites `env/production.env` —
+skipped, leaves an already-unpacked bundle tree exactly as it is (it is never
+re-extracted over — your `env/production.env`, your `Caddyfile.local` and your
+edits are not in the tarball to be restored), fast-forwards a checkout only while
+it is clean (a dirty tree is left alone and warned about, never reset), leaves
+`/usr/local/bin/vidra` alone when it is already the same bytes, and **never**
+writes or overwrites `env/production.env` —
 `vidra setup` owns that file, refuses to rewrite an existing one without `--yes`, and
 the installer never passes `--yes` to it. Re-running an installer must not re-mint
 the KEKs that seal data already in the database. If it stops early — a release with
@@ -461,11 +481,80 @@ api refuses to boot.
 
 ---
 
+## TLS topologies: who terminates, and what the deploy stops checking
+
+`VIDRA_TLS_MODE` in `env/production.env` is not only a certificate setting — it
+decides whether this host runs an edge at all, and therefore which of
+`deploy.sh`'s pre-flight checks still mean anything. Three of the five modes
+(`acme`, `acme-staging`, `internal`) are the managed-Caddy path documented above
+and unchanged. The other two are below.
+
+Every skip is **printed** by the deploy, with its reason. If you did not read a
+skip line, the check ran.
+
+### `external` — your proxy, LB or CDN terminates TLS
+
+The site is on TLS; it is just not this container's TLS. `PUBLIC_BASE_URL` stays
+`https://`, cookies stay `Secure`, HSTS is still emitted.
+
+`deploy/lib.sh` withholds the `edge` compose profile in this mode, so **the
+caddy service is not in the project at all** — nothing here competes for `:80`
+and `:443`. Consequently `deploy.sh` skips the `deploy/Caddyfile.local` check,
+the caddy reload, and the DNS preflight (the domain is *supposed* to resolve to
+your proxy, not to this box), and the edge probe becomes a single attempt whose
+failure is a **warning**: the deploy succeeded, and whether an operator-owned
+edge two networks away answers on this host's loopback is not something a deploy
+can conclude anything from.
+
+What you own:
+
+1. **Routing.** Forward `/api/*`, `/healthz`, `/readyz`, `/version`,
+   `/sitemap.xml`, `/feeds/*`, `/nodeinfo/*` and `/.well-known/*` to the api on
+   `127.0.0.1:${HTTP_PORT}` (default 8080), everything else to the frontend on
+   `127.0.0.1:${FRONTEND_PORT}` (default 3000). `vidra setup` writes
+   `deploy/nginx-external.conf.example` — a server block mirroring
+   `deploy/Caddyfile`'s split exactly. Start from it; a hand-written proxy that
+   sends `/feeds/*` to the frontend 404s every feed link and nothing errors.
+2. **Headers.** `X-Forwarded-Proto: https` and `X-Forwarded-For`. Without the
+   first, the api believes it is serving plain HTTP and mints `http://` links.
+3. **Upload limits and timeouts.** Whatever your proxy's body-size limit is, it
+   is now the upload limit. nginx's default is 1 MB.
+4. **`TRUSTED_PROXY_CIDRS`** — only when the terminator has a **public** IP. The
+   api already trusts loopback, private and link-local sources, so a proxy on
+   this host or on the same private network needs nothing. A cloud LB or CDN
+   edge does: without its CIDR listed, its `X-Forwarded-For` is ignored and every
+   visitor is rate-limited as one address. List only ranges you control —
+   trusting a range you do not own lets anyone in it forge the header.
+
+`vidra doctor` is the check that still applies end-to-end; run it after the
+first deploy.
+
+### `plain-http` — deliberate no-TLS (lab, LAN, air-gap)
+
+Caddy still runs, as a plain-HTTP site: one managed front door, all of the
+Caddyfile and reload machinery, no certificate. `PUBLIC_BASE_URL` must be
+`http://`, and because the api applies production validation rules whatever
+`VIDRA_ENV` says, that origin is a hard refusal until you also set
+**`VIDRA_ALLOW_PLAIN_HTTP=true`**. That switch is the consent, and it is what
+turns off `Secure` cookies and HSTS — neither of which can work over plain HTTP.
+
+`deploy.sh` skips `require_real_domain` and the DNS preflight (a lab origin is
+legitimately an IP or an internal name, with no public A record), and probes the
+edge over `http://` instead of `https://`. Everything else — the Caddyfile gate,
+the reload, the migrator floor, the health probes — is unchanged.
+
+**Every credential, cookie and upload on this deployment crosses the network in
+the clear.** Use it behind a VPN, on an isolated network, or through an SSH
+tunnel; not on anything the internet can reach. Federation and OAuth remain
+https-only by design and will not work here.
+
+---
+
 ## Everyday operations
 
 ```bash
 # UPGRADE — tag a release in the component repo, wait for GHCR, then:
-cd /opt/vidra && git pull --ff-only            # compose + Caddyfile only
+cd /opt/vidra && git pull --ff-only            # compose + Caddyfile only; CHECKOUT TREES ONLY
 $EDITOR env/production.env                     # VIDRA_CORE_TAG=v0.2.0
 ./deploy/deploy.sh                             # dump -> pull -> gated migrate -> up -> probe
 
@@ -477,6 +566,24 @@ $EDITOR env/production.env                     # VIDRA_CORE_TAG=v0.2.0
 ./deploy/restore.sh backups/pre-deploy-<ts>.dump.gz
 ./deploy/rollback.sh v0.2.0
 ```
+
+**On a bundle tree there is no `git pull`.** An upgrade is the tag bump plus
+`vidra deploy` — a release changes the images, and that is what the tags name.
+To take a release's new compose files and deploy scripts as well, unpack its
+bundle over the tree (it contains no `env/` secrets and no `Caddyfile.local`, so
+neither is touched), then deploy:
+
+```bash
+cd /opt/vidra
+curl -fsSLO https://github.com/yegamble/vidra-core/releases/download/v0.2.0/vidra-bundle_v0.2.0.tar.gz
+tar -xzf vidra-bundle_v0.2.0.tar.gz            # overwrites tracked files, keeps yours
+$EDITOR env/production.env                     # VIDRA_CORE_TAG=v0.2.0 …
+./deploy/deploy.sh
+```
+
+Verify its checksum against the release's `SHA256SUMS` first if you did not get
+it through `install.sh`. A bundle-aware `vidra update` is a recorded follow-up;
+today it warns rather than refuses on a tree with no git.
 
 `vidra deploy`, `vidra rollback v0.2.0`, `vidra backup`, `vidra restore <dump>` and
 `vidra release v0.2.0` are the same four lines: each execs the script above with
@@ -585,6 +692,18 @@ build is running?" during an incident has one answer instead of three. Skipping
 a component that did not change means its tag no longer exists — release it
 anyway.
 
+**This repository is tagged too — first, and without a release.** vidra-core's
+`release-assets.yml` builds `vidra-bundle_<tag>.tar.gz` by checking *this* repo
+out at the same tag and running [`make-bundle.sh`](./make-bundle.sh) from it, so
+the bundle has a provenance (one meta commit, one core commit, both recorded in
+`vidra-bundle.manifest`) instead of being whatever `main` happened to be that
+afternoon. The workflow fails loudly if the tag is missing, which is why
+`deploy/release.sh` creates and pushes it above the per-repo loop. It is *not* in
+`ALL_REPOS`: that loop creates a GitHub release, watches `publish-container.yml`
+and verifies an image in GHCR, and there is no image here. Run `release.sh` from
+a clean `main` — it refuses to tag a HEAD that is not already on `origin/main`,
+because pushing a tag would otherwise publish unreviewed commits under it.
+
 Guards, all of which fire *before* the first release is created (a release
 notifies watchers and is not meant to be deleted):
 
@@ -592,10 +711,14 @@ notifies watchers and is not meant to be deleted):
   `VIDRA_*_TAG` and every image reference here assume;
 - `gh` must be authenticated;
 - the tag must not already exist in **any** target repo;
+- this repo's `origin` must be the `GITHUB_OWNER` repository the bundle step
+  checks out, HEAD must be an ancestor of `origin/main`, and any existing meta
+  tag of that name must point at that very commit (so re-running for a subset of
+  repos works, and a tag pointing somewhere else is a refusal, not a surprise);
 - **`vidra-user` needs the `NEXT_PUBLIC_API_BASE_URL` repository variable set**,
-  because its workflow refuses to build without one (the origin is inlined into
-  the browser bundle at build time — see *Staging → production promotion*
-  below). Set it once with
+  because its workflow refuses to build without one — it is the build-time
+  fallback origin, not the one production uses (see *Staging → production
+  promotion* below). Set it once with
   `gh variable set NEXT_PUBLIC_API_BASE_URL -R yegamble/vidra-user -b https://your.origin`.
   Until it is set, `vidra-user` has **no published image** for any tag.
 
@@ -762,13 +885,19 @@ Staging runs production config with throwaway data. Promote by deploying the
 `./deploy/deploy.sh` both work from the `VIDRA_CORE_TAG` / `VIDRA_USER_TAG` /
 `VIDRA_SEARCH_TAG` values in the env file, so promotion is copying three lines.
 
-The frontend image bakes `NEXT_PUBLIC_API_BASE_URL` at **build** time (Next.js
-inlines `NEXT_PUBLIC_*` into the client bundle), so a restart cannot repoint it.
-CI publishes **one** `vidra-user` image per release, built with the production
-API URL from the `NEXT_PUBLIC_API_BASE_URL` repository variable — it does *not*
-build a separate image per environment. A staging host with a different origin
-therefore needs its own build. With the single-origin Caddyfile this is usually
-a non-issue, because `NEXT_PUBLIC_API_BASE_URL` equals the site origin.
+**The same image serves every environment.** This used to be the opposite: the
+frontend inlined `NEXT_PUBLIC_API_BASE_URL` into the client bundle at build time,
+so a staging host with a different origin needed its own build. It no longer
+does. The container reads `PUBLIC_API_BASE_URL` (which `docker-compose.yml` fills
+from the env file's `NEXT_PUBLIC_API_BASE_URL`) and serves it to the browser as
+`/runtime-config.js`, so the origin is a **restart**, not a rebuild. The
+build-time inline survives only as the dev/e2e fallback.
+
+CI still publishes one `vidra-user` image per release and its workflow still
+requires the `NEXT_PUBLIC_API_BASE_URL` repository variable to be set — that gate
+has not changed — but the value it bakes is now only what a container that was
+given no runtime origin would fall back to. Under the single-origin topology it
+is the site origin anyway.
 
 ---
 
