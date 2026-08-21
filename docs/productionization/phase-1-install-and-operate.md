@@ -327,9 +327,10 @@ when closing items.
   `/app/data` under s3 (it is the `STORAGE_BACKEND=local` media root, simply unused there).
   **Not yet in scope (later items):** INSTANCE_NAME and richer answers, the web wizard UX
   (item 9).
-- [ ] **9. Web setup wizard** *(PARTIAL — the owner-claim slice shipped 2026-08-20, wave 3:
-  `vidra-user prod/phase1-wave3` c3aadce + dd8d00a + f275d91; the nine-step installer wizard
-  remains open)* — first-run flow: Welcome → System Check → Basic/Advanced →
+- [x] **9. Web setup wizard** *(COMPLETE 2026-08-21 — nine-step host-served wizard shipped in
+  wave 6 tranche 3, `vidra-core prod/phase1-wave6c` 7b57323..9d40eb6, PR #55; the owner-claim
+  slice shipped earlier in wave 3, `vidra-user` c3aadce + dd8d00a + f275d91)* — first-run flow:
+  Welcome → System Check → Basic/Advanced →
   Domain/Networking → Storage → Admin Account (consumes the owner-claim token) → Optional
   Features → Review → Install → Success. "Recommended setup" makes production-safe decisions
   automatically; Advanced exposes external DB/storage/proxy/IPFS. Backbone already exists: the
@@ -374,6 +375,36 @@ when closing items.
   over a map; `doctor.Report` is a serialisable struct; `preflight` is host-free; the binary
   already execs deploy.sh) except an HTTP listener and embedded wizard assets. The Admin
   Account step stays where it shipped — `/setup/claim` in the frontend, post-TLS.
+  **SHIPPED (wave 6 tranche 3, 2026-08-21):** `vidra setup --web [--listen 127.0.0.1:8321]`,
+  new package `internal/setupweb` — a loopback HTTP server in the host binary serving an
+  embedded, dependency-free nine-step wizard, with the HTTP listener and `go:embed` assets that
+  were the only missing pieces. The Install step is real: it renders the proxy config and writes
+  the 0600 env (both rendered before either is written, the terminal's ordering), then execs
+  `deploy.sh` through the CLI's existing wrapper seam with stdin closed and stdout/stderr
+  streamed to the browser over SSE; Success runs the status probe so the 15s DB/Redis fail-fast
+  shows as wizard feedback rather than a crash loop, then hands to `/setup/claim`.
+  **Containment — the server is a file-writing, deploy-running credential and is built as one:**
+  loopback-only bind (any non-loopback `--listen` is refused, naming the SSH tunnel); a
+  128-bit one-time token minted at startup, printed once in the URL, required as an
+  `X-Setup-Token` header on every `/api` call (custom header ⇒ cross-site posts can't carry it
+  ⇒ CSRF closed) and compared in constant time; a Host allowlist plus absolute-form request-
+  target refusal (DNS-rebinding); secret values never reach the browser (names + provenance
+  only, write-only inputs); a 30-minute idle shutdown that will not fire during an install (with
+  an SSE keepalive); `no-store`, a strict CSP, no external subresources, and the token scrubbed
+  from the address bar. **One engine, no second validation:** every answer flows through the
+  same exported validators and `Generate`/`Check`/`Warnings` the terminal wizard uses — only
+  question *text* is duplicated (hand-sync comments), so behaviour cannot drift; the terminal
+  interview and the engine are untouched. **Verified:** fresh `make ci` green; an adversarial
+  security audit (no blocker — constant-time token; 27 Host values, 19 bind targets, a
+  16-secret sentinel sweep, exec proven shell-free) plus a real-browser drive-through of Basic
+  plain-http, Advanced external and re-run-safety flows (secret hash byte-identical across a
+  rewrite), then a fix round for the one availability finding (idle-vs-install) and the
+  browser-pass UX/accessibility defects. **Deliberately still terminal-only** (the container/
+  host split holds): nothing here runs *inside* the deployment — the wizard is the host operator
+  bootstrapping the stack, and `vidra doctor`/`status`/`logs` remain the post-install surface.
+  **CI note:** the no-secret-echo tests plant fake `SENTINEL-*` values (one a valid-base64
+  `MFA_KEY_KEK` shape) in `_test.go` fixtures; GitGuardian flags the base64 one — a confirmed
+  false positive to dismiss, not a leak.
   **Wave-4 update (partial):** the *answer-shape* trio is now callable — `setup.NormalizeOrigin`,
   `setup.NormalizeTLSMode` and `setup.CheckAcmeEmail` are exported wrappers over the engine's
   own unexported validators (item 10 uses them to re-ask at the prompt), so domain, TLS mode
