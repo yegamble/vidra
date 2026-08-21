@@ -33,10 +33,13 @@ Web wizard, CLI wizard, and non-interactive installer all call this one service.
 
 ## 2. Storage `Presigner` capability (Phase 2 seam; cut with Phase 2's first change)
 
-Add an optional `Presigner` interface next to PathProvider/ObjectLister/PrefixDeleter in
-`vidra-core/internal/storage/storage.go` — the optional-capability + feature-detection pattern
-is already established. s3.go implements it via minio `PresignedGetObject`; local.go simply
-doesn't. **Never fold delivery/CDN concerns into `Backend` itself.**
+*Shipped 2026-08-20 (lean-S3 wave, `1485eac`), ahead of phase 2.* `Presigner` sits next to
+PathProvider/ObjectLister/PrefixDeleter/SizedPutter in
+`vidra-core/internal/storage/storage.go`; s3.go implements it via minio `PresignedGetObject`;
+local.go simply doesn't. First consumer is ffprobe's source-open ladder
+(`internal/media/ffprobe.go` — local path → presigned URL → download, presign failure
+non-fatal), which is the feature-detect + fail-open shape the §4 resolver should copy.
+**Never fold delivery/CDN concerns into `Backend` itself.**
 
 ## 3. Per-object location record (Phase 2 schema seam)
 
@@ -88,9 +91,14 @@ Every **new** queue standardizes on the `media_ipfs_pins.sql` pattern
 (`FOR UPDATE SKIP LOCKED` + lease-seconds visibility timeout + state-guarded terminal writes).
 Port vidra-search's `SEARCH_WORKERS_ENABLED` / `SEARCH_RUN_JOB` env seams into vidra-core as
 the worker-role flag (same binary, role env). Phase 2 storage-migration jobs and Phase 3
-packaging jobs must be *born* on this convention. Retrofitting the 9 legacy unsafe claims and
-replacing the boot blanket-requeue (`internal/jobrecovery`) with lease-expiry sweeps is Phase 3
-scale-out work, populating the already-present `job_runs` lease columns (migration 0083).
+packaging jobs must be *born* on this convention.
+*Update 2026-08-21: the retrofit already landed* — the 9 legacy claims lease
+(`5ead076`/`b57a1d1`), the boot blanket-requeue became lease-expiry sweeps (`2763495`), the
+sweep-only crons are leader-elected (`9a0ddbd`), and claim ORDER BYs are total orders
+(core#56: `created_at, id` on UUID-keyed queues — `ORDER BY id` alone would be random there).
+Note the leases live on the *legacy queue tables* as `next_attempt_at` pushes; `job_runs`'s
+0083 lease columns remain trigger-fed display only. Still open from this section: the
+worker-role flag port (phase-3 item 8).
 
 ## 8. Player engine adapter (Phase 4 prep; the cheap part is early)
 

@@ -7,9 +7,10 @@ without every byte proxying through the Go API. Local-only installs notice nothi
 ## What already exists (don't rebuild)
 
 - `internal/storage/storage.go`: clean `Backend` interface with optional capabilities
-  (PathProvider/ObjectLister/PrefixDeleter); traversal-safe `local.go`; `s3.go` with streaming
+  (PathProvider/ObjectLister/PrefixDeleter, and since the lean-S3 wave also
+  Presigner/SizedPutter); traversal-safe `local.go`; `s3.go` with streaming
   multipart + seekable ranged reads via minio-go; MinIO dev profile; prod defaults to s3;
-  integration-tested. **Missing only presign.**
+  integration-tested. ~~Missing only presign.~~ *Presign shipped 2026-08-20 (item 3).*
 - Opaque relative `storage_key` doctrine (migration 0008) — URLs are always minted at response
   time, so delivery changes need zero data migration.
 - The IPFS mirror as a separated *delivery* concept (authority-vs-distribution split).
@@ -27,16 +28,29 @@ those systems are not equivalent and must not share one interface.
 
 ## Work items
 
-- [ ] **1. Media-GC safety (LANDS FIRST — prerequisite for all bucket/migration work)** — the
+- [x] **1. Media-GC safety (LANDS FIRST — prerequisite for all bucket/migration work)** — the
   daily sweep runs destructive, unconditionally. Add: enable flag, dry-run-first mode,
   orphan-ratio circuit breaker, bucket-ownership marker. Without this, pointing Vidra at a
   shared/pre-populated bucket — or running GC mid-migration against a destination bucket —
   deletes unreferenced objects within 24h.
+  *Done 2026-08-21, core#58.* `MEDIA_GC_ENABLED` + `MEDIA_GC_MAX_ORPHAN_PERCENT` (breaker:
+  >100 orphans AND >25% of scanned refuses to delete); first sweep per process is always dry-run
+  plus a dry sweep ~5 min after boot; `.vidra/owner` marker carrying the new one-row
+  `instance_identity` (0105) — buckets this boot created or found empty are claimed, a populated
+  unmarked bucket is never claimed (`POST /admin/media/gc/adopt-bucket` is the audited operator
+  action), a foreign marker is a conflict; every rail degrades to dry-run, never an error; local
+  backend exempt by design; `EnsureBucket` now reports creation; doctor gained "media GC posture"
+  and "bucket ownership". MinIO integration proofs cover the full ownership matrix.
 - [ ] **2. Content hashes** — compute + store sha256 (and/or etag) on Put and backfill via a
   background job; `video_files` has only size_bytes today. Foundation for integrity-verified
   migration and post-restore consistency checks.
-- [ ] **3. `Presigner` capability** — optional interface on Backend (interfaces.md §2);
+- [x] **3. `Presigner` capability** — optional interface on Backend (interfaces.md §2);
   s3 implements, local doesn't.
+  *Already shipped 2026-08-20 by the lean-S3 wave* (`1485eac`): `storage.Presigner` +
+  `S3.PresignGet` via minio `PresignedGetObject`, first consumer ffprobe's source-open ladder
+  (local path → presigned URL → download), which is also the fail-open feature-detection
+  pattern item 6's resolver should copy. The wave also added `SizedPutter`. Remaining
+  presign work is delivery-side consumption only (item 6).
 - [ ] **4. Per-object location record** — table/column recording which backend holds each
   object (interfaces.md §3), enabling dual-read during migration.
 - [ ] **5. Storage migration jobs** — local→s3 / bucket→bucket as background jobs born on the
