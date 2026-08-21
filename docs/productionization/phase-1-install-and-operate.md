@@ -232,6 +232,25 @@ when closing items.
 > **What wave 6 tranche 1 leaves open:** item 9 (the web wizard's remaining surface — same
 > instancesettings-validator prerequisite as every wave since 2) and item 20 (the admin infra
 > panels), plus the follow-ups in (b) and (c) above.
+>
+> **Wave 6, tranche 2 (2026-08-21) — item 20 + item 9's prerequisite.** Both shipped (see the
+> item entries; core PR #54, user PR #53). One new follow-up recorded honestly: **the
+> shared-boolean-spelling gap** — `setup.IsTrue`, `deploy.sh` and the wizard all accept
+> `yes`/`on` for the keys the api and scripts share, but `config` reads booleans with
+> `strconv.ParseBool`, so `MAIL_ENABLED=yes` in a hand-edited file passes `vidra setup` and
+> then refuses to boot the api. Pre-existing (`MAIL_ENABLED`, `FEDERATION_ENABLED`);
+> `VIDRA_EXTERNAL_POSTGRES` deliberately does NOT inherit it (display-only keys must never be
+> boot-fatal — it reads the shell-true spellings). The right fix — moving the spelling rule
+> into `config` and having `setup.IsTrue` delegate — changes `MAIL_ENABLED` parsing and needs
+> its own change with its own tests. Also noted: the mail-test rate budget is spent before the
+> 503/409 checks (an unconfigured deployment can burn its 3/hour on 503s — standard middleware
+> ordering, cosmetic).
+>
+> **What wave 6 leaves open after tranche 2:** item 9's nine-step wizard itself, now
+> architected as `vidra setup --web` on the host binary (the ruling and its evidence are in
+> item 9's entry) — a tranche-3-sized build; the spelling-gap follow-up above; and tranche 1's
+> recorded follow-ups (bundle-aware `vidra update`, the typed-keys blind spot in meta-ci's
+> consumer assert).
 
 - [x] **6. Remove runtime git dependence (migrations half)** *(implemented 2026-08-19, wave 2)* —
   migrations are embedded in both Go binaries (`//go:embed` + golang-migrate as a library) with
@@ -332,9 +351,29 @@ when closing items.
   `vidra doctor` flags. `e2e-backed/owner-claim.spec.ts` is written but **not run** (see the
   wave-3 note); its happy path is skipped by design, because the backed-setup project claims the
   stack before any spec runs and first run cannot be re-entered without dropping the database.
-  **Prerequisite for the rest is still unmet:** item 7's open follow-ups — semantic `validate()`
-  reports first-error-only and the instancesettings validators remain unexposed — so per-field
-  validation of *proposed* answers still has no callable surface.
+  **Prerequisite CLOSED (wave 6 tranche 2, 2026-08-21):** `config.validate()` now collects
+  every semantic error (parse errors keep their short-circuit — semantics over garbage values
+  is second-order noise; duplicate findings dedupe; guarded branches stay guarded; multi-var
+  rules stay unattributed — each property pinned by a test), `instancesettings.Validate` is
+  exported, `Apply` reports every invalid key, and `POST /admin/instance-settings/validate` is
+  the callable per-field surface — sharing the PATCH's coercion switch so dry-run and write
+  messages are word-identical by construction. The admin config UI already consumes it,
+  retiring the five hand-copied TypeScript validators (the exact drift `NormalizeOrigin`'s
+  doc comment forbids).
+  **Architecture ruling for the remaining nine-step wizard (tranche 3, from the wave-6
+  research):** it will be served by the **host `vidra` binary** (`vidra setup --web`, loopback
+  bind), not the frontend container. Three verified facts force this: the api container cannot
+  install (no docker socket, no deploy tree, no env file on disk — config arrives as process
+  env) and structurally cannot report its own boot failure, which the item explicitly asks to
+  surface; a frontend-served wizard has a fatal pre-TLS origin problem (`singleOriginKeys`
+  points browser JS at the not-yet-live public origin, and CORS pins the same single origin,
+  so the documented SSH tunnel reaches a page whose API calls go to a dead address); and the
+  item's own "binds to localhost pre-TLS with an SSH-tunnel instruction" line is only
+  coherently satisfied by a host-side server. Every ingredient exists (`Generate`,
+  `RenderCaddyfile`/`RenderNginxExternal` are deliberately pure; `Check`/`Warnings` are pure
+  over a map; `doctor.Report` is a serialisable struct; `preflight` is host-free; the binary
+  already execs deploy.sh) except an HTTP listener and embedded wizard assets. The Admin
+  Account step stays where it shipped — `/setup/claim` in the frontend, post-TLS.
   **Wave-4 update (partial):** the *answer-shape* trio is now callable — `setup.NormalizeOrigin`,
   `setup.NormalizeTLSMode` and `setup.CheckAcmeEmail` are exported wrappers over the engine's
   own unexported validators (item 10 uses them to re-ask at the prompt), so domain, TLS mode
@@ -798,10 +837,30 @@ when closing items.
   one-shot probe deliberately stays on `/`: a deploy gate runs once and wants the strongest
   signal (a full render, with the api proven ready one line above), while the recurring
   container check wants the cheapest one that cannot lie about whose fault it is.
-- [ ] **20. Admin infra visibility** — read-only Server/Storage/Networking/Backups panels in the
-  admin UI (env-derived, guidance-oriented, consistent with the env-vs-DB doctrine) + the
-  feature-discovery pattern ("Optional: Enable DASH / Connect CDN / …") for capabilities that
-  exist but aren't configured. Mail test action.
+- [x] **20. Admin infra visibility** *(implemented 2026-08-21, wave 6 tranche 2: core
+  `prod/phase1-wave6b` 7938a13..6cccc16, user 1321658..5636ead)* — `GET /admin/infrastructure`
+  renders read-only Server / Storage / Networking / Backups panels plus a 13-capability
+  feature-discovery list, and `POST /admin/mail/test` sends one probe message.
+  **Env-derived and guidance-oriented, literally:** every response field is hand-picked with a
+  justifying comment, and the no-secret test plants sentinels in every secret-bearing config
+  field *and* every internal endpoint (DSNs, S3 keys, SMTP credentials, KEKs, tokens, ClamAV /
+  Whisper / RTMP / IPFS addresses) and asserts none reflects. **The Backups panel is
+  guidance-only by proof, not laziness:** the api container has no bind of `backups/`, none of
+  the backup env, no docker socket and no systemd — four walls verified — so it renders the
+  documented cadence, the 26-hour staleness rule, the two artifact families and (via the new
+  display-only `VIDRA_EXTERNAL_POSTGRES` passthrough, which accepts the shell-true spellings
+  and is never boot-fatal) the managed-database advice, then points at `vidra doctor` for live
+  state. **Feature discovery keys on the flags the api owns** — compose profiles are invisible
+  to the container, and the flag is the honest signal anyway. Off features get "Optional: …";
+  on-but-unconfigured gets a warning and a bare finding, because a broken relay is not
+  "optional" (deliberate deviation, recorded). Deep-links exist only where a runtime settings
+  page actually holds the switch; an e2e assertion pins that boot-env-only features get none.
+  **The item's own examples were aspirational:** DASH and CDN do not exist in core (phase 3/4
+  items), so the pattern shipped over the thirteen real capabilities and those two slot in
+  when they exist. **Mail test cannot become a relay:** the recipient is the instance contact
+  address, the request body is ignored (asserted), the limiter is 3/hour per admin, all three
+  failure modes are typed errors with stable codes that survive the generic 5xx scrub, and the
+  audit event carries an outcome — never an address.
 
 ## Safe-defaults checklist (Phase 1 exit criteria)
 
