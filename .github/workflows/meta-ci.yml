@@ -88,7 +88,7 @@ jobs:
             *"usage:"*"install.sh"*) ;;
             *) echo "::error::sh install.sh --help printed no usage line" >&2; exit 1 ;;
           esac
-          for flag in --yes --ref --dir --owner VIDRA_YES VIDRA_REF VIDRA_HOME VIDRA_GH_OWNER; do
+          for flag in --yes --ref --dir --owner --git VIDRA_YES VIDRA_REF VIDRA_HOME VIDRA_GH_OWNER VIDRA_INSTALL_GIT; do
             case "$out" in
               *"$flag"*) ;;
               *) echo "::error::sh install.sh --help does not document $flag" >&2; exit 1 ;;
@@ -339,6 +339,12 @@ jobs:
       # and POSTGRES_PASSWORD must be passed: env/production.env.example
       # deliberately ships them blank so a copied-but-unedited env file fails the
       # render instead of the api's boot.
+      #
+      # `--profile edge` is part of the deploy shape now: the caddy service moved
+      # onto that profile so VIDRA_TLS_MODE=external can leave it out, and
+      # deploy/lib.sh appends it for every other mode. Rendering without it here
+      # would validate a stack with no TLS terminator in it, which is nobody's
+      # production.
       - name: Validate production overlay compose resolves
         env:
           JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
@@ -350,7 +356,64 @@ jobs:
         run: |
           docker compose -f docker-compose.yml -f docker-compose.prod.yml \
             --env-file env/production.env.example \
-            --profile core --profile frontend config -q
+            --profile core --profile frontend --profile edge config -q
+
+      # THE PROFILE IS THE WHOLE MECHANISM, so it is asserted in both directions
+      # and at both levels. One direction alone is worthless: "caddy renders" was
+      # true before the profile existed, and "caddy is absent without the profile"
+      # is equally true of a caddy service that was deleted by accident.
+      #
+      # The compose half proves the service is gated. The lib.sh half proves the
+      # gate is operated by the ENGINE and not by the operator - if edge_profile()
+      # ever stopped emitting `edge` for the ordinary modes, every existing env
+      # file (none of which names the profile) would deploy with no TLS
+      # terminator, and the compose assertions above would all still pass.
+      - name: caddy is in the project unless VIDRA_TLS_MODE=external
+        env:
+          JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
+          REDIS_PASSWORD: ci-dummy-redis-password
+          POSTGRES_PASSWORD: ci-dummy-password
+          VIDRA_CORE_TAG: ci-dummy
+          VIDRA_USER_TAG: ci-dummy
+          VIDRA_SEARCH_TAG: ci-dummy
+        run: |
+          render() {
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+              --env-file env/production.env.example \
+              --profile core --profile frontend "$@" config
+          }
+          if ! render --profile edge | grep -qE '^  caddy:'; then
+            echo "::error::the default deploy shape (--profile edge, which deploy/lib.sh appends for every mode but external) renders WITHOUT the caddy service - every existing deployment would come up with no TLS terminator" >&2
+            exit 1
+          fi
+          if render | grep -qE '^  caddy:'; then
+            echo "::error::caddy renders even without the edge profile, so VIDRA_TLS_MODE=external cannot keep it out - it would fight the operator's own proxy for :80 and :443" >&2
+            exit 1
+          fi
+
+          # The engine's half. Sourced exactly as the deploy scripts source it:
+          # ENV_FILE and log() defined first, per deploy/lib.sh's stated contract.
+          tmp="$(mktemp -d)"
+          fail=0
+          for mode in UNSET acme acme-staging internal plain-http external; do
+            : > "$tmp/t.env"
+            if [ "$mode" != UNSET ]; then
+              echo "VIDRA_TLS_MODE=$mode" > "$tmp/t.env"
+            fi
+            got="$(
+              ENV_FILE="$tmp/t.env"
+              log() { :; }
+              . ./deploy/lib.sh
+              edge_profile
+            )"
+            if [ "$mode" = external ]; then want=""; else want="edge"; fi
+            if [ "$got" != "$want" ]; then
+              echo "::error::edge_profile() returned '${got}' for VIDRA_TLS_MODE=${mode}, expected '${want}'" >&2
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] || exit 1
+          echo "OK: caddy renders with the edge profile and not without it, and deploy/lib.sh adds that profile for every mode except external."
 
       # The overlay's entire security value is that it closes ports, and it does
       # that with `!reset` / `!override` — merge tags that a Compose older than
@@ -366,6 +429,11 @@ jobs:
       # the whole contract: caddy 80/443, plus the two protocols remote peers dial
       # directly (RTMP ingest 1935, IPFS libp2p swarm 4001). Anything else that
       # wants a host port has to argue for it here first.
+      #
+      # `edge` is in BOTH renders for a reason that is easy to lose: caddy is the
+      # one service in the allow-list that publishes off-host, so a render that
+      # omits its profile silently stops checking the only ports that face the
+      # internet - and passes, greenly, while proving nothing about them.
       - name: Production overlay actually closes the internal ports
         env:
           JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
@@ -377,10 +445,10 @@ jobs:
         run: |
           docker compose -f docker-compose.yml -f docker-compose.prod.yml \
             --env-file env/production.env.example \
-            --profile core --profile frontend config > /tmp/prod-config.yml
+            --profile core --profile frontend --profile edge config > /tmp/prod-config.yml
           docker compose -f docker-compose.yml -f docker-compose.prod.yml \
             --env-file env/production.env.example \
-            --profile core --profile frontend --profile scan --profile captions \
+            --profile core --profile frontend --profile edge --profile scan --profile captions \
             --profile otel --profile media --profile ipfs \
             config > /tmp/prod-config-all-profiles.yml
           python3 - <<'PY'
@@ -462,7 +530,7 @@ jobs:
         run: |
           docker compose -f docker-compose.yml -f docker-compose.prod.yml \
             --env-file env/production.env.example \
-            --profile core --profile frontend config > /tmp/prod-config.yml
+            --profile core --profile frontend --profile edge config > /tmp/prod-config.yml
           python3 - <<'PY'
           import sys, yaml
           svcs = yaml.safe_load(open('/tmp/prod-config.yml'))['services']
@@ -515,6 +583,175 @@ jobs:
           test -d vidra-core/.git
           test -d vidra-search/.git
           test -d vidra-user/.git
+
+  # THE NO-GIT BUNDLE, PROVEN THE ONLY WAY IT CAN BE: by taking the checkouts
+  # away and rendering anyway.
+  #
+  # deploy/make-bundle.sh's entire claim is that a production deploy needs six
+  # files out of vidra-core and nothing else - no component checkouts, no git, no
+  # migrations directory. That claim is invisible to every other job here,
+  # because every other job HAS the checkouts: a bundle missing half its contents
+  # renders perfectly in this workspace and fails on the first operator's host.
+  # So this job builds the tarball, moves the real checkouts out of the tree, and
+  # renders the production matrix from inside the extract - where a forgotten
+  # file has nowhere to come from.
+  #
+  # It is a separate job because it deliberately mutilates its own workspace.
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # vidra-core ONLY. vidra-search and vidra-user are not checked out at all,
+      # which is itself part of the assertion: if the rendered production model
+      # needed either of them on disk, this job could not pass.
+      - name: Check out vidra-core (the bundle's --core input)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yegamble/vidra-core
+          path: vidra-core
+          persist-credentials: false
+
+      # The exact interface vidra-core's release-assets workflow calls. If these
+      # flags change, that workflow breaks in the release it is needed for, which
+      # is the worst possible time to find out.
+      - name: Build the bundle, twice, and assert the two are identical
+        run: |
+          ./deploy/make-bundle.sh --core "$GITHUB_WORKSPACE/vidra-core" \
+            --tag v0.0.0-ci --out "$RUNNER_TEMP/vidra-bundle_v0.0.0-ci.tar.gz"
+          ./deploy/make-bundle.sh --core "$GITHUB_WORKSPACE/vidra-core" \
+            --tag v0.0.0-ci --out "$RUNNER_TEMP/second.tar.gz"
+          # Reproducibility is not a nicety here: this tarball is a release asset
+          # published next to binaries that already have the property, and an
+          # asset nobody can rebuild bit-for-bit is an asset nobody can audit.
+          # The usual regressions are a stray mtime, the builder's umask, or an
+          # unsorted find.
+          cmp "$RUNNER_TEMP/vidra-bundle_v0.0.0-ci.tar.gz" "$RUNNER_TEMP/second.tar.gz" \
+            || { echo "::error::deploy/make-bundle.sh is not deterministic - two runs from the same commits produced different bytes" >&2; exit 1; }
+          echo "OK: byte-identical across runs."
+
+      - name: The manifest's schema version matches the migrations on disk
+        run: |
+          mkdir -p "$RUNNER_TEMP/tree"
+          tar -xzf "$RUNNER_TEMP/vidra-bundle_v0.0.0-ci.tar.gz" -C "$RUNNER_TEMP/tree"
+          # Derived FRESHLY here, with the same pipeline deploy.sh uses on a git
+          # checkout. deploy.sh trusts this number on a bundle host - it is the
+          # independent second opinion it checks the migrator's own ledger
+          # against - so a manifest that disagrees with the migrations would turn
+          # that check into a coin toss, silently.
+          fresh="$(ls -1 vidra-core/migrations/*.up.sql | awk -F/ '{print $NF}' | awk -F_ '{print $1}' | sort -n | tail -1)"
+          got="$(sed -n 's/^core_schema_version=//p' "$RUNNER_TEMP/tree/vidra-bundle.manifest")"
+          if [ "$fresh" != "$got" ]; then
+            echo "::error::vidra-bundle.manifest says core_schema_version=${got}, but vidra-core/migrations tops out at ${fresh}" >&2
+            exit 1
+          fi
+          for key in tag core_schema_version meta_commit core_commit; do
+            grep -qE "^${key}=." "$RUNNER_TEMP/tree/vidra-bundle.manifest" \
+              || { echo "::error::vidra-bundle.manifest has no ${key}= line - deploy.sh and the release provenance both read it" >&2; exit 1; }
+          done
+          echo "OK: core_schema_version=${got}, and all four manifest keys are present."
+
+      # The exclusions are as load-bearing as the inclusions. An auto-loaded
+      # docker-compose.override.yml in a bundle re-adds build contexts that do
+      # not exist there, so every bare `docker compose` in the tree starts
+      # failing about a directory nobody asked for; bootstrap.sh in a tree that
+      # exists because there is no git is a trap; and a .git anywhere would make
+      # deploy.sh take the checkout path on a tree that has no remotes.
+      - name: The bundle carries what a deploy needs and none of what it must not
+        run: |
+          cd "$RUNNER_TEMP/tree"
+          bad=""
+          for f in docker-compose.yml docker-compose.prod.yml \
+                   docker-compose.external-postgres.yml docker-compose.external-redis.yml \
+                   env/production.env.example deploy/deploy.sh deploy/rollback.sh \
+                   deploy/restore.sh deploy/backup.sh deploy/provision.sh deploy/lib.sh \
+                   deploy/compose.sh deploy/Caddyfile deploy/README.md \
+                   deploy/cloud-init.yaml.example deploy/vidra-backup.service \
+                   deploy/vidra-backup.timer vidra-bundle.manifest \
+                   vidra-core/docker-compose.yml; do
+            [ -f "$f" ] || bad="${bad} MISSING:${f}"
+          done
+          # Explicit `if`s, not `[ … ] && bad=…`: under `bash -e` (the default
+          # shell here) a failing AND-list is a failing command, so the spelling
+          # that reads better would kill the step on the first file that is
+          # correctly absent.
+          for f in bootstrap.sh docker-compose.override.yml docker-compose.dev.yml; do
+            if [ -e "$f" ]; then bad="${bad} PRESENT:${f}"; fi
+          done
+          if [ -d .git ]; then bad="${bad} PRESENT:.git"; fi
+          # Every path vidra-core's compose file bind-mounts. A missing one is
+          # created by Docker as an empty DIRECTORY and the container crash-loops
+          # on it - on the operator's host, at `up -d`, with nothing in this
+          # repository having noticed.
+          while IFS= read -r m; do
+            [ -f "vidra-core/$m" ] || bad="${bad} MISSING-MOUNT:vidra-core/${m}"
+          done <<EOF
+          $(grep -oE '^[[:space:]]*-[[:space:]]*\./[^:]+:' vidra-core/docker-compose.yml | sed -e 's/^[[:space:]]*-[[:space:]]*\.\///' -e 's/:$//' | sort -u)
+          EOF
+          if [ -n "$bad" ]; then
+            echo "::error::the bundle's contents are wrong:${bad}" >&2
+            exit 1
+          fi
+          echo "OK: the deployment tree is complete and carries no bootstrap.sh, no override/dev overlay and no .git."
+
+      # deploy.sh and rollback.sh branch on this and nothing else. If it answered
+      # `false` here they would run the checkout-sync loop on a tree with no .git
+      # and die - the exact failure the bundle exists to remove.
+      - name: deploy/lib.sh recognises the extracted tree as a bundle
+        run: |
+          cd "$RUNNER_TEMP/tree"
+          ENV_FILE=env/production.env.example
+          log() { :; }
+          . ./deploy/lib.sh
+          if ! is_bundle_tree "$PWD"; then
+            echo "::error::is_bundle_tree() says the extracted bundle is not a bundle - deploy.sh would take the git path on it and die" >&2
+            exit 1
+          fi
+          if is_bundle_tree "$GITHUB_WORKSPACE"; then
+            echo "::error::is_bundle_tree() says this git checkout IS a bundle - deploy.sh would skip the checkout sync on a tree that needs it" >&2
+            exit 1
+          fi
+          echo "OK: bundle tree yes, git checkout no; manifest tag=$(bundle_manifest_get "$PWD" tag)."
+
+      # THE ACTUAL PROOF. The checkout is moved away first, so nothing below can
+      # be resolving a path out of the workspace by accident.
+      - name: Render the production matrix from inside the bundle, with no checkouts on disk
+        env:
+          JWT_SECRET: ci-dummy-jwt-secret-not-a-real-secret
+          REDIS_PASSWORD: ci-dummy-redis-password
+          POSTGRES_PASSWORD: ci-dummy-password
+          VIDRA_CORE_TAG: ci-dummy
+          VIDRA_USER_TAG: ci-dummy
+          VIDRA_SEARCH_TAG: ci-dummy
+          DATABASE_URL: postgres://vidra:ci-dummy-password@db.ci.invalid:5432/vidra?sslmode=require
+          REDIS_URL: redis://:ci-dummy-redis-password@cache.ci.invalid:6379/0
+          SEARCH_REDIS_URL: redis://:ci-dummy-redis-password@cache.ci.invalid:6379/1
+        run: |
+          mv "$GITHUB_WORKSPACE/vidra-core" "$RUNNER_TEMP/vidra-core-moved-away"
+          cd "$RUNNER_TEMP/tree"
+          render() {
+            what="$1"; shift
+            if ! docker compose -f docker-compose.yml -f docker-compose.prod.yml "$@" \
+                 --env-file env/production.env.example config -q; then
+              echo "::error::the ${what} render fails inside an unpacked bundle - a deployment host would get this instead of a stack" >&2
+              exit 1
+            fi
+            echo "  OK: ${what}"
+          }
+          render "default deploy (core+frontend+edge)" --profile core --profile frontend --profile edge
+          render "external TLS (core+frontend, no edge)" --profile core --profile frontend
+          render "every optional profile" --profile core --profile frontend --profile edge \
+            --profile scan --profile captions --profile otel --profile media --profile ipfs
+          render "external Postgres" -f docker-compose.external-postgres.yml \
+            --profile core --profile frontend --profile edge
+          render "external Redis" -f docker-compose.external-redis.yml \
+            --profile core --profile frontend --profile edge
+          render "both external datastores" -f docker-compose.external-postgres.yml \
+            -f docker-compose.external-redis.yml --profile core --profile frontend --profile edge
+          echo "OK: every production shape renders from a tree with no component checkouts anywhere."
 
   # Readiness plan step 2's "Verify": render a template with dummy secrets, boot
   # the api in PRODUCTION mode, and assert /readyz 200. Separate job because it
