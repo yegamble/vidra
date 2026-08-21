@@ -57,13 +57,26 @@ those systems are not equivalent and must not share one interface.
   (local path → presigned URL → download), which is also the fail-open feature-detection
   pattern item 6's resolver should copy. The wave also added `SizedPutter`. Remaining
   presign work is delivery-side consumption only (item 6).
-- [ ] **4. Per-object location record** — table/column recording which backend holds each
+- [x] **4. Per-object location record** — table/column recording which backend holds each
   object (interfaces.md §3), enabling dual-read during migration.
-- [ ] **5. Storage migration jobs** — local→s3 / bucket→bucket as background jobs born on the
+  *Done 2026-08-21, core#60 (with item 5).* `storage_migration_objects` (0107) is the record —
+  keyed on `object_key` like the pin ledger, carrying state/sha256/byte_size; `verified` /
+  `source_deleted` = present in target. Dual-read = `storage.Fallback` (Backend only, no
+  capabilities — GC/doctor keep the raw primary); new `Describer` + `RootLister` capabilities.
+- [x] **5. Storage migration jobs** — local→s3 / bucket→bucket as background jobs born on the
   SKIP LOCKED + lease worker convention (interfaces.md §7): copy → verify hash → flip location
   record → (grace period) → delete source. Progress/retries surfaced through the existing
   jobstatus machinery. IPFS pin-ledger rows key on object keys — keep keys stable or migrate
   the ledger with them.
+  *Done 2026-08-21, core#60.* Campaign table + object ledger (0107); unleadered leased copy
+  workers, leader-gated enumerate/reconcile sweep; verify = re-open + re-hash the TARGET,
+  cross-checked against item 2's `video_files.sha256`; cutover is *observed* (operator swaps
+  both env sets + restarts — runbook in core docs/operations.md "Moving the media store"),
+  source deletion needs zero-pending + `STORAGE_MIGRATION_GRACE_HOURS` (168) + an identity
+  match, and the copy pass carries a direction guard against half-done swaps. Keys stay stable
+  so the pin ledger is untouched; GC is forced dry-run for the campaign's life. Progress rides
+  jobstatus via a campaign sync trigger (7th queue). Follow-ups noted: S3→S3 copy loses the
+  single-PUT size hint (16 MiB part buffers); a doctor "migration in flight" check.
 - [ ] **6. Direct object delivery (signed URLs)** — presign-redirect for eligible
   public/authorized objects via the delivery resolver (interfaces.md §4). **Must land as a
   package with:** cache-header policy work (Cache-Control is deliberately private today) and
