@@ -77,12 +77,22 @@ those systems are not equivalent and must not share one interface.
   so the pin ledger is untouched; GC is forced dry-run for the campaign's life. Progress rides
   jobstatus via a campaign sync trigger (7th queue). Follow-ups noted: S3→S3 copy loses the
   single-PUT size hint (16 MiB part buffers); a doctor "migration in flight" check.
-- [ ] **6. Direct object delivery (signed URLs)** — presign-redirect for eligible
+- [x] **6. Direct object delivery (signed URLs)** — presign-redirect for eligible
   public/authorized objects via the delivery resolver (interfaces.md §4). **Must land as a
   package with:** cache-header policy work (Cache-Control is deliberately private today) and
   the entity-ID-filename privacy analysis — unguessable names are currently safe *only*
   because serving is API-proxied. The API-proxy path remains the authoritative fallback and
   the only path for password-protected/private media until sessions (Phase 4).
+  *Done 2026-08-21, core#61, as the package.* `internal/delivery` resolver (mirror → presigned →
+  api-proxy terminal, all fail-open, `Purge` hook day one); the 5 IPFS redirect sites folded in
+  behavior-identically; presign behind runtime `delivery_presign_enabled` (default off), 1h TTL,
+  fully-public path only — never past the password gate, never playlists, never storyboard VTTs
+  (relative sprite refs). New `storage.ResponsePresigner` signs content-type/disposition/cache
+  into the URL (objects carry no Content-Type — bare presign would break inline playback);
+  presigner withheld entirely during a storage migration. Cache policy added to every
+  previously header-less media route. Privacy analysis: risks.md corrected — keys ARE
+  deterministic from public UUIDs; the controls are the private bucket, the auth gates, TTL.
+  Captions deferred (stream-only service seam, few-KB win) — wiring, not redesign, later.
 - [ ] **7. Backup/restore integration** — restore gains a blob-reference consistency check
   (DB rows ↔ objects, using item 2's hashes); backup docs cover S3-canonical deployments
   (provider-side durability + lifecycle guidance).

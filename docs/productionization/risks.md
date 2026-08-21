@@ -24,10 +24,26 @@ when retired.
    by documentation alone.** One destructive migration turns every rollback into
    old-code-on-new-schema corruption. CI enforcement (migration lint + N−1-binary-vs-N-schema
    job) is the highest-leverage prerequisite for `vidra update`.
-6. **Signed-URL/CDN/byte-path is an entangled triple.** Entity-ID filenames are unguessable
-   only because serving is API-proxied; authorization is per-request in the API; cache headers
-   are private for the same reason. Presign-redirect, header promotion, and purge machinery
-   land together or privacy leaks (a CDN entry outliving the auth decision; `?pt=` tokens in
+6. **Signed-URL/CDN/byte-path is an entangled triple.** ~~Entity-ID filenames are unguessable
+   only because serving is API-proxied~~ — **correction (phase-2 item 6): the filenames were
+   never unguessable.** Every media key is a deterministic function of a PUBLIC entity UUID:
+   `web-videos/<video-id>.mp4`, `thumbnails/<video-id>.jpg`, `storyboards/<video-id>.jpg`,
+   `avatars/users/<user-id>.png`, `playlist-thumbnails/<playlist-id>.jpg`,
+   `streaming-playlists/<video-id>/<height>p/seg_NNNNN.ts`. Anyone holding an id that the API
+   hands out on any public surface can compute the key. What actually protects private media is
+   (a) the bucket being private, so a key is worthless without credentials, and (b) per-request
+   authorization on the API byte path. Delivery must therefore be reasoned about as
+   "who can be given a credential", never as "who can guess a name".
+   *Item 6 shipped under exactly that reading:* presign only behind the same gates that gate the
+   bytes (public AND published, not password-protected, all download gates open, no `?pt=`, no
+   Authorization header), a 1-hour signature TTL with a 5-minute redirect cache so no expired
+   signature is replayed, private/unpublished/password media never signed at all, and a runtime
+   kill switch (`delivery_presign_enabled`, default off). Still true and still live: authorization
+   is per-request in the API; cache headers are private for the same reason (item 6 gave the
+   previously header-less byte routes an explicit private policy rather than promoting anything);
+   and **header promotion and CDN purge machinery still have to land together** — `delivery.Resolver`
+   carries `Purge` from day one precisely so nothing is promoted to shared caching before there is
+   something to invalidate it with (a CDN entry outliving the auth decision; `?pt=` tokens in
    edge logs).
 7. **CMAF/DASH is a pipeline restructure, not new ffmpeg flags.** Packaging is fused into the
    encode; the storage tree, mediagc grammar, hls.go allowlists all assume the TS layout;
