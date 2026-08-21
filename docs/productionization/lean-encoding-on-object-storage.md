@@ -378,23 +378,53 @@ table, not measured on a real 30-minute upload — the shape is right, the const
 - **A presigned source URL is visible in the process list** to a local user on the host. It is
   read-only, single-object and time-limited; that is the trade for not staging every original.
 
+### Follow-ups — closed 2026-08-21
+
+Three of the four items left open above were closed the next day.
+
+- **Backblaze B2 versioning — CLOSED** (`9302746`). `storage.BucketRetention` reads the bucket's
+  versioning and lifecycle configuration; `vidra doctor` reports it as **object retention** and
+  warns when versioning is on with no non-current-version expiry rule. A store that will not answer
+  either query reports UNKNOWN rather than OK, and a lifecycle rule that exists but is *disabled*
+  does not count. The operator fix (including a copy-paste rule) is in
+  `vidra-core/docs/operations.md`, in the media-backup section — which previously recommended
+  leaning on the store's own versioning without mentioning that doing so stops every delete from
+  reclaiming.
+- **Disk admission control — CLOSED** (`a2b53d7`). `DrainJobs` now checks a free-space floor
+  (`TRANSCODING_MIN_FREE_SCRATCH_MB`, default 10 GiB) *before* claiming, and estimates per-job need
+  from `video_files.size_bytes` keyed by the job's `source_key`. A job that does not fit is
+  **deferred** through a new query that does not increment `attempts` — using the existing
+  reschedule would have dead-lettered a good video after five full-disk ticks. Both guards fail
+  open: an unmeasurable filesystem or an unknown source size admits the job. `internal/diskspace`
+  is shared with `vidra doctor` so both measure the same disk the same way.
+- **Multi-instance claim safety — CLOSED** (`5ead076`, `b57a1d1`, `2763495`). Three commits:
+  1. The three **bare-SELECT** queues (federation delivery, ATProto cross-post, search outbox) now
+     lease. They had no claim at all, so two instances would both act on the same row — a duplicate
+     activity delivered to every remote server, or a second Bluesky post on a user's public feed.
+  2. The six **state-flip** claims gained `FOR UPDATE SKIP LOCKED`. Not theoretical: with it
+     removed, the new integration test reproduces a double-claim 5 runs out of 5.
+  3. `internal/jobrecovery`'s boot-time blanket requeue was replaced by **lease-expiry sweeps** —
+     claim takes a 30-minute lease, the worker renews it every 5 minutes while working, and the
+     sweep (now on a 2-minute ticker, not just at boot) returns only rows nobody is renewing.
+
+  All of it is verified against real PostgreSQL, because the guarantee comes from
+  `FOR UPDATE SKIP LOCKED` inside one statement and no in-memory fake can model that.
+
 ### Still open
 
-- **Backblaze B2 versioning.** Untouched by this work. `S3.Delete`/`DeletePrefix` still only
-  create hide markers on a versioned bucket, so upload chunks deleted after assembly are billed
-  forever and `mediagc` reclaims nothing. Needs a documented lifecycle rule plus a `vidra doctor`
-  check — that is the highest-value remaining item in this document.
-- **Disk admission control.** `DrainJobs` still claims work without asking whether the scratch
-  volume can hold it. `internal/doctor/host.go` already has `statfs`, and the estimate is easy
-  because the source size is known and the ladder is planned up front.
+- **Leader election for the singleton crons.** The ~9 periodic workers that *sweep* rather than
+  *claim* (media GC, scheduled publish, transcode-hold sweep, upload sweep, search reconcile, IPFS
+  reconcile, operational-job retention, E2EE sweep, live watchdog) would each run on every instance.
+  They are individually idempotent today, but that is an observation about the current code rather
+  than a guarantee. Phase 3 item 10's advisory-lock leader election is what would make it one, and
+  it is now the last thing between this codebase and an honest multi-instance story.
 - **Web-video peak.** Decode-once necessarily produces every progressive MP4 before any can be
   uploaded, so that pass's peak is the full set. Deleting each as it stores shortens how long the
   peak is held but does not lower it.
-- **Multi-instance is still unsafe.** `ClaimDueTranscodeJobs` has no `FOR UPDATE SKIP LOCKED` and
-  no lease; `internal/jobrecovery` still requeues every `running` row at boot. Nothing here changes
-  that — Phase 3 items 9–10 remain a hard prerequisite for a second instance.
 - **Streaming output is off by default** and needs a real deployment behind it before it can be
   recommended. It is verified against ffmpeg but has not run against a live S3/B2 bucket.
+- **No soak test.** `docker compose up --scale` with two API replicas has not been run. The claim
+  semantics are proven at the query level; the topology is not.
 
 ---
 

@@ -65,13 +65,19 @@ Upload → Ingest → Probe → Transcode → Rendition ladder → CMAF packagin
 - [ ] **8. Worker role flag** — same binary, `WORKERS_ENABLED`/role env (port the vidra-search
   seam); compose profile for a dedicated worker container; ffmpeg moves out of the API
   container's resource envelope.
-- [ ] **9. Lease retrofit** — convert the 9 single-process-only claim queries to the
-  SKIP LOCKED + lease template; the 3 bare-SELECT queues (federation delivery, ATProto
-  cross-post among them — double-delivery visible to other servers!) are the easiest to miss
-  because they look like reads. Populate the job_runs lease columns.
-- [ ] **10. Replace boot blanket-requeue** (`internal/jobrecovery` requeues *running* rows —
-  actively multi-node-hostile) with lease-expiry sweeps; advisory-lock leader election for
-  singleton crons.
+- [x] **9. Lease retrofit** — DONE 2026-08-21 (core `5ead076`, `b57a1d1`). The 3 bare-SELECT
+  queues (federation delivery, ATProto cross-post, search outbox) now lease; the 6 state-flip
+  claims gained `FOR UPDATE SKIP LOCKED`. No migration was needed — every one of those tables
+  already had `next_attempt_at`, and for a row being worked on "when may someone else touch this"
+  and "when should this be retried" are the same question. Verified against real PostgreSQL: with
+  SKIP LOCKED removed the double-claim reproduces 5 runs out of 5.
+- [~] **10. Replace boot blanket-requeue** — the requeue half is DONE 2026-08-21 (core
+  `2763495`): claim takes a 30-minute lease, `internal/lease` renews it every 5 minutes while the
+  worker works, and `jobrecovery.Sweep` returns only rows nobody is renewing, on a 2-minute ticker
+  rather than once at boot. **Advisory-lock leader election for the singleton crons is NOT done**
+  — the ~9 sweep-only workers still run on every instance. They are individually idempotent today,
+  which is an observation rather than a guarantee, and this is now the last blocker for an honest
+  multi-instance story.
 - [ ] **11. Scale story validation** — 2 api replicas + N workers soak test; document the
   supported topologies (this is what makes "Distributed" tier honest).
 
