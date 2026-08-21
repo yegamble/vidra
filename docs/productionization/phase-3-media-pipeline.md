@@ -71,15 +71,24 @@ Upload → Ingest → Probe → Transcode → Rendition ladder → CMAF packagin
   already had `next_attempt_at`, and for a row being worked on "when may someone else touch this"
   and "when should this be retried" are the same question. Verified against real PostgreSQL: with
   SKIP LOCKED removed the double-claim reproduces 5 runs out of 5.
-- [~] **10. Replace boot blanket-requeue** — the requeue half is DONE 2026-08-21 (core
-  `2763495`): claim takes a 30-minute lease, `internal/lease` renews it every 5 minutes while the
-  worker works, and `jobrecovery.Sweep` returns only rows nobody is renewing, on a 2-minute ticker
-  rather than once at boot. **Advisory-lock leader election for the singleton crons is NOT done**
-  — the ~9 sweep-only workers still run on every instance. They are individually idempotent today,
-  which is an observation rather than a guarantee, and this is now the last blocker for an honest
-  multi-instance story.
-- [ ] **11. Scale story validation** — 2 api replicas + N workers soak test; document the
-  supported topologies (this is what makes "Distributed" tier honest).
+- [x] **10. Replace boot blanket-requeue** — DONE 2026-08-21. Both halves:
+  - *Requeue* (core `2763495`): claim takes a 30-minute lease, `internal/lease` renews it every
+    5 minutes while the worker works, and `jobrecovery.Sweep` returns only rows nobody is renewing,
+    on a 2-minute ticker rather than once at boot.
+  - *Leader election* (core `9a0ddbd`): the ~9 sweep-only workers are gated on a PostgreSQL
+    advisory lock held on a dedicated connection — exactly one instance runs them, and the server
+    releases the lock itself when that instance dies. Gating is per TICK, not per worker, because
+    the IPFS mirror worker mixes a leased drain (must run everywhere) with a reconcile (must not).
+    The key uses the two-int lock form specifically so it cannot collide with golang-migrate's
+    one-bigint migration lock — verified by test rather than assumed.
+- [x] **11. Scale story validation** — DONE 2026-08-21 (core `55bb877`,
+  `deploy/docker-compose.soak.yml`). Two api replicas against one PostgreSQL: both serve, exactly
+  one advisory-lock holder, `SIGKILL` on the leader drops holders to 0 and a new leader is elected
+  ~11s later, and 400 outbox events drained concurrently produced **406 deliveries for 406 unique
+  events, 0 duplicates**. Checked against a counterfactual — with the lease and `SKIP LOCKED`
+  removed and the image rebuilt, the same run produced **423 deliveries, 17 duplicates** — so the
+  harness demonstrably detects the failure it is asserting the absence of. Supported topology and
+  its caveats documented in `vidra-core/docs/operations.md`.
 
 ## Exit criteria
 

@@ -412,19 +412,19 @@ Three of the four items left open above were closed the next day.
 
 ### Still open
 
-- **Leader election for the singleton crons.** The ~9 periodic workers that *sweep* rather than
-  *claim* (media GC, scheduled publish, transcode-hold sweep, upload sweep, search reconcile, IPFS
-  reconcile, operational-job retention, E2EE sweep, live watchdog) would each run on every instance.
-  They are individually idempotent today, but that is an observation about the current code rather
-  than a guarantee. Phase 3 item 10's advisory-lock leader election is what would make it one, and
-  it is now the last thing between this codebase and an honest multi-instance story.
+- ~~**Leader election for the singleton crons.**~~ **CLOSED 2026-08-21** (core `9a0ddbd`). The ~9
+  sweep-only workers are gated on a PostgreSQL advisory lock held on a dedicated connection, so
+  exactly one instance runs them and the server releases the lock itself when that instance dies.
 - **Web-video peak.** Decode-once necessarily produces every progressive MP4 before any can be
   uploaded, so that pass's peak is the full set. Deleting each as it stores shortens how long the
   peak is held but does not lower it.
 - **Streaming output is off by default** and needs a real deployment behind it before it can be
   recommended. It is verified against ffmpeg but has not run against a live S3/B2 bucket.
-- **No soak test.** `docker compose up --scale` with two API replicas has not been run. The claim
-  semantics are proven at the query level; the topology is not.
+- ~~**No soak test.**~~ **CLOSED 2026-08-21** (core `55bb877`). Two replicas, one PostgreSQL:
+  406 deliveries for 406 events with 0 duplicates, against a counterfactual that produced 17
+  duplicates with the lease removed. See `vidra-core/docs/operations.md` for the supported topology
+  and its caveats — notably that a *partitioned* leader keeps its lock until PostgreSQL notices the
+  session is gone, and that `STORAGE_BACKEND=local` cannot scale out at all.
 
 ---
 
