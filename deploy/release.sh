@@ -18,8 +18,24 @@
 #                     created, because a GitHub release is outward-facing: it
 #                     mails watchers and it cannot be un-announced.
 #   2. confirm      — one prompt, skippable with --yes for a scripted release.
-#   3. per repo     — gh release create -> watch the publish-container run to
+#   3. meta tag     — this repository gets the SAME tag, pushed, before any
+#                     release is created (see below).
+#   4. per repo     — gh release create -> watch the publish-container run to
 #                     conclusion -> verify the image actually exists in GHCR.
+#
+# WHY THIS REPOSITORY IS TAGGED AND YET IS NOT IN ALL_REPOS
+#
+# vidra-core's release-assets workflow builds the no-git deployment bundle by
+# checking THIS repository out at the same tag and running deploy/make-bundle.sh
+# from it. The bundle therefore has a provenance — one meta commit, one core
+# commit, both recorded in vidra-bundle.manifest — instead of being "whatever
+# main happened to be that afternoon". If the tag is missing the workflow fails
+# loudly rather than guessing, so the tag has to exist BEFORE the vidra-core
+# release is created; that is why it happens first, above the loop.
+#
+# It stays out of ALL_REPOS because that loop does three things this repo cannot:
+# create a GitHub release, watch a publish-container.yml run, and verify an image
+# in GHCR. There is no image here. A tag is the whole contract.
 #
 # It keeps going after a repo fails so one broken build does not hide the state
 # of the others, and exits non-zero with a per-image summary at the end.
@@ -39,6 +55,8 @@ cd "$REPO_ROOT"
 
 OWNER="${GITHUB_OWNER:-yegamble}"
 ALL_REPOS=(vidra-core vidra-user vidra-search)
+# This repository. Tagged, never released — see the header.
+META_REPO="vidra"
 # How long to wait for GitHub to create the workflow run after the release is
 # published. It is normally 2-5s; the wait exists so a slow webhook does not get
 # reported as "no run was triggered".
@@ -54,7 +72,7 @@ REPOS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     -y|--yes)  ASSUME_YES=1; shift ;;
-    -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,49p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *)
       if [ -z "$TAG" ]; then TAG="$1"; else REPOS+=("$1"); fi
@@ -101,6 +119,62 @@ for repo in "${REPOS[@]}"; do
 done
 log "tag ${TAG} is free in: ${REPOS[*]}"
 
+# --- the meta tag, decided here and applied after the confirmation ------------
+# Everything about it that can be refused is refused now, with the rest of the
+# pre-flight, because this repository is tagged BEFORE the first release is
+# created and a refusal after that point is a half-published release.
+#
+# META_TAG_ACTION ends up as either `push` (create it) or `skip` (it is already
+# there, on the very commit that would be tagged — which is what a re-run for a
+# subset of repos looks like, and refusing that would make the subset form of
+# this script unusable after any partial failure).
+META_TAG_ACTION=push
+META_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || true)"
+[ -n "$META_SHA" ] || die "$REPO_ROOT is not a git checkout, so this repository cannot be tagged ${TAG} — and vidra-core's release-assets workflow checks it out at that tag to build the deployment bundle."
+
+# The tag is pushed to `origin`, and release-assets checks out ${OWNER}/vidra.
+# If those are two different repositories the release looks fine here and the
+# bundle step fails on a tag that exists somewhere else entirely.
+META_ORIGIN="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)"
+case "$META_ORIGIN" in
+  *"${OWNER}/${META_REPO}"|*"${OWNER}/${META_REPO}.git") ;;
+  "") die "$REPO_ROOT has no 'origin' remote, so the ${TAG} tag cannot be pushed anywhere." ;;
+  *) die "this checkout's origin is ${META_ORIGIN}, but the release is being cut for ${OWNER}. The tag would be pushed to one repository while vidra-core's release-assets workflow checks a different one out to build the bundle. Set GITHUB_OWNER to the owner this checkout actually pushes to." ;;
+esac
+
+# The tag must name a commit the remote already has. `git push` would happily
+# send the missing objects along with it, which is how unreviewed local work gets
+# published under a release tag; making the check explicit turns that into a
+# refusal with a diagnosis instead.
+git -C "$REPO_ROOT" fetch --quiet origin main \
+  || die "could not fetch origin/main in $REPO_ROOT — the meta tag has to point at a commit that is already on the remote"
+if ! git -C "$REPO_ROOT" merge-base --is-ancestor "$META_SHA" origin/main; then
+  die "HEAD ($(git -C "$REPO_ROOT" rev-parse --short HEAD)) is not on origin/main, so tagging it ${TAG} would push unreviewed commits under a release tag. Land the work first (or check out the commit you mean), then re-run."
+fi
+
+# PEELED FIRST (`^{}`). An annotated tag's ref points at the TAG OBJECT, whose
+# sha is not the commit's — comparing that with HEAD reports a perfectly correct
+# tag as pointing "somewhere else", and the release stops for no reason. ls-remote
+# asks the remote this checkout will actually push to, which is the same question
+# the push is about; `gh api` would answer for ${OWNER} instead, and the two are
+# only the same repository because of the check above.
+remote_tag_commit() {
+  git -C "$REPO_ROOT" ls-remote origin "refs/tags/$1^{}" "refs/tags/$1" 2>/dev/null | awk '
+    $2 ~ /\^\{\}$/  { peeled = $1 }
+    $2 !~ /\^\{\}$/ { plain  = $1 }
+    END { print (peeled != "" ? peeled : plain) }
+  '
+}
+META_REMOTE_SHA="$(remote_tag_commit "$TAG")"
+if [ -z "$META_REMOTE_SHA" ]; then
+  log "tag ${TAG} is free in: ${META_REPO} (this repository, tagged not released)"
+elif [ "$META_REMOTE_SHA" = "$META_SHA" ]; then
+  META_TAG_ACTION=skip
+  log "tag ${TAG} already exists in ${OWNER}/${META_REPO} at this very commit — it will be left alone"
+else
+  die "tag ${TAG} already exists in ${OWNER}/${META_REPO} but points at ${META_REMOTE_SHA}, not at HEAD (${META_SHA}). The deployment bundle for this release would be built from that other commit. Releases are immutable here: pick the next version, or delete that tag deliberately if it was never released."
+fi
+
 # A GitHub release notifies watchers and shows up on the repo's front page. It is
 # the one step in this file that reaches people outside the machine, so it asks.
 if [ "$ASSUME_YES" = "1" ]; then
@@ -110,6 +184,11 @@ elif [ -t 0 ]; then
   echo "About to PUBLISH release ${TAG} in: ${REPOS[*]}"
   echo "This is public: it tags the repo, notifies watchers, and pushes"
   echo "ghcr.io/${OWNER}/<repo>:${TAG}. GitHub releases are not meant to be deleted."
+  if [ "$META_TAG_ACTION" = "push" ]; then
+    echo "It also tags THIS repository ${TAG} at $(git -C "$REPO_ROOT" rev-parse --short HEAD) and pushes"
+    echo "that tag first — vidra-core's release-assets workflow builds the deployment"
+    echo "bundle from a checkout of it, and fails the release if it is not there."
+  fi
   read -r -p "Type \"${TAG}\" to confirm: " answer
   [ "$answer" = "$TAG" ] || { echo "Aborted."; exit 1; }
 else
@@ -117,6 +196,34 @@ else
 fi
 
 step "1/2 publish"
+
+# THE META TAG GOES FIRST. vidra-core's release-assets workflow checks this
+# repository out at ${TAG} to build vidra-bundle_${TAG}.tar.gz, and it fails the
+# job if the tag is not there — so the tag has to exist before the vidra-core
+# release triggers that workflow, not after.
+if [ "$META_TAG_ACTION" = "push" ]; then
+  # A local tag with no remote twin is what the PREVIOUS run left behind if it
+  # got here and the push failed. Re-creating it is an error ("tag already
+  # exists") and would stop a release for the one reason that needs no fixing, so
+  # the existing tag is reused when it names the same commit — and refused when
+  # it does not, because then the local repository disagrees with itself about
+  # what ${TAG} is.
+  local_sha="$(git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/${TAG}^{commit}" 2>/dev/null || true)"
+  if [ -z "$local_sha" ]; then
+    log "tagging ${OWNER}/${META_REPO} ${TAG} at ${META_SHA}"
+    git -C "$REPO_ROOT" tag -a "$TAG" -m "vidra ${TAG}" "$META_SHA" \
+      || die "could not create tag ${TAG} locally in $REPO_ROOT"
+  elif [ "$local_sha" = "$META_SHA" ]; then
+    log "local tag ${TAG} already exists at this commit (a previous run got this far and could not push) — pushing it"
+  else
+    die "a LOCAL tag ${TAG} already exists in $REPO_ROOT at ${local_sha}, which is not HEAD (${META_SHA}), and the remote has no ${TAG} at all. Nothing has been released. Delete or move the local tag ('git tag -d ${TAG}') once you know which commit this release is meant to be."
+  fi
+  # refs/tags/… in full: an unqualified push of a name that also exists as a
+  # branch pushes the branch.
+  git -C "$REPO_ROOT" push origin "refs/tags/${TAG}" \
+    || die "could not push tag ${TAG} to origin. Nothing has been released yet. Check that you can push tags to ${OWNER}/${META_REPO}, then re-run — the local tag is already there, so the next run just pushes it."
+  log "pushed ${OWNER}/${META_REPO} ${TAG}"
+fi
 
 # Verify the image the deploy scripts will pull is really in the registry — a
 # green workflow is not proof (the push step can be skipped, a tag can be
