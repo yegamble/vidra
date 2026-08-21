@@ -41,9 +41,15 @@ those systems are not equivalent and must not share one interface.
   action), a foreign marker is a conflict; every rail degrades to dry-run, never an error; local
   backend exempt by design; `EnsureBucket` now reports creation; doctor gained "media GC posture"
   and "bucket ownership". MinIO integration proofs cover the full ownership matrix.
-- [ ] **2. Content hashes** — compute + store sha256 (and/or etag) on Put and backfill via a
+- [x] **2. Content hashes** — compute + store sha256 (and/or etag) on Put and backfill via a
   background job; `video_files` has only size_bytes today. Foundation for integrity-verified
   migration and post-restore consistency checks.
+  *Done 2026-08-21, core#59.* `video_files.sha256` (0106; `''` = uncomputed, `'missing'` =
+  backfill found no object — item 7's verify-blobs consumes the sentinel);
+  `storage.PutSizedHashed` tees SHA-256 in one pass; all ten row-creating Put chokepoints
+  converted (incl. the PeerTube importer, which was computing and discarding digests for both
+  originals and thumbnails); leader-gated backfill worker, 25 rows/min. HLS segments are
+  deliberately hash-less (no `video_files` rows) — migration verifies them in-flight (item 5).
 - [x] **3. `Presigner` capability** — optional interface on Backend (interfaces.md §2);
   s3 implements, local doesn't.
   *Already shipped 2026-08-20 by the lean-S3 wave* (`1485eac`): `storage.Presigner` +
