@@ -414,8 +414,23 @@ services:
     # validating deploy/Caddyfile against a different parser than production
     # runs.
     image: caddy:2.11.4-alpine
-    # No profile: this file is only ever applied to a production deploy, and the
-    # TLS terminator must come up with every one of them.
+    # THE `edge` PROFILE, and the reversal it records. This service used to carry
+    # no profile at all, on the reasoning that this file is only ever applied to a
+    # production deploy and the TLS terminator must come up with every one of
+    # them. That is true of every topology except one: VIDRA_TLS_MODE=external,
+    # where the operator terminates TLS in their OWN proxy, LB or CDN and Vidra's
+    # Caddy would be a second edge competing for :80 and :443 — it does not start,
+    # or it starts and shadows the real one.
+    #
+    # The profile is added by the ENGINE, not by the operator: deploy/lib.sh
+    # appends `edge` to the profile list unless the env file says
+    # VIDRA_TLS_MODE=external. So an existing env file — `VIDRA_COMPOSE_PROFILES=core
+    # frontend`, mode acme or internal — keeps caddy with zero edits, and a bare
+    # `docker compose -f … --profile core --profile frontend` (CI, `make
+    # prod-config`) is the one shape that now renders WITHOUT it. That is
+    # deliberate and asserted two ways in meta-ci: the default deploy render must
+    # contain caddy, the external-mode render must not.
+    profiles: ["edge"]
     restart: unless-stopped
     logging: *logging
     ports:

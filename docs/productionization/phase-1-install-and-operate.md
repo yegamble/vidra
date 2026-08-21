@@ -183,7 +183,7 @@ when closing items.
 > `vidra-core/deploy/media/nginx.conf.template`, and deploy.sh's schema version from
 > `ls vidra-core/migrations/*.up.sql` plus its `.git`-requiring checkout sync) make a git-free
 > install impossible today. The artifact bundle that would fix it **stays open** — item 12 or a
-> follow-up. **(b)** The installer's happy path begins at v0.2.1, the first release cut after
+> follow-up. *(Closed in wave 6, tranche 1 — see the wave-6 note below.)* **(b)** The installer's happy path begins at v0.2.1, the first release cut after
 > `release-assets.yml` landed; v0.2.0 and earlier have no assets, and the installer says so and
 > names `make build-vidra` rather than failing opaquely. **(c)** A fully-refusing
 > external-Postgres host gets **no config archive either** — the refusal is placed before the
@@ -201,6 +201,37 @@ when closing items.
 > external-proxy modes: `config.CookieSecure()`, unconditional HSTS, and giving caddy a compose
 > profile — the item that also unblocks the loopback half of pre-TLS bring-up and the no-git
 > artifact bundle above), and item 20 (the admin infra panels).
+>
+> **Wave 6, tranche 1 (2026-08-21) — item 12 + the no-git artifact bundle.** Item 12 shipped
+> in full (see its entry) and item 17's deviation (a) is now closed: the artifact bundle
+> exists. `deploy/make-bundle.sh` assembles a deterministic `vidra-bundle_<tag>.tar.gz` — the
+> prod deployment tree plus, at their checkout-relative paths, `vidra-core/docker-compose.yml`
+> and the five `vidra-core/deploy/**` files compose bind-mounts (the list is *derived* from
+> the compose file, not hard-coded, so a sixth mount ships automatically) — and writes
+> `vidra-bundle.manifest` (tag, `core_schema_version`, both source commits). That manifest is
+> both the bundle marker and deploy.sh's schema second opinion: a tree with the manifest and
+> no `vidra-core/.git` skips the checkout-sync loop and reads the expected migration version
+> from the manifest; a git checkout behaves byte-for-byte as before. install.sh is now
+> **bundle-first with a git fallback** (`--git`/`VIDRA_INSTALL_GIT` forces the checkout path;
+> a 404 on pre-bundle tags falls back and says so) — proven in a debian:12 container with no
+> git on the host. `release-assets.yml` builds the bundle from a meta checkout at the **same
+> tag** (release.sh now tags the meta repo, refusing a HEAD not on origin/main) into the same
+> bare-name `SHA256SUMS`. meta-ci gained a bundle job (byte-identical rebuild, manifest⇔`ls`
+> agreement, six prod renders from a checkout-less extract) and the two-way caddy gate.
+> **Deviations recorded honestly:** **(a)** the `release-assets.yml` bundle step has never
+> actually executed — it needs a tagged release after both repos merge; the first release cut
+> after this wave is its live test. **(b)** `vidra update` on a bundle tree remains
+> degraded-graceful (it warns that the target schema version cannot be read from git and
+> proceeds ungated) — a bundle-aware update flow is a real follow-up, and bundle-tree
+> *upgrades* are today a documented manual unpack. **(c)** meta-ci's "every config key has a
+> compose consumer" assert only sees `getEnv*` string keys — the 66 typed keys
+> (`p.Bool`/`p.Int`/…) are invisible to it, including `VIDRA_ALLOW_PLAIN_HTTP`; both new vars
+> were wired anyway, but the gate would not have caught the omission. **(d)** core's HSTS
+> max-age (2y) and the frontend's (1y) differ on the same origin — pre-existing, recorded.
+>
+> **What wave 6 tranche 1 leaves open:** item 9 (the web wizard's remaining surface — same
+> instancesettings-validator prerequisite as every wave since 2) and item 20 (the admin infra
+> panels), plus the follow-ups in (b) and (c) above.
 
 - [x] **6. Remove runtime git dependence (migrations half)** *(implemented 2026-08-19, wave 2)* —
   migrations are embedded in both Go binaries (`//go:embed` + golang-migrate as a library) with
@@ -413,11 +444,43 @@ when closing items.
   Template trap worth knowing: the commented split-origin block keeps `example.com` because the
   substitution skips comments, so uncommenting it *in the template* makes the next render emit
   `api.<domain>` — the block's own note explains why that layout needs a Go change first.
-- [ ] **12. External proxy / deliberate plain-HTTP modes** — these need *code*, not just
-  compose: caddy service needs a compose profile (it currently always starts);
-  `config.CookieSecure()` hardcodes production⇒Secure (login silently breaks over plain HTTP);
-  HSTS emitted unconditionally by both apps; public-IP TLS terminators need `TrustIPRange`
-  wiring exposed as config. Also: generated-nginx-config option. All gated, explicit choices.
+- [x] **12. External proxy / deliberate plain-HTTP modes** *(implemented 2026-08-21, wave 6:
+  core `prod/phase1-wave6` 0accc63..303f35c, user 9ebd4ef..f383f7d, meta b21d315..4a3fcf8)* —
+  `VIDRA_TLS_MODE` grew two modes, both gated, both explicit. **`external`** (operator
+  terminates TLS): caddy sits behind a new `edge` compose profile that the *engine* decides —
+  `deploy/lib.sh`'s `edge_profile()` and `setup.SkipsManagedCaddy()` are the two spellings of
+  one rule, "append `edge` unless mode is external" — so every existing env file keeps its
+  caddy with zero edits; setup emits `deploy/nginx-external.conf.example` instead of a
+  Caddyfile (routing mirrors `deploy/Caddyfile`, upstream ports read from the resolved
+  `HTTP_PORT`/`FRONTEND_PORT`, gitignored like `Caddyfile.local` so install.sh's
+  clean-tree check never wedges); deploy.sh skips the Caddyfile gate, reload and DNS
+  preflight loudly and downgrades the edge probe to a warning, because the edge is
+  operator-owned. **`plain-http`** (deliberate no-TLS for lab/LAN): caddy *stays*, generated
+  as an `http://<host>` site — the managed edge and all its deploy gates survive, including
+  `require_real_domain`'s placeholder and site-address⇔origin checks (only the DNS preflight
+  is skipped, and the probe speaks http). **One https predicate in core:**
+  `PUBLIC_BASE_URL`'s scheme drives both `CookieSecure()` and HSTS
+  (`PublicOriginIsHTTPS()`), and an `http://` origin in production is a hard boot **refusal**
+  unless `VIDRA_ALLOW_PLAIN_HTTP=true` — the consent lives in `config.validate()` itself, so
+  the wizard, doctor and boot cannot drift, and the old failure (production pins Secure,
+  login silently dies over http) became a named error. **Breaking change, deliberate:** a
+  production deployment already serving an `http://` PUBLIC_BASE_URL refuses to boot until
+  the consent var is set. The frontend's HSTS moved from the build-baked header list to
+  `proxy.ts` (Next 16's middleware), keyed on the same `PUBLIC_BASE_URL` at *runtime* — unset
+  or unparseable emits (fail-secure; RFC 6797 makes over-emission over http a no-op), only an
+  explicit `http://` origin suppresses. `TRUSTED_PROXY_CIDRS` (validated CIDR list →
+  `echo.TrustIPRange`) covers public-IP terminators; setup warns when external mode leaves it
+  empty, because the silent failure is every visitor behind the LB sharing one login budget.
+  Setup also now warns on placeholder domains and ported origins (caddy publishes 80/443
+  only) at generation time instead of letting deploy.sh refuse them later.
+  **Verification:** fresh un-cached `make ci` + `npm run ci` green; all five modes exercised
+  end-to-end through `vidra setup --template` + doctor; caddy itself validated the plain-http
+  Caddyfile; the generated nginx example passes `nginx -t`; an adversarial audit caught (and
+  wave 6 fixed) the one real drift — core's `checkProfiles()` compose-chain builder not
+  knowing `edge`, which had silently dropped caddy from doctor's port-exposure audit.
+  **Recorded gaps:** core emits 2y HSTS and the frontend 1y on the same origin (pre-existing,
+  now adjacent); federation/OAuth keep their https-in-production requirement — a plain-http
+  instance cannot enable them, by design.
 
 ### The `vidra` CLI
 
@@ -640,7 +703,10 @@ when closing items.
   --tags --force`, refusing a `vidra-core` that is not a git checkout. A true artifact bundle
   (the compose files, the Caddyfile and nginx templates, the migration inventory, shipped as
   release assets rather than repositories) is a real piece of work and **stays open** — fold it
-  into item 12's compose surgery or carry it as a follow-up. Meta-ci covers what it can without
+  into item 12's compose surgery or carry it as a follow-up. *(Closed in wave 6, tranche 1:
+  the bundle ships all three dependencies at their checkout-relative paths, the manifest
+  replaces the `ls`, and install.sh is bundle-first — the wave-6 note in the Foundations
+  section has the full record.)* Meta-ci covers what it can without
   a host: `sh install.sh --help` runs under `/bin/sh`, needs no network, no root and no clone,
   and is asserted to document every flag and environment variable it accepts.
   **Timing caveat, stated by the installer itself:** its happy path begins with the first
