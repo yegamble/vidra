@@ -278,6 +278,99 @@ log "running core migrations"
 log "running search migrations"
 "${COMPOSE[@]}" run --rm search-migrate
 
+# --- blob-reference consistency ------------------------------------------------
+# The dump was taken at time T; the object store is whatever it is at T+n. The
+# two are only a matched pair if they were captured together, and they usually
+# are not: media is backed up by the provider's versioning (S3) or by a separate
+# volume snapshot (local), on its own schedule. A video deleted after the dump
+# comes back as a row with no object, and nothing else in the system notices —
+# the api simply 404s that one video, forever, and an operator finds out from a
+# viewer.
+#
+# `verify-blobs` asks the store about every object the restored database
+# references. It only ever READS: no repair mode, no deletes.
+#
+# It runs on the **api** service, not the migrate one-shot: the migrator is given
+# DATABASE_URL and nothing else, and this needs the whole STORAGE_* set to know
+# which bucket or directory to ask. Same image, same env file, same compose
+# chain as every other call in this script.
+#
+# THIS NEVER BLOCKS THE RESTORE. `set -e` is deliberately suspended for the call
+# (the `|| rc=$?` form), because a restore that aborted here would leave the site
+# down over a media problem that not booting does not fix. Exit codes:
+#   0  consistent
+#   3  verified, and it is wrong  -> WARN and continue
+#   1  could not verify at all    -> WARN and continue
+# The two are kept apart on purpose: "the media is gone" and "I could not reach
+# the bucket" send an operator to completely different places.
+#
+# --timeout is short here, unlike the command's own generous default: this is
+# the fast existence-only pass, and a hung object store must not add an hour to
+# a restore that is otherwise finished.
+log "verifying that the restored database's media is present"
+verify_rc=0
+"${COMPOSE[@]}" run --rm api verify-blobs --timeout=10m || verify_rc=$?
+case "$verify_rc" in
+  0)
+    log "media consistency: every object the restored database references is present"
+    ;;
+  3)
+    cat >&2 <<EOF
+[restore] ================================ WARNING ================================
+[restore] MEDIA REFERENCED BY THE RESTORED DATABASE IS NOT ALL PRESENT.
+[restore]
+[restore] The restore itself SUCCEEDED and is continuing. This is about the object
+[restore] store, not the database: rows point at media the store does not have.
+[restore]
+[restore] The usual causes, in order of likelihood:
+[restore]   * the dump is OLDER than the media store, and the missing objects were
+[restore]     deleted after it was taken — in which case the rows are stale, not the
+[restore]     media, and the affected videos were already gone before this restore;
+[restore]   * the media was restored SEPARATELY from a different point in time (an
+[restore]     S3 bucket restore, a media_data volume snapshot) and has not caught up;
+[restore]   * STORAGE_* points at a different bucket or directory than the one this
+[restore]     database was written against. Check that FIRST — it is the one cause
+[restore]     that is a configuration mistake rather than a data fact.
+[restore]
+[restore] The key list above names what is missing. Nothing was changed: this check
+[restore] only reads.
+[restore]
+[restore] Next: once the stack is up, re-run it with content hashes, which also
+[restore] detects media that is present but CORRUPT (it reads the whole library, so
+[restore] give it a real timeout):
+[restore]
+[restore]   ${COMPOSE[*]} run --rm api verify-blobs --hash --deep --timeout=4h
+[restore]
+[restore] See "Backups & restore" in deploy/README.md and "Verifying media
+[restore] consistency" in vidra-core/docs/operations.md.
+[restore] =========================================================================
+EOF
+    ;;
+  *)
+    cat >&2 <<EOF
+[restore] ================================ WARNING ================================
+[restore] MEDIA CONSISTENCY COULD NOT BE VERIFIED (verify-blobs exited ${verify_rc}).
+[restore]
+[restore] The restore itself SUCCEEDED and is continuing. This is NOT a finding
+[restore] about your media — it means the check could not be made at all: the
+[restore] object store or the database was unreachable, the STORAGE_* configuration
+[restore] is unusable, or the run timed out. The output above says which.
+[restore]
+[restore] Do not read this as "the media is fine". Re-run it by hand once the stack
+[restore] is up:
+[restore]
+[restore]   ${COMPOSE[*]} run --rm api verify-blobs
+[restore]
+[restore] An image older than the release that added the subcommand refuses it as an
+[restore] unknown subcommand and exits 1, which also lands here.
+[restore]
+[restore] See "Backups & restore" in deploy/README.md and "Verifying media
+[restore] consistency" in vidra-core/docs/operations.md.
+[restore] =========================================================================
+EOF
+    ;;
+esac
+
 # --- back up ---------------------------------------------------------------
 log "starting api, search and frontend"
 "${COMPOSE[@]}" up -d --no-build api search frontend

@@ -26,6 +26,17 @@
 # media_data volume on the same cadence so DB rows and files stay consistent —
 # see "Local media volume snapshots" in deploy/README.md for the one-liner.
 #
+# Because the media is captured on its own schedule, the dump and the store are
+# NOT a matched pair: this dump is a snapshot at T and the bucket is whatever it
+# is at T+n. Two things close that loop rather than a knob here — the media-GC
+# safety rails (which refuse to delete from a store this install has not been
+# shown to own, and refuse a sweep that finds an implausible share to be
+# garbage), and `verify-blobs`, which deploy/restore.sh runs automatically after
+# a restore to name every row whose object is not there. Read "S3-canonical
+# deployments" in deploy/README.md before choosing a bucket's durability
+# settings: versioning without a non-current-version expiry rule is the trap
+# that quietly doubles a media bill forever.
+#
 # Safe to re-run at any time, and safe to run while the stack is serving traffic
 # (pg_dump takes a consistent MVCC snapshot; it does not lock writers out).
 #

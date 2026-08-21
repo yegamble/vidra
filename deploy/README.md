@@ -934,8 +934,12 @@ format is a contract; do not "improve" it.
   `HEALTHCHECKS_URL=https://hc-ping.com/<uuid>`; the script pings `/start`,
   `/fail` on any error, and success at the end, so a droplet that stops running
   the timer at all still pages you.
-- **Media is not in either file.** See
-  [Local media volume snapshots](#local-media-volume-snapshots) below.
+- **Media is not in either file.** With `STORAGE_BACKEND=s3` that is deliberate
+  and the durability settings are the provider's — see
+  [S3-canonical deployments](#s3-canonical-deployments) below, which is also
+  where the versioning-without-a-lifecycle-rule billing trap is written down.
+  With `local`, see
+  [Local media volume snapshots](#local-media-volume-snapshots).
 - **Redis** is a cache + rate-limit/dedup store: no backup needed, and it may be
   flushed at any time.
 - **External Postgres takes no backup here at all.** With
@@ -992,7 +996,110 @@ archive, that change is not in it.
 `RESTORE_CONFIRM=<database name>`. It stops api + search + frontend (search
 shares the database, so leaving it up means it reconnects mid-restore), drops and
 recreates the database, restores with `-j4`, runs both migrators to bring the
-schema to HEAD, restarts, and polls `/readyz`.
+schema to HEAD, **checks that the media the restored database references is
+actually in the object store** (see the next section — it warns and continues,
+never blocks), restarts, and polls `/readyz`.
+
+### S3-canonical deployments
+
+`STORAGE_BACKEND=s3` is the production default, and it moves one job off this
+host and onto your provider: **media durability is a bucket setting, not a
+script.** There is no media in either backup file and there never will be —
+nothing a shell script here could do would beat what the provider already offers.
+So configure it deliberately, because the defaults of the cheapest target are
+also the most expensive ones.
+
+**Pick one of two durability stories, and know which you picked.**
+
+| | What it protects against | What it costs |
+|---|---|---|
+| **Versioning** | A delete or an overwrite — yours, or a compromised key's. The previous bytes are still there. | Every superseded version keeps billing **until a lifecycle rule removes it**. |
+| **Cross-region replication** | Losing the region, the bucket, or the account's access to it. | A second copy's storage + egress, continuously. |
+
+Versioning is the one most operators reach for and the one with the trap.
+
+**If you turn versioning on, pair it with a lifecycle rule that expires
+non-current versions.** Without one, a versioned bucket never reclaims anything:
+a delete writes a *delete marker* (Backblaze calls it a *hide marker*) and the
+previous version keeps existing and keeps billing, forever. Vidra's media GC
+deletes orphaned objects — a deleted video's HLS tree, a superseded original —
+and on such a bucket a *successful* sweep frees exactly zero bytes while
+reporting that it deleted thousands of objects. Both numbers are true; only one
+is on the invoice.
+
+This matters most on **Backblaze B2, whose buckets are versioned by default**,
+so the expensive case is the default case for the cheapest storage target.
+
+`vidra doctor` reports it under **object retention**, and that ⚠ is the same
+fact from the other end: it reads the bucket's versioning and lifecycle
+configuration and warns when versioning is on with no `NoncurrentVersionExpiration`
+rule. A green **object retention** line means either "not versioned" or
+"versioned *and* expiring non-current versions" — those are the two supported
+shapes. Thirty days of non-current retention is a sane default: long enough to
+undo an accidental delete, short enough that the bill stops growing.
+
+**The ordering hazard, stated plainly.** The nightly dump is a snapshot of the
+database at time T. The bucket is whatever it is at T+n, because its durability
+runs on the provider's schedule and not on this one. Restore them and the two
+are no longer a matched pair, in both directions:
+
+- **object with no row** — media uploaded after the dump. Harmless to viewers,
+  and it is what the media-GC safety rails exist for: the ownership marker
+  refuses to delete from a store this install has not been shown to own, the
+  orphan-ratio breaker refuses a sweep that finds an implausible share of the
+  store to be garbage (a freshly restored older database looks *exactly* like
+  "almost everything is an orphan"), and the first sweep after any restart is
+  always a dry run. Without those rails a restore would be followed, within 24
+  hours, by a GC pass that deleted every object the older dump does not mention.
+- **row with no object** — media deleted after the dump, or a bucket restored
+  from a different point in time. Nothing detects this on its own: the api just
+  404s that one video, forever, and you hear about it from a viewer.
+
+`restore.sh` closes the second half automatically. After both migrators and
+before the stack comes back up it runs the fast pass:
+
+```bash
+docker compose … run --rm api verify-blobs --timeout=10m
+```
+
+It **never blocks the restore.** Exit `3` (verified, and it is wrong) prints a
+warning block naming the missing keys and continues; exit `1` (could not verify
+— bucket or database unreachable) prints a different warning and continues.
+Aborting there would leave the site down over a media problem that not booting
+does not fix.
+
+**When to run it by hand, with `--hash`.** The fast pass reads no bytes — it
+asks the store whether each object exists. `--hash` re-downloads every object
+that has a recorded digest and compares, which is the only mode that detects
+media that is *present but corrupt*. It reads the whole library, so give it a
+real timeout and run it:
+
+- after a **bucket-level restore** or a provider incident, where the objects came
+  back but you have no independent evidence they came back intact;
+- after **moving the media store** (the storage-migration campaign verifies each
+  copy in flight, but this is the whole-library statement at the end);
+- on whatever **periodic schedule** you are willing to pay the reads for — this
+  is a full read of every original, so it is a deliberate cost, not a cron
+  default.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  --env-file env/production.env run --rm api verify-blobs --hash --deep --timeout=4h
+```
+
+`--deep` additionally walks each HLS tree through the storage backend instead of
+trusting that a present master manifest implies a present ladder — worth adding
+after anything that touched the store wholesale, because a partial restore that
+brought back one small text file per video and none of the segments passes the
+fast pass with a clean bill of health and plays nothing.
+
+Two things it deliberately does not do: it never writes (no repair mode — every
+plausible repair destroys information, and only you know which of the two stores
+is the stale one), and it must not be run **during a storage migration**, when
+the two stores are deliberately out of step. It says so in its own output, and
+`vidra doctor`'s **storage migration** check reports the same fact before you
+start. Full reference: "Verifying media consistency" in
+`vidra-core/docs/operations.md`.
 
 ### Local media volume snapshots
 

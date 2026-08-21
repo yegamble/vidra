@@ -93,9 +93,16 @@ those systems are not equivalent and must not share one interface.
   previously header-less media route. Privacy analysis: risks.md corrected — keys ARE
   deterministic from public UUIDs; the controls are the private bucket, the auth gates, TTL.
   Captions deferred (stream-only service seam, few-KB win) — wiring, not redesign, later.
-- [ ] **7. Backup/restore integration** — restore gains a blob-reference consistency check
+- [x] **7. Backup/restore integration** — restore gains a blob-reference consistency check
   (DB rows ↔ objects, using item 2's hashes); backup docs cover S3-canonical deployments
   (provider-side durability + lifecycle guidance).
+  *Done 2026-08-21, core#62 + meta deploy edits.* `verify-blobs` on the api image (Exists pass;
+  `--hash` re-verifies item 2's digests; `--deep` catches hollow HLS trees; exit 0/3/1; the
+  `'missing'` sentinel reports but never fails — it was dangling at dump time; new StaleSentinel
+  class); restore.sh runs it between migrators and service start, warns with ranked causes,
+  never blocks; deploy/README.md "S3-canonical deployments" reconciles versioning-for-durability
+  with doctor's retention warning (pair versioning with noncurrent-version expiry) and documents
+  the dump-at-T vs bucket-at-T+n hazard both ways; doctor gains a "storage migration" check.
 - [ ] **8. Wizard/admin surfacing** — "Where should Vidra store your videos?" (This server /
   Cloud storage / Advanced) in the wizard; migration progress in admin; graceful-discovery
   card when S3 isn't configured.
