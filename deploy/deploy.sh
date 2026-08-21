@@ -220,7 +220,12 @@ caddyfile_site_address() {
 
 # Caddy provisions a certificate for every hostname in a site block, so a
 # placeholder domain means a failed ACME order and a site that serves nothing
-# over TLS. This now checks deploy/Caddyfile.local — the file that is actually
+# over TLS. Under plain-http there is no certificate to fail, but the check
+# still holds: Caddy routes by site address, so a placeholder site answers for
+# a hostname nobody requests and 404s the one they do. Neither of this
+# function's two checks assumes TLS or a public domain — an IP or an internal
+# name passes both — which is why plain-http runs it and only skips the DNS
+# preflight. This now checks deploy/Caddyfile.local — the file that is actually
 # mounted — and additionally that its site address agrees with PUBLIC_BASE_URL:
 # a Caddyfile serving `old.example.net` while the api mints links for
 # `new.example.net` is a site that answers on a hostname nothing points at.
@@ -239,17 +244,27 @@ caddyfile_site_address() {
 # reason. Must stay identical to setup.PlaceholderDomainPattern in
 # vidra-core/internal/setup/caddyfile.go, which vidra doctor uses.
 require_real_domain() {
-  local f="$REPO_ROOT/deploy/Caddyfile.local" site addr host matched=0
+  local f="$REPO_ROOT/deploy/Caddyfile.local" site addr host origin matched=0 consequence
+
+  # The consequence of a wrong site address depends on who is issuing
+  # certificates, and claiming a failed ACME order in a mode that never orders
+  # one sends the operator looking for a problem that cannot exist.
+  case "$TLS_MODE" in
+    plain-http) consequence="Caddy routes by site address, so it would answer for the placeholder and 404 the host your lab actually requests." ;;
+    *)          consequence="Caddy would order a certificate for the placeholder and fail." ;;
+  esac
+
   [ -f "$f" ] || return 0
   if grep -vE '^[[:space:]]*#' "$f" | grep -qE '(^|[^A-Za-z0-9-])(example\.(com|org|net)|your-domain|yourdomain|YOUR_DOMAIN)([^A-Za-z0-9-]|$)'; then
-    die "deploy/Caddyfile.local still contains a placeholder domain (example.com / your-domain / YOUR_DOMAIN) — replace it with your real domain, or re-run 'vidra setup' (comments may keep it). Caddy would order a certificate for the placeholder and fail."
+    die "deploy/Caddyfile.local still contains a placeholder domain (example.com / your-domain / YOUR_DOMAIN) — replace it with your real domain, or re-run 'vidra setup' (comments may keep it). $consequence"
   fi
 
   site="$(caddyfile_site_address "$f")"
   [ -n "$site" ] || die "could not find a site address in deploy/Caddyfile.local — expected a line like 'vidra.example.org {' at the start of a line. Re-run 'vidra setup' to regenerate it."
 
-  host="$(url_host "$(env_get PUBLIC_BASE_URL '')")"
-  [ -n "$host" ] || die "PUBLIC_BASE_URL is not set in $ENV_FILE, so the Caddyfile's site address cannot be checked against it. Set it to the https origin this instance serves (no path, no trailing slash)."
+  origin="$(env_get PUBLIC_BASE_URL '')"
+  host="$(url_host "$origin")"
+  [ -n "$host" ] || die "PUBLIC_BASE_URL is not set in $ENV_FILE, so the Caddyfile's site address cannot be checked against it. Set it to the origin this instance serves — scheme and host, no path, no trailing slash."
 
   # A site address line may list several addresses ("a.example.org,
   # www.example.org {"), and each may carry a scheme or a port.
@@ -258,7 +273,7 @@ require_real_domain() {
     matched=1
     break
   done
-  [ "$matched" -eq 1 ] || die "deploy/Caddyfile.local serves '${site}' but PUBLIC_BASE_URL in $ENV_FILE is 'https://${host}'. Caddy would answer on one hostname while the api mints links, OAuth callbacks and federation actor ids for the other. Fix whichever is wrong (re-run 'vidra setup' to regenerate the Caddyfile from PUBLIC_BASE_URL)."
+  [ "$matched" -eq 1 ] || die "deploy/Caddyfile.local serves '${site}' but PUBLIC_BASE_URL in $ENV_FILE is '${origin}' (host '${host}'). Caddy would answer on one hostname while the api mints links, OAuth callbacks and federation actor ids for the other. Fix whichever is wrong (re-run 'vidra setup' to regenerate the Caddyfile from PUBLIC_BASE_URL)."
 }
 
 # resolve_host <name> — every A record, one per line, using whatever resolver
@@ -417,7 +432,8 @@ case "$TLS_MODE" in
     ;;
   plain-http)
     require_caddyfile_local
-    log "VIDRA_TLS_MODE=plain-http — Caddy serves this instance over PLAIN HTTP, so SKIPPING the real-domain and DNS checks: a lab/LAN origin is legitimately an IP or an internal name, and neither has an A record pointing at a public address. There is no certificate and no transport encryption on this deployment."
+    require_real_domain
+    log "VIDRA_TLS_MODE=plain-http — Caddy serves this instance over PLAIN HTTP, so SKIPPING the DNS preflight only: a lab/LAN origin is legitimately an IP or an internal name, and neither has an A record pointing at a public address. The Caddyfile checks above still ran — a site address that disagrees with PUBLIC_BASE_URL breaks a lab exactly as it breaks a public site, and is the likeliest way a hand-edited lab config goes wrong. There is no certificate and no transport encryption on this deployment."
     ;;
   *)
     require_caddyfile_local
@@ -720,10 +736,13 @@ probe_edge() {
   log "edge OK (${scheme}://${host})"
 }
 if [ -z "$EDGE_HOST" ]; then
-  # Unreachable in the acme/internal modes: require_real_domain and the DNS
-  # preflight both die on an empty PUBLIC_BASE_URL long before this. Reachable in
-  # external/plain-http, which skip both — so this is a real branch now, not only
-  # a guard against a future edit.
+  # Unreachable in the acme/internal modes, and in plain-http: all three run
+  # require_real_domain, which dies on an empty PUBLIC_BASE_URL long before this
+  # (as does the DNS preflight, in the two that run it). Reachable in external,
+  # which runs neither — so this is a real branch, not only a guard against a
+  # future edit. Note the ordering that makes plain-http safe here:
+  # require_real_domain returns early when there is no Caddyfile.local, but
+  # require_caddyfile_local has already refused that case.
   printf '[deploy] WARNING: PUBLIC_BASE_URL is empty, so the edge was NOT probed. The checks above only cover the loopback ports, behind whatever is terminating requests.\n' >&2
 elif [ "$TLS_MODE" = "external" ]; then
   # ONE attempt, and a WARNING rather than a failure. The edge is the operator's:

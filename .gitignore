@@ -55,6 +55,15 @@ env/.*.tmp*
 # differs, so it is deliberately not committable — the template is what this
 # repo ships and reviews.
 deploy/Caddyfile.local
+# The OTHER generated proxy config: `vidra setup --tls-mode external` writes
+# deploy/nginx-external.conf.example as a starting point for the nginx/HAProxy
+# the operator runs themselves. Same reasoning as the Caddyfile — it is rendered
+# from their env file, not shipped by this repo — but it also has a mechanical
+# consequence if left untracked. install.sh decides whether to fast-forward a
+# git-mode tree with a pathspec-less `git status --porcelain`, so ONE untracked
+# generated file there means "has uncommitted changes, nothing was fetched" on
+# every future run: the tree would never update again.
+deploy/nginx-external.conf.example
 # ...and the same atomic-write temp files the env rule above covers. The setup
 # engine renders the Caddyfile through `os.CreateTemp(dir, "."+base+".tmp*")` +
 # rename, i.e. `deploy/.Caddyfile.local.tmpNNNNN`. A crash between create and

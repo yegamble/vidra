@@ -385,7 +385,12 @@ fi
 # An existing checkout can only be updated with git, whatever the default path
 # is; and --git commits to it up front. Both make git an apt dependency of THIS
 # run rather than of a branch that may not be taken.
-if [ "$HAVE_GIT" -eq 0 ] && { [ "$FORCE_GIT" -eq 1 ] || [ "$DIR_STATE" = "checkout" ]; }; then
+#
+# ...unless the tree is ALREADY an unpacked bundle, in which case --git is
+# ignored (see the DIR_STATE=bundle branch below) and installing a package for a
+# clone that will not happen is a host change nobody asked for.
+if [ "$HAVE_GIT" -eq 0 ] && [ "$DIR_STATE" != "bundle" ] \
+   && { [ "$FORCE_GIT" -eq 1 ] || [ "$DIR_STATE" = "checkout" ]; }; then
   log "git: MISSING - will apt-get install it (this run takes the clone path)"
   want_pkg git
 fi
@@ -452,6 +457,9 @@ elif have_tty; then
       ;;
     bundle)
       echo "  tree            ${DIR} is already an unpacked bundle - it will be left as it is"
+      if [ "$FORCE_GIT" -eq 1 ]; then
+        echo "  --git           IGNORED - the existing tree wins; nothing will be cloned"
+      fi
       ;;
     fresh)
       if [ "$FORCE_GIT" -eq 1 ]; then
@@ -765,6 +773,12 @@ if [ "$DIR_STATE" = "bundle" ]; then
   # already carry env/production.env, deploy/Caddyfile.local and whatever the
   # operator has edited, and none of that is in the tarball to be restored.
   TREE_MODE=bundle
+  # An existing tree outranks --git, because honouring the flag here would mean
+  # cloning over a live deployment. Say so rather than appearing to accept it:
+  # a flag that is silently ignored reads as a flag that did not work.
+  if [ "$FORCE_GIT" -eq 1 ]; then
+    warn "--git was given but ${DIR} is ALREADY an unpacked bundle, so it was ignored - this run did not clone anything, and the tree is still a no-git deployment tree. Converting a live deployment to a checkout is not something an installer should do behind your back: move the tree aside and re-run with --git, or clone elsewhere and copy env/production.env and deploy/Caddyfile.local across."
+  fi
   INSTALLED_TAG="$(sed -n 's/^[[:space:]]*tag[[:space:]]*=[[:space:]]*//p' "${DIR}/vidra-bundle.manifest" | tail -n1 | tr -d '\r')"
   if [ "$INSTALLED_TAG" = "$TAG" ]; then
     log "${DIR} is already the ${TAG} bundle - leaving it exactly as it is."

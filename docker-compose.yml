@@ -79,7 +79,7 @@ services:
       # and the frontend needs it for exactly one decision: whether to emit
       # Strict-Transport-Security. HSTS over an `http://` origin is a promise the
       # deployment cannot keep — and with VIDRA_TLS_MODE=plain-http (lab, LAN,
-      # air-gap) there deliberately is no TLS to promise — so middleware.ts emits
+      # air-gap) there deliberately is no TLS to promise — so proxy.ts emits
       # the header only when this is not an http:// origin.
       #
       # UNSET MUST STAY FAIL-SECURE: an empty value means "emit", because the
