@@ -103,12 +103,32 @@ those systems are not equivalent and must not share one interface.
   never blocks; deploy/README.md "S3-canonical deployments" reconciles versioning-for-durability
   with doctor's retention warning (pair versioning with noncurrent-version expiry) and documents
   the dump-at-T vs bucket-at-T+n hazard both ways; doctor gains a "storage migration" check.
-- [ ] **8. Wizard/admin surfacing** — "Where should Vidra store your videos?" (This server /
+- [x] **8. Wizard/admin surfacing** — "Where should Vidra store your videos?" (This server /
   Cloud storage / Advanced) in the wizard; migration progress in admin; graceful-discovery
   card when S3 isn't configured.
+  *Done 2026-08-21.* The wizard question already existed in both wizards (phase-1 work);
+  user#57 added the rest to the admin Infrastructure page: live object-store probe row (from
+  `/admin/system`, missing key renders "Not reported" — never healthy) with re-check, a
+  read-only migration campaign card (progress via a shared ProgressBar extracted from the jobs
+  browser, deep link to /admin/jobs; deliberately no start/cancel — ops-driven runbook), the
+  graceful-discovery card for local installs, and the `object_storage` feature deep link.
+  Migration progress in the jobs browser itself came free with item 5's sync trigger.
 
 ## Exit criteria
 
 - A local install migrates its full media library to S3 with zero downtime and verified hashes,
   then serves via presigned redirects, with `vidra doctor` green throughout.
 - Rollback: flipping back to api-proxy delivery is a config change, not a migration.
+
+**MET — validated 2026-08-21** on a real local→MinIO run against core main: 69 objects across 5
+videos (originals, HLS ladders, thumbnails, storyboards), 68/68 clean 1 Hz probe triples during
+enumerate→copy→synced (zero non-200s), byte-exact sha256 end-to-end (row == disk == presigned
+bytes), env-swap cutover through automatic source deletion (grace=0; local media dir emptied,
+counters exact), `verify-blobs --hash` and `--deep` exit 0, presigned 307s with pinned
+Content-Type (stored objects are octet-stream — the response-header pin is load-bearing), all
+negative cases held (private/password/scheduled/credentialed never presigned), doctor's only ✗
+was the validation host's own full disk, and rollback was a single settings PATCH with no
+restart. Validation findings (destination-bucket adoption on completion, runbook cleanup step,
+curl recipes, .env.example knobs) fixed same day in core#63. Caveats recorded: single-instance
+cutover is a brief restart outage (multi-instance roll not exercised); cutover→done costs ~3
+reconcile ticks (~3 min) even at grace 0.

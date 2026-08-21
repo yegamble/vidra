@@ -51,7 +51,7 @@ This directory is the program's tracking surface. Update the checklists here as 
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Production-ready basic install: installer, setup engine, web wizard, `vidra` CLI, doctor/update, managed Caddy, owner bootstrap | **All 20 work items shipped** (2026-08-19 → 2026-08-21); first real-host install pending an operator |
-| 2 | Storage: presign, canonical-vs-delivery, migration jobs, GC safety | In progress — items 1-7 done 2026-08-21 (GC safety core#58, hashes core#59, presign via lean-S3, location+migration core#60, direct delivery core#61, verify-blobs + restore integration core#62); item 8 surfacing in flight |
+| 2 | Storage: presign, canonical-vs-delivery, migration jobs, GC safety | **DONE 2026-08-21** — all 8 items (core#58-#63, user#57); exit criteria validated end-to-end on a real local→MinIO migration |
 | 3 | Media pipeline: CMAF, DASH, packager abstraction, codec profiles, hw transcode, worker scale-out | Not started (seams defined) |
 | 4 | Delivery: playback sessions, CDN, P2P, engine adapter, QoE | Not started (seams defined) |
 | 5 | Enterprise: multi-CDN, steering, DRM/KMS, multi-region | Not started |
