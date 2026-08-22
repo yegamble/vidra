@@ -42,6 +42,16 @@ services:
     environment:
       REDIS_URL: ${REDIS_URL:?VIDRA_EXTERNAL_REDIS=true, so REDIS_URL must name the managed instance (rediss://:PASSWORD@HOST:6379/0) - the bundled redis service is disabled by docker-compose.external-redis.yml}
 
+  # Only rendered under the `worker` profile, but the edge has to be cut anyway —
+  # Compose validates every loaded service definition, selected or not, and a
+  # dangling `redis` edge invalidates the whole project. Same DSN as the api: both
+  # are the same binary on the same logical database.
+  worker:
+    depends_on:
+      redis: !reset null
+    environment:
+      REDIS_URL: ${REDIS_URL:?VIDRA_EXTERNAL_REDIS=true, so REDIS_URL must name the managed instance (rediss://:PASSWORD@HOST:6379/0) - the bundled redis service is disabled by docker-compose.external-redis.yml}
+
   search:
     depends_on:
       redis: !reset null

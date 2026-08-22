@@ -67,6 +67,17 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:?VIDRA_EXTERNAL_POSTGRES=true, so DATABASE_URL must name the managed database (postgres://USER:PASSWORD@HOST:5432/DB?sslmode=require) - the bundled postgres service is disabled by docker-compose.external-postgres.yml}
 
+  # Only rendered when the `worker` profile is enabled, but the depends_on edge
+  # must be cut REGARDLESS: Compose validates every service definition it loads,
+  # not only the selected ones, and a dangling `postgres` edge makes the whole
+  # project invalid ("service \"worker\" depends on undefined service
+  # \"postgres\"") even when no worker container would ever start.
+  worker:
+    depends_on:
+      postgres: !reset null
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?VIDRA_EXTERNAL_POSTGRES=true, so DATABASE_URL must name the managed database (postgres://USER:PASSWORD@HOST:5432/DB?sslmode=require) - the bundled postgres service is disabled by docker-compose.external-postgres.yml}
+
   migrate:
     depends_on:
       postgres: !reset null

@@ -239,6 +239,18 @@ Runtime levers that need no restart (admin UI → instance settings): set
 `transcoding_threads` to vCPU−1 and keep `transcoding_concurrency` at 1. Raising
 concurrency multiplies both CPU **and** scratch disk.
 
+**Splitting the transcoders off the API.** `API_CPUS` sizes one container that
+both serves HTTP and runs ffmpeg, which is why it is so large. Setting
+`EXTRA_COMPOSE_PROFILES=worker` and `API_ROLE=api` in the env file moves every
+background worker — ffmpeg included — into separate `worker` containers running
+the same image, so `API_CPUS`/`API_MEM_LIMIT` can shrink to a web-serving
+envelope and `WORKER_CPUS`/`WORKER_MEM_LIMIT` take the transcoding budget
+(`--scale worker=N` for more). The two still have to fit the host together, and
+**`API_ROLE=api` with no worker container running means nothing transcodes,
+imports or sweeps at all** — there is no interlock. Optional; the single-container
+topology remains the default and the supported one. See
+[vidra-core operations](../vidra-core/docs/operations.md#splitting-the-api-and-the-workers).
+
 ### Storage
 
 - **Media → DO Spaces.** `STORAGE_S3_ENDPOINT=nyc3.digitaloceanspaces.com` —
