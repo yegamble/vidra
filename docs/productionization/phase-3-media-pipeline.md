@@ -36,9 +36,12 @@ Upload → Ingest → Probe → Transcode → Rendition ladder → CMAF packagin
 - [ ] **1. Packager abstraction** (interfaces.md §6) — split encode from package; ffmpeg-TS
   packager first (behavior-preserving refactor), proving the seam with byte-identical-ish
   output on the existing golden tests.
-- [ ] **2. Evaluate Shaka Packager vs ffmpeg CMAF muxing** for the CMAF implementation —
-  research task with a written decision (criteria: CENC-readiness, LL-HLS trajectory,
-  container-size/ops cost, maintenance). Don't reinvent standards-heavy packaging.
+- [x] **2. Evaluate Shaka Packager vs ffmpeg CMAF muxing** — DONE 2026-08-22, decision written
+  at [cmaf-packaging-decision.md](cmaf-packaging-decision.md). Verdict: ffmpeg dash muxer with
+  `-hls_playlist 1` for VOD CMAF now (fused with the encode pass, no mezzanine, true shared
+  segments, verified on ffmpeg 8.1); Shaka v3.9.x reserved as the phase-5 DRM-gated second
+  packager (ffmpeg emits zero DRM signaling and can never do `cbcs`/FairPlay; Shaka's real cost
+  is a pinned 10 MB static binary + a mezzanine pass). LL-HLS is a wash — neither tool has it.
 - [ ] **3. CMAF packager** — fMP4 segments, HLS (.m3u8) + DASH (.mpd) from the same segments;
   new file shapes added to hls.go allowlists + mediagc grammar together; PeerTube pass-through
   route preserved; per-video packaging format recorded so old TS trees keep playing (no forced
