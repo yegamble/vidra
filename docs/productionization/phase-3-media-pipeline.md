@@ -47,12 +47,23 @@ audit trail for the middle of the chain disappears.*
   **Anyone reading a green backend CI badge has learned nothing about this phase's work.**
 - **vidra-user `main` green** — typecheck, lint, icon-lint, and 1538 unit tests in 164 files.
   Playwright e2e not re-run post-merge (see the flakiness note in the program README).
-- **meta-ci was red on `main` and it was ours** — `docker compose --profile core config -q` failed
-  with `service "worker" has neither an image nor a build context specified`, i.e. item 8's worker
-  profile did not render at all. The 2026-08-22 E2E validation used vidra-core's own compose under
-  `-p phase3val`, so the meta-repo profile was never rendered after meta#18 merged. Fixed in
-  meta#21. *Validating a phase against a different compose file than the one operators use is how
-  a "validated" phase ships broken.*
+- **meta-ci red on `main`, and it is NOT phase 3.** Two separate things were confused here, so both
+  are written down:
+  - *The scary one that was a mirage.* `docker compose --profile core config -q` failed with
+    `service "worker" has neither an image nor a build context specified`. That looks exactly like
+    item 8 shipping broken. It was a merge-order race: meta-ci checks out vidra-core's **default
+    branch with no `ref:`** (meta-ci.yml), the run fired 01:51, and core#65 defined `worker` on
+    core main at 02:00. The next run (02:23) passes that step. meta#18's commit message predicted
+    this failure verbatim. **A meta-ci red is not evidence about the meta commit that triggered
+    it — it is evidence about whatever vidra-core main happened to be nine minutes earlier.**
+  - *The real red underneath*, which has been failing since phase 2 (2026-08-21, `ca99818`) and
+    which the worker mirage was hiding: `Every config key vidra-core reads has a compose consumer`
+    lists 7 `STORAGE_MIGRATION_TARGET_*` keys with no consumer. See the phase-2 doc; fix in flight.
+- **Verification blind spots this exposed**, all real and none phase-3-specific: meta-ci never
+  renders `--profile worker` at all (the profile whose merge order broke CI has no coverage of its
+  own), and its config-consumer assert inspects only the `api` service's environment, so a key that
+  reaches api but not worker would pass. The 2026-08-22 E2E validation also ran against vidra-core's
+  own compose under `-p phase3val` rather than the meta-repo compose operators actually use.
 
 Exit criteria proven on a live stack (validation run 2026-08-22, core-only compose,
 `-p phase3val`): CMAF upload playable via HLS **and** DASH with byte-identical shared segments
