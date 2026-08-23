@@ -20,10 +20,17 @@ P2P (opt):   peers first → CDN/IPFS/S3/local fallback — peers are never the 
 quality identity re-keyed off hls.js level indexes (user#59). **Item 6's research half is CLOSED —
 verdict DEFER, phase 4 ships no P2P** ([decision doc](p2p-delivery-decision.md)).
 
-**In flight:** item 3b, collapsing the three hls.js lifecycles into one engine adapter.
+Item 3's adapter (3a + 3b) is also merged — user#59 and user#61 — leaving 3c (Shaka as a second
+engine) as the only unbuilt part of that item, now unblocked.
 
-**Not started:** item 4 (QoE) and item 5 (IPFS delivery), both scoped against the code below.
-Item 4 is the gate on item 5, and item 3b is the gate on item 4's capture point.
+**In flight:** item 4's backend half (QoE raw → rollup → prune).
+
+**Not started:** item 4's client beacon (now unblocked — the adapter is the single capture point),
+item 5 (IPFS delivery, gated on item 4's measurement), and item 3c.
+
+**Worth knowing for any future worktree agent:** Turbopack rejects a symlinked `node_modules`
+("points out of the filesystem root"), so a worktree that symlinks the parent's must build with
+`next build --webpack`.
 
 ## Ground truth 2026-08-23 (recon against the code, before any phase-4 build)
 
@@ -146,7 +153,33 @@ Do not design against one that does not exist.
   Single-CDN support: origin pull from api-proxy or S3, cache-key discipline via the existing
   `?v=` generation-versioned immutable URLs (the ready groundwork), header promotion
   private→shared *only* through this machinery. No CDN vendor in core media logic.
-- [ ] **3. Player engine adapter** (interfaces.md §8) — collapse the three hls.js lifecycles
+- [x] **3. Player engine adapter** — **3a + 3b DONE 2026-08-23** (user#59 `70db307` re-key,
+  user#61 `3e44a5a` collapse). **3c (evaluate Shaka as engine #2) is the remaining half** and is
+  now unblocked: the adapter exists, so a second engine is an addition rather than a rewrite.
+
+  Shipped: `lib/player-engine.ts` (pure selection over three engines — `hls-js`, `native-hls`,
+  `progressive`; each answers "can I play this here?" and the adapter picks the first survivor) and
+  `lib/use-playback-engine.ts` (one lifecycle; VOD, live and federated are now *configuration* of
+  it). The three old hooks and both `choose*PlaybackMode` functions are deleted. All three
+  behavioural gaps closed: federated playback gets the shared ABR tuning and recovery ladder by
+  construction, and selection became `probe → ask each engine → pick`.
+
+  **The design insight worth keeping:** declining had to become **two verbs**, not one. Chromium
+  answers `canPlayType("application/vnd.apple.mpegurl")` with `"maybe"` while being unable to play
+  HLS natively — so a single "advance to the next candidate" rule would have routed a failed
+  playlist to a native path that cannot work, shipping a worse player to Chrome. Therefore:
+  `Hls.isSupported() === false` removes **hls.js alone** (evidence about an *engine*), while a fatal
+  playlist error removes **every HLS engine at once** (evidence about the *stream*). Native HLS is
+  only ever promoted on positive evidence that hls.js declined.
+
+  **Live/Remote keep their raw `<video controls>`** — checked, and the shell does not drop in:
+  `VideoPlayer` takes a full `Video` and calls the hook itself, and drives storyboards, chapters,
+  captions, end-card autoplay-next and per-user settings off a video id, none of which live or
+  federated have; live also needs a live edge and a "go to live" affordance the shell has no
+  concept of. Both views do now consume the unified lifecycle, and live's quality menu gained the
+  `Auto (720p)` readout and busy state for free.
+
+  *Original scope:* collapse the three hls.js lifecycles
   (`use-hls-playback`, `use-live-playback`, `use-remote-playback`); re-key quality identity off
   hls.js level indexes; evaluate Shaka Player as the second engine (DASH/EME-capable) with hls.js
   retained for the default HLS path. The bespoke player shell stays.
