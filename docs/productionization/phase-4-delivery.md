@@ -22,6 +22,10 @@ P2P (opt):   peers first → CDN/IPFS/S3/local fallback — peers are never the 
   today's hls_url + optional `?pt=` token so the player consumes a session object from day one;
   token gains scope/session claims + renewal (today's 6h password token has neither). The
   response lets the player operate without consulting the core API per segment.
+  **Inherited from phase 3:** the session response is the natural home for `dash_url` / packaging-
+  format discovery. Phase 3 ships DASH manifests but no way to ask for one — clients probe
+  `/hls/cmaf/stream.mpd` and infer. Until this lands, a TS-packaged back-catalog video and a CMAF
+  one are indistinguishable to a client without a round trip that can 404.
 - [ ] **2. Delivery-source resolver + CDN provider abstraction** (interfaces.md §4) — ordered
   source list, api-proxy as permanent fallback, purge hooks in the interface from day one.
   Single-CDN support: origin pull from api-proxy or S3, cache-key discipline via the existing

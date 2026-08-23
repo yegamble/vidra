@@ -52,7 +52,7 @@ This directory is the program's tracking surface. Update the checklists here as 
 |---|---|---|
 | 1 | Production-ready basic install: installer, setup engine, web wizard, `vidra` CLI, doctor/update, managed Caddy, owner bootstrap | **All 20 work items shipped** (2026-08-19 → 2026-08-21); first real-host install pending an operator |
 | 2 | Storage: presign, canonical-vs-delivery, migration jobs, GC safety | **DONE 2026-08-21** — all 8 items (core#58-#63, user#57); exit criteria validated end-to-end on a real local→MinIO migration |
-| 3 | Media pipeline: CMAF, DASH, packager abstraction, codec profiles, hw transcode, worker scale-out | Not started (seams defined) |
+| 3 | Media pipeline: CMAF, DASH, packager abstraction, codec profiles, hw transcode, worker scale-out | **DONE 2026-08-23** — all 11 items merged (core#64-#71, meta#18/#19, user#58); exit criteria E2E-validated on a live stack 2026-08-22 |
 | 4 | Delivery: playback sessions, CDN, P2P, engine adapter, QoE | Not started (seams defined) |
 | 5 | Enterprise: multi-CDN, steering, DRM/KMS, multi-region | Not started |
 

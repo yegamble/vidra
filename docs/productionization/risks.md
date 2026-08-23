@@ -45,10 +45,15 @@ when retired.
    carries `Purge` from day one precisely so nothing is promoted to shared caching before there is
    something to invalidate it with (a CDN entry outliving the auth decision; `?pt=` tokens in
    edge logs).
-7. **CMAF/DASH is a pipeline restructure, not new ffmpeg flags.** Packaging is fused into the
-   encode; the storage tree, mediagc grammar, hls.go allowlists all assume the TS layout;
-   `parseH264CodecString` dead-letters non-H.264-Main (also blocking hardware encoders);
-   ~2k imported videos need the fMP4 pass-through route to survive.
+7. ~~**CMAF/DASH is a pipeline restructure, not new ffmpeg flags.**~~ **RETIRED 2026-08-23** by
+   phase 3. It was the correct read — the restructure touched the packager seam, the storage
+   tree, the mediagc grammar and the hls.go allowlists together, and `parseH264CodecString` had
+   to stop dead-lettering non-H.264-Main before any codec or hardware work could run. All of it
+   landed; the fMP4 pass-through route for the ~2k imported videos survived, and old TS trees
+   keep playing because packaging format is now recorded per video rather than assumed. What
+   replaces this risk is narrower and documented in the phase-3 carry-forwards: back-catalog
+   re-packaging is optional and unbuilt, and host-binary deployments on ffmpeg 6.x emit a weaker
+   (legal) bare `hvc1` CODECS string than the shipped Alpine image's 8.1.
 8. **Live streaming is structurally single-host and edge-bypassing** (shared volume, raw
    0.0.0.0:1935, no playback tokens, no prod-overlay entry/restart policy). Phase 1
    firewall/doctor tooling must not assume 80/443 is the whole public surface.

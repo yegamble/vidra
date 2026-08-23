@@ -5,22 +5,65 @@ with HLS and DASH sharing segments; codec profiles beyond H.264 Main; hardware a
 offered when detected; workers that scale from 1 to many without redesign. Ordinary installs
 keep getting compatible H.264 HLS by default.
 
-## Status 2026-08-22 — all 8 items BUILT + E2E-VALIDATED; merges pending
+## Status 2026-08-23 — PHASE COMPLETE; all 11 items merged to main
 
-Items 2, 9, 10, 11 are closed on main. Items 1, 3–8 are complete, adversarially verified, and
-E2E-validated against a real stack, sitting as a PR set awaiting merge **in this order**:
+Every work item is closed and on `main` in all three repos. The merge queue described below
+was executed 2026-08-23 01:50–02:15 UTC in the planned order:
 
-1. **core#64** (carry-forwards: S3→S3 size hint + doctor bundled-Postgres fallback) and
-   **core#71** (pre-existing: transcodes >10s left `running` 30 min — bookkeeping context
-   created before the encode; found by this phase's validation) — independent, merge anytime.
-2. **core#65** (item 8, VIDRA_ROLE worker split) **before meta#18** (its prod envelope —
-   compose refuses an override naming an undefined service, so meta-ci is red until core#65).
-3. The stacked chain in order: **core#66** (item 1 packager seam) → **core#67** (items 3+4
-   backend, CMAF) → **core#68** (item 6 ladder) → **core#69** (item 5 codecs) → **core#70**
-   (item 7 hardware) → **meta#19** (env template). Note: whichever of #65 / the chain merges
-   second will hit one additive compose conflict (the x-api-env hoist vs the chain's new
-   TRANSCODING_ keys) — resolution demonstrated during validation, both sides purely additive.
-4. **user#58** (quality menu follows the engine's codec family) — anytime.
+| Item | PR | Merge commit |
+|---|---|---|
+| 1 — packager seam | core#66 | `ef05c63` |
+| 3 + 4 — CMAF packaging + DASH route | core#67 → re-opened as core#72 | landed via the stacked chain (see note) |
+| 5 — codec profiles | core#69 | `176ae2a` |
+| 6 — ladder improvements | core#68 | `ba5ccf4` |
+| 7 — hardware transcode | core#70 | `8625c7e` |
+| 8 — worker role flag | core#65 | `d31595e` |
+| carry-forwards (S3→S3 size hint, doctor bundled-Postgres) | core#64 | `9b11a92` |
+| pre-existing fix: transcodes >10s stuck `running` | core#71 | `09fe2e3` |
+| prod envelope + worker-profile wiring | meta#18 | `96a1f76` |
+| TRANSCODING_HW env template | meta#19 | `6c26e37` |
+| multi-codec quality menu | user#58 | `f3559ee` |
+
+**Note on the CMAF PR.** core#67 auto-closed the moment core#66 merged and its stacked base
+branch was deleted; core#72 was opened to supersede it and was closed too. Neither carries a
+merge commit, which reads like the item never landed — it did. The chain's later PRs (#68/#69/#70)
+were branched on top of the CMAF branch, so merging them carried its commits, and all seven
+(`4773159`, `a956e75`, `503039c`, `96abc8a`, `c6a55c9`, `12d50be`, `f953ab1`) are ancestors of
+`main`; `internal/media/cmaf.go` and the CMAF integration tests are present on `main`.
+*Lesson for future stacked sets: merge bottom-up without deleting intermediate branches, or the
+audit trail for the middle of the chain disappears.*
+
+### Post-merge verification 2026-08-23
+
+- **vidra-core `main` (`176ae2a`) green.** `make ci` passes — that target is
+  `fmt-check vet migrate-lint openapi-verify sqlc-verify test-race`, and backend-ci.yml runs
+  exactly it. 66 packages, 2211 tests, 0 failures, run with `-count=1` so the cache proves nothing
+  on our behalf.
+- **The ffmpeg pipeline is *not* covered by that gate, by design.** Every ffmpeg-dependent media
+  test sits behind `//go:build integration` so CI stays green on ffmpeg-less runners. Run
+  separately on a host with ffmpeg 8.1: `go test -tags=integration -count=1 ./internal/media/` →
+  196 pass, 0 fail, 2 skips (both ClamAV, `CLAMAV_TEST_ADDR` unset). No ffmpeg-capability skips
+  fired, so the CMAF/DASH, ladder, codec-family and HEVC/AV1 assertions genuinely executed.
+  **Anyone reading a green backend CI badge has learned nothing about this phase's work.**
+- **vidra-user `main` green** — typecheck, lint, icon-lint, and 1538 unit tests in 164 files.
+  Playwright e2e not re-run post-merge (see the flakiness note in the program README).
+- **meta-ci red on `main`, and it is NOT phase 3.** Two separate things were confused here, so both
+  are written down:
+  - *The scary one that was a mirage.* `docker compose --profile core config -q` failed with
+    `service "worker" has neither an image nor a build context specified`. That looks exactly like
+    item 8 shipping broken. It was a merge-order race: meta-ci checks out vidra-core's **default
+    branch with no `ref:`** (meta-ci.yml), the run fired 01:51, and core#65 defined `worker` on
+    core main at 02:00. The next run (02:23) passes that step. meta#18's commit message predicted
+    this failure verbatim. **A meta-ci red is not evidence about the meta commit that triggered
+    it — it is evidence about whatever vidra-core main happened to be nine minutes earlier.**
+  - *The real red underneath*, which has been failing since phase 2 (2026-08-21, `ca99818`) and
+    which the worker mirage was hiding: `Every config key vidra-core reads has a compose consumer`
+    lists 7 `STORAGE_MIGRATION_TARGET_*` keys with no consumer. See the phase-2 doc; fix in flight.
+- **Verification blind spots this exposed**, all real and none phase-3-specific: meta-ci never
+  renders `--profile worker` at all (the profile whose merge order broke CI has no coverage of its
+  own), and its config-consumer assert inspects only the `api` service's environment, so a key that
+  reaches api but not worker would pass. The 2026-08-22 E2E validation also ran against vidra-core's
+  own compose under `-p phase3val` rather than the meta-repo compose operators actually use.
 
 Exit criteria proven on a live stack (validation run 2026-08-22, core-only compose,
 `-p phase3val`): CMAF upload playable via HLS **and** DASH with byte-identical shared segments
@@ -61,39 +104,44 @@ Upload → Ingest → Probe → Transcode → Rendition ladder → CMAF packagin
 
 ### Packaging
 
-- [ ] **1. Packager abstraction** (interfaces.md §6) — split encode from package; ffmpeg-TS
-  packager first (behavior-preserving refactor), proving the seam with byte-identical-ish
-  output on the existing golden tests.
+- [x] **1. Packager abstraction** (interfaces.md §6) — DONE 2026-08-23 (core#66 `ef05c63`).
+  Encode split from package; ffmpeg-TS packager first (behavior-preserving refactor), proving the
+  seam with byte-identical-ish output on the existing golden tests.
 - [x] **2. Evaluate Shaka Packager vs ffmpeg CMAF muxing** — DONE 2026-08-22, decision written
   at [cmaf-packaging-decision.md](cmaf-packaging-decision.md). Verdict: ffmpeg dash muxer with
   `-hls_playlist 1` for VOD CMAF now (fused with the encode pass, no mezzanine, true shared
   segments, verified on ffmpeg 8.1); Shaka v3.9.x reserved as the phase-5 DRM-gated second
   packager (ffmpeg emits zero DRM signaling and can never do `cbcs`/FairPlay; Shaka's real cost
   is a pinned 10 MB static binary + a mezzanine pass). LL-HLS is a wash — neither tool has it.
-- [ ] **3. CMAF packager** — fMP4 segments, HLS (.m3u8) + DASH (.mpd) from the same segments;
+- [x] **3. CMAF packager** — DONE 2026-08-23 (core#67/#72, landed via the stacked chain).
+  fMP4 segments, HLS (.m3u8) + DASH (.mpd) from the same segments;
   new file shapes added to hls.go allowlists + mediagc grammar together; PeerTube pass-through
   route preserved; per-video packaging format recorded so old TS trees keep playing (no forced
   re-transcode of the back catalog; re-package as an optional background job).
-- [ ] **4. DASH delivery route** + frontend consumption (needs Phase 4 engine adapter for
-  playback; the backend/manifest side lands here).
+- [x] **4. DASH delivery route** — DONE 2026-08-23 (same chain as item 3). The backend/manifest
+  side landed here and is served from the CMAF tree; frontend consumption still needs the Phase 4
+  engine adapter, and clients currently probe `/hls/cmaf/stream.mpd` because format discovery on
+  the video API is a deliberate phase-4 carry-forward (below).
 
 ### Encoding
 
-- [ ] **5. Codec profiles** — profile registry (H.264 AVC baseline-compat default; HEVC; AV1)
+- [x] **5. Codec profiles** — DONE 2026-08-23 (core#69 `176ae2a`). Profile registry (H.264 AVC baseline-compat default; HEVC; AV1)
   with browser-compat/encoding-cost/storage/bandwidth metadata; un-poison AV1 config; CODECS
   attributes in master manifests; multi-codec masters. Enterprise enables efficient codecs;
   default stays compatibility-first.
-- [ ] **6. Ladder improvements** — fps-aware bitrates (60fps 1080p currently gets 24fps's
+- [x] **6. Ladder improvements** — DONE 2026-08-23 (core#68 `ba5ccf4`). fps-aware bitrates (60fps 1080p currently gets 24fps's
   budget); audio-only sources get an audio rung instead of dead-lettering; decode-once
   architecture (N-decodes-per-job + full web_video re-encode duplication wastes ~2–3× CPU);
   per-title/CRF/two-pass as a later optimization behind the profile registry.
-- [ ] **7. Hardware transcode** — detection (NVENC/QSV/VAAPI/VideoToolbox) + opt-in offer at
+- [x] **7. Hardware transcode** — DONE 2026-08-23 (core#70 `8625c7e`, env template meta#19
+  `6c26e37`). Detection (NVENC/QSV/VAAPI/VideoToolbox) + opt-in offer at
   install ("NVIDIA GPU detected. Enable hardware video transcoding?"); requires the
   parseH264CodecString fix first; CPU remains the default and always works.
 
 ### Workers
 
-- [ ] **8. Worker role flag** — same binary, `WORKERS_ENABLED`/role env (port the vidra-search
+- [x] **8. Worker role flag** — DONE 2026-08-23 (core#65 `d31595e`, prod envelope meta#18
+  `96a1f76`). Same binary, `WORKERS_ENABLED`/role env (port the vidra-search
   seam); compose profile for a dedicated worker container; ffmpeg moves out of the API
   container's resource envelope.
 - [x] **9. Lease retrofit** — DONE 2026-08-21 (core `5ead076`, `b57a1d1`). The 3 bare-SELECT
