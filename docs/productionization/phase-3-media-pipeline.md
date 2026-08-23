@@ -33,6 +33,27 @@ were branched on top of the CMAF branch, so merging them carried its commits, an
 *Lesson for future stacked sets: merge bottom-up without deleting intermediate branches, or the
 audit trail for the middle of the chain disappears.*
 
+### Post-merge verification 2026-08-23
+
+- **vidra-core `main` (`176ae2a`) green.** `make ci` passes — that target is
+  `fmt-check vet migrate-lint openapi-verify sqlc-verify test-race`, and backend-ci.yml runs
+  exactly it. 66 packages, 2211 tests, 0 failures, run with `-count=1` so the cache proves nothing
+  on our behalf.
+- **The ffmpeg pipeline is *not* covered by that gate, by design.** Every ffmpeg-dependent media
+  test sits behind `//go:build integration` so CI stays green on ffmpeg-less runners. Run
+  separately on a host with ffmpeg 8.1: `go test -tags=integration -count=1 ./internal/media/` →
+  196 pass, 0 fail, 2 skips (both ClamAV, `CLAMAV_TEST_ADDR` unset). No ffmpeg-capability skips
+  fired, so the CMAF/DASH, ladder, codec-family and HEVC/AV1 assertions genuinely executed.
+  **Anyone reading a green backend CI badge has learned nothing about this phase's work.**
+- **vidra-user `main` green** — typecheck, lint, icon-lint, and 1538 unit tests in 164 files.
+  Playwright e2e not re-run post-merge (see the flakiness note in the program README).
+- **meta-ci was red on `main` and it was ours** — `docker compose --profile core config -q` failed
+  with `service "worker" has neither an image nor a build context specified`, i.e. item 8's worker
+  profile did not render at all. The 2026-08-22 E2E validation used vidra-core's own compose under
+  `-p phase3val`, so the meta-repo profile was never rendered after meta#18 merged. Fixed in
+  meta#21. *Validating a phase against a different compose file than the one operators use is how
+  a "validated" phase ships broken.*
+
 Exit criteria proven on a live stack (validation run 2026-08-22, core-only compose,
 `-p phase3val`): CMAF upload playable via HLS **and** DASH with byte-identical shared segments
 resolved from both manifests; TS rollback + back-catalog byte-identical across restarts;
