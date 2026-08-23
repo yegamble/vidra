@@ -55,8 +55,17 @@ when retired.
    re-packaging is optional and unbuilt, and host-binary deployments on ffmpeg 6.x emit a weaker
    (legal) bare `hvc1` CODECS string than the shipped Alpine image's 8.1.
 8. **Live streaming is structurally single-host and edge-bypassing** (shared volume, raw
-   0.0.0.0:1935, no playback tokens, no prod-overlay entry/restart policy). Phase 1
-   firewall/doctor tooling must not assume 80/443 is the whole public surface.
+   0.0.0.0:1935, no playback tokens). Phase 1 firewall/doctor tooling must not assume 80/443 is
+   the whole public surface.
+   *Amended 2026-08-23:* the original "no prod-overlay entry/restart policy" clause is **stale** —
+   the prod overlay now gives `rtmp` `restart: unless-stopped` plus the logging anchor, and
+   documents 1935 as a standing exception gated in the cloud firewall. The other three clauses were
+   re-verified and all still hold. Two things to add: live has **no `password` privacy tier at
+   all**, so unlike VOD there is no token, no expiry and no revocation — anyone with the stream
+   UUID can pull segments for the whole broadcast. And "single-host" is a **volume** problem, not a
+   delivery-abstraction one: an api replica on another node sees an empty local volume and 404s
+   indistinguishably from "stream not live". No resolver work fixes that; see phase-4 item 7 for
+   the scope decision.
 9. **Player quality identity is the hls.js level index** across
    setLevel/AUTO_LEVEL/matchQualityLevel/QualityMenu. Deferring the re-key until Shaka/DRM time
    turns a cheap refactor into a breaking change; the native-HLS (iOS, MSE-less) branch needs
