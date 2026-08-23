@@ -110,13 +110,42 @@ QualityMenu). This is the entire prerequisite for a later Shaka/DASH/EME swap an
 instrumentation a single interception point. The bespoke shell (`components/player/`) is the
 mandated UI; engines swap under it.
 
-## 9. QoE event pipeline (Phase 4 seam; architecture decided now)
+## 9. QoE event pipeline (Phase 4 seam; BUILT 2026-08-23, core#77)
 
-QoE is an **event/rollup stream, never Prometheus labels** (bounded-cardinality rule). Ride the
-searchevents outbox pattern (`internal/searchevents`) with the `lib/search-events.ts`
-batched-keepalive transport on the client, keyed by the playback-session id, with the sha256
-viewerKey precedent for privacy. hls.js LEVEL_SWITCHED/FRAG_BUFFERED/error handlers in the
-unified engine adapter are the capture points.
+QoE is an **event/rollup stream, never Prometheus labels** (bounded-cardinality rule). That part
+held. **All three of this section's other prescriptions turned out to be wrong when checked against
+the code, so they are corrected here rather than left to mislead:**
+
+- ~~"Ride the searchevents outbox pattern"~~ — `search_outbox` is an *egress queue to an external
+  service* and **prunes nothing**; there is no DELETE against it anywhere. Fine at search volume,
+  not at playback volume. The shipped shape is **raw (7d) → hourly rollup (90d) → leader-elected
+  prune**, with retention modelled on `jobstatus.Prune`, not on searchevents.
+- ~~"the sha256 viewerKey precedent for privacy"~~ — that is not a precedent to follow. `viewerKey`
+  is a bare **unsalted** `sha256("ip:"+RealIP)`, trivially reversible against a known IP, and it is
+  safe only because it is **never persisted** (a Redis key fragment with a 1h TTL). What shipped is
+  a **keyed** digest off `JWT_SECRET`, scoped to a single UTC day: within a day two events from one
+  viewer are recognisable as one viewer, across days nothing links, and rotating the secret
+  re-derives the key so digests either side of a rotation never correlate.
+- ~~"keyed by the playback-session id"~~ — sound, with a caveat the section could not have known:
+  core#74 created no session table, so on a non-password video the session id is **client-asserted**.
+  The beacon may carry the playback token, and the server records `session_verified` so an admin can
+  see what fraction of the numbers are attested. On a normal public catalogue that fraction is 0 —
+  and being visibly 0 is the honest form of the same fact.
+
+The client transport prescription **does** hold: the `lib/search-events.ts` batched-keepalive shape
+is the right one to copy.
+
+**Percentiles do not merge** — the one arithmetic fact this seam turns on. "Per source for the last
+24h" spans 24 hourly rows × engines × formats, so rollup rows store a **fixed-boundary histogram**
+alongside the p50/p95/p99 columns. Averaging percentiles would be meaningless and re-scanning raw
+would defeat the rollup; histograms merge exactly, cost O(1) memory with no sampling cap, and keep
+the arithmetic in Go where CI can prove it without a database.
+
+**Capture point:** the unified engine adapter (`lib/use-playback-engine.ts`, user#61) — which did
+not exist when this section was written and is why item 4's client half was sequenced behind item 3.
+Note one dimension is structurally unknowable: on native HLS the browser owns variant selection via
+the manifest `SCORE` attribute, so **"selected rendition" is permanently null for that engine** and
+must be modelled as a first-class unknown rather than a missing value.
 
 ## 10. DRM provider interface (Phase 5; shape only)
 
