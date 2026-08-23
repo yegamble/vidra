@@ -559,22 +559,58 @@ jobs:
       # Go config reads but the map does not pass through is UNSETTABLE — silently,
       # and invisibly to every other gate. That is the class of bug that left
       # JWT_SECRET with no path into the container.
+      #
+      # THE EXTRACTION HAS TO COVER EVERY SHAPE config.go READS A VARIABLE IN.
+      # LoadFrom binds the local name getEnv to envParser.Str, but every TYPED
+      # value goes through p.Int / p.Int64 / p.Bool / p.Duration instead (and
+      # p.Str is called by its own name in a couple of places). A grep for
+      # getEnv alone therefore saw 77 of 153 keys: every boolean feature flag,
+      # every timeout and every numeric limit was invisible to this assert —
+      # which is exactly the half an unsettable key hides in.
+      #
+      # AND IT HAS TO INSPECT `worker`, NOT JUST `api`. worker runs the same
+      # binary through the same config.Load, so a key that reaches api and not
+      # worker is unsettable for half of a split deployment. It renders only
+      # under `--profile worker`, hence the extra profile. Both services take
+      # their environment from the same anchor in vidra-core's compose, so the
+      # two key sets are additionally asserted EQUAL: that is what catches a key
+      # added to one map and forgotten in the other, which no per-service check
+      # against the Go list can see.
       - name: Every config key vidra-core reads has a compose consumer
         run: |
-          docker compose --profile core config > /tmp/base-config.yml
-          grep -oE 'getEnv[A-Za-z]*\("[A-Z0-9_]+"' vidra-core/internal/config/config.go \
+          docker compose --profile core --profile worker config > /tmp/base-config.yml
+          grep -oE '(getEnv[A-Za-z]*|p\.(Str|Int|Int64|Bool|Duration))\("[A-Z0-9_]+"' \
+            vidra-core/internal/config/config.go \
             | sed 's/.*"\(.*\)"/\1/' | sort -u > /tmp/go-keys.txt
           python3 - <<'PY'
           import sys, yaml
-          env = yaml.safe_load(open('/tmp/base-config.yml'))['services']['api'].get('environment') or {}
+          svcs = yaml.safe_load(open('/tmp/base-config.yml'))['services']
           go = [k.strip() for k in open('/tmp/go-keys.txt') if k.strip()]
-          missing = sorted(k for k in go if k not in env)
-          if missing:
-              print('::error::config keys read by vidra-core with NO consumer in the rendered api environment:')
-              print('\n'.join(missing))
-              print('Add them to the api `environment:` map in vidra-core/docker-compose.yml.')
+          envs = {}
+          missing_anywhere = False
+          for name in ('api', 'worker'):
+              if name not in svcs:
+                  print(f'::error::the rendered model has no {name} service, so this assert is inspecting nothing')
+                  sys.exit(1)
+              envs[name] = svcs[name].get('environment') or {}
+              missing = sorted(k for k in go if k not in envs[name])
+              if missing:
+                  missing_anywhere = True
+                  print(f'::error::config keys read by vidra-core with NO consumer in the rendered {name} environment:')
+                  print('\n'.join(missing))
+          if missing_anywhere:
+              print('Add them to the shared environment anchor in vidra-core/docker-compose.yml.')
               sys.exit(1)
-          print(f'OK: all {len(go)} config keys reach the container ({len(env)} entries in the map).')
+          api_only = sorted(set(envs['api']) - set(envs['worker']))
+          worker_only = sorted(set(envs['worker']) - set(envs['api']))
+          if api_only or worker_only:
+              print('::error::api and worker do not carry the same config keys - they run the same binary, so one half is configured differently than its operator thinks:')
+              for k in api_only:
+                  print(f'  api only:    {k}')
+              for k in worker_only:
+                  print(f'  worker only: {k}')
+              sys.exit(1)
+          print(f'OK: all {len(go)} config keys reach BOTH api and worker ({len(envs["api"])} entries in each map).')
           PY
 
       - name: Exercise bootstrap.sh's idempotent update path
@@ -743,14 +779,28 @@ jobs:
           }
           render "default deploy (core+frontend+edge)" --profile core --profile frontend --profile edge
           render "external TLS (core+frontend, no edge)" --profile core --profile frontend
+          # The split topology an operator opts into with EXTRA_COMPOSE_PROFILES=worker.
+          # It gets its own line because `worker` is the profile whose merge order
+          # broke this workflow, and until now nothing here rendered it at all: the
+          # service, its production envelope, and the depends_on edges the external
+          # datastore overlays cut for it were all asserted by nobody.
+          render "worker split topology (core+frontend+edge+worker)" --profile core \
+            --profile frontend --profile edge --profile worker
           render "every optional profile" --profile core --profile frontend --profile edge \
-            --profile scan --profile captions --profile otel --profile media --profile ipfs
+            --profile scan --profile captions --profile otel --profile media --profile ipfs \
+            --profile worker
           render "external Postgres" -f docker-compose.external-postgres.yml \
             --profile core --profile frontend --profile edge
           render "external Redis" -f docker-compose.external-redis.yml \
             --profile core --profile frontend --profile edge
           render "both external datastores" -f docker-compose.external-postgres.yml \
             -f docker-compose.external-redis.yml --profile core --profile frontend --profile edge
+          # The overlays above rewrite `worker`'s depends_on as well as `api`'s, and
+          # that half of each overlay only exists in the rendered model with the
+          # profile on.
+          render "both external datastores + worker" -f docker-compose.external-postgres.yml \
+            -f docker-compose.external-redis.yml --profile core --profile frontend \
+            --profile edge --profile worker
           echo "OK: every production shape renders from a tree with no component checkouts anywhere."
 
   # Readiness plan step 2's "Verify": render a template with dummy secrets, boot

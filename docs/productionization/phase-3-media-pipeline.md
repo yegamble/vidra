@@ -172,8 +172,11 @@ Upload → Ingest → Probe → Transcode → Rendition ladder → CMAF packagin
 ## Carry-forwards out of the 2026-08-22 session (deliberate deferrals, not gaps)
 
 - **Back-catalog re-package job** (TS→CMAF as optional background work) — item 3's optional half.
-- **dash_url / format discovery on the video API** — clients currently probe
-  `/hls/cmaf/stream.mpd`; phase 4's player work is the natural home.
+- **dash_url / format discovery on the video API** — phase 4's player work is the natural home.
+  *Corrected 2026-08-23:* the "clients currently probe `/hls/cmaf/stream.mpd`" claim in this list
+  was never true — vidra-user has no DASH code at all, so the DASH route phase 3 shipped is served
+  and entirely unconsumed. `streaming_playlists.format` (migration 0108) is read in exactly one
+  place, the route cross-check at `hls.go:170`, and is exposed to no client.
 - **.mp3/.m4a/.flac upload allowlist** — audio-only transcoding works (incl. cover-art files)
   but is only reachable via video containers; widening the allowlist is a product decision.
 - **De-duplicate web-videos objects** — they are now byte-exact never-served copies of the HLS
