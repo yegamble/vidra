@@ -16,10 +16,14 @@ P2P (opt):   peers first → CDN/IPFS/S3/local fallback — peers are never the 
 
 ## Status 2026-08-23
 
-**Item 1 is DONE and merged** (core#74). **Item 6's research half is CLOSED — verdict DEFER, phase 4
-ships no P2P** ([decision doc](p2p-delivery-decision.md)). Item 3a (re-key quality identity) is
-built and awaiting merge as user#59; item 3b (collapse the lifecycles) branches off it. Items 2, 4,
-5 and 7 are scoped against the code below but not started.
+**Merged:** item 1 (core#74), item 2 (core#76), item 7's session half (core#75), and item 3a —
+quality identity re-keyed off hls.js level indexes (user#59). **Item 6's research half is CLOSED —
+verdict DEFER, phase 4 ships no P2P** ([decision doc](p2p-delivery-decision.md)).
+
+**In flight:** item 3b, collapsing the three hls.js lifecycles into one engine adapter.
+
+**Not started:** item 4 (QoE) and item 5 (IPFS delivery), both scoped against the code below.
+Item 4 is the gate on item 5, and item 3b is the gate on item 4's capture point.
 
 ## Ground truth 2026-08-23 (recon against the code, before any phase-4 build)
 
@@ -111,7 +115,33 @@ Do not design against one that does not exist.
   segments and `hls_url` still points at `master.m3u8`, so both play identically. Format discovery
   is therefore a **prerequisite for item 3's engine adapter**, not a live defect — priority drops,
   but it must land before any second engine can choose a manifest.
-- [ ] **2. Delivery-source resolver + CDN provider abstraction** (interfaces.md §4) — ordered
+- [x] **2. Delivery-source resolver + CDN provider abstraction** — **DONE 2026-08-23**
+  (core#76 `a058b38`; the resolver half shipped in phase 2 as core#61).
+
+  Source order is now `mirror → cdn → presign → api-proxy`, the CDN behind presign's exact fence
+  (redirectable class, `Eligible`, not `Credentialed`, runtime toggle) and presign's fail-open
+  discipline — errors log the class only, never the URL or key, and `Resolve` still cannot error.
+  New `internal/cdn` is stdlib-only with no vendor named in any identifier; purge is a method + a
+  URL template + one auth header. Six `DELIVERY_CDN_*` env keys (the first `DELIVERY_*` keys to
+  exist) plus a `delivery_cdn_enabled` runtime kill switch, default off, read per request.
+  `internal/delivery`'s import purity is preserved and was re-verified with `go list`.
+
+  Three things to know:
+  - **`Purge` has three outcomes, not two.** `nil` with no CDN (provably no shared copy); an
+    **error** for a CDN configured without a purge endpoint; the provider's answer otherwise.
+    Returning `nil` in the middle case would tell a future header-promotion caller that shared
+    caching is safe when it is not. It also ignores the kill switch — switching delivery off
+    evicts nothing.
+  - **The CDN origin must be the object store, not the Vidra API origin.** The resolver is
+    per-object-key, so it builds `base + "/" + objectKey`. Pointed at the API origin it 404s
+    everything, and a third-party 404 is indistinguishable from a cold cache — so a wrong origin
+    looks like a CDN that is merely slow to warm. Not enforceable in code; documented in the env
+    template and in four places in the source.
+  - **Nothing calls `Purge` automatically yet.** Purge-on-delete / purge-on-privacy-flip only
+    becomes load-bearing once something is shared-cacheable, and wiring it means touching media
+    logic. **That wiring is the gate on header promotion** — see the carry-forwards.
+
+  *Original scope:* ordered
   source list, api-proxy as permanent fallback, purge hooks in the interface from day one.
   Single-CDN support: origin pull from api-proxy or S3, cache-key discipline via the existing
   `?v=` generation-versioned immutable URLs (the ready groundwork), header promotion
@@ -233,7 +263,9 @@ Do not design against one that does not exist.
   **One prerequisite IS worth building, independently of P2P: per-segment SHA-256 manifests.**
   Item 5 needs them regardless, and `internal/mediahash` explicitly scopes HLS out today. Tracked as
   part of item 5 rather than as P2P groundwork.
-- [ ] **7. Live-plane delivery review** — all three audit claims verified still true (shared
+- [x] **7. Live-plane delivery review** — **session half DONE 2026-08-23** (core#75 `1b72626`);
+  delivery half deliberately not built and now documented as a supported-topology statement in
+  `vidra-core/docs/operations.md`. All three audit claims verified still true (shared
   volume + `os.Open` at `live_hls.go:134`, raw RTMP `0.0.0.0:1935` as a documented prod firewall
   exception, no playback tokens). **Decision taken 2026-08-23: split the item — bring live under
   the SESSION model, and explicitly document the DELIVERY gap.** The original phrasing bundled two
@@ -296,6 +328,27 @@ item 6   P2P — research first, decision doc, then a build decision
 - **Item 2 is mostly done**; what remains (a CDN provider, a real `Purge`, config keys, header
   promotion) is gated on `Purge` existing, because nothing may become shared-cacheable until
   something can invalidate it.
+
+## Carry-forwards out of the 2026-08-23 session (deliberate deferrals, not gaps)
+
+- **Purge call sites — the gate on header promotion.** `Purge` is real but nothing invokes it on
+  delete or privacy flip. Every byte route is still `private`; the only `public` value in the
+  system remains the IPFS mirror redirect. Promotion needs purge wired *and exercised* first.
+- **`origin-live` as a `delivery_source`** — item 7's QoE half. It has no home until item 4 builds
+  a beacon to carry it.
+- **Live segment cache-control got stricter, deliberately.** Live segments moved from
+  `private, max-age=12` to `CacheStableRevalidate` (`max-age=0, must-revalidate`) because there is
+  no 12-second constant in `internal/delivery` and inventing one would have been wrong anyway:
+  nginx-rtmp **reuses segment names across restarts**, so any freshness window is a window in which
+  a viewer receives the *previous* broadcast's bytes under the right name.
+- **`PlaybackSession.video_id` became optional** so live can carry `live_stream_id` in the same
+  schema rather than lying about `video_id`. Every video session still emits it; vidra-user does
+  not consume the endpoint yet, so nothing observable changed.
+- **`playback.Verify`/`VerifyClaims` now take an expected `Scope`** and `Claims.VideoID` became
+  `SubjectID`. Shipping a `ScopeLive` that no gate checked would have made the scope set
+  decorative. v1 tokens still verify, for `ScopePlayback` only.
+- **Frontend consumption of the session API** — gated on item 3's engine adapter, because there is
+  no DASH code to point a `dash_url` at yet.
 
 ## Exit criteria
 
