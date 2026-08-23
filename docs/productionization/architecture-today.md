@@ -3,6 +3,15 @@
 Produced by a 12-area repository audit. Derive planning from this document plus the code, not
 from older prose. Paths are relative to the meta-repo unless prefixed with a repo name.
 
+**Corrections since the snapshot (2026-08-23):** the queue-claim sentence below is stale — the
+lease retrofit landed 2026-08-21 (all 13 durable queues now claim with `FOR UPDATE SKIP
+LOCKED` + lease; ~11 sweep-only crons are leader-elected; 2-replica soak: 406/406, 0 dupes),
+and `VIDRA_ROLE` (`all|api|worker`) landed with it. The delivery sentence is also stale —
+phase 4 shipped playback sessions, a CDN provider behind the resolver, the unified engine
+adapter, and QoE beacons/rollups (six of seven items merged 2026-08-23; still true: no P2P —
+deferred by decision — and no EME/DRM in the player). Phase-5 recon corrections live in
+`phase-5-enterprise.md`.
+
 ## System shape
 
 Three standalone public repos — `vidra-core` (Go API), `vidra-user` (Next.js), `vidra-search`
