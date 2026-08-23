@@ -23,12 +23,18 @@ verdict DEFER, phase 4 ships no P2P** ([decision doc](p2p-delivery-decision.md))
 Item 3's adapter (3a + 3b) is also merged — user#59 and user#61 — leaving 3c (Shaka as a second
 engine) as the only unbuilt part of that item, now unblocked.
 
-Item 4's backend is merged too (core#77): raw → rollup → prune, the ingest beacon endpoint, and the
-admin playback-health endpoint that answers the 24h exit criterion.
+Item 4 is complete end to end (core#77, core#78, user#63, user#64) — raw → rollup → prune, the
+ingest beacon, the client capture point in the engine adapter, and an admin playback-health page
+that answers the 24h exit criterion.
 
-**Not started:** item 4's client beacon and admin page (both unblocked — the adapter is the single
-capture point), item 5 (IPFS delivery, gated on item 4's measurement actually running), and item 3c
-(Shaka as engine #2).
+**Six of seven items are done.** Remaining: **item 5** (IPFS delivery — deliberately gated on item
+4's measurement actually running, since gateway TTFB has never been measured) and **item 3c** (Shaka
+as engine #2, unblocked). Item 7's QoE half stays a carry-forward; read its trap below first.
+
+**Two exit criteria are met** — the player fetches a session before playing, and enabling a CDN is a
+configuration act with purge wired. The third (an admin seeing TTFF/rebuffer percentiles per source
+for 24h) is **built but not yet demonstrated on real traffic**; nothing has been deployed, so no
+rollup has ever run against genuine playback.
 
 **Worth knowing for any future worktree agent:** Turbopack rejects a symlinked `node_modules`
 ("points out of the filesystem root"), so a worktree that symlinks the parent's must build with
@@ -208,8 +214,26 @@ Do not design against one that does not exist.
     list, menu renders nothing) is correct and must be preserved rather than faked. Engine
     selection must also become `probe → ask each engine → pick`: today an MSE-partial browser is
     routed to the full progressive file even when it plays HLS natively.
-- [x] **4. QoE telemetry** — **backend DONE 2026-08-23** (core#77 `4d8b189`); the client beacon and
-  the admin page are the remaining halves, both now unblocked by item 3's adapter.
+- [x] **4. QoE telemetry** — **DONE end to end 2026-08-23**: backend core#77 `4d8b189`, schema
+  tightening core#78 `36915cb`, admin page user#63 `48b60c7`, client beacon + session consumption
+  user#64 `b554f7b`.
+
+  The admin page renders the three known-unknowns as properties of the data rather than as bugs:
+  native HLS shows **"Not reportable"** for bitrate switches (never the `0` that would read as
+  flawless ABR), a 0% attested share is presented as the expected reading with an explanation,
+  and "collection is off" is a *different* empty state from "on, nothing measured yet" — with
+  "unknown" when the switch cannot be read. Percentiles render to two significant figures with a
+  note about the ~15% histogram bucket resolution. `bitrate_switch_count` on a merged source row
+  cannot be corrected for the native-HLS share (no per-engine split on the wire), so it prints the
+  number and states the caveat rather than quietly adjusting it.
+
+  Client side, the session became the player's front door with a **bounded 4s wait** — starting on
+  the detail's URL and swapping would restart a loading media element, so the player waits, then
+  aborts and proceeds on the detail. A ready session with no manifest is a real answer ("no tree —
+  play the original"), not a missing one. Where a session issues a token it supersedes the unlock
+  token, because only the session's carries the session id inside its signature — which is what
+  makes a beacon attestable at all. **core#74's Safari fix only becomes real for users through
+  this PR**: the owner's session now mints a token that reaches the media URLs.
 
   Shipped: `qoe_events` (7d raw) → `qoe_rollups` (90d hourly, keyed on four closed vocabularies) →
   two leader-elected workers (rollup every 10 min, prune hourly); `POST /api/v1/qoe/events`
@@ -400,8 +424,16 @@ item 6   P2P — research first, decision doc, then a build decision
 - **Purge call sites — the gate on header promotion.** `Purge` is real but nothing invokes it on
   delete or privacy flip. Every byte route is still `private`; the only `public` value in the
   system remains the IPFS mirror redirect. Promotion needs purge wired *and exercised* first.
-- **`origin-live` as a `delivery_source`** — item 7's QoE half. It has no home until item 4 builds
-  a beacon to carry it.
+- **`origin-live` as a `delivery_source`** — item 7's QoE half. The beacon now exists, so what
+  remains is a client change plus a handler change. **Read the trap before touching it:** `qoe.Event`
+  and the schema already carry `live_stream_id` and the vocabulary already has `origin-live`, but
+  `buildQoEEvent` requires a parseable `video_id` and the handler is **all-or-nothing** — so the
+  moment a client emits one live event, it takes a whole batch of VOD measurements down with it.
+  Unreachable today only because the client never sends them (live and federated go unmeasured as a
+  consequence of requiring `video_id`, not as a special case). `qoeSubject` is the single line to
+  relax, and relaxing it without also reconsidering all-or-nothing batching is how this becomes
+  silent data loss. The handler documents the deferral deliberately — live segments never reach the
+  delivery resolver, so no origin classification can honestly produce `origin-live` yet.
 - **Live segment cache-control got stricter, deliberately.** Live segments moved from
   `private, max-age=12` to `CacheStableRevalidate` (`max-age=0, must-revalidate`) because there is
   no 12-second constant in `internal/delivery` and inventing one would have been wrong anyway:
