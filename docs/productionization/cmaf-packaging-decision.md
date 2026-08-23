@@ -79,8 +79,14 @@ manifest output — unblocking HEVC/AV1/hardware encoders (items 5/7).
 
 ### Host-process obligations (for item 3's implementer)
 
-`ignore_io_errors` must stay 0 (exit codes are then trustworthy); `setsar=1` after every scale
-(else SAR artifacts pollute the MPD); `-init_seg_name`/`-media_seg_name` give the
+`ignore_io_errors` must stay 0 (exit codes are then trustworthy); **do NOT add `setsar=1` (or any
+aspect filter) after scale** — this doc originally recommended it and that advice was wrong and
+harmful: `scale` already sets each rung's SAR to exactly what preserves the source's display
+ratio through even-rounding, so the adaptation set is consistent by default; `setsar=1` is what
+*creates* the "Conflicting stream aspect ratios" abort, and "fixing" that with `setdar` pinned to
+coded dimensions corrupts every rotated (phone portrait) and anamorphic source (verified during
+implementation, 2026-08-22 — regression fixtures now pin CMAF geometry ≡ TS geometry);
+`-init_seg_name`/`-media_seg_name` give the
 `init-$RepresentationID$.mp4` + `.m4s` layout (rung→representation-index mapping lives in Go);
 strip per-segment `EXT-X-PROGRAM-DATE-TIME`; inject `EXT-X-PLAYLIST-TYPE:VOD`; master playlist
 moves to `#EXT-X-VERSION:7` with `CODECS` on every `EXT-X-STREAM-INF` (mandatory in practice for
