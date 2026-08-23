@@ -82,10 +82,33 @@ Do not design against one that does not exist.
   Single-CDN support: origin pull from api-proxy or S3, cache-key discipline via the existing
   `?v=` generation-versioned immutable URLs (the ready groundwork), header promotion
   private→shared *only* through this machinery. No CDN vendor in core media logic.
-- [ ] **3. Player engine adapter** (interfaces.md §8) — collapse the three hls.js lifecycles;
-  re-key quality identity off hls.js level indexes; multi-audio + in-manifest subtitle
-  consumption; evaluate Shaka Player as the second engine (DASH/EME-capable) with hls.js
+- [ ] **3. Player engine adapter** (interfaces.md §8) — collapse the three hls.js lifecycles
+  (`use-hls-playback`, `use-live-playback`, `use-remote-playback`); re-key quality identity off
+  hls.js level indexes; evaluate Shaka Player as the second engine (DASH/EME-capable) with hls.js
   retained for the default HLS path. The bespoke player shell stays.
+
+  *Scoped 2026-08-23 against the code:*
+  - **Re-key BEFORE collapsing** — this doc originally implied the reverse. Re-keying while there
+    is still exactly one interface implementation (the only one with a test file) means Live and
+    Remote change once instead of twice.
+  - **The shell/engine boundary is already clean.** `components/player/VideoPlayer.tsx` imports no
+    hls.js type or value; its entire coupling is the 7-field `HlsPlayback` interface. §8's
+    precondition is already satisfied, which is what makes this item cheap.
+  - **Descoped: in-manifest subtitles.** Blocked at the packager (WebVTT hard-fails the dash
+    muxer), not the player — see risks.md #10. Belongs with the phase-5 Shaka Packager work.
+  - **Descoped: the player half of multi-audio.** The pipeline emits one hardcoded audio
+    representation with no language tag, so a selector would be a UI for a set of size one. The
+    backend half (probe N audio streams, emit `LANGUAGE=`/`NAME=`) is the real prerequisite.
+  - **Fold in:** Remote playback currently gets *no* ABR tuning at all (no `capLevelToPlayerSize`,
+    no `backBufferLength`), so a federated watch retains the whole played stream in MSE. Collapsing
+    fixes this for free. Live never wires `LEVEL_SWITCHED`, so its quality menu has no active-height
+    readout and PR #58's codec-family fix never reached it. Embeds pass no caption tracks at all.
+  - **Riskiest part: modelling native HLS as a third engine.** The browser owns variant selection
+    there via the manifest `SCORE` attribute; the adapter can neither read nor set the active
+    variant, so quality identity has no faithful implementation. Today's behavior (empty quality
+    list, menu renders nothing) is correct and must be preserved rather than faked. Engine
+    selection must also become `probe → ask each engine → pick`: today an MSE-partial browser is
+    routed to the full progressive file even when it plays HLS natively.
 - [ ] **4. QoE telemetry** (interfaces.md §9) — TTFF, buffering events, rebuffer duration,
   bitrate switches, selected rendition, delivery source, playback/DRM failures, segment
   latency, P2P/IPFS contribution. Event stream via the outbox pattern + batched beacon

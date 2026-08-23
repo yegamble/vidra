@@ -61,6 +61,24 @@ when retired.
    setLevel/AUTO_LEVEL/matchQualityLevel/QualityMenu. Deferring the re-key until Shaka/DRM time
    turns a cheap refactor into a breaking change; the native-HLS (iOS, MSE-less) branch needs
    its own FairPlay/credential path in any DRM or signed-URL design.
+   *Scoped down 2026-08-23 after reading the code:* **there is no data migration here.** No level
+   index is persisted anywhere — the only durable quality preference is server-side
+   `user_player_settings.default_quality`, already validated as `"auto" | "<height>p"`, i.e. already
+   height-keyed. The re-key is a pure in-memory/prop-shape refactor of four internal contracts.
+   Two things the entry missed, both now the real risk: `autoLevelCapForNetwork` in
+   `lib/hls-bandwidth.ts` *returns an hls.js index* out of an otherwise pure module, so it must be
+   re-keyed in the same change or the menu speaks heights while the ABR cap speaks indexes; and
+   **quality identity has no faithful implementation on the native-HLS branch at all** — the browser
+   owns variant selection there, driven by the `SCORE` attribute, so the adapter can neither read
+   nor set the active variant. Phase 4 item 4 must design the QoE schema knowing "selected
+   rendition" is permanently unknowable for that engine, rather than discovering it when the admin
+   playback-health page shows a third of sessions with a null rendition.
+10. **In-manifest subtitles are blocked at the packager, not the player** (added 2026-08-23).
+   `internal/media/cmaf.go` states it outright: WebVTT hard-fails the dash muxer, so captions stay
+   out-of-band. Any plan that puts in-manifest subtitles in the player work item is mis-scoped —
+   it needs a second packager (Shaka, already reserved for phase 5) or a separate WebVTT-segmenting
+   pass. Multi-audio is the same shape: the pipeline emits exactly one hardcoded `-map 0:a:0` audio
+   representation with no language tag, so a track selector would be a UI for a set of size one.
 
 ## Operational
 
