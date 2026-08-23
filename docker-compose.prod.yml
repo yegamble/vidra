@@ -46,6 +46,47 @@ x-logging: &logging
     max-size: "10m"
     max-file: "5"
 
+# The vidra-core PRODUCTION overrides, anchored because TWO services run that
+# image: `api` and — when the split topology is enabled — `worker`. They are the
+# same binary with a different VIDRA_ROLE, so anything asserted or redirected for
+# one has to hold for the other. A worker without TMPDIR writes ffmpeg scratch to
+# the container layer; a worker without the redis password cannot connect at all;
+# and JWT_SECRET is validated at boot in every role, so a worker without it
+# boot-loops exactly as an api would.
+x-core-prod-env: &core-prod-env
+  # THE production assertion. The base file deliberately declares
+  # `JWT_SECRET: ${JWT_SECRET:-}` (vidra-core/docker-compose.yml) because it
+  # is `include:`d by `make dev`, `make up` and meta-ci, all of which render
+  # with no env file at all — and a required-variable reference aborts
+  # RENDERING outright, not just booting. Production is where the assertion
+  # belongs, and this is it.
+  #
+  # `:?` fails on EMPTY as well as unset, which is the case that matters:
+  # env/production.env.example ships `JWT_SECRET=` blank, so without this
+  # line `$COMPOSE config -q` (deploy.sh step 0, `make prod-config`) renders
+  # exit-0 on an unedited env file and the failure only surfaces later as an
+  # api boot-loop against validate().
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in production - generate with `openssl rand -base64 48` and put it in env/production.env (>=32 bytes; the dev default is rejected at api boot)}
+  # Redirects all nine MkdirTemp/CreateTemp sites (HLS ladder, VP9 second
+  # encode, the uncompressed PCM wav Whisper needs, trick-play I-frames) off
+  # the container writable layer and onto the transcode_tmp volume. Budget
+  # ~4x UPLOAD_MAX_SIZE per concurrent transcode; back this volume with a
+  # Block Storage device, not the root disk Postgres lives on.
+  TMPDIR: /scratch
+  # Rewritten because redis now requires a password. ${REDIS_URL} still wins
+  # if the operator points at a managed Redis (use a rediss:// URL there).
+  REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required in production (openssl rand -hex 32 - hex not base64, because the value is substituted into a redis:// DSN)}@redis:6379/0}
+
+# The media + scratch volumes, likewise shared by api and worker. Both halves read
+# and write the object store, and in the split topology it is the WORKER that
+# needs the scratch device most — that is where ffmpeg ends up.
+x-core-prod-volumes: &core-prod-volumes
+  # Only load-bearing with STORAGE_BACKEND=local. Without it, media lands on
+  # the container writable layer and `up -d` destroys it while the Postgres
+  # rows survive, pointing at nothing.
+  - media_data:/app/data
+  - transcode_tmp:/scratch
+
 services:
   # ---------------------------------------------------------------------------
   # One-shot volume preparation. MUST run before api/search.
@@ -221,6 +262,13 @@ services:
     # droplet and leave one core for Postgres + the API itself.
     # IMPORTANT: Docker REJECTS a cpus value above the host's core count — on
     # the 4 vCPU floor droplet set API_CPUS=3.0 and API_MEM_LIMIT=4g.
+    #
+    # SPLIT TOPOLOGY: with the `worker` profile enabled AND API_ROLE=api, ffmpeg
+    # moves OUT of this container entirely and this envelope should SHRINK — the
+    # api is then serving JSON and streaming bytes, nothing more. Give what you
+    # take from here to WORKER_CPUS / WORKER_MEM_LIMIT below; the two together
+    # still have to fit the host. The defaults deliberately do not change, because
+    # the single-container topology is still the normal one.
     cpus: "${API_CPUS:-7.0}"
     mem_limit: ${API_MEM_LIMIT:-6g}
     # HTTP_SHUTDOWN_TIMEOUT defaults to 20s but Docker's default stop grace is
@@ -230,34 +278,9 @@ services:
       prep-volumes:
         condition: service_completed_successfully
     environment:
-      # THE production assertion. The base file deliberately declares
-      # `JWT_SECRET: ${JWT_SECRET:-}` (vidra-core/docker-compose.yml) because it
-      # is `include:`d by `make dev`, `make up` and meta-ci, all of which render
-      # with no env file at all — and a required-variable reference aborts
-      # RENDERING outright, not just booting. Production is where the assertion
-      # belongs, and this is it.
-      #
-      # `:?` fails on EMPTY as well as unset, which is the case that matters:
-      # env/production.env.example ships `JWT_SECRET=` blank, so without this
-      # line `$COMPOSE config -q` (deploy.sh step 0, `make prod-config`) renders
-      # exit-0 on an unedited env file and the failure only surfaces later as an
-      # api boot-loop against validate().
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in production - generate with `openssl rand -base64 48` and put it in env/production.env (>=32 bytes; the dev default is rejected at api boot)}
-      # Redirects all nine MkdirTemp/CreateTemp sites (HLS ladder, VP9 second
-      # encode, the uncompressed PCM wav Whisper needs, trick-play I-frames) off
-      # the container writable layer and onto the transcode_tmp volume. Budget
-      # ~4x UPLOAD_MAX_SIZE per concurrent transcode; back this volume with a
-      # Block Storage device, not the root disk Postgres lives on.
-      TMPDIR: /scratch
-      # Rewritten because redis now requires a password. ${REDIS_URL} still wins
-      # if the operator points at a managed Redis (use a rediss:// URL there).
-      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required in production (openssl rand -hex 32 - hex not base64, because the value is substituted into a redis:// DSN)}@redis:6379/0}
-    volumes:
-      # Only load-bearing with STORAGE_BACKEND=local. Without it, media lands on
-      # the container writable layer and `up -d` destroys it while the Postgres
-      # rows survive, pointing at nothing.
-      - media_data:/app/data
-      - transcode_tmp:/scratch
+      # Shared with `worker` — see x-core-prod-env at the top of this file.
+      <<: *core-prod-env
+    volumes: *core-prod-volumes
     healthcheck:
       # Stricter than the image's baked HEALTHCHECK (/healthz, liveness only):
       # /readyz also proves Postgres and Redis are reachable. The frontend's
@@ -267,6 +290,53 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  # BACKGROUND WORKERS — the same vidra-core image as `api`, started with
+  # VIDRA_ROLE=worker (vidra-core/docker-compose.yml defines the service and the
+  # profile; this block only adds the production envelope).
+  #
+  # OPT-IN. It is in the `worker` profile, which the deploy scripts do not enable
+  # by default, so a normal single-container install is untouched. To split:
+  #
+  #   EXTRA_COMPOSE_PROFILES=worker   in env/production.env
+  #   API_ROLE=api                    in env/production.env
+  #
+  # and re-run the deploy. WITHOUT API_ROLE=api this ADDS workers beside an api
+  # that still runs its own — valid, but not the split. WITH it, and with no worker
+  # container running, NOTHING drains the queues.
+  #
+  # `docker compose --profile worker up -d --scale worker=N` sizes it. Scale-safe:
+  # the base service declares no ports and no container_name, every queue claims
+  # under a lease, and the sweep-only crons are behind one advisory lock.
+  worker:
+    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    pull_policy: always
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - "no-new-privileges:true"
+    # THE point of the split: with API_ROLE=api, ffmpeg runs here and nowhere else,
+    # so this is the envelope that should hold the transcoding budget and API_CPUS /
+    # API_MEM_LIMIT above should come down to match. The defaults are deliberately
+    # SMALL — enabling the worker profile must not silently over-commit a host that
+    # is still running a full-size api. Size both together; Docker rejects a cpus
+    # value above the host's core count, and the sum has to fit alongside Postgres.
+    cpus: "${WORKER_CPUS:-2.0}"
+    mem_limit: ${WORKER_MEM_LIMIT:-2g}
+    # A worker has no listener and no drain: on SIGTERM it stops, and whatever it
+    # had claimed is handed back by lease expiry within one lease. The grace period
+    # matches api's only so a stop is not reported as a kill.
+    stop_grace_period: 30s
+    depends_on:
+      prep-volumes:
+        condition: service_completed_successfully
+    environment:
+      <<: *core-prod-env
+    volumes: *core-prod-volumes
+    # NO healthcheck block here on purpose. The base service already sets
+    # `healthcheck: {disable: true}`, and it must stay disabled: the image bakes an
+    # HTTP probe that a role with no listener can never pass. Do NOT copy api's
+    # /readyz probe down here.
 
   frontend:
     image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-user:${VIDRA_USER_TAG:?VIDRA_USER_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}

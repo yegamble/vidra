@@ -22,6 +22,16 @@
 #
 # NOTE: until vidra-core PR #1 (the search integration) merges, core main's image
 # simply ignores these unknown env vars — harmless.
+#
+# THE SAME KEYS MUST REACH `worker`. It runs the same vidra-core binary with
+# VIDRA_ROLE=worker, and it is the half that owns the search OUTBOX DRAINER and the
+# reconcile sweep. A worker without SEARCH_SERVICE_URL builds no drainer at all, so
+# in a split topology (API_ROLE=api + the `worker` profile) the outbox would fill
+# and never empty — with the api still happily enqueueing into it.
+x-search-wiring: &search-wiring
+  SEARCH_SERVICE_URL: http://search:8080
+  SEARCH_INTERNAL_SECRET: ${SEARCH_INTERNAL_SECRET:-dev-insecure-internal-secret-change-me-0000}
+
 services:
   api:
     environment:
@@ -29,5 +39,12 @@ services:
       # budget during local development. Production-like environments opt back
       # in through their env file; limiter tests exercise the limiter directly.
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-false}
-      SEARCH_SERVICE_URL: http://search:8080
-      SEARCH_INTERNAL_SECRET: ${SEARCH_INTERNAL_SECRET:-dev-insecure-internal-secret-change-me-0000}
+      <<: *search-wiring
+
+  # Only present when the `worker` profile is enabled; harmless otherwise (an
+  # override for a service that is not selected simply never renders a container).
+  # RATE_LIMIT_ENABLED is deliberately NOT repeated: it gates an HTTP middleware,
+  # and this role has no HTTP.
+  worker:
+    environment:
+      <<: *search-wiring
