@@ -52,12 +52,15 @@ foundation without them).
 
 ## 4. Delivery-source resolver (Phase 2/4 seam)
 
-New `internal/delivery` package in vidra-core, consulted by `internal/httpapi` at URL-mint time
-(hls.go `hlsDetail`, videos.go, downloads.go). Returns an ordered source list
-(`api-proxy | presigned | cdn | ipfs-gateway`) with **api-proxy as the permanent authoritative
-fallback** — modeled on `redirectPublicIPFS`'s fail-open-to-authoritative pattern. CDN providers
-plug in here later; **purge hooks are part of the interface from day one** (precondition for
-promoting versioned HLS from private to shared caching).
+New `internal/delivery` package in vidra-core. *Corrected 2026-08-23 (was stale):* the resolver
+is consulted at **byte-serve time** in `serveMediaAsset` (11 call sites), **not** at URL-mint
+time — `hlsDetail`, videos.go and downloads.go still mint plain origin-relative paths. Returns
+an ordered source list (`api-proxy | presigned | cdn | ipfs-gateway`) with **api-proxy as the
+permanent authoritative fallback** — modeled on `redirectPublicIPFS`'s
+fail-open-to-authoritative pattern. CDN providers plug in here (landed core#76); **purge hooks
+are part of the interface from day one** (precondition for promoting versioned HLS from private
+to shared caching) — as of 2026-08-23 `Purge` still has zero call sites, which is the standing
+gate on header promotion and on phase-5 items 1/3.
 
 ## 5. Playback session endpoint (Phase 4 consumer; stub early)
 
@@ -97,8 +100,11 @@ packaging jobs must be *born* on this convention.
 sweep-only crons are leader-elected (`9a0ddbd`), and claim ORDER BYs are total orders
 (core#56: `created_at, id` on UUID-keyed queues — `ORDER BY id` alone would be random there).
 Note the leases live on the *legacy queue tables* as `next_attempt_at` pushes; `job_runs`'s
-0083 lease columns remain trigger-fed display only. Still open from this section: the
-worker-role flag port (phase-3 item 8).
+0083 lease columns remain trigger-fed display only. *Update 2026-08-23:* the worker-role flag
+port **also landed** — `VIDRA_ROLE` = `all|api|worker` (`internal/config/config.go:28-67`,
+`RunsWorkers()`/`ServesHTTP()`), documented in operations.md; api-only processes deliberately
+do not stand for cron leader election. Nothing from this section remains open. (Fleet-scale
+follow-ups — sweep indexes, jitter, `stale_running` gauge fix — are phase-5 item 9.)
 
 ## 8. Player engine adapter (Phase 4 prep; the cheap part is early)
 
@@ -147,19 +153,35 @@ Note one dimension is structurally unknowable: on native HLS the browser owns va
 the manifest `SCORE` attribute, so **"selected rendition" is permanently null for that engine** and
 must be modelled as a first-class unknown rather than a missing value.
 
-## 10. DRM provider interface (Phase 5; shape only)
+## 10. DRM provider interface (Phase 5; shape landed 2026-08-23)
 
 ```go
 type DRMProvider interface {
-    PrepareAsset(...)          // CENC keys/PSSH at packaging time
-    GetProtectionMetadata(...) // what the player/manifest needs
-    LicenseConfiguration(...)  // license-service endpoints for the session API
+    PrepareAsset(...)          // CENC keys at packaging time — see amendment below
+    GetProtectionMetadata(...) // what the player/manifest needs (nil = clear)
+    LicenseConfiguration(...)  // license-service endpoints for the session API (nil = none)
 }
 ```
 
 Providers: NoDRM (default), ClearKeyTest, ExternalMultiDRM, then Widevine/FairPlay/PlayReady
-integrations. Hard prerequisites in order: CMAF packaging (Phase 3), engine abstraction with a
-FairPlay path for the MSE-less iOS native-HLS branch, playback sessions for license issuance.
-Content keys never in the normal DB; the existing KEK discipline (env-only, validated,
-destructive-rotation warnings) is the pattern for content-key KEKs. Peers may exchange
-encrypted segments; peers never exchange keys.
+integrations. Content keys never in the normal DB; the existing KEK discipline (env-only,
+validated, destructive-rotation warnings) is the pattern for content-key KEKs — with **no
+fallback to the federation KEK** (content keys are a separate trust domain).
+
+*Amendments 2026-08-23, from recon + empirical ffmpeg verification (phase-5 doc has the full
+evidence):*
+- **`PrepareAsset` is post-package, not packaging-time.** ffmpeg-fused CENC is disqualified
+  (one key per tree, no `pssh`, no manifest signaling, no `cbcs`, and the derivative
+  remux chain silently emits encrypted garbage with exit 0). If CENC ships, Shaka Packager
+  ships with it, as a transmux+encrypt pass over the finalized clear tree from `Finalize`'s
+  tail — cheaper than the cmaf-decision doc's mezzanine headline because the encode already
+  happened.
+- **FairPlay requires `cbcs` and is therefore Shaka-gated**, not engine-adapter-gated. The
+  "engine abstraction with a FairPlay path" prerequisite was half-stale: the adapter and the
+  native-HLS branch exist; zero EME code exists in vidra-user.
+- The former "peers never exchange keys" clause is the sole survivor of phase-5 item 7 (P2P
+  was deferred with no peer source kind): *peers may exchange already-encrypted segments;
+  peers never exchange keys; license requests always hit the license service.*
+- Slices 0+1 landed (phase-5 wave C): `internal/drm` modeled on `internal/cdn`, `NoDRM`
+  byte-identical session JSON, sealed `video_drm_keys` sidecar under `DRM_KEY_KEK`,
+  `playback.ScopeLicense`, ClearKey license endpoint.
