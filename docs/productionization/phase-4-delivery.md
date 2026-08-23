@@ -23,10 +23,12 @@ verdict DEFER, phase 4 ships no P2P** ([decision doc](p2p-delivery-decision.md))
 Item 3's adapter (3a + 3b) is also merged — user#59 and user#61 — leaving 3c (Shaka as a second
 engine) as the only unbuilt part of that item, now unblocked.
 
-**In flight:** item 4's backend half (QoE raw → rollup → prune).
+Item 4's backend is merged too (core#77): raw → rollup → prune, the ingest beacon endpoint, and the
+admin playback-health endpoint that answers the 24h exit criterion.
 
-**Not started:** item 4's client beacon (now unblocked — the adapter is the single capture point),
-item 5 (IPFS delivery, gated on item 4's measurement), and item 3c.
+**Not started:** item 4's client beacon and admin page (both unblocked — the adapter is the single
+capture point), item 5 (IPFS delivery, gated on item 4's measurement actually running), and item 3c
+(Shaka as engine #2).
 
 **Worth knowing for any future worktree agent:** Turbopack rejects a symlinked `node_modules`
 ("points out of the filesystem root"), so a worktree that symlinks the parent's must build with
@@ -206,7 +208,38 @@ Do not design against one that does not exist.
     list, menu renders nothing) is correct and must be preserved rather than faked. Engine
     selection must also become `probe → ask each engine → pick`: today an MSE-partial browser is
     routed to the full progressive file even when it plays HLS natively.
-- [ ] **4. QoE telemetry** (interfaces.md §9) — TTFF, buffering events, rebuffer duration,
+- [x] **4. QoE telemetry** — **backend DONE 2026-08-23** (core#77 `4d8b189`); the client beacon and
+  the admin page are the remaining halves, both now unblocked by item 3's adapter.
+
+  Shipped: `qoe_events` (7d raw) → `qoe_rollups` (90d hourly, keyed on four closed vocabularies) →
+  two leader-elected workers (rollup every 10 min, prune hourly); `POST /api/v1/qoe/events`
+  (optionalAuth, 20/batch, all-or-nothing allowlist, 202, best-effort write that never fails the
+  request path); `GET /api/v1/admin/qoe/playback-health` defaulting to the last 24h — the exit
+  criterion, answerable directly.
+
+  - **Percentiles do not merge**, so rollup rows store a fixed-boundary **histogram** beside the
+    p50/p95/p99 columns. "Per source for the last 24h" spans 24 hourly rows × engines × formats;
+    averaging percentiles is meaningless and re-scanning raw defeats the rollup. Histograms merge
+    exactly and keep the arithmetic in Go where CI proves it without a database. Cost is bucket
+    resolution (~15% width, interpolated).
+  - **No session table**, deliberately: it would be a third unbounded table written on the hot path
+    of every view, to defend against forged beacons that can at worst inflate counts on an endpoint
+    already accepting anonymous events. Instead the beacon may carry the playback token, the server
+    verifies it, and `session_verified` carries through to the admin response so an admin can see
+    what fraction is attested. Adding the table later is purely additive.
+  - **Privacy:** no IP, no account id. A keyed digest off `JWT_SECRET` scoped to a single UTC day —
+    within a day one viewer is recognisable as one viewer, across days nothing links, and rotating
+    the secret re-derives the key so digests either side never correlate.
+  - **`qoe_collection_enabled` defaults ON**, unlike its two delivery-toggle neighbours. Those send
+    a viewer to a third party and cost money; this writes bounded, keyed, local rows with no
+    external service. An instance that measures nothing cannot answer the question the whole phase
+    exists for, and a default discovered on a settings page is discovered *after* the incident.
+    One-line change if that judgement is wrong.
+  - **`make ci` is not sufficient to clear CI** — `make openapi-lint` (Redocly) is a separate job
+    and caught a real error: the spec is OpenAPI 3.1, where `nullable: true` is invalid
+    (`type: [integer, "null"]`). Worth adding to the repo's before-you-push habit.
+
+  *Original scope:* TTFF, buffering events, rebuffer duration,
   bitrate switches, selected rendition, delivery source, playback/DRM failures, segment
   latency, P2P/IPFS contribution. Event stream via the outbox pattern + batched beacon
   transport; admin playback-health page via the jobstatus/bounded-metrics patterns. Basic
