@@ -88,6 +88,92 @@ mints at boot and prints to its own log.
 
 ---
 
+## Four things a real deploy hit (2026-08-23)
+
+All four are silent-failure-shaped, which is why they are here rather than in a
+commit message.
+
+### `env/production.env` is docker-compose format, NOT shell — never `source` it
+
+`vidra setup` generates `VIDRA_COMPOSE_PROFILES=core frontend`: unquoted, with a
+space. Compose's `--env-file` parser reads that as the literal string
+`core frontend`, which is correct. A shell that `source`s the same file sets
+`VIDRA_COMPOSE_PROFILES=core` and then tries to **execute `frontend`**.
+
+Writing deploy automation that sources this file is the natural thing to do and
+it is wrong. Parse it as `KEY=VALUE` with the value taken literally, or hand it
+to `docker compose --env-file` / `docker run --env-file`, which already do. The
+same applies to any value with a space — a multi-word `INSTANCE_NAME` behaves the
+same way.
+
+Worse, the failure is quiet: a `set -e` script that pipes its output to `tail`
+reports the pipeline's exit status, so a run that died on line 1 exits 0 and looks
+like a run that found nothing to do. Capture to a file and check the status
+separately.
+
+### `git` in `/opt/vidra` must run as the `vidra` user, not as root
+
+`install.sh` clones as root; `provision.sh` then creates the service user and
+chowns the tree to it. After that, `git` as root refuses with *"detected dubious
+ownership in repository at '/opt/vidra'"* and does nothing.
+
+That refusal is safe on its own. What is not safe is mixing it with file-level
+edits, because those still succeed:
+
+```bash
+# WRONG — the sed lands, the checkout does not, and nothing says so
+sed -i 's/^VIDRA_CORE_TAG=.*/VIDRA_CORE_TAG=v0.3.0/' env/production.env
+git checkout v0.3.0            # fatal: dubious ownership
+
+# RIGHT
+sudo -u vidra git -C /opt/vidra fetch --tags origin
+sudo -u vidra git -C /opt/vidra checkout v0.3.0
+```
+
+The first form leaves the env file naming a release the tree is not on. `vidra
+deploy` will happily pull those images and run them against the previous
+revision's compose files.
+
+### Nothing publishes a Postgres port, so host tooling cannot use `postgres:5432`
+
+The prod overlay's loopback discipline means Postgres, Redis and search publish
+**nothing at all** — that is the point (see *Firewall* below). The service name
+`postgres` only resolves inside the compose network, so a tool run on the host
+with a `DATABASE_URL` copied from the env file cannot connect, and the error is a
+DNS failure rather than anything about ports.
+
+Either run the tool inside the network:
+
+```bash
+docker run --rm --network vidra_default --env-file env/production.env <image> …
+```
+
+or resolve the container address and repoint the DSN at it:
+
+```bash
+docker inspect vidra-postgres-1 \
+  --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
+```
+
+Prefer the first: it uses the same env parsing as the stack, and the address is
+not stable across recreates.
+
+### `peertube-import` is not shipped anywhere
+
+`Dockerfile` builds only `./cmd/api`, and the release assets carry only the
+`vidra` CLI. An operator migrating from PeerTube therefore has no supported way
+to run the importer — it has to be built from the source tree with a Go
+toolchain and copied to the host:
+
+```bash
+cd vidra-core
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o peertube-import ./cmd/peertube-import
+scp peertube-import root@<host>:/opt/vidra/
+```
+
+See [vidra-core's migration notes](../vidra-core/docs/operations.md) for what the
+importer does and does not carry across.
+
 ## Host prerequisites
 
 `ufw`, `unattended-upgrades` and SSH hardening are not mentioned anywhere else in
