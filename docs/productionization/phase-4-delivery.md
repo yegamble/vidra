@@ -14,6 +14,12 @@ Enterprise:  origin → {CDN A, CDN B, CDN C}  (Phase 5 steering)
 P2P (opt):   peers first → CDN/IPFS/S3/local fallback — peers are never the only durable source
 ```
 
+## Status 2026-08-23
+
+**Item 1 is DONE and merged** (core#74). Item 3a (re-key quality identity) is built and awaiting
+merge as user#59. Item 6's research decision doc is in progress. Items 2, 4, 5, 7 are scoped
+against the code below but not started.
+
 ## Ground truth 2026-08-23 (recon against the code, before any phase-4 build)
 
 This phase was scoped before phases 2 and 3 landed. Verified corrections — read these before
@@ -62,7 +68,34 @@ Do not design against one that does not exist.
 
 ## Work items
 
-- [ ] **1. Playback session API** (interfaces.md §5) — `POST /api/v1/videos/:id/playback-session`
+- [x] **1. Playback session API** — **DONE 2026-08-23** (core#74 `802b5ae`). Backend + OpenAPI;
+  frontend consumption is a deliberate follow-up, gated on item 3's engine adapter because the
+  frontend has no DASH code to point a `dash_url` at yet.
+
+  Shipped: `POST /api/v1/videos/:id/playback-session` under `optionalAuth`, returning `session_id`,
+  `video_id`, `packaging_format`, `hls_url`, `dash_url` (CMAF only), `renditions`, and a
+  **conditional** `playback_token` + `expires_in`; `packaging_format`/`dash_url` also added to the
+  video detail. Authorization calls `videoVisibleForMedia` rather than restating it, so the 401
+  unlock-prompt flow is untouched. Token payload is now versioned; v1 keeps *verifying* for its
+  remaining TTL but there is no v1 mint path left in production code.
+
+  Four things worth carrying forward:
+  - **The token is minted only for password videos**, and a regression test asserts on the raw
+    response body that a public session carries no `playback_token` key. This is the constraint
+    that protects CDN/presign delivery — any `?pt=` or `Authorization` header marks a request
+    credentialed, which forces `no-store` and blocks redirect.
+  - **`dash_url` is emitted unversioned**, deliberately. Adding `?v=` would make the manifest
+    return `immutable` over segments that arrive `must-revalidate`, because a DASH player expands
+    `SegmentTemplate` itself. Unversioned is the only spelling that makes no false claim.
+  - **A live bug fixed for free:** the *owner* of their own password-protected video could never
+    watch it in Safari — native HLS cannot set an `Authorization` header and the password gate has
+    no cookie path, so `master.m3u8` 401'd on the owner. Minting for owner/moderator closes it.
+  - **For item 4:** there is no session table. For a non-password video the `session_id` is
+    server-*minted* but not server-*recorded*, so a beacon carrying it is client-asserted; for a
+    password video the id is inside the HMAC-signed token and is verifiable. If item 4 wants to
+    reject events for sessions that never existed, that table is item 4's to add.
+
+  *Original scope, for reference:* `POST /api/v1/videos/:id/playback-session`
   determines authorization, available renditions, HLS/DASH preference, delivery endpoints,
   tokens/signed URLs, (later) DRM requirements and P2P config. First version simply returns
   today's hls_url + optional `?pt=` token so the player consumes a session object from day one;
