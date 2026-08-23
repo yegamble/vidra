@@ -16,9 +16,10 @@ P2P (opt):   peers first → CDN/IPFS/S3/local fallback — peers are never the 
 
 ## Status 2026-08-23
 
-**Item 1 is DONE and merged** (core#74). Item 3a (re-key quality identity) is built and awaiting
-merge as user#59. Item 6's research decision doc is in progress. Items 2, 4, 5, 7 are scoped
-against the code below but not started.
+**Item 1 is DONE and merged** (core#74). **Item 6's research half is CLOSED — verdict DEFER, phase 4
+ships no P2P** ([decision doc](p2p-delivery-decision.md)). Item 3a (re-key quality identity) is
+built and awaiting merge as user#59; item 3b (collapse the lifecycles) branches off it. Items 2, 4,
+5 and 7 are scoped against the code below but not started.
 
 ## Ground truth 2026-08-23 (recon against the code, before any phase-4 build)
 
@@ -191,16 +192,47 @@ Do not design against one that does not exist.
   measures gateway fetch outcomes; and unlike presign there is **no runtime kill switch** — turning
   IPFS delivery off during an incident currently means a restart.
 
+  **Do not assume public IPFS gateways still exist** (surfaced 2026-08-22 by the P2P research, which
+  probed them). The public gateway landscape collapsed while this item sat in the backlog:
+  **Infura's IPFS gateway shut down 2026-08-15 — one week ago**; Cloudflare's closed 2024-08;
+  Interplanetary Shipyard is redirecting `ipfs.io`/`dweb.link` with rate limits rolling out and has
+  **explicitly asked hot-linked video to migrate off**. Range requests cap at 5 GiB, and
+  verifiability and range-seeking are mutually exclusive (`entity-bytes` is CAR-only). Protocol
+  Labs' own NSDI '24 paper says IPFS *"struggles with real-time applications such as live video
+  streaming."* This does not close the item — a self-hosted or operator-chosen gateway is still
+  viable, and `IPFS_GATEWAY_URL` already never defaults to a public one — but any design premised on
+  free public gateway capacity is now wrong. **Also needs per-segment SHA-256 manifests**, which
+  `internal/mediahash` explicitly scopes HLS out of today.
+
   **Sequence item 4 before item 5.** Nobody has ever measured gateway TTFB for a segment; the only
   latency evidence in the repo is a CI test that polls a public gateway for up to *5 minutes* for
   one object — a reachability proof, not a latency proof, and ~150× a 2-second segment budget.
   Item 5's whole premise is unfalsifiable until measurement exists, so its **first deliverable
   should be measuring the existing client-side path**, not new plumbing.
-- [ ] **6. P2P (peer-assisted delivery, optional)** — research task first: current
-  PeerTube/p2p-media-loader architecture, WebRTC privacy implications (opt-in only), segment
-  granularity (HLS/CMAF segments, never whole-video blobs). Then: tracker/signaling decision,
-  integration under the engine adapter, fallback discipline (peers → CDN/origin), contribution
-  metrics into QoE. Never a durable source.
+- [x] **6. P2P (peer-assisted delivery, optional)** — **research half CLOSED 2026-08-22.
+  Verdict: DEFER — phase 4 ships no P2P.** Full decision at
+  [p2p-delivery-decision.md](p2p-delivery-decision.md).
+
+  The benefit is proportional to *simultaneous viewers on one title*, which the target install does
+  not have; the cost is a permanent widening of viewer exposure from "the operator sees my IP" to
+  "anyone who can read the public manifest can enumerate everyone watching this video, in real
+  time." The swarm id is derived from the video UUID in the page URL, so the swarm is a public
+  enumeration oracle — and the attack is not theoretical: a DSN 2024 measurement study harvested
+  **7,740 unique viewer IPs from one controlled peer** on this architecture in a week, and in the EU
+  (CJEU *Mircom*) harvesting them is expressly lawful. The usual mDNS rebuttal does not apply — that
+  draft never became an RFC and explicitly excludes public addresses. "Download-only" is not a
+  privacy setting either: the WebRTC connection completes before the upload flag is consulted.
+  Two findings make the trigger harder to hit than expected: the commercial market for
+  public-internet browser P2P is dead (Peer5/Streamroot/Viblast all DNS-dead), and the bandwidth
+  being optimized is **$0** on the hosting the target operator actually uses.
+
+  Not built, deliberately: no `peer` member on `delivery.SourceKind`, no peer source in the
+  resolver. Item 3's engine adapter keeps hls.js construction behind one seam — which it must
+  anyway for QoE — and that seam is where a loader would attach if this ever flips.
+
+  **One prerequisite IS worth building, independently of P2P: per-segment SHA-256 manifests.**
+  Item 5 needs them regardless, and `internal/mediahash` explicitly scopes HLS out today. Tracked as
+  part of item 5 rather than as P2P groundwork.
 - [ ] **7. Live-plane delivery review** — all three audit claims verified still true (shared
   volume + `os.Open` at `live_hls.go:134`, raw RTMP `0.0.0.0:1935` as a documented prod firewall
   exception, no playback tokens). **Decision taken 2026-08-23: split the item — bring live under
