@@ -112,20 +112,125 @@ Do not design against one that does not exist.
 - [ ] **4. QoE telemetry** (interfaces.md §9) — TTFF, buffering events, rebuffer duration,
   bitrate switches, selected rendition, delivery source, playback/DRM failures, segment
   latency, P2P/IPFS contribution. Event stream via the outbox pattern + batched beacon
-  transport; sha256 viewer-key privacy precedent; admin playback-health page via the
-  jobstatus/bounded-metrics patterns. Basic installs need no external analytics service;
-  collection is configurable and privacy-conscious.
-- [ ] **5. IPFS delivery integration** — promote the mirror from metadata-only to a real
-  delivery source in the resolver: health/priority model, failover, attempt/outcome
-  measurement feeding QoE.
+  transport; admin playback-health page via the jobstatus/bounded-metrics patterns. Basic
+  installs need no external analytics service; collection is configurable and privacy-conscious.
+
+  *Corrected 2026-08-23 against the code — four premises were wrong:*
+  - **The outbox pattern does not fit unmodified.** `search_outbox` is an *egress queue to an
+    external service* and **prunes nothing** — there is no DELETE anywhere against it. That is
+    survivable at search volume and is not at playback volume. QoE needs
+    outbox → **local rollup table** → prune worker. **Design the rollup first** (source × class ×
+    hour bucket, percentiles precomputed); otherwise the exit criterion "TTFF/rebuffer percentiles
+    per source for the last 24h" becomes a full scan of an unbounded table and the
+    bounded-cardinality rule gets violated in the storage layer instead of the label layer.
+    Copy the *retention* pattern from `jobstatus.Prune` (30/90-day windows, 10k batches, leader-
+    elected), not from searchevents.
+  - **The "sha256 viewer-key privacy precedent" is not one.** `viewerKey` is a bare unsalted
+    `sha256("ip:"+RealIP)` — trivially reversible against a known IP — and it survives only because
+    it is *never persisted*, existing solely as a Redis key fragment with a 1h TTL. Copying it into
+    a persisted event row would be a privacy regression dressed as reuse. Use a **keyed** digest
+    with domain separation (the `playback/token.go` HMAC construction) and state the rotation
+    policy.
+  - **The capture point does not exist yet.** interfaces.md §9 says "hls.js handlers in the unified
+    engine adapter" — there is no adapter, there are three hooks, and the live and remote hooks
+    wire no `LEVEL_SWITCHED` or `FRAG_BUFFERED` at all. Item 4 is sequenced behind item 3 unless v1
+    instruments only the VOD hook.
+  - **"Delivery source" is not currently knowable by the client.** `serveMediaAsset` redirects on
+    the first non-api-proxy source and emits no marker, so the client can only infer source by
+    sniffing a redirect host. Emitting an explicit source marker is part of item 4's cost, not a
+    freebie. Note also that **"selected rendition" is permanently null on native HLS** (item 3).
+- [ ] **5. IPFS delivery integration** — bring the two IPFS delivery paths that *already exist*
+  under the resolver and give them a health model: health/priority, failover, attempt/outcome
+  measurement feeding QoE, and a runtime kill switch.
+
+  *Rewritten 2026-08-23 — "promote from metadata-only" mis-stated the starting point twice.*
+  Server-side, thumbnails, playlist covers and avatars/banners **already 307 to the gateway**
+  through the resolver. Client-side, a viewer can **already play an entire HLS ladder off a
+  gateway** — the video detail carries `ipfs.hls_cid`, the watch view probes the gateway and offers
+  a manual source toggle, and the chosen URL is handed to hls.js as a master override. That path is
+  opt-in, unmeasured, and sits **entirely outside `internal/delivery`**. What is missing is not
+  delivery, it is *brokered, policy-driven, measured* delivery. Four concrete gaps: HLS is pinned
+  as **one directory CID, not per-segment**, so there is no per-segment gateway URL (cheapest fix:
+  have the lookup return `{gateway}/ipfs/{car_root}/<rendition>/<file>` — CI already proves nested
+  path resolution works); the resolver has **no health, priority or failover concept** and its
+  single consumer takes the first non-api-proxy source and returns, so post-307 failover is
+  impossible server-side and must live in the player (another item-3 dependency); nothing anywhere
+  measures gateway fetch outcomes; and unlike presign there is **no runtime kill switch** — turning
+  IPFS delivery off during an incident currently means a restart.
+
+  **Sequence item 4 before item 5.** Nobody has ever measured gateway TTFB for a segment; the only
+  latency evidence in the repo is a CI test that polls a public gateway for up to *5 minutes* for
+  one object — a reachability proof, not a latency proof, and ~150× a 2-second segment budget.
+  Item 5's whole premise is unfalsifiable until measurement exists, so its **first deliverable
+  should be measuring the existing client-side path**, not new plumbing.
 - [ ] **6. P2P (peer-assisted delivery, optional)** — research task first: current
   PeerTube/p2p-media-loader architecture, WebRTC privacy implications (opt-in only), segment
   granularity (HLS/CMAF segments, never whole-video blobs). Then: tracker/signaling decision,
   integration under the engine adapter, fallback discipline (peers → CDN/origin), contribution
   metrics into QoE. Never a durable source.
-- [ ] **7. Live-plane delivery review** — live HLS currently bypasses much of this (shared
-  volume + os.Open, raw RTMP 0.0.0.0:1935, no playback tokens); bring live segments under the
-  session/delivery model or explicitly document the gap.
+- [ ] **7. Live-plane delivery review** — all three audit claims verified still true (shared
+  volume + `os.Open` at `live_hls.go:134`, raw RTMP `0.0.0.0:1935` as a documented prod firewall
+  exception, no playback tokens). **Decision taken 2026-08-23: split the item — bring live under
+  the SESSION model, and explicitly document the DELIVERY gap.** The original phrasing bundled two
+  things with wildly different cost and value.
+
+  **In scope (cheap, high value):** a live playback-session endpoint returning the same session
+  object as VOD, carrying a scoped token; `liveStreamForHLS` accepting that token alongside session
+  auth; the QoE beacon carrying a live session id with `origin-live` as a first-class
+  `delivery_source`; and the hand-rolled `Cache-Control` at `live_hls.go:149-154` moving onto the
+  `delivery.CacheControl` constants. The session half is the **only** mechanism that gives live a
+  private-but-shareable tier and a revocable, expiring credential — today it has neither. Live has
+  no `password` privacy tier at all, so anyone who obtains the stream UUID (handed out on the
+  channel's public live detail) can pull segments for the whole broadcast. VOD's equivalent
+  capability is enforced with a signed, video-scoped, 6-hour token.
+
+  **Out of scope, and written down as a supported-topology statement rather than a defect:** live
+  segments never enter `storage.Backend` during the broadcast — they are ephemeral, live in a
+  12-second window, and their names are *reused across restarts* — so they have no `ObjectKey`, no
+  presign, no mirror CID and no `?v=` discipline. Forcing them into `delivery.Request` would mean
+  inventing a non-storage source kind. Live is also **single-host by construction** (a local Docker
+  volume shared by rtmp/api/worker); an api replica on another node sees an empty volume and 404s
+  every live request indistinguishably from "not live". **That is a volume problem, not a
+  delivery-abstraction problem** — no resolver work fixes it; fixing it properly means replacing
+  nginx-rtmp's HLS muxer with a Go-side repackager writing through `storage.Backend`, which is a
+  live-plane rewrite and is not phase 4. Record this in `vidra-core/docs/operations.md` beside the
+  phase-3 supported-topology section.
+
+  **Riskiest unknown — verify before committing to the design:** VOD makes `?pt=` work by
+  *rewriting the m3u8*. Live cannot — the playlist is written by nginx-rtmp and mutates every 2
+  seconds. So a token on `master.m3u8` will **not** propagate to the relative segment URIs inside
+  it. Either the segment route accepts the token per-request from the query string (plausible; the
+  handler already validates names and never rewrites), or Go starts rewriting a file that changes
+  every fragment. **Test path (a) against Safari native HLS first** — Safari is precisely the client
+  that cannot set headers and is the entire reason `?pt=` exists.
+
+## Build order (decided 2026-08-23 from the recon above)
+
+The items are not independent, and two of the dependencies run opposite to the order the list is
+written in.
+
+```text
+item 3a  re-key quality identity ──┐        (schedulable NOW; depends on nothing)
+                                   ├─► item 3b  collapse the three lifecycles
+item 1   playback session API ─────┤              │
+         (+ dash_url discovery)    │              ├─► item 3c  engine selection / Shaka
+                                   │              │
+                                   │              └─► item 4  QoE (needs ONE capture point)
+                                   │                        │
+item 2   CDN provider + real Purge─┘                        ├─► item 5  IPFS (needs measurement
+         (mostly built by phase 2)                          │           before plumbing)
+                                                            └─► item 7  live session half
+item 6   P2P — research first, decision doc, then a build decision
+```
+
+- **Re-key before collapse** (item 3a → 3b) — the item text implies the reverse.
+- **Item 4 before item 5** — item 5's premise (health/priority/failover is worth building) is
+  unfalsifiable until gateway latency is measured, and item 4 is what measures it.
+- **Item 1 gates engine selection**, but *not* the re-key or the collapse, which is what makes
+  item 3 startable immediately.
+- **Item 2 is mostly done**; what remains (a CDN provider, a real `Purge`, config keys, header
+  promotion) is gated on `Purge` existing, because nothing may become shared-cacheable until
+  something can invalidate it.
 
 ## Exit criteria
 
