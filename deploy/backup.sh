@@ -127,9 +127,28 @@ docker exec -i "$PG_CID" pg_dump -U "$PGUSER" -Fc "$PGDB" | gzip -c > "$TMP"
 # and it is the difference between "we have 8 weeks of backups" and "we have 8
 # weeks of unusable files". Reuses the container's pg_restore so the client
 # version always matches the server.
+#
+# NOT piped into pg_restore, deliberately. `pg_restore -l` reads only the
+# archive's table of contents and then exits, closing its stdin. Whatever is
+# still streaming into it takes SIGPIPE and exits 141, and `set -o pipefail`
+# turns that into a failed pipeline — so a PERFECTLY GOOD archive is reported
+# corrupt and deleted.
+#
+# That failure is size-dependent, which is what makes it vicious: while the
+# database is small the writer finishes before the reader exits and the check
+# passes, so it looks correct for as long as there is nothing worth backing up.
+# It starts failing silently at exactly the point the backups begin to matter.
+# Observed in production: every nightly dump discarded, and deploy.sh refusing
+# to deploy because its pre-deploy dump "failed" — on archives that restored
+# fine by hand.
+#
+# Decompressing to a file first removes the pipe, and with it the whole class.
 log "verifying archive"
-gzip -dc "$TMP" | docker exec -i "$PG_CID" pg_restore -l > /dev/null \
-  || die "archive failed pg_restore -l — NOT keeping $TMP"
+VERIFY_TMP="${TMP}.verify"
+gzip -dc "$TMP" > "$VERIFY_TMP" || die "could not decompress $TMP for verification"
+docker exec -i "$PG_CID" pg_restore -l < "$VERIFY_TMP" > /dev/null \
+  || { rm -f "$VERIFY_TMP"; die "archive failed pg_restore -l — NOT keeping $TMP"; }
+rm -f "$VERIFY_TMP"
 
 mv "$TMP" "$OUT"
 SIZE="$(du -h "$OUT" | cut -f1)"

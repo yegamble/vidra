@@ -516,8 +516,19 @@ else
   # `set -e` + pipefail: a failed pg_dump aborts the deploy here, which is the
   # single most important line in this file.
   docker exec -i "$PG_CID" pg_dump -U "$PGUSER" -Fc "$PGDB" | gzip -c > "${DUMP}.part"
-  gzip -dc "${DUMP}.part" | docker exec -i "$PG_CID" pg_restore -l > /dev/null \
-    || die "pre-deploy dump failed its integrity check — NOT deploying"
+  # Verified from a FILE, not a pipe. `pg_restore -l` reads only the table of
+  # contents and exits, closing stdin; whatever is still streaming takes SIGPIPE
+  # and exits 141, which `set -o pipefail` turns into a failed pipeline — so a
+  # good dump is reported corrupt and the deploy refuses. The failure is
+  # size-dependent, so it passes on a small database and starts firing at
+  # exactly the point the pre-deploy dump becomes worth having. See the longer
+  # note in backup.sh, which had the same bug.
+  VERIFY_TMP="${DUMP}.part.verify"
+  gzip -dc "${DUMP}.part" > "$VERIFY_TMP" \
+    || die "could not decompress the pre-deploy dump for verification"
+  docker exec -i "$PG_CID" pg_restore -l < "$VERIFY_TMP" > /dev/null \
+    || { rm -f "$VERIFY_TMP"; die "pre-deploy dump failed its integrity check — NOT deploying"; }
+  rm -f "$VERIFY_TMP"
   mv "${DUMP}.part" "$DUMP"
   log "wrote $DUMP ($(du -h "$DUMP" | cut -f1))"
 
