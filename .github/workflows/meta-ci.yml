@@ -613,6 +613,107 @@ jobs:
           print(f'OK: all {len(go)} config keys reach BOTH api and worker ({len(envs["api"])} entries in each map).')
           PY
 
+      # THE OTHER HALF OF THE SAME CONTRACT, and the half the step above cannot
+      # see. It proves a key is settable in the CONTAINER; it says nothing about
+      # whether an OPERATOR can set it. `vidra setup` generates env/production.env
+      # from env/production.env.example, and the engine resolves answers against
+      # THAT FILE'S KEYS — so a key this template does not define is a key the
+      # supported tooling cannot write and `vidra setup --check` cannot validate.
+      #
+      # That is not hypothetical. The thirteen PEERTUBE_* keys were in vidra-core's
+      # compose anchor from the day they were written and in no env template at
+      # all, so the step above stayed green while the only way to configure a
+      # PeerTube migration was to hand-edit a file `vidra setup` regenerates. It is
+      # the same shape as the twelve keys that were unsettable for want of an
+      # `env_file:`, and it hid the same way: everything downstream looked right.
+      #
+      # THE ASSERTION IS "NOTHING HAD TO BE APPENDED", and that is what makes it
+      # generic. The engine has a compatibility path for a template that predates a
+      # key: it writes the value into a trailing "Managed by `vidra setup`" block
+      # rather than dropping the answer. That block existing in a file generated
+      # from THIS repository's own template means the template is behind the
+      # engine — and an appended KEY=value with no comment above it is a knob no
+      # operator will ever find, in a file whose entire value is that every line is
+      # explained. So the check needs no list of which keys belong here (most of
+      # vidra-core's ~166 are tunables with correct defaults and are rightly
+      # absent); it asks the engine, and the engine says.
+      #
+      # The value comparison is the second half: a key can be present in the
+      # template and still not be wired to the answer that should fill it, which
+      # renders identically and is equally silent.
+      #
+      # Go is preinstalled on this runner; no pinned action is added for it.
+      - name: "`vidra setup` can write every answer it collects into this template"
+        run: |
+          go -C vidra-core build -o "$RUNNER_TEMP/vidra" ./cmd/vidra
+          "$RUNNER_TEMP/vidra" setup \
+            --template env/production.env.example \
+            --output "$RUNNER_TEMP/production.env" \
+            --caddy-out "$RUNNER_TEMP/Caddyfile.local" \
+            --nginx-out "$RUNNER_TEMP/nginx-external.conf.example" \
+            --non-interactive \
+            --domain video.ci.example.org \
+            --instance-name "CI Video" \
+            --release-tag v0.0.0-ci \
+            --acme-email ops@ci.example.org \
+            --storage local \
+            --smtp-host smtp.ci.example.org --smtp-from noreply@ci.example.org \
+            --peertube-source-url 'postgres://readonly:ci-dummy@10.0.0.5:5432/peertube_prod?sslmode=require' \
+            --peertube-source-storage s3 \
+            --peertube-source-s3-endpoint s3.ci.example.org \
+            --peertube-source-s3-region ci-1 \
+            --peertube-source-s3-bucket peertube-source-media \
+            --peertube-source-s3-access-key CIACCESSKEY \
+            --peertube-source-s3-secret-key ci-dummy-source-secret \
+            --peertube-media-mode copy \
+            --peertube-conflict-policy rename
+          if grep -q '^# Managed by' "$RUNNER_TEMP/production.env"; then
+            echo "::error::env/production.env.example does not define every key \`vidra setup\` writes, so the engine had to append them in its compatibility block. Add each key below to the template, in a section that explains it — an appended KEY=value is a knob nobody will find:" >&2
+            # NAMES only. Two of the answers above are secrets — dummies here, but
+            # this text is the template for the message a real regression prints,
+            # and a step that dumped values would teach the next person to paste
+            # one into an issue.
+            sed -n '/^# Managed by/,$p' "$RUNNER_TEMP/production.env" | sed -n 's/^\([A-Z0-9_]*\)=.*/  \1/p' >&2
+            exit 1
+          fi
+          # …and each answer landed on the key it belongs to. Values, not presence:
+          # a template that defines a key but is not wired to the answer that fills
+          # it renders identically and is equally silent.
+          : > "$RUNNER_TEMP/answer-drift"
+          while IFS='=' read -r key want; do
+            [ -n "$key" ] || continue
+            got=$(sed -n "s/^${key}=//p" "$RUNNER_TEMP/production.env")
+            if [ "$got" != "$want" ]; then
+              # The key, never the two values: the answers below include a source
+              # DSN and a source secret key. Which answer was given is in this
+              # file, twenty lines up.
+              echo "  ${key}" >> "$RUNNER_TEMP/answer-drift"
+            fi
+          done <<'EOF'
+          PUBLIC_BASE_URL=https://video.ci.example.org
+          INSTANCE_NAME=CI Video
+          PEERTUBE_IMPORT_ENABLED=true
+          PEERTUBE_SOURCE_DATABASE_URL=postgres://readonly:ci-dummy@10.0.0.5:5432/peertube_prod?sslmode=require
+          PEERTUBE_SOURCE_STORAGE_BACKEND=s3
+          PEERTUBE_SOURCE_S3_ENDPOINT=s3.ci.example.org
+          PEERTUBE_SOURCE_S3_REGION=ci-1
+          PEERTUBE_SOURCE_S3_BUCKET=peertube-source-media
+          PEERTUBE_SOURCE_S3_ACCESS_KEY=CIACCESSKEY
+          PEERTUBE_SOURCE_S3_SECRET_KEY=ci-dummy-source-secret
+          PEERTUBE_IMPORT_MEDIA_MODE=copy
+          PEERTUBE_IMPORT_CONFLICT_POLICY=rename
+          EOF
+          if [ -s "$RUNNER_TEMP/answer-drift" ]; then
+            echo "::error::an answer \`vidra setup\` collects did not reach the key it fills — the template defines it but nothing wires the answer to it:" >&2
+            cat "$RUNNER_TEMP/answer-drift" >&2
+            exit 1
+          fi
+          # The second thing a key missing from the template costs: `vidra setup
+          # --check` reads an env FILE, so a key that is in no template is a key
+          # nothing validates until the api refuses to boot on it.
+          "$RUNNER_TEMP/vidra" setup --check "$RUNNER_TEMP/production.env"
+          echo "OK: the template defines every key the engine writes, every answer reached it, and the result passes --check."
+
       - name: Exercise bootstrap.sh's idempotent update path
         run: |
           ./bootstrap.sh
