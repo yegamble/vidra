@@ -240,7 +240,7 @@ jobs:
       # vidra-user. This plain `docker compose`
       # auto-loads docker-compose.override.yml (the api's SEARCH_* wiring).
       - name: Validate full-stack compose resolves
-        run: docker compose --profile core config -q
+        run: SEARCH_INTERNAL_SECRET=dummy docker compose --profile core config -q
 
       # Three steps below parse a rendered compose model with PyYAML. It is not
       # guaranteed on the runner image, and a missing import would surface as a
