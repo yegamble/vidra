@@ -30,7 +30,7 @@
 # and never empty — with the api still happily enqueueing into it.
 x-search-wiring: &search-wiring
   SEARCH_SERVICE_URL: http://search:8080
-  SEARCH_INTERNAL_SECRET: ${SEARCH_INTERNAL_SECRET:-dev-insecure-internal-secret-change-me-0000}
+  SEARCH_INTERNAL_SECRET: ${SEARCH_INTERNAL_SECRET:?SEARCH_INTERNAL_SECRET must be set}
 
 services:
   api:
