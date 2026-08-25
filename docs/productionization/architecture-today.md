@@ -80,9 +80,12 @@ strong bounded-cardinality metrics/audit/job-run observability (shipped 2026-07)
 **CLI:** `vidra-core/cmd` carries `api`, `peertube-import` and `vidra` — the operator CLI
 (`setup`, `doctor`, `status`, `logs`, `restart`, `update`, plus thin wrappers over the deploy
 scripts), shipped as a checksum-verified release asset. The meta repo has `install.sh`
-(`curl … | sh`), `deploy/provision.sh` and a cloud-init template. The terminal setup wizard is
-done; the *web* wizard is still only its owner-claim step. See the phase-1 worklist for what
-each command does and what remains open.
+(`curl … | sh`), `deploy/provision.sh` and a cloud-init template. Both setup front ends are
+done: the terminal interview, and `vidra setup --web` — a nine-step browser wizard (Welcome,
+System check, question depth, Domain and TLS, Media storage, Optional features, Review,
+Install, Done) served on loopback from the CLI process behind a one-time token. They share one
+engine (`internal/setup`), and a parity test in `cmd/vidra` pins them to the same answers. See
+the phase-1 worklist for what each command does and what remains open.
 
 ## Do-not-touch inventory
 

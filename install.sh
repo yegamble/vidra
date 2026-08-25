@@ -50,12 +50,21 @@
 # WHY IT STOPS AT `vidra setup`
 #
 # The remaining answers are the operator's and nobody else's: the domain, whether
-# its DNS already points at this host, S3 credentials, SMTP. Worse, the first
-# `up -d` ORDERS A TLS CERTIFICATE, and an unattended deploy against a domain
-# that does not resolve here yet spends Let's Encrypt rate limit on a failure.
-# The web setup wizard (phase-1 item 9) does not exist yet either, so there is no
-# URL to print - the terminal interview is the wizard, and this script's last act
-# is to run it with a terminal attached.
+# its DNS already points at this host, S3 credentials, SMTP, and - for an
+# operator moving an instance - the PeerTube source to migrate from. Worse, the
+# first `up -d` ORDERS A TLS CERTIFICATE, and an unattended deploy against a
+# domain that does not resolve here yet spends Let's Encrypt rate limit on a
+# failure. So this script's last act is to run `vidra setup` with a terminal
+# attached and stop.
+#
+# THE TERMINAL INTERVIEW IS WHAT IT RUNS, and that is a choice rather than a
+# limitation. `vidra setup --web` serves the same nine questions as a browser
+# wizard on loopback, but it prints a one-time link and waits - which is the
+# wrong shape for a script that may be running under `curl ... | sh` on a box
+# whose operator is at an ssh prompt and has not yet forwarded a port. An
+# operator who wants the wizard runs `vidra setup --web` themselves; the banner
+# it prints tells them how to reach it (ssh -L), and everything it does goes
+# through the same engine as the interview below.
 #
 # WHAT IT NEVER DOES, deliberately:
 #
