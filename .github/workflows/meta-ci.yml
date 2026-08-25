@@ -982,6 +982,7 @@ jobs:
           REGISTRATION_ENABLED=false
           METRICS_ENABLED=true
           LOG_FORMAT=json
+          SEARCH_INTERNAL_SECRET=$(openssl rand -hex 32 | tr -d '\n')
           EOF
 
       # `up api` (not the whole profile) starts exactly postgres, redis, migrate
