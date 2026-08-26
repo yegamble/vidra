@@ -1,11 +1,11 @@
 # Search filters backlog — decisions and scoping (2026-08)
 
 Follow-up to the list/count/pagination audit: the four candidate search filters, in
-delivery order. Items 1 and 2 are built and in review (PR links below); item 3 is a
+delivery order. Items 1 and 2 are merged (PR links below); item 3 is a
 settled structural decision awaiting implementation; item 4 is scoped but
 deliberately not started.
 
-## 1. Licence filter — BUILT (PR open)
+## 1. Licence filter — MERGED
 
 `videos.license` existed in core but was never projected into the search index.
 Delivered end to end as a clone of the language filter at every layer: core projects
@@ -30,7 +30,7 @@ license-filtered search on the service path returns an empty page while core's
 
 PRs: [vidra-core#105](https://github.com/yegamble/vidra-core/pull/105), [vidra-search#24](https://github.com/yegamble/vidra-search/pull/24), [vidra-user#80](https://github.com/yegamble/vidra-user/pull/80).
 
-## 2. Original publication date — BUILT (PR open, core side)
+## 2. Original publication date — MERGED (core side)
 
 `videos.originally_published_at` (nullable timestamptz, migration 0119): detail-API
 read, PATCH write, PeerTube importer mapping (optional-column probe — old sources
