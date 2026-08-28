@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# The unpack_bundle section below stubs log/die/fetch_verified/make_install_dir
+# for a function this file sources at RUNTIME, which shellcheck cannot see - so
+# it reports the stubs as never invoked (SC2317 on shellcheck <= 0.9, SC2329 on
+# >= 0.10). 0.9 honours neither line- nor function-level directives for SC2317
+# (shellcheck issue #2542), so the disable has to be file-wide.
+# shellcheck disable=SC2317,SC2329
 
 set -euo pipefail
 
@@ -101,7 +107,6 @@ source "$UNPACK_TMP/unpack_func.sh"
 # TREE_MODE on success, because the caller branches on it later.
 run_unpack() {
   local fetch_rc="$1" tarball="$2" work="$3" dir="$4"
-  # shellcheck disable=SC2329  # the stubs are invoked indirectly, by the sourced unpack_bundle
   (
     set -euo pipefail
     WORK="$work"; DIR="$dir"; BUNDLE_ASSET="$UNPACK_ASSET"; TREE_MODE=""
