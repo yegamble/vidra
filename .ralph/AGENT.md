@@ -57,6 +57,16 @@ npm run e2e:backed # Playwright against a live vidra-core + Postgres (proves per
   `vidra-core` and `vidra-user` share one git history and one `main`, and the
   pull-rebase-retry is not concurrency-safe. Do not run a standalone subdir loop
   while the root orchestrator is running.
+- **Done means merged to `main`:** prefer small, frequent commits over one
+  loop-end mega-commit, and any work done on a side branch is not complete —
+  and may not be ticked done in any fix_plan — until that branch is merged
+  into `main` and the merge is pushed. Blocked merge = awaiting merge /
+  `BLOCKED`, never done.
+- **Delete merged branches every loop:** after any merge, remove the work
+  branch locally and remotely, and sweep `git branch --merged origin/main` /
+  `git branch -r --merged origin/main` → delete, then `git fetch --prune`.
+  Never delete `main`, the current branch, or an unmerged branch — report
+  unmerged strays instead.
 - Never commit secrets, tokens, keys, or real personal data anywhere (the
   `.githooks/pre-commit` stop guard applies; never `--no-verify` to dodge it).
 
