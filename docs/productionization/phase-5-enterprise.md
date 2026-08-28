@@ -5,6 +5,47 @@ steering, DRM with real key management, distributed/multi-region topology — as
 modules/providers on the same core. No fork: same interfaces, different providers, different
 scale. An ordinary Vidra installation never sees any of this.
 
+## Status 2026-08-28
+
+**Re-audit + admin-parity wave MERGED.** A claim-by-claim re-verification of every wave A/B/C
+claim against `main` confirmed all 19 (zero stale). Seven PRs landed and merged same day:
+
+- **Settings-cache invalidation (item 8a) — DONE** (core#115): migration 0121
+  `settings_version` counter + a jittered 10s poller on every HTTP-serving replica, reloading
+  the three boot-loaded caches (instance settings, ToS/privacy docs, branding) on version
+  change. N-replica api is now **correct**, not just safe. Bumps are post-write ordered (the
+  write paths are not transactional); a failed reload never advances the seen version.
+- **Purge call-site wiring (the items-1–3 gate) — WIRED** (core#117): video delete, privacy
+  flip away from public, and admin block now fan out best-effort single-key purges (the
+  provider has no prefix purge) over the video's recorded objects plus the listed
+  HLS/web-video trees — snapshotted pre-mutation, fired post-commit detached, capped at 5000
+  keys. Corrected premise: playlists were never edge-cacheable (`Redirectable` excludes
+  them) — segments are the cargo. Still unpurged: thumbnail/storyboard in-place replacement,
+  account deletion. Header promotion stays gated until purge is exercised against a live edge.
+- **Admin visibility (core#116):** the infrastructure feature vocabulary grew `cdn` and `drm`
+  three-state rows (the stale "there is no CDN integration" contract text is gone; `cdn` is
+  the one row that reads the runtime overlay, exception documented), the server block reports
+  pool sizing + `HTTP_DRAIN_DELAY`, and `GET /api/v1/admin/system` gained a live pgx pool
+  block (omitted entirely when unwired — 0/0 must not read as a checked-out pool).
+- **Admin UI parity (user#92–95):** the five uncurated registry keys got labels/help and a
+  real "Delivery" section on the Advanced page (CDN/presign/QoE toggles are no longer an
+  unlabeled toggle forest); the media-GC page renders the six previously-ignored safety
+  fields (a forced dry-run no longer shows as green "Purge complete" — the ownership-rail
+  trap is now visible, with a breaker-tripped danger state); the three drifting admin navs
+  collapsed onto one registry (mobile admins regained moderation; Overview gained the four
+  missing pages); and the new pool/drain/CDN/DRM contract renders (Database panel, pool
+  saturation warning, feature labels — the CDN row links to its Advanced-page control, DRM
+  deliberately does not link since no admin control exists).
+
+**Progressive-disclosure doctrine (decided this session):** advanced production features
+surface through the three idioms the admin UI already has — the Advanced config page for
+runtime toggles, the infrastructure feature list's `Off`/"Optional:" rows for discovery, and
+read-only Panel/Row display for boot-env knobs — never a new "advanced mode". A simple
+install sees one quiet row per module, not a control forest. Known deferred wiring: a
+`bootDep` signal for `delivery_cdn_enabled` needs `/instance` (or the config view) to carry
+CDN-configured state; an adopt-bucket action button on the media page (endpoint exists,
+unwired).
+
 ## Status 2026-08-23
 
 **Recon complete** — five parallel read-only audits (steering, DRM/CENC, multi-node API,
@@ -277,7 +318,9 @@ worker-role flag it would have needed **already landed** (`VIDRA_ROLE` = `all|ap
 - [ ] **3. Origin shielding / regional failover** — shield tier is documentation + config
   (key-addressed CDN origin). Code: per-pathway purge fan-out; failover gated on item 1c
   health. **Gate for 1–3: wire and exercise `Purge` call sites** (delete + privacy flip) —
-  the phase-4 carry-forward; nothing may become shared-cacheable before it.
+  the phase-4 carry-forward; nothing may become shared-cacheable before it. *Wired
+  2026-08-28 (core#117: delete + privacy flip + block); "exercised against a live edge"
+  remains open, so header promotion stays gated.*
 
 ### DRM
 
@@ -320,10 +363,11 @@ worker-role flag it would have needed **already landed** (`VIDRA_ROLE` = `all|ap
 - [ ] **8. Multi-node API** — **floor BUILT (wave A, this session):** pool sizing env keys +
   pool gauges + doctor check; drain phase (`HTTP_DRAIN_DELAY`, `/readyz` 503-while-draining);
   `/readyz` Redis-degrade + 2s probe cache; worker+local-storage boot warning. Remaining:
-  (a) settings/docs/branding cache invalidation via `settings_version` poller (M — the last
-  correctness gap for N api replicas); (b) an operations.md "behind a load balancer" section;
-  (c) live-HLS externalization via the **bridge shape** (L — see ground truth; includes the
-  per-session path ULID, mediagc exclusion, replay path, and shim endpoint configurability).
+  (a) ~~settings/docs/branding cache invalidation via `settings_version` poller~~ **DONE
+  2026-08-28 (core#115, migration 0121)**; (b) an operations.md "behind a load balancer"
+  section; (c) live-HLS externalization via the **bridge shape** (L — see ground truth;
+  includes the per-session path ULID, mediagc exclusion, replay path, and shim endpoint
+  configurability).
 - [ ] **9. Worker fleets** — **floor BUILT (wave B, this session):** running-state sweep
   indexes (0110), sweep LIMIT+SKIP LOCKED, leader-gated recovery sweep, ticker jitter,
   progress-write throttle, `stale_running` gauge fix, stale-comment corrections. Remaining
