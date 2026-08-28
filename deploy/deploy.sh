@@ -347,8 +347,8 @@ discover_public_ip() {
 # The mode itself is validated by require_known_tls_mode above, not here: this
 # check is one of several that branch on it, and five copies of the same
 # vocabulary is five chances for them to disagree about what a mode means.
-require_dns_points_here() {
-  local mode host resolved ip
+should_skip_dns_preflight() {
+  local mode
   mode="$(env_get VIDRA_TLS_MODE acme)"
   case "$mode" in
     acme|acme-staging) ;;
@@ -382,6 +382,15 @@ require_dns_points_here() {
       return 0
       ;;
   esac
+
+  return 1
+}
+
+require_dns_points_here() {
+  local host resolved ip
+  if should_skip_dns_preflight; then
+    return 0
+  fi
 
   host="$(url_host "$(env_get PUBLIC_BASE_URL '')")"
   [ -n "$host" ] || die "PUBLIC_BASE_URL is not set in $ENV_FILE — the DNS preflight has no hostname to check. Set it, or set VIDRA_TLS_MODE=internal if this instance is not on a public domain."
