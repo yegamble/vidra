@@ -8,6 +8,7 @@ die()  { printf '[test] ERROR: %s\n' "$*" >&2; exit 1; }
 # Source the function to test from install.sh
 # We extract just the function to avoid running the whole installer
 sed -n '/compose_at_least_2_24() {/,/^}/p' install.sh > /tmp/func_to_test.sh
+# shellcheck disable=SC1091
 source /tmp/func_to_test.sh
 
 failures=0
@@ -40,6 +41,10 @@ assert_exit_code "3.0" 0
 assert_exit_code "v10.0.0" 0
 assert_exit_code "2.24" 0
 assert_exit_code "v2.24" 0
+assert_exit_code "2.24.0-rc1" 0
+assert_exit_code "2.24-rc1" 0
+assert_exit_code "2.24-alpha" 0
+assert_exit_code "2.25.0-beta.1" 0
 
 # 2. Older versions (valid versions < 2.24) - Should return 1
 assert_exit_code "2.23.9" 1
