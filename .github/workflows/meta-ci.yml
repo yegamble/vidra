@@ -240,7 +240,7 @@ jobs:
       # vidra-user. This plain `docker compose`
       # auto-loads docker-compose.override.yml (the api's SEARCH_* wiring).
       - name: Validate full-stack compose resolves
-        run: docker compose --profile core config -q
+        run: SEARCH_INTERNAL_SECRET=dummy docker compose --profile core config -q
 
       # Three steps below parse a rendered compose model with PyYAML. It is not
       # guaranteed on the runner image, and a missing import would surface as a
@@ -301,7 +301,7 @@ jobs:
       # rendered model instead, exactly as the prod one-shot step below does.
       - name: Validate hot-reload overlay compose resolves
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.dev.yml \
+          SEARCH_INTERNAL_SECRET=dummy docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.dev.yml \
             --profile core config > /tmp/dev-config.yml
           python3 - <<'PY'
           import sys, yaml
@@ -982,6 +982,7 @@ jobs:
           REGISTRATION_ENABLED=false
           METRICS_ENABLED=true
           LOG_FORMAT=json
+          SEARCH_INTERNAL_SECRET=$(openssl rand -hex 32 | tr -d '\n')
           EOF
 
       # `up api` (not the whole profile) starts exactly postgres, redis, migrate

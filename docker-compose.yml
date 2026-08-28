@@ -207,10 +207,10 @@ services:
       # Redis DB index 1 — core uses 0. Do NOT feed this from ${REDIS_URL}: that
       # variable carries core's /0 and the two services would share a keyspace.
       REDIS_URL: ${SEARCH_REDIS_URL:-redis://redis:6379/1}
-      # Shared HMAC secret for core↔search auth. Compose-local dev default ONLY;
-      # a real deployment sets a strong (>=32 byte) value and never commits it.
+      # Shared HMAC secret for core↔search auth. A strong (>=32 byte) value
+      # must be set and never committed.
       # MUST match the api service's SEARCH_INTERNAL_SECRET above.
-      INTERNAL_SECRET: ${SEARCH_INTERNAL_SECRET:-dev-insecure-internal-secret-change-me-0000}
+      INTERNAL_SECRET: ${SEARCH_INTERNAL_SECRET:?SEARCH_INTERNAL_SECRET must be set}
       # Logging / metrics. Shared with api + frontend (same names, same defaults).
       # vidra-search's /metrics is only reachable over the compose network (the
       # prod overlay sets `ports: []`), so enabling it here publishes nothing.
