@@ -268,11 +268,18 @@ require_real_domain() {
 
   # A site address line may list several addresses ("a.example.org,
   # www.example.org {"), and each may carry a scheme or a port.
-  for addr in $(printf '%s' "$site" | tr ',' ' '); do
+  saved_IFS="$IFS"
+  IFS=" ,$IFS"
+  set -f
+  for addr in $site; do
+    set +f
+    IFS="$saved_IFS"
     [ "$(url_host "$addr")" = "$host" ] || continue
     matched=1
     break
   done
+  set +f
+  IFS="$saved_IFS"
   [ "$matched" -eq 1 ] || die "deploy/Caddyfile.local serves '${site}' but PUBLIC_BASE_URL in $ENV_FILE is '${origin}' (host '${host}'). Caddy would answer on one hostname while the api mints links, OAuth callbacks and federation actor ids for the other. Fix whichever is wrong (re-run 'vidra setup' to regenerate the Caddyfile from PUBLIC_BASE_URL)."
 }
 
