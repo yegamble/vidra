@@ -7,7 +7,12 @@ set -euo pipefail
 API="http://localhost:${HTTP_PORT:-8080}/api/v1"
 EMAIL="demo@vidra.local"
 USERNAME="demo"
-PASSWORD="demo-password-123"
+PASSWORD="${SEED_PASSWORD:-}"
+
+if [ -z "${PASSWORD}" ]; then
+  echo "Error: SEED_PASSWORD environment variable must be set" >&2
+  exit 1
+fi
 
 echo "Seeding against ${API} ..."
 
