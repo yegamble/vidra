@@ -64,10 +64,13 @@ jobs:
       # them, and a new one added to the repo root is otherwise linted by nothing.
       - name: Lint shell scripts
         run: |
-          for f in bootstrap.sh install.sh deploy/*.sh; do
+          for f in bootstrap.sh install.sh tests/install_test.sh deploy/*.sh; do
             bash -n "$f"
             shellcheck -x "$f"
           done
+
+          # Run the unit tests for install.sh
+          bash tests/install_test.sh
 
       # install.sh is the only script here that runs on a machine which has
       # nothing yet: no clone, no docker, no vidra, and — under

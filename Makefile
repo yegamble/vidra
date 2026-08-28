@@ -106,6 +106,7 @@ logs: ## Tail all service logs
 
 .PHONY: test
 test: ## Run all three repos' canonical CI gates (backend/search need the dockerised postgres/redis)
+	./tests/install_test.sh
 	cd vidra-core && $(MAKE) ci
 	cd vidra-search && $(MAKE) ci
 	cd vidra-user && npm run ci

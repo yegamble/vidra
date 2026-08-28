@@ -40,6 +40,10 @@ assert_exit_code "3.0" 0
 assert_exit_code "v10.0.0" 0
 assert_exit_code "2.24" 0
 assert_exit_code "v2.24" 0
+assert_exit_code "2.24.0-rc1" 0
+assert_exit_code "2.24-rc1" 0
+assert_exit_code "2.24-alpha" 0
+assert_exit_code "2.25.0-beta.1" 0
 
 # 2. Older versions (valid versions < 2.24) - Should return 1
 assert_exit_code "2.23.9" 1

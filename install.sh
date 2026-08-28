@@ -337,6 +337,7 @@ fi
 compose_at_least_2_24() {
   local v major minor
   v="${1#v}"
+  v="${v%%-*}"
   major="${v%%.*}"
   minor="${v#*.}"; minor="${minor%%.*}"
   case "${major}.${minor}" in
