@@ -8,6 +8,7 @@ die()  { printf '[test] ERROR: %s\n' "$*" >&2; exit 1; }
 # Source the function to test from install.sh
 # We extract just the function to avoid running the whole installer
 sed -n '/compose_at_least_2_24() {/,/^}/p' install.sh > /tmp/func_to_test.sh
+# shellcheck source=/dev/null
 source /tmp/func_to_test.sh
 
 failures=0
