@@ -82,6 +82,19 @@ component file at the root, STOP — it belongs in a subdirectory.
      time. `vidra-core` and `vidra-user` share one git history and one `main`, and
      the pull-rebase-retry above is NOT concurrency-safe — do not run the root
      orchestrator and a standalone subdir loop simultaneously.
+   - Prefer several small, scoped commits across the loop over one loop-end
+     mega-commit, and push at least once per loop — unpushed work does not exist.
+   - **Done means merged to `main`.** If the loop's work lives on any branch other
+     than `main`, no fix_plan item it implements may be ticked done/`VERIFIED` —
+     and the loop may not report `COMPLETE` — until that branch is merged into
+     `main` (gate + CI green) and the merge is pushed. If the merge is blocked,
+     report the item as awaiting merge / `BLOCKED`, never as done.
+   - **Clean up merged branches every loop.** After any merge (and as routine
+     loop housekeeping), delete branches already merged into `origin/main`:
+     local via `git branch --merged origin/main` → `git branch -d`, remote via
+     `git branch -r --merged origin/main` → `git push origin --delete <branch>`,
+     then `git fetch --prune`. Never delete `main`, the current branch, or an
+     unmerged branch — report unmerged strays instead of deleting them.
 
 Do one coherent slice per loop. Do not wander between projects within a loop.
 
@@ -193,6 +206,9 @@ Set `EXIT_SIGNAL: true` **only when ALL of these hold**:
 - All relevant backend and frontend test/lint/build gates pass.
 - Every in-scope data-mutating frontend flow is proven against the real database.
 - The root `.ralph/fix_plan.md` coarse gate has no unchecked blocking items.
+- All completed work is merged into `main` and pushed — nothing is waiting on an
+  unmerged work branch — and no local or remote branch already merged into
+  `origin/main` remains undeleted.
 
 If work remains in **either** project, `EXIT_SIGNAL` must be `false`. Do not exit just
 because one project looks done — keep going on the other.
