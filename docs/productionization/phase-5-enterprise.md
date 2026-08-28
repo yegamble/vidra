@@ -5,7 +5,70 @@ steering, DRM with real key management, distributed/multi-region topology — as
 modules/providers on the same core. No fork: same interfaces, different providers, different
 scale. An ordinary Vidra installation never sees any of this.
 
-## Status 2026-08-28
+## Status 2026-08-28 — audit + honesty wave (evening)
+
+**A 20-agent adversarial audit of the morning wave, then a ten-PR build wave closing what
+it found — all MERGED same day** (core#118–121, user#96–101). Claim-by-claim, all 67
+morning-wave claims held; every surviving gap was one level up — the UI/UX and
+observability layer over correct backends. Ten findings survived adversarial verification
+(zero refuted); all are closed:
+
+- **Cross-replica mediagc adopt staleness — the one real backend bug (core#119):** bucket
+  ownership is a boot-loaded cache the settings poller does not (and cannot) cover — the
+  scheduled sweep runs in `RoleWorker` processes where no poller starts, so adopt-bucket
+  flipped only the replica that served the POST and the leader worker's sweeps stayed
+  forced-dry-run until restart. `Sweep` now re-reads the owner marker on the
+  blocked-delete path only, and never claims (no marker leaves the state alone); the
+  operations.md/openapi "from the next sweep onward" promise is true again.
+- **Purge call-site completeness (core#120):** channel deletion (video cascade + the
+  channel's own avatar/banner), avatar/banner set/delete, and playlist cover
+  set/delete/visibility-flip all purge now (shared single-key helper; pre-mutation
+  snapshot, detached, CDN-gated). Same-generation admin re-transcode is deliberately NOT
+  purged — purge-at-enqueue would be wrong, the tracked fix is item 1a
+  generation-addressed keys — and warns when a CDN is configured. The still-unpurged
+  ledger now reads: **thumbnail/storyboard in-place replacement, account deletion,
+  same-generation re-transcode** (`media_purge.go`'s header is the canonical copy).
+- **Admin visibility round 2 (core#121, rendered by user#99+#100):** the DRM Active row
+  now carries the test-provider warning (a green "content protection" pill had asserted
+  protection that does not exist, with the honest note shown only when DRM was *off*);
+  VIDRA_ROLE, `DELIVERY_CDN_BASE_URL`, live ingest coordinates, rate limits (shipped in
+  the contract expressly for the status page, never rendered), settings-poller health
+  (`settings_sync` component), drain status, CDN purge counters (the `cdn_purge` block —
+  the "exercised" evidence header promotion waits on), and `GET /admin/media/gc` boot
+  facts are all visible. `FEATURE_LIVE_ENABLED`'s code default now derives from
+  `LIVE_RTMP_URL` (unset ⇒ on only when an ingest is configured) — a bare install no
+  longer boots into a permanent "Needs setup" warning with dead stream creation.
+- **Media page honesty (user#101):** the adopt-bucket action finally exists (unowned =
+  arm+confirm; conflict = typed ADOPT naming the marker overwrite; never offered for
+  unknown/healthy states); the false "nothing is deleted until you confirm a purge" copy
+  now names the daily automatic destructive sweep; boot facts render read-only; the
+  orphan preview caps at 500 rendered keys with a full-list download.
+- **Delivery config UX (user#96):** on-but-unwired CDN/presign toggles carry a live,
+  non-disabling warning driven by the admin infrastructure snapshot (the user#92 bootDep
+  deferral was stale once core#116 reported both halves); presign help names the
+  bucket-CORS prerequisite — the one misconfiguration that breaks playback instead of
+  staying inert; QoE help states the verified privacy posture (no account id, no IP,
+  keyed day-scoped viewer digest, 7-day raw retention).
+- **Nav coherence (user#97 + fix-forward #98):** the global Admin entry lands on the
+  console home; phones get an AccountMenu admin entry; the moderation surface adopts the
+  registry vocabulary (Queues/Content) with an admin-only back-link; the mobile Select
+  gains Console/More/Moderation groups. The lesson worth keeping: #97 updated only the
+  mocked e2e suite and merged red — the backed suite navigates the same journeys and
+  must move with any nav change; and an unscoped `getByRole("link", { name: "Content" })`
+  resolves to the "Skip to content" skip-link first (substring matching), off-viewport
+  forever.
+- **Item 8b closed (core#118):** operations.md gained "Behind a load balancer" —
+  /readyz + drain sizing, `TRUSTED_PROXY_CIDRS` rightmost-untrusted semantics, and
+  rate-limit N-replica behavior, with one correction to this doc's premise: Redis is a
+  fatal boot dependency, so shared limits never fall back to local counting — only the
+  always-on fallback limiters multiply per-process.
+
+Deferred, recorded: worker/leader liveness + latest-run-age surface (item 9's
+worker-identity slice owns it); the infra search row's Advanced-page anchor (an e2e spec
+pins the exact href — move both together); account-deletion and thumbnail/storyboard
+purge fan-out (ledger above).
+
+## Status 2026-08-28 (morning)
 
 **Re-audit + admin-parity wave MERGED.** A claim-by-claim re-verification of every wave A/B/C
 claim against `main` confirmed all 19 (zero stale). Seven PRs landed and merged same day:
@@ -319,8 +382,10 @@ worker-role flag it would have needed **already landed** (`VIDRA_ROLE` = `all|ap
   (key-addressed CDN origin). Code: per-pathway purge fan-out; failover gated on item 1c
   health. **Gate for 1–3: wire and exercise `Purge` call sites** (delete + privacy flip) —
   the phase-4 carry-forward; nothing may become shared-cacheable before it. *Wired
-  2026-08-28 (core#117: delete + privacy flip + block); "exercised against a live edge"
-  remains open, so header promotion stays gated.*
+  2026-08-28 (core#117: delete + privacy flip + block; core#120 completeness: channel
+  cascade, avatars/banners, playlist covers; core#121: `cdn_purge` outcome counters on
+  /admin/system as the exercise evidence); "exercised against a live edge" remains open,
+  so header promotion stays gated.*
 
 ### DRM
 
@@ -364,8 +429,9 @@ worker-role flag it would have needed **already landed** (`VIDRA_ROLE` = `all|ap
   pool gauges + doctor check; drain phase (`HTTP_DRAIN_DELAY`, `/readyz` 503-while-draining);
   `/readyz` Redis-degrade + 2s probe cache; worker+local-storage boot warning. Remaining:
   (a) ~~settings/docs/branding cache invalidation via `settings_version` poller~~ **DONE
-  2026-08-28 (core#115, migration 0121)**; (b) an operations.md "behind a load balancer"
-  section; (c) live-HLS externalization via the **bridge shape** (L — see ground truth;
+  2026-08-28 (core#115, migration 0121)**; (b) ~~an operations.md "behind a load balancer"
+  section~~ **DONE 2026-08-28 (core#118)**; (c) live-HLS externalization via the **bridge
+  shape** (L — see ground truth;
   includes the per-session path ULID, mediagc exclusion, replay path, and shim endpoint
   configurability).
 - [ ] **9. Worker fleets** — **floor BUILT (wave B, this session):** running-state sweep

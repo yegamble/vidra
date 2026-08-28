@@ -59,8 +59,14 @@ an ordered source list (`api-proxy | presigned | cdn | ipfs-gateway`) with **api
 permanent authoritative fallback** — modeled on `redirectPublicIPFS`'s
 fail-open-to-authoritative pattern. CDN providers plug in here (landed core#76); **purge hooks
 are part of the interface from day one** (precondition for promoting versioned HLS from private
-to shared caching) — as of 2026-08-23 `Purge` still has zero call sites, which is the standing
-gate on header promotion and on phase-5 items 1/3.
+to shared caching). *Updated 2026-08-28:* `Purge` call sites LANDED — core#117 wired the three
+moments (video delete, privacy flip away from public, admin block) and core#120 completed the
+seam (channel-deletion cascade incl. the channel's images, avatar/banner set/delete, playlist
+cover set/delete/visibility-flip; `media_purge.go`'s header carries the canonical still-unpurged
+ledger: thumbnail/storyboard replacement, account deletion, same-generation re-transcode).
+Outcome counters surface on `GET /api/v1/admin/system` (`cdn_purge`, core#121). The remaining
+gate on header promotion is purge being **exercised against a live edge** plus phase-5 item 1a
+(generation-addressed keys) — no longer purge wiring.
 
 ## 5. Playback session endpoint (Phase 4 consumer; stub early)
 
@@ -100,7 +106,8 @@ packaging jobs must be *born* on this convention.
 sweep-only crons are leader-elected (`9a0ddbd`), and claim ORDER BYs are total orders
 (core#56: `created_at, id` on UUID-keyed queues — `ORDER BY id` alone would be random there).
 Note the leases live on the *legacy queue tables* as `next_attempt_at` pushes; `job_runs`'s
-0083 lease columns remain trigger-fed display only. *Update 2026-08-23:* the worker-role flag
+0083 lease columns are declared but unpopulated — nothing writes them, not even the projection
+triggers; populating them is phase-5 item 9's worker-identity work. *Update 2026-08-23:* the worker-role flag
 port **also landed** — `VIDRA_ROLE` = `all|api|worker` (`internal/config/config.go:28-67`,
 `RunsWorkers()`/`ServesHTTP()`), documented in operations.md; api-only processes deliberately
 do not stand for cron leader election. Nothing from this section remains open. (Fleet-scale
