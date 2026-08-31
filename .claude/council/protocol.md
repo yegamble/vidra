@@ -2,6 +2,38 @@
 
 The chair (the main session) runs the rounds. Teammates obey their round.
 
+## Round 0 — shared evidence pass (chair, before any teammate is dispatched)
+
+Teammates each running their own repo-wide `grep` sweeps is the largest single
+cost in a council run, and it is also a *quality* problem: five specialists
+each grep up a slightly different picture and then argue about different
+objects.
+
+Before Round A the chair builds one **evidence pack** for the scope — a cheap
+retrieval pass (the `Explore` agent, or a Haiku/Sonnet subagent) enumerating
+the relevant files, endpoints, contract entries, migrations, UI routes and
+admin surfaces. Every teammate reads the pack, and greps only to chase
+something the pack missed — saying so when they do.
+
+Retrieval is not judgement. Never pay a reviewer's rate for enumeration.
+
+## Effort per round (the chair sets this)
+
+Reasoning effort is a finer-grained cost lever than swapping models, and it is
+the lever this council uses: all twelve teammates stay on Opus, and the saving
+comes from not running every round at maximum.
+
+| Round | Effort | Why |
+|---|---|---|
+| 0 — evidence | `low` / `medium` | Enumeration, not judgement. |
+| A — blind review | `high` | Open-ended investigation — the round that earns the money. `xhigh` only for a genuinely novel scope. |
+| B — cross-examination | `medium` | A bounded response to text you have been handed, in a fixed four-part shape. |
+| C — rebuttal | `medium` | Same — a bounded response to a named challenge. |
+| D — ruling | `high` | Where ambiguous judgement concentrates. |
+
+Leaving every round at `xhigh` is the default failure. Match effort to the
+difficulty of the round, not to the importance of the scope.
+
 ## Round A — blind review
 
 Each teammate investigates **independently**, without seeing any other
@@ -77,6 +109,25 @@ P2 — high-value improvements
 P3 — experiments and future opportunities
 DECLINED — considered and rejected, with the reason
 ```
+
+## The chair seat
+
+The chair runs the rounds *and* rules. Those are different jobs: dispatching
+teammates and shuttling Round A output between them is plumbing, while Round D
+adjudication — deciding between specialists who genuinely disagree — is the
+ambiguous judgement the whole council exists to produce.
+
+Run the chair as an **Opus session with `/advisor fable`**, not as a Fable
+session. Fable then steers panel selection and the Round D ruling — its
+architect seat, roughly 5–15% of the work — while Opus runs the rounds. Making
+Fable the whole chair session pays architect rates to shuffle teammate output.
+
+**Never add "show your reasoning" / "explain your thinking" wording to this
+protocol or to a teammate prompt.** It trips the reasoning-extraction
+classifier and silently reroutes Fable to Opus: you pay for the advisor seat
+and do not get it. (Audited 2026-08-31 — this protocol is clean. Round A's
+"what would change your mind" asks for a falsification condition, which is a
+substantive claim, not a reasoning echo.)
 
 ## Implementation rules (only after the owner asks for implementation)
 
