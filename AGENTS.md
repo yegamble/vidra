@@ -59,6 +59,14 @@ These rules bind every AI tool working in this repo (Claude, Jules, Codex, …):
    on, or an unmerged branch — an unmerged stray is reported for triage, not
    deleted.
 
+**Enforcement:** `.claude/hooks/finished-means-merged.sh` runs as a Claude Code
+`Stop` hook and refuses to let a session end while any repo here has
+uncommitted tracked changes or unpushed commits. It ignores untracked files (so
+`env/*.env` never trips it), skips detached checkouts (the pinned nested repos),
+and gives up after 3 attempts. It is Claude-only — Jules, Codex and every other
+tool are bound by the rules above regardless, with nothing mechanical to catch
+them.
+
 ## Layout
 
 - `deploy/` — deploy.sh, rollback.sh, backup.sh, restore.sh, release.sh
