@@ -41,8 +41,9 @@ overhead eats the benefit.
   verification gates, and the traps that have burned this project.
 - `.claude/council/finding-format.md` — the one finding schema everybody uses,
   so a backend engineer and a strategist argue about the same object.
-- `.claude/council/protocol.md` — Rounds A (blind) → B (cross-examination) →
-  C (rebuttal) → D (chair's ruling).
+- `.claude/council/protocol.md` — Round 0 (shared evidence) → A (blind) →
+  B (cross-examination) → C (rebuttal) → D (chair's ruling), plus the effort
+  budget for each round.
 
 Each component's `AGENTS.md` is binding on any teammate touching that repo.
 
@@ -51,10 +52,18 @@ Each component's `AGENTS.md` is binding on any teammate touching that repo.
 - **All twelve are read-only** (`Read, Grep, Glob, Bash`; business also has
   web search). The council reviews; it does not edit. Implementation is
   assigned afterwards, one repo to one implementer.
-- **All twelve run on Opus.** The chair is the architect seat of the
-  orchestration — run the chair session under Fable if you want architect-grade
-  refereeing, with `/effort` matched to how hard the scope actually is; the
-  teammates do research and review, which is Opus work.
+- **All twelve run on Opus**, deliberately. Tiering the rubric-driven seats
+  down to Sonnet was considered and declined: the teammates are not only
+  *subject* to cross-examination, they are the ones *performing* it, and a
+  weaker challenger weakens the mechanism the council is built on. Cost is
+  controlled by **effort per round** and the **Round 0 evidence pass**
+  instead — both in `.claude/council/protocol.md`. Effort is the finer lever;
+  running every round at `xhigh` is the default way to overpay.
+- **The chair is an Opus session running `/advisor fable`** — not a Fable
+  session. Round D adjudication is Fable's architect seat (~5–15% of the work);
+  running the rounds is plumbing that should not cost architect rates. Never
+  introduce "show/explain your reasoning" wording into the protocol or a
+  teammate prompt: it silently reroutes Fable to Opus.
 - **Ops-security and instance-admin are deliberately separate.** Ops asks "can
   the machine run?"; admin asks "can I run my community?"
 - **Viewer and creator are deliberately separate.** They want opposite things
