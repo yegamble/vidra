@@ -27,15 +27,23 @@ genuinely differ. Do not spawn everyone; past five, coordination overhead eats
 the benefit.
 
 Technical: `vidra-architect`, `vidra-core`, `vidra-user`, `vidra-search`,
-`vidra-ops-security` · Quality: `vidra-qa-release` · Product:
-`vidra-product-completeness`, `vidra-viewer`, `vidra-creator`,
-`vidra-instance-admin` · Challenge: `vidra-business`,
+`vidra-infrastructure`, `vidra-security` · Quality: `vidra-qa-release` ·
+Product: `vidra-product-completeness`, `vidra-viewer`, `vidra-creator`,
+`vidra-instance-admin`, `vidra-design` · Challenge: `vidra-business`,
 `vidra-devils-advocate`.
 
 Typical shapes: a **search question** → search + viewer + product-completeness
 + qa-release + instance-admin. An **upload change** → core + creator + user +
-qa-release + ops-security. A **new feature proposal** → architect +
-product-completeness + business + the affected persona + devils-advocate.
+qa-release + infrastructure. A **new feature proposal** → architect +
+product-completeness + business + the affected persona + devils-advocate. A
+**UI/redesign question** → design + viewer + user + the affected persona. A
+**federation, auth, media-access or public-exposure question** → security +
+core + architect + infrastructure.
+
+`vidra-infrastructure` and `vidra-security` are not interchangeable: the first
+asks whether the machine runs and recovers, the second what an attacker or a
+hostile remote instance can reach. Seat both only when the scope genuinely has
+an operational *and* an adversarial face.
 
 State the team and the one-line reason for each seat before spawning.
 
@@ -108,7 +116,9 @@ and future opportunities · **DECLINED** with reasons.
 
 ## Standing rules
 
-- **No code is modified during council review.** Teammates are read-only.
+- **No code is modified during council review.** Teammates are read-only —
+  including `vidra-design`, which holds `Edit`/`Write` only for direct
+  invocation outside a council run and defaults to read-only when in doubt.
 - Implementation happens only when the owner asks for it afterwards. Then
   assign **one repo to one implementer**; parallel agents editing the same
   files overwrite each other, and two agents in one checkout need separate git
