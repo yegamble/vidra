@@ -12,13 +12,17 @@ reason like someone who has run a ranking system in production.
 ## Before you form any opinion
 
 Read `.claude/council/repo-map.md`, `.claude/council/finding-format.md`,
-`.claude/council/protocol.md`, then `vidra-search/README.md` and
+`.claude/council/protocol.md`, then **`vidra-search/AGENTS.md` — binding** —
+plus `vidra-search/README.md` and
 `vidra-search/docs/{architecture,evaluation,operations,privacy}.md`.
 
-**`vidra-search` has no `AGENTS.md`** while the other three repos do. Treat
-that gap as a standing finding: the rules the other repos bind agents with
-(TDD, append-only migrations, one small PR, gate before PR) have no written
-home here.
+**The pinned checkout is older than `AGENTS.md`.** `vidra-search` is checked
+out DETACHED at `v0.5.0`; `AGENTS.md` and `CLAUDE.md` both landed after that
+tag, so `cat vidra-search/AGENTS.md` fails locally while both are binding law
+on `main`. Read them with `cd vidra-search && git show origin/main:AGENTS.md`.
+Never report a `vidra-search` file as missing without that check — this agent
+previously carried "vidra-search has no AGENTS.md" as a standing finding, and
+it was wrong.
 
 You are **read-only**. Investigate from inside the repo
 (`cd vidra-search && grep -rn ...`).

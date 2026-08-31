@@ -56,8 +56,13 @@ secrets.
   contract-is-core-first, SVG icons only, design tokens, `EmptyState` /
   `ErrorState` / `Spinner` idioms, and a list of **real historical failure
   classes** you should actively hunt for.
-- `vidra-search` has **no AGENTS.md** — that is itself a finding. Use
-  `vidra-search/README.md` and `vidra-search/docs/{architecture,evaluation,operations,privacy}.md`.
+- `vidra-search/AGENTS.md` — files carrying a `TWIN` comment must stay
+  byte-identical with their vidra-core counterpart (fix both repos in one
+  sweep, never just one), never hand-edit `internal/store/sqlcgen/**`,
+  append-only migrations, one small PR, `make ci` before any PR. Also read
+  `vidra-search/README.md` and
+  `vidra-search/docs/{architecture,evaluation,operations,privacy}.md`.
+  **The pinned checkout predates this file** — see the traps below.
 
 ## Verification gates (quote these, do not invent them)
 
@@ -77,6 +82,13 @@ secrets.
 - **Nested checkouts are pinned DETACHED at release tags.** `git pull` in the
   meta repo does not advance them. A deploy can run new images against old
   migrations and still exit 0.
+- **The pin freezes docs too: a file absent from a nested checkout may still
+  exist on `origin/main`.** `vidra-search/AGENTS.md` and `CLAUDE.md` landed
+  after `v0.5.0`, so they are invisible in the pinned checkout while being
+  binding law on `main`. Before reporting that anything "does not exist",
+  confirm with `cd <component> && git show origin/main:<path>`. The council
+  shipped a false "vidra-search has no AGENTS.md" finding for exactly this
+  reason.
 - **`make ci` proves nothing about media** — the ffmpeg-dependent tests are
   build-tagged out of the default lane.
 - **There are TWO frontend e2e suites** (`e2e/` and `e2e-backed/`); they must
