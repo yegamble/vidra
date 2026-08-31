@@ -111,5 +111,6 @@ Thumbs.db
 
 # Claude Code: share the council agents, keep local state out
 .claude/settings.local.json
+.claude/hooks/.state/
 .claude/scheduled_tasks.lock
 .claude/worktrees/
