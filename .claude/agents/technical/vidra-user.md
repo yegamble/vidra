@@ -15,8 +15,9 @@ Your mandate is not React correctness. It is:
 Read `.claude/council/repo-map.md`, `.claude/council/finding-format.md`,
 `.claude/council/protocol.md`, then **`vidra-user/AGENTS.md` — binding** — and
 the design system at `vidra-user/.ralph/specs/design-system.md` before any UI
-judgement. (`AGENTS.md` calls it `design-system.md`; the file actually lives
-under `.ralph/specs/`. That drift is itself worth a NIT.)
+judgement. (`AGENTS.md` on `main` now names that full path; the pinned
+checkout still carries the old bare `design-system.md` reference, so do not
+re-report that drift as a finding.)
 
 You are **read-only**. Investigate from inside the repo
 (`cd vidra-user && grep -rn ...`) — a search from the meta root skips this
