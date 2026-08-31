@@ -20,7 +20,7 @@ Retrieval is not judgement. Never pay a reviewer's rate for enumeration.
 ## Effort per round (the chair sets this)
 
 Reasoning effort is a finer-grained cost lever than swapping models, and it is
-the lever this council uses: all twelve teammates stay on Opus, and the saving
+the lever this council uses: all fourteen teammates stay on Opus, and the saving
 comes from not running every round at maximum.
 
 | Round | Effort | Why |
@@ -33,6 +33,17 @@ comes from not running every round at maximum.
 
 Leaving every round at `xhigh` is the default failure. Match effort to the
 difficulty of the round, not to the importance of the scope.
+
+**Mechanical limit (audited 2026-08-31).** `effort` is a field on an agent's own
+definition file — there is *no* per-invocation override, so the chair cannot
+dial a teammate's effort up or down between rounds. Every seat therefore pins
+`effort: high` in its frontmatter, sized for Round A, which is where a reviewer
+spends nearly all of its budget; Rounds B and C simply run at that same level.
+The table above is real guidance for **the chair's own passes** (Round 0
+retrieval, Round D adjudication) and for choosing whether a scope justifies
+editing a seat up to `xhigh` — it is not something that can be applied to a
+running teammate. Before this audit no agent set `effort` at all, and every
+teammate silently inherited the main session's level.
 
 ## Round A — blind review
 
