@@ -108,3 +108,8 @@ Thumbs.db
 # Stray package-manager artifacts from ad-hoc npx/pnpm-dlx runs (no JS package at the meta-repo root)
 /node_modules/
 /.pnpm-store/
+
+# Claude Code: share the council agents, keep local state out
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/worktrees/
