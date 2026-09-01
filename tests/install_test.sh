@@ -270,6 +270,115 @@ else
   failures=$((failures + 1))
 fi
 
+# ---------------------------------------------------------------------------
+# The release pins in the env templates: the FLOOR is not the RECOMMENDATION.
+#
+# Two numbers sit one paragraph apart in env/production.env.example and they rot
+# in opposite directions. deploy/deploy.sh's MIN_EMBEDDED_MIGRATE_TAG is a
+# compatibility FLOOR: deliberately old, and it never moves down. The VIDRA_*_TAG
+# values are a RECOMMENDATION: the release a fresh install deploys, which has to
+# be bumped on every release. They were left equal for three releases, and that
+# failure is SILENT on the checkout path — deploy.sh pins ./vidra-core to
+# VIDRA_CORE_TAG *before* it reads expected_version out of that checkout's
+# migrations, so the ledger assertion compares the stale release against itself,
+# matches, and the deploy exits 0 on release-old code.
+#
+# So: the six pins must parse, agree, clear the floor, and must not have
+# collapsed back onto it. The strict-greater assertion is the one with teeth —
+# ">= the floor" is what the deploy scripts already enforce and it passes
+# trivially on the stale value. It has one deliberate cost: raising the floor to
+# the newest release would trip it. That is the right trade against a production
+# deploy that exits 0 on the wrong code, and the message says what to do.
+#
+# The comparison is deploy.sh's OWN semver_ge, extracted the way
+# compose_at_least_2_24 is above, so this test cannot drift from the gate it is
+# asserting about.
+# ---------------------------------------------------------------------------
+
+log "Testing the release pins in the env templates..."
+
+sed -n '/^semver_ge() {/,/^}/p' deploy/deploy.sh > /tmp/semver_ge_to_test.sh
+# shellcheck disable=SC1091
+source /tmp/semver_ge_to_test.sh
+
+pins_ok=1
+
+floor="$(grep -vE '^[[:space:]]*#' deploy/deploy.sh \
+  | sed -n 's/^MIN_EMBEDDED_MIGRATE_TAG="\([^"]*\)".*/\1/p' | head -n1)"
+if [ -z "$floor" ]; then
+  echo "FAIL: env pins -> deploy/deploy.sh declares no MIN_EMBEDDED_MIGRATE_TAG to compare against"
+  pins_ok=0
+fi
+
+pin_values=""
+for tmpl in env/production.env.example env/staging.env.example; do
+  for key in VIDRA_CORE_TAG VIDRA_USER_TAG VIDRA_SEARCH_TAG; do
+    tag="$(sed -n "s/^${key}=//p" "$tmpl" | head -n1 | tr -d '\r')"
+    if [ -z "$tag" ]; then
+      echo "FAIL: env pins -> ${tmpl} sets no ${key}; docker-compose.prod.yml requires it, because an untagged production deploy has nothing to roll back to"
+      pins_ok=0
+      continue
+    fi
+    pin_values="${pin_values}${tag}
+"
+    [ -n "$floor" ] || continue
+
+    rc=0
+    semver_ge "$tag" "$floor" || rc=$?
+    case "$rc" in
+      0) ;;
+      1)
+        echo "FAIL: env pins -> ${tmpl}'s ${key}=${tag} is BELOW deploy/deploy.sh's MIN_EMBEDDED_MIGRATE_TAG=${floor}; that image has no embedded 'migrate' subcommand, so the migration one-shot boots an API server that never exits and the deploy hangs with no error"
+        pins_ok=0
+        continue
+        ;;
+      *)
+        echo "FAIL: env pins -> ${tmpl}'s ${key}=${tag} is not a vMAJOR.MINOR.PATCH release tag, so it cannot be checked against the ${floor} floor at all"
+        pins_ok=0
+        continue
+        ;;
+    esac
+
+    # Strictly above the floor: semver_ge both ways means equal.
+    rc=0
+    semver_ge "$floor" "$tag" || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      echo "FAIL: env pins -> ${tmpl}'s ${key}=${tag} is still sitting ON the ${floor} floor. That floor is a compatibility bound; these pins are the release a fresh install deploys and must be bumped every release (deploy/release.sh prints the instruction when it finishes cutting one). If you deliberately RAISED the floor to the newest release, bump these to it and relax this assertion in the same commit."
+      pins_ok=0
+    fi
+  done
+done
+
+if [ -n "$pin_values" ]; then
+  distinct="$(printf '%s' "$pin_values" | sort -u | wc -l | tr -d ' ')"
+  if [ "$distinct" -ne 1 ]; then
+    echo "FAIL: env pins -> production and staging do not name ONE release ($(printf '%s' "$pin_values" | sort -u | tr '\n' ' ')). Staging validates the exact tags production runs; if the six differ, a green staging says nothing about the artifact production pulls."
+    pins_ok=0
+  fi
+fi
+
+# The durable half of the same defect. vidra-core's setup interview only asks
+# "Release tag to deploy" when no tag flag was given, and defaults that prompt to
+# the TEMPLATE's value — so without this flag a stale template silently becomes
+# the pinned release of every fresh install, chosen by an operator pressing
+# enter. Passing the release install.sh already resolved is also what makes its
+# own closing message ("...if you want something other than ${TAG}") true.
+# Searching install.sh's SOURCE for that literal argument, so $TAG must not
+# expand here — hence -F and the single quotes.
+# shellcheck disable=SC2016
+if grep -qF -- '--release-tag "$TAG"' install.sh; then
+  echo "PASS: install.sh pins 'vidra setup' to the release it resolved"
+else
+  echo "FAIL: install.sh no longer passes --release-tag \"\$TAG\" to 'vidra setup'; the interview then defaults the release to env/production.env.example's value, and a stale template becomes every fresh install's pinned release"
+  pins_ok=0
+fi
+
+if [ "$pins_ok" -eq 1 ]; then
+  echo "PASS: env template release pins name one release above the ${floor} floor, and install.sh does not defer to them"
+else
+  failures=$((failures + 1))
+fi
+
 if [ "$failures" -gt 0 ]; then
   die "$failures tests failed!"
 else
