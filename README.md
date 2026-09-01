@@ -35,7 +35,7 @@ on anything S3-compatible if you want it to, and it is free software under AGPL 
 - **A real creator pipeline.** Resumable uploads, an H.264/AAC HLS ladder, live
   streaming over RTMP with replay-to-VOD, Whisper auto-captions, chapters,
   storyboards.
-- **Not a science project.** 214-path OpenAPI contract, drift-guarded codegen,
+- **Not a science project.** [200+ path OpenAPI contract](https://github.com/yegamble/vidra-core/blob/main/api/openapi.yaml), drift-guarded codegen,
   race-detected CI in every repo, axe accessibility as a hard gate, health/readiness
   probes (`/healthz`, `/readyz`, `/schemaz`, `/version`), metrics, tracing,
   backup/restore/rollback scripts.
@@ -82,7 +82,7 @@ as a hard CI gate, on the tokens of a documented
 
 Feature-by-feature detail lives in
 [`vidra-core/docs/features.md`](https://github.com/yegamble/vidra-core/blob/main/docs/features.md)
-and the [PeerTube parity ledger](.ralph/specs/peertube-feature-ledger.md).
+and the [PeerTube parity ledger](https://github.com/yegamble/vidra-core/blob/main/.ralph/specs/peertube-feature-ledger.md).
 
 ## Architecture
 
@@ -329,7 +329,6 @@ directories are independent git checkouts, git-ignored by this repo.
 | [`.ralph/specs/security.md`](.ralph/specs/security.md) | Security posture and planned controls (CORS allow-list, config hygiene, token hashing, fail-secure prod). |
 | [`.ralph/specs/testing.md`](.ralph/specs/testing.md) | Test strategy: unit / integration / migration / fuzz / benchmark layers and how to run them. |
 | [`.ralph/specs/search.md`](.ralph/specs/search.md) | Cross-repo map of the `vidra-search` service and how it plugs into core and user. |
-| [`.ralph/specs/peertube-feature-ledger.md`](.ralph/specs/peertube-feature-ledger.md) | PeerTube feature-parity ledger with per-feature status and evidence. |
 | [`.ralph/specs/environments.md`](.ralph/specs/environments.md) | Canonical environment matrix (local / dev / QA / staging / production) and the DX contract. |
 | [`deploy/README.md`](deploy/README.md) | Reference single-host deployment: first-boot ordering, host prerequisites + firewall, droplet sizing, the prod compose overlay + Caddy TLS, deploy/rollback/backup/restore scripts, dirty-migration runbook, secret-rotation table, email. |
 | [`docs/production-readiness-2026-07.md`](docs/production-readiness-2026-07.md) | **Archival** launch-gate audit (2026-07-28 → 2026-08-02) — superseded by `docs/productionization/`; VERDICT and `101 migrations` count are stale, kept for history. |
