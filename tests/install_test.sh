@@ -379,6 +379,95 @@ else
   failures=$((failures + 1))
 fi
 
+# ---------------------------------------------------------------------------
+# Both migration one-shots bound how long they will WAIT for a lock.
+#
+# Several core migrations build indexes and none uses CREATE INDEX
+# CONCURRENTLY, so each holds a SHARE lock for the whole build. Postgres lock
+# queues are FIFO: one long write transaction is enough to make CREATE INDEX
+# queue behind it, and then every write to that table queues behind the CREATE
+# INDEX. With no lock_timeout that is a HANG — deploy.sh stops at "3/6
+# migrations", after the pre-deploy dump and before the restart, and the `die`
+# it already carries for a FAILED migration is never reached, because a hang is
+# not an exit code.
+#
+# So this asserts the bound is present on BOTH one-shots, fed by ONE variable,
+# and that the variable is documented in the template an operator actually
+# edits. It also asserts what must NOT be there: statement_timeout. Bounding the
+# work rather than the wait would kill a legitimately long index build that has
+# already acquired its lock — the opposite of the intent, and the easy wrong
+# turn for whoever next reads "the migration timed out" in a ticket.
+#
+# Static, not a render: `docker compose config` needs the nested vidra-core
+# checkout that provides the included model, and this file must keep running on
+# a bare clone. meta-ci's "production overlay" job renders the real thing.
+# ---------------------------------------------------------------------------
+
+log "Testing the migration one-shots' lock-wait bound..."
+
+# The body of one top-level service in docker-compose.prod.yml. A service key is
+# the only thing indented exactly two spaces that is not a comment, so the next
+# such line ends the block; everything a service owns is indented deeper.
+prod_service_block() {
+  awk -v svc="$1" '
+    /^services:/            { in_services = 1; next }
+    in_services && /^[^ #]/ { in_services = 0 }
+    !in_services            { next }
+    $0 == "  " svc ":"      { in_svc = 1; next }
+    in_svc && /^  [^ #]/    { in_svc = 0 }
+    in_svc                  { print }
+  ' docker-compose.prod.yml
+}
+
+lock_ok=1
+
+for svc in migrate search-migrate; do
+  block="$(prod_service_block "$svc")"
+  if [ -z "$block" ]; then
+    echo "FAIL: migrate lock wait -> docker-compose.prod.yml declares no '${svc}' service body; deploy.sh runs both one-shots through the same exit-code-gated step and both need the bound"
+    lock_ok=0
+    continue
+  fi
+
+  if printf '%s\n' "$block" | grep -qE '^[[:space:]]+PGOPTIONS:.*lock_timeout='; then
+    echo "PASS: docker-compose.prod.yml bounds ${svc}'s lock wait"
+  else
+    echo "FAIL: migrate lock wait -> docker-compose.prod.yml's '${svc}' sets no PGOPTIONS lock_timeout. Without it a migration that cannot take its lock waits forever instead of failing, and deploy.sh hangs at '3/6 migrations' with the previous release still serving reads and silently refusing writes to the locked tables"
+    lock_ok=0
+  fi
+
+  if printf '%s\n' "$block" | grep -qE 'statement_timeout'; then
+    echo "FAIL: migrate lock wait -> docker-compose.prod.yml's '${svc}' sets statement_timeout. Only the WAIT is meant to be bounded: an index build that already HOLDS its lock must be allowed to finish, and killing it mid-build leaves the ledger dirty for no benefit"
+    lock_ok=0
+  fi
+done
+
+# The variable name is read out of the compose file rather than hard-coded here,
+# so renaming the knob cannot leave the template documenting something nothing
+# reads (or the compose file reading something nothing documents).
+lock_var="$(sed -n 's/.*PGOPTIONS: "-c lock_timeout=\${\([A-Z_][A-Z0-9_]*\).*/\1/p' \
+  docker-compose.prod.yml | sort -u)"
+lock_var_count="$(printf '%s' "$lock_var" | grep -c . || true)"
+
+if [ "$lock_var_count" -ne 1 ]; then
+  echo "FAIL: migrate lock wait -> the two one-shots must read ONE substitution variable, not ${lock_var_count} ($(printf '%s' "$lock_var" | tr '\n' ' ')); two knobs means an operator can raise one migrator's bound and leave the other hanging"
+  lock_ok=0
+else
+  lock_default="$(sed -n "s/^${lock_var}=//p" env/production.env.example | head -n1 | tr -d '\r')"
+  if [ -z "$lock_default" ]; then
+    echo "FAIL: migrate lock wait -> env/production.env.example does not set ${lock_var}. The compose default still applies, but a bound nobody can find is a bound nobody will raise when a deploy legitimately needs to wait longer"
+    lock_ok=0
+  else
+    echo "PASS: env/production.env.example documents ${lock_var}=${lock_default}"
+  fi
+fi
+
+if [ "$lock_ok" -eq 1 ]; then
+  echo "PASS: both migration one-shots bound their lock WAIT (not their work) from one documented knob"
+else
+  failures=$((failures + 1))
+fi
+
 if [ "$failures" -gt 0 ]; then
   die "$failures tests failed!"
 else

@@ -220,11 +220,66 @@ services:
   # SERVER here, so the one-shot never exits and the deploy hangs — the
   # MIN_EMBEDDED_MIGRATE_TAG gate in deploy/{deploy,rollback,restore}.sh refuses
   # those tags before anything runs.
+  #
+  # LOCK WAIT, BOUNDED — the PGOPTIONS line on BOTH one-shots below.
+  #
+  # THE FAILURE IT CLOSES. Nine of the last twenty core migrations build an
+  # index, and 0118 builds two GIN *trigram* indexes (channels.display_name,
+  # users.display_name) — among the slowest builds Postgres has. No migration
+  # uses CREATE INDEX CONCURRENTLY, so each one holds a SHARE lock on the table
+  # for the whole build, and Postgres lock queues are FIFO: a long write
+  # transaction already holding `users`/`channels` (a PeerTube import is the
+  # obvious one) makes CREATE INDEX queue behind it, and then EVERY subsequent
+  # write to that table queues behind the CREATE INDEX — including the import's
+  # own next insert. Nothing resolves that, because nothing set a timeout.
+  # deploy.sh stops at "3/6 migrations" — AFTER the pre-deploy dump, BEFORE
+  # `up -d` — with the previous release still serving reads while silently
+  # refusing every signup and profile edit, and prints no timeout and no lock
+  # diagnostic. `scripts/migrate-lint.sh` cannot catch this: it enforces that
+  # forward migrations are ADDITIVE, and CREATE INDEX is perfectly additive.
+  #
+  # WHY IT IS ONLY A TIMEOUT. deploy.sh line ~566 already handles a migration
+  # that FAILS ("CORE MIGRATION FAILED (exit N). The stack has NOT been
+  # restarted; the previous release is still serving."). A hang is not an exit
+  # code, so that `die` is simply never reached. Bounding the wait turns the
+  # invisible hang into the actionable failure the script already handles.
+  #
+  # lock_timeout AND NOT statement_timeout: a legitimately long index build must
+  # still be allowed to run to completion once it HOLDS its lock. The WAIT is
+  # what has to be bounded, not the work.
+  #
+  # PGOPTIONS rather than a `?options=` suffix on the DSN because the DSN is
+  # ${DATABASE_URL} — an operator-supplied value that may or may not already
+  # carry a query string, so appending to it is not safe. Every client in this
+  # path honours PGOPTIONS: core's migrator is golang-migrate's `postgres`
+  # driver on lib/pq (conn.go parseEnviron), search's is golang-migrate's
+  # `pgx/v5` driver on pgx v5.10.0 (pgconn/config.go maps PGOPTIONS -> options),
+  # and psql honours it too, so the runbook's ad-hoc `run --rm migrate …` forms
+  # inherit the same bound.
+  #
+  # NOT AFFECTED, deliberately: golang-migrate serializes concurrent migrators
+  # with pg_advisory_lock, which is a function call and not subject to
+  # lock_timeout — two migrators still queue for each other instead of one
+  # erroring out.
+  #
+  # THE COST, STATED PLAINLY: an aborted migration leaves schema_migrations
+  # dirty at that version, exactly as any other mid-migration failure does —
+  # "Migration failed mid-deploy" in deploy/README.md is the runbook for it.
+  # That path is documented and recoverable; a hang is neither.
+  #
+  # VIDRA_MIGRATE_LOCK_TIMEOUT tunes the bound (see env/production.env.example);
+  # `0` means "wait forever" and restores the pre-existing behaviour.
   migrate:
     image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     build: !reset null
     logging: *logging
+    # `environment` is a MAP, so this MERGES with the DATABASE_URL the included
+    # vidra-core/docker-compose.yml sets here (and with the one
+    # docker-compose.external-postgres.yml asserts on top of it) rather than
+    # replacing it. See the block comment above for why this key exists.
+    environment:
+      PGOPTIONS: "-c lock_timeout=${VIDRA_MIGRATE_LOCK_TIMEOUT:-5s}"
     # Hardening parity with api/search/frontend: this one-shot connects to the
     # production database with the same image and privileges the api has, so it
     # gets the same setuid/setgid escalation block.
@@ -236,6 +291,12 @@ services:
     pull_policy: always
     build: !reset null
     logging: *logging
+    # Same bound, same variable, same reason as `migrate` above — deploy.sh runs
+    # this one-shot through the identical exit-code-gated `run --rm` step, and
+    # the search schema builds indexes of its own. One knob covers both so the
+    # two migrators can never be tuned apart by accident.
+    environment:
+      PGOPTIONS: "-c lock_timeout=${VIDRA_MIGRATE_LOCK_TIMEOUT:-5s}"
     security_opt:
       - "no-new-privileges:true"
 
