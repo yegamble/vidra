@@ -942,7 +942,19 @@ elif have_tty; then
   # are already the terminal, but stdin is the script being piped in, and the
   # wizard refuses a non-terminal stdin by design rather than asking eleven
   # questions that all read EOF (vidra-core/cmd/vidra/setup.go).
-  if ( cd "$DIR" && "$VIDRA_BIN" setup --template env/production.env.example < /dev/tty ); then
+  #
+  # --release-tag IS NOT OPTIONAL HERE. Without it the interview asks "Release
+  # tag to deploy" and offers the TEMPLATE's value as the default (setup.go only
+  # prompts when no tag flag was given, and defaults it from
+  # env/production.env.example). So a template that has not been bumped since an
+  # old release becomes the pinned release of every fresh install, chosen by an
+  # operator pressing enter — and the checkout deploy path then validates that
+  # release against its own migrations and exits 0. $TAG is the release this run
+  # already resolved and installed the tree and the CLI at; pinning the images to
+  # anything else was never a coherent default, and passing it is what makes the
+  # closing message below ("...if you want something other than ${TAG}") true.
+  # $TAG is guaranteed non-empty by the resolve_tag call above.
+  if ( cd "$DIR" && "$VIDRA_BIN" setup --template env/production.env.example --release-tag "$TAG" < /dev/tty ); then
     SETUP_RAN=1
   else
     die "'vidra setup' exited non-zero. Nothing else was changed and ${DIR} is a complete deployment tree - re-run just the interview: 'cd ${DIR} && vidra setup --template env/production.env.example'."
