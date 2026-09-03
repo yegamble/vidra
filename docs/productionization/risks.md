@@ -29,10 +29,19 @@ when retired.
    ATProto double-posts — visible to other servers); boot jobrecovery requeuing the other
    node's in-flight work. Failure is data-visible, not a crash. The SELECT-only queues are the
    easiest to miss in a lease retrofit because they look like reads.
-5. **Auto-rollback is only safe under the one-release schema-compat policy — which is enforced
-   by documentation alone.** One destructive migration turns every rollback into
-   old-code-on-new-schema corruption. CI enforcement (migration lint + N−1-binary-vs-N-schema
-   job) is the highest-leverage prerequisite for `vidra update`.
+5. ~~**Auto-rollback is only safe under the one-release schema-compat policy — which is enforced
+   by documentation alone.**~~ **RETIRED — verified 2026-09-03.** Both halves of the CI
+   enforcement this entry asks for exist in vidra-core. The cheap static half, `make migrate-lint`,
+   is inside the canonical `make ci` gate — and `.github/workflows/ci-guard.yml:64` fails the build
+   if `backend-ci.yml` ever stops invoking `make ci`, so the gate cannot be quietly removed. The
+   expensive dynamic half is `.github/workflows/schema-compat.yml`: HEAD's migrations are applied
+   to a fresh database, then the **previous release tag's tree runs its own integration suite
+   against that already-migrated schema**, so a column this PR drops, renames, narrows or makes
+   NOT NULL fails N−1's store tests hard. It is path-filtered to `migrations/**`. The workflow
+   documents its own blind spot, which remains a reviewer's job: it proves N−1 still reads and
+   writes fine, not that release N−1 had already stopped depending on what release N removes — so
+   staged two-release drops still need the reviewer to confirm the write path went away in the
+   prior release.
 6. **Signed-URL/CDN/byte-path is an entangled triple.** ~~Entity-ID filenames are unguessable
    only because serving is API-proxied~~ — **correction (phase-2 item 6): the filenames were
    never unguessable.** Every media key is a deterministic function of a PUBLIC entity UUID:
@@ -113,10 +122,18 @@ when retired.
 12. **Secret-rotation asymmetry.** MFA/FEDERATION/ATPROTO KEK rotation is destructive (no
     re-wrap job; unset MFA KEK ⇒ plaintext TOTP with only a log warning). "Re-run the
     installer" must never silently mint new KEKs; generated secrets must be persisted durably
-    and included in backups (`env/production.env` is currently backed up nowhere).
-13. **Stale-tag trap.** The 2026-08 upstream history rewrite changed every v0.1.x tag SHA;
-    `deploy.sh` fetched tags without `--force`, so live hosts pin stale tag objects.
-    *(Fix in flight; the live beta droplet needs it before its next deploy.)*
+    and included in backups. *Amended 2026-09-03: the "backed up nowhere" clause is **stale** —
+    `deploy/backup.sh` writes `backups/vidra-config-<stamp>.tar.gz` containing `$ENV_FILE` plus
+    `deploy/Caddyfile.local` (`backup.sh:15,183-188`), and refuses rather than writing a partial
+    archive when the env file sits outside the repo root and so cannot be stored repo-relative
+    (`:188`). The destructive-rotation half of this entry still stands.*
+13. ~~**Stale-tag trap.**~~ **RETIRED — verified 2026-09-03.** `deploy/deploy.sh` pre-flight now
+    runs `git -C "$repo" fetch --tags --force` before `checkout --detach "$tag"`, with the reason
+    written at the call site: without `--force` git refuses to move a tag the host already has.
+    The same loop pins every component checkout to its `VIDRA_*_TAG`, and
+    `require_embedded_migrate_tag` rejects a tag that predates migrations being embedded in the
+    images. Bundle-unpacked trees skip the loop deliberately — there is no remote to fetch and the
+    images are pinned by the same tags.
 14. ~~**Silent env-parse fallbacks**~~ **RETIRED — verified 2026-09-03.** `envParser` collects a
     typed error per key instead of falling back: `Bool` appends `"%s must be a boolean
     (true|false)"` (`vidra-core/internal/config/config.go:2563`), and `Int`/`Int64`/`Duration`
@@ -132,10 +149,25 @@ when retired.
     `proxy.ts` instead (`vidra-user/lib/security-headers.ts:35-45`), failing secure in every
     ambiguous case. `TRUSTED_PROXY_CIDRS` has one validating parser that rejects a non-CIDR entry
     with a worked example (`config.go:2431-2440`).
-16. **Everything is currently one-provider-and-owner-shaped** (hardcoded ghcr owner, /opt/vidra
-    + service-user assumptions in systemd units, provider-specific sizing/firewall docs,
-    release.sh requiring maintainer gh auth). Generalize by parameterizing with the existing
-    single-host recipe as the tested default — don't break the one proven deployment.
+16. **Everything is currently one-provider-and-owner-shaped** (/opt/vidra + service-user
+    assumptions in systemd units, provider-specific sizing/firewall docs, release.sh requiring
+    maintainer gh auth). Generalize by parameterizing with the existing single-host recipe as the
+    tested default — don't break the one proven deployment.
+    *Amended 2026-09-03: the "hardcoded ghcr owner" clause is **stale**. Every image in
+    `docker-compose.prod.yml` expands `ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/...` (`:273, :290,
+    :308, :373, :403, :428`), documented in `env/production.env.example:75-80`. The registry HOST
+    is still literal `ghcr.io`, so a self-hosted registry remains unparameterized — that is the
+    narrower risk that survives.*
 17. **Doc drift can misdirect the program.** Several runbook claims are stale (restore-drill
     warnings outdated; migration counts wrong in prose; old perf notes superseded). Doctor and
     update logic derive facts from files/DB, never prose.
+    *Confirmed against this register 2026-09-03, which is the sharpest available example: an audit
+    of all 17 entries found **nine** stale — five fully retired in code while still reading "Fix in
+    flight" (1, 2, 9, 14, 15), two more fully retired (5, 13), and two carrying stale clauses
+    (12's "backed up nowhere", 16's "hardcoded ghcr owner"). The register meant to track risk had
+    become a source of it: entries 1 and 2 were listed as blocking Phase 1 promises that in fact
+    shipped, and entry 5 called for CI enforcement that already exists and runs. **Practice
+    adopted: an entry is not retired by the PR that fixes it — it is retired by an audit that
+    re-derives it from the code, and every retirement above carries the file:line it was verified
+    against.** Review the whole register at the start of each phase, not just the entries the
+    current work touches.*
