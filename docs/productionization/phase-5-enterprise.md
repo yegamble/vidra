@@ -206,9 +206,19 @@ worker-role flag it would have needed **already landed** (`VIDRA_ROLE` = `all|ap
 - **Item 3 (origin shielding) is mostly configuration + docs:** the CDN origin is already a
   plain key-addressed base, so a shield tier is "point CDN A's origin at the shield". What needs
   code: per-pathway purge fan-out, and failover — which needs item 1's health signals first.
-- **Nothing calls `Purge`** (zero call sites). Every media response is still `private`; header
-  promotion remains gated on purge being wired *and exercised*. That phase-4 carry-forward is a
-  phase-5 gate: multi-CDN multiplies the purge fan-out before single-CDN purge has ever fired.
+- ~~**Nothing calls `Purge`** (zero call sites).~~ **STALE as of core#117/#120 — corrected
+  2026-09-03.** This line was the 2026-08-23 recon snapshot and was left standing when the wiring
+  landed, so this document contradicted its own status section 130 lines above it. Eight call
+  sites are verified present: video delete, privacy flip away from public, admin block, channel
+  cascade (videos + the channel's own avatar/banner), avatar/banner set/delete, and playlist cover
+  set/delete/visibility-flip — each snapshotting pre-mutation, firing post-commit and detached,
+  capped at 5000 keys, and free when no CDN is configured (`internal/media/media_purge.go`).
+  What is still true, and still the gate: every media response remains `private`, and header
+  promotion waits on purge being **exercised against a live edge**, which has not happened.
+  Multi-CDN multiplies the purge fan-out before single-CDN purge has ever fired for real.
+  *One gap found in the canonical ledger while verifying this: the download-gate flip
+  (`download_enabled` true→false) fires no purge and is not listed — see
+  [../beta-readiness-2026-09.md](../beta-readiness-2026-09.md).*
 
 ### DRM (items 4–7)
 

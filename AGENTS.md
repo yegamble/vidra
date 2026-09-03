@@ -16,6 +16,20 @@ cp env/production.env.example /tmp/check.env   # fill the ${VAR:?} keys with dum
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file /tmp/check.env config -q
 ```
 
+`config -q` above is a complete check: Compose validates the whole model, and
+the `${VAR:?}` asserts fire, whether or not profiles are selected (verified
+2026-09-03 by breaking a service key and by removing `JWT_SECRET` — both forms
+exit 1). But every service sits behind a profile, so if you drop `-q` to READ
+the render, add `--profile core --profile frontend` or the output is a bare
+`services: {}` and you will think the file is empty. Use the full form when you
+need to assert what the prod overlay actually produces — e.g. that postgres,
+redis and search publish no ports and api/frontend publish on 127.0.0.1 only:
+
+```
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file /tmp/check.env \
+  --profile core --profile frontend config
+```
+
 ## Hard rules
 
 1. **One small PR per session.** Deploy tooling failures cost real downtime —
@@ -23,11 +37,23 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file /tmp/
 2. **Ordering in `deploy/deploy.sh` is sacred**: pre-deploy dump (abort on
    failure) → pull → migrate as discrete exit-code-gated steps → `up -d
    --no-build` → health probes. Never fold migrations into `up -d`.
-3. **Nested checkouts are a real trap** (incident 2026-08-10): the migrate
-   service mounts `./vidra-core/migrations` from the nested checkout, which
-   `git pull` on this repo does NOT advance — a deploy can run new images
-   against old migrations and exit 0. Any change touching migrations flow
-   must keep the checkout-pinning + ledger-assertion guards intact.
+3. **Nested checkouts are a real trap** (incident 2026-08-10). *Mechanism
+   corrected 2026-09-03 — the original bind-mount is gone, the rule is not.*
+   The trap WAS that the migrate service bind-mounted
+   `./vidra-core/migrations` from the nested checkout, which `git pull` on this
+   repo does not advance, so a deploy could run new images against old
+   migrations and exit 0. That is now architecturally impossible: migrations
+   are compiled into the release binaries, and the rendered prod `migrate`
+   service has **no volumes at all** — it runs `migrate up` on the same
+   `VIDRA_CORE_TAG` image as the api, so image and migrations agree by
+   construction. What survives is narrower and still load-bearing: the nested
+   checkout is what `deploy.sh` reads to compute the EXPECTED migration
+   version for its independent ledger assertion (a deliberate second opinion —
+   reading it out of the migrator would only prove the migrator agrees with
+   itself). So a drifted checkout no longer runs the wrong migrations, but it
+   does invalidate the check that would catch the wrong ones. Any change
+   touching migrations flow must keep the checkout-pinning + ledger-assertion
+   guards intact, and must not reintroduce a migrations bind mount.
 4. **Compose >= 2.24 assumptions**: `docker-compose.prod.yml` uses
    `!reset`/`!override` merge tags; older Compose silently ignores them and
    publishes Postgres/Redis on 0.0.0.0. Never remove the version check.
