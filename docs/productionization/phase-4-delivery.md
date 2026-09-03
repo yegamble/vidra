@@ -430,9 +430,12 @@ item 6   P2P — research first, decision doc, then a build decision
   `buildQoEEvent` requires a parseable `video_id` and the handler is **all-or-nothing** — so the
   moment a client emits one live event, it takes a whole batch of VOD measurements down with it.
   Unreachable today only because the client never sends them (live and federated go unmeasured as a
-  consequence of requiring `video_id`, not as a special case). `qoeSubject` is the single line to
-  relax, and relaxing it without also reconsidering all-or-nothing batching is how this becomes
-  silent data loss. The handler documents the deferral deliberately — live segments never reach the
+  consequence of requiring `video_id`, not as a special case). The line to relax is the
+  `uuid.Parse` on `video_id` inside **`buildQoEEvent`** (`internal/httpapi/qoe.go`) — *corrected
+  2026-09-03: this passage said `qoeSubject`, which does not exist in vidra-core at all. It is a
+  frontend function (`vidra-user/lib/playback-qoe.ts:124`), so relaxing the named symbol would
+  have changed nothing server-side.* Relaxing it without also reconsidering all-or-nothing
+  batching is how this becomes silent data loss. The handler documents the deferral deliberately — live segments never reach the
   delivery resolver, so no origin classification can honestly produce `origin-live` yet.
 - **Live segment cache-control got stricter, deliberately.** Live segments moved from
   `private, max-age=12` to `CacheStableRevalidate` (`max-age=0, must-revalidate`) because there is
