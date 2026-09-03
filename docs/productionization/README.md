@@ -53,8 +53,8 @@ This directory is the program's tracking surface. Update the checklists here as 
 | 1 | Production-ready basic install: installer, setup engine, web wizard, `vidra` CLI, doctor/update, managed Caddy, owner bootstrap | **All 20 work items shipped** (2026-08-19 → 2026-08-21); first real-host install pending an operator |
 | 2 | Storage: presign, canonical-vs-delivery, migration jobs, GC safety | **DONE 2026-08-21** — all 8 items (core#58-#63, user#57); exit criteria validated end-to-end on a real local→MinIO migration |
 | 3 | Media pipeline: CMAF, DASH, packager abstraction, codec profiles, hw transcode, worker scale-out | **DONE 2026-08-23** — all 11 items merged (core#64-#71, meta#18/#19, user#58); exit criteria E2E-validated on a live stack 2026-08-22 |
-| 4 | Delivery: playback sessions, CDN, P2P, engine adapter, QoE | Not started (seams defined) |
-| 5 | Enterprise: multi-CDN, steering, DRM/KMS, multi-region | Not started |
+| 4 | Delivery: playback sessions, CDN, P2P, engine adapter, QoE | **6 of 7 items merged 2026-08-23** (core#74-#77, user#59); item 5 (multi-CDN) is phase 5, P2P closed DEFER. Carry-forward: every media response is still `private` — header promotion stays gated on purge being exercised against a live edge |
+| 5 | Enterprise: multi-CDN, steering, DRM/KMS, multi-region | **Floor merged, modules open.** Waves A/B/C (core#80-#82) + admin/settings/purge waves (core#115-#121, user#92-#101) all merged; items 1-3 (multi-CDN, steering, shielding), 5 (Shaka CENC), 8c (live externalization), 9-remaining and 10 (multi-region) are open |
 
 Phases overlap deliberately at the interface level: earlier phases cut the seams
 (see [interfaces.md](interfaces.md)) that make later phases possible without rewrites.

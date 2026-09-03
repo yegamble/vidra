@@ -5,12 +5,21 @@ when retired.
 
 ## Architectural
 
-1. **Frontend origin baking is architectural, not incidental.** `NEXT_PUBLIC_API_BASE_URL` is
-   inlined at build time. Every Phase 1 promise — one-command install, domain automation,
-   generic images — is blocked until vidra-user gets runtime origin config. *(Fix in flight.)*
-2. **First-account-gets-admin race.** A streamlined installer that opens the site before owner
-   registration hands the instance to the first bot. Owner bootstrap is a security fix with
-   priority over convenience. *(Fix in flight.)*
+1. ~~**Frontend origin baking is architectural, not incidental.**~~ **RETIRED — verified
+   2026-09-03.** `NEXT_PUBLIC_API_BASE_URL` survives only as the dev/e2e fallback: compose passes
+   the value as `PUBLIC_API_BASE_URL` (`vidra-core/docker-compose.yml:76`), which
+   `vidra-user/lib/config.ts:68` resolves *first*, served per-request from `/runtime-config.js`.
+   It is now a **restart**, not a rebuild, and it is the only `NEXT_PUBLIC_*` in the codebase —
+   so no feature flag anywhere in Vidra is build-baked. A non-`http(s)` value is rejected and
+   downgraded to same-origin with a logged error rather than throwing on every call
+   (`lib/config.ts:20-27`).
+2. ~~**First-account-gets-admin race.**~~ **RETIRED — verified 2026-09-03.** Migration 0104 plus
+   `vidra-core/internal/auth/ownerclaim.go`: the first admin redeems a one-time 256-bit claim
+   token minted at boot and printed to the operator console exactly once (only its SHA-256 is
+   persisted, so a lost token is re-minted, never recovered). While the claim is pending — empty
+   users table and an unclaimed token — every normal signup path answers
+   `ErrOwnerClaimRequired`. Instances that already have users are implicitly claimed and never
+   mint a new token, but an unclaimed leftover from an earlier boot still rotates.
 3. **Media GC is the Phase 2 landmine.** The daily sweep runs destructive, unconditionally.
    Pointing at a shared/pre-populated bucket, or running mid-migration against a destination
    bucket, deletes unreferenced objects within 24h. Enable flag / dry-run / orphan-ratio
@@ -74,14 +83,18 @@ when retired.
    index is persisted anywhere — the only durable quality preference is server-side
    `user_player_settings.default_quality`, already validated as `"auto" | "<height>p"`, i.e. already
    height-keyed. The re-key is a pure in-memory/prop-shape refactor of four internal contracts.
-   Two things the entry missed, both now the real risk: `autoLevelCapForNetwork` in
-   `lib/hls-bandwidth.ts` *returns an hls.js index* out of an otherwise pure module, so it must be
-   re-keyed in the same change or the menu speaks heights while the ABR cap speaks indexes; and
-   **quality identity has no faithful implementation on the native-HLS branch at all** — the browser
-   owns variant selection there, driven by the `SCORE` attribute, so the adapter can neither read
-   nor set the active variant. Phase 4 item 4 must design the QoE schema knowing "selected
-   rendition" is permanently unknowable for that engine, rather than discovering it when the admin
-   playback-health page shows a third of sessions with a null rendition.
+   **RETIRED — verified 2026-09-03.** The re-key landed in phase 4 (user#59): quality is keyed on
+   height throughout (`vidra-user/lib/hls.ts:82-89,119-123`) and the level index never escapes the
+   adapter. The entry's own follow-up is stale twice over — the symbol is
+   `autoHeightCapForNetwork` (`lib/hls-bandwidth.ts:125`) and it already **returns a height**
+   (480/720/null), translated to an index only at `use-playback-engine.ts:388-391`.
+   The second half was not fixed but *designed for*, which is the correct outcome: quality identity
+   still has no faithful implementation on the native-HLS branch — the browser owns variant
+   selection via `SCORE`, so `levels` is deliberately empty there
+   (`use-playback-engine.ts:492`), the quality menu self-hides (`QualityMenu.tsx:40`), and QoE
+   emits a first-class *unsupported* rather than a null or a zero
+   (`vidra-user/lib/playback-qoe.ts:257`). The admin playback-health page renders three explicit
+   known-unknowns instead of empty cells (`AdminPlaybackHealthView.tsx:664-675`).
 10. **In-manifest subtitles are blocked at the packager, not the player** (added 2026-08-23).
    `internal/media/cmaf.go` states it outright: WebVTT hard-fails the dash muxer, so captions stay
    out-of-band. Any plan that puts in-manifest subtitles in the player work item is mis-scoped —
@@ -91,29 +104,38 @@ when retired.
 
 ## Operational
 
-10. **Compose semantics are silent-failure-shaped**, and every new entrypoint re-inherits them:
+11. **Compose semantics are silent-failure-shaped**, and every new entrypoint re-inherits them:
     bare `docker compose up` on a prod host auto-loads the dev override (rate limiting off, dev
     HMAC secret) and drops the prod overlay; Compose < 2.24 silently ignores `!reset` leaving
     Postgres/Redis on 0.0.0.0; a stray `vidra-core/.env` poisons included-file substitution.
     The CLI/wizard reproduce the exact `-f` chain and version guards; doctor checks the stray
     file.
-11. **Secret-rotation asymmetry.** MFA/FEDERATION/ATPROTO KEK rotation is destructive (no
+12. **Secret-rotation asymmetry.** MFA/FEDERATION/ATPROTO KEK rotation is destructive (no
     re-wrap job; unset MFA KEK ⇒ plaintext TOTP with only a log warning). "Re-run the
     installer" must never silently mint new KEKs; generated secrets must be persisted durably
     and included in backups (`env/production.env` is currently backed up nowhere).
-12. **Stale-tag trap.** The 2026-08 upstream history rewrite changed every v0.1.x tag SHA;
+13. **Stale-tag trap.** The 2026-08 upstream history rewrite changed every v0.1.x tag SHA;
     `deploy.sh` fetched tags without `--force`, so live hosts pin stale tag objects.
     *(Fix in flight; the live beta droplet needs it before its next deploy.)*
-13. **Silent env-parse fallbacks** (malformed bool/duration values boot "successfully" wrong)
-    undermine any generated-env pipeline. *(Fix in flight.)*
-14. **Plain-HTTP and external-proxy modes require code, not config** — CookieSecure()
-    hardcodes production⇒https (login silently breaks over HTTP); HSTS emitted unconditionally
-    by both apps; public-IP TLS terminators need TrustIPRange wiring. Shipping these as
-    compose-only options yields silently broken deployments.
-15. **Everything is currently one-provider-and-owner-shaped** (hardcoded ghcr owner, /opt/vidra
+14. ~~**Silent env-parse fallbacks**~~ **RETIRED — verified 2026-09-03.** `envParser` collects a
+    typed error per key instead of falling back: `Bool` appends `"%s must be a boolean
+    (true|false)"` (`vidra-core/internal/config/config.go:2563`), and `Int`/`Int64`/`Duration`
+    have the same shape (`:2530-2569`), surfaced together through `Err()` (`:2526`). A malformed
+    value now refuses to boot and names the key.
+15. ~~**Plain-HTTP and external-proxy modes require code, not config**~~ **RETIRED — verified
+    2026-09-03**, all three clauses. `CookieSecure()` now returns `PublicOriginIsHTTPS()`
+    (`vidra-core/internal/config/config.go:2471`) rather than hardcoding production⇒https. HSTS is
+    conditional in *both* apps: core adds it only when the public origin is HTTPS
+    (`internal/httpapi/secure_headers.go:13,35`), and the frontend deliberately keeps it out of
+    `next.config`'s build-time `headers()` — because that is evaluated when the image is BUILT
+    while the origin is only known when the container RUNS — emitting it per-request from
+    `proxy.ts` instead (`vidra-user/lib/security-headers.ts:35-45`), failing secure in every
+    ambiguous case. `TRUSTED_PROXY_CIDRS` has one validating parser that rejects a non-CIDR entry
+    with a worked example (`config.go:2431-2440`).
+16. **Everything is currently one-provider-and-owner-shaped** (hardcoded ghcr owner, /opt/vidra
     + service-user assumptions in systemd units, provider-specific sizing/firewall docs,
     release.sh requiring maintainer gh auth). Generalize by parameterizing with the existing
     single-host recipe as the tested default — don't break the one proven deployment.
-16. **Doc drift can misdirect the program.** Several runbook claims are stale (restore-drill
+17. **Doc drift can misdirect the program.** Several runbook claims are stale (restore-drill
     warnings outdated; migration counts wrong in prose; old perf notes superseded). Doctor and
     update logic derive facts from files/DB, never prose.
