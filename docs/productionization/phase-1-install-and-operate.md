@@ -218,9 +218,12 @@ when closing items.
 > tag** (release.sh now tags the meta repo, refusing a HEAD not on origin/main) into the same
 > bare-name `SHA256SUMS`. meta-ci gained a bundle job (byte-identical rebuild, manifest⇔`ls`
 > agreement, six prod renders from a checkout-less extract) and the two-way caddy gate.
-> **Deviations recorded honestly:** **(a)** the `release-assets.yml` bundle step has never
+> **Deviations recorded honestly:** **(a)** ~~the `release-assets.yml` bundle step has never
 > actually executed — it needs a tagged release after both repos merge; the first release cut
-> after this wave is its live test. **(b)** `vidra update` on a bundle tree remains
+> after this wave is its live test.~~ **CLOSED — verified 2026-09-03.** It has executed:
+> `gh release view v0.6.1 --repo yegamble/vidra-core` lists `SHA256SUMS`,
+> `vidra-bundle_v0.6.1.tar.gz` and four `vidra_v0.6.1_*` CLI binaries, so the
+> `curl … | sh` → bundle → checksum-gated CLI → wizard path has real assets behind it. **(b)** `vidra update` on a bundle tree remains
 > degraded-graceful (it warns that the target schema version cannot be read from git and
 > proceeds ungated) — a bundle-aware update flow is a real follow-up, and bundle-tree
 > *upgrades* are today a documented manual unpack. **(c)** meta-ci's "every config key has a
@@ -267,7 +270,8 @@ when closing items.
   real VERSION ldflags.
 - [x] **7. Callable validation (config half)** *(implemented, wave 2)* — `config.LoadFrom(lookup)`
   + `config.CheckEnv(map)` validate candidate env values with the *same* code that boots (zero
-  drift), and `VarError{Var, Msg}` types 88 single-variable errors for field mapping.
+  drift), and `VarError{Var, Msg}` types 126 single-variable errors for field mapping
+  (88 when this was written; re-counted 2026-09-03).
   **Open follow-ups:** semantic `validate()` still reports first-error-only (the wizard may want
   error collection); the instancesettings validators (the runtime-settings half) remain to be
   exposed for wizard use.
@@ -490,8 +494,14 @@ when closing items.
   `--check` and doctor now agree that blank is fine. Image pinned to `caddy:2.11.4-alpine` in the
   prod overlay *and* in meta-ci's validate step, with a CI assertion that the two never drift;
   `docker-compose.prod.yml` mounts `Caddyfile.local` (gitignored, atomic-writer temp file
-  included) and never the template. Three gates run before anything starts, in all three scripts
-  that `up -d`: `require_caddyfile_local` (a missing bind-mount source is created by Docker as an
+  included) and never the template. Three gates run before anything starts
+  in `deploy.sh`, and **one of the three in all three scripts that `up -d`** — corrected
+  2026-09-03; the original "in all three scripts" was wrong and contradicted the code's own
+  written rationale. `require_caddyfile_local` (and `require_compose_version`) run in
+  `deploy.sh`, `rollback.sh` and `restore.sh`; `require_real_domain` and
+  `require_dns_points_here` are **deliberately deploy-only** (`deploy/deploy.sh:236-239`:
+  "Those two run during an incident, and refusing an emergency rollback over a cosmetic file
+  check would be the wrong trade"). The gates themselves: `require_caddyfile_local` (a missing bind-mount source is created by Docker as an
   empty DIRECTORY and crash-loops Caddy — whole site dark, every app container healthy — and the
   message offers the two legacy migrations), `require_real_domain` now reading the file actually
   mounted *and* comparing its site address with `PUBLIC_BASE_URL`'s host, and
@@ -596,7 +606,10 @@ when closing items.
   (object store, SMTP, search, ffmpeg — item 19) is a page an admin opens, and `vidra doctor`
   already probes those from the host without a token.
 - [x] **14. `vidra doctor`** *(implemented 2026-08-20, wave 3: core f337b0c + daa976a,
-  `internal/doctor` + `cmd/vidra doctor`)* — the runbook, executed. **18 checks** in four
+  `internal/doctor` + `cmd/vidra doctor`)* — the runbook, executed. **26 checks registered** (the 18 named below, plus `db pool
+  sizing`, `media GC posture`, `storage migration`, `object write`, `object retention`,
+  `bucket ownership`, `video encoders` and `hardware transcode` added by later phases;
+  re-counted 2026-09-03) in four
   sections: docker & compose (compose version, published ports, log caps, dev override, stray
   `vidra-core/.env`), configuration (reverse proxy, domain DNS, env file vs template,
   configuration values), data & state (schema ledger, search ledger, backups, backup timer, disk
@@ -870,7 +883,7 @@ when closing items.
   container check wants the cheapest one that cannot lie about whose fault it is.
 - [x] **20. Admin infra visibility** *(implemented 2026-08-21, wave 6 tranche 2: core
   `prod/phase1-wave6b` 7938a13..6cccc16, user 1321658..5636ead)* — `GET /admin/infrastructure`
-  renders read-only Server / Storage / Networking / Backups panels plus a 13-capability
+  renders read-only Server / Storage / Networking / Backups panels plus a 14-capability
   feature-discovery list, and `POST /admin/mail/test` sends one probe message.
   **Env-derived and guidance-oriented, literally:** every response field is hand-picked with a
   justifying comment, and the no-secret test plants sentinels in every secret-bearing config
@@ -886,9 +899,11 @@ when closing items.
   on-but-unconfigured gets a warning and a bare finding, because a broken relay is not
   "optional" (deliberate deviation, recorded). Deep-links exist only where a runtime settings
   page actually holds the switch; an e2e assertion pins that boot-env-only features get none.
-  **The item's own examples were aspirational:** DASH and CDN do not exist in core (phase 3/4
+  ~~**The item's own examples were aspirational:** DASH and CDN do not exist in core (phase 3/4
   items), so the pattern shipped over the thirteen real capabilities and those two slot in
-  when they exist. **Mail test cannot become a relay:** the recipient is the instance contact
+  when they exist.~~ **Stale — corrected 2026-09-03.** Phases 3-5 landed both: the list is now
+  fourteen keys and includes `cdn` and `drm`
+  (`vidra-core/internal/httpapi/admin_infra.go:388-520`). **Mail test cannot become a relay:** the recipient is the instance contact
   address, the request body is ignored (asserted), the limiter is 3/hour per admin, all three
   failure modes are typed errors with stable codes that survive the generic 5xx scrub, and the
   audit event carries an outcome — never an address.

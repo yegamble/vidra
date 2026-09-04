@@ -145,7 +145,14 @@ Ranked by what actually bites, with the flag posture that contains each one toda
 1. **Unversioned CDN edge keys** (`internal/cdn/cdn.go:203` + `internal/media/hls.go:984-989`).
    Contained by keeping `delivery_cdn_enabled` off. The tracked fix is phase-5 item 1a,
    generation-addressed keys, which also makes content replacement stop needing purge at all.
-2. **Download-gate revocation leaves the original at the edge.** Flipping `download_enabled`
+2. ~~**Download-gate revocation leaves the original at the edge.**~~ **FIXED 2026-09-03 by
+   core#149** (`internal/httpapi/videos.go:1067,1113`, snapshot `media_purge.go:222`): both
+   causes below are closed — `DownloadEnabled` is now in the snapshot trigger list, and the
+   post-mutation gate no longer depends on the video losing eligibility, because `publicDownload`
+   is a second, independent fence. Still open, and now the ledger's fourth entry: the
+   **instance-wide** `downloads_enabled` setting, deferred with a written rationale (it needs a
+   leased job with a cursor, not a request-scoped fan-out). Original text follows.
+   Flipping `download_enabled`
    true→false fires no purge, for two independent reasons: `DownloadEnabled` is absent from the
    snapshot trigger list (`internal/httpapi/videos.go:1055`, which watches only `Privacy`,
    `PublishAt`, `PublishAfterTranscode`), and even with a snapshot the post-mutation gate

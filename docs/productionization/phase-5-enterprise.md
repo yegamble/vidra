@@ -218,7 +218,16 @@ worker-role flag it would have needed **already landed** (`VIDRA_ROLE` = `all|ap
   Multi-CDN multiplies the purge fan-out before single-CDN purge has ever fired for real.
   *One gap found in the canonical ledger while verifying this: the download-gate flip
   (`download_enabled` true→false) fires no purge and is not listed — see
-  [../beta-readiness-2026-09.md](../beta-readiness-2026-09.md).*
+  [../beta-readiness-2026-09.md](../beta-readiness-2026-09.md).* **CLOSED 2026-09-03 by
+  core#149** — `download_enabled` is now in the pre-write snapshot trigger list and has its own
+  `videoDownloadPurgeSnapshot` fence, because `publicDownload` is a **second** fence independent
+  of `Eligible`: a public, published video with downloads off still serves its ladder while
+  403ing its master file, so closing the gate leaves the video Eligible (which is exactly why
+  the privacy-flip trigger never fired for it) while making previously-unauthorized objects
+  fetchable from the edge. Call sites `internal/httpapi/videos.go:1067,1113`, snapshot
+  `internal/httpapi/media_purge.go:222`. The canonical ledger now carries a **fourth** entry the
+  prose above does not: the instance-wide `downloads_enabled` setting, still deferred with a
+  written rationale (it needs a leased job with a cursor, not a request-scoped fan-out).
 
 ### DRM (items 4–7)
 

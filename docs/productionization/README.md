@@ -23,6 +23,47 @@ This directory is the program's tracking surface. Update the checklists here as 
 | [phase-5-enterprise.md](phase-5-enterprise.md) | Multi-CDN/steering, DRM/CENC/KMS, multi-region |
 | [risks.md](risks.md) | Program-level risk register |
 
+## Audit 2026-09-03 (second pass, full program)
+
+Every work item in phases 1-5 was re-verified against the code at `main`
+(core `9507f66`, user `4892bdd`, search `e8a1f76`). **Nothing was refuted** — no item claims
+something the code does not do. All gates green: core `make ci` (incl. `test-race`), user
+`npm run ci` (622/622), meta `shellcheck -x` + `tests/install_test.sh` + prod compose render
+with the port/volume invariants asserted; CI green on all four repos, including core's
+`ipfs-integration` and `ipfs-private-integration` and user's `frontend-e2e-backed`.
+
+Corrections this pass made (all in place, dated):
+
+- **phase-1 item 11 was wrong**, and contradicted the code's own written rationale: the three
+  deploy gates do *not* all run in all three scripts. `require_real_domain` and
+  `require_dns_points_here` are deliberately `deploy.sh`-only — refusing an emergency rollback
+  over a cosmetic file check would be the wrong trade (`deploy/deploy.sh:236-239`).
+- **phase-4's "Nothing calls `Purge` automatically yet"** was stale; purge is wired at
+  eight-plus call sites. Header promotion is still gated, but on *exercise against a live edge*,
+  not on the wiring.
+- **phase-4 item 5(c)'s "nothing measures gateway fetch outcomes"** was partly stale — the
+  viewer-toggled IPFS path is measured today.
+- **phase-5's download-gate purge gap** was closed by core#149 the same week it was recorded.
+- Counts that grew: `varErrorf` sites 88 → 126, doctor checks 18 → 26, infra capabilities
+  13 → 14 (and `cdn`/`drm` now exist, retiring an "aspirational" aside).
+- **phase-1 item 17 deviation (a)** is closed: `release-assets.yml` has executed; v0.6.1 ships
+  `SHA256SUMS`, the bundle and four CLI binaries.
+
+Genuine code defects found this pass (tracked, not doc drift):
+
+1. **The settings-version poller never runs in a worker** (`vidra-core/cmd/api/main.go:1427`),
+   and the comment justifying that gate is false — a `VIDRA_ROLE=worker` process reads the
+   instance-settings cache constantly, so on the split topology `operations.md` recommends,
+   every runtime toggle is boot-frozen while the admin UI reports success.
+2. **The S3 storage layer is unexercised by automation** — six `//go:build integration` files
+   self-skip on every run because `S3_TEST_ENDPOINT` is never set and no S3 service exists in
+   `backend-integration.yml`, while production runs S3.
+3. **QoE delivery-source attribution is wrong for Safari/native-HLS and progressive playback** —
+   both report as `api-proxy`, so a CDN-specific regression on Apple clients is invisible on the
+   admin page built to show it.
+4. **IPFS delivery has no runtime kill switch** (boot config only, unlike its `presign`/`cdn`
+   neighbours), and `env/production.env.example` documents no IPFS keys at all.
+
 ## Product philosophy (binding)
 
 1. **Progressive complexity.** The default install asks the fewest possible questions
