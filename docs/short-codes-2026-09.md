@@ -109,9 +109,18 @@ re-derivable, so dropping the column kills every link ever shared.
   break ActivityPub dereference. See the open bug below — it likely cannot,
   because that dereference already does not work, but it must be checked rather
   than assumed.
-- **Stage 3:** does the API's *locked* (password-protected) response carry `id`?
-  If not, the `/v/[code]` page cannot hand `WatchView` a uuid for the unlock
-  panel.
+- **Stage 3 — answered, and it needs a core change.** The locked
+  (password-protected) response does **not** carry `id`:
+  `PasswordRequiredError` is an empty struct (`errors.go:272`), deliberately
+  carrying "no secret (no token, no hash, no password)". So a `/v/{code}` page
+  for a locked video gets a 401 with no uuid in it, and cannot hand
+  `WatchView` an id for `PasswordUnlockPanel`, whose unlock POST is
+  `/videos/{id}/unlock`. Two ways out, both core-side and both small: put the
+  video's `id` (and `short_code`) on the 401 body — neither is a secret, the
+  caller already holds one of them — or teach the unlock route to accept a
+  short code. Prefer the former; it also lets the watch page render its title
+  and poster behind the prompt. Do this in stage 2, before the frontend needs
+  it.
 - **Stage 5:** the ~40 e2e specs that `goto("/videos/v1")` should need no
   changes, because Playwright's `page.route` does not intercept the server-side
   fetch, so those pages fall through to the render branch. Verify before relying
