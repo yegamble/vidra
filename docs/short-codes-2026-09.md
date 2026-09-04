@@ -4,8 +4,10 @@ Cross-repo plan for replacing the derived PeerTube-style short URL with a stored
 opaque short code, while keeping every URL Vidra has ever published — including
 an imported PeerTube instance's — resolving.
 
-**Status:** the whole BACKEND is merged — stages 1, 2 and 2b (vidra-core#154,
-#155, #156, 2026-09-04), not yet released or deployed. **Stage 3 is unblocked.** Nothing user-visible has shipped — the columns
+**Status:** backend complete (vidra-core#154, #155, #156) and **stage 3 merged**
+(vidra-user#136), 2026-09-04. Not released, not deployed. `/v/{code}` now renders
+a watch page, but nothing links to it — cards, the share dialog and every piece
+of metadata still point at `/videos/{uuid}`. **Next: stage 4.** Nothing user-visible has shipped — the columns
 exist and `short_code` reaches every local view, but no URL has changed.
 
 ## What was decided
@@ -96,7 +98,7 @@ deploy alone given everything before it is deployed.
 | **1** | core | `short_code` + `peertube_uuid` migrations, `GET /videos/resolve`, oEmbed short-code branch, importer writes the source uuid | **merged** (#154) |
 | **2** | core | `short_code` on feed/search/playlist cards (`video.FeedItem`, `playlist.VideoCard`) — needed before the frontend can build card links | **merged** (#155) |
 | **2b** | core | Put `id` + `short_code` on the password-locked 401 | **merged** (#156) |
-| 3 | user | `npm run codegen`; `/v/[code]/page.tsx` replaces the route handler and renders; `watchPath()` helper adopted everywhere but still returning `/videos/{id}`; `rel=canonical` introduced | not started |
+| **3** | user | `npm run codegen`; `/v/[code]/page.tsx` replaces the route handler and renders; WatchView accepts either name | **merged** (#136) |
 | 4 | user | `/w/[shortUUID]` + `/videos/watch/[id]` route handlers, Flickr decoder (**frontend only** — core never needs it), delete the stale `next.config.ts` redirect | not started |
 | 5 | user | **THE FLIP.** `watchPath()` → `/v/{code}`; `/videos/[id]` redirects; canonical + oEmbed discovery move; ShareButton uses the stored code | not started |
 | 6 | core | Emitter flip: RSS `<link>`, sitemap `<loc>`, Bluesky, AP `url`. `guid`/`id`/`inReplyTo`/embed untouched, each pinned by a test | not started |
@@ -183,3 +185,38 @@ it hold, and neither may be dropped:
   column. The integration test asserts both branches on that basis.
 - **Admin listings deliberately carry no code.** `GET /admin/videos` uses its own
   `adminVideoView`; admin links are internal, and they ride the stage-5 redirect.
+
+## Stage 3 notes (vidra-user#136)
+
+**A competing approach landed mid-flight.** vidra-user#135 added
+`useShortWatchUrl`, which rewrites the address bar to `/v/{derived sid}` after
+render, and explicitly declined to make `/v/` render a page because its 301 is
+cached forever. That objection holds for the sids that were EMITTED — all 16-22
+chars, and #136 keeps redirecting every one — but not for the stored code: 11
+characters is a disjoint space, so no 11-char `/v/` URL was ever requested and
+none can sit in a redirect cache. A unit test pins that disjointness for every
+golden uuid; if it fails, `/v/` is ambiguous and the route must stop
+discriminating by length.
+
+**Two bugs came from the same blind spot: a route handler is not a page.**
+
+1. A route handler forwards `req.nextUrl.search`; a Server Component never sees
+   it. `permanentRedirect` silently dropped the query, which would have started
+   every shared `?t=` link at zero.
+2. A `loading.tsx` puts the segment behind Suspense, so Next streams the shell
+   and COMMITS 200 before the component runs — `notFound()` then paints a SOFT
+   404. Measured on a real build: with the file `/v/not-a-valid-sid` is 200,
+   without it 404.
+
+Neither was visible to `tsc`, lint, or 2245 unit tests, because the unit tests
+mock `notFound`/`permanentRedirect` and cannot observe an HTTP status. Only a
+production build could. **When this route changes again, verify against
+`npm run build && next start` and curl the statuses**, not just the unit suite.
+
+Consequence carried forward: `/v/[code]` has NO loading skeleton, deliberately.
+Restoring it needs the shape check to run before streaming (middleware), not a
+loading file.
+
+**Still on the derived sid, to flip together at stage 5:** the share dialog
+(`ShareButton` calls `uuidToShortId`) and `useShortWatchUrl`. Moving one alone
+relocates the two-short-forms problem instead of solving it.
