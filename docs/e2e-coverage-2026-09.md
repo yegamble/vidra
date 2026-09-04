@@ -99,6 +99,31 @@ assert no pin ledger row appears for it — which locks the privacy fence from o
 unit tests. Making messaging content mirror-eligible would be a product decision against a
 written privacy invariant, not a test gap.
 
+## The bug mocked-only coverage hid
+
+Found while wiring the IPFS backed spec, and the clearest justification in this repo for
+backed tests existing at all.
+
+`WatchView.tsx` offered the IPFS source bar only when
+`video?.ipfs_pinned && ipfsMasterUrl && video?.hls_url`. **`GET /videos/{id}` never sends
+`ipfs_pinned`.** It is a card/feed badge, set only by the list and search handlers
+(`attachIPFSPinned` — `vidra-core/internal/httpapi/videos.go:645,666,838,932` plus three sites in
+`search.go`) and declared `json:"ipfs_pinned,omitempty"`, so it is absent from a detail response
+entirely. The detail handler calls `attachVideoIPFS` (`videos.go:518`) instead.
+
+So on every real backend the condition was `undefined && … ` — false — and **the entire
+client-side IPFS playback path was unreachable**, while `docs/productionization/phase-4-delivery.md`
+described it as a working opt-in feature.
+
+It survived because `e2e/watch-ipfs.spec.ts` is mocked and fabricated *four* things at once:
+`ipfs_pinned`, `ipfs.hls_cid`, `ipfs.gateway_url` and the gateway's own response. Every one of its
+assertions passed against a backend that could not produce any of them. No amount of additional
+mocked coverage would have found this; only a request to a real core would.
+
+The correct gate is the `ipfs` object itself, which is emitted only for a public, published video
+with a `state='pinned'` row on the public swarm (`videos.go:416-434`) — strictly stronger than the
+list-only badge it replaced.
+
 ## Manual verification run, 2026-09-03
 
 An isolated stack (`-p vidramanual`, ports 8090/5442/6389/9010) was brought up on
