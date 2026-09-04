@@ -152,9 +152,16 @@ Do not design against one that does not exist.
     everything, and a third-party 404 is indistinguishable from a cold cache — so a wrong origin
     looks like a CDN that is merely slow to warm. Not enforceable in code; documented in the env
     template and in four places in the source.
-  - **Nothing calls `Purge` automatically yet.** Purge-on-delete / purge-on-privacy-flip only
-    becomes load-bearing once something is shared-cacheable, and wiring it means touching media
-    logic. **That wiring is the gate on header promotion** — see the carry-forwards.
+  - ~~**Nothing calls `Purge` automatically yet.**~~ **STALE — corrected 2026-09-03.** Purge is
+    now wired at eight-plus call sites through `internal/httpapi/media_purge.go`
+    (`purgeVideoEdgeCopies:267`, `purgeEdgeKey:324`), called from video delete and
+    privacy-flip and admin block (`videos.go:1191,1056,1691`), the download-gate flip
+    (`videos.go:1067` — core#149), channel cascade (`channels.go:344`), avatars/banners
+    (`profile_images.go:62,81,134,153`) and playlist covers
+    (`playlists.go:271,299,455,481`), with `cdn_purge` outcome counters on /admin/system.
+    **Header promotion is still gated**, but on the remaining condition — purge has never been
+    exercised against a live edge — not on the wiring. Every media header is still `private`
+    (`internal/delivery/delivery.go:105-119`).
 
   *Original scope:* ordered
   source list, api-proxy as permanent fallback, purge hooks in the interface from day one.
@@ -309,7 +316,11 @@ Do not design against one that does not exist.
   path resolution works); the resolver has **no health, priority or failover concept** and its
   single consumer takes the first non-api-proxy source and returns, so post-307 failover is
   impossible server-side and must live in the player (another item-3 dependency); nothing anywhere
-  measures gateway fetch outcomes; and unlike presign there is **no runtime kill switch** — turning
+  measures gateway fetch outcomes *(partly stale — corrected 2026-09-03: when a viewer toggles
+  to IPFS the gateway master is handed to hls.js, `FRAG_LOADED` reports the gateway URL and
+  `internal/qoe/classify.go` maps `IPFS_GATEWAY_URL` to `ipfs-gateway`, so that path IS
+  measured; still unmeasured are the toggle's own reachability probe and every server-side
+  307 to the gateway for thumbnails/covers/avatars)*; and unlike presign there is **no runtime kill switch** — turning
   IPFS delivery off during an incident currently means a restart.
 
   **Do not assume public IPFS gateways still exist** (surfaced 2026-08-22 by the P2P research, which
