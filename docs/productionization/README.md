@@ -49,6 +49,12 @@ Corrections this pass made (all in place, dated):
 - **phase-1 item 17 deviation (a)** is closed: `release-assets.yml` has executed; v0.6.1 ships
   `SHA256SUMS`, the bundle and four CLI binaries.
 
+End-to-end test coverage was audited in the same pass and written up separately in
+[../e2e-coverage-2026-09.md](../e2e-coverage-2026-09.md) — including a manual
+verification run of the video and messaging paths against an S3-backed stack (26/27
+checks passed) and the reason "private pinning for messaging" has no test: the feature
+does not exist and the privacy fence forbids it.
+
 Genuine code defects found this pass (tracked, not doc drift):
 
 1. **The settings-version poller never runs in a worker** (`vidra-core/cmd/api/main.go:1427`),
