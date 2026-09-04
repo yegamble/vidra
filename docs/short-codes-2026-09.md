@@ -4,13 +4,19 @@ Cross-repo plan for replacing the derived PeerTube-style short URL with a stored
 opaque short code, while keeping every URL Vidra has ever published — including
 an imported PeerTube instance's — resolving.
 
-**Status:** backend complete (vidra-core#154, #155, #156) and **stages 3-5
-merged** (vidra-user#136, #137, #138), 2026-09-04. Not released, not deployed.
+**Status: CODE COMPLETE, 2026-09-04.** All six stages merged — vidra-core#154,
+#155, #156, #157 and vidra-user#136, #137, #138, #139. **Not released, not
+deployed: beta still runs v0.6.2, which predates the whole programme.**
 
-**The flip has landed.** `/v/{code}` is what the app emits and declares: cards,
-the share dialog, the address bar, `rel=canonical`, `og:url` and the oEmbed
-discovery href. `/videos/{uuid}` still renders — it is NOT redirected, see
-below — and is simply no longer emitted. **Next: stage 5b and stage 6.** Nothing user-visible has shipped — the columns
+`/v/{code}` is what the platform emits and declares: cards, share dialog,
+address bar, `rel=canonical`, `og:url`, oEmbed discovery, RSS `<link>`, sitemap
+`<loc>`, the ActivityPub object's `url`, and Bluesky posts. `/videos/{uuid}`
+still renders — it is NOT redirected, see below — and is simply no longer
+emitted. Identifiers (AP `id`, RSS `<guid>`, `inReplyTo`) are frozen on it
+forever.
+
+**The one thing left is a deploy, and one line per route after it** — see
+"Outstanding" at the end. Nothing user-visible has shipped — the columns
 exist and `short_code` reaches every local view, but no URL has changed.
 
 ## What was decided
@@ -104,7 +110,7 @@ deploy alone given everything before it is deployed.
 | **3** | user | `npm run codegen`; `/v/[code]/page.tsx` replaces the route handler and renders; WatchView accepts either name | **merged** (#136) |
 | **4** | user | `/w/[shortUUID]` + `/videos/watch/[id]` route handlers, Flickr decoder (**frontend only** — core never needs it), delete the stale `next.config.ts` redirect | **merged** (#137) |
 | 5 | user | **THE FLIP.** `watchPath()` → `/v/{code}`; `/videos/[id]` redirects; canonical + oEmbed discovery move; ShareButton uses the stored code | not started |
-| 6 | core | Emitter flip: RSS `<link>`, sitemap `<loc>`, Bluesky, AP `url`. `guid`/`id`/`inReplyTo`/embed untouched, each pinned by a test | not started |
+| **6** | core | Emitter flip: RSS `<link>`, sitemap `<loc>`, Bluesky, AP `url`. `guid`/`id`/`inReplyTo`/embed untouched, each pinned by a test | **merged** (#157) |
 
 **Rollback invariant:** never roll back stage 3 once any `/v/{code}` has been
 emitted (i.e. after stage 5 or 6). Before the flip, `0126`'s down migration is
@@ -307,3 +313,41 @@ wrong host is silently ignored by crawlers. Checked with
   The helper's fallback is the contract, not a gap.
 - Neither a 301 nor a canonical re-indexes 13.5k videos quickly. Stage 6's
   sitemap `<loc>` is the actual accelerator; ship it promptly after stage 5.
+
+## Stage 6 notes (vidra-core#157)
+
+`videoObject` took ONE url and used it for both `id` and `url`. Splitting the
+parameter is what made the whole "identifiers stay, links move" rule expressible
+at all — and it is idiomatic ActivityPub, which draws exactly that distinction.
+
+**The freeze needed the tests, not the move.** The federation fakes carry no
+short code, so the id/url split was invisible to the entire suite: every existing
+test passed identically whether or not the change was made. Both freezes are now
+mutation-checked — pointing the AP `id` at the link fails the new federation
+test, pointing the RSS `<guid>` at the link fails the feed test.
+
+**A test had gone vacuous, not merely stale.** The sensitive-content leak check
+matched on a video's uuid, which the sitemap no longer emits at all — so its
+"must not leak under the hide policy" half could never fail again. Moved to the
+canonical form. Worth a habit: when a change removes a value from an output,
+grep the tests for assertions that matched on it.
+
+## OUTSTANDING — what is left, in order
+
+1. **Release and deploy.** Beta runs v0.6.2. Nothing in this programme has
+   served a production request. Cut releases from both repos and deploy.
+2. **Add `/v/*` to anything keyed on `/videos/*`** — Caddy/Cloudflare cache and
+   rate-limit rules, QoE and analytics dashboards, log alerts. These stop seeing
+   watch traffic the moment cards point at `/v/`. **Same release as the deploy.**
+3. **Then, and only then, turn the three legacy redirects 302 → 301.** One line
+   per route in `app/w/[sid]/route.ts`, `app/videos/watch/[id]/route.ts` and
+   `app/v/[code]/page.tsx`. A 301 is cached by browsers and CDNs indefinitely,
+   so it is worth spending only once `/v/{code}` has been observed working in
+   production.
+4. Watch Search Console. If Google still refuses the `/v/` canonical for a
+   material share of pages after a full recrawl cycle, the fallback mechanism is
+   **middleware** (runs before streaming, real 308) — never deleting
+   `/videos/[id]/loading.tsx`.
+
+Deferred, not lost: a client-side `router.replace` to the canonical for
+owner-private videos; `/embed/{code}`; `short_code` in the vidra-search index.
