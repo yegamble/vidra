@@ -4,8 +4,8 @@ Cross-repo plan for replacing the derived PeerTube-style short URL with a stored
 opaque short code, while keeping every URL Vidra has ever published — including
 an imported PeerTube instance's — resolving.
 
-**Status:** stages 1 and 2 of 6 **merged** (vidra-core#154, #155, 2026-09-04),
-not yet released or deployed. Nothing user-visible has shipped — the columns
+**Status:** the whole BACKEND is merged — stages 1, 2 and 2b (vidra-core#154,
+#155, #156, 2026-09-04), not yet released or deployed. **Stage 3 is unblocked.** Nothing user-visible has shipped — the columns
 exist and `short_code` reaches every local view, but no URL has changed.
 
 ## What was decided
@@ -95,7 +95,7 @@ deploy alone given everything before it is deployed.
 |---|---|---|---|
 | **1** | core | `short_code` + `peertube_uuid` migrations, `GET /videos/resolve`, oEmbed short-code branch, importer writes the source uuid | **merged** (#154) |
 | **2** | core | `short_code` on feed/search/playlist cards (`video.FeedItem`, `playlist.VideoCard`) — needed before the frontend can build card links | **merged** (#155) |
-| **2b** | core | Put `id` + `short_code` on the password-locked 401 — see the stage-3 gate below | **not started, blocks stage 3** |
+| **2b** | core | Put `id` + `short_code` on the password-locked 401 | **merged** (#156) |
 | 3 | user | `npm run codegen`; `/v/[code]/page.tsx` replaces the route handler and renders; `watchPath()` helper adopted everywhere but still returning `/videos/{id}`; `rel=canonical` introduced | not started |
 | 4 | user | `/w/[shortUUID]` + `/videos/watch/[id]` route handlers, Flickr decoder (**frontend only** — core never needs it), delete the stale `next.config.ts` redirect | not started |
 | 5 | user | **THE FLIP.** `watchPath()` → `/v/{code}`; `/videos/[id]` redirects; canonical + oEmbed discovery move; ShareButton uses the stored code | not started |
