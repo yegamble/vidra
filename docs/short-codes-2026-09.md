@@ -4,7 +4,9 @@ Cross-repo plan for replacing the derived PeerTube-style short URL with a stored
 opaque short code, while keeping every URL Vidra has ever published — including
 an imported PeerTube instance's — resolving.
 
-**Status:** stage 1 of 6 open (vidra-core#154). Nothing user-visible has shipped.
+**Status:** stage 1 of 6 **merged** (vidra-core#154, 2026-09-04), not yet
+released or deployed. Nothing user-visible has shipped — both columns exist and
+are populated, but no URL has changed.
 
 ## What was decided
 
@@ -91,7 +93,7 @@ deploy alone given everything before it is deployed.
 
 | # | Repo | Content | Status |
 |---|---|---|---|
-| **1** | core | `short_code` + `peertube_uuid` migrations, `GET /videos/resolve`, oEmbed short-code branch, importer writes the source uuid | **open — awaiting merge** (#154) |
+| **1** | core | `short_code` + `peertube_uuid` migrations, `GET /videos/resolve`, oEmbed short-code branch, importer writes the source uuid | **merged** (#154) |
 | 2 | core | `short_code` on feed/search/playlist cards (`video.FeedItem`, `playlist.VideoCard`) — needed before the frontend can build card links | not started |
 | 3 | user | `npm run codegen`; `/v/[code]/page.tsx` replaces the route handler and renders; `watchPath()` helper adopted everywhere but still returning `/videos/{id}`; `rel=canonical` introduced | not started |
 | 4 | user | `/w/[shortUUID]` + `/videos/watch/[id]` route handlers, Flickr decoder (**frontend only** — core never needs it), delete the stale `next.config.ts` redirect | not started |
