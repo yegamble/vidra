@@ -306,10 +306,29 @@ Do not design against one that does not exist.
 
   *Rewritten 2026-08-23 — "promote from metadata-only" mis-stated the starting point twice.*
   Server-side, thumbnails, playlist covers and avatars/banners **already 307 to the gateway**
-  through the resolver. Client-side, a viewer can **already play an entire HLS ladder off a
-  gateway** — the video detail carries `ipfs.hls_cid`, the watch view probes the gateway and offers
+  through the resolver. Client-side, a viewer can ~~**already play an entire HLS ladder off a
+  gateway**~~ — the video detail carries `ipfs.hls_cid`, the watch view probes the gateway and offers
   a manual source toggle, and the chosen URL is handed to hls.js as a master override. That path is
-  opt-in, unmeasured, and sits **entirely outside `internal/delivery`**. What is missing is not
+  opt-in, unmeasured, and sits **entirely outside `internal/delivery`**.
+
+  > **CORRECTION 2026-09-03 — the client half was UNREACHABLE, not merely opt-in.** Every
+  > component named above existed and was individually correct, but the gate in front of them was
+  > permanently closed: `WatchView.tsx` offered the source bar only when
+  > `video?.ipfs_pinned && ipfsMasterUrl && video?.hls_url`, and **`GET /videos/{id}` never sends
+  > `ipfs_pinned`**. That field is a card/feed badge set only by the list and search handlers
+  > (`attachIPFSPinned`, called at `internal/httpapi/videos.go:645,666,838,932` and three sites in
+  > `search.go`), and it is `json:"ipfs_pinned,omitempty"`, so it is absent from a detail response
+  > entirely. The detail handler calls `attachVideoIPFS` (`videos.go:518`) instead, which populates
+  > the `ipfs` object — and that object's presence IS the pinned+public+published signal, since
+  > `attachVideoIPFS` returns early unless the mirror is enabled and the video is public and
+  > published with a `state='pinned'` public-swarm ledger row (`videos.go:416-434`).
+  >
+  > So the toggle never rendered on any real backend. It was not caught because
+  > `e2e/watch-ipfs.spec.ts` is mocked and **fabricated `ipfs_pinned` along with the CID, the
+  > gateway URL and the gateway's response** — the spec proved the UI works against fiction while
+  > the real path was dead. This is the sharpest argument in the tree for backed coverage over
+  > mocked, and it is why the IPFS backed spec exists now. The gate is corrected to key on the
+  > `ipfs` object; see [../e2e-coverage-2026-09.md](../e2e-coverage-2026-09.md). What is missing is not
   delivery, it is *brokered, policy-driven, measured* delivery. Four concrete gaps: HLS is pinned
   as **one directory CID, not per-segment**, so there is no per-segment gateway URL (cheapest fix:
   have the lookup return `{gateway}/ipfs/{car_root}/<rendition>/<file>` — CI already proves nested
