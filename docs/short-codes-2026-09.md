@@ -121,10 +121,20 @@ re-derivable, so dropping the column kills every link ever shared.
   short code. Prefer the former; it also lets the watch page render its title
   and poster behind the prompt. Do this in stage 2, before the frontend needs
   it.
-- **Stage 5:** the ~40 e2e specs that `goto("/videos/v1")` should need no
-  changes, because Playwright's `page.route` does not intercept the server-side
-  fetch, so those pages fall through to the render branch. Verify before relying
-  on it, and do **not** add `short_code` to shared fixtures.
+- **Stage 5 — mechanism verified.** The ~40 e2e specs that `goto("/videos/v1")`
+  need no changes. `getPublicVideo` goes through `serverJson`, which is typed
+  `Promise<T | null>` and returns `null` on any failure rather than throwing
+  (`lib/server-json.ts:50-68`). Playwright's `page.route` intercepts browser
+  requests only, so in the mocked suite that server-side fetch fails, the page
+  gets `null`, `video?.short_code` is undefined, and the conditional redirect
+  does not fire — the page renders exactly as it does today. That conditional is
+  therefore load-bearing twice over: it keeps the mocked suite green AND keeps
+  owner-private/locked videos reachable, where the anonymous server fetch also
+  fails but the client fetch with a session succeeds.
+
+  Corollary: do **not** add `short_code` to the shared e2e fixtures. Doing so
+  would flip those pages into a redirect whose target's `resolve` call nobody
+  has mocked.
 
 ## Open bugs found while planning (not caused by this work)
 
