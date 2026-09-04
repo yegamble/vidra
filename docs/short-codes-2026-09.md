@@ -4,11 +4,13 @@ Cross-repo plan for replacing the derived PeerTube-style short URL with a stored
 opaque short code, while keeping every URL Vidra has ever published — including
 an imported PeerTube instance's — resolving.
 
-**Status:** backend complete (vidra-core#154, #155, #156) and **stages 3-4
-merged** (vidra-user#136, #137), 2026-09-04. Not released, not deployed.
-`/v/{code}` renders and an imported PeerTube instance's legacy links resolve, but
-nothing links to the new code yet — cards, the share dialog and every piece of
-metadata still point at `/videos/{uuid}`. **Next: stage 5, THE FLIP.** Nothing user-visible has shipped — the columns
+**Status:** backend complete (vidra-core#154, #155, #156) and **stages 3-5
+merged** (vidra-user#136, #137, #138), 2026-09-04. Not released, not deployed.
+
+**The flip has landed.** `/v/{code}` is what the app emits and declares: cards,
+the share dialog, the address bar, `rel=canonical`, `og:url` and the oEmbed
+discovery href. `/videos/{uuid}` still renders — it is NOT redirected, see
+below — and is simply no longer emitted. **Next: stage 5b and stage 6.** Nothing user-visible has shipped — the columns
 exist and `short_code` reaches every local view, but no URL has changed.
 
 ## What was decided
@@ -255,3 +257,53 @@ them would only prove our decoder agrees with our own encoder.
 controls its own status code and reads the query string; a Server Component does
 neither. Verified against a production build with a stub backend, because unit
 tests mock the resolve away.
+
+## Stage 5 notes (vidra-user#138) — why `/videos/{uuid}` does NOT redirect
+
+The plan assumed a 301/308 from `/videos/{uuid}`. Measurement killed it. A
+redirect there sits under that route's `loading.tsx`, and on a real build:
+
+| `/videos/{uuid}` → `permanentRedirect('/v/{code}')` | result |
+|---|---|
+| with `loading.tsx` | **200**, no `Location` — a soft redirect that also loses `?t=` |
+| without | **308** → `/v/{code}` |
+
+Same Suspense mechanism that made `notFound()` a soft 404 in #136.
+
+**The skeleton argument does not discriminate**, which is the part that settles
+it: after the flip a card click lands on `/v/[code]`, which has no loading
+boundary by design, so the skeleton is gone either way — because of the flip,
+not the redirect choice. What discriminates is that a conditional redirect adds
+a branch the e2e suite **structurally cannot exercise** (Playwright does not
+intercept the server-side fetch, so the "on" branch never fires in mocked runs)
+and which must hand-rebuild the query string.
+
+So canonicality is expressed by **declaration + emission**: `rel=canonical`,
+`og:url`, oEmbed discovery, and the fact that nothing links to the uuid form any
+more. A hard redirect, if ever wanted, belongs in **middleware** (runs before
+streaming, real 308) — deferred, not rejected. Revisit only if Search Console
+shows Google refusing the `/v/` canonical for a material share of pages after
+stage 6 plus a full recrawl cycle.
+
+**oEmbed discovery moved in stage 5, not 6**, because core#154 already taught
+`parseLocalVideoURL` the 11-character form. Leaving it would have had the page
+advertise one URL and declare another.
+
+**Two rules that look alike and are opposite:** the address bar KEEPS `?t=`; the
+canonical STRIPS it. A start time names a moment in a video, not a video.
+
+**Verify canonicals behind a proxy.** `metadataBase` comes from
+`getRequestOrigin()` (`x-forwarded-host`), so a local curl without that header
+proves nothing — Next will happily emit `localhost`, and a canonical with the
+wrong host is silently ignored by crawlers. Checked with
+`-H "X-Forwarded-Host: tube.example"`.
+
+## Carried forward — things that bite outside the repo
+
+- **Ops paths keyed on `/videos/*`** — Caddy/Cloudflare cache and rate-limit
+  rules, QoE and analytics dashboards, log alerts — stop seeing watch traffic
+  once cards point at `/v/`. **Add `/v/*` in the same release as the deploy.**
+- Remote/federated videos have no code and stay on `/videos/{uuid}` forever.
+  The helper's fallback is the contract, not a gap.
+- Neither a 301 nor a canonical re-indexes 13.5k videos quickly. Stage 6's
+  sitemap `<loc>` is the actual accelerator; ship it promptly after stage 5.
