@@ -1,0 +1,105 @@
+{
+  "status": "FAIL",
+  "checks": {
+    "fixture-identity": "PASS",
+    "canonical-legacy-timestamps": "PASS",
+    "share-embed-link": "PASS",
+    "private-owner-and-anonymous-media": "FAIL"
+  },
+  "node": "v25.9.0",
+  "vm": "vidra-a02-20260905123822-89250",
+  "project": "vidra-a03-20260905124354-92490",
+  "helper_sha256": "085bdf7205ad03e31cea8601a31bec9aefe4eb5432c775b0c436855dcccca501",
+  "fixture_sha256": "23febdedf00e4ffc6ac7ca70f8ba0e5c08712708864381869a3ab6ff271bad6b",
+  "fixture_bytes": 225521,
+  "browser": "151.0.7922.34",
+  "video_id": "0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+  "prepared_fixture_sha256": "841a584bcc215b36c3b0acd6ae2986da4a1c571f9741714f778b0648777bbe1f",
+  "short_code": "2zyPjYv9d6Q",
+  "links": [
+    {
+      "path": "/v/2zyPjYv9d6Q",
+      "final_url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+      "canonical": "https://secure.video.test/v/2zyPjYv9d6Q",
+      "playback": {
+        "time": 2.003325,
+        "frames": 4,
+        "src": "blob:https://secure.video.test/7a0d6ce9-96db-4740-8e60-9a618ba86907",
+        "audio": 3577
+      }
+    },
+    {
+      "path": "/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+      "final_url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+      "canonical": "https://secure.video.test/v/2zyPjYv9d6Q",
+      "playback": {
+        "time": 2.551915,
+        "frames": 17,
+        "src": "blob:https://secure.video.test/9a98a2b0-a3b4-4983-a885-66c212d34e81",
+        "audio": 10648
+      }
+    },
+    {
+      "path": "/v/2EtYEDLnpw2iwtA9QAX7WT",
+      "final_url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+      "canonical": "https://secure.video.test/v/2zyPjYv9d6Q",
+      "playback": {
+        "time": 2.006055,
+        "frames": 4,
+        "src": "blob:https://secure.video.test/0bbfcd4f-79f8-4032-9b1c-8d10b390c0ba",
+        "audio": 3577
+      }
+    },
+    {
+      "path": "/w/2eTxedkMPW2HWTa9paw7vs",
+      "final_url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+      "canonical": "https://secure.video.test/v/2zyPjYv9d6Q",
+      "playback": {
+        "time": 2.525259,
+        "frames": 17,
+        "src": "blob:https://secure.video.test/24ab56ce-793b-4052-bf4b-e62650d3eb58",
+        "audio": 10357
+      }
+    },
+    {
+      "path": "/videos/watch/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+      "final_url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+      "canonical": "https://secure.video.test/v/2zyPjYv9d6Q",
+      "playback": {
+        "time": 2.064434,
+        "frames": 6,
+        "src": "blob:https://secure.video.test/458ea441-315f-4f73-b653-c9f49372c515",
+        "audio": 4968
+      }
+    }
+  ],
+  "active_path": "/videos/watch/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+  "share": {
+    "url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+    "embed_url": "https://secure.video.test/embed/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4?t=2"
+  },
+  "embed_playback": {
+    "time": 2.003051,
+    "frames": 4,
+    "src": "blob:https://secure.video.test/b387a369-b9c0-424a-aa5c-6753ce5080fa",
+    "audio": 3577
+  },
+  "private_media": [
+    {
+      "suffix": "original",
+      "authenticated": 200,
+      "anonymous": 404
+    },
+    {
+      "suffix": "thumbnail",
+      "authenticated": 200,
+      "anonymous": 404
+    },
+    {
+      "suffix": "hls/master.m3u8",
+      "authenticated": 200,
+      "anonymous": 404
+    }
+  ],
+  "restored_public": false
+}

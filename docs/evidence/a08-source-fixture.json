@@ -1,0 +1,56 @@
+{
+  "status": "PASS",
+  "vm": "vidra-a02-20260905123822-89250",
+  "project": "vidra-a03-20260905124354-92490",
+  "guest_root": "/home/ubuntu/vidra-a08-1788628812",
+  "sources": {
+    "vidra-core": {
+      "revision": "63eafcbf371122e5b69666e9e59131de4b2c06cc",
+      "archive_sha256": "04e46f4a7b563d09c21f828d2d80da759b48e04da76649d3440c8728856e6f2b"
+    },
+    "vidra-user": {
+      "revision": "f160f5c80a96623e0ff537db5bfba140c243d680",
+      "archive_sha256": "9c1b138f9a13171bb8db7824d4b8a7a121cc517bae3830f98c04a06ceb84f474"
+    }
+  },
+  "images": {
+    "vidra-core:a08-source": "sha256:169fb05f548ae3849ce2531bb945554f0dfdf8fbca6814b8c597aeee3999712d",
+    "vidra-user:a08-source": "sha256:c75d70f3d2d559a5ea9615b2243b7b0b24d005d5491ccb6c2219072cb0306510"
+  },
+  "expected_core_schema": 127,
+  "bundle_sha256": "1efbf53b5dfd7ca44d4ef70961be63e8d2ba0238b3626b5c25b160d8914682fe",
+  "image_archive_sha256": "112de12fd3fd31719573beb873983ad32693d17500b6f5f6fd98d4277e193493",
+  "helper_sha256": "9d83fc6f90605f8537b9f42687a0f7d29b582f7f1f8f3b8c6e07520fa54f3d0b",
+  "checks": {
+    "loaded_exact_images": "PASS",
+    "normal_deploy": "PASS",
+    "independent_schema": "PASS"
+  },
+  "preserved_images": {
+    "postgres": [
+      "sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2",
+      "linux/arm64"
+    ],
+    "redis": [
+      "sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576",
+      "linux/arm64"
+    ],
+    "caddy": [
+      "sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648",
+      "linux/arm64"
+    ],
+    "search": [
+      "sha256:9c38c0817c60f9bbecc04f9f90183d8f61d87f295b5cbc2dad5a1f4aa7032fbe",
+      "linux/amd64"
+    ],
+    "prep-volumes": [
+      "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+      "linux/arm64"
+    ],
+    "search-migrate": [
+      "sha256:9c38c0817c60f9bbecc04f9f90183d8f61d87f295b5cbc2dad5a1f4aa7032fbe",
+      "linux/amd64"
+    ]
+  },
+  "core_ledger": "127|f"
+}

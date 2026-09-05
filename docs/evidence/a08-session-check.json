@@ -1,0 +1,48 @@
+{
+  "status": "PARTIAL",
+  "source_revision": "e528578",
+  "checks": {
+    "owner_session_restored": "PASS",
+    "private_code_resolution": "PASS",
+    "private_media": "FAIL",
+    "restored_public": "PASS"
+  },
+  "events": [
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/original",
+      "status": 404,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/playback-session",
+      "status": 404,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/auth/refresh",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/resolve",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/hls/master.m3u8",
+      "status": 404,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/original",
+      "status": 404,
+      "bearer": false
+    }
+  ],
+  "restore_status": 200
+}
