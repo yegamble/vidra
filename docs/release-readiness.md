@@ -221,7 +221,7 @@ Each item below is a small **acceptance slice**, with implementation only if ins
 | 39 A39 | M C S U | Supported-toolchain, exact-manifest CI gates with explicit required test selection and zero silent skips; attach artifacts | A01 and all implemented slices |
 | 40 A40 | U | Required-control inventory closes mobile/theme/keyboard/error/persistence gaps; link each UI acceptance to workflow row and backend evidence | Selected workflows |
 
-**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). Next dependency-ready item: A07 (see A06 evidence below).** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
+**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). A07 now has passing runtime evidence with the frontend fix (see final A07 evidence below); next dependency-ready item after delivery is A09.** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
 
 ## Inputs still needed before dependent acceptance
 
@@ -557,3 +557,71 @@ inspect advertised HLS master/audio/video/init/segments; prove browser decode,
 time progression, audio and seek plus progressive fallback; investigate the
 observed private thumbnail failure. A10 resumability, A24 S3 and A28 scanning
 remain separate unverified requirements.
+
+## A07 playback checkpoint — 2026-09-05
+
+**Open — runtime acceptance and merge pending.** Meta [PR #89](https://github.com/yegamble/vidra/pull/89)
+adds the retained-stack harness. A06 delivery is merged as `87ac38a` (#88).
+The original A01 images complete the same video's transcode job
+`c269149a-3a85-4001-acee-c8ac06e08c3d` (done, attempt 1) and serve all nine
+advertised HLS/CMAF assets. Real Chromium HLS playback advances unmuted, decodes
+video/audio and completes seek to 3.5 seconds. These successes do not certify
+progressive fallback.
+
+[Original-image failure](evidence/a07-playback-before.json) records a real
+transition failure: temporarily marking this synthetic video's playlist pending
+makes the detail and playback-session stop advertising HLS, but the player stays
+on an empty blob source instead of playing the original. The harness restores
+ready and verifies HLS advertisement in `finally`. The frontend regression
+reproduces the underlying ordering: React commits the original src, then HLS
+teardown removes it while detaching its owned child source. A focused source
+reconciliation fix and real-browser rerun are pending; do not promote A07 from
+unit tests or HLS-only results.
+
+Earlier click-based starts were intermittent during the original-to-HLS startup
+transition. The media harness now waits for the intended source and starts with
+the DOM play API. A40 must separately verify Play-button behavior; this evidence
+does not certify it or physical speaker output. The private thumbnail probe
+returned anonymous 404 and authenticated-owner 200/23,236 bytes; the original
+exists, but A08 must verify private image delivery through the actual UI. Raw
+errors, screenshots, credentials and failed-run logs remain private under
+`/tmp/vidra-a07-*`. No production deployment or release publication occurred.
+
+### A07 final runtime evidence — 2026-09-05
+
+**Bounded A07 acceptance PASS with the frontend fix.** The linked PRs track delivery and merge state.
+Frontend [PR #146](https://github.com/yegamble/vidra-user/pull/146), revision
+`fde5ccc`, restores the direct src after HLS teardown. Meta PR #89 contains the
+harness and reviewed [complete result](evidence/a07-playback-after.json).
+[Fixture provenance](evidence/a07-frontend-fixture.json) proves the only changed
+production file in the frozen A01 frontend source is `lib/use-playback-engine.ts`.
+Core/search remain A01 images. The original release frontend still has this
+bug; no new release was published.
+
+| Acceptance | Observed result |
+|---|---|
+| Same media/job | A06 video `0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4`; exact fixture SHA-256 matches A06; job `c269149a-3a85-4001-acee-c8ac06e08c3d` done, attempt 1. Earlier stalled-lease observations and failure logs remain private; this final run certifies completion, not a new controlled worker-kill test |
+| Advertised tree | Nine nonempty 200 assets: master, video/audio media playlists, both init files and fragments, iframe playlist and MP4; CMAF, advertised 320×240 rendition. Every referenced URI is followed through the actual HTTPS edge |
+| HLS decode | Unmuted 1.645s, 48 frames, 27,377 audio decoded bytes, 320×240; readyState 4, completed seek 3.5s. Menu selection of the advertised 240p followed by repeated unmuted decode succeeds; this single-rung fixture does not certify ABR switching |
+| Original/audio | Original decoded by browser to 5s/48kHz/mono PCM, nonzero peak 0.157. Under real pending-playlist state, API and session omit HLS; player chooses `/original`, advances unmuted to 1.596s with 43 frames/16,557 decoded audio bytes and completes seek 3.5s |
+| Recovery | `finally` restores ready, then API advertises HLS again. Only this synthetic playlist row is temporarily changed; no bytes deleted, migrations altered or production service touched |
+| Reproduction/TDD | Original-image run FAIL with empty blob; rendered-video regression fails with null src before the fix. After fix, 37 playback-engine tests pass; full frontend gate is 228 files/2,285 tests, zero skips, on Node 24.4.1. Typecheck/icon lint pass, lint has zero errors/two existing warnings |
+| Harness/visual | Complete six-check run exits 0 on Node 25.9.0/Chromium 151.0.7922.34. Reviewed screenshot shows the actual test pattern at 3.5s. Meta Python 20 and Node 3 assertions pass, Compose config validation and diff check pass. No shell script changed |
+
+This certifies browser media decoding and no-ready-tree progressive selection,
+not physical speaker output, fatal-network-error recovery, Play-button timing,
+ABR, or private-thumbnail UI delivery. A40/A08 retain those relevant follow-ups.
+A channel avatar is also visibly broken in the watch screenshot; its identity
+and delivery need their own UI acceptance rather than a playback claim.
+The successful private output is `/tmp/vidra-a07-r16`; failures remain under
+r1–r15. Next dependency-ready item is A09 (same ID through real search), then
+A08. Dependent playback runs requiring this fix must select the recorded local
+patch fixture or a later verified release containing `fde5ccc`.
+
+The original A01 frontend digest was restored after the successful run and its
+HTTPS home page returned 200; the disposable VM was then stopped. The local
+A07 patch image and exact build source remain available for dependent rehearsals.
+A09 preflight found `e2e-backed/search-discovery.spec.ts` still gated by
+`E2E_SEARCH_SERVICE=true`; its two cases alone do not prove this same ID's
+outbox/index/UI path, privacy/deletion rehydration or fallback/reconcile. Those
+remain required A09 work, not implied by green general frontend CI.

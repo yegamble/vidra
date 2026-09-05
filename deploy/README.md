@@ -1557,3 +1557,33 @@ uploads corrupt media and requires an honest failed outcome. Output must be a
 new directory. Credentials, screenshots and raw errors remain private; retain
 successful video IDs for A07. Existing fixtures are not reset. Do not run on an
 operator or production installation. A06 does not certify playback or thumbnails.
+
+### A07 HLS and progressive playback verification
+
+After A06, retain its exact fixture and disposable VM. The helper validates the
+A03/A06 target evidence and uses the A04 ordinary actor:
+
+```bash
+node tests/playback-smoke.mjs /tmp/vidra-a03-r3 /tmp/vidra-a04-r3 \
+  /tmp/vidra-a06-fixture/clip.mp4 /tmp/vidra-a07-new
+```
+
+It makes the synthetic A06 video public, waits up to 40 minutes for its real
+transcode job to finish, walks every advertised HLS playlist/init/segment, and
+measures unmuted browser frames, decoded audio, time progression and completed
+seek through the production player. Playback is started with the media API;
+this does not certify Play-button behavior or physical speaker output. The
+browser also decodes the original into nonzero PCM, selects the advertised
+quality via the actual menu, and repeats playback.
+
+To exercise the same original after HLS is ready, the helper temporarily marks
+only this synthetic video's streaming playlist pending. It verifies that the
+real API stops advertising HLS and the production player chooses `/original`,
+then restores ready in `finally` and verifies HLS is advertised again. This
+models pre-transcode availability; it does not inject a fatal HLS network error.
+A hard process kill can bypass `finally`; inspect the retained video's
+`streaming_playlists.state` before resuming. Never run against production.
+The video stays public, and all bytes/job rows remain for dependent A09/A08.
+Keep raw errors/screenshots and account credentials private; commit only reviewed,
+sanitized evidence. Missing media or unavailable runtime prerequisites fail the
+run rather than skip. Use a new output directory for each attempt.
