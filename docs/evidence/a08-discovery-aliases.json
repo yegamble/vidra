@@ -1,0 +1,147 @@
+{
+  "status": "PASS",
+  "checks": {
+    "fixture-identity": "PASS",
+    "canonical-metadata-distribution": "PASS",
+    "unlisted-video-discovery": "PASS",
+    "account-unlisted-discovery": "PASS",
+    "private-distribution-refusal": "PASS",
+    "source-uuid-aliases": "PASS"
+  },
+  "node": "v25.9.0",
+  "vm": "vidra-a02-20260905123822-89250",
+  "project": "vidra-a03-20260905124354-92490",
+  "helper_sha256": "ef50d84b8b6f228320d510303024d9cedec81df7448457f66632d53c367ea901",
+  "fixture_sha256": "23febdedf00e4ffc6ac7ca70f8ba0e5c08712708864381869a3ab6ff271bad6b",
+  "fixture_bytes": 225521,
+  "browser": "151.0.7922.34",
+  "video_id": "0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+  "prepared_fixture_sha256": "d5a829639a42282234fe67252c99cf63f6a3ac55b187bec4ccdc28e255fa507a",
+  "short_code": "2zyPjYv9d6Q",
+  "public_discovery": {
+    "feed": true,
+    "search": true,
+    "rss": true,
+    "sitemap": true
+  },
+  "metadata": {
+    "canonical": "https://secure.video.test/v/2zyPjYv9d6Q",
+    "og_url": "https://secure.video.test/v/2zyPjYv9d6Q",
+    "og_title": "A09search1788627554677",
+    "oembed": "https://secure.video.test/services/oembed?url=https%3A%2F%2Fsecure.video.test%2Fv%2F2zyPjYv9d6Q&format=json"
+  },
+  "distribution": [
+    {
+      "path": "/feeds/videos.xml",
+      "status": 200,
+      "items": [
+        {
+          "link": "https://secure.video.test/v/2zyPjYv9d6Q",
+          "guid": "https://secure.video.test/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4"
+        }
+      ],
+      "locations": []
+    },
+    {
+      "path": "/feeds/videos.xml?channel=a062c0fd875c2",
+      "status": 200,
+      "items": [
+        {
+          "link": "https://secure.video.test/v/2zyPjYv9d6Q",
+          "guid": "https://secure.video.test/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4"
+        }
+      ],
+      "locations": []
+    },
+    {
+      "path": "/sitemap.xml",
+      "status": 200,
+      "items": [],
+      "locations": [
+        "https://secure.video.test/",
+        "https://secure.video.test/trending",
+        "https://secure.video.test/search",
+        "https://secure.video.test/channels/a062c0fd875c2",
+        "https://secure.video.test/v/2zyPjYv9d6Q"
+      ]
+    },
+    {
+      "path": "/services/oembed?url=https%3A%2F%2Fsecure.video.test%2Fv%2F2zyPjYv9d6Q",
+      "status": 200,
+      "body": {
+        "version": "1.0",
+        "type": "video",
+        "title": "A09search1788627554677",
+        "author_name": "A06 a062c0fd875c2",
+        "author_url": "https://secure.video.test/channels/a062c0fd875c2",
+        "provider_name": "A03 rehearsal",
+        "provider_url": "https://secure.video.test",
+        "thumbnail_url": "https://secure.video.test/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/thumbnail",
+        "html": "<iframe src=\"https://secure.video.test/embed/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4\" width=\"640\" height=\"360\" frameborder=\"0\" allow=\"autoplay; fullscreen; picture-in-picture\" allowfullscreen></iframe>",
+        "width": 640,
+        "height": 360
+      }
+    }
+  ],
+  "unlisted": {
+    "feed": false,
+    "search": false,
+    "rss": false,
+    "sitemap": false
+  },
+  "unlisted_playback": {
+    "time": 2.39441,
+    "frames": 61,
+    "src": "blob:https://secure.video.test/4e96d335-8b3c-4f90-b987-8d2a0d74ffc4",
+    "audio": 33393
+  },
+  "account_unlisted": {
+    "feed": false,
+    "search": false,
+    "rss": false,
+    "sitemap": false
+  },
+  "account_direct": {
+    "video": 200,
+    "channel": 200
+  },
+  "account_restored": {
+    "feed": true,
+    "search": true,
+    "rss": true,
+    "sitemap": true
+  },
+  "private": {
+    "feed": false,
+    "search": false,
+    "rss": false,
+    "sitemap": false
+  },
+  "private_oembed": 401,
+  "synthetic_source_uuid": "00bc4979-7378-4020-bd90-3d9e7af6160a",
+  "aliases": [
+    {
+      "path": "/w/16gwv3dfqAepCqUMvAuyvq",
+      "final_url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+      "playback": {
+        "time": 2.637138,
+        "frames": 19,
+        "src": "blob:https://secure.video.test/849d1137-1aba-436e-bd2e-40ad4e95ddcf",
+        "audio": 11759
+      }
+    },
+    {
+      "path": "/videos/watch/00bc4979-7378-4020-bd90-3d9e7af6160a",
+      "final_url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+      "playback": {
+        "time": 2.48291,
+        "frames": 16,
+        "src": "blob:https://secure.video.test/5bacfe77-48d9-4b0a-9ad9-91af0c04efb3",
+        "audio": 9855
+      }
+    }
+  ],
+  "alias_cleanup": true,
+  "restore_privacy": 200,
+  "restore_account": 200
+}
