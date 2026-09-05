@@ -1,0 +1,78 @@
+{
+  "status": "UNVERIFIED",
+  "scope": "A14 attachment contract checkpoint; remaining messaging acceptance is open",
+  "frontend_revision": "0cc2278",
+  "frontend_mode": "Next development server; real disposable API via guarded localhost proxy",
+  "vm": "vidra-a02-20260905194815-89796",
+  "checks": {
+    "multi_file": "PASS",
+    "size_boundary": "PASS",
+    "nonparticipant": "PASS"
+  },
+  "multi_file": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "thirty-office-attachments": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "conversation_id": "6aaed400-60bc-420e-8212-3fb18dc497a3",
+    "message_id": "71bc463b-6a19-4fdd-88e2-442ba2bc3f1a",
+    "attachment_count": 30,
+    "attachment_id": "9ee01162-1c52-40aa-a17b-66fc0835aa2f"
+  },
+  "size_boundary": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "exact_100_mib": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "failures": [
+      {
+        "path": "/api/v1/users/b5fe0b20-feb1-4663-8555-d5b6950f73f3/avatar",
+        "status": 404
+      }
+    ],
+    "upload_status": 201,
+    "attachment_id": "71fe4a6d-6571-4b0d-9994-f073e16de804",
+    "size_bytes": 104857600
+  },
+  "nonparticipant": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "nonparticipant_denial": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "outsider_status": 404,
+    "outsider_thread_status": 404
+  },
+  "verification": {
+    "tsc": "PASS",
+    "lint": "PASS: 0 errors, 2 pre-existing warnings",
+    "icons": "PASS",
+    "unit_tests": 2303,
+    "unit_files": 229,
+    "focused_tests": 14,
+    "red_tests": 11
+  },
+  "attempts": {
+    "browser-r1-r2": "Local proxy lacked HMR WebSocket; React login form did not initialize. Fixed only test proxy and explicit development API origin.",
+    "browser-r3": "Locator also matched Next route announcer; scoped to Composer alert.",
+    "browser-r4": "All 30 uploaded; send returned HTTP 429 under shared 120/minute lab limit. No limiter changes; fresh run passed.",
+    "boundary-r1": "Composer was not attached within 5 seconds; 30-second page readiness retry passed."
+  },
+  "helpers": {
+    "vidra-a14-browser.mjs": "c836d344ee78ed7d9f0fa76fc8d50db3ac8bef4329009633aa449b39ef38dd28",
+    "vidra-a14-boundary.mjs": "d7c93bc0aed62bb19dcf4a5474605f8a06c07a8b43d49f4f61cc070dfb83700f",
+    "vidra-a14-denial.mjs": "c2181b9ac836a564728d30f8e70e786d9e60186af6c6d6eab93871e3861b7bef",
+    "a14-proxy.cjs": "48eb0cd84aa8c196fa793f0a1a213884bf097d3c85d95178f422458f2155c6f4"
+  },
+  "unverified": [
+    "production frontend build",
+    "full backed messaging suite",
+    "remaining timeline/retry/receipt/privacy/delete/report acceptance",
+    "configured malware scanner failure lane"
+  ]
+}
