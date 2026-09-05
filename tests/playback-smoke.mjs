@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// A06 uses actual browser requests and persisted bytes; never route interception.
+// A07 exercises real HLS and progressive playback on the retained disposable stack.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve, join } from 'node:path';
@@ -33,7 +33,7 @@ result.browser = browser.version();
 let phase = 'setup';
 const step = name => { phase = name; console.log(`[a07] ${name}`); };
 const login = async actor => {
-  const ctx = await browser.newContext({ baseURL: 'https://secure.video.test', ignoreHTTPSErrors: true });
+  const ctx = await browser.newContext({ baseURL: 'https://secure.video.test', ignoreHTTPSErrors: true, viewport: {width:1920,height:1080} });
   const page = await ctx.newPage(); page.setDefaultTimeout(60000);
   await page.goto('/login');
   await page.getByLabel('Email or username', { exact: true }).fill(actor.email);
@@ -49,11 +49,6 @@ const api = (actor, path, method = 'GET', body) => actor.page.evaluate(async ({ 
   const r = await fetch(path, { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
   return { status: r.status, body: r.status === 204 ? null : await r.json() };
 }, { path, method, body, token: actor.token });
-const originalHash = (actor, id) => actor.page.evaluate(async ({ id, token }) => {
-  const r = await fetch(`/api/v1/videos/${id}/original`, { headers: { Authorization: `Bearer ${token}` } });
-  const digest = await crypto.subtle.digest('SHA-256', await r.arrayBuffer());
-  return { status: r.status, content_type: r.headers.get('content-type'), sha256: Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('') };
-}, { id, token: actor.token });
 
 const a06 = JSON.parse(readFileSync('docs/evidence/a06-upload.json'));
 assert.equal(a06.vm, vm); assert.equal(a06.project, a03.project); assert.equal(a06.status, 'PASS');
@@ -64,21 +59,24 @@ const jobSnapshot = () => JSON.parse(sql(`SELECT row_to_json(j) FROM (SELECT id,
 const measurePlayback = async page => {
   const player = page.locator('#main-content').getByTestId('video-player').first();
   const video = player.locator('video'); await expect(video).toBeVisible();
-  await video.evaluate(v => {v.currentTime=0;v.muted=false;v.volume=1;});
+  await video.evaluate(v => {v.pause();v.currentTime=0;v.muted=false;v.volume=1;});
   await player.hover();
   await player.getByRole('button',{name:'Play',exact:true}).click();
   await expect(async () => {
     const sample=await video.evaluate(v=>{
-      return {time:v.currentTime,paused:v.paused,ended:v.ended,ready:v.readyState,error:v.error?.message,width:v.videoWidth,height:v.videoHeight,frames:v.getVideoPlaybackQuality().totalVideoFrames,
+      return {time:v.currentTime,muted:v.muted,paused:v.paused,ended:v.ended,ready:v.readyState,error:v.error?.message,width:v.videoWidth,height:v.videoHeight,frames:v.getVideoPlaybackQuality().totalVideoFrames,
         audio_decoded_bytes:v.webkitAudioDecodedByteCount ?? 0,src:v.currentSrc.split('?')[0]};
     });
     result.last_sample=sample;checkpoint();
 
-    assert.ok(sample.time>1.5);assert.ok(sample.frames>0);assert.equal(sample.width,320);assert.equal(sample.height,240);assert.ok(sample.audio_decoded_bytes>0);
+    assert.equal(sample.muted,false);assert.ok(sample.time>1.5);assert.ok(sample.frames>0);assert.equal(sample.width,320);assert.equal(sample.height,240);assert.ok(sample.audio_decoded_bytes>0);
     result.last_playback=sample;
   }).toPass({timeout:60000,intervals:[100,250]});
   await video.evaluate(v=>{v.pause();v.currentTime=3.5;});
-  await expect(async()=>assert.ok(Math.abs(await video.evaluate(v=>v.currentTime)-3.5)<0.3)).toPass({timeout:15000});
+  await expect(async()=>{
+    const seek=await video.evaluate(v=>({time:v.currentTime,seeking:v.seeking,ready:v.readyState}));
+    assert.ok(Math.abs(seek.time-3.5)<0.3);assert.equal(seek.seeking,false);assert.ok(seek.ready>=2);
+  }).toPass({timeout:15000});
   return {...result.last_playback,seek:await video.evaluate(v=>v.currentTime)};
 };
 try {
@@ -92,15 +90,17 @@ try {
  },{id,token:actor.token});
  result.job_before=jobSnapshot();checkpoint();
  assert.equal((await api(actor,`/api/v1/videos/${id}`,'PATCH',{privacy:'public'})).status,200);
- step('progressive-before-hls');
- const before=await api(actor,`/api/v1/videos/${id}`);assert.equal(before.status,200);
- if(!before.body.hls_url){
-   await page.goto(`/videos/${id}`);
-   result.progressive=await measurePlayback(page);
-   assert.ok(result.progressive.src.endsWith('/original'));
-   result.checks[phase]='PASS';checkpoint();
- }else{result.checks[phase]='UNVERIFIED: HLS already ready';checkpoint();}
- step('lease-recovery');
+ result.audio_decode=await page.evaluate(async id=>{
+   const response=await fetch(`/api/v1/videos/${id}/original`);
+   if(response.status!==200)throw new Error('original not available for audio decode');
+   const ctx=new OfflineAudioContext(1,1,48000);
+   const decoded=await ctx.decodeAudioData(await response.arrayBuffer());
+   let peak=0;for(const sample of decoded.getChannelData(0))peak=Math.max(peak,Math.abs(sample));
+   return {channels:decoded.numberOfChannels,duration:decoded.duration,sample_rate:decoded.sampleRate,peak};
+ },id);
+ assert.ok(result.audio_decode.peak>0.01);assert.ok(result.audio_decode.duration>=4.9);
+ result.checks['browser-audio-pcm']='PASS';
+ step('transcode-completion');
  result.job_observations=[];
  const deadline=Date.now()+40*60*1000;
  while(Date.now()<deadline){
@@ -136,11 +136,28 @@ try {
  step('hls-browser-decode-audio-seek');
  await page.goto(`/videos/${id}`);
  result.hls_playback=await measurePlayback(page);assert.ok(result.hls_playback.src.startsWith('blob:'));
- await page.locator('#main-content').getByRole('button',{name:'Quality: Auto',exact:true}).first().click();
+ await page.locator('#main-content').getByRole('button',{name:/^Quality: Auto/}).first().click();
  await page.getByRole('menu',{name:'Playback quality'}).getByRole('menuitemradio',{name:`${detail.body.renditions[0].height}p`,exact:true}).click();
  await expect(page.locator('#main-content').getByRole('button',{name:`Quality: ${detail.body.renditions[0].height}p`,exact:true}).first()).toBeVisible();
  await page.screenshot({path:join(output,'private-watch.png')});
- result.checks[phase]='PASS';
+ result.checks[phase]='PASS';checkpoint();
+ step('progressive-without-ready-hls');
+ // A completed tree would hide the original path. Temporarily reproduce the
+ // pre-transcode state on this synthetic video, restoring it even on failure.
+ const playlistState=sql(`SELECT state FROM streaming_playlists WHERE video_id='${id}'`);
+ assert.equal(playlistState,'ready');
+ try {
+   sql(`UPDATE streaming_playlists SET state='pending' WHERE video_id='${id}'`);
+   assert.ok(!(await api(actor,`/api/v1/videos/${id}`)).body.hls_url);
+   await page.goto(`/videos/${id}`);
+   result.progressive=await measurePlayback(page);
+   assert.ok(result.progressive.src.endsWith('/original'));
+   result.checks[phase]='PASS';
+ } finally {
+   sql(`UPDATE streaming_playlists SET state='ready' WHERE video_id='${id}'`);
+   assert.ok((await api(actor,`/api/v1/videos/${id}`)).body.hls_url);
+   result.checks['restore-hls-ready']='PASS';
+ }
  result.status=Object.values(result.checks).every(v=>v==='PASS')?'PASS':'UNVERIFIED';
 } catch(error){result.checks[phase]='FAIL';result.status='FAIL';writeFileSync(join(output,'private-error.txt'),error.stack,{mode:0o600});}
 finally{await browser.close();checkpoint();}
