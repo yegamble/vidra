@@ -68,6 +68,7 @@ const sample=async page=>{
  }).toPass({timeout:15000});await video.evaluate(v=>v.pause());return measurement;
 };
 let actor;
+const privateResponses=[];
 try{
  step('fixture-identity');
  for(const service of ['api','frontend']){
@@ -83,45 +84,74 @@ try{
  const alphabet='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';let number=BigInt('0x'+id.replaceAll('-','')),sid='';
  while(number){sid=alphabet[Number(number%58n)]+sid;number/=58n;}
  const zeroBytes=id.replaceAll('-','').match(/^(00)*/)[0].length/2;sid='1'.repeat(zeroBytes)+sid;
+ const flickr='123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
+ const peerTubeSID=[...sid].map(c=>flickr[alphabet.indexOf(c)]).join('').padStart(22,'1');
  const context=await browser.newContext({baseURL:'https://secure.video.test',ignoreHTTPSErrors:true,viewport:{width:1600,height:1000}});
  const page=await context.newPage();result.links=[];
- for(const path of [`/v/${code}`,`/videos/${id}`,`/v/${sid}`,`/w/${sid}`,`/videos/watch/${id}`]){
-   const response=await page.goto(path+'?t=2');assert.equal(response.status(),200);
+ for(const path of [`/v/${code}`,`/videos/${id}`,`/v/${sid}`,`/w/${peerTubeSID}`,`/videos/watch/${id}`]){
+   result.active_path=path;checkpoint();const response=await page.goto(path+'?t=2');assert.equal(response.status(),200);
    await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
    const canonical=await page.locator('link[rel="canonical"]').getAttribute('href');assert.equal(canonical,`https://secure.video.test/v/${code}`);
    const playback=await sample(page);assert.ok(playback.time>=2);
    result.links.push({path,final_url:page.url(),canonical,playback});checkpoint();
+   // Each navigation boots the full app; pace the rehearsal within API limits.
+   await new Promise(resolve=>setTimeout(resolve,10000));
  }
  result.checks[phase]='PASS';checkpoint();
  step('share-embed-link');
  await page.locator('#main-content').getByRole('button',{name:'Share',exact:true}).click();
  const dialog=page.getByRole('dialog',{name:'Share this video'});await expect(dialog).toBeVisible();
  await dialog.getByRole('checkbox',{name:/Start at/}).check();
- const shareURL=await dialog.getByLabel('Watch page link').inputValue();const embed=await dialog.getByLabel('Embed code').inputValue();
+ const shareURL=await dialog.getByLabel('Watch page link',{exact:true}).inputValue();const embed=await dialog.getByLabel('Embed code',{exact:true}).inputValue();
  assert.equal(new URL(shareURL).pathname,`/v/${code}`);assert.ok(new URL(shareURL).searchParams.has('t'));
  const embedURL=embed.match(/src="([^"]+)"/)[1].replaceAll('&amp;','&');result.share={url:shareURL,embed_url:embedURL};
  await page.goto(embedURL);await expect(page.getByRole('link',{name:title,exact:true})).toBeVisible();result.embed_playback=await sample(page);
  await expect(page.getByRole('link',{name:'Home',exact:true})).toHaveCount(0);
  result.checks[phase]='PASS';checkpoint();
  step('private-owner-and-anonymous-media');
+ actor.page.on('response',r=>{if(r.url().includes('/api/v1/'))privateResponses.push({path:new URL(r.url()).pathname,status:r.status(),bearer:!!r.request().headers().authorization});});
  assert.equal((await api(actor,`/api/v1/videos/${id}`,'PATCH',{privacy:'private'})).status,200);
  result.private_media=await actor.page.evaluate(async({id,token})=>{
    const outcomes=[];for(const suffix of ['original','thumbnail','hls/master.m3u8']){
      const url=`/api/v1/videos/${id}/${suffix}`;
      const authed=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});const plain=await fetch(url);
-     outcomes.push({suffix,authenticated:authed.status,anonymous:plain.status});
+     outcomes.push({suffix,authenticated:authed.status,owner_native:plain.status});
    }return outcomes;
  },{id,token:actor.token});
- for(const outcome of result.private_media){assert.equal(outcome.authenticated,200);assert.equal(outcome.anonymous,404);}
+ for(const outcome of result.private_media){
+   outcome.anonymous=await page.evaluate(async({id,suffix})=>(await fetch(`/api/v1/videos/${id}/${suffix}`)).status,{id,suffix:outcome.suffix});
+   assert.equal(outcome.authenticated,200);assert.equal(outcome.anonymous,404);
+ }
  checkpoint();await actor.page.goto(`/v/${code}`);await expect(actor.page.getByRole('heading',{name:title,exact:true})).toBeVisible();
  result.private_playback=await sample(actor.page);
  result.checks[phase]='PASS';
  // These phases are a reproduction slice; broader A08 stays open until its
  // password/expiry/download and embed-origin/legacy-import acceptance runs.
  result.status='PASS';
-}catch(error){result.checks[phase]='FAIL';result.status='FAIL';writeFileSync(join(output,'private-error.txt'),error.stack,{mode:0o600});}
+}catch(error){
+ result.checks[phase]='FAIL';result.status='FAIL';
+ writeFileSync(join(output,'private-error.txt'),error.stack,{mode:0o600});
+ if(actor)await actor.page.screenshot({path:join(output,'private-failure.png'),fullPage:true}).catch(()=>{});
+}
 finally{
- if(actor){const restored=await api(actor,`/api/v1/videos/${id}`,'PATCH',{privacy:'public'}).catch(()=>null);result.restored_public=restored?.status===200;if(!result.restored_public)result.status='FAIL';}
+ result.private_responses=privateResponses;
+ if(actor){
+   let restored=await api(actor,`/api/v1/videos/${id}`,'PATCH',{privacy:'public'}).catch(()=>null);
+   // Navigation may replace the page's execution context, and long media runs
+   // can outlive the captured bearer. Restore with a fresh login if needed.
+   if(restored?.status!==200){
+     const recovery=await login(actors.ordinary).catch(()=>null);
+     if(recovery)restored=await api(recovery,`/api/v1/videos/${id}`,'PATCH',{privacy:'public'}).catch(()=>null);
+   }
+   for(let attempt=0;restored?.status===429&&attempt<3;attempt++){
+     await actor.page.goto('about:blank');
+     await new Promise(resolve=>setTimeout(resolve,30000));
+     const recovery=await login(actors.ordinary).catch(()=>null);
+     if(recovery)restored=await api(recovery,`/api/v1/videos/${id}`,'PATCH',{privacy:'public'}).catch(()=>null);
+   }
+   result.restore_status=restored?.status??null;result.restored_public=restored?.status===200;
+   if(!result.restored_public)result.status='FAIL';
+ }
  await browser.close();checkpoint();
 }
 console.log(`[a08] ${result.status}; ${output}`);process.exitCode=result.status==='PASS'?0:1;

@@ -663,3 +663,56 @@ A09's index, routing, visibility and recovery boundary, not autocomplete quality
 search history, recommendations, scale or relevance tuning (A13/A39/A40 retain
 those separate requirements). Next dependency-ready item: **A08**, using the
 preserved A06 video and the recorded A07 patch fixture where playback needs it.
+
+
+## A08 links checkpoint — 2026-09-05
+
+**A08 remains OPEN.** Canonical/legacy routes, timestamp playback and the real
+Share dialog/embed pass on the exact-source lab fixture; private owner playback
+fails. This is partial runtime evidence, not PLAY-02/03 acceptance or a release
+certification.
+
+The original v0.6.2 core image predates stored short codes. A08 therefore uses
+pristine archives of core `63eafcbf371122e5b69666e9e59131de4b2c06cc` and frontend
+`f160f5c80a96623e0ff537db5bfba140c243d680`, built as native ARM64 lab images.
+The exact [source/image identities and normal deployment result](evidence/a08-source-fixture.json)
+are retained. No published release or committed production pin changed.
+`make-bundle.sh` generated an unmodified manifest with synthetic lab tag
+`v999.8.0`; the normal deploy completed pre-deploy dump, pull (local images use
+`pull_policy: never`), separate migrators, independent ledger assertions, startup
+and API/frontend/HTTPS probes. The core ledger advanced from 125 to **127 clean**.
+The retained VM is now a schema-127 source fixture; the old release bundle must
+not be treated as the active installation or used for a blind schema rollback.
+The lab-only API CPU limit is two, matching the VM. Existing stateful/search
+images and their architectures were preserved.
+
+The [browser result before product fixes](evidence/a08-links-before.json) proves
+actual audio/video decode through `/v/{stored-code}`, `/videos/{uuid}`, legacy
+Bitcoin-base58 `/v/{sid}`, PeerTube Flickr-base58 `/w/{sid}`, and
+`/videos/watch/{uuid}`, all with `?t=2`. Canonical metadata names the stored code
+without the timestamp. The Share dialog produces that watch link and an iframe
+that plays the same fixture with its timestamp. This tests local UUID aliases;
+source-import UUID mapping still needs its own fixture.
+
+A separate fresh-login trace reproduced an anonymous resolve 404 before the
+successful refresh/me responses; the private page stayed on not-found.
+[Frontend PR #147](https://github.com/yegamble/vidra-user/pull/147) waits for the
+session to settle before resolving UUID/code links. Three reproducing tests
+failed first; all seven focused tests and 2,288 full tests then passed, alongside
+typecheck and lint gates. Private original, thumbnail and HLS fetches with the
+owner bearer returned 200 while ordinary media-element requests returned 404;
+that separate transport issue remains open.
+
+Private runs r1/r2 corrected harness path-alphabet and exact-label mistakes.
+r3 exposed private access; its automatic restore failed. r4 added request-status
+diagnostics and exposed API rate limiting after repeated full-page navigations;
+fresh-login recovery restored public with HTTP 200. The helper now paces those
+navigations and retries rate-limited cleanup. Raw errors, screenshots and account
+credentials remain private under `/tmp/vidra-a08-*`, never in git.
+
+Remaining A08 work: verify the session fix through the real edge, fix owner media
+transport with regression tests, then test password unlock and copied assets,
+expiry, download revocation, embed allowlists/disablement, source UUID aliases,
+oEmbed/feed/sitemap and unlisted/account-unlisted discovery boundaries. None is
+implied by the passing link subset. The retained A06 audiovisual bytes and UUID
+remain the acceptance subject.
