@@ -121,6 +121,7 @@ try{
  sql(`UPDATE search.documents SET eligible=true WHERE video_id='${id}'`);
  result.stale_private_candidate=internalSearch(title);assert.ok(result.stale_private_candidate.ids.some(v=>v.video_id===id));
  const hidden=await search();assert.equal(hidden.status,200);assert.ok(!hidden.body.videos.some(v=>v.id===id));
+ await publicPage.goto(`/search?q=${encodeURIComponent(title)}`);await publicPage.waitForLoadState('networkidle');await expect(publicPage.getByRole('link',{name:title,exact:true})).toHaveCount(0);
  const denied=await publicPage.evaluate(async id=>(await fetch(`/api/v1/videos/${id}`)).status,id);assert.equal(denied,404);
  const restoreStart=marker();assert.equal((await api(actor,`/api/v1/videos/${id}`,'PATCH',{privacy:'public'})).status,200);
  await waitEvent(restoreStart,'video.upsert');await poll(()=>assert.equal(documentRow()?.eligible,true));
@@ -140,16 +141,22 @@ try{
  await poll(()=>assert.equal(guest(['docker','inspect','--format','{{.State.Health.Status}}',`${a03.project}-api-1`]).trim(),'healthy'));
  await poll(()=>{const d=documentRow();assert.equal(d?.eligible,true);assert.ok(d?.reconcile_run_id);assert.notEqual(d.reconcile_run_id,oldStamp);});
  result.reconciled=documentRow();result.reconcile_events=await waitEvent(reconcileStart,'reconcile.page');
+ const runID=uuid(result.reconciled.reconcile_run_id);
+ await poll(()=>{
+   result.reconcile_envelopes=JSON.parse(sql(`SELECT COALESCE(json_agg(e),'[]') FROM (SELECT o.event_id,o.event_type,o.state,(i.event_id IS NOT NULL) AS received FROM search_outbox o LEFT JOIN search.events_inbox i USING(event_id) WHERE o.id>${reconcileStart} AND o.payload->>'run_id'='${runID}') e`));
+   for(const type of ['reconcile.begin','reconcile.page','reconcile.end'])assert.ok(result.reconcile_envelopes.some(e=>e.event_type===type&&e.state==='delivered'&&e.received));
+ });
  const recovered=await search();assert.ok(recovered.body.videos.some(v=>v.id===id));await assertSource(title,'search');
  result.checks[phase]='PASS';checkpoint();
  step('delete-real-fixture-copy');
  const deletionTitle=`${title}delete`;
- const created=await api(actor,`/api/v1/channels/${uuid(a06.channel_id)}/videos`,'POST',{title:deletionTitle,privacy:'public'});assert.equal(created.status,201);
+ const created=await api(actor,`/api/v1/channels/${encodeURIComponent(a06.channel_handle)}/videos`,'POST',{title:deletionTitle,privacy:'public'});assert.equal(created.status,201);
  const deletionID=uuid(created.body.id);result.deletion_video_id=deletionID;
  const uploaded=await actor.page.evaluate(async({id,token,encoded})=>{
    const bytes=Uint8Array.from(atob(encoded),c=>c.charCodeAt(0));const form=new FormData();form.append('file',new Blob([bytes],{type:'video/mp4'}),'a09-delete.mp4');
    const r=await fetch(`/api/v1/videos/${id}/file`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:form});return {status:r.status};
- },{id:deletionID,token:actor.token,encoded:bytes.toString('base64')});assert.ok([200,201,202].includes(uploaded.status));
+ },{id:deletionID,token:actor.token,encoded:bytes.toString('base64')});assert.ok([200,201,202].includes(uploaded.status));result.deletion_upload_status=uploaded.status;
+ await poll(()=>assert.equal(Number(sql(`SELECT size_bytes FROM video_files WHERE video_id='${deletionID}' AND kind='original'`)),bytes.length));
  await poll(()=>assert.equal(documentRow(deletionID)?.eligible,true));
  assert.ok((await search(deletionTitle)).body.videos.some(v=>v.id===deletionID));
  const deletionStart=marker();assert.equal((await api(actor,`/api/v1/videos/${deletionID}`,'DELETE')).status,204);
@@ -159,6 +166,7 @@ try{
  result.stale_deleted_candidate=internalSearch(deletionTitle);assert.ok(result.stale_deleted_candidate.ids.some(v=>v.video_id===deletionID));
  const gone=await search(deletionTitle);assert.equal(gone.status,200);assert.ok(!gone.body.videos.some(v=>v.id===deletionID));
  assert.equal(sql(`SELECT count(*) FROM videos WHERE id='${deletionID}'`),'0');
+ await publicPage.goto(`/search?q=${encodeURIComponent(deletionTitle)}`);await publicPage.waitForLoadState('networkidle');await expect(publicPage.getByRole('link',{name:deletionTitle,exact:true})).toHaveCount(0);
  sql(`UPDATE search.documents SET eligible=false WHERE video_id='${deletionID}'`);
  result.checks[phase]='PASS';result.status='PASS';
 }catch(error){result.checks[phase]='FAIL';result.status='FAIL';writeFileSync(join(output,'private-error.txt'),error.stack,{mode:0o600});}
