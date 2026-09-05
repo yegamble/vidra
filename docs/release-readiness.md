@@ -221,7 +221,7 @@ Each item below is a small **acceptance slice**, with implementation only if ins
 | 39 A39 | M C S U | Supported-toolchain, exact-manifest CI gates with explicit required test selection and zero silent skips; attach artifacts | A01 and all implemented slices |
 | 40 A40 | U | Required-control inventory closes mobile/theme/keyboard/error/persistence gaps; link each UI acceptance to workflow row and backend evidence | Selected workflows |
 
-**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). A07 now has passing runtime evidence with the frontend fix (see final A07 evidence below); A09 now has passing runtime evidence (see below); next dependency-ready item after delivery is A08.** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
+**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). A07 now has passing runtime evidence with the frontend fix (see final A07 evidence below); A09 now has passing runtime evidence (see below); A08 now has bounded passing runtime evidence (see final A08 media evidence and linked delivery PRs).** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
 
 ## Inputs still needed before dependent acceptance
 
@@ -909,10 +909,10 @@ The prior real probe returned 404 for an unlisted caption. Core
 reuses `videoVisibleForMedia` for caption metadata and bytes. The new regression
 failed first, then focused caption tests and `make ci` passed (format, vet,
 migration lint, OpenAPI, sqlc and race tests); integration-tagged vet passed.
-The linked frontend contract update is generated normally from that OpenAPI
+The linked [frontend PR #149](https://github.com/yegamble/vidra-user/pull/149) is generated normally from that OpenAPI
 source; it changes comments only. Frontend typecheck, lint, icon lint and all
 2,289 tests in 228 files passed. Merge order: core fix → generated client →
-this evidence record.
+[meta evidence PR #95](https://github.com/yegamble/vidra/pull/95).
 
 [Required media helper](../tests/media-access-smoke.mjs),
 [full result](evidence/a08-media-access.json), and
