@@ -1389,3 +1389,46 @@ do not resolve moving `main` or image tags again and call that the same candidat
 manifest is the portable identity record. A01 does not certify runtime workflows,
 image startup, blank-host installation, search, or browser/media behavior. The
 v0.6.2 example is a rehearsal candidate, not a change to production pins.
+
+## Blank-server installer smoke (A02)
+
+Run the released installer on a **new Ubuntu 24.04 Multipass VM**, using an A01
+PASS manifest. Requires Multipass with a working daemon, Python >=3.9, curl and
+network access to Ubuntu/Docker repositories, GitHub release assets and GHCR.
+The launcher allocates 2 CPUs, 4 GiB RAM and a 20 GiB disk, without mounting host
+directories or the host Docker socket. It never selects an existing VM.
+
+```bash
+python3 -m unittest discover -s tests -p '*_test.py'
+bash tests/blank-server-smoke.sh \
+  docs/evidence/a01-v0.6.2-linux-amd64.json /tmp/vidra-a02-unique
+```
+
+Use a new output directory each time. A missing dependency, failed transfer,
+failed assertion or missing result returns nonzero. `status.txt` and `result.json`
+must both say PASS. `candidate.json`, `vm.json` (including the base image hash),
+`install.sh`, staged guest verifier and sanitized result identify the run.
+
+The real released installer installs Docker/Compose, rejects a corrupted bundle
+and CLI download, and then installs the original verified assets. Corruption is
+injected only in negative runs by appending a byte after curl's actual transfer;
+HTTP status and exit codes are preserved. Positive runs use the ordinary curl.
+The released setup CLI generates local test configuration; reinstall must leave
+the env file, rendered Caddyfile and CLI byte-identical. The harness validates
+production Compose ports with explicit profiles and pulls all three exact A01
+image digests, checking their platform and revision labels after the pull.
+
+Multipass uses the workstation's native architecture. The native CLI is verified
+against the SHA256SUMS **whose own hash A01 pinned**. An ARM64 VM can pull the
+candidate's amd64 images, but this proves availability only: no containers start
+in A02. Runtime ports, architecture-compatible image execution, migration,
+readiness and frontend checks remain A03. The plain-HTTP `video.test` setup is an
+isolated test configuration and requests no public TLS certificate.
+
+The VM is retained **stopped** on success or failure, named in `vm-name.txt`.
+Only sanitized evidence leaves it; raw command logs, generated configuration and
+test secrets stay under `/root/vidra-a02-private` and `/opt/vidra` in the VM.
+For a failed run, start that exact VM and inspect the named private log; rerun the
+acceptance on a new VM after a fix. Do not label an existing volume as fresh.
+To remove the disposable VM after retaining evidence, use `multipass delete
+--purge <name-from-vm-name.txt>`; never use a global purge or an unrelated VM name.
