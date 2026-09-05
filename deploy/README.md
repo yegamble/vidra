@@ -1621,3 +1621,12 @@ the secret is never returned or logged. Keep credentials, errors and screenshots
 private. Review result JSON before committing it. The existing frontend
 `search-discovery.spec.ts` covers different discovery/history scenarios; green
 CI with that spec skipped is not this A09 proof. This helper has no skip path.
+
+A08's remaining copied-media and instance-download boundaries are exercised by
+`tests/media-access-smoke.mjs A03_OUTPUT A04_ACTORS MP4 PREPARED_FIXTURE NEW_OUTPUT`
+using Node >=24 and the installed `vidra-user` Playwright dependency. This is a
+required real Chromium/HTTPS test on the retained disposable A03 VM: missing
+prerequisites fail. It verifies exact images, walks the advertised HLS tree,
+checks caption/storyboard/original access through privacy/password transitions,
+and restores temporary settings/objects. The output contains sanitized results;
+keep its `private-error.txt`, credentials, and guest deploy logs out of git.

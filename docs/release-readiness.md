@@ -221,7 +221,7 @@ Each item below is a small **acceptance slice**, with implementation only if ins
 | 39 A39 | M C S U | Supported-toolchain, exact-manifest CI gates with explicit required test selection and zero silent skips; attach artifacts | A01 and all implemented slices |
 | 40 A40 | U | Required-control inventory closes mobile/theme/keyboard/error/persistence gaps; link each UI acceptance to workflow row and backend evidence | Selected workflows |
 
-**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). A07 now has passing runtime evidence with the frontend fix (see final A07 evidence below); A09 now has passing runtime evidence (see below); next dependency-ready item after delivery is A08.** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
+**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). A07 now has passing runtime evidence with the frontend fix (see final A07 evidence below); A09 now has passing runtime evidence (see below); A08 now has bounded passing runtime evidence (see final A08 media evidence and linked delivery PRs).** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
 
 ## Inputs still needed before dependent acceptance
 
@@ -896,3 +896,91 @@ workflow or production pin changed. Private output: `/tmp/vidra-a08-discovery-r1
 Remaining A08 work is the copied caption/storyboard/remaining media-path boundary
 and instance-wide download policy. Cached frontend metadata freshness is not
 certified as immediate revocation by this origin/distribution test.
+
+## A08 final media access evidence — 2026-09-05
+
+**Bounded A08 runtime acceptance PASS.** Core/frontend fixes are merged; meta
+[PR #95](https://github.com/yegamble/vidra/pull/95) tracks final evidence delivery.
+A07 was already delivered (meta #89, frontend #146); A08 is the next open item
+continued here. This closes the two remaining boundaries from the preceding
+checkpoint, reusing the same A06 video and the earlier link/discovery evidence.
+
+The prior real probe returned 404 for an unlisted caption. Core
+[PR #159](https://github.com/yegamble/vidra-core/pull/159), revision `b01c53e`,
+reuses `videoVisibleForMedia` for caption metadata and bytes. The new regression
+failed first, then focused caption tests and `make ci` passed (format, vet,
+migration lint, OpenAPI, sqlc and race tests); integration-tagged vet passed.
+The linked [frontend PR #149](https://github.com/yegamble/vidra-user/pull/149) is generated normally from that OpenAPI
+source; it changes comments only. Frontend typecheck, lint, icon lint and all
+2,289 tests in 228 files passed. Merge order: core fix → generated client →
+[meta evidence PR #95](https://github.com/yegamble/vidra/pull/95).
+
+[Required media helper](../tests/media-access-smoke.mjs),
+[full result](evidence/a08-media-access.json), and
+[fixture identity](evidence/a08-caption-fixture.json) record exact source/image
+identities and the helper hash. Command (Node 24.4.1):
+
+```sh
+node tests/media-access-smoke.mjs /tmp/vidra-a03-r3 /tmp/vidra-a04-r3 \
+  /tmp/vidra-a06-fixture/clip.mp4 /tmp/vidra-a08-caption-fixture-r1 \
+  /tmp/vidra-a08-assets-r2
+```
+
+Exit 0: four groups PASS, zero skips. Real Chromium through the HTTPS edge:
+
+- Global download listing and every advertised file return 403
+  `feature_disabled` after the instance switch is disabled; streaming still
+  advances time and decodes audio/video. Original setting restored with 200.
+- The helper walks the complete advertised HLS tree (alternate audio, variants,
+  init files and segments), plus original, thumbnail, storyboard image/map and
+  caption list/bytes: 15 endpoints. Public/unlisted reads return 200; private
+  owner cookie reads return 200 and anonymous reads return 404.
+- Real password form unlock plays audio/video. All 15 copied paths return 200
+  with its playback token, 401 without it, and 401 with an expired signed token.
+  The signing secret stays inside the disposable guest; no token is evidence.
+- Cleanup restores public visibility (200), removes the temporary caption and
+  password (204 each), and restores the download setting (200).
+
+Docker Hub's Dockerfile frontend resolution stalled. The lab therefore uses a
+local `CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath` of the archived
+core revision with version/commit ldflags, copied into the retained runtime
+image `sha256:bbb048f88cf83c8340f61e7544fc9d09dd73ee42f5e861b5b91bf24830ab3297`.
+This is an exact-source local fixture, **not a released-image certification**.
+Normal pre-deploy dump, discrete migration/ledger checks and health gates passed;
+core schema remains 127 clean. Frontend runtime remains `5217e36` as previously
+recorded; the generated comment update has no runtime effect. No production
+pins, releases, deployment, workflows, SQL or migrations changed.
+
+Meta Python20/Node3 tests, helper syntax, production Compose config validation
+and diff checks pass. Private diagnostics remain `/tmp/vidra-a08-assets-r2`.
+Earlier A08 checkpoints retain canonical/legacy/source alias, metadata,
+discovery, per-video download and real iframe-policy evidence. Native Safari,
+selected CDN-edge revocation, actual PeerTube import/cutover and instantaneous
+cached frontend metadata revocation are not certified here; retain their
+existing A40/A33/A18–23 scope. Stop after A08 delivery; do not start another item.
+
+### A08 delivery checkpoint (superseded below)
+
+**Open — awaiting merge.** Core #159 passed all six checks, including real
+integration and public/private IPFS lanes. Automatic approval review rejected
+merging twice: the session has both an earlier no-merge instruction and a later
+merge instruction, which it considers ambiguous. No merge occurred. Fresh user
+confirmation is required. Smallest next action: authorize core #159 → frontend
+#149 → meta #95 merges, then rerun frontend contract run `33985647123` after
+core lands. Its current failure is precisely the four generated documentation
+lines versus core's pre-merge `main`; do not revert the correct generated client
+or weaken the gate. Wait for all remaining checks before each merge and delete
+only merged branches. The local fixture is restored and the VM stopped.
+
+### A08 approved delivery — 2026-09-05
+
+The user explicitly resolved merge authorization with “continue with automatical
+approval.” Core #159 is merged to main at `6a6ea24` after all six checks passed.
+Frontend #149 is merged at `ad00b69` after all seven checks passed, including
+real backend-backed local/S3 browser lanes, channel-sync, IPFS, and the contract
+rerun against merged core (run `33985647123`, attempt 2). The original contract
+failure was resolved by the documented dependency order without code changes or
+gate weakening. Both component work branches were deleted locally and remotely.
+Meta #95 carries this final delivery record; merge it on its final green checks,
+then delete its work branch. The fixture remains restored and stopped. A08 is
+the only acceptance item completed here; the earlier runtime limitations remain.

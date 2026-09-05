@@ -1,0 +1,476 @@
+{
+  "status": "PASS",
+  "checks": {
+    "fixture-identity": "PASS",
+    "instance-download-revocation": "PASS",
+    "media-assets": "PASS",
+    "password-media-assets": "PASS"
+  },
+  "node": "v24.4.1",
+  "vm": "vidra-a02-20260905123822-89250",
+  "project": "vidra-a03-20260905124354-92490",
+  "helper_sha256": "58c915dabaec330164118072fd2760eb5d81b47b0249a1f5405cb226f507362c",
+  "fixture_sha256": "23febdedf00e4ffc6ac7ca70f8ba0e5c08712708864381869a3ab6ff271bad6b",
+  "fixture_bytes": 225521,
+  "browser": "151.0.7922.34",
+  "video_id": "0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+  "prepared_fixture_sha256": "58d71c860c4b772c0223699d740e9fdfe212d376126c4dd816e3fad4ba47ef0b",
+  "images": {
+    "vidra-core:a08-source": "sha256:11da5f5c256020b56d86ead9b8961ff914731af63823c9054fcd36968c91a785",
+    "vidra-user:a08-source": "sha256:6053d1feee2faef0eb7b2a2043d7f30bc55bbc9f2ec796cad71cb18915bf3946"
+  },
+  "sources": {
+    "vidra-core": {
+      "revision": "b01c53e3ddfc86acdb3e34040ec3b6f4510c8eb1",
+      "archive_sha256": "d90b1a7a874c650ae442fd26647f65d3284bb3a863b7e5551108d038515929ac"
+    },
+    "vidra-user": {
+      "revision": "5217e36fbcc314abcf63750fc32b2384de527f91",
+      "archive_sha256": "34aad50d611a94387c7fa59dd4e15ca4d0774f96205c76d14182f68ebbb317f7"
+    }
+  },
+  "global_downloads": [
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/download",
+      "status": 403,
+      "code": "feature_disabled"
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/download/original",
+      "status": 403,
+      "code": "feature_disabled"
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/download/hls/240",
+      "status": 403,
+      "code": "feature_disabled"
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/download/hls/240?audio=false",
+      "status": 403,
+      "code": "feature_disabled"
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/download/audio",
+      "status": 403,
+      "code": "feature_disabled"
+    }
+  ],
+  "global_streaming": {
+    "time": 2.869832,
+    "frames": 73,
+    "src": "blob:https://secure.video.test/7702da9e-248c-4229-b1d2-114fd745df36",
+    "audio": 39136
+  },
+  "asset_count": 15,
+  "public_assets": [
+    {
+      "suffix": "original",
+      "status": 200,
+      "bytes": 225521
+    },
+    {
+      "suffix": "thumbnail",
+      "status": 200,
+      "bytes": 23236
+    },
+    {
+      "suffix": "storyboard.jpg",
+      "status": 200,
+      "bytes": 15812
+    },
+    {
+      "suffix": "storyboard.vtt",
+      "status": 200,
+      "bytes": 326
+    },
+    {
+      "suffix": "captions",
+      "status": 200,
+      "bytes": 113
+    },
+    {
+      "suffix": "captions/zxx",
+      "status": 200,
+      "bytes": 58
+    },
+    {
+      "suffix": "hls/master.m3u8",
+      "status": 200,
+      "bytes": 475
+    },
+    {
+      "suffix": "hls/cmaf/media_1.m3u8",
+      "status": 200,
+      "bytes": 207
+    },
+    {
+      "suffix": "hls/cmaf/iframe-0.m3u8",
+      "status": 200,
+      "bytes": 564
+    },
+    {
+      "suffix": "hls/cmaf/media_0.m3u8",
+      "status": 200,
+      "bytes": 207
+    },
+    {
+      "suffix": "hls/cmaf/init-1.mp4",
+      "status": 200,
+      "bytes": 765
+    },
+    {
+      "suffix": "hls/cmaf/chunk-1-00001.m4s",
+      "status": 200,
+      "bytes": 60856
+    },
+    {
+      "suffix": "hls/cmaf/iframe-0.mp4",
+      "status": 200,
+      "bytes": 31231
+    },
+    {
+      "suffix": "hls/cmaf/init-0.mp4",
+      "status": 200,
+      "bytes": 828
+    },
+    {
+      "suffix": "hls/cmaf/chunk-0-00001.m4s",
+      "status": 200,
+      "bytes": 544939
+    }
+  ],
+  "unlisted_assets": [
+    {
+      "suffix": "original",
+      "status": 200,
+      "bytes": 225521
+    },
+    {
+      "suffix": "thumbnail",
+      "status": 200,
+      "bytes": 23236
+    },
+    {
+      "suffix": "storyboard.jpg",
+      "status": 200,
+      "bytes": 15812
+    },
+    {
+      "suffix": "storyboard.vtt",
+      "status": 200,
+      "bytes": 326
+    },
+    {
+      "suffix": "captions",
+      "status": 200,
+      "bytes": 113
+    },
+    {
+      "suffix": "captions/zxx",
+      "status": 200,
+      "bytes": 58
+    },
+    {
+      "suffix": "hls/master.m3u8",
+      "status": 200,
+      "bytes": 475
+    },
+    {
+      "suffix": "hls/cmaf/media_1.m3u8",
+      "status": 200,
+      "bytes": 207
+    },
+    {
+      "suffix": "hls/cmaf/iframe-0.m3u8",
+      "status": 200,
+      "bytes": 564
+    },
+    {
+      "suffix": "hls/cmaf/media_0.m3u8",
+      "status": 200,
+      "bytes": 207
+    },
+    {
+      "suffix": "hls/cmaf/init-1.mp4",
+      "status": 200,
+      "bytes": 765
+    },
+    {
+      "suffix": "hls/cmaf/chunk-1-00001.m4s",
+      "status": 200,
+      "bytes": 60856
+    },
+    {
+      "suffix": "hls/cmaf/iframe-0.mp4",
+      "status": 200,
+      "bytes": 31231
+    },
+    {
+      "suffix": "hls/cmaf/init-0.mp4",
+      "status": 200,
+      "bytes": 828
+    },
+    {
+      "suffix": "hls/cmaf/chunk-0-00001.m4s",
+      "status": 200,
+      "bytes": 544939
+    }
+  ],
+  "private_owner_assets": [
+    {
+      "suffix": "original",
+      "status": 200,
+      "bytes": 225521
+    },
+    {
+      "suffix": "thumbnail",
+      "status": 200,
+      "bytes": 23236
+    },
+    {
+      "suffix": "storyboard.jpg",
+      "status": 200,
+      "bytes": 15812
+    },
+    {
+      "suffix": "storyboard.vtt",
+      "status": 200,
+      "bytes": 326
+    },
+    {
+      "suffix": "captions",
+      "status": 200,
+      "bytes": 113
+    },
+    {
+      "suffix": "captions/zxx",
+      "status": 200,
+      "bytes": 58
+    },
+    {
+      "suffix": "hls/master.m3u8",
+      "status": 200,
+      "bytes": 475
+    },
+    {
+      "suffix": "hls/cmaf/media_1.m3u8",
+      "status": 200,
+      "bytes": 207
+    },
+    {
+      "suffix": "hls/cmaf/iframe-0.m3u8",
+      "status": 200,
+      "bytes": 564
+    },
+    {
+      "suffix": "hls/cmaf/media_0.m3u8",
+      "status": 200,
+      "bytes": 207
+    },
+    {
+      "suffix": "hls/cmaf/init-1.mp4",
+      "status": 200,
+      "bytes": 765
+    },
+    {
+      "suffix": "hls/cmaf/chunk-1-00001.m4s",
+      "status": 200,
+      "bytes": 60856
+    },
+    {
+      "suffix": "hls/cmaf/iframe-0.mp4",
+      "status": 200,
+      "bytes": 31231
+    },
+    {
+      "suffix": "hls/cmaf/init-0.mp4",
+      "status": 200,
+      "bytes": 828
+    },
+    {
+      "suffix": "hls/cmaf/chunk-0-00001.m4s",
+      "status": 200,
+      "bytes": 544939
+    }
+  ],
+  "private_anonymous_assets": [
+    {
+      "suffix": "original",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "thumbnail",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "storyboard.jpg",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "storyboard.vtt",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "captions",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "captions/zxx",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "hls/master.m3u8",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "hls/cmaf/media_1.m3u8",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "hls/cmaf/iframe-0.m3u8",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "hls/cmaf/media_0.m3u8",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "hls/cmaf/init-1.mp4",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "hls/cmaf/chunk-1-00001.m4s",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "hls/cmaf/iframe-0.mp4",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "hls/cmaf/init-0.mp4",
+      "status": 404,
+      "bytes": 107
+    },
+    {
+      "suffix": "hls/cmaf/chunk-0-00001.m4s",
+      "status": 404,
+      "bytes": 107
+    }
+  ],
+  "password_playback": {
+    "time": 2.31938,
+    "frames": 60,
+    "src": "blob:https://secure.video.test/609c5c79-e826-4557-82d5-559978fe73c1",
+    "audio": 32369
+  },
+  "password_assets": [
+    {
+      "suffix": "original",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "thumbnail",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "storyboard.jpg",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "storyboard.vtt",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "captions",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "captions/zxx",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "hls/master.m3u8",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "hls/cmaf/media_1.m3u8",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "hls/cmaf/iframe-0.m3u8",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "hls/cmaf/media_0.m3u8",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "hls/cmaf/init-1.mp4",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "hls/cmaf/chunk-1-00001.m4s",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "hls/cmaf/iframe-0.mp4",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "hls/cmaf/init-0.mp4",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    },
+    {
+      "suffix": "hls/cmaf/chunk-0-00001.m4s",
+      "unlocked": 200,
+      "expired": 401,
+      "bare": 401
+    }
+  ],
+  "restore_privacy": 200,
+  "password_cleanup": 204,
+  "caption_cleanup": 204,
+  "restore_downloads": 200
+}
