@@ -46,6 +46,11 @@
 
 set -euo pipefail
 
+# Database dumps contain private account data just like the config archive.
+# Restrict creation, including .part and decompressed verification files: chmod
+# after writing would leave those bytes readable during the backup itself.
+umask 077
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
