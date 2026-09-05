@@ -95,7 +95,7 @@ try{
    const playback=await sample(page);assert.ok(playback.time>=2);
    result.links.push({path,final_url:page.url(),canonical,playback});checkpoint();
    // Each navigation boots the full app; pace the rehearsal within API limits.
-   await new Promise(resolve=>setTimeout(resolve,10000));
+   await new Promise(resolve=>setTimeout(resolve,30000));
  }
  result.checks[phase]='PASS';checkpoint();
  step('share-embed-link');

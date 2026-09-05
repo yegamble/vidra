@@ -716,3 +716,14 @@ expiry, download revocation, embed allowlists/disablement, source UUID aliases,
 oEmbed/feed/sitemap and unlisted/account-unlisted discovery boundaries. None is
 implied by the passing link subset. The retained A06 audiovisual bytes and UUID
 remain the acceptance subject.
+
+The session fix's [exact lab deployment](evidence/a08-session-fixture.json) also
+passed all normal gates. A [focused fresh-login browser trace](evidence/a08-session-check.json)
+then showed refresh/me 200 followed by **authenticated stored-code resolution
+200**, and the UI displayed the title plus “Private — Only you can see this”.
+Native original/HLS still returned 404 and the player remained at 0:00. This
+isolates the remaining media failure without rate-limit responses. Public
+restoration returned 200. The full r5 run still hit 429 during its sweep; pacing
+was increased to 30 seconds per route, and that revised full sweep has not yet
+been rerun. Current active guest installation is the one named in the session
+fixture result; schema remains 127 clean.
