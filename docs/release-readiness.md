@@ -234,7 +234,7 @@ No launch, migration or recovery approval is requested in this audit. Stop at th
 
 ## A01 implementation evidence — 2026-09-05
 
-**Status: verification PASS for the bounded A01 acceptance; open — awaiting review/merge.**
+**Status: verification PASS for the bounded A01 acceptance; [draft PR #83](https://github.com/yegamble/vidra/pull/83) open — awaiting review/merge.**
 Single agent. Implementation revision `183f729c1c5e579e9ed78361338173b269f4a284`
 adds the read-only [preflight](../deploy/release-preflight.py), eight regression
 tests and [operator procedure](../deploy/README.md#release-readiness-preflight-a01).
@@ -266,7 +266,9 @@ not independent reproducible-build proof. The release was read, never published.
 | Supplemental method guard | Checker frozen from frontend audit revision `cbc11451e6fc804e76a2a73e693e2f9842178bba:scripts/check-contract.mjs`, copied beside the candidate's unmodified `lib/api` in `/tmp/vidra-a01-method-check`; `OPENAPI_PATH=/tmp/vidra-a01-v062/source/vidra-core/api/openapi.yaml node scripts/check-contract.mjs`: **exit 0**, 230 paths / 302 operations / 202 client paths / 258 call sites |
 | Meta required local gates | `bash -n` and `shellcheck -x` on all 12 existing shell scripts: exit 0; Python entrypoint is not Bash. `docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file /tmp/vidra-a01-check.env config -q`: exit 0, production template with dummy required secrets |
 | Existing installer regression | `bash tests/install_test.sh`: exit 0, all assertions passed, zero skips; this is fixture coverage, not blank-server proof |
-| Integration boundary | Actual remote tags, registry manifests/configs, downloaded release bytes, lockfile installation and code generation executed. Browser/search/transcoding/database suites are not needed for this read-only A01 behavior; their workflow rows remain UNVERIFIED. Full remote meta CI status will be recorded with the draft PR |
+| Integration boundary | Actual remote tags, registry manifests/configs, downloaded release bytes, lockfile installation and code generation executed. Browser/search/transcoding/database suites are not needed for this read-only A01 behavior; their workflow rows remain UNVERIFIED. Remote meta CI on `1c5b9b6` passed; details below |
+
+Remote required gates: [meta CI run 33962973913](https://github.com/yegamble/vidra/actions/runs/33962973913) on `1c5b9b6` **PASS** — validate 48s, bundle 15s, production-mode boot 2m1s (including readiness and both migration one-shots); GitGuardian also passed. The final documentation-only checkpoint adds these links; it does not change the verified implementation. This existing CI lane does not certify real transcoding/search/browser acceptance (F04 still applies).
 
 Local raw evidence: `/tmp/vidra-a01-v062-verified.log`, the matching output tree
 (including `bundle-provenance.txt`), `/tmp/vidra-a01-unit.log`,
