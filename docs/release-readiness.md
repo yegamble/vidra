@@ -221,7 +221,7 @@ Each item below is a small **acceptance slice**, with implementation only if ins
 | 39 A39 | M C S U | Supported-toolchain, exact-manifest CI gates with explicit required test selection and zero silent skips; attach artifacts | A01 and all implemented slices |
 | 40 A40 | U | Required-control inventory closes mobile/theme/keyboard/error/persistence gaps; link each UI acceptance to workflow row and backend evidence | Selected workflows |
 
-**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). Next dependency-ready item: A07 (see A06 evidence below).** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
+**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). A07 now has passing runtime evidence with the frontend fix (see final A07 evidence below); next dependency-ready item after delivery is A09.** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
 
 ## Inputs still needed before dependent acceptance
 
@@ -589,7 +589,7 @@ errors, screenshots, credentials and failed-run logs remain private under
 
 ### A07 final runtime evidence — 2026-09-05
 
-**Bounded A07 acceptance PASS with the frontend fix; delivery awaiting merge.**
+**Bounded A07 acceptance PASS with the frontend fix.** The linked PRs track delivery and merge state.
 Frontend [PR #146](https://github.com/yegamble/vidra-user/pull/146), revision
 `fde5ccc`, restores the direct src after HLS teardown. Meta PR #89 contains the
 harness and reviewed [complete result](evidence/a07-playback-after.json).
@@ -617,3 +617,11 @@ The successful private output is `/tmp/vidra-a07-r16`; failures remain under
 r1–r15. Next dependency-ready item is A09 (same ID through real search), then
 A08. Dependent playback runs requiring this fix must select the recorded local
 patch fixture or a later verified release containing `fde5ccc`.
+
+The original A01 frontend digest was restored after the successful run and its
+HTTPS home page returned 200; the disposable VM was then stopped. The local
+A07 patch image and exact build source remain available for dependent rehearsals.
+A09 preflight found `e2e-backed/search-discovery.spec.ts` still gated by
+`E2E_SEARCH_SERVICE=true`; its two cases alone do not prove this same ID's
+outbox/index/UI path, privacy/deletion rehydration or fallback/reconcile. Those
+remain required A09 work, not implied by green general frontend CI.
