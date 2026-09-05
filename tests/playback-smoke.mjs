@@ -56,7 +56,8 @@ const id = uuid(a06.video_id);
 result.video_id = id;
 const checkpoint = () => writeFileSync(join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n');
 const jobSnapshot = () => JSON.parse(sql(`SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,updated_at FROM transcode_jobs WHERE video_id='${id}' ORDER BY created_at DESC LIMIT 1) j`));
-const measurePlayback = async page => {
+const measurePlayback = async (page, source = 'blob:') => {
+  await page.waitForLoadState('networkidle');
   const player = page.locator('#main-content').getByTestId('video-player').first();
   const video = player.locator('video'); await expect(video).toBeVisible();
   // Visibility precedes the async playback-session/engine attachment. Starting
@@ -64,6 +65,7 @@ const measurePlayback = async page => {
   await expect(async()=>{
     result.ready_sample=await video.evaluate(v=>({ready:v.readyState,duration:v.duration,src:v.currentSrc.split('?')[0],error:v.error?.message}));checkpoint();
     assert.ok(result.ready_sample.ready>=2 && result.ready_sample.duration>=4.9);
+    assert.ok(source==='blob:' ? result.ready_sample.src.startsWith(source) : result.ready_sample.src.endsWith(source));
   }).toPass({timeout:60000});
   await video.evaluate(v => {v.pause();v.currentTime=0;v.muted=false;v.volume=1;});
   // Measure the production engine through the media API; UI-control behavior
@@ -158,7 +160,7 @@ try {
    sql(`UPDATE streaming_playlists SET state='pending' WHERE video_id='${id}'`);
    assert.ok(!(await api(actor,`/api/v1/videos/${id}`)).body.hls_url);
    await page.goto(`/videos/${id}`);
-   result.progressive=await measurePlayback(page);
+   result.progressive=await measurePlayback(page,'/original');
    assert.ok(result.progressive.src.endsWith('/original'));
    result.checks[phase]='PASS';
  } finally {
