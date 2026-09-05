@@ -857,3 +857,42 @@ checks passed. The fixture is public and its original policies are restored.
 Remaining A08 acceptance: copied captions/storyboards and remaining media paths,
 instance-wide download policy, source-import UUID aliases, oEmbed/feed/sitemap
 and other metadata, and unlisted/account-unlisted discovery transitions.
+
+
+## A08 metadata, discovery and source UUID routing — 2026-09-05
+
+**Six discovery/metadata/alias groups PASS; full A08 remains OPEN.** Frontend
+HTTP-parent fix #148 is merged (`5f7efe3`) and download/embed evidence #93 is
+merged (`b10ee3f`). The new [required helper](../tests/discovery-links-smoke.mjs)
+and [complete result](evidence/a08-discovery-aliases.json) use the same exact
+source fixture from the preceding checkpoint and retain image/fixture identities.
+
+Canonical and OpenGraph URLs match the stored code; OpenGraph title matches the
+video. oEmbed discovery points at that canonical link, and the actual provider
+returns the correct title and working embed path. Instance/channel RSS link to
+the code while retaining the UUID permalink as their GUID; the sitemap advertises
+the canonical code. Every endpoint returned 200. Anonymous feed/search/RSS/
+sitemap include the original public fixture.
+
+Changing the video to unlisted excludes it from all four discovery surfaces,
+while its direct watch page decodes audio/video. Changing its owning account to
+unlisted also excludes the public video from those surfaces, while direct video
+and channel APIs return 200. Restoring the account restores discovery. Private
+visibility excludes the video from those surfaces and makes oEmbed return 401.
+The helper restores public visibility and the account's original listed status.
+
+For legacy source routing, a fresh synthetic source UUID is temporarily assigned
+to this fixture's previously-empty `peertube_uuid`. Its real Flickr-base58 `/w/`
+path and `/videos/watch/{source UUID}` both reach the existing stored-code page,
+preserve `?t=2`, and decode the same media. The conditional SQL update and cleanup
+both affect exactly this fixture; the mapping is cleared afterward. This proves
+the source-UUID routing mechanism, **not** an actual PeerTube import or cutover;
+those remain A18–A23 requirements.
+
+The command exits 0 with six groups PASS, no skips, privacy/account restoration
+200 and alias cleanup confirmed. Python20/Node3 tests, helper syntax, production
+Compose config validation and diff checks passed. No product code, shell script,
+workflow or production pin changed. Private output: `/tmp/vidra-a08-discovery-r1`.
+Remaining A08 work is the copied caption/storyboard/remaining media-path boundary
+and instance-wide download policy. Cached frontend metadata freshness is not
+certified as immediate revocation by this origin/distribution test.
