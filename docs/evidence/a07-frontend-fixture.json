@@ -1,0 +1,13 @@
+{
+  "frontend_base_revision": "b7520f96856642c573ddf62e8b46acf13e015621",
+  "frontend_fix_revision": "fde5ccc1c33eb35c5445b4276ee4fdc5ed63f64d",
+  "changed_production_files": [
+    "lib/use-playback-engine.ts"
+  ],
+  "patched_engine_sha256": "e6d0eac4f205c843b16a0351854fe176e7ab45dfba2e1fba24196e74fafaac86",
+  "image_id": "sha256:85103a70d6d48cace985f6cb60279ff168148eef15e23ae87dc7571c25a253cb",
+  "platform": "linux/arm64",
+  "image_tag": "vidra-user:a07-progressive",
+  "scope": "Frozen A01 frontend source plus only the playback engine patch. Local native ARM64 image, no registry publication. Core/search remain A01 frozen release images; emulated runtime is functional evidence, not capacity.",
+  "runtime_image_id": "sha256:85103a70d6d48cace985f6cb60279ff168148eef15e23ae87dc7571c25a253cb"
+}

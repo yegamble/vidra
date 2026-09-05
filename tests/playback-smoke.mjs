@@ -51,6 +51,7 @@ const api = (actor, path, method = 'GET', body) => actor.page.evaluate(async ({ 
 }, { path, method, body, token: actor.token });
 
 const a06 = JSON.parse(readFileSync('docs/evidence/a06-upload.json'));
+assert.equal(a06.fixture_sha256,hash(bytes));
 assert.equal(a06.vm, vm); assert.equal(a06.project, a03.project); assert.equal(a06.status, 'PASS');
 const id = uuid(a06.video_id);
 result.video_id = id;

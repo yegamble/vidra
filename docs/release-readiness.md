@@ -586,3 +586,34 @@ returned anonymous 404 and authenticated-owner 200/23,236 bytes; the original
 exists, but A08 must verify private image delivery through the actual UI. Raw
 errors, screenshots, credentials and failed-run logs remain private under
 `/tmp/vidra-a07-*`. No production deployment or release publication occurred.
+
+### A07 final runtime evidence — 2026-09-05
+
+**Bounded A07 acceptance PASS with the frontend fix; delivery awaiting merge.**
+Frontend [PR #146](https://github.com/yegamble/vidra-user/pull/146), revision
+`fde5ccc`, restores the direct src after HLS teardown. Meta PR #89 contains the
+harness and reviewed [complete result](evidence/a07-playback-after.json).
+[Fixture provenance](evidence/a07-frontend-fixture.json) proves the only changed
+production file in the frozen A01 frontend source is `lib/use-playback-engine.ts`.
+Core/search remain A01 images. The original release frontend still has this
+bug; no new release was published.
+
+| Acceptance | Observed result |
+|---|---|
+| Same media/job | A06 video `0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4`; exact fixture SHA-256 matches A06; job `c269149a-3a85-4001-acee-c8ac06e08c3d` done, attempt 1. Earlier stalled-lease observations and failure logs remain private; this final run certifies completion, not a new controlled worker-kill test |
+| Advertised tree | Nine nonempty 200 assets: master, video/audio media playlists, both init files and fragments, iframe playlist and MP4; CMAF, advertised 320×240 rendition. Every referenced URI is followed through the actual HTTPS edge |
+| HLS decode | Unmuted 1.645s, 48 frames, 27,377 audio decoded bytes, 320×240; readyState 4, completed seek 3.5s. Menu selection of the advertised 240p followed by repeated unmuted decode succeeds; this single-rung fixture does not certify ABR switching |
+| Original/audio | Original decoded by browser to 5s/48kHz/mono PCM, nonzero peak 0.157. Under real pending-playlist state, API and session omit HLS; player chooses `/original`, advances unmuted to 1.596s with 43 frames/16,557 decoded audio bytes and completes seek 3.5s |
+| Recovery | `finally` restores ready, then API advertises HLS again. Only this synthetic playlist row is temporarily changed; no bytes deleted, migrations altered or production service touched |
+| Reproduction/TDD | Original-image run FAIL with empty blob; rendered-video regression fails with null src before the fix. After fix, 37 playback-engine tests pass; full frontend gate is 228 files/2,285 tests, zero skips, on Node 24.4.1. Typecheck/icon lint pass, lint has zero errors/two existing warnings |
+| Harness/visual | Complete six-check run exits 0 on Node 25.9.0/Chromium 151.0.7922.34. Reviewed screenshot shows the actual test pattern at 3.5s. Meta Python 20 and Node 3 assertions pass, Compose config validation and diff check pass. No shell script changed |
+
+This certifies browser media decoding and no-ready-tree progressive selection,
+not physical speaker output, fatal-network-error recovery, Play-button timing,
+ABR, or private-thumbnail UI delivery. A40/A08 retain those relevant follow-ups.
+A channel avatar is also visibly broken in the watch screenshot; its identity
+and delivery need their own UI acceptance rather than a playback claim.
+The successful private output is `/tmp/vidra-a07-r16`; failures remain under
+r1–r15. Next dependency-ready item is A09 (same ID through real search), then
+A08. Dependent playback runs requiring this fix must select the recorded local
+patch fixture or a later verified release containing `fde5ccc`.
