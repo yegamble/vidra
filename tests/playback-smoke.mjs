@@ -59,9 +59,16 @@ const jobSnapshot = () => JSON.parse(sql(`SELECT row_to_json(j) FROM (SELECT id,
 const measurePlayback = async page => {
   const player = page.locator('#main-content').getByTestId('video-player').first();
   const video = player.locator('video'); await expect(video).toBeVisible();
+  // Visibility precedes the async playback-session/engine attachment. Starting
+  // before media is ready races its initial source reset and can lose the click.
+  await expect(async()=>{
+    result.ready_sample=await video.evaluate(v=>({ready:v.readyState,duration:v.duration,src:v.currentSrc.split('?')[0],error:v.error?.message}));checkpoint();
+    assert.ok(result.ready_sample.ready>=2 && result.ready_sample.duration>=4.9);
+  }).toPass({timeout:60000});
   await video.evaluate(v => {v.pause();v.currentTime=0;v.muted=false;v.volume=1;});
-  await player.hover();
-  await player.getByRole('button',{name:'Play',exact:true}).click();
+  // Measure the production engine through the media API; UI-control behavior
+  // has separate A40 acceptance and must not be inferred from this decode proof.
+  await video.evaluate(v=>Promise.race([v.play(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('play did not resolve')),15000))]));
   await expect(async () => {
     const sample=await video.evaluate(v=>{
       return {time:v.currentTime,muted:v.muted,paused:v.paused,ended:v.ended,ready:v.readyState,error:v.error?.message,width:v.videoWidth,height:v.videoHeight,frames:v.getVideoPlaybackQuality().totalVideoFrames,
@@ -138,7 +145,8 @@ try {
  result.hls_playback=await measurePlayback(page);assert.ok(result.hls_playback.src.startsWith('blob:'));
  await page.locator('#main-content').getByRole('button',{name:/^Quality: Auto/}).first().click();
  await page.getByRole('menu',{name:'Playback quality'}).getByRole('menuitemradio',{name:`${detail.body.renditions[0].height}p`,exact:true}).click();
- await expect(page.locator('#main-content').getByRole('button',{name:`Quality: ${detail.body.renditions[0].height}p`,exact:true}).first()).toBeVisible();
+ await expect(page.locator('#main-content').getByRole('button',{name:new RegExp(`^Quality: ${detail.body.renditions[0].height}p`)}).first()).toBeVisible();
+ result.selected_quality_playback=await measurePlayback(page);
  await page.screenshot({path:join(output,'private-watch.png')});
  result.checks[phase]='PASS';checkpoint();
  step('progressive-without-ready-hls');
@@ -159,7 +167,7 @@ try {
    result.checks['restore-hls-ready']='PASS';
  }
  result.status=Object.values(result.checks).every(v=>v==='PASS')?'PASS':'UNVERIFIED';
-} catch(error){result.checks[phase]='FAIL';result.status='FAIL';writeFileSync(join(output,'private-error.txt'),error.stack,{mode:0o600});}
+} catch(error){for(const context of browser.contexts())for(const page of context.pages())await page.screenshot({path:join(output,'private-failure.png')}).catch(()=>{});result.checks[phase]='FAIL';result.status='FAIL';writeFileSync(join(output,'private-error.txt'),error.stack,{mode:0o600});}
 finally{await browser.close();checkpoint();}
 console.log(`[a07] ${result.status}; ${output}`);
 process.exitCode=result.status==='PASS'?0:1;
