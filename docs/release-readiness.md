@@ -984,3 +984,49 @@ gate weakening. Both component work branches were deleted locally and remotely.
 Meta #95 carries this final delivery record; merge it on its final green checks,
 then delete its work branch. The fixture remains restored and stopped. A08 is
 the only acceptance item completed here; the earlier runtime limitations remain.
+
+
+## A10 recovery checkpoint — 2026-09-05
+
+**A10 OPEN — resume/cancel slice verified; remaining lifecycle acceptance unverified.**
+Dependencies A07/A09 have prior runtime evidence. Observable PUB-02 outcomes:
+interruption and service restart preserve uploaded chunks, a fresh session resumes
+without duplicate files/quota, and failed cancellation remains recoverable until
+cleanup succeeds. PUB-02 batch and PUB-04 publishing lifecycle remain separate
+required work; this checkpoint does not mark either entire row PASS.
+
+Frontend [PR #152](https://github.com/yegamble/vidra-user/pull/152), revision
+`420bc56`, fixes two false-success paths: failed inventory checks were hidden,
+and failed cancellation/deletion removed the recovery row. Inventory now has a
+retry action. Discard waits for confirmed cancellation and draft deletion; failed
+draft deletion remains retryable and disables unsafe resume. No API/SQL contract,
+authorization, privacy, dependencies or workflow changes.
+
+[Evidence](evidence/a10-recovery.json): real Chromium and the restored lab API
+proved an 11,207,830-byte two-chunk MP4 survives interruption and API restart.
+A fresh browser rejected the wrong file, sent only chunk 1, and downloaded a
+published original with matching SHA-256. SQL showed one original and quota
+matched stored files. Browser network fault injection proved inventory retry
+and failed Discard retaining its row. The real cleanup retry removed the draft,
+left quota unchanged and left zero session chunk files on disk. API final health
+is healthy; the source VM and test runner were untouched.
+
+TDD: three new tests failed before implementation and passed after. Required
+frontend gates PASS: TypeScript, lint (0 errors, 2 existing warnings), icons,
+229 unit files / 2,292 tests. Meta Compose config and diff/JSON checks PASS
+(nested core `6a6ea24`). No scripts changed. Runtime used the development frontend and actual
+lab backend; PR CI is pending, so no production-build CI result is claimed.
+
+Failed attempts retained: the first draft fixture used a channel UUID where the
+contract requires a handle (404); the corrected run persisted chunk 0, then its
+service-outage UI assertion timed out while the VM temporarily lost SSH. Immediate
+API recovery also failed. A later successful restart resumed that same session;
+the inventory error UI was separately proven through request-level network abort.
+No mocked success responses, raised limits or duplicate replacement drafts.
+
+Next: PUB-02 partial batch failures, then PUB-04 schedule/quarantine/replacement
+with processing, search and browser persistence evidence. Also verify recovery
+across reload between successful cancellation and failed draft deletion. The
+private reproduction paths/hashes are recorded in evidence. This focused slice
+is reviewable; A10 and the wider A09–A40 goal remain open. Merge authorization
+is still pending; no merge is claimed.
