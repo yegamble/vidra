@@ -1144,3 +1144,40 @@ replacement must preserve stable identity/metadata and playable old/new
 versions, including failure retaining the previous usable generation. Partial
 cleanup/reload gaps remain recorded. No merge, release or production deployment;
 the wider A09–A40 goal remains OPEN.
+
+### A10 replacement and CI checkpoint — 2026-09-05
+
+**A10 OPEN — replacement failure retention and scheduling CI pending.**
+[Replacement evidence](evidence/a10-replacement.json) records real Chromium
+playback during a 48 MB replacement and after its HLS generation was promoted.
+The video ID, short link, channel, title, description, privacy, creation time and
+publish-after-transcode setting stayed equal. Views did not decrease; the
+returned original matched the replacement SHA-256. The existing player kept
+advancing with no media error before, during and after promotion, including a
+seek after promotion. The replacement feature override was restored exactly.
+
+An invalid replacement did not settle within the test's 90-second terminal wait.
+Read-only inspection found the existing five-attempt exponential retry policy,
+with the safe error "the file is not a playable video" and a pending job after
+attempt four. This is not terminal-failure proof. Next: observe the natural final
+attempt, then verify the previous master/original and actual playback survive.
+No retries, job states or clocks were modified to manufacture completion.
+
+Scheduling frontend #153's first CI run exposed stale test sequencing: the
+shared backed fixture and two mocked tests waited for finalization before
+Publish. Revision `217b083` saves metadata first, then asserts the unchanged
+processing outcome; the mocked publish test additionally requires zero
+completion requests before Publish and exactly one afterward. Typecheck, lint
+(two existing warnings), production build and both previously failing mocked
+Chromium tests PASS (2/2). Full updated local/S3 CI is pending. Earlier unit and
+icon gates remain recorded above; this follow-up changes only tests.
+
+Recovery frontend #152 and core #160 now have green CI, including their actual
+integration suites. This supplements, rather than reclassifies, the explicitly
+unrun local tagged core suites. Partial-discard fault injection confirms honest
+cleanup errors and a retained draft discoverable in its channel after reload;
+[Partial-cleanup evidence](evidence/a10-partial-cleanup.json) now confirms UI
+deletion, API 404, zero video-file rows and unchanged used quota after reload.
+Test-selector corrections and transient inventory failure remain in private
+checkpoints. Meta Compose config, evidence JSON and diff checks PASS.
+No acceptance completion, merge, release or production deployment is claimed.

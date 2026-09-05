@@ -1,0 +1,51 @@
+{
+  "status": "PARTIAL_PASS",
+  "vm": "vidra-a02-20260905194815-89796",
+  "checks": {
+    "old_generation_playable_during_swap": "PASS",
+    "promotion_identity_integrity_playback": "PASS"
+  },
+  "browser": "151.0.7922.34",
+  "original_setting": {
+    "key": "video_replace_enabled",
+    "type": "bool",
+    "value": false,
+    "default": false,
+    "overridden": false,
+    "page": "vod",
+    "section": "uploads"
+  },
+  "video_id": "2c53cd8c-3279-438f-b5f3-c373a3d1e085",
+  "before_metadata": {
+    "id": "2c53cd8c-3279-438f-b5f3-c373a3d1e085",
+    "short_code": "1Yyxf6Sjgf4",
+    "channel_id": "63f04679-fa05-4610-b35f-fbacb649614b",
+    "title": "A10hold1788646285303",
+    "description": "",
+    "privacy": "public",
+    "created_at": "2026-09-05T22:11:25.292323Z",
+    "publish_after_transcode": true
+  },
+  "old_master_key": "streaming-playlists/2c53cd8c-3279-438f-b5f3-c373a3d1e085/master.m3u8",
+  "playback_before": 2.868962,
+  "playback_during": {
+    "time": 14.004793,
+    "error": null
+  },
+  "new_master_key": "streaming-playlists/2c53cd8c-3279-438f-b5f3-c373a3d1e085/r1/master.m3u8",
+  "replacement_sha256": "068571964c0d328287886061dd27118f090e7ba9421102684e4f53bdaf994bc3",
+  "playback_after": {
+    "time": 194.07316,
+    "error": null,
+    "frames": 4306
+  },
+  "setting_restored": "PASS",
+  "invalid_replacement": {
+    "status": "UNVERIFIED",
+    "observation": "UI did not reach terminal state within 90 seconds; persisted finalize job pending after attempt 3 with safe error: the file is not a playable video. Existing policy retries five times with exponential backoff.",
+    "next_action": "Wait for terminal job/session state; verify prior master, original SHA and playback remain usable."
+  },
+  "frontend_revision": "fd7ce8f",
+  "core_runtime": "6a6ea24-equivalent lab base",
+  "acceptance": "A10 replacement"
+}
