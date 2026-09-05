@@ -96,6 +96,8 @@ def guest(stage):
         require(not run(['docker', 'volume', 'ls', '-q'], 'empty-volumes')[1].strip(),
                 'VM has volumes; fresh first-deploy evidence required')
         evidence['checks']['empty_runtime'] = 'PASS'
+        evidence['released_deploy_sha256'] = sha(root / 'deploy/deploy.sh')
+        shutil.copyfile(stage / 'deploy-under-test.sh', root / 'deploy/deploy.sh')
         evidence['deploy_sha256'] = sha(root / 'deploy/deploy.sh')
         # Only the disposable bundle copy is changed: use immutable A01 images
         # with explicit platforms while leaving the semver/env and ledger gates intact.

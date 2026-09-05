@@ -1445,7 +1445,8 @@ bash tests/runtime-smoke.sh /tmp/vidra-a02-smoke-r1 \
 The VM must still have **no containers or volumes**. The harness refuses a used
 runtime; use a new A02 VM for another full rehearsal. It copies the installation
 inside that VM, pins the copy's application images/platforms to A01, and uses a
-unique Compose project. It preserves the released deploy script, semver gates,
+unique Compose project. It runs this checkout's deploy script against that bundle
+and records both script hashes, retaining the semver gates,
 bundle provenance and independent core ledger assertion. The test independently
 checks the search ledger against migration filenames at the frozen source SHA.
 No workstation install or production host is accepted.

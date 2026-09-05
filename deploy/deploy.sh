@@ -668,8 +668,21 @@ step "5/6 reload Caddy"
 # prevent, and neither is visible in the loopback probes below — they connect
 # to api and frontend directly, behind Caddy.
 reload_caddy() {
-  local attempt
+  local attempt mounted
   for attempt in 1 2 3 4 5; do
+    # Setup promotes files with an atomic rename. A file bind mount retains
+    # the old inode, so reload can succeed while serving the previous domain
+    # or TLS mode. Refresh only Caddy's mount when its bytes actually differ;
+    # unchanged deployments keep the graceful reload path.
+    if mounted="$("${COMPOSE[@]}" exec -T caddy cat /etc/caddy/Caddyfile 2>/dev/null)"; then
+      if [ "$mounted" != "$(cat "$REPO_ROOT/deploy/Caddyfile.local")" ]; then
+        log "Caddyfile mount is stale; recreating Caddy before reload"
+        "${COMPOSE[@]}" up -d --no-build --no-deps --force-recreate caddy || return 1
+      fi
+    else
+      sleep 2
+      continue
+    fi
     if "${COMPOSE[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; then
       log "caddy reloaded (attempt $attempt)"
       return 0

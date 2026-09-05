@@ -30,6 +30,7 @@ step "start retained disposable VM"
 multipass start "$VM" > "$OUT/start.log" 2>&1
 multipass exec "$VM" -- mkdir "$STAGE"
 multipass transfer "$2" "$VM:$STAGE/candidate.json"
+multipass transfer "$ROOT/deploy/deploy.sh" "$VM:$STAGE/deploy-under-test.sh"
 for file in runtime_smoke.py blank_server_smoke.py; do
   multipass transfer "$ROOT/tests/$file" "$VM:$STAGE/$file"
 done
