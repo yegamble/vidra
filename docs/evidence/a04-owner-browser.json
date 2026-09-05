@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "checks": {
+    "preclaim_rotation": "PASS",
+    "owner_claim_role": "PASS",
+    "ordinary_signup_role": "PASS",
+    "session_persistence": "PASS",
+    "rejected_auth": "PASS"
+  },
+  "a03_sha256": "2b71f25ae0c83a4e73f226d7f6f8c25c876e0d3a71029cfbe771169819245100",
+  "helper_sha256": "b4fa6afbc6bedab03c277418dde575b4e5b9ac25e7213ccd66e3421f04c4a474",
+  "project": "vidra-a03-20260905124354-92490",
+  "vm": "vidra-a02-20260905123822-89250",
+  "node": "v25.9.0",
+  "browser": "151.0.7922.34"
+}

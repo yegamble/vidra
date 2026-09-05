@@ -397,3 +397,61 @@ workflows remain individually unverified. Emulation is functional evidence,
 not a capacity claim. A changed Caddyfile now causes a brief Caddy-only restart;
 unchanged configurations keep graceful reload. A04 is next, with a dedicated
 unclaimed browser fixture rather than the existing normally-skipped wizard test.
+
+
+## A04 owner/basic-session slice — 2026-09-05
+
+**Slice verification PASS; A04 remains open for the remaining AUTH-02 cases.** [PR #86](https://github.com/yegamble/vidra/pull/86) tracks this slice and its delivery state.
+The previous turn merged A03 as `386a179` ([PR #85](https://github.com/yegamble/vidra/pull/85)).
+This slice adds the [browser harness](../tests/owner-auth-smoke.mjs), its three
+assertion tests and an [isolated concurrent-claim harness](../tests/owner_claim_race.py).
+No application code, contract, migration, workflow, dependency or release pin changed.
+
+Observable result: a real unclaimed production-mode A03 stack refuses signup
+while registration is open; restart rotates its random boot token; wrong/old
+claims create no users; the browser claims the owner and reaches the signed-in
+confirmation. Persisted API/SQL reads prove admin role, ordinary signup yields
+user role and admin refusal, two hard reloads rotate the protected refresh
+cookie, logout stays logged out, and fresh browser login succeeds. A separate
+new database/API proves exactly one winner when two valid owner claims race.
+
+[Browser result](evidence/a04-owner-browser.json) records the exact helper hash,
+A03 evidence hash, VM/project, Node **v25.9.0**, and Chromium **151.0.7922.34**.
+It ran from implementation `cc56f65` using the sibling's installed Playwright
+against the frozen A03 release images, not a development frontend or mocked API.
+The [race result](evidence/a04-owner-race.json) records the pinned core image and
+helper hash; race helper/procedure committed as `453f30e`.
+
+| Verification | Result and boundary |
+|---|---|
+| Host/safety | Retained disposable Ubuntu ARM64 VM `vidra-a02-20260905123822-89250`, A03 project `vidra-a03-20260905124354-92490`; guard requires zero users before browser bootstrap and preserves existing output directories. Own synthetic failed-run DB was backed up privately before restoring the known preclaim backup; no operator data touched |
+| Browser execution | `node tests/owner-auth-smoke.mjs /tmp/vidra-a03-r3 /tmp/vidra-a04-r3`: exit **0**, five groups PASS / zero failures/skips. Dedicated Chromium contexts map secure.video.test to the VM; no route interception. Contexts ignore the lab certificate; A03 separately proved CA verification |
+| Preclaim/rotation | With registration explicitly open via released CLI setup and normal deploy, signup returns 403 owner_claim_required. API restart produces a distinct boot token; old and invalid tokens return 403 owner_claim_invalid. SQL still has zero users |
+| Owner | Actual setup form submission returns 201; UI shows Your server is ready and signs in. Auth response and GET auth/me prove owner username/admin role; admin/system is 200, owner_claim_pending false, SQL exactly one admin; spent-token claim returns 403 |
+| Ordinary actor | Browser signup returns 201/user role; SQL exactly one ordinary user; its bearer token receives 403 from admin/system |
+| Sessions | Two hard reloads each perform a real 200 refresh with correct user role and visible signed-in menu. Cookie is Secure/httpOnly and no refresh token appears in cookie-mode response bodies. Browser logout clears the cookie and remains signed out after reload; new form login with original credentials returns 200 and the persisted user |
+| Rejections | Wrong-password login returns 401 with no session tokens. Admin closes registration through the actual settings API; signup returns 403; SQL still contains exactly the two created accounts |
+| Race | New DB `a04race1788613956`, same digest-pinned core migrator/API with workers disabled. Two request threads leave a barrier together: one 201, one 403 owner_claim_invalid; SQL exactly one user/admin, spent token refused. Exit **0**, one group PASS; test API stopped, separate DB retained |
+| Local gates | TDD first failed on missing harness/contract validator. Final Node assertion tests: **3 passed / 0 failed / 0 skipped**. Existing Python suite: **20 passed**, zero skips. New Python helper compiles; production Compose config -q with dummy secrets and git diff --check pass. No shell scripts touched |
+| Visual check | Signed-in ordinary-user home screenshot inspected; real header/account menu and library/studio navigation rendered. Screenshot remains private; it does not replace the API/SQL assertions |
+
+Exploratory failures were harness failures, not suppressed product defects:
+closed registration correctly returned generic forbidden before the owner gate;
+the fixture was changed to open registration before testing that gate. The
+browser claim then succeeded but harness readback used access_token instead of
+the generated contract's token field; fixed and covered by a contract assertion.
+Docker's emulation warning preceded the race container ID; parser corrected,
+created test containers stopped, and the complete race rerun passed.
+
+Raw private evidence: `/tmp/vidra-a04-r{1,2,3}` on the workstation,
+`/root/vidra-a04-race-r{1,2,3}` inside the VM. The failed-claim fixture is retained
+as `/home/ubuntu/vidra-a03-20260905124354-92490/private/a04-failed-run-preserved.dump`.
+Credentials remain in private-accounts.json (mode 0600 under mode 0700 output),
+never in committed results. Primary fixture ends with owner + ordinary user,
+registration closed; race DBs are separate. No production deployment occurred.
+
+**Next action: finish A04's remaining AUTH-02 approval/accept/reject, explicit
+expiry/revocation and multi-tab cases using these retained actors and fresh
+pending actors, then assess the full row before advancing to A06.** Provider
+signup paths still need their A05 provider fixtures. Neither this slice nor a
+green CI lane closes those unexecuted requirements.

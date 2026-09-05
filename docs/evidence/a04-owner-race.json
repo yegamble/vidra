@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "database": "a04race1788613956",
+  "checks": {
+    "simultaneous_claims": "PASS: one 201, one 403 owner_claim_invalid, exactly one persisted admin"
+  },
+  "image": "ghcr.io/yegamble/vidra-core@sha256:9f829f26bdfd323c49e6f28061c07758c680dec5d3e2249a515574d2478a4c6a",
+  "helper_sha256": "db25ff60b3b7a1a0c06ef2e51f38a8a59a4bb026792ef982921c8016634bd087"
+}
