@@ -1470,3 +1470,36 @@ test secrets stay in the guest's root-only `private` directory. The VM is stoppe
 and retained on success or failure. A failure is evidence to investigate, never
 a skipped acceptance. These checks do not certify owner claim, browser workflows,
 media processing, public ACME, external TLS, lock contention or recovery objectives.
+# Owner and session rehearsal (A04)
+
+With Node >=24 and the sibling frontend's installed Playwright/Chromium, run:
+
+```sh
+node tests/owner-auth-smoke.mjs /tmp/vidra-a03-r3 /tmp/vidra-a04-new
+node --test tests/owner_auth_smoke_test.mjs
+```
+
+The target must be the retained A03 disposable VM with **zero users**. The
+harness refuses an already-claimed instance; do not point it at an operator
+stack or delete accounts to make that guard pass. It opens registration through
+the released setup/deploy procedure before claim so signup refusal proves the
+owner gate. It verifies boot-token rotation, claims through the actual browser,
+checks API/SQL roles, signs up a normal user, reloads twice, signs out/in and
+checks rejected authentication and closed registration. Registration ends closed.
+The two synthetic users remain available for later acceptance work.
+
+The browser uses an explicit lab-host DNS mapping and ignores the lab certificate
+only in its isolated Playwright contexts. A03 separately verifies that certificate
+chain with the lab CA. No route interception or mocked backend is used.
+
+The output directory is private: `private-accounts.json`, error diagnostics and
+screenshots can contain synthetic credentials or account details and must not be
+committed. Only the sanitized `result.json` is suitable for acceptance evidence.
+No screenshot/trace of a filled setup-token form is exported.
+
+For the simultaneous-claim case, transfer `tests/owner_claim_race.py` into the
+same VM and run it as root with the A03 Compose project and a new root-only output
+directory. It creates a new database, runs the pinned core image's real migrations,
+starts a separate API with workers disabled, then releases two claim requests at
+a barrier. Exactly one must create an admin. The test container is stopped and
+its database/logs retained; the primary A04 users are unaffected.
