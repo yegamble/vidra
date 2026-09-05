@@ -1,0 +1,72 @@
+{
+  "acceptance": "A10",
+  "status": "PARTIAL_PASS",
+  "frontend_revision": "420bc56",
+  "frontend_pr": "https://github.com/yegamble/vidra-user/pull/152",
+  "resume": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "restart_chunk_persistence": "PASS",
+      "fresh_session_resume_integrity_quota": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "video_id": "74cb423f-807b-4f3a-8fe2-b2d1794fd7ad",
+    "upload_id": "f341b213-74b6-4259-ad06-5c4eadc57f81",
+    "file_bytes": 11207830,
+    "file_sha256": "2faa06c872080102060c1cc711281d4f5344c9d68ee55732c09f3a73a9949031",
+    "quota_before": 3492053,
+    "chunk_indexes_sent_on_resume": [
+      1
+    ],
+    "video_state": "published",
+    "quota_after": 14981233
+  },
+  "cancellation": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "inventory_network_failure_retry": "PASS",
+      "failed_discard_retained": "PASS",
+      "discard_retry_draft_files_quota": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "video_id": "91f95981-8867-4be1-aaa2-4928f90e1280",
+    "upload_id": "4fdefd10-c05a-437e-9017-2fddca6b01f4",
+    "quota_bytes": 43305893
+  },
+  "cancelled_chunk_files_remaining": 0,
+  "api_final_health": "healthy",
+  "verification": {
+    "tdd": "3 red then 3 green",
+    "typescript": "PASS",
+    "lint": "PASS (0 errors, 2 existing warnings)",
+    "icons": "PASS",
+    "unit_files": 229,
+    "unit_tests": 2292,
+    "meta_compose": "PASS; nested core 6a6ea24c0e8262b594f19d1fba4870fe77e3ab4c"
+  },
+  "fault_injection": {
+    "inventory": "Aborted only the browser inventory request; retry used the real API",
+    "discard": "Browser offline mode; retry used the real API"
+  },
+  "attempts": [
+    {
+      "run": "resume-r1",
+      "result": "FAIL before creating draft: fixture used channel UUID instead of required handle"
+    },
+    {
+      "run": "resume-r2",
+      "result": "Network interruption PASS; inventory UI assertion timed out during temporary VM SSH loss. Immediate API restart failed. Subsequent restart and health probe succeeded; existing session resumed in r3."
+    }
+  ],
+  "unverified": [
+    "batch partial failure",
+    "schedule/quarantine/privacy and replacement lifecycle",
+    "page reload between session cancellation and failed draft deletion"
+  ],
+  "private_reproductions": {
+    "/tmp/vidra-a10-resume.mjs": "1ba733c4d2df2bdad4872cfc677765408cbf666e093d0b5bc8623a40cedfc868",
+    "/tmp/vidra-a10-cancel.mjs": "29f3dbb97bbb646cbe6023baa6b2fd3aa613a5c3c1e76b8b3c6767d38e62db78"
+  }
+}
