@@ -1017,3 +1017,59 @@ focused A36 fix/checkpoint, not full recovery acceptance: encrypted retrieval,
 matched media snapshot, independent restore and selected offsite target remain
 required. Next: quiesce fixture writers, capture a matched media/DB/config set,
 then encrypt/retrieve and validate it before A37 replacement-host recovery.
+
+## A36 matched capture and encrypted B2 retrieval — 2026-09-05
+
+**A36 runtime acceptance PASS; delivery remains open pending merge authorization.**
+The user selected a new Backblaze B2 test bucket and explicitly authorized
+uploading the client-encrypted synthetic DB/config (including test sealing and
+session keys)/media archives. No DigitalOcean source data has been accessed.
+The backup permission fix is green in [PR #96](https://github.com/yegamble/vidra/pull/96),
+revision `fdfed44`; its merge was rejected by automatic approval review, and
+explicit approval for it and subsequent acceptance merges was requested.
+
+[Matched capture helper](../tests/backup-capture-smoke.py) stops only the
+synthetic fixture's API/search/frontend writers, verifies the exact running
+images and backup script hash, takes the DB/config backup, then snapshots the
+actual canonical media volume with the same stamp. Services restart in `finally`.
+[Offsite helper](../tests/backup-offsite-smoke.py) uploads through S3 with rclone
+crypt, retrieves into a fresh private directory, and compares every archive
+SHA-256 and size. [Complete final result](evidence/a36-offsite.json) includes
+exact images/source revisions, both helper hashes, backup hash, capture times,
+and all archive checksums. No keys, tokens or archive contents are committed.
+
+Final commands (exit 0 each; capture PASS and three recovered archives PASS):
+
+```sh
+python3 tests/backup-capture-smoke.py /tmp/vidra-a08-caption-fixture-r1 /tmp/vidra-a36-set-r3
+python3 tests/backup-offsite-smoke.py /tmp/vidra-a36-set-r3 \
+  /tmp/vidra-a36-b2/private-rclone.conf /tmp/vidra-a36-b2/private-key.json \
+  vidra-acceptance-20260905-a36 /tmp/vidra-a36-offsite-r3
+```
+
+The independently provisioned test bucket is `vidra-acceptance-20260905-a36`,
+endpoint `https://s3.us-east-005.backblazeb2.com`. Bucket readback confirms
+`allPrivate` and `SSE-B2` / AES256. Client encryption and encrypted names are
+also verified by opaque object names and the actual rclone ciphertext header.
+A bucket-scoped seven-day application key provides S3 read/write access;
+the crypt recovery configuration stays outside the bucket, private on the
+operator host. The first attempt failed because rclone tried to create an
+already-existing bucket with that restricted key; `no_check_bucket=true` fixed
+the configuration without granting broader privileges.
+
+All three final archives recover byte-for-byte; the media tar contains 64 files
+and the exact A06 audiovisual fixture. The preceding real `pg_restore -l` and
+configuration comparison prove both schemas and exact config/key inclusion;
+the failed-dump probe proves no finalized failed archive or advanced marker.
+Search models are rebuildable and Redis is disposable per the existing runbook.
+This certifies the synthetic local-storage set to an independent remote B2
+provider, not an unselected production geographic redundancy or S3 version
+retention policy. These are test archives, retained for A37; private recovery
+material and downloaded archives remain under `/tmp/vidra-a36-*`.
+
+Python22, Node3, helper compilation, production Compose validation and diff
+checks PASS; no product behavior changed in this evidence slice. Next: A37
+replacement-host restore from this retrieved set, with login, usable media,
+reindex and measured recovery. Source migration A18–A23 still needs the SSH
+host/user and read-only inventory; other selected integration decisions remain
+explicitly open. The A09–A40 goal is not complete.
