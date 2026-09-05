@@ -1275,3 +1275,35 @@ but that toast assertion is not relabeled as a success.
 Next: review the pending collector permission and observe #154's updated CI.
 Keep A11 open until physical cleanup is proved. Independent A12 work can proceed
 while that external approval remains pending; the A09–A40 goal stays active.
+
+
+## A12 library checkpoint — 2026-09-05
+
+**A12 OPEN — partial library proof; remaining acceptance slices unverified.**
+Observable success remains all AUTH-05, SOC-01 and SOC-02 criteria: persistent
+library actions, intended social recipients/privacy, and complete profile,
+archive, deactivation and deletion behavior. No suite result substitutes for
+those individual workflows.
+
+The session-restoration defect is fixed in [frontend draft PR #155](https://github.com/yegamble/vidra-user/pull/155), revision `4a84aac`:
+channel follow state and private playlist detail wait for the restored viewer;
+changing identity clears pending resource/editor state. Four new regressions
+failed before implementation; all six focused tests now pass. Required gates:
+TypeScript and icons pass; ESLint has zero errors and two existing warnings;
+229 test files / 2,295 tests pass. Backed follow/unfollow and private-playlist
+reload regressions were added; full local/S3 PR CI is pending.
+
+[Library evidence](evidence/a12-library.json) records real Chromium against the
+disposable restored API/PostgreSQL/search/media worker: follow before actual
+uploads, notification/feed after publication, saved reload, owner private
+playlist reload and other-user refusal, add/order/reload, unlisted metadata and
+write denial, and uploaded cover decoding/reload. Registration was temporarily
+enabled only for the three synthetic actors and the exact closed setting was
+restored. Harness rate-limit and expected-status corrections are recorded.
+
+Private detail now loads correctly, but its owner's image element receives 404
+because the cover request lacks bearer authentication. Anonymous refusal still
+passes. Next: a failing authenticated-cover regression and scoped correction,
+then real history/continuation/unfollow, social, profile/archive and deletion
+proof. No production or source migration data was used. A11 frontend PR #154
+and meta PR #102 now have all checks green; physical GC remains approval-blocked.
