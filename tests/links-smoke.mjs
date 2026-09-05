@@ -120,7 +120,7 @@ try{
  },{id,token:actor.token});
  for(const outcome of result.private_media){
    outcome.anonymous=await page.evaluate(async({id,suffix})=>(await fetch(`/api/v1/videos/${id}/${suffix}`)).status,{id,suffix:outcome.suffix});
-   assert.equal(outcome.authenticated,200);assert.equal(outcome.anonymous,404);
+   assert.equal(outcome.authenticated,200);assert.equal(outcome.owner_native,200);assert.equal(outcome.anonymous,404);
  }
  checkpoint();await actor.page.goto(`/v/${code}`);await expect(actor.page.getByRole('heading',{name:title,exact:true})).toBeVisible();
  result.private_playback=await sample(actor.page);

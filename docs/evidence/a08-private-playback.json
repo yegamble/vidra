@@ -1,0 +1,332 @@
+{
+  "status": "PASS",
+  "checks": {
+    "fixture-identity": "PASS",
+    "canonical-legacy-timestamps": "PASS",
+    "share-embed-link": "PASS",
+    "private-owner-and-anonymous-media": "PASS"
+  },
+  "node": "v25.9.0",
+  "vm": "vidra-a02-20260905123822-89250",
+  "project": "vidra-a03-20260905124354-92490",
+  "helper_sha256": "ffdbb5a32ea3d5a8759206a4af77e65a088443db3d6f3b02b1cdc925f32851f1",
+  "fixture_sha256": "23febdedf00e4ffc6ac7ca70f8ba0e5c08712708864381869a3ab6ff271bad6b",
+  "fixture_bytes": 225521,
+  "browser": "151.0.7922.34",
+  "video_id": "0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+  "prepared_fixture_sha256": "fe18f1c80f553f6966853c1481451e9adabf402c8822f44e1b816a4653f251f5",
+  "short_code": "2zyPjYv9d6Q",
+  "links": [
+    {
+      "path": "/v/2zyPjYv9d6Q",
+      "final_url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+      "canonical": "https://secure.video.test/v/2zyPjYv9d6Q",
+      "playback": {
+        "time": 2.068447,
+        "frames": 6,
+        "src": "blob:https://secure.video.test/6a216cb9-0e23-4263-8023-26c4615128f9",
+        "audio": 4968
+      }
+    },
+    {
+      "path": "/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+      "final_url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+      "canonical": "https://secure.video.test/v/2zyPjYv9d6Q",
+      "playback": {
+        "time": 2.538505,
+        "frames": 17,
+        "src": "blob:https://secure.video.test/385434f7-6958-4ac3-9dc7-a66625a12f9f",
+        "audio": 10648
+      }
+    },
+    {
+      "path": "/v/2EtYEDLnpw2iwtA9QAX7WT",
+      "final_url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+      "canonical": "https://secure.video.test/v/2zyPjYv9d6Q",
+      "playback": {
+        "time": 2.470423,
+        "frames": 15,
+        "src": "blob:https://secure.video.test/602efba0-cf47-4b1a-a10e-ce140b618473",
+        "audio": 9855
+      }
+    },
+    {
+      "path": "/w/2eTxedkMPW2HWTa9paw7vs",
+      "final_url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+      "canonical": "https://secure.video.test/v/2zyPjYv9d6Q",
+      "playback": {
+        "time": 2.514653,
+        "frames": 17,
+        "src": "blob:https://secure.video.test/7b541836-67f6-43db-92bc-6ef0b975cf36",
+        "audio": 10357
+      }
+    },
+    {
+      "path": "/videos/watch/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+      "final_url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+      "canonical": "https://secure.video.test/v/2zyPjYv9d6Q",
+      "playback": {
+        "time": 2.536292,
+        "frames": 17,
+        "src": "blob:https://secure.video.test/f343ad9e-5f60-4950-8355-0c6c9cd91751",
+        "audio": 10648
+      }
+    }
+  ],
+  "active_path": "/videos/watch/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+  "share": {
+    "url": "https://secure.video.test/v/2zyPjYv9d6Q?t=2",
+    "embed_url": "https://secure.video.test/embed/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4?t=2"
+  },
+  "embed_playback": {
+    "time": 2.056737,
+    "frames": 6,
+    "src": "blob:https://secure.video.test/ab0597db-7f67-4f04-81fe-e964aa86ccf5",
+    "audio": 4687
+  },
+  "private_media": [
+    {
+      "suffix": "original",
+      "authenticated": 200,
+      "owner_native": 200,
+      "anonymous": 404
+    },
+    {
+      "suffix": "thumbnail",
+      "authenticated": 200,
+      "owner_native": 200,
+      "anonymous": 404
+    },
+    {
+      "suffix": "hls/master.m3u8",
+      "authenticated": 200,
+      "owner_native": 200,
+      "anonymous": 404
+    }
+  ],
+  "private_playback": {
+    "time": 2.850235,
+    "frames": 73,
+    "src": "blob:https://secure.video.test/41c3f067-8a98-4e83-aea6-de6e937f2fae",
+    "audio": 38893
+  },
+  "private_responses": [
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/original",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/original",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/thumbnail",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/thumbnail",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/hls/master.m3u8",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/hls/master.m3u8",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/thumbnail",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/channels/a062c0fd875c2/avatar",
+      "status": 404,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/original",
+      "status": 206,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/instance",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/playback-session",
+      "status": 404,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/channels/a062c0fd875c2/donation-addresses",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/comments",
+      "status": 404,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/rating",
+      "status": 404,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/captions",
+      "status": 404,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/channels/a062c0fd875c2",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/channels/a062c0fd875c2/donation-addresses",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/users/b5fe0b20-feb1-4663-8555-d5b6950f73f3/donation-addresses",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/auth/refresh",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/me/player-settings",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/me/notifications/unread-count",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/watch-progress",
+      "status": 404,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/me/saved",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/me/channels",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/recommendations",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/me/subscriptions",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/watch-progress",
+      "status": 404,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/resolve",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/me/notifications/unread-count",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/original",
+      "status": 206,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/channels/a062c0fd875c2/videos",
+      "status": 200,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/view",
+      "status": 204,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/hls/master.m3u8",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/hls/cmaf/media_1.m3u8",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/hls/cmaf/media_0.m3u8",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/hls/cmaf/chunk-1-00001.m4s",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/hls/cmaf/chunk-0-00001.m4s",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/hls/cmaf/init-1.mp4",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/hls/cmaf/init-0.mp4",
+      "status": 200,
+      "bearer": false
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4/watch-progress",
+      "status": 404,
+      "bearer": true
+    },
+    {
+      "path": "/api/v1/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+      "status": 200,
+      "bearer": true
+    }
+  ],
+  "restore_status": 200,
+  "restored_public": true
+}

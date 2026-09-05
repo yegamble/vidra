@@ -727,3 +727,44 @@ restoration returned 200. The full r5 run still hit 429 during its sweep; pacing
 was increased to 30 seconds per route, and that revised full sweep has not yet
 been rerun. Current active guest installation is the one named in the session
 fixture result; schema remains 127 clean.
+
+
+## A08 private playback checkpoint — 2026-09-05
+
+**Private owner playback PASS; full A08 remains OPEN.** The prior page-session
+fix is merged in frontend [PR #147](https://github.com/yegamble/vidra-user/pull/147)
+(`df327d9`), and the first link checkpoint is merged in meta
+[PR #91](https://github.com/yegamble/vidra/pull/91) (`ee078ea`).
+Core [PR #158](https://github.com/yegamble/vidra-core/pull/158) supplies the missing
+native media credential: cookie-mode login/refresh sets a short-lived HttpOnly
+video-path access cookie, which only private/unpublished GET/HEAD reads consult.
+Explicit bearers take precedence, mutations remain bearer-only, and public
+playback ignores this cookie to preserve anonymous CDN/cache behavior.
+
+The [exact-source fixture](evidence/a08-private-media-fixture.json) again passed
+normal dump/pull/discrete migrations/independent ledger/startup/health gates.
+Schema remains 127 clean, with core source `0f5b347` and the already-proven
+frontend session fix. This is a lab fixture, not a newly published release.
+The [complete browser result](evidence/a08-private-playback.json) records all
+five canonical/legacy timestamp routes, Share/embed playback, owner and anonymous
+asset responses, decoded frames/audio, exact identities and cleanup status.
+
+For the retained A06 video, bearer and owner-native requests to original,
+thumbnail and HLS master each returned **200**; a separate anonymous browser
+returned **404** for each. The owner opened its stored-code private page and
+played actual media with advancing time, decoded frames and audio. The final
+privacy restore returned 200. The 30-second route pacing completed without
+rate-limit interference. Private raw diagnostics remain `/tmp/vidra-a08-links-r6`.
+
+Core regression tests failed first for the missing cookie, then passed for
+owner/foreign/expired access, explicit-bearer precedence, cookie-only mutation
+and account rejection, private no-store, public CDN eligibility, refresh and
+logout. Full `make ci` and integration-tag vet passed; frontend contract guard
+passed all 303 operations. Meta Python 20 / Node 3 tests, helper syntax,
+production Compose config validation and diff checks passed. PR CI/merge state
+is tracked at the linked PRs.
+
+Still required for A08: password unlock and expiry, copied segment/caption/
+storyboard assets, download revocation, embed origins/disablement, source UUID
+mapping, oEmbed/feed/sitemap, and unlisted/account-unlisted discovery boundaries.
+The passing reproduction helper deliberately does not claim those phases.
