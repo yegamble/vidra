@@ -1531,3 +1531,29 @@ patch from frontend PR #145; see
 original frontend image after this disposable test. Do not infer that an older
 published image contains a merged source fix. The current proof uses HTTPS
 Chromium with Web Locks; other browser/fallback behavior remains unverified.
+
+
+### A06 original upload verification
+
+Use the retained disposable A03 VM and A04 private actors. Generate a real audio
+and video fixture with ffmpeg (the recorded run used 8.1), then run on Node >=24:
+
+```bash
+mkdir -p /tmp/vidra-a06-fixture
+ffmpeg -hide_banner -loglevel error \
+  -f lavfi -i testsrc2=size=320x240:rate=24 \
+  -f lavfi -i sine=frequency=440:sample_rate=48000 \
+  -t 5 -c:v libx264 -pix_fmt yuv420p -c:a aac -movflags +faststart \
+  /tmp/vidra-a06-fixture/clip.mp4
+node tests/upload-smoke.mjs /tmp/vidra-a03-r3 /tmp/vidra-a04-r3 \
+  /tmp/vidra-a06-fixture/clip.mp4 /tmp/vidra-a06-new
+```
+
+The harness creates and selects a channel through the browser, uploads through
+the real resumable protocol, checks persisted ownership/metadata/hash and
+refusal paths, briefly sets/restores the synthetic user's quota override, then
+recreates only the disposable API container and verifies durability. It also
+uploads corrupt media and requires an honest failed outcome. Output must be a
+new directory. Credentials, screenshots and raw errors remain private; retain
+successful video IDs for A07. Existing fixtures are not reset. Do not run on an
+operator or production installation. A06 does not certify playback or thumbnails.
