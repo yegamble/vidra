@@ -1,0 +1,175 @@
+{
+  "status": "PASS",
+  "checks": {
+    "required-search-ready": "PASS",
+    "same-video-outbox-index-ui": "PASS",
+    "private-stale-index-rehydration": "PASS",
+    "service-outage-local-fallback": "PASS",
+    "missing-document-startup-reconcile": "PASS",
+    "delete-real-fixture-copy": "PASS"
+  },
+  "node": "v25.9.0",
+  "vm": "vidra-a02-20260905123822-89250",
+  "project": "vidra-a03-20260905124354-92490",
+  "helper_sha256": "32c2a2acea16a86462ea41f4f8fc2fbbbc6a34f5495e11613796135c0cbe5a6e",
+  "fixture_sha256": "23febdedf00e4ffc6ac7ca70f8ba0e5c08712708864381869a3ab6ff271bad6b",
+  "fixture_bytes": 225521,
+  "browser": "151.0.7922.34",
+  "video_id": "0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+  "required_search": true,
+  "query": "A09search1788627554677",
+  "images": [
+    "/vidra-a03-20260905124354-92490-api-1 ghcr.io/yegamble/vidra-core@sha256:9f829f26bdfd323c49e6f28061c07758c680dec5d3e2249a515574d2478a4c6a sha256:9f829f26bdfd323c49e6f28061c07758c680dec5d3e2249a515574d2478a4c6a",
+    "/vidra-a03-20260905124354-92490-search-1 ghcr.io/yegamble/vidra-search@sha256:9c38c0817c60f9bbecc04f9f90183d8f61d87f295b5cbc2dad5a1f4aa7032fbe sha256:9c38c0817c60f9bbecc04f9f90183d8f61d87f295b5cbc2dad5a1f4aa7032fbe",
+    "/vidra-a03-20260905124354-92490-frontend-1 ghcr.io/yegamble/vidra-user@sha256:71eee6ca360d9c6205d812e5e1e8fdb70d0dc4f9888e04516941f113eb6d00b8 sha256:71eee6ca360d9c6205d812e5e1e8fdb70d0dc4f9888e04516941f113eb6d00b8"
+  ],
+  "source_observations": [
+    {
+      "phase": "same-video-outbox-index-ui",
+      "id": 159,
+      "event_id": "cc962c05-1050-4ef6-9a44-73d9dcefd618",
+      "source": "search"
+    },
+    {
+      "phase": "service-outage-local-fallback",
+      "id": 170,
+      "event_id": "6f579224-90fe-4d81-9a45-6e0bda1dac42",
+      "source": "local"
+    },
+    {
+      "phase": "missing-document-startup-reconcile",
+      "id": 172,
+      "event_id": "fc42dd96-a10d-4564-a218-5a590127cf5b",
+      "source": "local"
+    },
+    {
+      "phase": "missing-document-startup-reconcile",
+      "id": 177,
+      "event_id": "4527c2c0-f733-4c25-85b5-176a03416a12",
+      "source": "search"
+    }
+  ],
+  "upsert_events": [
+    {
+      "id": 158,
+      "event_id": "a9b8c7d9-e8e8-4163-816f-e58ae83f026e",
+      "event_type": "video.upsert",
+      "state": "delivered",
+      "attempts": 0,
+      "received": true
+    }
+  ],
+  "indexed": {
+    "video_id": "0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+    "title": "A09search1788627554677",
+    "eligible": true,
+    "suppressed_reason": null,
+    "reconcile_run_id": "871684c1-a56a-4fca-8ead-aab3b63b7df2"
+  },
+  "internal_search": {
+    "query": "A09search1788627554677",
+    "ids": [
+      {
+        "video_id": "0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+        "score": 0.907776988566994
+      }
+    ],
+    "model_version": "simple-v1",
+    "total": 1,
+    "total_is_lower_bound": false,
+    "has_more": false
+  },
+  "search_source": "search",
+  "ui_href": "/videos/0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+  "private_events": [
+    {
+      "id": 161,
+      "event_id": "37e0beda-8e0d-4dc6-b140-078c8f6a19ad",
+      "event_type": "video.upsert",
+      "state": "delivered",
+      "attempts": 0,
+      "received": true
+    }
+  ],
+  "stale_private_candidate": {
+    "query": "A09search1788627554677",
+    "ids": [
+      {
+        "video_id": "0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+        "score": 0.9077768344404427
+      }
+    ],
+    "model_version": "simple-v1",
+    "total": 1,
+    "total_is_lower_bound": false,
+    "has_more": false
+  },
+  "outage_source": "local",
+  "reconciled": {
+    "video_id": "0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+    "title": "A09search1788627554677",
+    "eligible": true,
+    "suppressed_reason": null,
+    "reconcile_run_id": "97492110-c503-46f0-b469-e0e6e1cc58bd"
+  },
+  "reconcile_events": [
+    {
+      "id": 175,
+      "event_id": "ae1ffab8-d4c1-4425-ba40-3e21e217f455",
+      "event_type": "reconcile.page",
+      "state": "delivered",
+      "attempts": 0,
+      "received": true
+    }
+  ],
+  "reconcile_envelopes": [
+    {
+      "event_id": "fbbcb97c-c63e-4036-b1f0-604fb4772068",
+      "event_type": "reconcile.begin",
+      "state": "delivered",
+      "received": true
+    },
+    {
+      "event_id": "ae1ffab8-d4c1-4425-ba40-3e21e217f455",
+      "event_type": "reconcile.page",
+      "state": "delivered",
+      "received": true
+    },
+    {
+      "event_id": "2d1a9c19-caf9-4cfc-b41f-849b910cb6f6",
+      "event_type": "reconcile.end",
+      "state": "delivered",
+      "received": true
+    }
+  ],
+  "deletion_video_id": "5d3c3960-4b48-4b35-bd12-9748d86b38be",
+  "deletion_upload_status": 201,
+  "delete_events": [
+    {
+      "id": 180,
+      "event_id": "ad4aeeb7-4343-4360-a62e-607d402adb65",
+      "event_type": "video.suppress",
+      "state": "delivered",
+      "attempts": 0,
+      "received": true
+    }
+  ],
+  "stale_deleted_candidate": {
+    "query": "A09search1788627554677delete",
+    "ids": [
+      {
+        "video_id": "5d3c3960-4b48-4b35-bd12-9748d86b38be",
+        "score": 0.8999997351903963
+      },
+      {
+        "video_id": "0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+        "score": 0.254442750900695
+      }
+    ],
+    "model_version": "simple-v1",
+    "total": 2,
+    "total_is_lower_bound": false,
+    "has_more": false
+  },
+  "restored_public": true
+}

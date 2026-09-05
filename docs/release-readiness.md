@@ -221,7 +221,7 @@ Each item below is a small **acceptance slice**, with implementation only if ins
 | 39 A39 | M C S U | Supported-toolchain, exact-manifest CI gates with explicit required test selection and zero silent skips; attach artifacts | A01 and all implemented slices |
 | 40 A40 | U | Required-control inventory closes mobile/theme/keyboard/error/persistence gaps; link each UI acceptance to workflow row and backend evidence | Selected workflows |
 
-**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). A07 now has passing runtime evidence with the frontend fix (see final A07 evidence below); next dependency-ready item after delivery is A09.** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
+**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). A07 now has passing runtime evidence with the frontend fix (see final A07 evidence below); A09 now has passing runtime evidence (see below); next dependency-ready item after delivery is A08.** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
 
 ## Inputs still needed before dependent acceptance
 
@@ -625,3 +625,41 @@ A09 preflight found `e2e-backed/search-discovery.spec.ts` still gated by
 `E2E_SEARCH_SERVICE=true`; its two cases alone do not prove this same ID's
 outbox/index/UI path, privacy/deletion rehydration or fallback/reconcile. Those
 remain required A09 work, not implied by green general frontend CI.
+
+## A09 real search acceptance — 2026-09-05
+
+**Bounded A09 acceptance PASS.** [PR #90](https://github.com/yegamble/vidra/pull/90)
+tracks delivery and merge state. A07 delivery is merged: meta `cc5ab1a`, frontend
+`f160f5c`. The new [required-search helper](../tests/search-smoke.mjs) executes
+six groups against the original A01 core/search/frontend release images; exact
+running image references, helper/fixture hashes, Node 25.9.0 and Chromium
+151.0.7922.34 are in the reviewed [complete result](evidence/a09-search.json).
+No product changes, image-pin changes or new releases were needed for A09.
+The A07 local frontend patch was not selected; this search proof does not
+recertify its progressive transition.
+
+| Acceptance | Executed evidence |
+|---|---|
+| Mandatory real service | `E2E_SEARCH_SERVICE=true` is required before the helper starts the VM; a missing flag exits 1, and search must be healthy. No route interception, fake search server or skip path. The actual service is reached through signed probes inside the guest without exporting its secret |
+| Same uploaded ID end to end | A06 video `0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4`, exact audiovisual fixture hash, unique title `A09search1788627554677`. Upsert event ID matches core's delivered outbox and search's inbox; index title/eligibility and internal search IDs match. Anonymous header search renders a title link whose href is that exact video's watch path; clicking shows its heading and actual media image |
+| Required search route | Fresh `search.submitted` event `cc962c05-1050-4ef6-9a44-73d9dcefd618` records source `search`, after a per-request outbox marker. The proof cannot silently pass by using local SQL or an old telemetry row |
+| Private stale index | Real API privacy change delivers an ineligible upsert. After intentionally re-enabling only this stale synthetic search document, internal search returns its ID but public API and search UI exclude it; anonymous direct detail returns 404. Restoring public delivers another upsert |
+| Outage/cold fallback | Stop real search: same query still returns the video, with a fresh `local` event. Restart search healthy; delete only this synthetic index document: cold-index query still finds it locally. These are separate observations, not simulated error responses |
+| Reconcile | Restart API with existing images. Startup reconcile restores eligible document with a new run stamp; begin/page/end event IDs all appear delivered in core and received in search. A fresh query then records source `search` again |
+| Deletion | API-create and upload a separate exact-fixture copy (201, original size 225,521 bytes), wait for eligible index/search result, then DELETE 204. Suppression event reaches both ledgers. Intentionally re-enable its stale candidate: internal search still returns it, but public API/UI do not, and core row count is zero. Stale eligibility is cleared afterward. Deleted copy ID `5d3c3960-4b48-4b35-bd12-9748d86b38be`; the main A06 ID is preserved for A08 |
+| Verification | Final command exits 0: six groups PASS, zero skipped. Helper syntax, Python 20 and Node 3 assertions, production Compose config validation and diff check pass. No shell script changed; final PR CI must be green before merge |
+
+Reviewed watch screenshot confirms the anonymous UI reached the retitled A06
+fixture. Final readback is public video / ready playlist / eligible index.
+The unique A09 title remains; the main media bytes were never deleted. A failed
+first run used a channel UUID where draft creation requires its handle (404);
+that harness error was corrected. r2 passed, then r3 passed with stronger fresh
+routing-event correlation. Private diagnostics remain `/tmp/vidra-a09-r1` through
+r3; credentials, raw errors and screenshots are not committed.
+
+The existing frontend discovery/history spec was not run or relabelled here;
+its default opt-out remains visible. This dedicated required lane certifies
+A09's index, routing, visibility and recovery boundary, not autocomplete quality,
+search history, recommendations, scale or relevance tuning (A13/A39/A40 retain
+those separate requirements). Next dependency-ready item: **A08**, using the
+preserved A06 video and the recorded A07 patch fixture where playback needs it.
