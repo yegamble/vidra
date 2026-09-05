@@ -802,3 +802,58 @@ download revocation, embed origins/disablement, source UUID aliases, metadata,
 and unlisted/account-unlisted discovery. Core CI's first public-IPFS lane failed
 because the external gateway returned 429 for the fresh CID; all other lanes
 passed. That specific lane was retried without changing its test or workflow.
+
+
+## A08 downloads and embed policies — 2026-09-05
+
+**Download revocation and real iframe policy checks PASS; full A08 remains
+OPEN.** Core private-media fix [PR #158](https://github.com/yegamble/vidra-core/pull/158)
+is merged (`d1250c3`), as is the private/password/expiry evidence in meta
+[PR #92](https://github.com/yegamble/vidra/pull/92) (`614535b`). The public-IPFS CI
+retry passed without changing the gate.
+
+The [download/embed helper](../tests/download-embed-smoke.mjs) uses the same A06
+video and exact bytes, separate anonymous and owner browsers, and real local
+HTTP/HTTPS parent servers. It does not intercept browser requests or spoof
+referrer/ancestor-origin properties. Its
+[complete result](evidence/a08-download-embed.json) and
+[exact fixture deployment](evidence/a08-http-embed-fixture.json) record image,
+source, helper and media identities, response statuses and decoded frames/audio.
+Normal dump/pull/migration/ledger/startup/health gates passed; schema remains
+127 clean. Production pins and releases were not changed.
+
+The browser's Download dialog selected Original file and saved all 225,521 bytes
+with the original SHA256. Every advertised download URL independently returned
+200 and nonempty bytes. Disabling the per-video download flag made the listing
+and every copied file URL return 403 `feature_disabled`, and removed the UI
+button after reload. Actual streaming still played. The original flag was
+restored with HTTP200.
+
+With an allowlist containing `allowed.a08.test`, actual HTTPS and HTTP parents
+on that hostname both played audio/video. Parents on `denied.a08.test` both
+showed the blocked notice and no video element. Setting embed policy to disabled
+also removed the player and showed its disabled notice. The original embed
+policy was restored with HTTP200. These are the shipped browser embed-policy
+semantics, not a server-side restriction against a determined custom embedder.
+
+The HTTP-parent case initially failed before any API request: an HTTPS child
+under an HTTP ancestor is not a secure context, so `crypto.randomUUID` is absent.
+The [before trace](evidence/a08-http-embed-before.json) records that distinction
+and the empty API request list. Frontend
+[PR #148](https://github.com/yegamble/vidra-user/pull/148) adds a CSPRNG UUIDv4
+fallback using `getRandomValues`, shared by API transports. Its new test failed
+first; 56 focused and 2,289 full tests then passed, with typecheck and lint gates.
+The new browser result proves HTTP-parent playback while `randomUUID` remains
+undefined. The fixture uses runtime source `5217e36`; the later generated-code
+update changes only the login contract comment to match core's media cookie.
+That generated file was regenerated normally, never hand-edited.
+
+Private runs r1/r2 exposed the HTTP-parent failure; r3 proved HTTPS policy
+behavior, and r4 passed both schemes plus all advertised download URLs. Private
+TLS keys and diagnostics remain under `/tmp/vidra-a08-download-embed-*`, never
+in git. Meta Python20/Node3 tests, syntax, production Compose validation and diff
+checks passed. The fixture is public and its original policies are restored.
+
+Remaining A08 acceptance: copied captions/storyboards and remaining media paths,
+instance-wide download policy, source-import UUID aliases, oEmbed/feed/sitemap
+and other metadata, and unlisted/account-unlisted discovery transitions.
