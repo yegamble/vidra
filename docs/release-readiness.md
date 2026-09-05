@@ -221,7 +221,7 @@ Each item below is a small **acceptance slice**, with implementation only if ins
 | 39 A39 | M C S U | Supported-toolchain, exact-manifest CI gates with explicit required test selection and zero silent skips; attach artifacts | A01 and all implemented slices |
 | 40 A40 | U | Required-control inventory closes mobile/theme/keyboard/error/persistence gaps; link each UI acceptance to workflow row and backend evidence | Selected workflows |
 
-**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). Next dependency-ready item: A04.** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
+**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). Next dependency-ready item: A06 (see A04 policy evidence below).** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
 
 ## Inputs still needed before dependent acceptance
 
@@ -455,3 +455,47 @@ expiry/revocation and multi-tab cases using these retained actors and fresh
 pending actors, then assess the full row before advancing to A06.** Provider
 signup paths still need their A05 provider fixtures. Neither this slice nor a
 green CI lane closes those unexecuted requirements.
+
+
+## A04 registration/session policies — 2026-09-05
+
+**Bounded A04 verification PASS; next dependency-ready item A06.** The owner/basic
+slice merged as `7e3273a` ([meta #86](https://github.com/yegamble/vidra/pull/86)).
+This continuation pairs [frontend #145](https://github.com/yegamble/vidra-user/pull/145)
+with [meta #87](https://github.com/yegamble/vidra/pull/87); merge frontend first.
+It completes AUTH-02's password/session scenarios on the selected HTTPS Chromium
+stack. AUTH-01's provider-specific preclaim paths remain unverified until A05;
+the broader auth rows above are not blanket certifications of those paths.
+
+The real browser exposed a product defect: two tabs can rotate the same shared
+refresh cookie concurrently, causing a 401 and lost session. Frontend revision
+`8d4a8d856ccdbf4c839b30cf10bb0b2c5b34d6da` serializes cookie refresh across tabs
+with one same-origin Web Lock, retaining the existing per-tab in-flight promise
+and backend replay policy. Environments without Web Locks retain the previous
+fallback; this run certifies secure Chromium, not that fallback. Logout proof
+checks the other tab after reload, not immediate broadcast-driven UI updates.
+
+| Verification | Result and evidence |
+|---|---|
+| Reproduction | [Original-image paced run](evidence/a04-policies-before.json): approval and logout-all PASS, simultaneous refresh pair **200/401**, concurrent-tabs FAIL. Earlier unpaced attempts also hit real rate limits; the decisive run paces cases 62 seconds apart without disabling limits |
+| Fixed browser | [Final complete run](evidence/a04-policies-after.json): **3 groups PASS**, no skipped groups. Two pending signups receive 202 and create no users; admin browser approves one/rejects one, SQL verifies both dispositions, approved login succeeds and rejected login is 401. Three pairs of hard reloads yield **six 200 refreshes** and signed-in menus in both tabs |
+| Logout/revoke | Same final run: browser logout 204 clears shared refresh cookie; other-tab reload is signed out and missing-cookie refresh returns the existing **422 unprocessable_entity / refresh_token** validation error. Two independent token sessions both return 401 on refresh after logout-all 204 |
+| Expiry | [Elapsed-time test](evidence/a04-expiry.json): **3 groups PASS**. Normal disposable-stack deploy temporarily sets access/refresh TTLs to 6s/18s; after 8.5s old access is 401, refresh rotates and new access is 200; after another 11.5s untouched refresh is 401. Finally normal deploy restores and verifies **15m/720h** |
+| Fixture | [Exact provenance](evidence/a04-frontend-fixture.json): frozen released frontend source plus only the production client patch, built locally for ARM64. Core/search remain frozen A01 images. This avoids combining current frontend main with an older API. No new release was published; the original release image does not contain this fix |
+| Product TDD/gates | New lock tests first failed **2**, then focused suite passed **25**. Required Node **24.20.0** typecheck, lint, icon lint and full unit gate pass: **228 files / 2,284 tests**, zero skips; [exit metadata](evidence/a04-frontend-gates.json). Two existing lint warnings remain. An initial Node 25 diagnostic full run was interrupted after environment-related localStorage failures and is not counted as passing |
+| CI | Frontend canonical gate, contract, local/S3/IPFS backed suites, channel-sync and GitGuardian all PASS on fix revision. Meta harness commit `a0060d4` passes bundle/validate/boot and GitGuardian; final documentation head must also pass before merge |
+| Harness/gates | Both new JS helpers parse; existing Node assertions **3 PASS**, Python suite **20 PASS**, production Compose config -q with dummy secrets and diff check pass. No shell scripts touched |
+
+Commands are in [the deploy runbook](../deploy/README.md#a04-registration-and-session-policy-verification).
+Private results remain under `/tmp/vidra-a04-policies-*` and
+`/tmp/vidra-a04-expiry-r1`; generated credentials, dumps and private error/deploy
+logs are excluded from Git. A test initially expected missing-cookie 401; it was
+corrected to assert the actual 422 field error, then the entire run passed.
+Registration and approval end disabled; synthetic approved accounts and rejected
+requests remain in the disposable database. The original frontend Compose/image
+was restored after verification. No production deployment occurred.
+
+A06 now proceeds with the retained owner/ordinary actors: browser-create a
+channel/draft, upload a real generated audiovisual fixture, and prove original
+metadata, owner/quota accounting, persistence and refusal paths. A05 provider
+fixtures and every later acceptance remain open.

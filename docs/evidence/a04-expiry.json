@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "checks": {
+    "access_expiry_refresh": "PASS",
+    "refresh_expiry": "PASS",
+    "restored": "PASS"
+  },
+  "project": "vidra-a03-20260905124354-92490",
+  "vm": "vidra-a02-20260905123822-89250",
+  "helper_sha256": "9165b92483c2572529656ce1eddd7c9b9736c516544ce3e5d308c0bc9bd86f25"
+}

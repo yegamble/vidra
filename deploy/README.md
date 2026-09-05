@@ -1503,3 +1503,31 @@ directory. It creates a new database, runs the pinned core image's real migratio
 starts a separate API with workers disabled, then releases two claim requests at
 a barrier. Exactly one must create an admin. The test container is stopped and
 its database/logs retained; the primary A04 users are unaffected.
+
+
+### A04 registration and session policy verification
+
+After the owner harness succeeds, reuse its private actor directory and A03 VM
+metadata. Each output directory must be new. Run these sequentially against the
+disposable VM only; the expiry helper temporarily changes token lifetimes using
+the normal deploy path and restores the original values in `finally`.
+
+```bash
+node tests/auth-policies-smoke.mjs /tmp/vidra-a03-r3 /tmp/vidra-a04-r3 /tmp/vidra-a04-policies-new
+node tests/auth-expiry-smoke.mjs /tmp/vidra-a03-r3 /tmp/vidra-a04-r3 /tmp/vidra-a04-expiry-new
+```
+
+The policy harness uses real browser approval/rejection, concurrent reloads,
+shared-cookie logout and independent-session logout-all. It spaces groups by
+62 seconds to respect production rate limits. `A04_CASES` accepts a comma-separated
+subset of `approval-rejection,concurrent-tabs,logout-all-revocation` for diagnosis;
+only a result selecting all three proves the full policy set. Neither harness
+uses browser route mocks. Private credentials/logs must remain outside Git.
+
+The frozen release reproduces the multi-tab refresh race. For the passing A04
+run, a local image used the frozen frontend source plus the production client
+patch from frontend PR #145; see
+[fixture provenance](../docs/evidence/a04-frontend-fixture.json). Restore the
+original frontend image after this disposable test. Do not infer that an older
+published image contains a merged source fix. The current proof uses HTTPS
+Chromium with Web Locks; other browser/fallback behavior remains unverified.

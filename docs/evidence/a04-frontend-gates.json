@@ -1,0 +1,9 @@
+{
+  "node": "v24.20.0",
+  "checks": {
+    "typecheck": 0,
+    "lint": 0,
+    "icons": 0,
+    "tests": 0
+  }
+}
