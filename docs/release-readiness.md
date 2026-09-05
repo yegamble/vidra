@@ -768,3 +768,20 @@ Still required for A08: password unlock and expiry, copied segment/caption/
 storyboard assets, download revocation, embed origins/disablement, source UUID
 mapping, oEmbed/feed/sitemap, and unlisted/account-unlisted discovery boundaries.
 The passing reproduction helper deliberately does not claim those phases.
+
+
+The follow-on [password watch/embed helper](../tests/password-links-smoke.mjs)
+also passed against those exact running images; its
+[complete result](evidence/a08-password-links.json) records both real browser
+surfaces. Each rejected a wrong password, accepted the temporary correct one,
+and decoded audio/video. Original, thumbnail and HLS master returned 200 with
+the playback token and 401 without it. The fixture initially had no passwords;
+cleanup restored public (200) and removed the temporary password (204). No
+password or playback token is retained in the evidence. Private output is
+`/tmp/vidra-a08-password-r2`; r1 was the successful preliminary probe.
+
+This closes basic password unlock/playback on watch and embed. **A08 is still
+open** for token expiry, copied segment/caption/storyboard paths, download
+revocation, embed origin/disabled policy, source UUID mapping, metadata and
+unlisted/account-unlisted discovery. A valid copied playback token is a bearer
+credential; this run does not claim that it expires before its six-hour TTL.

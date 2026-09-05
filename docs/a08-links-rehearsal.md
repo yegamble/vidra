@@ -42,3 +42,13 @@ The archived before result is deliberately FAIL. Passwords, expiry, downloaded
 bytes/revocation, embed origins, source UUID mappings and discovery/metadata
 surfaces remain follow-up phases; do not report zero missing acceptance from
 this reproduction slice.
+
+
+After the link/private subset, run `node tests/password-links-smoke.mjs` with
+the same five arguments (A03, A04, MP4, prepared result, new private output).
+It requires the retained video to be public with no existing passwords, creates
+one temporary password, tests wrong/correct unlock and actual watch/embed
+playback, and probes original/thumbnail/HLS with and without the playback token.
+It restores public and deletes its password; either failed cleanup fails the
+run and must be recovered before continuing. Exact running image IDs are
+required. Token expiry and the remaining A08 boundaries are not covered here.
