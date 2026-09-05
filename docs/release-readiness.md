@@ -103,9 +103,9 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | AUTH-04 TOTP enrollment, recovery and removal; OAuth/OIDC login/link/unlink | C U M | Core auth/MFA/OAuth routes; backed mfa/oauth-identities; real provider not supplied | BLOCKED | TOTP second login/recovery/revoke; local OIDC provider callback/state/PKCE, account collision and unlink-last-method policy; never substitute a precreated identity for login | AUTH-02 + OIDC selection → A05 |
 | AUTH-05 Profile/privacy, email/password changes, deactivation/deletion and account archive | C U S | Backed profile-edit/deactivate/delete-account/account-export; core account and search deletion hooks | UNVERIFIED | Mutate profile/unlisted/email/password with re-verification, export and import supported archive; delete/deactivate with content, sessions, follows and search history; verify recipient DM retention policy and media cleanup | AUTH-02, SRC-02 → A12 |
 | PUB-01 Create channel and draft; upload a real file within quota | C U M | `internal/video`, upload routes; backed upload/studio/channel-management | UNVERIFIED | Browser-create channel/draft; upload generated audiovisual clip; inspect original metadata, owner quota accounting and durable state; deny nonowner/overquota/invalid input | AUTH-02 → A06 |
-| PUB-02 Resumable upload, cancel, draft recovery and batch publishing | C U | W2 plans; backed upload-draft-recovery/upload-cancel/upload-batch | UNVERIFIED | Interrupt network and restart service between chunks; resume without duplicate files/charges; recover draft on another session; cancel cleanup; partial batch failure retained | PUB-01 → A10 |
+| PUB-02 Resumable upload, cancel, draft recovery and batch publishing | C U | W2 plans; backed upload-draft-recovery/upload-cancel/upload-batch | PASS (candidate; unmerged) | Interrupt network and restart service between chunks; resume without duplicate files/charges; recover draft on another session; cancel cleanup; partial batch failure retained | PUB-01 → A10 |
 | PUB-03 Transcode durable jobs into playable CMAF/HLS ladder | C M U | `internal/media/hls.go`, CMAF packager, transcode jobs; backed hls-playback | UNVERIFIED | Real ffmpeg job: source→processing→ready; fetch advertised master, audio/video variants, init/segments; decode audio and video; retry crash without duplicate promotion | PUB-01 → A07 |
-| PUB-04 Schedule/quarantine/privacy gates survive processing and replacement | C U S | Schedule/quarantine backed specs; replace handlers; instance gates | UNVERIFIED | Publish-after-transcode and schedule, quarantine approve/reject, replacement preserving URL/metadata; no premature discovery; concurrent old/new playback; failed replacement retains prior usable generation | PUB-03, SRC-02 → A10 |
+| PUB-04 Schedule/quarantine/privacy gates survive processing and replacement | C U S | Schedule/quarantine backed specs; replace handlers; instance gates | PASS (candidate; unmerged) | Publish-after-transcode and schedule, quarantine approve/reject, replacement preserving URL/metadata; no premature discovery; concurrent old/new playback; failed replacement retains prior usable generation | PUB-03, SRC-02 → A10 |
 | PLAY-01 Watch, seek, quality, speed, resume, PiP/theater and mobile/native playback | C U | `components/player`, HLS hook, backed hls-playback/player-settings/history | UNVERIFIED | Browser actual currentTime advance and audible track, seek, quality change and saved preferences; Chromium plus native-HLS Safari on representative ladder; original fallback when appropriate | PUB-03 → A07 |
 | PLAY-02 Canonical/legacy links, sharing, embeds, oEmbed/feed/sitemap | C U M | F01 resolved at final snapshot; resolver and imported UUID mapping now present; no actual browser route proof | UNVERIFIED | Run path guard first; follow canonical and old PeerTube/UUID/short links through edge with timestamps; verify privacy/password unlock and embed origin rules, metadata and downloadable file | REL-01, PLAY-01 → A01 then A08 |
 | PLAY-03 Private, unlisted, password, embed and download revocation | C U S | Backed video-password/embed; HTTP media auth and purge helpers | UNVERIFIED | Copy all manifest/segment/original/caption/storyboard URLs to unauthorized session; enforce token expiry, unlisted discovery exclusion and changed download policy; test account-unlisted transition | PLAY-01, SRC-02 → A08 |
@@ -1181,3 +1181,43 @@ deletion, API 404, zero video-file rows and unchanged used quota after reload.
 Test-selector corrections and transient inventory failure remain in private
 checkpoints. Meta Compose config, evidence JSON and diff checks PASS.
 No acceptance completion, merge, release or production deployment is claimed.
+
+### A10 candidate acceptance — 2026-09-05
+
+**A10 implementation and acceptance proof are reviewable; delivery remains OPEN
+— awaiting merge.** This checkpoint supersedes the pending observations above.
+PUB-02/PUB-04 candidate success means resumable transfers survive network/service
+interruption and a fresh session without duplicate files/quota; cancellation
+and partial batch failures remain recoverable; schedule, processing and
+quarantine enforce visibility; replacement preserves identity and playable
+media, including when the replacement fails.
+
+The invalid replacement naturally exhausted the existing five-attempt retry
+policy. Its job and session became failed without manipulating their state or
+clock. The prior HLS master, original SHA-256 and video metadata remained intact;
+an anonymous Chromium player then advanced 3.006 seconds and decoded 77 frames
+with no media error. [Replacement evidence](evidence/a10-replacement.json) now
+PASS. [Partial-cleanup evidence](evidence/a10-partial-cleanup.json) PASS includes
+zero remaining chunks under the verified media root. Earlier failed harness
+attempts and the initial 90-second wait remain recorded, not relabeled as passes.
+
+Implementation revisions and green CI:
+
+- Frontend recovery/batch `20fd27b`, [#152](https://github.com/yegamble/vidra-user/pull/152):
+  frontend, local/S3 backed, channel-sync, contract and IPFS checks PASS.
+- Frontend schedule `217b083`, [#153](https://github.com/yegamble/vidra-user/pull/153):
+  frontend [run 33996505843](https://github.com/yegamble/vidra-user/actions/runs/33996505843)
+  and local/S3 backed [run 33996505849](https://github.com/yegamble/vidra-user/actions/runs/33996505849)
+  PASS; contract, channel-sync and IPFS checks PASS.
+- Core intended viewer policy `39be454`, [#160](https://github.com/yegamble/vidra-core/pull/160):
+  build/test, OpenAPI, integration and IPFS integration checks PASS. Security:
+  needs owner attention; detailed original reproduction stays private.
+
+Review all three independent implementation PRs before accepting the linked
+meta evidence PR #101; none requires a contract migration or an ordering among
+implementation PRs. No production deployment/release or merge occurred. Local
+core full tagged suites were not run (CI integration passed); temporary browser
+harnesses supplement committed tests and do not replace their gates. Temporary proxy/frontend processes were stopped and the generated instruction
+suffix removed; component checkouts are clean. The wider
+A09–A40 goal remains open. Next action: resolve pending merge authorization and
+review these candidates; continue the next dependency-ready item separately.

@@ -1,5 +1,5 @@
 {
-  "status": "PARTIAL_PASS",
+  "status": "PASS",
   "vm": "vidra-a02-20260905194815-89796",
   "checks": {
     "old_generation_playable_during_swap": "PASS",
@@ -41,11 +41,28 @@
   },
   "setting_restored": "PASS",
   "invalid_replacement": {
-    "status": "UNVERIFIED",
+    "status": "PASS",
     "observation": "UI did not reach terminal state within 90 seconds; persisted finalize job pending after attempt 3 with safe error: the file is not a playable video. Existing policy retries five times with exponential backoff.",
-    "next_action": "Wait for terminal job/session state; verify prior master, original SHA and playback remain usable."
+    "next_action": "Complete: natural job and session failure observed; preserved master, metadata, original SHA and public playback verified."
   },
   "frontend_revision": "fd7ce8f",
   "core_runtime": "6a6ea24-equivalent lab base",
-  "acceptance": "A10 replacement"
+  "acceptance": "A10 replacement",
+  "terminal_failure_followup": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "failed_replacement_preserves_metadata_master_original": "PASS",
+      "public_playback_after_failed_replacement": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "video_id": "2c53cd8c-3279-438f-b5f3-c373a3d1e085",
+    "job_state": "failed",
+    "original_sha256": "068571964c0d328287886061dd27118f090e7ba9421102684e4f53bdaf994bc3",
+    "playback": {
+      "time": 3.006197,
+      "frames": 77,
+      "error": null
+    }
+  }
 }

@@ -12,5 +12,7 @@
   "quota_bytes": 182506459,
   "acceptance": "A10 partial discard and reload",
   "frontend_revision": "20fd27b",
-  "prior_attempts": "Partial error text, selected channel and lowercase draft badge required harness corrections. A later inventory attempt failed before discard; after a 60-second pause the same existing session completed the full proof."
+  "prior_attempts": "Partial error text, selected channel and lowercase draft badge required harness corrections. A later inventory attempt failed before discard; after a 60-second pause the same existing session completed the full proof.",
+  "cancelled_chunk_files_remaining": 0,
+  "storage_root": "/app/data/media"
 }
