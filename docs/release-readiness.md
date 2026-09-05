@@ -1307,3 +1307,16 @@ passes. Next: a failing authenticated-cover regression and scoped correction,
 then real history/continuation/unfollow, social, profile/archive and deletion
 proof. No production or source migration data was used. A11 frontend PR #154
 and meta PR #102 now have all checks green; physical GC remains approval-blocked.
+
+
+Further A12 browser evidence: actual long-video playback saved a 12-second
+position; the in-progress history query and a hard reload retained it, and
+Resume played from that position. Clear-history persisted in a fresh session
+(HTTP 200 empty list); the immediate post-clear assertion timed out and is
+recorded separately. Unfollow survived reload and removed the channel's videos
+from the subscription feed. Disabling “Keep my watch history” survived reload;
+12 seconds of actual playback created no history. The original enabled setting
+was restored and verified after reload. These checks pass; playlist continuation,
+private-cover rendering and the social/profile/archive/deletion slices remain
+open. Evidence PR: [meta #103](https://github.com/yegamble/vidra/pull/103), stacked
+on #102; all checks passed for its initial `bdbe88f` revision.

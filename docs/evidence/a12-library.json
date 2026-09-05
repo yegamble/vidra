@@ -13,13 +13,19 @@
     "metadata_unlisted_and_write_denial": "PASS",
     "cover_upload_decode_reload": "PASS",
     "private_detail_owner_and_other_denial": "PASS",
-    "private_cover_anonymous_denial": "PASS"
+    "private_cover_anonymous_denial": "PASS",
+    "actual_playback_history_reload_in_progress": "PASS",
+    "resume_playback": "PASS",
+    "clear_reload": "PASS",
+    "unfollow_reload_and_feed": "PASS",
+    "disable_reload": "PASS",
+    "actual_playback_does_not_record": "PASS",
+    "history_setting_restored": "PASS"
   },
   "registration_restored": "PASS",
   "remaining": [
     "private playlist owner cover decoding",
-    "unfollow and playback continuation",
-    "history disable and clear",
+    "playlist playback continuation",
     "three-actor social workflows",
     "profile/archive/deactivation/deletion"
   ],
@@ -33,6 +39,8 @@
   "harness_corrections": [
     "First extended run hit HTTP 429; completed mutations were retained and later checks resumed.",
     "Cover upload correctly returned contract-defined HTTP 201; original harness expected 200.",
-    "Five-second reload assertion timed out; separate read-only run confirmed private detail success and isolated cover failure."
-  ]
+    "Five-second reload assertion timed out; separate read-only run confirmed private detail success and isolated cover failure.",
+    "Immediate clear-history reload assertion timed out; a fresh session confirmed empty persisted history with HTTP 200."
+  ],
+  "history_position_seconds": 12
 }
