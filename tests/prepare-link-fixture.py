@@ -2,7 +2,6 @@
 """Install an exact-source A08 lab fixture using the existing deploy gates."""
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import subprocess
@@ -76,6 +75,9 @@ shutil.copy2(old/'deploy/Caddyfile.local',tree/'deploy/Caddyfile.local')
 env=tree/'env/production.env'; text=env.read_text()
 for key in ('VIDRA_CORE_TAG','VIDRA_USER_TAG'):
     text,n=re.subn(r'^'+key+r'=.*$',key+'=v999.8.0',text,flags=re.M); assert n==1
+# The retained rehearsal VM has two CPUs; production defaults assume more.
+text,n=re.subn(r'^API_CPUS=.*$', 'API_CPUS=2.0', text, flags=re.M)
+if n==0: text+='\nAPI_CPUS=2.0\n'
 env.write_text(text);env.chmod(0o600)
 p=tree/'docker-compose.prod.yml'; text=p.read_text()
 pins={}
