@@ -63,7 +63,7 @@ const measurePlayback = async (page, source = 'blob:') => {
   // Visibility precedes the async playback-session/engine attachment. Starting
   // before media is ready races its initial source reset and can lose the click.
   await expect(async()=>{
-    result.ready_sample=await video.evaluate(v=>({ready:v.readyState,duration:v.duration,src:v.currentSrc.split('?')[0],error:v.error?.message}));checkpoint();
+    result.ready_sample=await video.evaluate(v=>({ready:v.readyState,duration:v.duration,attribute:v.getAttribute('src')?.split('?')[0],src:v.currentSrc.split('?')[0],error:v.error?.message}));checkpoint();
     assert.ok(result.ready_sample.ready>=2 && result.ready_sample.duration>=4.9);
     assert.ok(source==='blob:' ? result.ready_sample.src.startsWith(source) : result.ready_sample.src.endsWith(source));
   }).toPass({timeout:60000});
@@ -90,6 +90,17 @@ const measurePlayback = async (page, source = 'blob:') => {
 };
 try {
  const actor=await login(actors.ordinary); const page=actor.page;
+ result.media_requests=[];
+ page.on('response',async response=>{
+   const url=new URL(response.url());
+   if(!url.pathname.startsWith(`/api/v1/videos/${id}`))return;
+   const entry={path:url.pathname,status:response.status()};
+   result.media_requests.push(entry);
+   if(url.pathname.endsWith('/playback-session')){
+     const session=await response.json().catch(()=>null);
+     entry.hls_advertised=Boolean(session?.hls_url);
+   }
+ });
  step('media-visibility-probe');
  result.probed_privacy=(await api(actor,`/api/v1/videos/${id}`)).body.privacy;
  result.thumbnail_probe=await page.evaluate(async({id,token})=>{
