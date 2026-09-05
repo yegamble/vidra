@@ -132,6 +132,10 @@ def guest(stage):
         model = json.loads(run(['env', 'VIDRA_TLS_MODE=acme', 'bash', 'deploy/compose.sh', 'config', '--format', 'json'], 'default-render')[1])
         check_ports(model)
         require('caddy' in model['services'], 'default edge profile missing')
+        for migrator, service in (('migrate', 'api'), ('search-migrate', 'search')):
+            require(not model['services'][migrator].get('volumes'), f'{migrator}: migration bind mount forbidden')
+            require(model['services'][migrator]['image'] == model['services'][service]['image'],
+                    f'{migrator}: service image differs')
         for mode, origin in (('plain-http', 'http://video.test'), ('internal', 'https://secure.video.test')):
             run(['vidra', 'setup', '--non-interactive', '--yes', '--domain', origin, '--instance-name', 'A03 rehearsal',
                  '--registration', 'closed', '--tls-mode', mode, '--storage', 'local',
