@@ -1432,3 +1432,41 @@ For a failed run, start that exact VM and inspect the named private log; rerun t
 acceptance on a new VM after a fix. Do not label an existing volume as fresh.
 To remove the disposable VM after retaining evidence, use `multipass delete
 --purge <name-from-vm-name.txt>`; never use a global purge or an unrelated VM name.
+# Released-stack runtime rehearsal (A03)
+
+After A02, run the retained disposable VM through setup, both real migrators,
+edge and frontend probes, and injected dirty-ledger failures:
+
+```sh
+bash tests/runtime-smoke.sh /tmp/vidra-a02-smoke-r1 \
+  docs/evidence/a01-v0.6.2-linux-amd64.json /tmp/vidra-a03-new
+```
+
+The VM must still have **no containers or volumes**. The harness refuses a used
+runtime; use a new A02 VM for another full rehearsal. It copies the installation
+inside that VM, pins the copy's application images/platforms to A01, and uses a
+unique Compose project. It runs this checkout's deploy script against that bundle
+and records both script hashes, retaining the semver gates,
+bundle provenance and independent core ledger assertion. The test independently
+checks the search ledger against migration filenames at the frozen source SHA.
+No workstation install or production host is accepted.
+
+The candidate architecture must execute on the VM. On an ARM64 Ubuntu VM with
+an amd64 candidate, install Ubuntu's `qemu-user-static` package in the disposable
+guest first. The harness records binfmt registration and executes every image;
+a pull alone cannot pass. Emulation results are functional evidence, not native
+performance or capacity evidence. The lab sets API limits to 2 CPUs / 1536 MiB.
+
+The default ACME edge profile is rendered only. Actual runtime checks use plain
+HTTP then internal-CA HTTPS, including certificate verification using Caddy's
+test root, frontend HTML and runtime API-origin changes. No public certificate
+is ordered. Dirty core and search ledger bits are injected separately after a
+successful deployment; each must produce a nonzero migration failure without
+reaching startup or changing serving container IDs, start times or restart
+counts. Only the injected bit is cleared, followed by a normal recovery deploy.
+
+`result.json`, progress and status are exported; raw command logs and generated
+test secrets stay in the guest's root-only `private` directory. The VM is stopped
+and retained on success or failure. A failure is evidence to investigate, never
+a skipped acceptance. These checks do not certify owner claim, browser workflows,
+media processing, public ACME, external TLS, lock contention or recovery objectives.

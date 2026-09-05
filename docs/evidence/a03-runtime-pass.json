@@ -1,0 +1,23 @@
+{
+  "status": "PASS",
+  "candidate_sha256": "0c13e887efef5ccb56de68f81859c1c2bcc7a4d9cd4a0ec688a2c428bf4e36db",
+  "helper_sha256": "c207ab2430143fc0901c99e07aa317dc8245dd1571ec7b8d4112d08ab99770df",
+  "host_architecture": "aarch64",
+  "checks": {
+    "empty_runtime": "PASS",
+    "image_execution": "PASS",
+    "plain-http": "PASS: setup, deploy, clean ledgers, runtime ports, edge and runtime origin",
+    "internal": "PASS: setup, deploy, clean ledgers, runtime ports, edge and runtime origin",
+    "dirty-core": "PASS: nonzero migrator; serving IDs/start times/restarts unchanged",
+    "dirty-search": "PASS: nonzero migrator; serving IDs/start times/restarts unchanged",
+    "recovery": "PASS"
+  },
+  "project": "vidra-a03-20260905124354-92490",
+  "released_deploy_sha256": "ad97c6df35a3ac3174c581aaef8f07cbf907b5790a781093cc3e433c4addab5a",
+  "deploy_sha256": "36bbd71259acee49a323ff42648909a3ea3dcae59d0cb6c742f3fd8862651fd5",
+  "emulation": "enabled\ninterpreter /usr/libexec/qemu-binfmt/x86_64-binfmt-P\nflags: POF\noffset 0\nmagic 7f454c4602010100000000000000000002003e00\nmask fffffffffffefefcfffffffffffffffffeffffff\n",
+  "ledgers": {
+    "schema_migrations": 125,
+    "vidra_search_migrations": 16
+  }
+}

@@ -221,7 +221,7 @@ Each item below is a small **acceptance slice**, with implementation only if ins
 | 39 A39 | M C S U | Supported-toolchain, exact-manifest CI gates with explicit required test selection and zero silent skips; attach artifacts | A01 and all implemented slices |
 | 40 A40 | U | Required-control inventory closes mobile/theme/keyboard/error/persistence gaps; link each UI acceptance to workflow row and backend evidence | Selected workflows |
 
-**A01 is merged and A02 is reviewable; next acceptance item: A03 (requires compatible runtime architecture).** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
+**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). Next dependency-ready item: A04.** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
 
 ## Inputs still needed before dependent acceptance
 
@@ -348,3 +348,52 @@ its PR was squash-merged, so `git branch --merged origin/main` does not include
 it; no force deletion was performed.
 
 A02 required remote gates: [meta CI run 33965465521](https://github.com/yegamble/vidra/actions/runs/33965465521) on `5dedb2e` **PASS** — validate 55s, bundle 14s, boot 1m55s; GitGuardian also passed. This existing CI source-build lane is separate from the frozen release/VM evidence and does not promote A03. The final documentation-only checkpoint adds the PR and CI links.
+
+
+## A03 implementation checkpoint — 2026-09-05
+
+**Status: open — awaiting runtime verification and merge of [PR #85](https://github.com/yegamble/vidra/pull/85).** The current user instruction authorizes the A03–A40 loop and merging green scoped PRs, superseding the earlier attachment's draft-only restriction. A02 PR #84 was merged as `d7c2dbd`; its remote/local branch was removed. Component checkouts remain unchanged and clean. The old A01 local branch was subsequently removed after GitHub confirmed PR #83 merged exactly its head `d5d35c1` and `git diff --quiet` proved its tree identical to merge `491a0cb`; this preserved all work despite squash ancestry.
+
+Observable A03 success: setup → exact clean core/search ledgers → actual loopback app ports and closed datastore ports → ready/edge/frontend and runtime API origin; default edge render and selected internal-CA TLS execution; real dirty core/search migrations each abort before startup with serving IDs/start times/restarts unchanged; recovery deploy succeeds.
+
+The [runtime harness](../tests/runtime_smoke.py) and [launcher](../tests/runtime-smoke.sh) use the frozen A01 images and a disposable A02 VM. Only the disposable bundle copy receives immutable image references/platforms and the deploy script under test; both original and tested script hashes are recorded. No application image, production pin, migration, workflow or component code changes.
+
+**Reproduced defect:** run `/tmp/vidra-a03-r2` began with zero containers/volumes and executed all three amd64 images on ARM64 Ubuntu with Ubuntu QEMU binfmt (`POF`). Released deploy hash `ad97c6df35a3ac3174c581aaef8f07cbf907b5790a781093cc3e433c4addab5a` passed the complete plain-HTTP group. Setup then atomically replaced `Caddyfile.local` for `https://secure.video.test`, but the running Caddy file mount still contained `http://video.test`. Reload returned success while HTTPS failed; deploy exited 1 at its edge deadline. [Sanitized negative result](evidence/a03-stale-caddy-mount-failure.json). Transient SSH delays were observation failures; the original run was allowed to reach its own terminal failure without restarting it.
+
+Fix revision `95c2599` compares mounted/generated content inside the existing reload retry loop and recreates only Caddy with `--no-build --no-deps --force-recreate` when stale. Unchanged mounts retain graceful reload; recreation failure is fatal. Dump/pull/migration/up ordering, Compose version check, bundle/checkout pinning and ledger guards are unchanged.
+
+Verification checkpoint: two Caddy regression assertions failed before the fix; `python3 -m unittest discover -s tests -p '*_test.py'` now exits 0 (**20 passed / 0 failed / 0 skipped**). `bash -n` and shellcheck pass on touched scripts; production Compose `config -q` with `/tmp/vidra-a02-check.env` dummy values passes; existing installer regression exits 0. Full fixed-runtime run is pending on a newly launched blank VM (`/tmp/vidra-a03-fresh-a02-r3`), preserving the negative run. Do not promote A03 based on these unit/CI checks.
+
+Next action: finish the fresh A02 preparation, install guest QEMU, run the fixed A03 harness through both TLS modes and both injected failures, attach sanitized evidence, then merge green PR #85. A04 needs a fresh owner-claim browser path: the existing backed setup claims the owner before its wizard spec, which normally skips that happy path; that suite alone cannot certify A04.
+
+
+### A03 final runtime evidence — 2026-09-05
+
+**Bounded A03 acceptance PASS.** [PR #85](https://github.com/yegamble/vidra/pull/85) tracks delivery and its current merge state. Tested checkout
+`8668723852968b668ff664b417772531a9ca70ce`; deployment fix `95c2599`.
+The [passing runtime result](evidence/a03-runtime-pass.json) records the exact
+helper, candidate and original/fixed deploy hashes. They match the files in
+this checkout. [Fresh-host result](evidence/a03-fresh-host.json) records the
+successful A02 prerequisite rerun on Ubuntu 24.04.4 ARM64 VM
+`vidra-a02-20260905123822-89250` (2 CPUs, 4 GiB, 20 GiB, no host mounts).
+
+| Check | Executed evidence |
+|---|---|
+| Fresh runtime | Zero containers and zero volumes before startup; all three frozen amd64 image shells execute via Ubuntu QEMU binfmt POF, followed by real API/search/frontend execution |
+| Default render | ACME edge profile present; exact loopback/no-datastore-port assertions; both migrators have no mounts and use their service image |
+| Plain HTTP | Real setup/check/deploy, clean core 125 and search 16 ledgers, actual Docker port bindings, edge health/ready/frontend HTML and runtime API origin all PASS |
+| Internal TLS transition | Setup changes origin to `https://secure.video.test`; deploy logs stale mount detection, recreates only Caddy and successfully reloads. Edge health/ready/frontend/runtime config PASS with curl trusting the exported lab CA root (no insecure flag in acceptance probes). Frontend runtime origin follows the new domain |
+| Core dirty ledger | Real SQL injection followed by real deployed migrator: deploy exits nonzero at CORE MIGRATION FAILED, never reaches 4/6 startup; all six serving/datastore container IDs, start timestamps and restart counts unchanged. Injected dirty bit remains true until test cleanup |
+| Search dirty ledger | Same independent procedure for vidra_search_migrations: SEARCH MIGRATION FAILED, no startup or container changes, dirty bit retained until cleanup |
+| Recovery | Only synthetic injected dirty bits cleared; ordinary deploy succeeds and independent SQL reads show exactly core `125|f`, search `16|f` |
+| Local required gates | 20 Python tests PASS, zero skips; bash syntax and shellcheck on deploy/deploy.sh and tests/runtime-smoke.sh PASS; installer regression PASS; production Compose config -q with dummy required secrets PASS; diff whitespace check PASS |
+| CI on tested code | [Run 33966768372](https://github.com/yegamble/vidra/actions/runs/33966768372): validate 49s, bundle 12s, boot 2m2s PASS; GitGuardian PASS |
+
+Commands: `bash tests/blank-server-smoke.sh docs/evidence/a01-v0.6.2-linux-amd64.json /tmp/vidra-a03-fresh-a02-r3`, then guest Ubuntu `apt-get install -y qemu-user-static`, then `bash tests/runtime-smoke.sh /tmp/vidra-a03-fresh-a02-r3 docs/evidence/a01-v0.6.2-linux-amd64.json /tmp/vidra-a03-r3`. Launcher exit 0 and exported status PASS; VM stopped successfully. Seven runtime acceptance groups PASS / zero failed / zero skipped. Private logs and generated secrets remain in `/home/ubuntu/vidra-a03-20260905124354-92490/private` inside the retained VM. No production deployment or release publication occurred.
+
+This proves the bounded A03 row, not every INS-02/04/05 scenario: public ACME,
+external TLS, web setup, lock contention, failed-dump injection and browser/media
+workflows remain individually unverified. Emulation is functional evidence,
+not a capacity claim. A changed Caddyfile now causes a brief Caddy-only restart;
+unchanged configurations keep graceful reload. A04 is next, with a dedicated
+unclaimed browser fixture rather than the existing normally-skipped wizard test.
