@@ -295,7 +295,7 @@ authorized in this session.
 
 ## A02 implementation evidence — 2026-09-05
 
-**Status: bounded A02 verification PASS; open — awaiting draft review/merge.**
+**Status: bounded A02 verification PASS; [draft PR #84](https://github.com/yegamble/vidra/pull/84) open — awaiting review/merge.**
 One agent. Harness revision `910fa7d0f89524399197f2482a6a018bddf18d06`, based on
 merged A01 `491a0cb`; subsequent documentation commit records the evidence.
 The [launcher](../tests/blank-server-smoke.sh), [guest assertions](../tests/blank_server_smoke.py)
@@ -346,3 +346,5 @@ fallback/interrupted-transfer/installation workflow remain tracked, not silently
 closed. The old local `codex/a01-release-preflight` branch remains for triage:
 its PR was squash-merged, so `git branch --merged origin/main` does not include
 it; no force deletion was performed.
+
+A02 required remote gates: [meta CI run 33965465521](https://github.com/yegamble/vidra/actions/runs/33965465521) on `5dedb2e` **PASS** — validate 55s, bundle 14s, boot 1m55s; GitGuardian also passed. This existing CI source-build lane is separate from the frozen release/VM evidence and does not promote A03. The final documentation-only checkpoint adds the PR and CI links.
