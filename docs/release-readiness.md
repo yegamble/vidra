@@ -462,7 +462,8 @@ green CI lane closes those unexecuted requirements.
 **Bounded A04 verification PASS; next dependency-ready item A06.** The owner/basic
 slice merged as `7e3273a` ([meta #86](https://github.com/yegamble/vidra/pull/86)).
 This continuation pairs [frontend #145](https://github.com/yegamble/vidra-user/pull/145)
-with [meta #87](https://github.com/yegamble/vidra/pull/87); merge frontend first.
+with [meta #87](https://github.com/yegamble/vidra/pull/87). Frontend #145 merged
+first as `13072dc6cadb6487a3ad68e66971ff279d7aae3d` after all CI lanes passed.
 It completes AUTH-02's password/session scenarios on the selected HTTPS Chromium
 stack. AUTH-01's provider-specific preclaim paths remain unverified until A05;
 the broader auth rows above are not blanket certifications of those paths.
@@ -493,7 +494,7 @@ logs are excluded from Git. A test initially expected missing-cookie 401; it was
 corrected to assert the actual 422 field error, then the entire run passed.
 Registration and approval end disabled; synthetic approved accounts and rejected
 requests remain in the disposable database. The original frontend Compose/image
-was restored after verification. No production deployment occurred.
+was restored after verification; the disposable VM was then stopped. No production deployment occurred.
 
 A06 now proceeds with the retained owner/ordinary actors: browser-create a
 channel/draft, upload a real generated audiovisual fixture, and prove original
