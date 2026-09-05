@@ -557,3 +557,32 @@ inspect advertised HLS master/audio/video/init/segments; prove browser decode,
 time progression, audio and seek plus progressive fallback; investigate the
 observed private thumbnail failure. A10 resumability, A24 S3 and A28 scanning
 remain separate unverified requirements.
+
+## A07 playback checkpoint — 2026-09-05
+
+**Open — runtime acceptance and merge pending.** Meta [PR #89](https://github.com/yegamble/vidra/pull/89)
+adds the retained-stack harness. A06 delivery is merged as `87ac38a` (#88).
+The original A01 images complete the same video's transcode job
+`c269149a-3a85-4001-acee-c8ac06e08c3d` (done, attempt 1) and serve all nine
+advertised HLS/CMAF assets. Real Chromium HLS playback advances unmuted, decodes
+video/audio and completes seek to 3.5 seconds. These successes do not certify
+progressive fallback.
+
+[Original-image failure](evidence/a07-playback-before.json) records a real
+transition failure: temporarily marking this synthetic video's playlist pending
+makes the detail and playback-session stop advertising HLS, but the player stays
+on an empty blob source instead of playing the original. The harness restores
+ready and verifies HLS advertisement in `finally`. The frontend regression
+reproduces the underlying ordering: React commits the original src, then HLS
+teardown removes it while detaching its owned child source. A focused source
+reconciliation fix and real-browser rerun are pending; do not promote A07 from
+unit tests or HLS-only results.
+
+Earlier click-based starts were intermittent during the original-to-HLS startup
+transition. The media harness now waits for the intended source and starts with
+the DOM play API. A40 must separately verify Play-button behavior; this evidence
+does not certify it or physical speaker output. The private thumbnail probe
+returned anonymous 404 and authenticated-owner 200/23,236 bytes; the original
+exists, but A08 must verify private image delivery through the actual UI. Raw
+errors, screenshots, credentials and failed-run logs remain private under
+`/tmp/vidra-a07-*`. No production deployment or release publication occurred.
