@@ -1030,3 +1030,38 @@ across reload between successful cancellation and failed draft deletion. The
 private reproduction paths/hashes are recorded in evidence. This focused slice
 is reviewable; A10 and the wider A09–A40 goal remain open. Merge authorization
 is still pending; no merge is claimed.
+
+
+### A10 batch retry evidence — 2026-09-05
+
+Frontend PR #152, revision `20fd27b`, now also fixes batch retries abandoning their original
+draft/session and the capacity backoff timer leaving a queued row stalled.
+Retries read the existing session and reuse server identity; successful rows
+remain untouched. Cancellation cleanup errors remain Failed instead of being
+reported as Cancelled. No contract or migration changed.
+
+[Batch evidence](evidence/a10-batch.json) records the real pre-fix failure:
+three chosen files, one interrupted chunk stream, then four database rows after
+retry (one abandoned draft plus three published videos). After the fix the same
+scenario retained the failed file/title, retried only that row, and produced
+exactly three published private videos whose original SHA-256 hashes matched.
+A second actual browser test filled the backend's five-session limit, observed
+`429 too_many_active_uploads`, released only its four seeded reservations, and
+proved automatic recovery to two completed videos with no extra draft. All
+seeded reservations/drafts were cleaned up; existing lab sessions were preserved.
+
+Regression tests reproduced duplicate draft creation and stalled backoff before
+their fixes. Three focused batch tests now pass, including honest cleanup error
+state. Final frontend gates: 230 files / 2,295 tests, TypeScript, lint (0 errors,
+2 existing warnings), icons and diff check PASS. Live tests exercised the real
+API and processing pipeline through a development frontend. Updated PR CI is
+pending and must be checked independently; the prior revision's checks do not
+prove this revision.
+
+PUB-04 remains UNVERIFIED. Next experiment: schedule a small real upload through
+the ordinary UI without holding its completion request, then check persistence,
+processing/search visibility, due-time publication, quarantine and replacement.
+The existing schedule spec deliberately holds completion until metadata PATCH;
+that cannot by itself prove the ordinary user flow is free from that race.
+Reload during partially completed cancellation cleanup also remains unverified.
+A10 and the A09–A40 goal remain OPEN; no merge is claimed.

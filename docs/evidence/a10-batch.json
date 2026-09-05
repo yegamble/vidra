@@ -1,0 +1,118 @@
+{
+  "acceptance": "A10 PUB-02",
+  "status": "PARTIAL_PASS",
+  "partial_batch": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "partial_failure_retained": "PASS",
+      "retry_only_failed_without_duplicate": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "titles": [
+      "a10batch1788644345400-good",
+      "a10batch1788644345400-retry",
+      "a10batch1788644345400-last"
+    ],
+    "blocked_chunk_attempts": 3,
+    "rows": [
+      {
+        "id": "c34f6915-86b4-4c3a-a323-90bfa0b86743",
+        "title": "a10batch1788644345400-good",
+        "state": "published",
+        "privacy": "private"
+      },
+      {
+        "id": "6dea350f-ad2f-4b24-bbc4-617478945652",
+        "title": "a10batch1788644345400-last",
+        "state": "published",
+        "privacy": "private"
+      },
+      {
+        "id": "69d27806-448a-4e40-8dca-02fc11eb146c",
+        "title": "a10batch1788644345400-retry",
+        "state": "published",
+        "privacy": "private"
+      }
+    ]
+  },
+  "pre_fix_reproduction": {
+    "status": "FAIL",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "partial_failure_retained": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "titles": [
+      "a10batch1788644169364-good",
+      "a10batch1788644169364-retry",
+      "a10batch1788644169364-last"
+    ],
+    "blocked_chunk_attempts": 3,
+    "rows": [
+      {
+        "id": "355fd1b3-476c-45da-ab4f-d96f240255ee",
+        "title": "a10batch1788644169364-retry",
+        "state": "draft",
+        "privacy": "private"
+      },
+      {
+        "id": "c86a4d3f-4e50-4c57-8f05-9e56a27604ae",
+        "title": "a10batch1788644169364-good",
+        "state": "published",
+        "privacy": "private"
+      },
+      {
+        "id": "9e45bda7-1008-4c21-88ae-604ce79c2449",
+        "title": "a10batch1788644169364-last",
+        "state": "published",
+        "privacy": "private"
+      },
+      {
+        "id": "608af6ae-b0fb-4e81-a20a-a74dff7e29c0",
+        "title": "a10batch1788644169364-retry",
+        "state": "published",
+        "privacy": "private"
+      }
+    ]
+  },
+  "capacity": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "real_capacity_refusal": "PASS",
+      "automatic_backoff_resume_no_duplicate": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "preexisting_sessions": 1,
+    "titles": [
+      "a10capacity1788644506058-one",
+      "a10capacity1788644506058-two"
+    ],
+    "capacity_response": {
+      "error": {
+        "code": "too_many_active_uploads",
+        "message": "you have too many uploads in progress; finish or cancel one and try again"
+      }
+    },
+    "seed_cleanup": "PASS"
+  },
+  "notes": [
+    "Batch cancellation cleanup failure is covered by a component regression; real browser cleanup remains covered by the earlier recovery-card test, not this branch of BatchUploadQueue.",
+    "Failed-then-cancelled session/draft cleanup across reload remains unverified."
+  ],
+  "reproduction_sha256": {
+    "/tmp/vidra-a10-batch.mjs": "9c9e22c4d706913c54236551d9f0359f66db16f13916de64ea6d9c0a1aad7bf4",
+    "/tmp/vidra-a10-capacity.mjs": "9473de2b2b826e3050287a834d76f2b917f91ac35e945cd4bb7123c93f31994b"
+  },
+  "frontend_revision": "20fd27b",
+  "verification": {
+    "unit_files": 230,
+    "unit_tests": 2295,
+    "typescript": "PASS",
+    "lint": "PASS (0 errors, 2 existing warnings)",
+    "icons": "PASS",
+    "meta_compose": "PASS; core 6a6ea24",
+    "diff": "PASS"
+  }
+}
