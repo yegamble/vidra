@@ -180,8 +180,8 @@ Each item below is a small **acceptance slice**, with implementation only if ins
 
 | Order / ID | Owning repo(s) | Acceptance artifact and stopping criterion | Depends on |
 |---|---|---|---|
-| 1 A01 | M — verified, draft review pending | Freeze one four-repo/release-image manifest in a disposable audit tree; path and generated-type drift checks pass for that set. Keep the resolved `/videos/resolve` release-skew case as a preflight regression; do not add a duplicate endpoint | None |
-| 2 A02 | M | Add a blank-server smoke harness for released bundle/CLI/images on supported Linux; install/re-run preserves config; port exposure and checksum failure assertions execute | A01 |
+| 1 A01 | M — verified, merged externally as #83 | Freeze one four-repo/release-image manifest in a disposable audit tree; path and generated-type drift checks pass for that set. Keep the resolved `/videos/resolve` release-skew case as a preflight regression; do not add a duplicate endpoint | None |
+| 2 A02 | M — bounded verification PASS, draft review pending | Add a blank-server smoke harness for released bundle/CLI/images on supported Linux; install/re-run preserves config; port exposure and checksum failure assertions execute | A01 |
 | 3 A03 | M C | Extend smoke only through setup→both clean ledgers→edge/ready/frontend; failing migration prevents up; assert default and selected TLS profile | A02 |
 | 4 A04 | C U | Owner claim then ordinary user creation/login/session reload against this stack, with role/readback proof | A03 |
 | 5 A06 | U C | Real browser channel/draft/upload persists original with correct owner/quota; synthetic audio+video fixture | A04 |
@@ -221,7 +221,7 @@ Each item below is a small **acceptance slice**, with implementation only if ins
 | 39 A39 | M C S U | Supported-toolchain, exact-manifest CI gates with explicit required test selection and zero silent skips; attach artifacts | A01 and all implemented slices |
 | 40 A40 | U | Required-control inventory closes mobile/theme/keyboard/error/persistence gaps; link each UI acceptance to workflow row and backend evidence | Selected workflows |
 
-**A01 implementation is reviewable; next dependency-ready item: A02.** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
+**A01 is merged and A02 is reviewable; next acceptance item: A03 (requires compatible runtime architecture).** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
 
 ## Inputs still needed before dependent acceptance
 
@@ -234,7 +234,7 @@ No launch, migration or recovery approval is requested in this audit. Stop at th
 
 ## A01 implementation evidence — 2026-09-05
 
-**Status: verification PASS for the bounded A01 acceptance; [draft PR #83](https://github.com/yegamble/vidra/pull/83) open — awaiting review/merge.**
+**Status: verification PASS for the bounded A01 acceptance; [PR #83](https://github.com/yegamble/vidra/pull/83) was merged externally on 2026-09-05 as `491a0cb790e1330b5f1a92a7547f7ef49a1daa59`. This agent did not merge it.**
 Single agent. Implementation revision `183f729c1c5e579e9ed78361338173b269f4a284`
 adds the read-only [preflight](../deploy/release-preflight.py), eight regression
 tests and [operator procedure](../deploy/README.md#release-readiness-preflight-a01).
@@ -291,3 +291,60 @@ v0.6.3 availability and later resolver feature coverage as explicit blockers to
 promoting a newer release candidate. No merged-branch leftovers were present;
 no nested checkout or unrelated branch was changed. No merge or deployment is
 authorized in this session.
+
+
+## A02 implementation evidence — 2026-09-05
+
+**Status: bounded A02 verification PASS; [draft PR #84](https://github.com/yegamble/vidra/pull/84) open — awaiting review/merge.**
+One agent. Harness revision `910fa7d0f89524399197f2482a6a018bddf18d06`, based on
+merged A01 `491a0cb`; subsequent documentation commit records the evidence.
+The [launcher](../tests/blank-server-smoke.sh), [guest assertions](../tests/blank_server_smoke.py)
+and [procedure](../deploy/README.md#blank-server-installer-smoke-a02) create a
+new Multipass VM, never select an existing host, and fail closed on missing
+prerequisites or evidence. No production scripts, workflows, pins, API, SQL,
+migrations or component code changed.
+
+Observable success criteria: real released installer on blank supported Linux;
+corrupted bundle and CLI rejected before promotion; verified installation and
+native CLI execution; generated configuration preserved on reinstall; explicit
+production Compose port assertions; all three A01 digest-pinned images pulled
+and inspected. Runtime startup is deliberately the dependent A03 boundary.
+
+The [durable sanitized result](evidence/a02-ubuntu24.04-arm64.json) records the
+candidate hash, installer and guest/launcher hashes, exact harness revision,
+Ubuntu base-image hash, native CLI identity, Docker/Compose versions and port
+bindings. It links by hash to the unchanged [A01 candidate](evidence/a01-v0.6.2-linux-amd64.json).
+
+| Verification | Result and limits |
+|---|---|
+| TDD red baseline | `python3 -m unittest discover -s tests -p blank_server_smoke_test.py`: exit 1 before helper implementation (missing module) |
+| Focused assertions | `python3 -m unittest discover -s tests -p '*_test.py'`: exit 0, **14 passed / 0 failed / 0 skipped** (6 A02, 8 A01). Covers incomplete candidate, mutable digest, exact/no datastore ports, empty profile render, native checksum selection and refusal to overwrite evidence before VM operations |
+| Real blank-host smoke | `bash tests/blank-server-smoke.sh docs/evidence/a01-v0.6.2-linux-amd64.json /tmp/vidra-a02-smoke-r1`: **exit 0, 7 acceptance groups PASS / 0 failed / 0 skipped**; both exported status files PASS |
+| Environment | New Ubuntu **24.04.4 LTS aarch64** VM `vidra-a02-20260905120542-66513`, 2 CPUs / 4 GiB / 20 GiB, no host mounts, no Docker, Vidra CLI or install tree at start. Multipass 1.16.1 on macOS ARM64. Installer actually installed Docker **29.8.0** and Compose **5.5.1**; daemon active and enabled assertions passed |
+| Real checksum rejection and recovery | Installer exits **1** for bundle corruption, then **1** for CLI corruption, specifically CHECKSUM MISMATCH; fault wrapper appends one byte after each actual curl transfer and preserves HTTP/exit behavior. No corrupt bundle marker, no unverified CLI, no env generated. Unmodified transport install and reinstall each exit **0** |
+| Released bundle and native CLI | Installer fetched at frozen meta `2a584f0`; bundle meta/core/tag match A01. Installed ARM64 CLI SHA256 `1fb66a1e54ef8954a0f596c9278f3ff41dd353e762850dfd81db7f3d4799e11e` matches native entry in the SHA256SUMS file **whose complete hash A01 pinned**. `vidra help` exits 0; the CLI has no version subcommand, so no version output is fabricated |
+| Real persisted configuration | Released `vidra setup --non-interactive --domain http://video.test --instance-name "A02 disposable test" --registration closed --tls-mode plain-http --storage local --release-tag v0.6.2 --template env/production.env.example` exits 0. After reinstall, env, rendered Caddyfile and CLI bytes are identical; `vidra setup --check env/production.env` exits 0. Local test secrets never exported |
+| Port and release assertions | Installed bundle's base+prod Compose rendered with explicit core/frontend profiles and generated env: postgres/redis/search have no published ports; API 127.0.0.1:8080, frontend 127.0.0.1:3000. All five api/migrate/frontend/search/search-migrate image tags equal the selected release. This is actual Linux Compose execution, **not runtime socket/edge proof** |
+| Real image availability | Core, frontend and search each pulled with `docker pull --platform linux/amd64 <A01 digest reference>`; inspected RepoDigests, OS/architecture and OCI source revision match A01. `docker ps -aq` is empty. ARM64-host success here proves pulls, **not amd64 execution** |
+| Meta required local gates | `bash -n` and `shellcheck -x` on all 13 shell scripts, existing `bash tests/install_test.sh`, and `docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file /tmp/vidra-a02-check.env config -q` with dummy required secrets: exits 0. `git diff --check`: exit 0 |
+| Runtime suites | Browser/search-service/media-processing/database suites not run: A02 changes only the installer rehearsal harness and starts no application. A03 and dependent workflow rows remain UNVERIFIED; no missing runtime prerequisite was skipped and called PASS |
+
+Local evidence: `/tmp/vidra-a02-smoke-r1/{result.json,status.txt,vm.json,guest-progress.log}`,
+`/tmp/vidra-a02-unit.log`, `/tmp/vidra-a02-installer-unit.log`.
+Raw command output and generated test secrets remain root-only at
+`/root/vidra-a02-private` and in `/opt/vidra` inside the stopped VM. The launcher
+keeps the VM for diagnosis/follow-on work and never deletes an unrelated instance.
+The pre-existing `test-runner` VM was not used or changed.
+
+**Blockers/next action:** review this small A02 draft, then implement A03 through
+setup, clean migration ledgers, ready/edge/frontend, and migration-failure
+abort. A03 requires an amd64 Linux host for the pinned candidate, or explicitly
+verified emulation / a separately preflighted native candidate. Do not count an
+ARM64 pull as execution. No new release, image publication or production deploy
+is authorized. The earlier v0.6.3 availability finding and full INS-01 git
+fallback/interrupted-transfer/installation workflow remain tracked, not silently
+closed. The old local `codex/a01-release-preflight` branch remains for triage:
+its PR was squash-merged, so `git branch --merged origin/main` does not include
+it; no force deletion was performed.
+
+A02 required remote gates: [meta CI run 33965465521](https://github.com/yegamble/vidra/actions/runs/33965465521) on `5dedb2e` **PASS** — validate 55s, bundle 14s, boot 1m55s; GitGuardian also passed. This existing CI source-build lane is separate from the frozen release/VM evidence and does not promote A03. The final documentation-only checkpoint adds the PR and CI links.
