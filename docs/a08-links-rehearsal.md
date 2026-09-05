@@ -55,3 +55,14 @@ required. The helper also verifies server expiry on original/thumbnail/HLS maste
 chunk reads using a correctly signed valid/expired control pair created inside
 the guest. The key stays there; tokens are not saved. This is a synthetic expiry
 fixture, not a six-hour browser soak. Remaining A08 boundaries stay open.
+
+
+Run `node tests/download-embed-smoke.mjs` with the same five arguments for the
+next subset. OpenSSL creates a disposable self-signed parent certificate inside
+the private output directory; Chromium accepts that test certificate only for
+this rehearsal. Real HTTP and HTTPS parent origins test allow/deny behavior.
+The helper downloads the exact original through the UI, probes every advertised
+file URL, revokes the per-video flag, checks refusal while streaming still
+works, and restores the original download/embed policies. A failed restore is
+a failed run requiring recovery. This does not certify instance-wide download
+policy or complete A08.
