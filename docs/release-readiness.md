@@ -401,7 +401,7 @@ unclaimed browser fixture rather than the existing normally-skipped wizard test.
 
 ## A04 owner/basic-session slice — 2026-09-05
 
-**Slice verification PASS; A04 remains open for the remaining AUTH-02 cases.**
+**Slice verification PASS; A04 remains open for the remaining AUTH-02 cases.** [PR #86](https://github.com/yegamble/vidra/pull/86) tracks this slice and its delivery state.
 The previous turn merged A03 as `386a179` ([PR #85](https://github.com/yegamble/vidra/pull/85)).
 This slice adds the [browser harness](../tests/owner-auth-smoke.mjs), its three
 assertion tests and an [isolated concurrent-claim harness](../tests/owner_claim_race.py).
