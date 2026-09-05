@@ -1026,3 +1026,45 @@ lane. Next: use these persisted synthetic conversations for those probes;
 do not redo the global audit. Private helpers/results remain under
 `/tmp/vidra-a14-*`, with helper hashes in the evidence. Frontend PR #150 precedes
 this readiness checkpoint; no merge is claimed and the A09–A40 goal stays open.
+
+## A14 plaintext history and scroll checkpoint — 2026-09-05
+
+**A14 OPEN.** [Frontend PR #151](https://github.com/yegamble/vidra-user/pull/151),
+revision `3a69671`, is stacked on attachment PR #150. Plaintext threads previously
+loaded only the newest 100 messages; only encrypted threads could page earlier.
+The shared loader now uses the oldest plaintext ID with `before_id` (no offset),
+merges overlapping pages once, retains loaded history on failure, and exposes
+retry. The timeline anchors prepends without treating history as new mail or
+jumping to the reader's last own message.
+
+[Real history evidence](evidence/a14-history-checkpoint.json) includes the initial
+browser failure: the message log had `scrollHeight=clientHeight=6428`, because
+the page expanded with its history. The anchored message jumped 306px despite
+passing component tests. A messaging-only viewport constraint now lets the root
+flex row shrink and the existing panes scroll; header, banner and tab navigation
+retain their intrinsic heights. No root layout rewrite or fixed chrome-height
+assumption was introduced.
+
+Actual Chromium checks passed at desktop, 390px and 768px: a real authenticated
+keyset response added earlier history, the anchored message moved **0px**, all
+105 seeded fixture rows appeared exactly once, and polling preserved the loaded
+history. Phone/tablet body dimensions matched their viewports and the composer
+remained visible. Phone screenshot was visually inspected. Old fixture rows were
+seeded directly in the disposable database; the history reads and a newest
+message send traversed the real API. This proves history behavior, not 105
+individual API sends. Browser proof used the development frontend.
+
+TDD: three new tests failed before implementation and passed after. Final gates:
+TypeScript PASS; lint PASS (0 errors, 2 existing warnings); icons PASS; 230 unit
+files / 2,306 tests PASS; diff check PASS. Attachment PR #150 now has all CI green,
+including local/S3 backend, IPFS, channel-sync, frontend and contract checks.
+Do not infer that predecessor result covers the new #151 revision; its CI must
+complete separately. Required meta Compose validation also passes.
+
+Next: explicit send retry, receipt opt-out, delete/report and configured scanner
+failure acceptance using the existing synthetic actors/conversation. Those remain
+unverified, so A14 and the A09–A40 goal are not complete. Temporary test servers
+were stopped, generated unrelated AGENTS changes removed, and both worktrees
+are clean. Private reproduction scripts/results are under `/tmp/vidra-a14-*`.
+Delivery order: frontend #150 → #151; readiness #99 → this checkpoint. No merge
+is claimed; the pending explicit merge-authorization request remains unresolved.
