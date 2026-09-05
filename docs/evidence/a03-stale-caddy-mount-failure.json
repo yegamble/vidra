@@ -1,0 +1,15 @@
+{
+  "status": "FAIL",
+  "candidate_sha256": "0c13e887efef5ccb56de68f81859c1c2bcc7a4d9cd4a0ec688a2c428bf4e36db",
+  "helper_sha256": "385ffcf45390b62abc5e7769f54d636c0f1bf40903a334eadb0b6cb67bb8c29d",
+  "host_architecture": "aarch64",
+  "checks": {
+    "empty_runtime": "PASS",
+    "image_execution": "PASS",
+    "plain-http": "PASS: setup, deploy, clean ledgers, runtime ports, edge and runtime origin"
+  },
+  "project": "vidra-a03-20260905123022-83976",
+  "deploy_sha256": "ad97c6df35a3ac3174c581aaef8f07cbf907b5790a781093cc3e433c4addab5a",
+  "emulation": "enabled\ninterpreter /usr/libexec/qemu-binfmt/x86_64-binfmt-P\nflags: POF\noffset 0\nmagic 7f454c4602010100000000000000000002003e00\nmask fffffffffffefefcfffffffffffffffffeffffff\n",
+  "error": "deploy-internal: exit 1; see private guest log"
+}
