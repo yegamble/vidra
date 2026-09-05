@@ -104,6 +104,39 @@ try {
   result.checks[phase]='PASS';checkpoint();
   await new Promise(resolve=>setTimeout(resolve,30000));
  }
+ step('playback-token-expiry');
+ // Sign a valid/expired control pair inside the disposable guest. The signing
+ // secret never leaves it; tokens stay in memory and are absent from evidence.
+ const tokens=JSON.parse(guest(['python3','-c',`
+import base64,hashlib,hmac,json,subprocess,sys,time,uuid
+config=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]+'-api-1']))[0]
+env=dict(v.split('=',1) for v in config['Config']['Env'] if '=' in v)
+key=hmac.new(env['JWT_SECRET'].encode(),b'vidra/playback-token/v1',hashlib.sha256).digest()
+def encode(b): return base64.urlsafe_b64encode(b).decode().rstrip('=')
+def token(exp):
+ payload=('v2:'+sys.argv[2]+':'+str(uuid.uuid4())+':playback:'+str(exp)).encode()
+ return encode(payload)+'.'+encode(hmac.new(key,payload,hashlib.sha256).digest())
+now=int(time.time())
+print(json.dumps({'valid':token(now+300),'expired':token(now-60)}))
+`,a03.project,id]));
+ result.expiry=await page.evaluate(async({id,tokens})=>{
+   const url=(path,token)=>{const u=new URL(path,location.origin);u.searchParams.set('pt',token);return u.href;};
+   const master=`/api/v1/videos/${id}/hls/master.m3u8`;
+   const firstURI=text=>text.split('\n').map(s=>s.trim()).find(s=>s&&!s.startsWith('#'));
+   const masterResponse=await fetch(url(master,tokens.valid));if(masterResponse.status!==200)throw new Error('valid master control failed');
+   const variant=new URL(firstURI(await masterResponse.text()),new URL(master,location.origin));
+   const variantResponse=await fetch(url(variant.pathname,tokens.valid));if(variantResponse.status!==200)throw new Error('valid variant control failed');
+   const segment=new URL(firstURI(await variantResponse.text()),variant);
+   if(!variant.pathname.startsWith(`/api/v1/videos/${id}/hls/`)||!segment.pathname.startsWith(`/api/v1/videos/${id}/hls/`))throw new Error('unexpected HLS asset path');
+   const outcomes=[];
+   for(const path of [`/api/v1/videos/${id}/original`,`/api/v1/videos/${id}/thumbnail`,master,variant.pathname,segment.pathname]){
+    const valid=await fetch(url(path,tokens.valid)),expired=await fetch(url(path,tokens.expired));
+    outcomes.push({path,valid:valid.status,expired:expired.status});
+   }
+   return outcomes;
+ },{id,tokens});
+ for(const asset of result.expiry){assert.equal(asset.valid,200);assert.equal(asset.expired,401);}
+ result.checks[phase]='PASS';
  result.status='PASS';
 }catch(error){result.status='FAIL';result.checks[phase]='FAIL';writeFileSync(join(output,'private-error.txt'),error.stack,{mode:0o600});}
 finally{

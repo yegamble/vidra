@@ -785,3 +785,20 @@ open** for token expiry, copied segment/caption/storyboard paths, download
 revocation, embed origin/disabled policy, source UUID mapping, metadata and
 unlisted/account-unlisted discovery. A valid copied playback token is a bearer
 credential; this run does not claim that it expires before its six-hour TTL.
+
+
+The extended password run r3 also passed **server-side playback-token expiry**.
+Inside the disposable guest, the helper creates a correctly signed valid/expired
+control pair using the deployed signer's format and domain separation; the key
+never leaves the guest and neither token is saved in evidence. Real edge reads
+of original, thumbnail, HLS master, CMAF variant and a real `.m4s` chunk return
+200 for the valid control and 401 for the expired control. This is an explicit
+expired-credential fixture, not a claim that a browser was held open for six
+hours. Watch/embed playback and cleanup passed again. The password evidence
+now records this complete r3 run.
+
+Remaining A08 boundaries are copied caption/storyboard and other asset paths,
+download revocation, embed origins/disablement, source UUID aliases, metadata,
+and unlisted/account-unlisted discovery. Core CI's first public-IPFS lane failed
+because the external gateway returned 429 for the fresh CID; all other lanes
+passed. That specific lane was retried without changing its test or workflow.

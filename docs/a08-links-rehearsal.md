@@ -51,4 +51,7 @@ one temporary password, tests wrong/correct unlock and actual watch/embed
 playback, and probes original/thumbnail/HLS with and without the playback token.
 It restores public and deletes its password; either failed cleanup fails the
 run and must be recovered before continuing. Exact running image IDs are
-required. Token expiry and the remaining A08 boundaries are not covered here.
+required. The helper also verifies server expiry on original/thumbnail/HLS master/variant/
+chunk reads using a correctly signed valid/expired control pair created inside
+the guest. The key stays there; tokens are not saved. This is a synthetic expiry
+fixture, not a six-hour browser soak. Remaining A08 boundaries stay open.
