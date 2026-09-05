@@ -1,0 +1,66 @@
+{
+  "acceptance_id": "A02",
+  "harness_revision": "910fa7d0f89524399197f2482a6a018bddf18d06",
+  "launcher_sha256": "f144ec010390e2ca57bafb1f4fc5b5a460e4843aeeaf58c1cfdaa67991ec9e5b",
+  "command": "bash tests/blank-server-smoke.sh docs/evidence/a01-v0.6.2-linux-amd64.json /tmp/vidra-a02-smoke-r1",
+  "exit_code": 0,
+  "checks_passed": 7,
+  "checks_failed": 0,
+  "checks_skipped": 0,
+  "vm": {
+    "name": "vidra-a02-20260905120542-66513",
+    "image_hash": "afa139bac6f2629c1e1f2f8f34215f3a9ad9779801bcb945521ba1a45016743f",
+    "release": "Ubuntu 24.04.4 LTS",
+    "cpu_count": "2",
+    "mounts": {},
+    "stopped_by_launcher": true
+  },
+  "result": {
+    "status": "PASS",
+    "candidate_sha256": "0c13e887efef5ccb56de68f81859c1c2bcc7a4d9cd4a0ec688a2c428bf4e36db",
+    "helper_sha256": "4206dd2a569add16ff74c14296a7311f35fd12679a69f4727c4d5a5644703d4c",
+    "host_architecture": "aarch64",
+    "os_release": "PRETTY_NAME=\"Ubuntu 24.04.4 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.4 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+    "checks": {
+      "corrupt-bundle": "PASS",
+      "corrupt-cli": "PASS",
+      "install": "PASS",
+      "native_cli_executes": "PASS (help; binary identity verified by checksum)",
+      "configuration_preserved": "PASS",
+      "production_ports": "PASS (Compose render; runtime ports belong to A03)",
+      "pinned_image_pulls": "PASS"
+    },
+    "image_execution": "UNVERIFIED: pulls only; no containers started",
+    "installer_sha256": "6b7a6152015dd404c2d3b8410a1de70a8911ecad0a68e468aed9bb92c0572674",
+    "native_cli": {
+      "asset": "vidra_v0.6.2_linux_arm64",
+      "sha256": "1fb66a1e54ef8954a0f596c9278f3ff41dd353e762850dfd81db7f3d4799e11e",
+      "url": "https://github.com/yegamble/vidra-core/releases/download/v0.6.2/vidra_v0.6.2_linux_arm64"
+    },
+    "docker_version": "Docker version 29.8.0, build 88096ef",
+    "compose_version": "5.5.1",
+    "ports": {
+      "postgres": [],
+      "redis": [],
+      "search": [],
+      "api": [
+        {
+          "mode": "ingress",
+          "host_ip": "127.0.0.1",
+          "target": 8080,
+          "published": "8080",
+          "protocol": "tcp"
+        }
+      ],
+      "frontend": [
+        {
+          "mode": "ingress",
+          "host_ip": "127.0.0.1",
+          "target": 3000,
+          "published": "3000",
+          "protocol": "tcp"
+        }
+      ]
+    }
+  }
+}
