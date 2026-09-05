@@ -1,0 +1,11 @@
+{
+  "frontend_base_revision": "b7520f96856642c573ddf62e8b46acf13e015621",
+  "frontend_fix_revision": "8d4a8d856ccdbf4c839b30cf10bb0b2c5b34d6da",
+  "patch_sha256": "8d41f10fcb129b7c4307eb9275476c3ff391780d738fb07731a46c363823c1f9",
+  "patched_client_sha256": "53b42171039bb5991f00c66ec6276f4f29fc26d92f0a08ccc2cb4a8690a4b674",
+  "image_id": "sha256:c99d0ff4f72c8fdf2fea136ecc4bcd0687e01cedbd7889619762119ac03a711f",
+  "platform": "linux/arm64",
+  "image_tag": "vidra-user:a04-cookie-lock",
+  "scope": "Frozen A01 frontend source with only production lib/api/client.ts patch from the fix revision; native local image, no registry publication. Backend and search retained A01 digests. Original frontend image restored after verification.",
+  "restored_frontend": "ghcr.io/yegamble/vidra-user@sha256:71eee6ca360d9c6205d812e5e1e8fdb70d0dc4f9888e04516941f113eb6d00b8"
+}

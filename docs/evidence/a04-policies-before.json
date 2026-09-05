@@ -1,0 +1,21 @@
+{
+  "selected_cases": [
+    "approval-rejection",
+    "concurrent-tabs",
+    "logout-all-revocation"
+  ],
+  "status": "FAIL",
+  "checks": {
+    "approval-rejection": "PASS",
+    "concurrent-tabs": "FAIL",
+    "logout-all-revocation": "PASS"
+  },
+  "project": "vidra-a03-20260905124354-92490",
+  "vm": "vidra-a02-20260905123822-89250",
+  "helper_sha256": "6d57b75c1436ff852def6fa84553a0fa59f284be9dbdd7dad3e0b858d7f0daef",
+  "browser": "151.0.7922.34",
+  "concurrent_refresh_statuses": [
+    200,
+    401
+  ]
+}
