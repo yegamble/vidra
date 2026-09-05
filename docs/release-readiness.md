@@ -221,7 +221,7 @@ Each item below is a small **acceptance slice**, with implementation only if ins
 | 39 A39 | M C S U | Supported-toolchain, exact-manifest CI gates with explicit required test selection and zero silent skips; attach artifacts | A01 and all implemented slices |
 | 40 A40 | U | Required-control inventory closes mobile/theme/keyboard/error/persistence gaps; link each UI acceptance to workflow row and backend evidence | Selected workflows |
 
-**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). Next dependency-ready item: A06 (see A04 policy evidence below).** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
+**A01 and A02 are merged; bounded A03 runtime verification PASS ([implementation PR #85](https://github.com/yegamble/vidra/pull/85)). Next dependency-ready item: A07 (see A06 evidence below).** The original A01 recommendation was to add a compatible release-manifest/contract preflight in the meta-repo. The initial `node scripts/check-contract.mjs` failure already demonstrated why it is needed; the final frozen source set passes, so this item must not add a resolver. Its acceptance is a pinned four-repository **and image-digest** candidate that passes path/codegen validation without relying on moving `main`, and records release-asset/checksum availability. This is prerequisite to meaningful fresh-server testing; the next implementation is the small blank-server smoke harness A02, not a new product feature.
 
 ## Inputs still needed before dependent acceptance
 
@@ -500,3 +500,60 @@ A06 now proceeds with the retained owner/ordinary actors: browser-create a
 channel/draft, upload a real generated audiovisual fixture, and prove original
 metadata, owner/quota accounting, persistence and refusal paths. A05 provider
 fixtures and every later acceptance remain open.
+
+
+## A06 channel/draft/original upload — 2026-09-05
+
+**A06 PASS on the retained local-storage stack; A07 next.** A04 delivery is merged:
+frontend `13072dc`, meta `2b8db36`. This A06 adds only a
+[real browser harness](../tests/upload-smoke.mjs), procedure and evidence;
+no product, migration, workflow, dependency or release-pin changes.
+
+[Final result](evidence/a06-upload.json) records four passing groups, exact helper
+and fixture hashes, Node **24.20.0**, Chromium **151.0.7922.34**, channel/video/upload
+IDs and quota readback. [Fixture provenance](evidence/a06-fixture.json) records
+actual inspected container image references and ffprobe output. All runtime
+checks used the original A01 release images, including the original frontend;
+A04's local patch image was not used. HTTPS browser traffic is real, with no
+route interception; A03 separately verified the lab CA. Emulation establishes
+functionality, not performance capacity.
+
+| Acceptance | Executed proof |
+|---|---|
+| Channel/draft | Ordinary A04 actor creates a unique channel using Studio, explicitly selects it when multiple channels exist, and chooses a generated file. Channel SQL owner matches the actor; draft response is 201/private/draft; SQL draft channel matches the newly created channel |
+| Real original | 5-second, 320×240 H.264 + AAC test-pattern/sine fixture, **225,521 bytes**. Resumable completion 202 is followed by the browser's actual **Uploaded** state. API duration/dimensions are 5/320/240, original row has exact filename/size, authenticated original GET is 200 video/mp4 and SHA-256 equals the local file |
+| Ownership/input | Other actor's upload-session request and private-original request are 404. Zero size returns 422, unsupported .exe returns 415. No rejected request creates an extra upload session |
+| Quota | Admin temporarily sets this synthetic user's override to 1 byte; session request returns **422 quota_exceeded**, then exact previous override is restored. Final API used_bytes **1,402,160** equals SQL sum of all owned video_files; pre-run usage **1,137,240**. Usage includes derived files and retained earlier synthetic fixtures, not just the original |
+| Corrupt media | Browser selects deliberately invalid .mp4 bytes. UI shows processing failure, never Published!; SQL video state is failed. This is distinct from rejecting an unsupported extension |
+| Durability | Recreate API container only with existing images/volumes, wait for readyz 200, reload browser session, reread metadata and original. Original SHA-256 remains identical and quota still matches SQL |
+| Gates | Helper parses; existing Node assertions **3 passed**, Python suite **20 passed**, zero skips; production Compose config -q with dummy values and git diff --check pass. No shell scripts changed. Final PR CI must pass before merge |
+| Visual review | Inspected post-recreation Studio screenshot: correct selected channel, private uploaded clip and failed corrupt clip. The private clip's thumbnail is visibly broken; thumbnail/playback behavior is **not** certified here and requires investigation in A07 |
+
+The draft automatically reaches state published while privacy remains private
+when original processing finishes; this test does not press Publish or claim
+public visibility. A07 must deliberately set the visibility needed for its
+playback checks and inspect transcode jobs/assets, not infer playback from this
+state label. Retained successful video: `0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4`.
+
+Exploratory evidence was not silently promoted: initial Node-side HTTP requests
+could not resolve the test-only hostname (browser DNS mapping does not apply to
+Playwright's Node request context); all requests now use actual browser fetch.
+An initial database MIME assertion was over-specific: the optional stored field
+is empty but the original response is correctly video/mp4, now asserted directly.
+The first four-group result lacked a new-channel association assertion; visual
+review and SQL caught uploads targeting the previously selected channel. The
+harness now selects the channel through the actual switcher and proves the
+association. The final complete rerun passes those stronger checks. Earlier
+selector timeouts/strict-match failures are retained privately, not product bugs.
+
+Private outputs `/tmp/vidra-a06-r1` through `r7` contain diagnostics; only sanitized
+results are committed. Fixture generation/run commands are in the
+[runbook](../deploy/README.md#a06-original-upload-verification). Existing private
+A04 actor credentials are reused and never committed. Synthetic rows remain for
+A07 and failed-run diagnosis. No release publication or production deployment.
+
+**Next: A07 on this same video's real transcode pipeline and local storage:**
+inspect advertised HLS master/audio/video/init/segments; prove browser decode,
+time progression, audio and seek plus progressive fallback; investigate the
+observed private thumbnail failure. A10 resumability, A24 S3 and A28 scanning
+remain separate unverified requirements.

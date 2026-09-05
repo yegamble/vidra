@@ -1,0 +1,43 @@
+{
+  "status": "PASS",
+  "checks": {
+    "channel-draft-upload": "PASS",
+    "ownership-invalid-quota": "PASS",
+    "invalid-media": "PASS",
+    "durability-accounting": "PASS"
+  },
+  "node": "v24.20.0",
+  "vm": "vidra-a02-20260905123822-89250",
+  "project": "vidra-a03-20260905124354-92490",
+  "helper_sha256": "afb3fe604eb57057c82a6b353dbc2922444376b97ba654614bf8ab3abafa44ce",
+  "fixture_sha256": "23febdedf00e4ffc6ac7ca70f8ba0e5c08712708864381869a3ab6ff271bad6b",
+  "fixture_bytes": 225521,
+  "browser": "151.0.7922.34",
+  "channel_id": "7095c10d-5002-4751-b16a-733e9bf3151c",
+  "channel_handle": "a062c0fd875c2",
+  "video_id": "0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+  "upload_id": "24bdd68f-6046-45bc-a69f-b8ef3dc260b0",
+  "video": {
+    "state": "published",
+    "privacy": "private",
+    "width": 320,
+    "height": 240,
+    "duration_seconds": 5
+  },
+  "original": {
+    "size_bytes": 225521,
+    "content_type": "",
+    "original_name": "a06-clip.mp4"
+  },
+  "original_response": {
+    "status": 200,
+    "content_type": "video/mp4",
+    "sha256": "23febdedf00e4ffc6ac7ca70f8ba0e5c08712708864381869a3ab6ff271bad6b"
+  },
+  "invalid_video_id": "98319cfe-374e-42ad-9f18-04838a0ff7fb",
+  "quota": {
+    "before": 1137240,
+    "after": 1402160,
+    "sql_sum": 1402160
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "programs": [],
+  "stream_groups": [],
+  "streams": [
+    {
+      "codec_name": "h264",
+      "codec_type": "video",
+      "width": 320,
+      "height": 240
+    },
+    {
+      "codec_name": "aac",
+      "codec_type": "audio"
+    }
+  ],
+  "format": {
+    "duration": "5.000000",
+    "size": "225521"
+  },
+  "ffmpeg": "8.1",
+  "scope": "Local storage; unchanged A01 release images on disposable ARM64 VM with amd64 emulation. Functional proof, not capacity or playback proof.",
+  "core_image": "ghcr.io/yegamble/vidra-core@sha256:9f829f26bdfd323c49e6f28061c07758c680dec5d3e2249a515574d2478a4c6a",
+  "frontend_image": "ghcr.io/yegamble/vidra-user@sha256:71eee6ca360d9c6205d812e5e1e8fdb70d0dc4f9888e04516941f113eb6d00b8",
+  "search_image": "ghcr.io/yegamble/vidra-search@sha256:9c38c0817c60f9bbecc04f9f90183d8f61d87f295b5cbc2dad5a1f4aa7032fbe"
+}
