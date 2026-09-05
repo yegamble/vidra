@@ -957,3 +957,16 @@ discovery, per-video download and real iframe-policy evidence. Native Safari,
 selected CDN-edge revocation, actual PeerTube import/cutover and instantaneous
 cached frontend metadata revocation are not certified here; retain their
 existing A40/A33/A18–23 scope. Stop after A08 delivery; do not start another item.
+
+### A08 delivery checkpoint
+
+**Open — awaiting merge.** Core #159 passed all six checks, including real
+integration and public/private IPFS lanes. Automatic approval review rejected
+merging twice: the session has both an earlier no-merge instruction and a later
+merge instruction, which it considers ambiguous. No merge occurred. Fresh user
+confirmation is required. Smallest next action: authorize core #159 → frontend
+#149 → meta #95 merges, then rerun frontend contract run `33985647123` after
+core lands. Its current failure is precisely the four generated documentation
+lines versus core's pre-merge `main`; do not revert the correct generated client
+or weaken the gate. Wait for all remaining checks before each merge and delete
+only merged branches. The local fixture is restored and the VM stopped.
