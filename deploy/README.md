@@ -1352,3 +1352,40 @@ the same backed suite against long-lived data and for manual exploratory testing
 Note that `env/qa.env.example` deliberately sets `DEV_MAIL_CAPTURE_ENABLED=true`
 and `HTTP_IMPORT_ALLOW_PRIVATE_URLS=true`; both are account-takeover / SSRF
 primitives and must never be copied into a production env file.
+
+## Release-readiness preflight (A01)
+
+Before a fresh-host rehearsal, freeze an **existing** common release tag in a
+new disposable directory. Requires Python >=3.9, Node >=24 with npm, git,
+authenticated `gh`, and Docker buildx registry access. This reads GitHub/GHCR;
+it does not publish, run containers, or change the operator's nested checkouts.
+
+```bash
+python3 deploy/release-preflight.py --tag v0.6.2 --platform linux/amd64 \
+  --out /tmp/vidra-candidate-unique > /tmp/vidra-candidate-unique.log 2>&1
+python3 -m unittest discover -s tests -p release_preflight_test.py
+```
+
+The output directory must not exist. Retain its `manifest.json`, command log,
+and `bundle-provenance.txt` with the acceptance evidence. A nonzero exit or
+anything other than `status: PASS` blocks the next acceptance. Failures preserve
+partial evidence; retries use a new directory. A PASS covers:
+
+- Four detached source commits resolved from the requested release tag.
+- Three immutable registry digest references, selected Linux platform, and OCI
+  revision/source labels matching those commits (label correspondence, not
+  an independent reproducible-image build).
+- Downloaded bundle and selected Linux CLI checked against release SHA256SUMS;
+  bundle meta/core provenance must match the source commits. Assets are never
+  executed or extracted. Checksums establish release consistency, not signatures.
+- The frozen frontend's existing path guard, lockfile-installed code generator,
+  byte-identical generated types, and rejection of a resolver call against a
+  spec without that endpoint. The guard's coverage is version-dependent: v0.6.2
+  checks paths, while newer source also checks methods.
+
+Use the recorded commits and `images.*.reference` digests for subsequent tests;
+do not resolve moving `main` or image tags again and call that the same candidate.
+`source/` holds disposable checkouts and installed codegen dependencies; the
+manifest is the portable identity record. A01 does not certify runtime workflows,
+image startup, blank-host installation, search, or browser/media behavior. The
+v0.6.2 example is a rehearsal candidate, not a change to production pins.
