@@ -1068,3 +1068,53 @@ were stopped, generated unrelated AGENTS changes removed, and both worktrees
 are clean. Private reproduction scripts/results are under `/tmp/vidra-a14-*`.
 Delivery order: frontend #150 → #151; readiness #99 → this checkpoint. No merge
 is claimed; the pending explicit merge-authorization request remains unresolved.
+
+## A14 candidate acceptance PASS — 2026-09-05
+
+**A14 runtime acceptance PASS; delivery OPEN awaiting merge authorization.**
+Candidate frontend `3a69671` in PR #151 (after #150) now has evidence for MSG-01
+and MSG-02. This is not a claim that the unchanged main branch is ready.
+[Controls/scanner evidence](evidence/a14-controls-scanner.json) completes the
+preceding attachment and history checkpoints:
+
+- Actual browser offline mode prevented a send from reaching the server; the UI
+  showed failure, SQL confirmed zero rows, and one explicit Retry created exactly
+  one message. Recipient read advanced the sender's API watermark and UI Seen.
+- The recipient's receipt opt-out persisted across reload and hid their watermark
+  from the sender API/UI. Original preference was restored and verified.
+- A live incoming message reached the other browser by polling, appeared once,
+  preserved a reader's history position and left their read watermark unchanged.
+  Jump to latest made it visible and advanced that watermark.
+- Non-sender delete returned 404; repeated UI reports returned 204 and retained
+  exactly one report/body snapshot. Sender UI delete returned 204 and the peer
+  read a tombstone; the report snapshot survived deletion.
+- An actual 104,857,601-byte file was refused in Composer before any upload.
+  This complements the real accepted 104,857,600-byte and 30/31-file proofs.
+- The repository-pinned `clamav/clamav:1.5` image ran in the disposable VM without
+  host ports. It is amd64-only, so the existing QEMU support was used; no pin was
+  changed. Recorded engine/image: ClamAV 1.5.4, SHA in evidence. With real scanning
+  enabled fail-closed, a benign Word document uploaded and sent. Standard harmless
+  EICAR returned 422, as did a benign upload with clamd stopped. Rejected uploads
+  produced neither attachment rows nor orphan blobs, and the UI could not send
+  them. Counts increased only for the benign accepted document (35 → 36).
+  Original API flags were restored exactly and clamd was stopped afterward.
+
+Failed attempts remain visible: an unhandled WebSocket reset killed the private
+local test proxy; a real 429 interrupted delete and cleanup; and an isolated
+retry initially navigated the sender incorrectly. These were corrected without
+API response mocks, raised limits or fake success. Cleanup was separately
+verified after the failed attempts. Only individually completed phases from the
+partial runs contribute to this combined acceptance evidence.
+
+Frontend PRs #150 and #151 both have all CI green, including the frontend gate,
+contract, local/S3 backed suites, IPFS and channel sync. Local final history gates
+remain 230 unit files / 2,306 tests, TypeScript, lint and icons PASS. Browser
+acceptance used the real lab API and a development frontend; CI separately ran
+the production frontend gate. Meta Compose validation and diff/JSON checks PASS.
+No product code changed in this final evidence step. The DM scanner lane is
+proven here; A28's other ingestion paths are still a separate acceptance item.
+
+Review/merge order: vidra-user #150 → #151; vidra #99 → #100. The prior explicit
+merge-authorization request remains unresolved; nothing was merged. Next ready
+work should use the existing readiness dependency order and retain source/A37
+external blockers. The wider A09–A40 goal is still open.
