@@ -1106,3 +1106,41 @@ reject and replacement preserving identity and playable generations. Recovery
 across partial cleanup/reload remains recorded. Review this scheduling change
 and the independent recovery/batch PR #152 before their shared evidence record.
 No production deployment or merge occurred; the A09–A40 goal remains OPEN.
+
+
+### A10 processing and quarantine checkpoint — 2026-09-05
+
+**A10 OPEN — replacement and partial-cleanup verification remain.**
+[Evidence](evidence/a10-processing-quarantine.json) adds actual processing and
+moderation proof using frontend `fd7ce8f` and the isolated PostgreSQL-backed API:
+
+- A real 11 MB audiovisual upload with publish-after-transcode enabled entered
+  the persisted hold and was excluded from public detail/search. It later became
+  published and discoverable with an advertised ready HLS master. Chromium
+  playback advanced past two seconds and decoded 68 frames. No processing jobs
+  or success responses were mocked; existing A07 evidence covers the full ladder
+  and audio decoding separately.
+- Real uploads under temporarily enabled quarantine entered the held state.
+  Browser approval/rejection, reload persistence, intended viewer policy, owner
+  notification and moderation response semantics passed on candidate core
+  `39be454` in [PR #160](https://github.com/yegamble/vidra-core/pull/160).
+  Security: needs owner attention; detailed prior reproduction remains private.
+- The quarantine setting was restored with its original override status. The
+  candidate API was built only in the disposable VM from the unchanged lab base
+  plus the scoped binary; original image and complete environment were restored
+  and health verified. Source VM/test runner were untouched. Temporary frontend
+  and proxy processes were stopped, and generated unrelated instructions removed.
+
+Core TDD regression failed before the fix; full HTTP API suite PASS. Required
+`make ci` PASS (format, vet, migration lint, OpenAPI, generated SQL, race tests),
+with bounded build concurrency. Integration-tagged vet PASS. Full tagged store/
+federation suites were NOT RUN; targeted acceptance ran against actual lab
+PostgreSQL through the API/browser. No SQL or API shape changed, so no migration
+or client regeneration was needed. New core PR CI remains pending.
+
+Review core #160 and independent frontend #152/#153 before this evidence record;
+there is no contract dependency order among those implementation PRs. Next:
+replacement must preserve stable identity/metadata and playable old/new
+versions, including failure retaining the previous usable generation. Partial
+cleanup/reload gaps remain recorded. No merge, release or production deployment;
+the wider A09–A40 goal remains OPEN.
