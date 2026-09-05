@@ -90,9 +90,18 @@ try{
  actor=await login(actors.ordinary);
  const publicContext=await browser.newContext({baseURL:'https://secure.video.test',ignoreHTTPSErrors:true,viewport:{width:1600,height:1000}});
  const publicPage=await publicContext.newPage();await publicPage.goto('/');
- const search=async(q=title)=>publicPage.evaluate(async q=>{const r=await fetch(`/api/v1/videos/search?q=${encodeURIComponent(q)}`);return {status:r.status,body:await r.json()};},q);
+ let lastSearchMarker=0;result.source_observations=[];
+ const search=async(q=title)=>{
+   lastSearchMarker=marker();
+   return publicPage.evaluate(async q=>{const r=await fetch(`/api/v1/videos/search?q=${encodeURIComponent(q)}`);return {status:r.status,body:await r.json()};},q);
+ };
  const assertSource=async(q,wanted)=>{
-   await poll(()=>assert.equal(sql(`SELECT payload->>'source' FROM search_outbox WHERE event_type='search.submitted' AND payload->>'query'='${q}' ORDER BY id DESC LIMIT 1`),wanted));
+   let observation;
+   await poll(()=>{
+     const row=sql(`SELECT row_to_json(e) FROM (SELECT id,event_id,payload->>'source' AS source FROM search_outbox WHERE id>${lastSearchMarker} AND event_type='search.submitted' AND payload->>'query'='${q}' ORDER BY id DESC LIMIT 1) e`);
+     observation=row?JSON.parse(row):null;assert.equal(observation?.source,wanted);
+   });
+   result.source_observations.push({phase,...observation});
  };
  result.checks[phase]='PASS';checkpoint();
  step('same-video-outbox-index-ui');

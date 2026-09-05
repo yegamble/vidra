@@ -1587,3 +1587,37 @@ The video stays public, and all bytes/job rows remain for dependent A09/A08.
 Keep raw errors/screenshots and account credentials private; commit only reviewed,
 sanitized evidence. Missing media or unavailable runtime prerequisites fail the
 run rather than skip. Use a new output directory for each attempt.
+
+### A09 required search, visibility and recovery verification
+
+Run against the retained A03 stack and A06 audiovisual fixture. Search is
+mandatory: omitting the flag fails before starting the VM, and an unhealthy
+service fails rather than producing a skipped result.
+
+```bash
+E2E_SEARCH_SERVICE=true node tests/search-smoke.mjs \
+  /tmp/vidra-a03-r3 /tmp/vidra-a04-r3 \
+  /tmp/vidra-a06-fixture/clip.mp4 /tmp/vidra-a09-new
+```
+
+The helper retitles the synthetic A06 video with a unique query, verifies the
+same event ID in core's delivered outbox and search's inbox, reads the indexed
+document, and follows the actual anonymous UI result to that video. It checks
+private exclusion with an intentionally stale eligible index document. Real
+search is briefly stopped to prove local fallback, then restarted; removing
+only the synthetic index document and restarting API proves cold fallback and
+the startup begin/page/end reconciliation through both durable ledgers.
+
+Deletion uses a separate API-created copy of the exact media fixture, preserving
+the A06 ID for A08 links. After real deletion and suppression delivery, a stale
+eligible search candidate must still disappear from the public API and UI.
+Only disposable synthetic rows are fault-injected. The helper restores the A06
+video to public, starts search if an outage test failed, and clears stale
+eligibility for the deleted copy. The unique A09 title remains. Process kills
+can bypass cleanup; inspect the recorded phase and synthetic IDs before resuming.
+
+Internal search probes sign requests inside the VM using its existing secret;
+the secret is never returned or logged. Keep credentials, errors and screenshots
+private. Review result JSON before committing it. The existing frontend
+`search-discovery.spec.ts` covers different discovery/history scenarios; green
+CI with that spec skipped is not this A09 proof. This helper has no skip path.
