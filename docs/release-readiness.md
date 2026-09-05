@@ -896,3 +896,64 @@ workflow or production pin changed. Private output: `/tmp/vidra-a08-discovery-r1
 Remaining A08 work is the copied caption/storyboard/remaining media-path boundary
 and instance-wide download policy. Cached frontend metadata freshness is not
 certified as immediate revocation by this origin/distribution test.
+
+## A08 final media access evidence — 2026-09-05
+
+**Bounded A08 runtime acceptance PASS; delivery awaits the linked PR checks.**
+A07 was already delivered (meta #89, frontend #146); A08 is the next open item
+continued here. This closes the two remaining boundaries from the preceding
+checkpoint, reusing the same A06 video and the earlier link/discovery evidence.
+
+The prior real probe returned 404 for an unlisted caption. Core
+[PR #159](https://github.com/yegamble/vidra-core/pull/159), revision `b01c53e`,
+reuses `videoVisibleForMedia` for caption metadata and bytes. The new regression
+failed first, then focused caption tests and `make ci` passed (format, vet,
+migration lint, OpenAPI, sqlc and race tests); integration-tagged vet passed.
+The linked frontend contract update is generated normally from that OpenAPI
+source; it changes comments only. Frontend typecheck, lint, icon lint and all
+2,289 tests in 228 files passed. Merge order: core fix → generated client →
+this evidence record.
+
+[Required media helper](../tests/media-access-smoke.mjs),
+[full result](evidence/a08-media-access.json), and
+[fixture identity](evidence/a08-caption-fixture.json) record exact source/image
+identities and the helper hash. Command (Node 24.4.1):
+
+```sh
+node tests/media-access-smoke.mjs /tmp/vidra-a03-r3 /tmp/vidra-a04-r3 \
+  /tmp/vidra-a06-fixture/clip.mp4 /tmp/vidra-a08-caption-fixture-r1 \
+  /tmp/vidra-a08-assets-r2
+```
+
+Exit 0: four groups PASS, zero skips. Real Chromium through the HTTPS edge:
+
+- Global download listing and every advertised file return 403
+  `feature_disabled` after the instance switch is disabled; streaming still
+  advances time and decodes audio/video. Original setting restored with 200.
+- The helper walks the complete advertised HLS tree (alternate audio, variants,
+  init files and segments), plus original, thumbnail, storyboard image/map and
+  caption list/bytes: 15 endpoints. Public/unlisted reads return 200; private
+  owner cookie reads return 200 and anonymous reads return 404.
+- Real password form unlock plays audio/video. All 15 copied paths return 200
+  with its playback token, 401 without it, and 401 with an expired signed token.
+  The signing secret stays inside the disposable guest; no token is evidence.
+- Cleanup restores public visibility (200), removes the temporary caption and
+  password (204 each), and restores the download setting (200).
+
+Docker Hub's Dockerfile frontend resolution stalled. The lab therefore uses a
+local `CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath` of the archived
+core revision with version/commit ldflags, copied into the retained runtime
+image `sha256:bbb048f88cf83c8340f61e7544fc9d09dd73ee42f5e861b5b91bf24830ab3297`.
+This is an exact-source local fixture, **not a released-image certification**.
+Normal pre-deploy dump, discrete migration/ledger checks and health gates passed;
+core schema remains 127 clean. Frontend runtime remains `5217e36` as previously
+recorded; the generated comment update has no runtime effect. No production
+pins, releases, deployment, workflows, SQL or migrations changed.
+
+Meta Python20/Node3 tests, helper syntax, production Compose config validation
+and diff checks pass. Private diagnostics remain `/tmp/vidra-a08-assets-r2`.
+Earlier A08 checkpoints retain canonical/legacy/source alias, metadata,
+discovery, per-video download and real iframe-policy evidence. Native Safari,
+selected CDN-edge revocation, actual PeerTube import/cutover and instantaneous
+cached frontend metadata revocation are not certified here; retain their
+existing A40/A33/A18–23 scope. Stop after A08 delivery; do not start another item.
