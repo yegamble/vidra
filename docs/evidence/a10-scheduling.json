@@ -1,0 +1,112 @@
+{
+  "acceptance": "A10 PUB-04 scheduling slice",
+  "status": "PARTIAL_PASS",
+  "frontend_revision": "fd7ce8f",
+  "runs": {
+    "pre_fix": {
+      "status": "FAIL",
+      "vm": "vidra-a02-20260905194815-89796",
+      "checks": {},
+      "browser": "151.0.7922.34",
+      "video_id": "85bc42a5-a5a2-4fa4-9545-2e7df91bf526",
+      "before_schedule": "published-private",
+      "patch_status": 422,
+      "patch_body": {
+        "error": {
+          "code": "unprocessable_entity",
+          "message": "validation failed",
+          "fields": [
+            {
+              "field": "publish_at",
+              "message": "cannot be set after the video is published"
+            }
+          ]
+        }
+      }
+    },
+    "ordinary_flow": {
+      "status": "FAIL",
+      "vm": "vidra-a02-20260905194815-89796",
+      "checks": {
+        "draft_until_publish": "PASS",
+        "scheduled_hidden_from_public_search": "PASS",
+        "reload_schedule_persistence": "PASS"
+      },
+      "browser": "151.0.7922.34",
+      "video_id": "9423837c-dbd2-48c0-963f-41a59d11a490",
+      "title": "A10schedule1788645645020",
+      "schedule": {
+        "local": "2026-09-05T18:03",
+        "iso": "2026-09-05T22:03:00.000Z"
+      }
+    },
+    "after_due": {
+      "status": "PASS",
+      "vm": "vidra-a02-20260905194815-89796",
+      "checks": {
+        "due_time_publication_search_integrity": "PASS"
+      },
+      "browser": "151.0.7922.34",
+      "video_id": "9423837c-dbd2-48c0-963f-41a59d11a490",
+      "schedule": {
+        "local": "2026-09-05T18:03",
+        "iso": "2026-09-05T22:03:00.000Z"
+      },
+      "title": "A10schedule1788645645020",
+      "pre_due_denial_probes": 0,
+      "original_sha256": "23febdedf00e4ffc6ac7ca70f8ba0e5c08712708864381869a3ab6ff271bad6b",
+      "rate_limit_retries": 0,
+      "checked_at": "2026-09-05T22:03:16.271Z"
+    },
+    "cancel": {
+      "status": "PASS",
+      "vm": "vidra-a02-20260905194815-89796",
+      "checks": {
+        "cancel_before_finalize_cleans_draft_chunks": "PASS"
+      },
+      "browser": "151.0.7922.34",
+      "video_id": "199ca3f2-e512-41e0-aba5-3c24f0befda2",
+      "upload_id": "ec52e1a5-02b0-4e8a-b0c7-cff19cf11362",
+      "completion_requests": 0
+    },
+    "cleanup": {
+      "status": "PASS",
+      "vm": "vidra-a02-20260905194815-89796",
+      "checks": {
+        "failed_attempt_draft_cleanup": "PASS"
+      },
+      "browser": "151.0.7922.34",
+      "video_id": "d41e1609-7e7d-4e3f-9f50-14528404e381"
+    }
+  },
+  "verification": {
+    "focused_tests": 34,
+    "unit_files": 228,
+    "unit_tests": 2292,
+    "unit_command": "npm run test -- --maxWorkers=2",
+    "typescript": "PASS",
+    "lint": "PASS (0 errors, 2 existing warnings)",
+    "icons": "PASS",
+    "meta_compose": "PASS; nested core 6a6ea24"
+  },
+  "attempts": [
+    "r1: actual ordinary schedule rejected 422 after automatic finalization",
+    "r2: fixed schedule accepted; test used wrong search path and received 404",
+    "r3: follow-up failed before browser startup when Multipass info timed out",
+    "r4: draft/schedule/reload/pre-due exclusion passed; repeated probes hit real 429",
+    "r5: after limit reset, same video public and indexed 16 seconds after scheduled time; original hash matched",
+    "cancel-r1: test timed out waiting for session creation; its synthetic orphan draft was separately removed through owner API",
+    "default-worker full suite: unrelated ChannelSyncSection and FeaturedBanner timeouts; all tests passed with two workers and unchanged timeouts"
+  ],
+  "limits": [
+    "No continuous public visibility observation during rate-limited interval",
+    "Exact revised backed specs await CI; equivalent actual lab flow ran",
+    "Publish-after-transcode, quarantine and replacement remain unverified"
+  ],
+  "reproduction_sha256": {
+    "/tmp/vidra-a10-schedule-complete.mjs": "9e7e9e245737bc40cb848ab5ba15f42dd692394d1dbb902877f8cce810234ad7",
+    "/tmp/vidra-a10-schedule-after.mjs": "d005944e5c081d32b4f8eacc7479fa5e8fcac5b7ad578df63e8d0b6626ef4b63",
+    "/tmp/vidra-a10-gate-cancel.mjs": "92474c383f800f2270b6f2cb40e21ab4417ea7c807f63acaf6186cb82e2b47b9"
+  },
+  "frontend_pr": "https://github.com/yegamble/vidra-user/pull/153"
+}

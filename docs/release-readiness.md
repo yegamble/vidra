@@ -1065,3 +1065,44 @@ The existing schedule spec deliberately holds completion until metadata PATCH;
 that cannot by itself prove the ordinary user flow is free from that race.
 Reload during partially completed cancellation cleanup also remains unverified.
 A10 and the A09–A40 goal remain OPEN; no merge is claimed.
+
+
+### A10 ordinary scheduling checkpoint — 2026-09-05
+
+**A10 remains OPEN; scheduling slice verified, other PUB-04 paths unverified.**
+Frontend [PR #153](https://github.com/yegamble/vidra-user/pull/153), candidate
+`fd7ce8f`, fixes an observed ordinary-flow race: a small upload
+finalized as privately published before the creator saved a schedule, making the
+API correctly reject `publish_at` with 422. Bytes still upload immediately, but
+finalization now waits for the Publish metadata PATCH to succeed. Failed saves
+remain retryable, and waiting uploads remain cancellable. This preserves the
+existing API/authorization contract; no SQL/API client regeneration was needed.
+
+[Scheduling evidence](evidence/a10-scheduling.json): a real upload stayed in draft
+with no video-file rows after transfer, accepted its schedule through the ordinary
+UI, survived a page reload, and was excluded from public detail/search before due
+time. The same video was public and indexed 16 seconds after due time; its
+original hash matched the audiovisual fixture. Cancel after transfer sent zero
+completion requests and removed the real draft and chunk files. The earlier
+failed cancellation attempt's single orphan draft was separately deleted using
+the owner API and the cleanup was verified.
+
+Three new regressions failed before implementation; 34 focused tests pass.
+Final full suite: 228 files / 2,292 tests PASS with two workers and unchanged
+timeouts. The initial default-worker run failed two unrelated component timeouts
+while the VM status probe also timed out; the original failures are retained.
+TypeScript, lint (0 errors, 2 existing warnings), icons and diff checks PASS.
+Existing backed schedule specs now exercise fully transferred files without an
+artificial completion-route gate; exact revised specs await CI, whereas actual
+lab browser/API/search tests above ran. No green CI claim for this new revision.
+
+Other failed attempts remain explicit: a test-only wrong search URL, temporary
+Multipass info timeout, and a real 429 during repeated pre-due reads. The final
+follow-up used bounded reads after the limit reset; it does not prove continuous
+visibility monitoring during that interval. No server limits were raised.
+
+Next: publish-after-transcode state and discovery, then real quarantine approve/
+reject and replacement preserving identity and playable generations. Recovery
+across partial cleanup/reload remains recorded. Review this scheduling change
+and the independent recovery/batch PR #152 before their shared evidence record.
+No production deployment or merge occurred; the A09–A40 goal remains OPEN.
