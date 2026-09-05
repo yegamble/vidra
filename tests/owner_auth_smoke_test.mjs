@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateTarget, checkIdentity } from './owner-auth-smoke.mjs';
+import { validateTarget, checkIdentity, checkCookieSession } from './owner-auth-smoke.mjs';
 
 test('refuse non-rehearsal VM/project and incomplete A03', () => {
   const good = { status: 'PASS', project: 'vidra-a03-123-456', checks: { recovery: 'PASS' } };
@@ -9,6 +9,13 @@ test('refuse non-rehearsal VM/project and incomplete A03', () => {
     ['vidra-a02-123-456', { ...good, project: 'production' }]]) {
     assert.throws(() => validateTarget(vm, result));
   }
+});
+
+test('cookie session requires the contract token field and no body refresh secret', () => {
+  const good = { token: 'test-jwt', user: { id: 'owner', username: 'alice', role: 'admin' } };
+  checkCookieSession(good, 'alice', 'admin');
+  assert.throws(() => checkCookieSession({ ...good, token: undefined, access_token: 'wrong-field' }, 'alice', 'admin'));
+  assert.throws(() => checkCookieSession({ ...good, refresh_token: 'exposed' }, 'alice', 'admin'));
 });
 
 test('role readback must name the same persisted account', () => {

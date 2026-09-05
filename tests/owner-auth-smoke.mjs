@@ -20,6 +20,12 @@ export function checkIdentity(user, username, role) {
   assert.equal(user.role, role);
 }
 
+export function checkCookieSession(auth, username, role) {
+  assert.ok(typeof auth.token === 'string' && auth.token.length > 0, 'missing contract token field');
+  assert.equal(auth.refresh_token, undefined, 'cookie-mode refresh token exposed in body');
+  checkIdentity(auth.user, username, role);
+}
+
 async function main() {
   assert.ok(Number(process.versions.node.split('.')[0]) >= 24, 'Node >=24 required');
   const [a03dir, output] = process.argv.slice(2);
@@ -72,6 +78,7 @@ async function main() {
     const id = randomBytes(5).toString('hex');
     const account = name => ({ username: `${name}${id}`, email: `${name}${id}@example.test`, password: `A04-${randomBytes(20).toString('hex')}` });
     const owner = account('owner'), ordinary = account('viewer');
+    writeFileSync(join(output, 'private-accounts.json'), JSON.stringify({ owner, ordinary }), { mode: 0o600 });
     const ownerToken = token();
     await page.goto('/setup/claim');
     assert.equal((await api('/api/v1/instance')).body.owner_claim_pending, true);
@@ -104,18 +111,18 @@ async function main() {
     const response = await claimed;
     assert.equal(response.status(), 201);
     const auth = await response.json();
-    checkIdentity(auth.user, owner.username, 'admin');
+    checkCookieSession(auth, owner.username, 'admin');
     await expect(page.getByRole('heading', { name: 'Your server is ready' })).toBeVisible();
     await page.getByRole('link', { name: 'Go to the home page' }).click();
     await expect(page.getByRole('button', { name: 'Open account menu' })).toBeVisible();
-    checkIdentity((await api('/api/v1/auth/me', 'GET', undefined, auth.access_token)).body, owner.username, 'admin');
-    assert.equal((await api('/api/v1/admin/system', 'GET', undefined, auth.access_token)).status, 200);
+    checkIdentity((await api('/api/v1/auth/me', 'GET', undefined, auth.token)).body, owner.username, 'admin');
+    assert.equal((await api('/api/v1/admin/system', 'GET', undefined, auth.token)).status, 200);
     assert.equal((await api('/api/v1/instance')).body.owner_claim_pending, false);
     assert.equal(sql("SELECT count(*) FROM users WHERE role = 'admin'"), '1');
     assert.equal((await api('/api/v1/setup/claim-owner', 'POST', { ...ordinary, token: rotated })).status, 403);
     evidence.checks.owner_claim_role = 'PASS';
     step('open-registration-and-browser-signup');
-    assert.equal((await api('/api/v1/admin/instance-settings', 'PATCH', { registration_enabled: true }, auth.access_token)).status, 200);
+    assert.equal((await api('/api/v1/admin/instance-settings', 'PATCH', { registration_enabled: true }, auth.token)).status, 200);
     const visitor = await browser.newContext({ baseURL: 'https://secure.video.test', ignoreHTTPSErrors: true });
     const userPage = await visitor.newPage();
     userPage.setDefaultTimeout(60000);
@@ -128,9 +135,9 @@ async function main() {
     const signed = await signup;
     assert.equal(signed.status(), 201);
     const userAuth = await signed.json();
-    checkIdentity(userAuth.user, ordinary.username, 'user');
+    checkCookieSession(userAuth, ordinary.username, 'user');
     await expect(userPage.getByRole('button', { name: 'Open account menu' })).toBeVisible();
-    assert.equal((await api('/api/v1/admin/system', 'GET', undefined, userAuth.access_token)).status, 403);
+    assert.equal((await api('/api/v1/admin/system', 'GET', undefined, userAuth.token)).status, 403);
     assert.equal(sql("SELECT count(*) FROM users WHERE role = 'user'"), '1');
     evidence.checks.ordinary_signup_role = 'PASS';
     step('session-reload-logout-login');
@@ -139,7 +146,7 @@ async function main() {
       await userPage.reload();
       const renewed = await refresh;
       assert.equal(renewed.status(), 200);
-      checkIdentity((await renewed.json()).user, ordinary.username, 'user');
+      checkCookieSession(await renewed.json(), ordinary.username, 'user');
       await expect(userPage.getByRole('button', { name: 'Open account menu' })).toBeVisible();
     }
     const cookie = (await visitor.cookies()).find(c => c.name === 'vidra_refresh');
@@ -157,14 +164,14 @@ async function main() {
     await userPage.getByRole('button', { name: 'Sign in', exact: true }).click();
     const logged = await login;
     assert.equal(logged.status(), 200);
-    checkIdentity((await logged.json()).user, ordinary.username, 'user');
+    checkCookieSession(await logged.json(), ordinary.username, 'user');
     await expect(userPage.getByRole('button', { name: 'Open account menu' })).toBeVisible();
     evidence.checks.session_persistence = 'PASS';
     step('rejected-login-and-closed-registration');
     const wrong = await api('/api/v1/auth/login', 'POST', { email: ordinary.email, password: 'wrong-a04-password' });
     assert.equal(wrong.status, 401);
-    assert.ok(!wrong.body.access_token && !wrong.body.refresh_token);
-    assert.equal((await api('/api/v1/admin/instance-settings', 'PATCH', { registration_enabled: false }, auth.access_token)).status, 200);
+    assert.ok(!wrong.body.token && !wrong.body.refresh_token);
+    assert.equal((await api('/api/v1/admin/instance-settings', 'PATCH', { registration_enabled: false }, auth.token)).status, 200);
     assert.equal((await api('/api/v1/auth/register', 'POST', account('closed'))).status, 403);
     assert.equal(sql('SELECT count(*) FROM users'), '2');
     evidence.checks.rejected_auth = 'PASS';
