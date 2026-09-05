@@ -899,7 +899,8 @@ certified as immediate revocation by this origin/distribution test.
 
 ## A08 final media access evidence — 2026-09-05
 
-**Bounded A08 runtime acceptance PASS; delivery awaits the linked PR checks.**
+**Bounded A08 runtime acceptance PASS.** Core/frontend fixes are merged; meta
+[PR #95](https://github.com/yegamble/vidra/pull/95) tracks final evidence delivery.
 A07 was already delivered (meta #89, frontend #146); A08 is the next open item
 continued here. This closes the two remaining boundaries from the preceding
 checkpoint, reusing the same A06 video and the earlier link/discovery evidence.
@@ -958,7 +959,7 @@ selected CDN-edge revocation, actual PeerTube import/cutover and instantaneous
 cached frontend metadata revocation are not certified here; retain their
 existing A40/A33/A18–23 scope. Stop after A08 delivery; do not start another item.
 
-### A08 delivery checkpoint
+### A08 delivery checkpoint (superseded below)
 
 **Open — awaiting merge.** Core #159 passed all six checks, including real
 integration and public/private IPFS lanes. Automatic approval review rejected
@@ -970,3 +971,16 @@ core lands. Its current failure is precisely the four generated documentation
 lines versus core's pre-merge `main`; do not revert the correct generated client
 or weaken the gate. Wait for all remaining checks before each merge and delete
 only merged branches. The local fixture is restored and the VM stopped.
+
+### A08 approved delivery — 2026-09-05
+
+The user explicitly resolved merge authorization with “continue with automatical
+approval.” Core #159 is merged to main at `6a6ea24` after all six checks passed.
+Frontend #149 is merged at `ad00b69` after all seven checks passed, including
+real backend-backed local/S3 browser lanes, channel-sync, IPFS, and the contract
+rerun against merged core (run `33985647123`, attempt 2). The original contract
+failure was resolved by the documented dependency order without code changes or
+gate weakening. Both component work branches were deleted locally and remotely.
+Meta #95 carries this final delivery record; merge it on its final green checks,
+then delete its work branch. The fixture remains restored and stopped. A08 is
+the only acceptance item completed here; the earlier runtime limitations remain.
