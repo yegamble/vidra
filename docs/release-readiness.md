@@ -984,3 +984,45 @@ gate weakening. Both component work branches were deleted locally and remotely.
 Meta #95 carries this final delivery record; merge it on its final green checks,
 then delete its work branch. The fixture remains restored and stopped. A08 is
 the only acceptance item completed here; the earlier runtime limitations remain.
+
+## A14 attachment contract checkpoint — 2026-09-05
+
+**A14 OPEN.** [Frontend PR #150](https://github.com/yegamble/vidra-user/pull/150),
+revision `0cc2278`, removes the reproduced Composer mismatch with the already
+shipped API: 30 attachments, 100 MiB per file, and six Office MIME types in the
+picker and validation. An overflowing selection is visibly refused as a whole
+instead of silently truncating files. Server error and explicit upload retry
+semantics are preserved. No OpenAPI/generated-client change was required.
+
+[Sanitized evidence](evidence/a14-attachment-checkpoint.json) records:
+
+- TDD: 11 failed / 3 passed before implementation; 14 focused tests passed after.
+  Exact 100 MiB, one byte over, 30/31 files, existing pending counts, all six
+  Office types, unsupported types and 413/415/422/503 retry behavior are covered.
+- Required frontend gates passed: TypeScript, lint (0 errors, 2 existing
+  warnings), icon check, 229 unit-test files / 2,303 tests, and diff checks.
+- Actual Chromium against the changed frontend and real restored lab API:
+  31-file refusal; 30 Word files uploaded and sent; recipient API readback has
+  all 30 as `doc`; recipient UI download matches the source SHA-256.
+- An actual 104,857,600-byte synthetic size fixture uploaded and sent through
+  Composer. A separate approved synthetic account gets 404 for both attachment
+  and conversation, preserving nonparticipant privacy.
+
+The frontend ran in Next development mode at localhost behind a guarded proxy
+to verified disposable VM `vidra-a02-20260905194815-89796`; no API interception,
+response mocks, or changed rate limits were used. The first local proxy lacked
+Next's HMR WebSocket and the development API default was wrong; correcting
+that test setup enabled React hydration. A selector initially included Next's
+route announcer and was narrowed to Composer's actual alert. One real send
+returned 429 after all 30 uploads; the limiter remained unchanged and the next
+run passed. The first size probe's five-second page wait timed out; a bounded
+30-second readiness retry passed. These failed attempts are retained, not
+counted as successful acceptance.
+
+Production frontend build and the full backed messaging suite are **unverified**
+for this slice. A14 remains open for timeline/history stability, send retry and
+receipt/privacy controls, delete/report, and the configured scanner failure
+lane. Next: use these persisted synthetic conversations for those probes;
+do not redo the global audit. Private helpers/results remain under
+`/tmp/vidra-a14-*`, with helper hashes in the evidence. Frontend PR #150 precedes
+this readiness checkpoint; no merge is claimed and the A09–A40 goal stays open.
