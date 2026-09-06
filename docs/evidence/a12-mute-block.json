@@ -1,0 +1,132 @@
+{
+  "status": "PASS (SOC-02 mute/block + tombstoned-parent criteria only; A12 remains OPEN)",
+  "scope": "A12 / SOC-02, three criteria: owner-notification privacy under mutes and blocks, blocked/muted content in comment threads, and the deleted/tombstoned parent. Ratings, report resolution, notification-preference refresh, per-comment deep links and mentions are deliberately out of scope and remain open.",
+  "core_revision": "a0a96a3",
+  "frontend_revision": "a90d697",
+  "core_baseline_revision": "cd8a12e",
+  "pull_requests": {
+    "core": "yegamble/vidra-core#162",
+    "frontend": "yegamble/vidra-user#160",
+    "meta": "this evidence PR",
+    "dependency_order": "None between core and frontend: core#162 changes no route and no response shape, so vidra-user needs no regenerated contract and #160 does not wait on it. The evidence PR goes last."
+  },
+  "environment": "Disposable LOCAL lab, no Docker (the engine is still down on this machine). Native Homebrew PostgreSQL 16 + Redis; the core API built from the branch and run on 127.0.0.1:8088 with VIDRA_ENV=development, local blob storage and a throwaway database migrated from 0 to schema 127; the vidra-user PRODUCTION build (next build + next start) on 127.0.0.1:3100. Synthetic actors registered through the public API. The instance rate limiter was left at its shipped default (120 requests/minute per client) \u2014 it is not under test, so the browser walkthrough is paced with 63-second cool-downs between phases rather than having the limit raised.",
+  "browser": "Chromium via Playwright 1.62.1 (headless, real browser, production frontend build)",
+  "actors": {
+    "A": "alice \u2014 writes the parent comment that gets deleted",
+    "B": "bob \u2014 the muted/blocked account",
+    "C": "carol \u2014 owns the channel and the video",
+    "D": "dana \u2014 a throwaway fourth actor who hard-deletes her account so her comment becomes a 0057 tombstone"
+  },
+  "shipped_promise_established_for_SC2": "A mute one-directionally hides the muted account's content from the muter \u2014 its comments are filtered out of the muter's comment list and count, per viewer \u2014 and a block does everything a mute does plus cuts direct messaging between the two accounts in both directions; NEITHER stops the muted or blocked account from commenting on the other's video, replying to them, or seeing their comments.",
+  "shipped_promise_sources": [
+    "internal/mute/service.go package doc: the mute package owns the model; 'the filtering effect on each content surface (comments, feed) is applied by those surfaces'",
+    "internal/block/service.go package doc: 'a block is enforced symmetrically: if EITHER user has blocked the other, direct messaging between them is refused in both directions'",
+    "api/openapi.yaml muteAccount: 'Mutes another account so its content becomes hidden from the caller'",
+    "api/openapi.yaml blockUser: 'direct messaging between the two is cut off in both directions, and the blocked account's content is hidden from the blocker \u2026 their comments are filtered from comment lists (per-viewer, exactly like mutes; other viewers are unaffected)'",
+    "internal/store/queries/comments.sql ListCommentsByVideo / CountCommentsByVideo: mute and block are viewer-scoped NOT EXISTS predicates on the READ path only; nothing on the write path consults either",
+    "vidra-user app/settings/mutes/page.tsx: 'Accounts you have muted. Their comments are hidden from you.'",
+    "vidra-user app/settings/blocks/page.tsx: 'Accounts you have blocked. Neither of you can send the other a direct message.'"
+  ],
+  "reproduction_of_the_gap": {
+    "SC1_owner_notification_leak": {
+      "binary": "core built from origin/main cd8a12e (pre-change), same database, three fresh synthetic actors",
+      "result": "FAIL, live: with carol muting bob, carol blocking bob, and bob blocking carol, bob's comment on carol's video produced a 'comment' notification for carol EVERY TIME \u2014 delta 1, 1, 1 \u2014 identical to the no-relationship control's delta 1. The muted account reached the inbox of the person who muted it, carrying the comment id back to the comment the mute had hidden.",
+      "artifact": "before.json in the private lab directory"
+    },
+    "SC2_anonymous_comment_read": {
+      "how_found": "real Chromium against the production frontend build",
+      "result": "FAIL: on a hard load of the watch page the /videos/{id}/comments request carried NO Authorization header at all, so the server had no viewer to filter for and returned the muted author's comments to the person who muted them. The mute held only for as long as the client-side filter survived: mute \u2192 the comment vanishes; reload \u2192 it is back.",
+      "cause": "CommentsSection's list effect had deps [videoId, reloadKey] and fired on mount, but the access token is restored asynchronously from the refresh cookie; the effect never re-ran once the session arrived."
+    }
+  },
+  "criteria": {
+    "SC1_owner_notification_privacy": {
+      "result": "PASS",
+      "api_readback_fixed_build": {
+        "carol_muted_bob": "0 new notifications for carol",
+        "carol_blocked_bob": "0 new notifications for carol",
+        "bob_blocked_carol": "0 new notifications for carol",
+        "control_every_relationship_lifted": "exactly 1 new notification, type 'comment' \u2014 the control proves the exclusions, not a broken fixture, are doing the work",
+        "baseline_same_four_cases": "1, 1, 1, 1"
+      },
+      "browser": "carol's Inbox after a HARD reload: with bob blocked, bob's fresh comment left her notification list at 4 rows (4 before, 4 after) and no new row appeared. After unblocking from /settings/blocks, the same action produced a 5th row \u2014 newest type 'comment', actor bobu3, rendered as 'bobu3 commented on A12 mute block UI u3 \u00b7 just now'. Screenshots sc1-inbox-while-blocked.png and sc1-inbox-control.png.",
+      "implementation": "One new :one query, CommentVideoOwnerRecipient, following the 0101/0103 set-based idiom already used by CommentReplyRecipient and NotifyFollowersOfNewVideo: the video's owner resolved with mute, block in BOTH directions, tombstoned comment (0057), federated comment (0053, NULL user_id), self-comment and inactive/deleted owner all as SQL predicates. NotifyComment now resolves its own recipient (actorID, commentID) \u2192 (recipient, error), mirroring NotifyCommentReply; it has to, because the caller cannot see the mute/block relationship. handleCreateComment keeps the mutual-exclusion check against the reply recipient using the video publicVideo already loaded, so the redundant second GetByID is gone.",
+      "negative_control": "Replacing the two NOT EXISTS clauses with AND TRUE and regenerating sqlc made store.TestCommentVideoOwnerRecipientOnRealPG fail on exactly the three relationship cases ('resolved recipient \u2026 even though the owner muted the commenter', and both block directions). Clauses restored and re-verified green.",
+      "no_migration": "notifications.type is unconstrained TEXT and no column changed; latest migration remains 0127."
+    },
+    "SC2_blocked_muted_content_in_threads": {
+      "result": "PASS after one surgical frontend fix; the backend already matched the promise",
+      "api_readback": {
+        "carol_muted_bob": "carol's comment list no longer contains bob's comment and her per-viewer total drops to 1; bob still sees carol's comment; an anonymous viewer still sees bob's comment; bob can still comment (201) and still reply to carol (201), and carol does not see that reply",
+        "carol_blocked_bob": "identical hiding for carol, and bob can still comment (201)",
+        "bob_blocked_carol": "the reverse direction hides carol's comments from BOB, and leaves bob's comments visible to carol \u2014 the block's content effect is one-directional (blocker-side), matching the query",
+        "messaging_under_block": "POST /conversations answers 403 in BOTH directions \u2014 the part of the block that is symmetric"
+      },
+      "browser": "carol muted bob from the comment's own overflow menu: the comment disappeared immediately AND stayed gone after a hard reload, with alice's comment untouched and the header reading 'Comments (2)' rather than 4 (screenshot sc3-after-mute-reload.png, visually inspected). Blocking behaves differently on the immediate step \u2014 the behaviour its two e2e specs pin, see block_optimistic_state_left_alone \u2014 but reaches the same place: the comment stays put with the menu control reading 'Blocked', and after a hard reload the server has filtered it out \u2014 'Comments (2)', alice untouched (screenshot sc3-after-block-reload.png). From bob's side while blocked, the whole thread still rendered \u2014 alice's comment, his own, the tombstone \u2014 and he could still comment (201) and reply to alice (201).",
+      "frontend_fix": "components/CommentsSection.tsx: the list effect now waits for the session restore to settle before reading, so the request goes out as the signed-in viewer and the server can apply the per-viewer filter. That is the whole change \u2014 it is inside the comments read path and it is what made mute and block hold across a reload at all.",
+      "not_a_gap": "That a muted or blocked account can still comment on your video, reply to you, and read your comments is the SHIPPED promise, not a defect: mute and block are viewer-side hiding plus (for a block) a messaging cutoff. Nothing was redesigned.",
+      "block_optimistic_state_left_alone": "Blocking from a comment's menu leaves that comment on screen and flips the control to 'Blocked', where muting removes the comment at once. That inconsistency was found, and a fix was written and then REVERTED: e2e/blocks.spec.ts ('The comment stays (a block doesn't hide content); reopening the menu shows the control now reflects the blocked state') and e2e-backed/blocks.spec.ts both pin the current behaviour, and vidra-user's AGENTS.md forbids weakening an existing e2e spec to make a change fit. Removing the row optimistically is therefore a product decision for the owner, not a defect this slice may settle. It is a cosmetic difference either way: the server hides the blocked author on the next load regardless, which is what the browser run shows."
+    },
+    "SC3_mute_block_round_trip": {
+      "result": "PASS",
+      "mute": "carol muted bob from a comment's overflow menu \u2192 /settings/mutes lists 'bobu3 \u00b7 muted 1m ago' after a hard reload, GET /me/mutes/accounts returns exactly bob's id and GET /me/blocks is empty (so this state is the mute, not a block). Unmute from that page \u2192 the row is gone after a hard reload, the API readback total is 0, and bob's comment is visible again on the watch page.",
+      "block": "carol blocked bob from the same menu \u2192 the control reads 'Blocked' and, after a hard reload, the comment is gone (server-side filter) while alice's remains; /settings/blocks lists 'bobu4 \u00b7 blocked 1m ago', GET /me/blocks returns exactly bob's id and GET /me/mutes/accounts is empty (so this state is the block, not a mute). Unblock from that page \u2192 0 blocks on readback.",
+      "visibly_distinguishable": "The two live on separate routes with different headings and different promises: '/settings/mutes \u2192 Muted accounts \u2014 Accounts you have muted. Their comments are hidden from you.' versus '/settings/blocks \u2192 Blocked accounts \u2014 Accounts you have blocked. Neither of you can send the other a direct message.' Neither page's text contains the other's heading. Screenshots sc3-settings-mutes.png and sc3-settings-blocks.png."
+    },
+    "SC4_deleted_or_tombstoned_parent": {
+      "result": "PASS \u2014 both paths exercised",
+      "product_convention_established": "There are TWO conventions behind one word. An author deleting their OWN comment is a hard delete, and comments.parent_id is ON DELETE CASCADE (migration 0026, whose own comment says 'Deleting a parent cascades to its replies'), so the replies go with it. The '[deleted]' placeholder with the reply thread preserved is the ACCOUNT-deletion path (migration 0057 / TombstoneUserComments): the row survives with an empty body and deleted_at stamped.",
+      "author_deletes_own_comment": "alice deleted her comment (204): the parent and bob's reply both left the list and the reply's row is gone from the database (cascade). alice's own comment_reply notification about that reply went with it \u2014 notifications.comment_id is ON DELETE CASCADE (0018) \u2014 so no notification survives pointing at deleted content. No API or UI leak of the deleted text is possible because no row remains.",
+      "account_tombstone": "dana hard-deleted her account (DELETE /auth/me, 204). Her comment survives as a tombstone: the API returns deleted=true, body '[deleted]', and an ANONYMISED author handle (deleted-<8 random chars>, per internal/account/delete.go) \u2014 never the original username. In the database the stored body is empty and deleted_at is set. bob's reply survives with its own body and its own attribution.",
+      "browser": "carol's watch page renders the tombstone as an italic '[deleted]' placeholder with no author name and no controls, and bob's reply below it under a 'View 1 reply' toggle, correctly attributed to bobu3 with its body intact. Screenshot sc4-tombstone.png, visually inspected.",
+      "no_notification_for_or_from_the_tombstone": "Tombstoning dana's account created no notification for anyone (carol's count unchanged at 4 across the deletion) and dana's own notification rows are gone. alice then replied TO the tombstone: no new notification was raised at all \u2014 CommentReplyRecipient excludes a tombstoned parent, and the notification count referencing that comment id stayed at 1.",
+      "residual_observation": "That one surviving row is carol's pre-existing 'comment' notification about dana's comment, raised before the account was deleted. It carries no comment body (notifications never store one) and its actor renders as the anonymised deleted-<suffix> handle, so nothing of the deleted identity or text leaks \u2014 but it does mean a notification about a comment outlives that comment's tombstoning."
+    },
+    "SC5_no_regression": {
+      "result": "PASS",
+      "comment_reply_tests": "The #161/#159 tests are untouched and green: TestCommentReplyNotifiesTheParentAuthor, TestCommentReplyNotificationNeverSelfOrDuplicates, TestCommentReplyNotificationRespectsMutesAndBlocks, TestDisabledPrefSuppressesCommentReplyNotification, store.TestCommentReplyRecipientOnRealPG, and the frontend's comment_reply rendering tests.",
+      "owner_notification_for_a_non_muted_commenter": "The control case in every lane: one 'comment' notification, correct type, correct actor, correct video and comment id, in the unit test, the live API readback and the browser Inbox."
+    }
+  },
+  "gates": {
+    "core_make_ci": "PASS (exit 0) \u2014 fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race; 79 packages ok, 0 failures",
+    "core_integration": "PASS \u2014 go test -tags=integration ./internal/store/... against native PostgreSQL 16 at schema 127, including the new TestCommentVideoOwnerRecipientOnRealPG and the existing TestCommentReplyRecipientOnRealPG",
+    "frontend": "PASS on Node 24.4.1 \u2014 tsc --noEmit clean; eslint 0 errors / 2 pre-existing warnings (WatchView, remote-search.test); lint:icons clean; vitest 237 files / 2340 tests passed; production next build succeeded",
+    "node_version_note": "Node 24.20.0 is still not present on this machine; gates ran on nvm 24.4.1, which satisfies .nvmrc '24', engines '>=24' and CI's node-version '24'.",
+    "not_run": [
+      "npm run e2e and npm run e2e:backed \u2014 vidra-user AGENTS.md forbids running them locally; repo CI covers them",
+      "meta docker compose config gate \u2014 not needed, no compose or script files touched",
+      "core ipfs-integration on PR #162 timed out once on TestIntegrationPublicVideoRoundTrip (300s) and was re-run; the change touches nothing IPFS-related"
+    ]
+  },
+  "tdd_red_first": {
+    "core_http": "TestCommentNotificationRespectsMutesAndBlocks failed on all three relationship cases \u2014 'owner has 1 notifications after \"ada muted bob\", want 0', same for 'ada blocked bob' and 'bob blocked ada' \u2014 while its no-relationship control passed.",
+    "core_sql": "See SC1 negative_control.",
+    "core_unit": "TestNotifyCommentSkips pins the four silent answers (no recipient, self-comment, disabled preference, failed lookup) and asserts a failed resolution never falls back to notifying anyone.",
+    "frontend": "3 failed in components/CommentsSection.test.tsx: 'does not request the list until the session has resolved' (getVideoComments was called while the session was still restoring), 'fetches once for an anonymous visitor, after the restore attempt settles', and a third for the block-hides-comment behaviour ('expected null, received <p>from bob</p>'). The first two are kept and green; the third was reverted with its change when repo CI showed two existing e2e specs pin the current block behaviour \u2014 see block_optimistic_state_left_alone. 20/20 in that file after the revert."
+  },
+  "attempts_and_corrections": [
+    "The first 'baseline' driver run silently hit the FIXED binary: the pkill pattern used an absolute path while the process had been started as ./vidra-api, so the old process kept port 8088 and the baseline exited with 'bind: address already in use' while healthz still answered 200. Caught because the baseline showed the fixed numbers. That run was relabelled as the fixed phase and the true baseline re-run after confirming which pid held the port.",
+    "The driver posted {\"user_id\": \u2026} to POST /conversations; the contract field is recipient_id.",
+    "GET /me/blocks returns {\"users\": \u2026} while GET /me/mutes/accounts returns {\"accounts\": \u2026}; the driver assumed one shape for both.",
+    "The first browser walkthrough tripped the shipped 120 req/min rate limiter (35 x 429 in the API log), which put the comment list into its error state and made a later assertion read as a false negative. Re-run with 63-second cool-downs between phases and a hard failure on any 429, rather than by raising the limit.",
+    "No transcoder runs in this lab, so each fixture video was moved out of 'draft' with a direct UPDATE \u2014 a database fixture, not a code change.",
+    "A second frontend change (blocking a comment's author removes their comments at once, as muting does) was written, proved with a failing test, and then REVERTED after repo CI showed e2e/blocks.spec.ts and e2e-backed/blocks.spec.ts both pin the opposite behaviour. Editing those specs to fit the change is exactly what vidra-user's AGENTS.md forbids, so the behaviour is recorded as a finding for its owner instead."
+  ],
+  "unrelated_findings": [
+    "components/CommentsSection.tsx fetched the comment list from a useEffect that fired before the session existed. The same 'fetch on mount, before the session is restored' shape may apply to other client-side reads whose answer is viewer-scoped; not swept here.",
+    "Mute and Block, sitting in the same comment overflow menu, behave differently on the spot: Mute removes the comment, Block leaves it with the control reading 'Blocked'. Both end up hidden on the next load. Two e2e specs pin the Block behaviour, so it needs an owner's ruling rather than a patch.",
+    "/settings/blocks describes a block as only 'Neither of you can send the other a direct message', but the API contract says a block also hides the blocked account's videos and comments from the blocker. The copy under-promises what the block does.",
+    "A notification about a comment outlives that comment's account-level tombstoning (it is only deleted when the comment ROW is, via the ON DELETE CASCADE on notifications.comment_id). Nothing leaks \u2014 no body is stored and the actor is anonymised \u2014 but the inbox row remains, pointing at a '[deleted]' placeholder.",
+    "e2e-backed/video-description.spec.ts failed on this branch's first CI run with a strict-mode violation ('Edited description \u2026 resolved to 2 elements') \u2014 unrelated to comments; noted, not investigated."
+  ],
+  "helpers_sha256": {
+    "drive.py (three-actor before/after API driver)": "ea7b3d730e746d0eb39dce6ac364db170bd8b2d8ed57c1e584c5b99f2aac4d03",
+    "setup_ui.py (browser fixture seeder, incl. the account tombstone)": "af0d5c770cb13c8caabcd933b5cc6885f2bc05db1b55929e4a8d0942c4602bc8",
+    "ui-proof.mjs (Chromium walkthrough for SC1\u2013SC4)": "ec843ad03564cf6d4c31db6473b7c92daaa74cf539b0afc3a6442e98a6900f7b",
+    "block-phase.mjs (block round trip re-verified after the revert)": "f84cbba181cdf9d9e06e278c4f39e535bcc02ef0842d3a7351d1ceb2f570678b"
+  },
+  "helpers_location": "Private session scratch directory; results (before.json, after.json, ui-proof.json) and the nine screenshots stay there and are not committed.",
+  "register": "SOC-02 row NOT flipped. This slice closes its 'blocked/muted content' and 'deleted/tombstoned parent' criteria; the row's remaining criteria \u2014 ratings, report resolution, and refreshing unread counts and notification preferences \u2014 are untouched, so it stays UNVERIFIED. A12 remains OPEN."
+}

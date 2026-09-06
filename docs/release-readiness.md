@@ -1803,3 +1803,142 @@ is merged here and no deployment is authorized. Next: deep-link a notification t
 its comment (anchor + thread auto-expansion), then ratings/reports and the
 mute/block surfaces, then profile/archive/deactivation/account deletion. The
 complete A12 acceptance remains OPEN.
+
+## A12 social mute/block privacy — 2026-09-05
+
+**A12 OPEN; the SOC-02 "blocked/muted content" and "deleted/tombstoned parent"
+criteria PASS.** Observable success for this focused slice: an account C has
+muted or blocked — or that has blocked C — cannot reach C's inbox by commenting
+on C's video, cannot appear in C's comment thread on a hard reload, and the two
+surfaces round-trip and read differently; and a parent comment that is gone,
+by either of the two conventions, leaves neither text nor a notification behind.
+[Core #162](https://github.com/yegamble/vidra-core/pull/162), revision `a0a96a3`,
+and [frontend #160](https://github.com/yegamble/vidra-user/pull/160), revision
+`a90d697`. Authorization, best-effort semantics and error shapes are unchanged;
+no migration (latest stays 0127), no route or response-shape change, and no
+hand-edited generated files.
+
+The finding the last slice deliberately left alone is now reproduced live rather
+than read. Built from `origin/main` `cd8a12e` against the same database and three
+fresh synthetic actors, bob's comment on carol's video notified carol **every
+time** — with carol muting bob, with carol blocking bob, and with bob blocking
+carol, deltas 1, 1, 1, indistinguishable from the no-relationship control's 1.
+The muted account reached the inbox of the person who muted it, carrying the
+comment id back to the comment the mute had hidden. That failing run is kept. The
+correction adds one `CommentVideoOwnerRecipient` statement that keeps every
+selection rule in SQL — mute, block in **both** directions, tombstoned comment,
+federated comment, self-comment, inactive or deleted owner — following the
+0101/0103 idiom `CommentReplyRecipient` and `NotifyFollowersOfNewVideo` already
+follow. `NotifyComment` now resolves its own recipient, mirroring
+`NotifyCommentReply`; it has to, because the caller cannot see the relationship.
+
+A second, larger gap turned up in the browser and is fixed in the same slice.
+**The watch page fetched its comment list anonymously.** `CommentsSection` fired
+its effect on mount with deps `[videoId, reloadKey]`, but the access token is
+restored asynchronously from the refresh cookie, so the request carried **no
+`Authorization` header at all** — the mute/block filter is per-viewer and applied
+by the server, which therefore had no viewer to filter for and handed the muted
+author's comments back to the person who hid them. The effect never re-ran, so
+the mute held only for as long as the client-side filter survived: mute, and the
+comment vanishes; reload, and it is back. The effect now waits for the session to
+settle, and that single change is what makes a mute or a block hold across a
+reload at all.
+
+The shipped promise was established before anything was called a defect, and it
+is narrow: **a mute one-directionally hides the muted account's content from the
+muter, and a block does everything a mute does plus cuts direct messaging in both
+directions — neither stops the muted or blocked account from commenting on your
+video, replying to you, or reading your comments.** That was confirmed live and
+left alone: while blocked, bob still saw the whole thread and still posted a
+comment (201) and a reply (201), while `POST /conversations` answered 403 in both
+directions.
+
+[Sanitized evidence](evidence/a12-mute-block.json) records the proof. On the
+fixed build the same four cases give 0, 0, 0 and **1** — the control with every
+relationship lifted still delivers, so the exclusions and not a broken fixture
+are doing the work. In real Chromium against the **production-built** frontend:
+carol muted bob from the comment's own overflow menu, and after a HARD reload the
+thread read "Comments (2)" with bob's comment and his reply both gone and alice's
+untouched; `/settings/mutes` listed him and `GET /me/blocks` was empty, so the
+state was unambiguously the mute; unmuting from that page restored the comment.
+Blocking repeated the whole round trip: the control reads "Blocked", and after a
+hard reload the server has filtered the comment out — "Comments (2)" again, with
+alice untouched — while `/settings/blocks` lists him and `GET /me/mutes/accounts`
+is empty. That page reads "Accounts you have blocked. Neither of you can send the
+other a direct message." against the mutes page's "Their comments are hidden from
+you." — different routes, different headings, different promises. With bob blocked, his fresh
+comment left carol's Inbox at four rows after a hard reload; after unblocking,
+the same action produced a fifth, "bobu3 commented on …". Screenshots were
+visually inspected.
+
+The tombstoned parent has **two conventions behind one word** and both were
+exercised. An author deleting their own comment is a hard delete, and
+`comments.parent_id` is `ON DELETE CASCADE` (0026), so replies go with it —
+alice's deletion removed her comment, bob's reply and the row itself, and her own
+`comment_reply` notification went too (`notifications.comment_id` is also
+`ON DELETE CASCADE`, 0018), so nothing survives pointing at deleted content. The
+"[deleted]" placeholder with the thread preserved is the **account**-deletion
+path (0057): dana hard-deleted her account, and her comment came back with
+`deleted=true`, body `[deleted]` and an anonymised `deleted-<8 random>` handle —
+never her username — while bob's reply kept its own body and attribution under
+it. Carol's watch page renders exactly that. Tombstoning raised no notification
+for anyone, and alice replying **to** the tombstone raised none either.
+
+TDD failed first in every lane. Core HTTP: `owner has 1 notifications after
+"ada muted bob", want 0`, and the same for both block directions, with the
+control passing. SQL: replacing the two `NOT EXISTS` clauses with `AND TRUE` and
+regenerating sqlc made the real-PostgreSQL test fail on exactly those three cases,
+and it passes again with them restored. Frontend: three failures, including
+`getVideoComments` being called while the session was still restoring. The third
+covered a second change — blocking removing the author's comments at once, as
+muting does — which was **reverted**: repo CI showed `e2e/blocks.spec.ts` ("The
+comment stays (a block doesn't hide content)") and `e2e-backed/blocks.spec.ts`
+both pin the current behaviour, and editing an existing e2e spec to make a change
+fit is exactly what vidra-user's AGENTS.md forbids. Whether the row should also
+go immediately is a product call for its owner; it is cosmetic either way, since
+the server hides it on the next load regardless.
+
+Gates: core `make ci` passes (exit 0; fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race; 79 packages, 0 failures), and
+`go test -tags=integration ./internal/store/...` passes against native
+PostgreSQL 16 at schema 127. Frontend passes TypeScript, lint (zero errors, two
+pre-existing warnings), icons, **237 files / 2340 tests**, and the production
+build, on nvm Node 24.4.1 (24.20.0 is still absent from this machine; 24.4.1
+satisfies `.nvmrc` "24", `engines >=24` and CI's `node-version: "24"`). Per
+vidra-user's AGENTS.md the local e2e suites were **not run**. On #162 the
+`ipfs-integration` lane timed out once on `TestIntegrationPublicVideoRoundTrip`
+(300s) and was re-run; this change touches nothing IPFS-related. Docker remains
+unavailable, so the lab is again native PostgreSQL + Redis with the API and the
+production frontend run directly.
+
+Failures worth keeping. The first "baseline" run silently hit the **fixed**
+binary: `pkill` matched an absolute path while the process had been started as
+`./vidra-api`, so the old process kept port 8088, the baseline died with "bind:
+address already in use", and `healthz` still answered 200 — caught only because
+the baseline reported the fixed numbers. The first browser walkthrough tripped
+the shipped 120 req/min rate limiter (35 × 429), which put the comment list into
+its error state and produced a false negative; it was re-run with cool-downs
+between phases and a hard failure on any 429, rather than by raising the limit.
+
+Four unrelated findings. The "fetch on mount, before the session is restored"
+shape may apply to other client-side reads whose answer is viewer-scoped; not
+swept here. Mute and Block sit in the same overflow menu and behave differently
+on the spot — Mute removes the comment, Block leaves it reading "Blocked" — and
+two e2e specs pin the Block half, so it needs a ruling rather than a patch.
+`/settings/blocks` under-promises — it mentions only direct messages,
+while the contract says a block also hides the blocked account's videos and
+comments from the blocker. And a notification **about** a comment outlives that
+comment's account-level tombstoning: nothing leaks (no body is stored, the actor
+is anonymised) but the inbox row remains, pointing at a "[deleted]" placeholder.
+
+Register rows are unchanged. This slice closes SOC-02's "blocked/muted content"
+and "deleted/tombstoned parent" criteria; its remaining criteria — ratings,
+report resolution, and refreshing unread counts and notification preferences —
+are untouched, so the row stays UNVERIFIED.
+
+Delivery order: core #162 and frontend #160 have **no contract dependency** on
+each other (core changes no route and no response shape, so vidra-user needs no
+regenerated client), then this evidence PR. Nothing is merged here and no
+deployment is authorized. Next: ratings and report resolution with the
+notification-preference refresh, then per-comment deep links, then mentions. The
+complete A12 acceptance remains OPEN.
