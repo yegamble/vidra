@@ -1,0 +1,190 @@
+{
+  "status": "UNVERIFIED",
+  "scope": "A14 history checkpoint; remaining messaging acceptance is open",
+  "frontend_revision": "3a69671",
+  "checks": {
+    "desktop": "PASS",
+    "phone": "PASS",
+    "tablet": "PASS"
+  },
+  "verification": {
+    "typecheck": "PASS",
+    "lint": "PASS: 0 errors, 2 existing warnings",
+    "icons": "PASS",
+    "unit_files": 230,
+    "unit_tests": 2306,
+    "red_tests": 3
+  },
+  "attachment_predecessor_ci": "PR150 all checks PASS, including local/S3 backend suites",
+  "desktop": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "history_cursor_anchor_dedup_poll": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "marker": "A14history1788640943968",
+    "conversation_id": "6aaed400-60bc-420e-8212-3fb18dc497a3",
+    "initial_oldest": "545a72fd-2146-4287-9f0b-fa3f260463ad",
+    "before": {
+      "box": {
+        "x": 1020.9375,
+        "y": 262,
+        "width": 197.0625,
+        "height": 21.75
+      },
+      "scroll": {
+        "top": 0,
+        "height": 6428,
+        "client": 529
+      }
+    },
+    "after": {
+      "box": {
+        "x": 1020.9375,
+        "y": 262,
+        "width": 197.0625,
+        "height": 21.75
+      },
+      "scroll": {
+        "top": 306,
+        "height": 6734,
+        "client": 529
+      }
+    },
+    "anchor_delta_px": 0
+  },
+  "phone": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "history_cursor_anchor_dedup_poll": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "marker": "A14history1788640943968",
+    "conversation_id": "6aaed400-60bc-420e-8212-3fb18dc497a3",
+    "initial_oldest": "545a72fd-2146-4287-9f0b-fa3f260463ad",
+    "before": {
+      "box": {
+        "x": 162.9375,
+        "y": 270,
+        "width": 197.0625,
+        "height": 21.75
+      },
+      "scroll": {
+        "top": 0,
+        "height": 6428,
+        "client": 559
+      }
+    },
+    "after": {
+      "box": {
+        "x": 162.9375,
+        "y": 270,
+        "width": 197.0625,
+        "height": 21.75
+      },
+      "scroll": {
+        "top": 306,
+        "height": 6734,
+        "client": 559
+      }
+    },
+    "anchor_delta_px": 0,
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "bodyHeight": 844,
+      "bodyWidth": 390
+    }
+  },
+  "tablet": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "history_cursor_anchor_dedup_poll": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "marker": "A14history1788640943968",
+    "conversation_id": "6aaed400-60bc-420e-8212-3fb18dc497a3",
+    "initial_oldest": "545a72fd-2146-4287-9f0b-fa3f260463ad",
+    "before": {
+      "box": {
+        "x": 516.9375,
+        "y": 262,
+        "width": 197.0625,
+        "height": 21.75
+      },
+      "scroll": {
+        "top": 0,
+        "height": 6428,
+        "client": 653
+      }
+    },
+    "after": {
+      "box": {
+        "x": 516.9375,
+        "y": 262,
+        "width": 197.0625,
+        "height": 21.75
+      },
+      "scroll": {
+        "top": 306,
+        "height": 6734,
+        "client": 653
+      }
+    },
+    "anchor_delta_px": 0,
+    "viewport": {
+      "width": 768,
+      "height": 844,
+      "bodyHeight": 844,
+      "bodyWidth": 768
+    }
+  },
+  "reproduction": {
+    "status": "FAIL",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {},
+    "browser": "151.0.7922.34",
+    "marker": "A14history1788640943968",
+    "conversation_id": "6aaed400-60bc-420e-8212-3fb18dc497a3",
+    "initial_oldest": "545a72fd-2146-4287-9f0b-fa3f260463ad",
+    "before": {
+      "box": {
+        "x": 1020.9375,
+        "y": 262,
+        "width": 197.0625,
+        "height": 21.75
+      },
+      "scroll": {
+        "top": 0,
+        "height": 6428,
+        "client": 6428
+      }
+    },
+    "after": {
+      "box": {
+        "x": 1020.9375,
+        "y": 568,
+        "width": 197.0625,
+        "height": 21.75
+      },
+      "scroll": {
+        "top": 0,
+        "height": 6734,
+        "client": 6734
+      }
+    },
+    "anchor_delta_px": 306
+  },
+  "helpers": {
+    "vidra-a14-history.mjs": "0c84ec4037d590382ec72caeaa151f3c3fa54904e1275becf888daad85f1102c",
+    "vidra-a14-history-responsive.mjs": "2d9f36c5a14f83e629d9f0c270c4b7631a7a0c8f1f8220aad69782ad397bc0fc"
+  },
+  "limitations": [
+    "105 old fixture rows were seeded directly in the disposable DB; history reads used the real authenticated API.",
+    "Browser proof used Next development mode.",
+    "Full A14 still needs explicit send retry, receipt opt-out, delete/report and configured scanner lane."
+  ]
+}

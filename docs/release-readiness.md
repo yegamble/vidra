@@ -1375,6 +1375,139 @@ focused A36 fix/checkpoint, not full recovery acceptance: encrypted retrieval,
 matched media snapshot, independent restore and selected offsite target remain
 required. Next: quiesce fixture writers, capture a matched media/DB/config set,
 then encrypt/retrieve and validate it before A37 replacement-host recovery.
+## A14 attachment contract checkpoint — 2026-09-05
+
+**A14 OPEN.** [Frontend PR #150](https://github.com/yegamble/vidra-user/pull/150),
+revision `0cc2278`, removes the reproduced Composer mismatch with the already
+shipped API: 30 attachments, 100 MiB per file, and six Office MIME types in the
+picker and validation. An overflowing selection is visibly refused as a whole
+instead of silently truncating files. Server error and explicit upload retry
+semantics are preserved. No OpenAPI/generated-client change was required.
+
+[Sanitized evidence](evidence/a14-attachment-checkpoint.json) records:
+
+- TDD: 11 failed / 3 passed before implementation; 14 focused tests passed after.
+  Exact 100 MiB, one byte over, 30/31 files, existing pending counts, all six
+  Office types, unsupported types and 413/415/422/503 retry behavior are covered.
+- Required frontend gates passed: TypeScript, lint (0 errors, 2 existing
+  warnings), icon check, 229 unit-test files / 2,303 tests, and diff checks.
+- Actual Chromium against the changed frontend and real restored lab API:
+  31-file refusal; 30 Word files uploaded and sent; recipient API readback has
+  all 30 as `doc`; recipient UI download matches the source SHA-256.
+- An actual 104,857,600-byte synthetic size fixture uploaded and sent through
+  Composer. A separate approved synthetic account gets 404 for both attachment
+  and conversation, preserving nonparticipant privacy.
+
+The frontend ran in Next development mode at localhost behind a guarded proxy
+to verified disposable VM `vidra-a02-20260905194815-89796`; no API interception,
+response mocks, or changed rate limits were used. The first local proxy lacked
+Next's HMR WebSocket and the development API default was wrong; correcting
+that test setup enabled React hydration. A selector initially included Next's
+route announcer and was narrowed to Composer's actual alert. One real send
+returned 429 after all 30 uploads; the limiter remained unchanged and the next
+run passed. The first size probe's five-second page wait timed out; a bounded
+30-second readiness retry passed. These failed attempts are retained, not
+counted as successful acceptance.
+
+Production frontend build and the full backed messaging suite are **unverified**
+for this slice. A14 remains open for timeline/history stability, send retry and
+receipt/privacy controls, delete/report, and the configured scanner failure
+lane. Next: use these persisted synthetic conversations for those probes;
+do not redo the global audit. Private helpers/results remain under
+`/tmp/vidra-a14-*`, with helper hashes in the evidence. Frontend PR #150 precedes
+this readiness checkpoint; no merge is claimed and the A09–A40 goal stays open.
+
+## A14 plaintext history and scroll checkpoint — 2026-09-05
+
+**A14 OPEN.** [Frontend PR #151](https://github.com/yegamble/vidra-user/pull/151),
+revision `3a69671`, is stacked on attachment PR #150. Plaintext threads previously
+loaded only the newest 100 messages; only encrypted threads could page earlier.
+The shared loader now uses the oldest plaintext ID with `before_id` (no offset),
+merges overlapping pages once, retains loaded history on failure, and exposes
+retry. The timeline anchors prepends without treating history as new mail or
+jumping to the reader's last own message.
+
+[Real history evidence](evidence/a14-history-checkpoint.json) includes the initial
+browser failure: the message log had `scrollHeight=clientHeight=6428`, because
+the page expanded with its history. The anchored message jumped 306px despite
+passing component tests. A messaging-only viewport constraint now lets the root
+flex row shrink and the existing panes scroll; header, banner and tab navigation
+retain their intrinsic heights. No root layout rewrite or fixed chrome-height
+assumption was introduced.
+
+Actual Chromium checks passed at desktop, 390px and 768px: a real authenticated
+keyset response added earlier history, the anchored message moved **0px**, all
+105 seeded fixture rows appeared exactly once, and polling preserved the loaded
+history. Phone/tablet body dimensions matched their viewports and the composer
+remained visible. Phone screenshot was visually inspected. Old fixture rows were
+seeded directly in the disposable database; the history reads and a newest
+message send traversed the real API. This proves history behavior, not 105
+individual API sends. Browser proof used the development frontend.
+
+TDD: three new tests failed before implementation and passed after. Final gates:
+TypeScript PASS; lint PASS (0 errors, 2 existing warnings); icons PASS; 230 unit
+files / 2,306 tests PASS; diff check PASS. Attachment PR #150 now has all CI green,
+including local/S3 backend, IPFS, channel-sync, frontend and contract checks.
+Do not infer that predecessor result covers the new #151 revision; its CI must
+complete separately. Required meta Compose validation also passes.
+
+Next: explicit send retry, receipt opt-out, delete/report and configured scanner
+failure acceptance using the existing synthetic actors/conversation. Those remain
+unverified, so A14 and the A09–A40 goal are not complete. Temporary test servers
+were stopped, generated unrelated AGENTS changes removed, and both worktrees
+are clean. Private reproduction scripts/results are under `/tmp/vidra-a14-*`.
+Delivery order: frontend #150 → #151; readiness #99 → this checkpoint. No merge
+is claimed; the pending explicit merge-authorization request remains unresolved.
+
+## A14 candidate acceptance PASS — 2026-09-05
+
+**A14 runtime acceptance PASS; delivery OPEN awaiting merge authorization.**
+Candidate frontend `3a69671` in PR #151 (after #150) now has evidence for MSG-01
+and MSG-02. This is not a claim that the unchanged main branch is ready.
+[Controls/scanner evidence](evidence/a14-controls-scanner.json) completes the
+preceding attachment and history checkpoints:
+
+- Actual browser offline mode prevented a send from reaching the server; the UI
+  showed failure, SQL confirmed zero rows, and one explicit Retry created exactly
+  one message. Recipient read advanced the sender's API watermark and UI Seen.
+- The recipient's receipt opt-out persisted across reload and hid their watermark
+  from the sender API/UI. Original preference was restored and verified.
+- A live incoming message reached the other browser by polling, appeared once,
+  preserved a reader's history position and left their read watermark unchanged.
+  Jump to latest made it visible and advanced that watermark.
+- Non-sender delete returned 404; repeated UI reports returned 204 and retained
+  exactly one report/body snapshot. Sender UI delete returned 204 and the peer
+  read a tombstone; the report snapshot survived deletion.
+- An actual 104,857,601-byte file was refused in Composer before any upload.
+  This complements the real accepted 104,857,600-byte and 30/31-file proofs.
+- The repository-pinned `clamav/clamav:1.5` image ran in the disposable VM without
+  host ports. It is amd64-only, so the existing QEMU support was used; no pin was
+  changed. Recorded engine/image: ClamAV 1.5.4, SHA in evidence. With real scanning
+  enabled fail-closed, a benign Word document uploaded and sent. Standard harmless
+  EICAR returned 422, as did a benign upload with clamd stopped. Rejected uploads
+  produced neither attachment rows nor orphan blobs, and the UI could not send
+  them. Counts increased only for the benign accepted document (35 → 36).
+  Original API flags were restored exactly and clamd was stopped afterward.
+
+Failed attempts remain visible: an unhandled WebSocket reset killed the private
+local test proxy; a real 429 interrupted delete and cleanup; and an isolated
+retry initially navigated the sender incorrectly. These were corrected without
+API response mocks, raised limits or fake success. Cleanup was separately
+verified after the failed attempts. Only individually completed phases from the
+partial runs contribute to this combined acceptance evidence.
+
+Frontend PRs #150 and #151 both have all CI green, including the frontend gate,
+contract, local/S3 backed suites, IPFS and channel sync. Local final history gates
+remain 230 unit files / 2,306 tests, TypeScript, lint and icons PASS. Browser
+acceptance used the real lab API and a development frontend; CI separately ran
+the production frontend gate. Meta Compose validation and diff/JSON checks PASS.
+No product code changed in this final evidence step. The DM scanner lane is
+proven here; A28's other ingestion paths are still a separate acceptance item.
+
+Review/merge order: vidra-user #150 → #151; vidra #99 → #100. The prior explicit
+merge-authorization request remains unresolved; nothing was merged. Next ready
+work should use the existing readiness dependency order and retain source/A37
+external blockers. The wider A09–A40 goal is still open.
 
 ## A36 matched capture and encrypted B2 retrieval — 2026-09-05
 
@@ -1478,6 +1611,9 @@ the checkpoint records helper hashes, not credentials or archive contents.
 This evidence checkpoint depends on A36 PR #97 (which depends on #96), and does
 not close A37 or the wider A09–A40 goal.
 
+A14 delivery update: merge authorization is now explicit. Frontend #150 is
+merged; #151 is retargeted to main with CI rerunning. This conflict resolution
+preserves both the complete A14 and the independent A36/A37 evidence.
 
 ## Merge delivery checkpoint — 2026-09-05
 
@@ -1491,6 +1627,9 @@ items remain open as recorded. A36 offsite proof meta #97 and the A37 checkpoint
 main and its new checks are running. Completed base branches are removed only
 after dependents are retargeted. No production deployment or release occurred.
 
+A14 final delivery: frontend #150 and #151 are now merged after all gates passed.
+The combined runtime acceptance remains PASS; this evidence PR completes its
+delivery record once its final validation passes and it is merged.
 
 A12 playlist continuation is fixed in [frontend #157](https://github.com/yegamble/vidra-user/pull/157),
 revision `9c2a0e3`. Watch links and end-card navigation retain a playlist id;
@@ -1506,3 +1645,9 @@ changes. Temporary harness navigation/role/duplicate-label errors were corrected
 the instrumented final run passed with no 429. Production build and the two
 corrected cover Chromium tests also pass. #157 CI is pending. Remaining A12
 social/profile/archive/deactivation/deletion criteria stay open.
+
+Final implementation gates: frontend #156 and #157 both pass all checks,
+including production frontend, local/S3 backed suites, contract, channel sync
+and IPFS. The final merge/branch cleanup is being completed under the user’s
+explicit instruction. A12 remains open for the individually listed social and
+account lifecycle criteria; green library checks do not certify those slices.
