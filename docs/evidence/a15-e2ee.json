@@ -1,0 +1,165 @@
+{
+  "item": "A15",
+  "register_row": "MSG-03",
+  "date": "2026-09-06",
+  "verdict": "runtime acceptance PASS on the candidate frontend; delivery open awaiting merge",
+  "note": "Sanitized. Every credential, address and identifier below belongs to a disposable local lab that was torn down; no production data, keys or private paths appear here. Encrypted blobs remain out of scope (SCP-03).",
+
+  "lab": {
+    "shape": "single origin, mirroring the production Caddy topology so the httpOnly SameSite=Lax vidra_refresh cookie is first-party",
+    "postgres": "native postgresql@16.15, fresh cluster on a private port, schema 129 (no migration in this slice)",
+    "redis": "native redis, own data directory, empty throughout (no key was ever written by this workload)",
+    "core_api": "built from the vidra-core working tree at main, local HTTP port",
+    "frontend": "production build (npm run build) served by next start; same-origin API through a pipe-only lab proxy that inspects, rewrites and mocks nothing",
+    "ipfs": "native kubo 0.40.1, own repo, configured by the repository's OWN shipped hook deploy/ipfs-public/001-configure-network-mode.sh with IPFS_PUBLIC_NETWORK=false",
+    "ipfs_local_only_asserted": {
+      "AutoConf.Enabled": false,
+      "Routing.Type": "none",
+      "Provide.Enabled": false,
+      "bootstrap_list": "empty",
+      "Swarm.AddrFilters": ["/ip4/0.0.0.0/ipcidr/0", "/ip6/::/ipcidr/0"],
+      "swarm_peers": 0
+    },
+    "browser": "real Chromium via Playwright 1.62.1, one persistent profile per DEVICE (its own IndexedDB), real Olm WASM from the app's own /olm/ assets — the crypto stub was never injected",
+    "rate_limits": "left at the shipped defaults (120/min general, 10/min auth). The harness parked idle contexts on about:blank and paced every step. 429s observed across all five browser phases: 0",
+    "actors": "four synthetic accounts (an owner plus alice/bob/carol) created on a fresh instance; registration was at its shipped default on this disposable database"
+  },
+
+  "shipped_promises_as_verified": {
+    "new_device_history": "NONE. A send fans out one Olm envelope per recipient device that exists AT SEND TIME; the list endpoint returns only envelopes addressed to the caller's devices. A device added later is addressed in nothing earlier, so it starts empty. No recovery key, no key backup, no device-to-device history share, no cross-signing exists in either repo.",
+    "key_persistence": "The Olm account is pickled under a random 32-byte pickle key in IndexedDB database `vidra-e2ee`, store `device`, key `self`, alongside a decrypted-message cache and a sent-message outbox. It survives a hard reload, a full browser restart and a sign-out/sign-in on the same browser. Clearing the origin loses the device and every message it could read.",
+    "recovery": "None ships. Losing a browser's storage is unrecoverable by design (device-bound; the setup copy says so).",
+    "device_visibility": "GET /e2ee/devices returns the caller's own devices. GET /users/{id}/e2ee/devices returns another user's device ids, names, PUBLIC identity and signing keys and timestamps, and ONLY to a caller who shares a conversation with them — an outsider and even the instance admin get 404. The one-time-key COUNT endpoint is owner-only: a conversation peer gets 404. Claiming prekeys is conversation-gated the same way. No private key is ever exposed by any endpoint.",
+    "server_visible_metadata": "sender and recipient account ids and usernames, the conversation id and its dm_key (which literally names both participants), per-envelope created_at, ciphertext length, Olm message_type, device ids, user-chosen device NAMES, device public keys, last_seen_at, conversation updated_at/last_message_at, unread counts, and the fan-out width — one envelope row per recipient device, which reveals how many devices each party has.",
+    "attachment_rejection": "422 in every shape. Uploading into an encrypted conversation is refused BEFORE the multipart body is read: 422 'attachments are not supported on encrypted conversations'. A send carrying attachment_ids with envelopes is 422 on field attachment_ids with the same message; a send carrying attachment_ids without envelopes is 422 on field envelopes ('this conversation is encrypted; send envelopes, not body'). No attachment row and no stored bytes result."
+  },
+
+  "sc1_two_devices_and_round_trip": {
+    "devices_registered": ["alice browser one", "alice browser two", "bob browser one"],
+    "registration": "through the shipped DeviceSetup form inside an encrypted thread; each pickled Olm account is 3060 chars with a 44-char (32-byte base64) pickle key, and 30 one-time prekeys were uploaded per device",
+    "round_trip": "alice device 1 sent; bob's device decrypted it; alice's OTHER device decrypted it too (the fan-out addresses the sender's own other devices). Bob replied; both of alice's devices decrypted the reply.",
+    "envelope_rows_for_two_messages": 4,
+    "ciphertext_bytes_per_envelope": 246,
+    "each_copy_distinct": true,
+    "late_device": {
+      "device": "alice browser three, registered AFTER four messages existed",
+      "sees": "nothing — zero bubbles and the shipped 'No messages yet' copy, not placeholders",
+      "after_a_new_send": "receives ONLY the message sent after it existed"
+    },
+    "composer_recipient_fallback": "a bare thread URL without the ?to hint still had a live composer for a sender, recovered from the local outbox"
+  },
+
+  "sc2_ciphertext_only": {
+    "database_columns_scanned": 290,
+    "database_columns_matching_any_plaintext": 0,
+    "scan_scope": "every text, varchar, json and jsonb column in the whole public schema, against three distinct sent plaintexts",
+    "plaintext_messages_table_rows_for_the_encrypted_thread": 0,
+    "inbox_preview": "last_message_body is the empty string for the encrypted conversation; the rendered row reads 'Encrypted conversation' where a plaintext row shows the body",
+    "notifications": "type=message with actor and conversation_id only — no body, no preview, for encrypted and plaintext alike",
+    "audit_log": "carries no message or e2ee action at all (only auth rows in this run)",
+    "search": "core's search_outbox had zero rows for the whole run; messaging emits no search event",
+    "redis": "zero keys written by this workload",
+    "core_stdout": "0 occurrences of any sent plaintext across all three captured log files (1,186 + 101 + bootstrap lines)",
+    "key_material_at_rest": "identity_key and signing_key are 43-char base64 (32-byte PUBLIC keys); one-time keys likewise. No private key column exists."
+  },
+
+  "sc3_restart_recover_unlink": {
+    "hard_reload": "both messages still decrypt",
+    "full_browser_restart": "process gone, only the profile on disk; both messages still decrypt and the pickle had grown 3060 -> 4118 chars as sessions ratcheted",
+    "sign_out_then_in": "IndexedDB survived sign-out (device, plaintext cache and outbox rows all intact) and the thread read identically afterwards",
+    "cleared_origin": "deleting the vidra-e2ee database returned the device-setup form and left zero readable messages",
+    "unlink": {
+      "surface": "Settings -> Encrypted-messaging devices; three devices listed with safety numbers and a 'This device' badge, removed with the shipped arm-then-confirm control",
+      "after": {
+        "device_rows_for_the_removed_device": 0,
+        "one_time_keys_for_it": 0,
+        "envelopes_to_or_from_it": 0,
+        "peer_fan_out": "bob's next send addressed only the two remaining devices — his client stopped encrypting to the removed one",
+        "removed_device_thread": "zero readable messages (its envelopes cascaded away and nothing new is addressed to it)",
+        "removed_device_send": "422 'sender_device_id must be one of your registered devices'"
+      }
+    },
+    "deletion_authorization": {
+      "outsider": 404,
+      "conversation_peer": 404,
+      "instance_admin": 404,
+      "anonymous": 401,
+      "devices_remaining_after_every_refusal": 3
+    },
+    "orphan_caveat": "clearing a browser's storage does NOT remove the server-side device row. Peers keep fanning out to it and those envelopes can never be opened by anyone. Only an explicit unlink removes the device."
+  },
+
+  "sc4_attachments_unsupported": {
+    "encrypted_composer": { "file_inputs": 0, "attachment_controls": 0 },
+    "plaintext_composer": {
+      "file_inputs": 1,
+      "control": "Attach a file",
+      "accept": "image/*, video/*, audio/*, application/pdf and the six Office types — the shipped A14 contract, unchanged"
+    },
+    "api_refusals": {
+      "upload_txt_into_encrypted": 422,
+      "upload_pdf_into_encrypted": 422,
+      "send_attachment_ids_without_envelopes": 422,
+      "send_body_into_encrypted": 422,
+      "send_envelopes_with_attachment_ids": 422
+    },
+    "stored_bytes_from_refused_uploads": 0,
+    "plaintext_path_smoke": "upload 201 -> send 201 with the attachment echoed back on the message; the bytes landed under the local backend's dm-attachments tree"
+  },
+
+  "sc5_no_ipfs_pin_for_dm_bytes": {
+    "method": "real kubo node, local-only, mirror enabled in core (IPFS_ENABLED=true). Encrypted messages were exchanged, a plaintext DM attachment was uploaded and sent, and an ordinary public avatar was uploaded as the positive control.",
+    "pin_ledger_rows": 1,
+    "pin_ledger_row": { "media_class": "user_avatar", "state": "pinned", "network": "public", "byte_size": 70 },
+    "pin_ledger_rows_naming_a_dm_attachment_conversation_message_or_e2ee_object": 0,
+    "user_reeval_queue_rows": 0,
+    "node_block_store_after": "3 blocks, all accounted for: the avatar's content block, kubo's own pin-index entry for it, and the 4-byte empty-unixfs baseline block that predated the run",
+    "dm_attachment_would_be_cid_present_locally": false,
+    "dm_attachment_bytes_exist_on_the_authoritative_backend": true,
+    "note": "the never-mirror routing is not merely asserted in code — the whole block store was enumerated and nothing but the control is in it"
+  },
+
+  "sc6_authorization": {
+    "outsider_reads_thread": 404,
+    "outsider_posts_to_thread": 404,
+    "outsider_conversation_list": "empty",
+    "anonymous_reads_thread": 401,
+    "outsider_reads_peer_device_directory": 404,
+    "instance_admin_reads_peer_device_directory": 404,
+    "conversation_peer_reads_device_directory": "200 — device ids, names, public identity/signing keys, timestamps",
+    "outsider_claims_prekeys": 404,
+    "conversation_peer_reads_one_time_key_count": 404,
+    "owner_reads_own_one_time_key_count": 200
+  },
+
+  "sc7_no_regression": {
+    "repo_changed": "vidra-user only",
+    "typecheck": "PASS",
+    "lint": "PASS (0 errors, 2 pre-existing warnings)",
+    "icons": "PASS",
+    "unit": "242 files / 2372 tests PASS (2369 before; 3 added)",
+    "contract": "PASS — 235 backend paths / 309 operations, 206 paths and 263 call sites in the frontend client",
+    "named_a14_suites": "Composer, ConversationView, MessagingShell, ThreadHeader and every lib/e2ee suite: 8 files / 48 tests PASS",
+    "production_build": "PASS",
+    "repo_ci": "all seven checks green on vidra-user#166 including contract, frontend, ipfs-backed, channel-sync-backed and both e2e-backed lanes",
+    "vidra_core": "unchanged in this slice — no core gate was needed or claimed",
+    "not_run": "the meta compose render was not re-run because no compose, script or env file was touched; vidra-search was not started (encrypted messaging emits no search event, proven by the empty search_outbox)"
+  },
+
+  "defect_fixed": {
+    "where": "vidra-user components/e2ee/EncryptedThreadView.tsx",
+    "symptom": "on a multi-device account every message in an encrypted thread rendered TWICE — once readable and once as 'Message can't be decrypted on this device' — because the list endpoint answers for the ACCOUNT and the view rendered every envelope it received",
+    "observed": "alice with two devices saw four bubbles for a two-message conversation, growing with each device she adds",
+    "fix": "filter on recipient_device_id (already on the wire) so only envelopes addressed to THIS browser render; the placeholder survives for an envelope addressed here that will not open, which is the only trace a real ratchet fault leaves",
+    "tdd": "components/e2ee/EncryptedThreadView.test.tsx is new — these components had NO component tests; 2 failed / 1 passed before, 3 passed after",
+    "reverified_in_browser": "after the fix each of the three devices shows exactly the real messages and no placeholder"
+  },
+
+  "findings_not_fixed": [
+    "components/e2ee/StartEncryptedButton.tsx is exported but imported nowhere — a dead control. Encrypted threads stay reachable through the New-message dialog's 'End-to-end encrypted' checkbox.",
+    "POST /users/{id}/e2ee/claim is all-or-nothing per user and includes the CALLER's own device, so fanning out to your own other devices burns one of the sending device's own prekeys per send.",
+    "Clearing a browser's storage orphans its server-side device row; peers keep encrypting to a device nobody can read, with no signal to either side.",
+    "No audit row is written for any e2ee device registration or deletion.",
+    "A first page load by a signed-out visitor fires one POST /auth/refresh that answers 422 (no cookie to present)."
+  ]
+}

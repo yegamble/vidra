@@ -118,7 +118,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | SOC-02 Comments/replies/ratings, mentions, reports and notification preferences | C U | Backed comments/comment-replies/rating/report/notifications/notification-prefs; live three-actor evidence `a12-social-notifications`, `a12-mute-block`, `a12-ratings-reports-prefs` (mentions are not a shipped capability — recorded, not accepted) | PASS (candidate; unmerged) | Three actors: reply attribution, intended recipient notification, deleted/tombstoned parent, blocked/muted content; refresh unread counts/preferences and resolve report | SOC-01 → A12 |
 | MSG-01 Plaintext DM timeline, retry/read receipts/delete/report and attachments | C U | `internal/messaging`; backed messaging/message-compose; frontend P-MSG2 unfinished boxes | UNVERIFIED | Two browser contexts send/poll/read, prepend history without jumps/duplicates, retry once, receipts opt-out, delete/report; recipient downloads attachment, third party denied | AUTH-02 → A14 |
 | MSG-02 Approved 100 MiB / 30-file and office-document attachment behavior | C U | F03; product decision §14a vs Composer limits | FAIL | Boundary values, 31st file and oversize refusal; document kind renders; multi-file recipient API/UI readback; configured scanner failure semantics | MSG-01, INT-04 → A14 |
-| MSG-03 E2EE device/session lifecycle and honest unsupported attachments | C U | `internal/e2ee`, Olm client; backed e2ee; D7 defers encrypted blobs | UNVERIFIED | Two devices establish encryption; inspect server stores ciphertext only; restart/recover/unlink as supported; plain attachment affordance absent and API rejection; no IPFS pin for DM bytes | AUTH-02 → A15; encrypted blobs remain SCP-03 |
+| MSG-03 E2EE device/session lifecycle and honest unsupported attachments | C U | `internal/e2ee`, Olm client; backed e2ee; D7 defers encrypted blobs; live two-device evidence `a15-e2ee` (real Olm in two Chromium profiles, 290-column plaintext scan, unlink cascade, attachment refusal, enumerated IPFS block store) | PASS (candidate; unmerged) | Two devices establish encryption; inspect server stores ciphertext only; restart/recover/unlink as supported; plain attachment affordance absent and API rejection; no IPFS pin for DM bytes | AUTH-02 → A15; encrypted blobs remain SCP-03 |
 | ADM-01 Users/roles/quotas/suspensions/signup approval with lockout guards | C U | Backed admin-users/registration-approval; requireRole and self guards | UNVERIFIED | Admin vs moderator vs user; quotas, verified/bypass flags, deactivate/reactivate, reject self-demotion; session revocation and audit evidence | AUTH-02 → A16 |
 | ADM-02 Reports, video blocks/quarantine, mutes, watched words and appeals/context | C U S | Backed moderation/admin-comments/blocked-videos/watched-word-matches/instance-mutes | UNVERIFIED | Report video/comment/message; staff review and note; owner notifications; ban/block/unblock and affected feeds/search; unauthorized and bulk behavior inventoried explicitly | SRC-02, SOC-02 → A16 |
 | ADM-03 Runtime config, branding/legal documents and feature capability truth | M C U S | Instance registry/config parity W1–W15; core settings poller and search config events | UNVERIFIED | Change typed settings/documents/images in admin; observe public/UI/worker/search after refresh and restart; dependencies missing must be explained; test dangerous custom CSS/JS confirmation path | INS-05, SRC-01 → A17 |
@@ -3379,3 +3379,161 @@ accepts a click, says "Saved.", and changes nothing.
 **Delivery order:** core #168 first (it changes what the rails report and what
 `has_more` means), then user #165, then this evidence. Nothing is merged here and
 no deployment is authorized.
+
+## A15 E2EE device lifecycle and attachment refusal — 2026-09-06
+
+**MSG-03 flips to PASS on the candidate frontend; delivery is open awaiting
+merge.** This is A15 in full: two devices establishing encryption, ciphertext-only
+storage, restart/unlink behaviour, the honest absence of attachments in encrypted
+threads, and the negative IPFS proof. Encrypted blobs stay out of scope (SCP-03),
+so the row's own note survives the flip. One defect was found and fixed TDD-first
+in [user #166](https://github.com/yegamble/vidra-user/pull/166); **vidra-core was
+not modified** — no migration (schema stays 129), no OpenAPI change, no core gate
+claimed. [Sanitized evidence](evidence/a15-e2ee.json) records the run.
+
+**The lab was built to be the production shape, because the first attempt proved
+that shape is load-bearing.** Frontend and API on separate origins looked like it
+worked — sign-in returned 201 — and then every page load answered *"Sign in to
+manage your devices. Your session has ended."* The refresh token rides an httpOnly
+`SameSite=Lax` cookie scoped `Path=/api/v1/auth`, so cross-origin it is simply
+never presented and the boot-time restore 422s forever. A pipe-only lab proxy that
+inspects, rewrites and mocks nothing put Next and vidra-core behind one origin —
+the Caddy topology — and the session survived. Everything below ran on the
+**production frontend build** (`next build` + `next start`), a real vidra-core
+built from the working tree at schema 129, and **real Chromium with the real Olm
+WASM the app serves itself**: the crypto stub seam (`__VIDRA_E2EE_CRYPTO__`) was
+never touched, so every ciphertext quoted here is genuine Olm output. One
+persistent Chromium profile is one DEVICE, because IndexedDB is where the keys
+live. Rate limits were left at their shipped defaults and the harness paced
+itself: **zero 429 responses in any of the five browser phases**.
+
+**What the product actually promises, established from the code and then proven.**
+A send fans out one envelope per recipient device that exists *at send time*, and
+the list endpoint returns only envelopes addressed to the caller's devices — so a
+device added later sees **nothing**, and there is **no recovery key, no key
+backup, no device-to-device history share and no cross-signing anywhere in either
+repo**. Keys are a pickled Olm account under a random 32-byte pickle key in the
+`vidra-e2ee` IndexedDB database; clearing the origin loses them permanently. All
+of that was then observed rather than asserted: alice's third browser, registered
+after four messages existed, opened the thread to **zero bubbles and the shipped
+"No messages yet" copy**, and after bob sent again it received **only** that new
+message.
+
+**What failed first is the thing a two-device run exists to find.** Alice with two
+browsers saw **four bubbles for a two-message conversation** — each message once
+readable and once as *"Message can't be decrypted on this device"*. The cause is a
+mismatch nobody could see with one device: core's `ListE2EEMessagesForRecipient`
+joins the recipient device on `user_id` and takes no device parameter, so the
+endpoint answers for the **account**, while the fan-out writes one envelope per
+**device**. `EncryptedThreadView` rendered every envelope it received, so each of
+alice's other devices added a permanent placeholder to every message in the
+thread, growing with each device she adds. `recipient_device_id` was already on
+the wire, so user #166 filters on it. The placeholder is not removed — it is
+*restored to meaning*: an envelope addressed to **this** device that will not open
+is the only trace a real ratchet fault leaves. The three tests that prove it are
+the first component tests these e2ee components have ever had; 2 failed and 1
+passed before the fix, 3 pass after, and the re-run in Chromium shows each of the
+three devices rendering exactly the real messages and no placeholder.
+
+**The round trip, on the fixed build.** Alice device 1 sent; bob's device
+decrypted it; **alice's other device decrypted it too**, because the fan-out
+addresses the sender's own other devices. Bob replied and both of alice's devices
+decrypted the reply. Two messages produced **four envelope rows of 246 opaque
+bytes each, every copy distinct**, with 30 one-time prekeys uploaded per device
+and claims visible in the unclaimed counts.
+
+**Ciphertext only, and this time the scan is exhaustive.** Every `text`,
+`varchar`, `json` and `jsonb` column in the schema — **290 of them** — was
+searched for the three sent plaintexts. **Zero hits.** The plaintext `messages`
+table holds nothing for the encrypted thread. `last_message_body` is the empty
+string and the rendered inbox row reads **"Encrypted conversation"** where a
+plaintext row shows the body. Notifications carry `type: message`, an actor and a
+conversation id and **no body at all**, for encrypted and plaintext alike.
+`search_outbox` stayed empty for the entire run — messaging emits no search event,
+which is why vidra-search was not stood up. Redis was written to zero times. All
+three captured core stdout files contain **no occurrence of any sent plaintext**.
+Every stored key is 43-char base64 — a 32-byte *public* key; no private-key column
+exists.
+
+**What the server does see, stated plainly, because "ciphertext only" is not
+"metadata free":** both participants' ids and usernames, a `dm_key` that literally
+concatenates the two account UUIDs, per-envelope timestamps, ciphertext lengths,
+Olm message types, device ids, **user-chosen device names**, device public keys,
+last-seen times, unread counts — and the fan-out width, which is one row per
+recipient device and therefore discloses **how many devices each party has**.
+
+**Restart, sign-out and unlink.** A hard reload, a **full browser restart** (the
+process gone, only the profile on disk) and a sign-out/sign-in on the same browser
+all left the thread readable; the pickle grew 3060 → 4118 characters as the
+sessions ratcheted, and the device, plaintext-cache and outbox rows all survived
+sign-out. Deleting the `vidra-e2ee` database returned the setup form and left
+nothing readable. Then alice unlinked *alice browser two* through the shipped
+Settings → Devices arm-then-confirm control, and every layer agrees: **the device
+row, its 30 one-time keys and every envelope to or from it are gone (0/0/0)**;
+**bob's next send addressed only the two remaining devices**; the unlinked
+browser's thread is empty; and a send from it is refused *422 sender_device_id
+must be one of your registered devices*. Nobody else can unlink it — an outsider,
+a conversation peer **and the instance admin all get 404**, anonymous gets 401,
+and all three devices survived every refusal.
+
+**Attachments are refused honestly, in the UI and at the API.** The encrypted
+composer has **zero file inputs and zero attachment controls**; the plaintext
+composer in the same browser and session has one, carrying the unchanged A14
+accept list (image/video/audio/pdf plus the six Office types). Every API shape is
+**422**: uploading into an encrypted conversation is refused *before the multipart
+body is read* ("attachments are not supported on encrypted conversations"), a send
+with `attachment_ids` and envelopes is 422 on `attachment_ids`, and a send with
+`attachment_ids` but no envelopes is 422 on `envelopes`. **No attachment row and
+no stored bytes** result from any refusal, and the plaintext path still uploads,
+sends and echoes its attachment back.
+
+**No IPFS pin for DM bytes — run, not read.** A real kubo 0.40.1 node was
+configured by the repository's **own shipped hook**
+(`deploy/ipfs-public/001-configure-network-mode.sh` with
+`IPFS_PUBLIC_NETWORK=false`) and asserted local-only: no bootstrap peers,
+`Routing.Type=none`, `Provide.Enabled=false`, deny-all address filters, zero swarm
+peers. With `IPFS_ENABLED=true` the exchange was repeated: encrypted messages, a
+plaintext DM attachment uploaded and sent, and an ordinary public avatar as the
+control. The mirror drained and the ledger holds **exactly one row** —
+`user_avatar / pinned / public` with a real CID — and **zero rows naming a DM
+attachment, conversation, message or e2ee object**. The stronger statement is that
+the node's **entire block store was enumerated: three blocks, every one accounted
+for** (the avatar, kubo's own pin-index entry for it, and the 4-byte empty-directory
+block that predated the run). The DM attachment's would-be CID is absent, while its
+bytes really do sit under the authoritative local backend — so the negative is about
+mirroring, not about a file that was never written.
+
+**Authorization.** Carol, an outsider, gets **404** reading the thread, 404 posting
+to it, an empty conversation list, 404 on alice's device directory and 404 claiming
+her prekeys; anonymous gets 401. A conversation peer may read alice's device
+directory — ids, names, public identity/signing keys, timestamps — and **nothing
+more**: even bob gets 404 on her one-time-key *count*, which is owner-only. The
+instance admin gets 404 on the directory too; sharing a conversation, not a role, is
+the key.
+
+**Gates.** vidra-user: TypeScript PASS, lint PASS (0 errors, 2 pre-existing
+warnings), icons PASS, **242 unit files / 2,372 tests PASS** (2,369 before; three
+added), contract check PASS, production build PASS, and the named A14 suites
+(Composer, ConversationView, MessagingShell, ThreadHeader plus every `lib/e2ee`
+suite) 8 files / 48 tests PASS. All seven repo CI checks are green on user #166 —
+contract, frontend, ipfs-backed, channel-sync-backed and both e2e-backed lanes.
+**vidra-core was not touched**, so no core gate is claimed; the meta compose render
+was not re-run because no compose, script or env file changed; vidra-search was not
+started, which the empty `search_outbox` justifies rather than excuses.
+
+**Findings recorded, not fixed.** (1) `StartEncryptedButton.tsx` is exported and
+imported nowhere — a dead control; encrypted threads stay reachable through the
+New-message dialog's checkbox. (2) `POST /users/{id}/e2ee/claim` is all-or-nothing
+per user *including the caller's own device*, so fanning out to your own other
+devices burns one of the sending device's own prekeys every time. (3) Clearing a
+browser's storage **orphans its server-side device row**: peers keep encrypting to
+a device nobody can read, and neither side is told — only an explicit unlink
+removes it. (4) No audit row is written for any e2ee device registration or
+deletion. (5) A signed-out visitor's first page load fires one `POST /auth/refresh`
+that 422s with no cookie to present.
+
+**MSG-03 → PASS**, evidence `docs/evidence/a15-e2ee.json`, with the row's
+"encrypted blobs remain SCP-03" note intact: this verifies the current refusal, not
+feature completion. A15's stopping criterion is met. **Delivery order:** vidra-user
+#166 first, then this evidence PR. Nothing is merged here and no deployment is
+authorized. The lab was torn down; no lab artefact is committed.
