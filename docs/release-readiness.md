@@ -119,7 +119,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | MSG-01 Plaintext DM timeline, retry/read receipts/delete/report and attachments | C U | `internal/messaging`; backed messaging/message-compose; frontend P-MSG2 unfinished boxes | UNVERIFIED | Two browser contexts send/poll/read, prepend history without jumps/duplicates, retry once, receipts opt-out, delete/report; recipient downloads attachment, third party denied | AUTH-02 → A14 |
 | MSG-02 Approved 100 MiB / 30-file and office-document attachment behavior | C U | F03; product decision §14a vs Composer limits | FAIL | Boundary values, 31st file and oversize refusal; document kind renders; multi-file recipient API/UI readback; configured scanner failure semantics | MSG-01, INT-04 → A14 |
 | MSG-03 E2EE device/session lifecycle and honest unsupported attachments | C U | `internal/e2ee`, Olm client; backed e2ee; D7 defers encrypted blobs; live two-device evidence `a15-e2ee` (real Olm in two Chromium profiles, 290-column plaintext scan, unlink cascade, attachment refusal, enumerated IPFS block store) | PASS (candidate; unmerged) | Two devices establish encryption; inspect server stores ciphertext only; restart/recover/unlink as supported; plain attachment affordance absent and API rejection; no IPFS pin for DM bytes | AUTH-02 → A15; encrypted blobs remain SCP-03 |
-| ADM-01 Users/roles/quotas/suspensions/signup approval with lockout guards | C U | Backed admin-users/registration-approval; requireRole and self guards | UNVERIFIED | Admin vs moderator vs user; quotas, verified/bypass flags, deactivate/reactivate, reject self-demotion; session revocation and audit evidence | AUTH-02 → A16 |
+| ADM-01 Users/roles/quotas/suspensions/signup approval with lockout guards | C U | Backed admin-users/registration-approval; `requireRole` and self guards; live evidence `a16-users-roles` (three-role matrix over 43 admin-only + 24 staff routes, role change biting a LIVE session, real over/under-quota uploads, bypass_quarantine proven against the quarantine gate, deactivate/reactivate/delete with the tombstone made irreversible, approval queue and audit rows) | PASS (candidate; unmerged) | Admin vs moderator vs user; quotas, verified/bypass flags, deactivate/reactivate, reject self-demotion; session revocation and audit evidence | AUTH-02 → A16; no last-admin or owner guard ships (recorded) |
 | ADM-02 Reports, video blocks/quarantine, mutes, watched words and appeals/context | C U S | Backed moderation/admin-comments/blocked-videos/watched-word-matches/instance-mutes | UNVERIFIED | Report video/comment/message; staff review and note; owner notifications; ban/block/unblock and affected feeds/search; unauthorized and bulk behavior inventoried explicitly | SRC-02, SOC-02 → A16 |
 | ADM-03 Runtime config, branding/legal documents and feature capability truth | M C U S | Instance registry/config parity W1–W15; core settings poller and search config events | UNVERIFIED | Change typed settings/documents/images in admin; observe public/UI/worker/search after refresh and restart; dependencies missing must be explained; test dangerous custom CSS/JS confirmation path | INS-05, SRC-01 → A17 |
 | ADM-04 Health/jobs/audit/infra/storage-GC dashboards reflect real operations | M C U S | Core admin system/jobs/audit/media-GC; backed admin-system/admin-audit; `vidra doctor` | UNVERIFIED | Create failed job and degraded dependency, inspect status/log correlation/retry; doctor identifies drift and backup age; regular users denied; no secrets in responses/logs | PUB-03 → A17 |
@@ -3932,3 +3932,249 @@ core honours it, and shipping the frontend alone would leave the double row
 exactly as it is), then user #168, then this evidence PR. Nothing is merged here
 and no deployment is authorized. The lab was torn down; no lab artefact is
 committed.
+
+## A16 users, roles, quotas and signup approval — 2026-09-06
+
+**ADM-01 flips to PASS (candidate; unmerged). A16 stays OPEN — ADM-02 remains.**
+This is the first of three A16 slices: the account-administration half. Two
+defects were found and fixed TDD-first — a **role change that did not reach the
+session it demoted**, and a **hard-deleted account an admin could switch back
+on** — and both were reproduced in the lab on the `origin/main` binary before
+being fixed, so the "before" is evidence rather than a claim.
+[Core #171](https://github.com/yegamble/vidra-core/pull/171) and
+[user #169](https://github.com/yegamble/vidra-user/pull/169). **No migration**
+(core stays at schema 129); one additive OpenAPI field; no generated file
+hand-edited. [Sanitized evidence](evidence/a16-users-roles.json) records **338
+assertions across eleven API drivers on one clean database, plus a real-Chromium
+walkthrough**, with **three failing rows that are all deliberate**: one lab
+formatting bug, restated and passing in its addendum, and the two baseline
+reproductions where the defect answering 200 *is* the finding.
+
+**The role matrix as shipped, established from the route table rather than
+guessed.** There are exactly **three** roles — `user`, `moderator`, `admin` —
+and `admin.ValidRole` accepts nothing else (`owner` and `superuser` are both
+422). Parsing `routes()` gives **43 admin-only** routes and **24 staff** routes
+(`requireRole(admin, moderator)`); five representatives of each tier were probed
+against all four principals, and every one of the 40 answers was the shipped
+one: admin 200 / moderator 403 / user 403 / anonymous 401 on the admin tier, and
+admin 200 / moderator 200 / user 403 / anonymous 401 on the staff tier. **There
+is no owner role.** The instance owner is simply the first account, claimed with
+`OWNER_CLAIM_TOKEN`, holding `admin` like any other admin — and nothing
+distinguishes it afterwards. `user → moderator → admin → moderator → user` was
+walked in both directions with a Postgres readback *and* an admin-list readback
+at every step; a moderator, an ordinary user and anonymous were each refused a
+role change (403/403/401) with the target's role unmoved after all three.
+
+**The self guards hold and the last-admin guard does not exist.** The owner
+cannot demote itself (422 *"cannot demote or deactivate yourself"*), cannot
+deactivate itself (422), and cannot hard-delete itself through
+`DELETE /admin/users/{id}` (422, pointing at `DELETE /auth/me`) — after all four
+refusals the row still reads `admin/true`. Setting one's **own quota** is
+deliberately allowed, because it carries no lockout risk, and re-asserting one's
+own `admin` role is a no-op rather than a refusal. But **admin A demoted the
+instance owner M to `user` and got 200**. There is no last-admin guard and no
+owner protection: the self-change guard is the *only* thing between an instance
+and zero admins, and two admins can lock the instance out of its own console by
+demoting each other. That is a product decision — vidra has no notion of an
+owner after first-run — and it is recorded, not patched.
+
+**Defect 1: a demoted moderator kept every staff route.** `requireAuth` has
+re-read the account on every request since AUTH-05 slice (c) — one indexed
+`sessions ⋈ users` lookup, which is what made revocation, deactivation and
+deletion immediate. It then took the principal's **role** from the JWT's copy of
+it, so the last piece of stale principal state survived: a snapshot taken at
+sign-in. Paired probe, same lab, same data, same account, **only the binary
+different**: on `origin/main` a moderator demoted mid-session answers **200 on
+`/admin/reports`, `/admin/videos` and `/admin/comments`** with the token it was
+already holding, for the rest of `JWT_ACCESS_TTL`; on the patched binary all
+three are **403**, measured at **1 ms** after the demotion returned. The fix is
+one column: `GetActiveSessionForAccessToken` also selects `u.role`,
+`AuthenticateAccessToken` returns an `auth.Principal{UserID, Role}`, and
+`requireAuth`, `optionalAuth` and the private-media access cookie all build the
+principal from it. **No extra query** — the row was already being read. Seven
+more staff and admin routes were probed on the demoted token, all 403. The other
+half matters as much: **demotion is not a sign-out.** `/auth/me`,
+`/me/notifications`, `/me/playlists`, `/me/conversations` and `/videos` all keep
+answering 200 on that same token, the refresh token still works, and every
+session row stays un-revoked. Promotion is the same mechanism in reverse: a
+token minted while the account was a plain user reaches the admin list the
+instant the role is granted.
+
+**Defect 2: a tombstone could be switched back on.** The A12 deletion slice
+recorded that `/admin/users` lists a hard-deleted account as `deleted-<suffix>`
+with **Reactivate** and **Delete** actions. Reproduced here with a control — an
+account whose profile was **public and answering 200** before the delete: on
+`origin/main`, `PATCH {"is_active": true}` on the tombstone answers **200**,
+flips `is_active` to true, and the deleted account's **public profile page
+answers 200 again**, while restoring nothing (the username, address, display
+name and bio are gone for good). `admin.UpdateUser` now refuses it —
+`ErrDeletedAccount` → **422** *"this account was deleted; deletion is permanent
+and cannot be reversed"*, audited as an `admin.user.update` **failure** beside
+the self-change guard. The ruling is that **a tombstone is irreversible by
+design**: it is the one admin action with no inverse, so the write is refused
+rather than half-honoured. A combined body carrying `is_active: true` *and* a
+quota is refused **whole** — the quota in it was not written either —
+while `is_active: false` on a tombstone stays a harmless 200 no-op, and deleting
+an already-deleted row stays 404. The row remains listed and readable, and the
+admin projection now carries **`deleted_at`** so a console can tell a tombstone
+from a deactivation.
+
+**Deactivation, re-verified with the control the first attempt lacked.**
+`profile_public` defaults to **false**, so "the profile 404s" proves nothing
+until the account has opted in — the first run of this phase asserted it anyway
+and is restated rather than quietly re-run. With A's profile public and
+answering 200 first: deactivation revokes **every session row**, the **access
+JWT** is 401 on `/auth/me`, `/me/playlists`, `/me/notifications`,
+`/me/conversations` and on a write (`PATCH /auth/me`, which changed nothing),
+the **refresh token** is 401, login is **403 "account is disabled"**, the
+profile is 404 for anonymous *and* for the instance owner, and the account
+leaves `/search/accounts`. What does **not** change: the channel page still
+answers 200 and the videos stay in the public feed — deactivation is a login
+switch, not a content switch, exactly as A12 recorded. Reactivation restores
+login, the profile and the search listing, and the pre-deactivation sessions
+**stay dead** — it is not a resurrection. A moderator, an ordinary user and
+anonymous were each refused both the deactivate and the delete (403/403/401),
+six refusals with the account untouched after all of them.
+
+**Quotas, on real bytes.** A real 36,859-byte mp4 was uploaded through the
+shipped path — create video, open session, PUT the chunks, complete — under
+`TRANSCODING_ENABLED=true` with ffmpeg 8.1, so the **63,555 stored bytes** the
+admin list reports are originals plus renditions the pipeline actually wrote,
+and the admin list's `storage_used_bytes` matches the SQL aggregate exactly. An
+admin quota set just above that is echoed by the PATCH, held in Postgres, and
+reported by the account's **own** `/me/quota`. An upload session declaring four
+times the cap is **422 `quota_exceeded`** — *"storing this file would exceed your
+storage quota"* — with **no `upload_sessions` row created**, while one that fits
+is still 201, so the gate is a cap and not a wall. The tri-state is exercised
+end to end: `null` writes NULL (instance default), `0` reports an unlimited cap
+on `/me/quota`, and a negative value is 422. Moderator, ordinary user and
+anonymous are refused (403/403/401) with the target's quota still NULL.
+
+**The two flags, and what the bypass actually lifts — proven, not read.**
+`email_verified` flips on (response, Postgres and the target's own `/auth/me` all
+agree) and off again, and is refused for a moderator, for the target themselves
+and for anonymous. `bypass_quarantine` exempts an account from
+`QUARANTINE_NEW_UPLOADS` (§11), and that was proven against the live gate rather
+than described: with the instance gate **ON**, a plain user's finished upload
+parks in **`quarantined`** and appears in the moderator's queue; the same upload
+by an account the admin has flagged publishes **straight through** and never
+enters the queue; **revoking the flag re-subjects the account** and its next
+upload is quarantined again. A moderator approving one is **204** and publishes
+it; an ordinary user is 403. Both instance-settings overrides were **cleared**
+afterwards, not merely set back — they read `overridden: false` again, exactly
+as found.
+
+**Signup approval.** With `registration_require_approval` on, P's signup is
+**202 `{"status":"pending"}`** with **no `users` row** and a pending
+`registration_requests` row carrying the applicant's own note and **no password
+hash anywhere in the projection**. A pending applicant's login is **401 "invalid
+credentials"** — **the same status and the same message an address that never
+existed gets**, so the queue leaks nothing beyond what registration already
+discloses. The queue is **admin-only**: a moderator is 403 on reading it, 403 on
+approve and 403 on reject, with the request still pending after both attempts.
+Approval marks the request approved, records **who** reviewed it, creates a
+`user/true` account, and the applicant signs in with the password from the
+*application*; approving twice is 404 rather than a second account. Rejection
+keeps the moderator note, creates no account, leaves the pending queue but stays
+auditable under `?status=rejected`, and rejecting twice is 404. **Nothing
+notifies the applicant either way** — no notification row, no mail on approve or
+reject; they learn by trying to sign in, and that is a gap worth a product call
+rather than a defect. Lockout: **14 unpaced login attempts by the rejected
+applicant answer 401 ten times and then 429**, on the shipped 10/min per-IP
+limit which was never raised — and an address that never existed produces a
+**byte-identical** sequence, so the limiter cannot be used to tell one from the
+other either.
+
+**Audit coverage, before and after.** Every mutation this slice performs already
+wrote an `audit_log` row and still does: `admin.user.update` (role, quota, both
+flags, deactivate and reactivate — each naming the target and the field it
+changed), `admin.user.delete` (naming the target), `auth.registration.approve`
+(naming the created account), `auth.registration.reject`,
+`auth.registration.request` and `admin.instance.update` (key names only). **The
+gap was on the failure side and this slice closes half of it**: the self-change
+refusal was already audited as a failure, and the new tombstone-reactivation
+refusal now is too. Nothing secret leaks — the fixture password, the word
+"password" and every email address are absent from the whole table. The admin
+audit **view** serves them (139 entries, filterable by action, moderator 403 /
+user 403 / anonymous 401) and shows the browser's own three mutations at the top
+with `Actor: mona`. Out of scope and unchanged: **messaging and e2ee still write
+no audit rows at all** (the A15 finding), confirmed here as 0 for both actions.
+
+**The browser walkthrough.** Real Chromium against the production frontend build
+served from `.next/standalone`, behind one origin, with hard reloads. `/admin/users`
+renders the table with `ADMIN`/`MODERATOR`/`USER` pills and a `YOU` pill on the
+owner; the three tombstoned rows read **Deleted** while live rows read **Active**.
+Opening a tombstone shows Status **Deleted**, the role frozen to a static pill,
+**no Reactivate and no Delete**, no flag switches, and the notice explaining that
+the row is kept only as a record. Opening a live account shows the actions, the
+three-way role control and the two **new** switches. Clicking Moderator and both
+switches flips the header pill, the subtitle to *verified* and the facts column
+to *Exempt* — and a **hard reload of `/admin/users?q=avery` still reads
+MODERATOR**, so it was the server, not optimistic UI; Postgres reads
+`moderator/true/true` and three audit rows name the fields. `/admin/registration-requests`
+lists a pending applicant with their note and an internal-note box; **Approve**
+through the UI creates the account, marks the request approved by mona, and the
+applicant signs in. And the effect-timing proof in the browser: **dana signed in
+as a moderator sees the Moderation nav and the full inventory; demoted from
+another process, the same session's next hard load of `/moderation/videos` shows
+"Moderators only" with the Moderation nav gone — while `/settings` still renders
+her account normally**, on the same session, with no re-login.
+
+**Gates.** Core `make ci` **passed** (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race) on the final revision, and core CI on
+#171 is **all six checks green** — GitGuardian, build-test, integration,
+ipfs-integration, ipfs-private-integration and openapi. vidra-user: `npx tsc
+--noEmit` PASS, `npm run lint` PASS (0 errors, 2 pre-existing warnings),
+`npm run lint:icons` PASS, `npm run test` **245 files / 2,427 tests PASS** on
+**Node 24** (vitest is still broken on Node 25 in this repo: 82 failures on
+`window.localStorage.clear`). User CI on #169: **six of seven green**, including
+`frontend` (which runs the 623 Playwright specs), both `e2e-backed` lanes,
+`ipfs-backed` and `channel-sync-backed`; **`contract` is red and expected to be**
+— its diff is exactly the two additions from core#171 and nothing else. SC7
+no-regression: `TestDeleteAccountFlow`, `TestAdminUserManagement`,
+`TestAdminSetsEmailVerified` and the A12 auth/session suites all pass alongside
+the three new tests. The meta compose render was not re-run: no compose, script
+or env file changed. **Unverified:** the tagged real-PostgreSQL `internal/store`
+integration lane was not run locally (the lab is native rather than the compose
+stack) — repo CI's `integration` job ran it and is green; and vidra-search was
+not started, which nothing in this slice needs.
+
+**What failed first, beyond the two defects.** `psql -At` renders a bare boolean
+as `t`/`f` and only a text-concatenated one as `true` — three assertions were
+wrong about the LAB rather than the product and are restated in addenda rather
+than silently re-run. The **first attempt at the baseline probe never ran the
+baseline binary at all**: `pkill -f 'a16sock/vidra-api$'` did not match a process
+started as `./vidra-api` from that directory, the second binary died on
+`address already in use`, and the patched server answered every "baseline"
+assertion — those rows were discarded and the probe redone with the bind failure
+checked explicitly. The upload-finalize worker **drains in batches**, so reading
+a video's state immediately after `complete` returns 200 shows `draft`; the first
+quarantine run convinced itself the gate had not fired when in fact every video
+was processed *after* the gate was turned back off. The public profile route is
+`/users/{username}/profile`, not `/users/{username}`. And an evidence-recorder
+crash on a non-serializable `set` **truncated the results file mid-write**; it
+was repaired by trimming to the last complete row, nothing was lost, and the
+recorder now serializes defensively.
+
+**Findings recorded, not fixed.** (1) **No last-admin guard and no owner
+protection** — any admin may demote or delete any other, the instance owner
+included; only the self-change guard stands between an instance and zero admins.
+(2) **Approval and rejection notify the applicant of nothing** — no notification,
+no mail; they discover the outcome by trying to sign in. (3) The **approval queue
+is admin-only**, so a moderator cannot triage signups; whether that is the
+intended split is a product call. (4) Every field of a **tombstone other than
+`is_active`** is still writable (role, quota, flags); the writes are inert,
+because the session lookup requires `deleted_at IS NULL` and the row can never
+authenticate, but they are accepted. (5) `admin.user.update` records a
+**free-text reason string** rather than the structured `changes` array the audit
+envelope carries, so a consumer must parse prose to know what changed.
+
+**ADM-01 → PASS (candidate; unmerged)**, evidence
+`docs/evidence/a16-users-roles.json`. **A16 stays OPEN**: ADM-02 (reports,
+video blocks and quarantine, then mutes and watched words) is untouched here.
+Delivery order: **core#171 first** (it carries the `deleted_at` contract
+addition), then **user#169** (its `contract` check goes green the moment core
+merges), then this evidence PR. Nothing is merged here and no deployment is
+authorized. The lab was torn down — Postgres and Redis stopped, their data
+directories removed, both binaries and the `origin/main` worktree deleted, no
+listener left on 8088/3100/3200 — and no lab artefact is committed.

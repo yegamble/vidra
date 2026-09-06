@@ -1,0 +1,3163 @@
+{
+ "slice": "A16 \u2014 ADM-01 users, roles, quotas, suspensions and signup approval",
+ "date": "2026-09-06",
+ "register_row": "ADM-01",
+ "prs": {
+  "vidra-core": "https://github.com/yegamble/vidra-core/pull/171",
+  "vidra-user": "https://github.com/yegamble/vidra-user/pull/169"
+ },
+ "lab": {
+  "topology": "one origin (a pipe-only proxy on :3200 in front of `node .next/standalone/server.js` on :3100 and vidra-core on :8088), because vidra_refresh is SameSite=Lax and Path=/api/v1/auth",
+  "postgres": "native PostgreSQL 16.15 on a private port, fresh cluster, migrated to schema 129",
+  "redis": "native redis on a private port, flushed before seeding",
+  "media": "TRANSCODING_ENABLED=true with ffmpeg 8.1 \u2014 every quota and quarantine assertion below is about real stored bytes from the shipped pipeline",
+  "frontend": "production build (`next build`) served from .next/standalone with .next/static and public copied in, exactly as the Dockerfile does",
+  "browser": "real Chromium, hard reloads, one signed-in session at a time",
+  "rate_limits": "left at shipped defaults and never raised: general 120/min per IP, auth 10/min per IP"
+ },
+ "actors": {
+  "M": "mona \u2014 instance owner, claimed with OWNER_CLAIM_TOKEN; role 'admin' (there is no separate owner role)",
+  "D": "dana \u2014 moderator, promoted through the shipped PATCH /admin/users/{id}",
+  "A": "avery \u2014 ordinary user with a channel and real uploads",
+  "B": "blair \u2014 ordinary user, later hard-deleted",
+  "C/E": "cass / erin \u2014 throwaway accounts used for the controlled tombstone probes",
+  "P/Q/rowan2": "pat / quinn / rowan2 \u2014 signup applicants (approved, rejected, approved through the UI)"
+ },
+ "role_matrix_as_shipped": {
+  "roles": [
+   "user",
+   "moderator",
+   "admin"
+  ],
+  "assignable": "admin.ValidRole accepts exactly those three; 'owner' and 'superuser' are 422",
+  "admin_only_routes": 43,
+  "staff_routes_admin_plus_moderator": 24,
+  "owner": "the instance owner is the FIRST account and holds role 'admin'; nothing distinguishes it afterwards",
+  "guards": {
+   "self_demotion": "refused 422 (admin.ErrSelfChange)",
+   "self_deactivation": "refused 422",
+   "self_delete_via_admin_route": "refused 422 (use DELETE /auth/me)",
+   "self_quota_change": "ALLOWED \u2014 no lockout risk",
+   "last_admin": "NO GUARD SHIPS \u2014 admin A may demote admin B, including the instance owner; only the self-change guard prevents zero-admin lockout",
+   "owner_protection": "NO GUARD SHIPS \u2014 the owner is demotable and deletable by any other admin",
+   "tombstone_reactivation": "refused 422 (NEW in this slice; was 200 on origin/main)"
+  }
+ },
+ "totals": {
+  "assertions": 338,
+  "failed": 3,
+  "observations": 44,
+  "note": "the three 'failed' rows are (1) one lab-format bug about psql boolean rendering, restated and passing in its addendum, and (2)+(3) the two DELIBERATE baseline reproductions on the origin/main binary, where the defect answering 200 IS the finding"
+ },
+ "phases": {
+  "seed": {
+   "assertions": 11,
+   "failed": 0,
+   "observations": 0
+  },
+  "SC1 role matrix": {
+   "assertions": 71,
+   "failed": 1,
+   "observations": 3
+  },
+  "SC1 role matrix (addendum)": {
+   "assertions": 2,
+   "failed": 0,
+   "observations": 1
+  },
+  "SC2 effect timing": {
+   "assertions": 23,
+   "failed": 0,
+   "observations": 1
+  },
+  "SC2 paired probe \u2014 origin/main binary": {
+   "assertions": 7,
+   "failed": 1,
+   "observations": 3
+  },
+  "SC2 paired probe \u2014 patched binary": {
+   "assertions": 7,
+   "failed": 0,
+   "observations": 3
+  },
+  "SC3 quotas and flags": {
+   "assertions": 21,
+   "failed": 0,
+   "observations": 3
+  },
+  "SC3 quotas and flags (addendum)": {
+   "assertions": 3,
+   "failed": 0,
+   "observations": 1
+  },
+  "SC3 verified / bypass flags": {
+   "assertions": 28,
+   "failed": 0,
+   "observations": 0
+  },
+  "SC3 verified / bypass flags (addendum)": {
+   "assertions": 7,
+   "failed": 0,
+   "observations": 0
+  },
+  "SC4 deactivate / reactivate / delete": {
+   "assertions": 41,
+   "failed": 0,
+   "observations": 5
+  },
+  "SC4 deactivation visibility (controlled)": {
+   "assertions": 14,
+   "failed": 0,
+   "observations": 1
+  },
+  "SC4 tombstone reactivation (controlled)": {
+   "assertions": 14,
+   "failed": 0,
+   "observations": 2
+  },
+  "SC4 tombstone baseline (origin/main binary)": {
+   "assertions": 6,
+   "failed": 1,
+   "observations": 3
+  },
+  "SC5 signup approval": {
+   "assertions": 37,
+   "failed": 0,
+   "observations": 3
+  },
+  "SC6 audit evidence": {
+   "assertions": 31,
+   "failed": 0,
+   "observations": 2
+  },
+  "SC5 lockout guards / rate limiting": {
+   "assertions": 4,
+   "failed": 0,
+   "observations": 2
+  },
+  "browser walkthrough (real Chromium, one origin, hard reloads)": {
+   "assertions": 11,
+   "failed": 0,
+   "observations": 0
+  },
+  "browser walkthrough \u2014 what the screen showed": {
+   "assertions": 0,
+   "failed": 0,
+   "observations": 11
+  }
+ },
+ "rate_limit_429s": {
+  "count_in_the_final_core_log": 12,
+  "all_on": "/api/v1/auth/login",
+  "explanation": "8 are the deliberate SC5 burst (two runs of 14 attempts, 10 refusals then 4 throttles each); the rest are the harness's own probes waiting for that window to drain, plus one browser sign-in that collided with it. No assertion outside the rate-limit phase saw a 429."
+ },
+ "rows": [
+  {
+   "phase": "seed",
+   "assert": "claim-owner status",
+   "got": 201,
+   "want": 201,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "seed",
+   "assert": "M role after claim",
+   "got": "admin",
+   "want": "admin",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "seed",
+   "assert": "register dana",
+   "got": 201,
+   "want": 201,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "seed",
+   "assert": "dana default role",
+   "got": "user",
+   "want": "user",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "seed",
+   "assert": "register avery",
+   "got": 201,
+   "want": 201,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "seed",
+   "assert": "avery default role",
+   "got": "user",
+   "want": "user",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "seed",
+   "assert": "register blair",
+   "got": 201,
+   "want": 201,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "seed",
+   "assert": "blair default role",
+   "got": "user",
+   "want": "user",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "seed",
+   "assert": "promote D to moderator",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "seed",
+   "assert": "D role in the PATCH response",
+   "got": "moderator",
+   "want": "moderator",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "seed",
+   "assert": "D role in postgres",
+   "got": "moderator",
+   "want": "moderator",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "assignable roles are refused outside the three",
+   "got": 422,
+   "want": 422,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "role 'superuser' refused",
+   "got": 422,
+   "want": 422,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  M   /api/v1/admin/users",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  D   /api/v1/admin/users",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": "moderator on an admin-only route"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  A   /api/v1/admin/users",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  anon/api/v1/admin/users",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  M   /api/v1/admin/audit-log",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  D   /api/v1/admin/audit-log",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": "moderator on an admin-only route"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  A   /api/v1/admin/audit-log",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  anon/api/v1/admin/audit-log",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  M   /api/v1/admin/registration-requests",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  D   /api/v1/admin/registration-requests",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": "moderator on an admin-only route"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  A   /api/v1/admin/registration-requests",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  anon/api/v1/admin/registration-requests",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  M   /api/v1/admin/instance-settings",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  D   /api/v1/admin/instance-settings",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": "moderator on an admin-only route"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  A   /api/v1/admin/instance-settings",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  anon/api/v1/admin/instance-settings",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  M   /api/v1/admin/stats",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  D   /api/v1/admin/stats",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": "moderator on an admin-only route"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  A   /api/v1/admin/stats",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "admin  anon/api/v1/admin/stats",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  M   /api/v1/admin/reports",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  D   /api/v1/admin/reports",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": "moderator IS staff"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  A   /api/v1/admin/reports",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  anon/api/v1/admin/reports",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  M   /api/v1/admin/videos",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  D   /api/v1/admin/videos",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": "moderator IS staff"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  A   /api/v1/admin/videos",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  anon/api/v1/admin/videos",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  M   /api/v1/admin/comments",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  D   /api/v1/admin/comments",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": "moderator IS staff"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  A   /api/v1/admin/comments",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  anon/api/v1/admin/comments",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  M   /api/v1/admin/watched-words",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  D   /api/v1/admin/watched-words",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": "moderator IS staff"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  A   /api/v1/admin/watched-words",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  anon/api/v1/admin/watched-words",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  M   /api/v1/admin/videos/quarantined",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  D   /api/v1/admin/videos/quarantined",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": "moderator IS staff"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  A   /api/v1/admin/videos/quarantined",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "staff  anon/api/v1/admin/videos/quarantined",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "M sets A role=moderator",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "A role in DB after ->moderator",
+   "got": "moderator",
+   "want": "moderator",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "A role in the admin list after ->moderator",
+   "got": "moderator",
+   "want": "moderator",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "M sets A role=admin",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "A role in DB after ->admin",
+   "got": "admin",
+   "want": "admin",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "A role in the admin list after ->admin",
+   "got": "admin",
+   "want": "admin",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "M sets A role=moderator",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "A role in DB after ->moderator",
+   "got": "moderator",
+   "want": "moderator",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "A role in the admin list after ->moderator",
+   "got": "moderator",
+   "want": "moderator",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "M sets A role=user",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "A role in DB after ->user",
+   "got": "user",
+   "want": "user",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "A role in the admin list after ->user",
+   "got": "user",
+   "want": "user",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "moderator changing a role",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "moderator's attempt left the role alone",
+   "got": "user",
+   "want": "user",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "ordinary user changing a role",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "anonymous changing a role",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "B is still a plain user after all three attempts",
+   "got": "user",
+   "want": "user",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "owner self-demote to user",
+   "got": 422,
+   "want": 422,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "observation": "self-demote message",
+   "value": "cannot demote or deactivate yourself"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "owner self-demote to moderator",
+   "got": 422,
+   "want": 422,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "owner self-deactivate",
+   "got": 422,
+   "want": 422,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "owner self-delete through the admin route",
+   "got": 422,
+   "want": 422,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "owner still admin and active after all four",
+   "got": "admin/true",
+   "want": "admin/t",
+   "ok": false,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "owner setting their OWN quota is allowed",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "owner re-asserting their own admin role is a no-op, not a refusal",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "A promoted to admin (second admin)",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "A signs in as an admin",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "A's ORIGINAL token now reaches an admin route",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": "SC2: promotion reaches a live session"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "observation": "admin A demoting the instance OWNER M",
+   "value": 200
+  },
+  {
+   "phase": "SC1 role matrix",
+   "observation": "M role after A's demotion",
+   "value": "user"
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "A restores M to admin",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix",
+   "assert": "M demotes A back to user",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix (addendum)",
+   "assert": "owner still admin and active after all four self-change refusals",
+   "got": "admin/true",
+   "want": "admin/true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix (addendum)",
+   "assert": "exactly one admin remains after the transitions",
+   "got": 1,
+   "want": 1,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC1 role matrix (addendum)",
+   "observation": "admin count",
+   "value": "1"
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "D /auth/me",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "D role reported by the API",
+   "got": "moderator",
+   "want": "moderator",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "D on a staff route BEFORE demotion",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "M demotes D to user",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "D on the staff route AFTER demotion, SAME token",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "observation": "seconds from the demotion to the refusal",
+   "value": 0.001
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D refused on /api/v1/admin/videos",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D refused on /api/v1/admin/comments",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D refused on /api/v1/admin/watched-words",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D refused on /api/v1/admin/videos/blocked",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D refused on /api/v1/admin/instances/blocked",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D refused on /api/v1/admin/videos/quarantined",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D refused on /api/v1/admin/watched-word-matches",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D still served on /api/v1/auth/me",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D still served on /api/v1/me/notifications",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D still served on /api/v1/me/playlists",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D still served on /api/v1/me/conversations",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D still served on /api/v1/videos",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "demoted D can still refresh (not signed out)",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "the refreshed token reports the NEW role",
+   "got": "user",
+   "want": "user",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "M promotes D back to moderator",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "D reaches the staff route again on the SAME token",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "optionalAuth route still serves the demoted/re-promoted principal",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 effect timing",
+   "assert": "D's session rows are all still live",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 origin/main binary",
+   "assert": "D is a moderator to start",
+   "got": "moderator",
+   "want": "moderator",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 origin/main binary",
+   "assert": "D signs in",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 origin/main binary",
+   "assert": "D on a staff route before demotion",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 origin/main binary",
+   "assert": "M demotes D",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 origin/main binary",
+   "assert": "role in postgres is now user",
+   "got": "user",
+   "want": "user",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 origin/main binary",
+   "assert": "demoted D on the staff route, SAME token",
+   "got": 200,
+   "want": 403,
+   "ok": false,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 origin/main binary",
+   "observation": "observed status on the demoted token",
+   "value": 200
+  },
+  {
+   "phase": "SC2 paired probe \u2014 origin/main binary",
+   "observation": "demoted D on /api/v1/admin/videos",
+   "value": 200
+  },
+  {
+   "phase": "SC2 paired probe \u2014 origin/main binary",
+   "observation": "demoted D on /api/v1/admin/comments",
+   "value": 200
+  },
+  {
+   "phase": "SC2 paired probe \u2014 origin/main binary",
+   "assert": "M restores D to moderator",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 patched binary",
+   "assert": "D is a moderator to start",
+   "got": "moderator",
+   "want": "moderator",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 patched binary",
+   "assert": "D signs in",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 patched binary",
+   "assert": "D on a staff route before demotion",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 patched binary",
+   "assert": "M demotes D",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 patched binary",
+   "assert": "role in postgres is now user",
+   "got": "user",
+   "want": "user",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 patched binary",
+   "assert": "demoted D on the staff route, SAME token",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC2 paired probe \u2014 patched binary",
+   "observation": "observed status on the demoted token",
+   "value": 403
+  },
+  {
+   "phase": "SC2 paired probe \u2014 patched binary",
+   "observation": "demoted D on /api/v1/admin/videos",
+   "value": 403
+  },
+  {
+   "phase": "SC2 paired probe \u2014 patched binary",
+   "observation": "demoted D on /api/v1/admin/comments",
+   "value": 403
+  },
+  {
+   "phase": "SC2 paired probe \u2014 patched binary",
+   "assert": "M restores D to moderator",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "observation": "fixture mp4 bytes",
+   "value": 36859
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "A creates a channel",
+   "got": 201,
+   "want": 201,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "B creates a channel",
+   "got": 201,
+   "want": 201,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "A reads its own quota",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "A's first upload completes",
+   "got": "ok",
+   "want": "ok",
+   "ok": true,
+   "note": "{'upload_id': '<lab-uuid-10>', 'video_id': '<lab-uuid-2>', 'state': 'queued', 'size': 36859, 'chunk_size': 8388608, 'total_chunks': 1, 'received_chunks':"
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "A's stored bytes are non-zero after the upload",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": "used=63555"
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "observation": "A stored bytes",
+   "value": 63555
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "the admin list reports the same usage",
+   "got": 63555,
+   "want": 63555,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "M sets A's storage quota",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "the PATCH response echoes the quota",
+   "got": 101438,
+   "want": 101438,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "postgres holds the quota",
+   "got": 101438,
+   "want": 101438,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "A's own /me/quota reports the admin's number",
+   "got": 101438,
+   "want": 101438,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "an over-quota upload session",
+   "got": 422,
+   "want": 422,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "its error code",
+   "got": "quota_exceeded",
+   "want": "quota_exceeded",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "observation": "over-quota message",
+   "value": "storing this file would exceed your storage quota"
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "no upload session row was created for it",
+   "got": 0,
+   "want": 0,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "an in-quota upload session",
+   "got": 201,
+   "want": 201,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "reset to the instance default",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "0 means unlimited",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "A's /me/quota reports unlimited (null cap)",
+   "got": null,
+   "want": null,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "a negative quota is refused",
+   "got": 422,
+   "want": 422,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "moderator setting someone else's quota",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "ordinary user setting someone else's quota",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags",
+   "assert": "anonymous setting someone else's quota",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags (addendum)",
+   "assert": "resetting to the instance default writes NULL",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags (addendum)",
+   "assert": "postgres holds NULL for A",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags (addendum)",
+   "assert": "B's quota was never touched by the three refused writes",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 quotas and flags (addendum)",
+   "observation": "A's effective quota with no override (the instance default)",
+   "value": {
+    "used_bytes": 63555,
+    "quota_bytes": null,
+    "daily_used_bytes": 0,
+    "daily_quota_bytes": null
+   }
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "A starts unverified",
+   "got": "false",
+   "want": "false",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "M marks A verified",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "the response says verified",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "postgres says verified",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "A's OWN /auth/me says verified",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "M revokes the confirmation",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "postgres says unverified again",
+   "got": "false",
+   "want": "false",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "moderator setting email_verified",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "the target themselves setting email_verified",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "anonymous setting email_verified",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "still unverified after the three refusals",
+   "got": "false",
+   "want": "false",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "M turns the instance quarantine gate ON",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "the settings read-back agrees",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "B has no bypass flag",
+   "got": "false",
+   "want": "false",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "B's upload completes",
+   "got": "ok",
+   "want": "ok",
+   "ok": true,
+   "note": "{'upload_id': '<lab-uuid-9>', 'video_id': '<lab-uuid-6>', 'state': 'queued', 'size': 36859, 'chunk_size': 838860"
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "B's video is parked in quarantine",
+   "got": "quarantined",
+   "want": "quarantined",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "and it is in the moderator's quarantine queue",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "M grants A the bypass flag",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "the response says exempt",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "postgres says exempt",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "A's upload completes",
+   "got": "ok",
+   "want": "ok",
+   "ok": true,
+   "note": "{'upload_id': '<lab-uuid-4>', 'video_id': '<lab-uuid-3>', 'state': 'queued', 'size': 36859, 'chunk_size': 838860"
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "A's video published straight through",
+   "got": "published",
+   "want": "published",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "A's video is NOT in the quarantine queue",
+   "got": false,
+   "want": false,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "M revokes the bypass",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "A's next upload completes",
+   "got": "ok",
+   "want": "ok",
+   "ok": true,
+   "note": "{'upload_id': '<lab-uuid-5>', 'video_id': '<lab-uuid-1>', 'state': 'queued', 'size': 36859, 'chunk_size': 838860"
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "and IS quarantined once the flag is gone",
+   "got": "quarantined",
+   "want": "quarantined",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "it is published afterwards",
+   "got": "published",
+   "want": "published",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags",
+   "assert": "M turns the quarantine gate back OFF",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags (addendum)",
+   "assert": "gate back ON",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags (addendum)",
+   "assert": "B's upload completes",
+   "got": "ok",
+   "want": "ok",
+   "ok": true,
+   "note": "{'upload_id': '<lab-uuid-8>', 'video_id': '<lab-uuid-7>', 'state': 'queu"
+  },
+  {
+   "phase": "SC3 verified / bypass flags (addendum)",
+   "assert": "it parks in quarantine",
+   "got": "quarantined",
+   "want": "quarantined",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags (addendum)",
+   "assert": "moderator approves it",
+   "got": 204,
+   "want": 204,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags (addendum)",
+   "assert": "it is published afterwards",
+   "got": "published",
+   "want": "published",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags (addendum)",
+   "assert": "an ordinary user cannot approve",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC3 verified / bypass flags (addendum)",
+   "assert": "gate back OFF",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "A is active to start",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "A has at least one live session row",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": "sessions=2"
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "A's access token works",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "M deactivates A",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "the response says inactive",
+   "got": false,
+   "want": false,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "postgres says inactive",
+   "got": "false",
+   "want": "false",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "deleted_at is NOT stamped by a deactivation",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "every session row is revoked",
+   "got": 0,
+   "want": 0,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "A's ACCESS token is refused everywhere now",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "deactivated A on /api/v1/me/playlists",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "deactivated A on /api/v1/me/notifications",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "deactivated A on /api/v1/me/conversations",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "a WRITE on the deactivated access token",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "the refused write changed nothing",
+   "got": "",
+   "want": "",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "A's REFRESH token is refused",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "A cannot sign in while deactivated",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "observation": "the refusal message",
+   "value": "account is disabled"
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "M reactivates A",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "postgres says active",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "A can sign in again",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "the OLD (pre-deactivation) session stays dead \u2014 reactivation is not resurrection",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "moderator deactivating A",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "moderator deleting A",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "ordinary user deactivating A",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "ordinary user deleting A",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "anonymous deactivating A",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "anonymous deleting A",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "A is still active after all six",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "M hard-deletes B",
+   "got": 204,
+   "want": 204,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "observation": "B's row after the delete",
+   "value": "deleted-52ec2efc|deleted-52ec2efc@deleted.invalid|false|true|[]"
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "username anonymised",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": "deleted-52ec2efc"
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "address anonymised",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "row is inactive",
+   "got": "false",
+   "want": "false",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "deleted_at is stamped",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "display name emptied",
+   "got": "[]",
+   "want": "[]",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "password hash cleared",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "B's channel is gone",
+   "got": 404,
+   "want": 404,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "deleting the same row again is 404, not a second tombstone",
+   "got": 404,
+   "want": 404,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "reactivating a tombstoned account",
+   "got": 422,
+   "want": 422,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "observation": "the refusal message",
+   "value": "this account was deleted; deletion is permanent and cannot be reversed"
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "is_active is still false",
+   "got": "false",
+   "want": "false",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "the tombstone is still listed for the admin",
+   "got": 1,
+   "want": 1,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "and the admin projection carries deleted_at",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "assert": "the live account's deleted_at is null",
+   "got": null,
+   "want": null,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "observation": "PATCH role on a tombstone",
+   "value": 200
+  },
+  {
+   "phase": "SC4 deactivate / reactivate / delete",
+   "observation": "that role write's effect on login",
+   "value": "the row cannot authenticate at all: sessions JOIN users requires deleted_at IS NULL"
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "A opts its profile in",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "profile_public in postgres",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "BASELINE: A's profile is 200 for anonymous",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "BASELINE: A is in /search/accounts",
+   "got": 1,
+   "want": 1,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "BASELINE: A's channel answers",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "M deactivates A",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "A's profile is 404 for anonymous",
+   "got": 404,
+   "want": 404,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "A's profile is 404 for the instance owner too",
+   "got": 404,
+   "want": 404,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "A leaves /search/accounts",
+   "got": 0,
+   "want": 0,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "A's CHANNEL page still answers \u2014 deactivation is a login switch, not a content switch",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "observation": "A's published videos are still reachable while deactivated",
+   "value": 200
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "M reactivates A",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "A's profile is back",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "A is back in /search/accounts",
+   "got": 1,
+   "want": 1,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 deactivation visibility (controlled)",
+   "assert": "and A can sign in again",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "C registers",
+   "got": 201,
+   "want": 201,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "C opts its profile in",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "BASELINE: C's profile is public",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "M hard-deletes C",
+   "got": 204,
+   "want": 204,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "observation": "C's tombstoned username",
+   "value": "deleted-4002ee44"
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "the old handle is 404",
+   "got": 404,
+   "want": 404,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "and so is the tombstone's own handle",
+   "got": 404,
+   "want": 404,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "profile_public survived the anonymisation (nothing turned it off)",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "reactivating the tombstone",
+   "got": 422,
+   "want": 422,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "observation": "refusal message",
+   "value": "this account was deleted; deletion is permanent and cannot be reversed"
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "is_active never moved",
+   "got": "false",
+   "want": "false",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "the tombstone's profile is STILL 404",
+   "got": 404,
+   "want": 404,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "it is still absent from /search/accounts",
+   "got": 0,
+   "want": 0,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "a combined patch that includes is_active:true is refused whole",
+   "got": 422,
+   "want": 422,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "and the quota in that same body was not written either",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone reactivation (controlled)",
+   "assert": "is_active:false on a tombstone is a harmless no-op, not a 422",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone baseline (origin/main binary)",
+   "assert": "E registers",
+   "got": 201,
+   "want": 201,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone baseline (origin/main binary)",
+   "assert": "E opts its profile in",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone baseline (origin/main binary)",
+   "assert": "BASELINE: E's profile is public",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone baseline (origin/main binary)",
+   "assert": "M hard-deletes E",
+   "got": 204,
+   "want": 204,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone baseline (origin/main binary)",
+   "assert": "the tombstone's profile is 404",
+   "got": 404,
+   "want": 404,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone baseline (origin/main binary)",
+   "assert": "reactivating the tombstone on origin/main",
+   "got": 200,
+   "want": 422,
+   "ok": false,
+   "note": ""
+  },
+  {
+   "phase": "SC4 tombstone baseline (origin/main binary)",
+   "observation": "observed status",
+   "value": 200
+  },
+  {
+   "phase": "SC4 tombstone baseline (origin/main binary)",
+   "observation": "is_active after it",
+   "value": "true"
+  },
+  {
+   "phase": "SC4 tombstone baseline (origin/main binary)",
+   "observation": "the tombstone's public profile after it",
+   "value": 200
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "the baseline probe's resurrected tombstone can be put back",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "observation": "registration_require_approval before",
+   "value": {
+    "key": "registration_require_approval",
+    "type": "bool",
+    "value": false,
+    "default": false,
+    "overridden": false,
+    "page": "general",
+    "section": "signup"
+   }
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "M turns approval mode ON",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "P's signup is accepted as an APPLICATION, not an account",
+   "got": 202,
+   "want": 202,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "the body says pending",
+   "got": "pending",
+   "want": "pending",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "no users row was created",
+   "got": 0,
+   "want": 0,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "a pending registration_requests row was",
+   "got": "pending",
+   "want": "pending",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "a pending applicant cannot sign in",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "observation": "the pending applicant's login message",
+   "value": "invalid credentials"
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "an account that never existed gets the same status",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "and the same message",
+   "got": "invalid credentials",
+   "want": "invalid credentials",
+   "ok": true,
+   "note": "no enumeration beyond what registration already discloses"
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "M sees the queue",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "P is in it",
+   "got": 1,
+   "want": 1,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "with the note the applicant wrote",
+   "got": "please let me in",
+   "want": "please let me in",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "and no password hash anywhere in the projection",
+   "got": false,
+   "want": false,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "a MODERATOR cannot read the approval queue",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "an ordinary user cannot",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "anonymous cannot",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "a moderator cannot approve",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "a moderator cannot reject",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "the request is still pending after those two",
+   "got": "pending",
+   "want": "pending",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "M approves P",
+   "got": 204,
+   "want": 204,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "the request is marked approved",
+   "got": "approved",
+   "want": "approved",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "it records WHO reviewed it",
+   "got": "true",
+   "want": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "a real account now exists",
+   "got": 1,
+   "want": 1,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "with role user and active",
+   "got": "user/true",
+   "want": "user/true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "P can sign in with the password from the APPLICATION",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "observation": "notice on approval: mail queued?",
+   "value": "0"
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "approving it twice is 404, not a second account",
+   "got": 404,
+   "want": 404,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "Q applies",
+   "got": 202,
+   "want": 202,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "M rejects Q with a note",
+   "got": 204,
+   "want": 204,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "the request is marked rejected",
+   "got": "rejected",
+   "want": "rejected",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "the moderator note is kept",
+   "got": "not this time",
+   "want": "not this time",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "no account was created for Q",
+   "got": 0,
+   "want": 0,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "a rejected applicant cannot sign in",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "the rejected request leaves the PENDING queue",
+   "got": 0,
+   "want": 0,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "but is still auditable under ?status=rejected",
+   "got": 1,
+   "want": 1,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "rejecting it again is 404",
+   "got": 404,
+   "want": 404,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "M restores approval mode to its prior value",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 signup approval",
+   "assert": "and it reads back identical",
+   "got": false,
+   "want": false,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "audit rows for admin.user.update (role / quota / flag / deactivate-reactivate)",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": "n=53"
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "admin.user.update names an actor",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "audit rows for admin.user.delete (admin hard delete)",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": "n=4"
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "admin.user.delete names an actor",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "audit rows for auth.registration.approve (signup approval)",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": "n=1"
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "auth.registration.approve names an actor",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "audit rows for auth.registration.reject (signup rejection)",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": "n=2"
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "auth.registration.reject names an actor",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "audit rows for admin.instance.update (instance settings (approval mode, quarantine gate))",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": "n=8"
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "admin.instance.update names an actor",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "a role change records its target and the new role",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "a quota change records the value",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "email_verified changes record the flag",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "bypass_quarantine changes record the flag",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "deactivation records is_active=false",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "reactivation records is_active=true",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "the delete records its target",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "approval records the created account's id",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "the self-change refusal is audited as a failure",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "the tombstone-reactivation refusal is audited as a failure",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "the fixture password never appears in audit_log",
+   "got": false,
+   "want": false,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "no email address anywhere in audit_log",
+   "got": false,
+   "want": false,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "no applicant address anywhere in audit_log",
+   "got": false,
+   "want": false,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "the word 'password' never appears in audit_log",
+   "got": false,
+   "want": false,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "M reads the audit view",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "it is not empty",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "the newest event carries an action + result + actor",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "it filters by action",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "a moderator cannot read it",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "an ordinary user cannot",
+   "got": 403,
+   "want": 403,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "assert": "anonymous cannot",
+   "got": 401,
+   "want": 401,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "observation": "audit rows for e2ee.device.register (A15 finding, out of scope here)",
+   "value": 0
+  },
+  {
+   "phase": "SC6 audit evidence",
+   "observation": "audit rows for messaging.message.send (A15 finding, out of scope here)",
+   "value": 0
+  },
+  {
+   "phase": "SC5 lockout guards / rate limiting",
+   "observation": "statuses for 14 unpaced login attempts by a REJECTED applicant",
+   "value": [
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    429,
+    429,
+    429,
+    429
+   ]
+  },
+  {
+   "phase": "SC5 lockout guards / rate limiting",
+   "observation": "statuses for the same burst against a NEVER-EXISTED address",
+   "value": [
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    429,
+    429,
+    429,
+    429
+   ]
+  },
+  {
+   "phase": "SC5 lockout guards / rate limiting",
+   "assert": "the burst is throttled",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 lockout guards / rate limiting",
+   "assert": "the throttle starts at the 11th attempt (shipped 10/min per IP, never raised)",
+   "got": 10,
+   "want": 10,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 lockout guards / rate limiting",
+   "assert": "everything before it is the ordinary refusal",
+   "got": [
+    401
+   ],
+   "want": [
+    401
+   ],
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "SC5 lockout guards / rate limiting",
+   "assert": "a never-existed address is throttled identically, so the limiter leaks nothing",
+   "got": [
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    429,
+    429,
+    429,
+    429
+   ],
+   "want": [
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    429,
+    429,
+    429,
+    429
+   ],
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "browser walkthrough (real Chromium, one origin, hard reloads)",
+   "assert": "the three UI mutations on avery landed in postgres",
+   "got": "moderator/true/true",
+   "want": "moderator/true/true",
+   "ok": true,
+   "note": "role via the segmented control, both flags via the new toggles"
+  },
+  {
+   "phase": "browser walkthrough (real Chromium, one origin, hard reloads)",
+   "assert": "the browser's role change is audited",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "browser walkthrough (real Chromium, one origin, hard reloads)",
+   "assert": "the browser's email_verified toggle is audited",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "browser walkthrough (real Chromium, one origin, hard reloads)",
+   "assert": "the browser's bypass_quarantine toggle is audited",
+   "got": true,
+   "want": true,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "browser walkthrough (real Chromium, one origin, hard reloads)",
+   "assert": "the UI approval created the account",
+   "got": "user/true",
+   "want": "user/true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "browser walkthrough (real Chromium, one origin, hard reloads)",
+   "assert": "and marked the request approved by the admin who clicked it",
+   "got": "approved/true",
+   "want": "approved/true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "browser walkthrough (real Chromium, one origin, hard reloads)",
+   "assert": "the approved applicant can sign in",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "browser walkthrough (real Chromium, one origin, hard reloads)",
+   "assert": "dana was demoted mid-session and is a plain user",
+   "got": "user",
+   "want": "user",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "browser walkthrough (real Chromium, one origin, hard reloads)",
+   "assert": "re-promote dana",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "browser walkthrough (real Chromium, one origin, hard reloads)",
+   "assert": "avery back to user",
+   "got": 200,
+   "want": 200,
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "browser walkthrough (real Chromium, one origin, hard reloads)",
+   "assert": "both settings overrides were cleared, not just set back",
+   "got": [
+    false,
+    false
+   ],
+   "want": [
+    false,
+    false
+   ],
+   "ok": true,
+   "note": ""
+  },
+  {
+   "phase": "browser walkthrough \u2014 what the screen showed",
+   "observation": "/admin/users after a hard reload as the owner",
+   "value": "table renders; mona ADMIN + YOU pill, dana MODERATOR, avery USER; three tombstoned rows read 'Deleted' while live rows read 'Active'"
+  },
+  {
+   "phase": "browser walkthrough \u2014 what the screen showed",
+   "observation": "tombstone detail (deleted-52ec2efc)",
+   "value": "Status 'Deleted'; role frozen to a static USER pill; NO Reactivate and NO Delete button; the notice reads 'This account was permanently deleted. Its username, address and profile are gone and cannot be restored, so it can be neither reactivated nor deleted again \u2014 the row is kept only as a record.'; neither flag toggle rendered"
+  },
+  {
+   "phase": "browser walkthrough \u2014 what the screen showed",
+   "observation": "live account detail (avery)",
+   "value": "Deactivate + Delete account buttons present; three-way Role segmented control; the new 'Email verified' and 'Skip upload review' switches present with their explanatory copy"
+  },
+  {
+   "phase": "browser walkthrough \u2014 what the screen showed",
+   "observation": "after clicking Moderator + both switches",
+   "value": "header pill flips to MODERATOR, subtitle reads 'verified', the facts column reads Role MODERATOR / Email Verified / New-upload quarantine Exempt"
+  },
+  {
+   "phase": "browser walkthrough \u2014 what the screen showed",
+   "observation": "hard reload of /admin/users?q=avery",
+   "value": "the row still reads MODERATOR \u2014 the change survived a full page load, it was not optimistic UI"
+  },
+  {
+   "phase": "browser walkthrough \u2014 what the screen showed",
+   "observation": "/admin/audit-log as the owner",
+   "value": "139 entries; the three browser mutations appear top-of-list as admin.user.update SUCCESS with Actor: mona and the reason naming target + field; the deliberate login burst appears as auth.rate_limited FAILURE rows"
+  },
+  {
+   "phase": "browser walkthrough \u2014 what the screen showed",
+   "observation": "/admin/registration-requests with a pending applicant",
+   "value": "rowan2 listed PENDING with the applicant's own note, an internal-note box, and Approve / Reject; after Approve the Pending tab reads '0 registration requests'"
+  },
+  {
+   "phase": "browser walkthrough \u2014 what the screen showed",
+   "observation": "moderator dana signed in",
+   "value": "the left nav shows Moderation and NOT Admin; /moderation/videos renders the full inventory (8 videos, one QUARANTINED badge)"
+  },
+  {
+   "phase": "browser walkthrough \u2014 what the screen showed",
+   "observation": "dana after being demoted from another process, SAME browser session, no re-login",
+   "value": "a hard reload of /moderation/videos shows 'Moderators only'; the Moderation nav item is gone; RoleGate means the privileged fetch never even mounts"
+  },
+  {
+   "phase": "browser walkthrough \u2014 what the screen showed",
+   "observation": "the same demoted session on an ordinary page",
+   "value": "/settings renders dana's full account settings normally \u2014 demotion removed a tier, it did not sign her out"
+  },
+  {
+   "phase": "browser walkthrough \u2014 what the screen showed",
+   "observation": "anonymous on /admin/users",
+   "value": "'Administrators only \u2014 This page is for administrators. Sign in with an admin account to manage users.'"
+  }
+ ]
+}
