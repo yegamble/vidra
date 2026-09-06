@@ -20,21 +20,23 @@
     "unfollow_reload_and_feed": "PASS",
     "disable_reload": "PASS",
     "actual_playback_does_not_record": "PASS",
-    "history_setting_restored": "PASS"
+    "history_setting_restored": "PASS",
+    "private_cover_owner_decode": "PASS",
+    "private_grid_cover_decode": "PASS",
+    "private_library_cover_decode": "PASS"
   },
   "registration_restored": "PASS",
   "remaining": [
-    "private playlist owner cover decoding",
     "playlist playback continuation",
     "three-actor social workflows",
     "profile/archive/deactivation/deletion"
   ],
   "private_cover": {
     "detail_status": 200,
-    "image_status": 404,
+    "image_status": 200,
     "anonymous_status": 404,
-    "owner_decode": "FAIL",
-    "next_experiment": "Use the authenticated binary request path for owner cover rendering; reproduce in a focused test before implementation."
+    "owner_decode": "PASS after de7bd33",
+    "next_experiment": "Private cover defect corrected; verify full local/S3 CI for frontend #156."
   },
   "harness_corrections": [
     "First extended run hit HTTP 429; completed mutations were retained and later checks resumed.",
@@ -42,5 +44,6 @@
     "Five-second reload assertion timed out; separate read-only run confirmed private detail success and isolated cover failure.",
     "Immediate clear-history reload assertion timed out; a fresh session confirmed empty persisted history with HTTP 200."
   ],
-  "history_position_seconds": 12
+  "history_position_seconds": 12,
+  "cover_revision": "de7bd33"
 }

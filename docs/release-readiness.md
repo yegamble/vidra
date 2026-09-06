@@ -1320,3 +1320,15 @@ was restored and verified after reload. These checks pass; playlist continuation
 private-cover rendering and the social/profile/archive/deletion slices remain
 open. Evidence PR: [meta #103](https://github.com/yegamble/vidra/pull/103), stacked
 on #102; all checks passed for its initial `bdbe88f` revision.
+
+
+A12 private covers corrected in [frontend #156](https://github.com/yegamble/vidra-user/pull/156),
+revision `de7bd33`, stacked after #155. Owner images now fetch authenticated bytes
+in the editor, playlist grid and Library; all three decoded in real Chromium,
+with anonymous denial intact. TDD manager regression failed before the fix;
+six focused tests pass, including viewer changes, cancellation and stale-response
+cleanup. Required gates pass: TypeScript/icons, zero lint errors (two existing
+warnings), 232 files / 2,301 tests. Backed tests now cover public and private
+owner reload with a decodable PNG. Full local/S3 CI for #156 is pending; all
+checks for #155 are green. A12 remains OPEN for playlist continuation and the
+remaining social/profile/archive/deletion criteria.
