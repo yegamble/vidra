@@ -2604,8 +2604,9 @@ Gates: core `make ci` **passed** (fmt-check, vet, migrate-lint, openapi-verify,
 sqlc-verify, test-race) plus the tagged `internal/store` and `internal/account`
 integration lanes against real PostgreSQL 16 at **schema 128**, including the new
 `TestSessionRevocationQueriesPersist`. Frontend: TypeScript clean, lint 0 errors
-with the same 2 pre-existing warnings, icons clean, **239 files / 2354 tests** —
-up from 238/2348 by exactly this slice's six new tests — on nvm Node 24.4.1. Per
+with the same 2 pre-existing warnings, icons clean, and **239 files / 2355
+tests** — up from 238/2348 by exactly this slice's seven new tests, and the same
+counts CI reports on the green `frontend` lane — on nvm Node 24.4.1. Per
 vidra-user's AGENTS.md the e2e suites were **not** run locally; repo CI owns
 them. `vidra-search` was not modified and not run — nothing here reaches the
 search boundary — and no compose or script files were touched, so the meta render
@@ -2654,6 +2655,43 @@ SMTP a password change produces **no notice at all**, the same gap the reset flo
 has. And the previous slice's `.next/standalone` chunk-404 finding was **not
 re-tested** — this walkthrough used `next start` against the same production
 build, as that one did — so it remains open.
+
+**CI, and what it caught.** Core #165 is **green on all six functional lanes**
+(build-test, integration, ipfs-integration, ipfs-private-integration, openapi,
+prev-release-against-new-schema) and is marked ready. Two of them went red once
+and passed on re-run: `integration` on `TestStateFlipClaimsAreExclusive` — a
+queue-lease concurrency test this diff cannot reach — and `ipfs-integration` on
+`TestIntegrationPublicVideoRoundTrip` timing out at 300s, the same lane and the
+same test that flaked on core#163. **GitGuardian is red and needs owner
+attention**: it reports *"1 secret uncovered"*, and nothing in the branch is a
+live credential — every credential-shaped string it adds is a test fixture
+password or the long-standing test JWT signing secret that already sits in about
+twenty test files on `main`. Two follow-up commits removed the newly-introduced
+copies anyway (the fixture passwords now have one definition each, and the test
+wiring was deduplicated so the signing secret does too), and neither cleared the
+check, because GitGuardian scans **every commit in the PR** and a finding in the
+first survives its removal in a later one. Clearing it needs someone with
+dashboard access.
+
+Frontend #163 is green on `frontend` (the canonical gate, Playwright included)
+and all four backed lanes; `contract` is red for the ordering reason and nothing
+else — *"Frontend calls paths that do NOT exist in vidra-core's openapi.yaml:
+/api/v1/auth/me/password"* — so **that PR stays a draft until core#165 merges**.
+One backed lane failed in 11s on `unauthorized: authentication required` pulling
+a compose image and passed on re-run.
+
+And CI earned its keep. The first push turned the `frontend` lane red on two
+cases in `e2e/security-settings.spec.ts` with *"strict mode violation:
+getByLabel('Current password') resolved to 2 elements"* — when two-factor is on,
+`/settings/security` now carries **two correctly-labelled "Current password"
+inputs**, the disable form's and this card's. The spec's two locators are scoped
+to the card that owns the "Turn off two-factor authentication" button, which is
+what they always meant; no assertion changed, and both were reproduced failing
+and then passing locally. The ambiguity is not only a test problem — two
+identically-labelled password inputs are indistinguishable to a screen reader
+too — so the Password card is now a **named region**, with a test.
+`e2e/settings.spec.ts` and `e2e-backed/deactivate.spec.ts` use the same label but
+on `/settings`, where this card is not mounted; that was checked, not assumed.
 
 **The AUTH-05 row is not flipped and A12 remains OPEN.** What remains is
 **email change with re-verification, and nothing else**: an account's address is
