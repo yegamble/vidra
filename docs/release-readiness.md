@@ -984,3 +984,36 @@ gate weakening. Both component work branches were deleted locally and remotely.
 Meta #95 carries this final delivery record; merge it on its final green checks,
 then delete its work branch. The fixture remains restored and stopped. A08 is
 the only acceptance item completed here; the earlier runtime limitations remain.
+
+## A36 backup confidentiality and failure checkpoint — 2026-09-05
+
+**A36 OPEN.** A09 is already merged as #90 (`56ef7a8`); source-dependent
+A18–A23 await a sanitized source inventory. A36 is independently ready after
+A03/A07 and is being completed before A37. Actual offsite storage selection
+was requested; a local host rehearsal must not be labelled separate-region proof.
+
+The retained A08 fixture ran the real backup script successfully. Inspection
+exposed insufficient default permissions for database artifacts. The focused
+fix applies `umask 077` before any backup file/directory creation, covering the
+dump, partial/decompressed verification files, and marker as well as config.
+Two regression tests failed first and then passed. No dump format, retention,
+success-marker contract or deploy/migration ordering changed.
+
+The [required real helper](../tests/backup-smoke.py) and
+[complete sanitized evidence](evidence/a36-backup-local.json) record script/helper
+hashes, fixture identity, archive filenames/modes, and independent verification.
+Command: `python3 tests/backup-smoke.py /tmp/vidra-a08-caption-fixture-r1
+/tmp/vidra-a36-smoke-r1` (arguments on one command line). Exit 0, two groups PASS,
+zero skips. Real `pg_restore -l` finds core and search tables. Both configuration
+members match the active files byte-for-byte, including presence of sealing and
+session keys; values are never output. New directory mode is 0700 and new files
+0600. A second real `pg_dump` against a nonexistent DB exits 1, leaves only a
+private partial, finalizes no archive, and does not change `last_success`.
+
+Local tests: Python22 PASS; `bash -n deploy/backup.sh`, `shellcheck -x
+ deploy/backup.sh`, helper compile and diff checks PASS. Private diagnostics and
+archives remain only in the disposable lab and `/tmp/vidra-a36-*`. This is a
+focused A36 fix/checkpoint, not full recovery acceptance: encrypted retrieval,
+matched media snapshot, independent restore and selected offsite target remain
+required. Next: quiesce fixture writers, capture a matched media/DB/config set,
+then encrypt/retrieve and validate it before A37 replacement-host recovery.
