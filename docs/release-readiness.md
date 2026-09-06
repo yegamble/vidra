@@ -2083,3 +2083,180 @@ counted as a pass. Delivery order: frontend #161 alone (no contract dependency,
 Nothing is merged here and no deployment is authorized. **A12 remains OPEN**:
 AUTH-05 — profile/privacy, email/password changes, deactivation/deletion and the
 account archive — is untouched, and is the next slice.
+
+## A12 profile, credentials and archive — 2026-09-06
+
+**A12 stays OPEN and the AUTH-05 row does NOT flip.** This is the first half of
+AUTH-05 — profile/privacy, password and email changes with re-verification, and
+the account archive; deactivation and deletion are the next slice. Two of the
+four capabilities pass on real evidence. **The other two cannot pass, because
+they do not exist.** [Core #163](https://github.com/yegamble/vidra-core/pull/163)
+(`e4bde3b`) and [frontend #162](https://github.com/yegamble/vidra-user/pull/162)
+(`32f6b57`) each carry one small, TDD-first fix; no migration (latest stays
+0127), no hand-edited generated file.
+[Sanitized evidence](evidence/a12-profile-archive.json) records **224 API
+assertions and 60 browser assertions, none failed, and no 429 in either
+walkthrough**.
+
+**There is no password-change endpoint and no email-change flow anywhere in the
+product.** That is proven, not inferred: eleven plausible password routes and
+twelve email routes were probed as the signed-in owner and every one answers
+404/405; `PATCH /auth/me` cannot set a password (the stored hash is
+byte-identical afterwards) and rejects an `email` field with 422; **`PATCH
+/admin/users/{id}` as the instance owner also refuses an email (422)** — the
+admin surface can only toggle `email_verified`. In Chromium, `/settings` and
+`/settings/security` offer no such control either. So an account's address is
+fixed at registration and cannot be moved by anyone, and the only password
+rotation is the **forgotten**-password flow: `POST /auth/password-reset` (always
+202, enumeration-safe) → a single-use expiring token delivered out of band →
+`POST /auth/password-reset/confirm`. Re-verification is by **mailbox
+possession**, never by the current password. Those two facts compound: a user who
+loses the mailbox loses the ability to change their password, and cannot change
+the address either. On an instance with no working SMTP, password rotation is
+simply impossible.
+
+What *is* shipped passes end to end, and the mail path was exercised **two
+ways**, so this is not blocked on the AUTH-03/A05 SMTP-selection gate. The
+shipped dev capture seam (`DEV_MAIL_CAPTURE_ENABLED`, `GET
+/api/v1/dev/email-token` — registered only outside production, logged as a loud
+boot warning, tokens in memory only, deliberately absent from the OpenAPI
+document) served the tokens for the main runs; and a **real SMTP delivery** was
+proven separately against a throwaway Mailpit sink with `MAIL_ENABLED=true` and
+the capture seam **off** — 10 assertions, the dev seam 404, the message
+delivered to the right address from the configured `SMTP_FROM`, and the token
+lifted out of the real message body verifying the account. The reset itself: a
+wrong token 400 and a too-short password 422 both leave the hash untouched, the
+real token is 204 and changes it, a replay is 400, the old password is then 401
+at login and the new one 200.
+
+**What a password change does to your other sessions, exactly.** `ResetPassword`
+revokes every session row, so all refresh tokens die at once — a second Chromium
+context signed in *before* the reset showed "Your session has ended." after a
+hard reload, with no settings form rendered, and so did the first. But
+`requireAuth` verifies the access JWT alone and never re-checks a session row,
+so an **already-issued access token keeps answering 200 for the rest of its
+`JWT_ACCESS_TTL` (default 15 minutes)** — proven live, refresh 401 and access 200
+in the same breath. "Signed out everywhere" is true of refresh tokens instantly
+and of access tokens within fifteen minutes. The deletion slice must say which
+token it means.
+
+Profile and privacy pass. **"Unlisted" is a discovery opt-out, not an access
+control**: with it on, A's video leaves the anonymous feed *and* B's, she leaves
+`/search/accounts` and her channel leaves `/search/channels`, while the direct
+video, channel and profile URLs all still answer **200 anonymously** — and
+turning it off restores the feed. **`profile_public` is a different control and
+is privacy-by-default**: `users.profile_public` is `NOT NULL DEFAULT FALSE`
+(migration 0091) and registration does not opt in, so a brand-new account's
+profile is 404 to everyone until its owner ticks "Make my profile public" —
+proven on an account that never did. Display name, bio and a real decodable
+96×96 PNG avatar all persist, are confirmed by independent API reads *and* the
+database, and survive a hard reload in the browser; B sees the new public values
+on A's profile page and **never her email**. Every mutation was attempted by the
+wrong actor: `PATCH /auth/me` is self-scoped so B's attempt edited *bob*, B's
+`PATCH /admin/users/{A}` is 403, an anonymous PATCH is 401, an over-long name is
+422 and changes nothing, and B's avatar upload leaves A's bytes identical. The
+**vidra-search** facet is honestly unverified — that service is not running — but
+the core half is proven: with `SEARCH_SERVICE_URL` set, toggling unlisted
+enqueues a `user.suppress` outbox event carrying `unlisted:true`, and un-listing
+enqueues the restoring one.
+
+The archive passes, and its contents are recorded by field name rather than
+claimed. Ten top-level sections, all of them present, and **what is missing is
+named**: media bytes (each video carries an `original_download_url` instead —
+documented v1), ratings, mutes and blocks, messages, sessions and devices,
+OAuth/ATProto links, player and messaging preferences, search history, donation
+addresses, and any moderation or audit history. No credential material of any
+kind. The lifecycle is complete: 404 before any request, 202 pending, **409 while
+one is in flight**, done with an expiry stamped, an attachment download, a
+re-request that produces a **new job id and replaces** the previous archive, a
+forced expiry that gives **410** while the status still reads 200 with
+`download_ready:false`, and a fresh request downloadable again. **IDOR is
+structurally impossible rather than merely guarded** — `/me/export` and
+`/me/export/download` take no id parameter, and there is no admin route to
+another user's archive either (404); B's download is *bob's* archive with A's
+address nowhere in it. Both halves are operator kill-switchable and independent
+(`user_export_enabled` off → 403 `feature_disabled` while import still works, and
+vice versa; a normal user gets 403 on the switches).
+
+**Archive import IS a shipped capability** (`POST /api/v1/me/import`, with a card
+on `/settings`) and it round-tripped: A's archive into a fresh actor applied the
+profile, created the playlist with its one locally-matched item, re-created the
+follow of a local channel and applied one notification preference, while
+`skipped_sections` named the five it cannot restore — and the readback confirms
+the **username and email were never imported**, no channel, comment or video was
+created, and a re-import duplicates the playlist while the follow stays one row.
+The whole thing was then driven from Chromium: the card polls honestly, offers
+"Download archive" when the job finishes, states the expiry in words, and the
+captured `vidra-account-export.json` is Alice's with no credential material; the
+import through the real file input reported *"Profile: display name and bio
+applied / Playlists: 1 created, 1 items added / Follows: 1 created /
+Notification preferences: 1 applied / Not importable from an archive: Channels
+(1), Comments (1), Saved videos (1), Videos (2), Watch history (1)"*.
+
+Two defects, both found by reading the summary against the database. **The
+import reported `follows_created` for follows it did not create**: `FollowChannel`
+is `:execrows` with `ON CONFLICT DO NOTHING` — the query's own comment says the
+count exists so callers can tell a new follow from an existing one — but
+`ImportArchive` discarded it and incremented unconditionally, so a re-import
+claimed a follow with exactly one row in `channel_follows`. The **in-memory fake
+mirrored the bug** (it always answered 1), which is how it survived; it now
+mirrors the SQL. Red first: `re-import reported follows_created = 1, want 0`.
+And the frontend then **named the wrong cause** — `", N skipped (channel not on
+this instance)"` told an importer whose follows were already in place that the
+channels were missing. Both fixed, both with a failing test first.
+
+Gates: core `make ci` **passed** (fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race) plus the tagged `internal/store` and `internal/account`
+integration lanes against real PostgreSQL 16 at schema 127; frontend TypeScript,
+lint (0 errors, the same 2 pre-existing warnings), icons, **238 files / 2348
+tests** — up from 237/2346 by exactly this slice's two new tests — and the
+production build, on nvm Node 24.4.1. Core CI is green except `ipfs-integration`,
+which failed on `TestIntegrationPublicVideoRoundTrip` timing out at 300s — a lane
+this diff (`internal/account` plus an OpenAPI description) cannot reach; it was
+re-run and the result is on the PR. **`contract-ci` on the frontend PR is
+expected red until core#163 merges** — it regenerates `lib/api/generated.ts` from
+`vidra-core@main` and this branch carries the regen for an unmerged spec change;
+that PR stays draft until then. Per vidra-user's AGENTS.md the local e2e suites
+were **not run**. SC5 no-regression: the named tests from all three merged A12
+slices pass, including the tagged real-PostgreSQL
+`TestCommentReplyRecipientOnRealPG` and `TestCommentVideoOwnerRecipientOnRealPG`.
+
+Failures worth keeping. **The frontend could not reach the API at all on the
+first browser attempt**: `CORS_ALLOWED_ORIGINS` defaults to
+`http://localhost:3000`, so every call from the lab's `127.0.0.1:3100` origin
+failed preflight and the sign-in form reported "Couldn't reach the server." — it
+looks exactly like a broken login. The **auth limiter is 10/min per IP and a
+per-process pacer resets between scripts**, so a run 429'd mid-SC3 and was
+voided; the pacer is now file-backed and the limit was never raised. The first
+browser walkthrough tripped the *general* 120/min limiter seven times (a settings
+load costs ~10 calls); document loads are now budgeted and both final
+walkthroughs recorded **zero** 429s. **Access tokens are 15-minute JWTs**, so a
+long lab run silently 401s mid-script — actor tokens are re-minted between
+phases. Six harness bugs were corrected rather than the app, including an
+assertion that a brand-new profile is publicly readable (it is not), the feed's
+envelope key (`videos`, not `items`), the notification-prefs body shape
+(`{"prefs": …}`), the admin settings route (`/admin/instance-settings`), and an
+import-summary read that grabbed the page's first `[role="status"]` — a spinner.
+
+Findings worth a decision, none fixed here. After an import applies the profile,
+**the profile form above it still shows the pre-import values until a reload** —
+visible in the acceptance screenshot, where the summary says "display name and
+bio applied" beside an input still reading the old name. `POST /me/import`
+accepts a body carrying only the format marker and no `profile` (200, all-zero
+summary) while `AccountArchive` lists `profile` as required — `ParseArchive`
+checks the marker and version only, so the schema and the validator disagree
+about what a valid archive is. `PATCH /auth/me`'s OpenAPI *description* still says
+"display_name, bio" while the schema under it carries nine more fields including
+every privacy toggle. And an archive **carries no identity**, so it cannot write
+another account — but a leaked one lets a stranger clone a creator's display
+name, bio, playlists and follows onto their own account, which deserves an
+explicit product call rather than being an accident of the design.
+
+**The AUTH-05 row is not flipped and A12 remains OPEN.** Profile/privacy and the
+account archive are closed on evidence; "email/password changes … with
+re-verification" describes a product Vidra does not ship, and that is recorded
+rather than counted either way. The remaining half — deactivation, deletion, DM
+retention, media cleanup and the search deletion hooks — is the next slice.
+Delivery order: **core#163 first** (it changes `api/openapi.yaml`), then
+**frontend#162** (its `contract-ci` goes green only after core merges), then this
+evidence PR. Nothing is merged here and no deployment is authorized.
