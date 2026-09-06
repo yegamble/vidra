@@ -101,7 +101,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | AUTH-02 Registration, approval, login, logout and session refresh persist | C U | Auth service/routes; backed auth-persistence/session/registration-approval tests; approval opt-in | UNVERIFIED | Open/closed/approval registration with two users; accept/reject; expiration/refresh/revoke; reload and multi-tab/logout; rejected credentials never create sessions | AUTH-01 → A04 |
 | AUTH-03 Email verification and password recovery deliver real mail | M C U | `internal/mail/smtp.go`; backed reset/verify use dev capture | BLOCKED | Disposable SMTP sink + browser token redemption, expiry/reuse and enumeration behavior; then operator-selected SMTP delivery and disabled-mail UX | AUTH-02 + SMTP selection → A05 |
 | AUTH-04 TOTP enrollment, recovery and removal; OAuth/OIDC login/link/unlink | C U M | Core auth/MFA/OAuth routes; backed mfa/oauth-identities; real provider not supplied | BLOCKED | TOTP second login/recovery/revoke; local OIDC provider callback/state/PKCE, account collision and unlink-last-method policy; never substitute a precreated identity for login | AUTH-02 + OIDC selection → A05 |
-| AUTH-05 Profile/privacy, email/password changes, deactivation/deletion and account archive | C U S | Backed profile-edit/deactivate/delete-account/account-export; core account and search deletion hooks | UNVERIFIED | Mutate profile/unlisted/email/password with re-verification, export and import supported archive; delete/deactivate with content, sessions, follows and search history; verify recipient DM retention policy and media cleanup | AUTH-02, SRC-02 → A12 |
+| AUTH-05 Profile/privacy, email/password changes, deactivation/deletion and account archive | C U S | Backed profile-edit/deactivate/delete-account/account-export; core account and search deletion hooks; live evidence `a12-profile-archive` (profile/privacy + archive round trip), `a12-deletion` (deactivation/deletion with content, DM retention, media cleanup, search hook), `a12-password-change` (password change with re-verification, on session-bound access tokens) and `a12-email-change` (two-step email change with re-verification over real SMTP) | PASS (candidate; unmerged) | Mutate profile/unlisted/email/password with re-verification, export and import supported archive; delete/deactivate with content, sessions, follows and search history; verify recipient DM retention policy and media cleanup | AUTH-02, SRC-02 → A12 |
 | PUB-01 Create channel and draft; upload a real file within quota | C U M | `internal/video`, upload routes; backed upload/studio/channel-management | UNVERIFIED | Browser-create channel/draft; upload generated audiovisual clip; inspect original metadata, owner quota accounting and durable state; deny nonowner/overquota/invalid input | AUTH-02 → A06 |
 | PUB-02 Resumable upload, cancel, draft recovery and batch publishing | C U | W2 plans; backed upload-draft-recovery/upload-cancel/upload-batch | PASS (candidate; unmerged) | Interrupt network and restart service between chunks; resume without duplicate files/charges; recover draft on another session; cancel cleanup; partial batch failure retained | PUB-01 → A10 |
 | PUB-03 Transcode durable jobs into playable CMAF/HLS ladder | C M U | `internal/media/hls.go`, CMAF packager, transcode jobs; backed hls-playback | UNVERIFIED | Real ffmpeg job: source→processing→ready; fetch advertised master, audio/video variants, init/segments; decode audio and video; retry crash without duplicate promotion | PUB-01 → A07 |
@@ -2709,3 +2709,216 @@ everything. Delivery order: **core#165 first** (it changes `api/openapi.yaml` an
 carries migration 0128), then **frontend#163** (its `contract-ci` goes green only
 after core merges), then this evidence PR. Nothing is merged here and no
 deployment is authorized.
+
+## A12 email change with re-verification — 2026-09-06
+
+**A12's stopping criterion is met and the AUTH-05 row flips to PASS (candidate;
+unmerged).** Five slices closed the row's procedure clause by clause, and the
+last one — "email … changes … with re-verification" — described a capability
+vidra did not ship at all: an account's address was fixed at registration,
+`PATCH /auth/me` 422'd an `email`, and not even the instance owner could move
+one, so a user who lost their mailbox lost password recovery permanently. The
+owner's answer was to build it, and this slice builds it.
+[Core #166](https://github.com/yegamble/vidra-core/pull/166) (`b760f57`, two
+commits, **migration 0129**) and [frontend
+#164](https://github.com/yegamble/vidra-user/pull/164) (`5744c10`). [Sanitized
+evidence](evidence/a12-email-change.json) records **114 API assertions on one
+clean database and 23 browser assertions in real Chromium, across two complete
+walkthroughs, none failed**, with the shipped rate limits never raised and every
+message delivered over **real SMTP** to a throwaway Mailpit sink with the dev
+capture seam deliberately **off**.
+
+**The model, and why a second table.** A pending change is a row in
+`email_change_requests` (0129, append-only, with its `.down.sql`), not a pair of
+`pending_*` columns on `users`: the token lifecycle it needs — issued, used,
+expired, superseded — is exactly the lifecycle `password_reset_tokens` (0012)
+and `email_verification_tokens` (0013) already have, the hot `users` row stays
+untouched by a flow that may never complete, and `ON DELETE CASCADE` disposes of
+pending requests with the account (proven). Only the SHA-256 of the token is
+stored; the raw token exists only in the message.
+
+**The switch is one SQL statement, and that is the point.** A CTE consumes the
+token — `used_at IS NULL` is *inside* its predicate — and the outer `UPDATE
+users` moves the address and sets `email_verified` from the CTE's row. So there
+is no window in which the token is spent and the address is not, two concurrent
+confirmations cannot both win without a transaction, and a token that is
+unknown, already used, expired **or issued to another account** matches nothing
+and returns no row: one indistinct 400 for all four, so a caller cannot probe
+which. `users_email_lower_idx` is the final authority on collisions — an address
+claimed by somebody else between the request and the confirmation fails as a
+unique violation (409), not as a silent overwrite. All of that is pinned against
+real PostgreSQL in `TestEmailChangeQueriesPersist`, not merely mirrored in a
+fake.
+
+**Confirm requires the session as well as the token.** The mail token proves
+possession of the mailbox; the bearer token proves whose account it is. Both are
+required, so a token that leaks out of the one place it necessarily sits in
+plaintext moves nobody's address: bob presenting alice's token is 400, alice's
+address does not move, bob's does not move, and — asserted separately — the
+refused attempt does not consume the token, so alice's own confirmation still
+works afterwards.
+
+**The refusal rule has two halves and only one of them is a refusal.** An
+address that resolves to **another** account's sign-in identifier is 409 —
+either its email or its **username**, because sign-in accepts both with **email
+taking precedence**, so an address equal to somebody's username would silently
+shadow their sign-in, and usernames predating the `@` ban may literally be
+addresses. An address equal to the **caller's own** username is *accepted*: it
+shadows nobody, and a legacy account whose username *is* an address must be able
+to set it. The lab is what forced that distinction into the open — its first run
+made the collision actor its own victim, saw 202, and reported a failure that
+turned out to be the harness misreading a rule the code had right. The
+disclosure is deliberate and unchanged from what the instance already leaks:
+registration answers 409 for a taken address today, so refusing here tells an
+authenticated caller nothing an anonymous one cannot already learn. The other
+refusals: wrong current password **403** with the stored hash byte-identical
+afterwards, a password-less (OAuth/ATProto-only) account **409** pointed at the
+reset flow — the same rule the password slice set, and for the same reason —
+the address the account already has **422** (case-insensitively), a malformed
+address **422**, a missing password **422**, and anonymous **401** on all five
+routes. Every refusal was followed by an independent database read proving the
+address had not moved, that nothing was left pending, and that **no mail was
+sent at all**.
+
+**Sessions are NOT revoked, and that is a decision.** An email address is not a
+credential — knowing it grants nothing — and the change is already gated on the
+password, so signing every device out would be a cost with no security bought.
+Proven live: a second session opened before the change keeps reading and writing
+afterwards, and the database shows **zero** revoked session rows. The safeguard
+is the notice to the old address instead. Nothing here stamps
+`revoked_reason`, because nothing here signs anything out.
+
+**Both messages, over real SMTP.** The confirmation goes to the **new** address
+and nowhere else (the old mailbox cannot supply possession of the new one), from
+the configured `SMTP_FROM`, subject naming the instance, carrying no password
+and saying in words that the account keeps its current address until the code is
+used. It is deliberately **not** best-effort: a pending request whose message
+never left is a dead end the user cannot see, so a failed send fails the
+request and leaves the address alone. The notice to the **old** address is the
+opposite — best-effort, because the address has already moved by then and
+reporting a failure would read as "your address did not change" — and it
+**names the new address**, since it is the last message that mailbox will ever
+get and its reader needs to know what happened and be able to prove it to an
+operator. Both were asserted at the sink: exactly one message each, to the right
+address, with the token present in one and absent from the other.
+
+**The limiter is in front of it, proven on the route.** The request, the resend
+and the confirmation sit behind the same strict auth limiter as login and the
+password change, which runs *before* `requireAuth`. An unpaced burst of 14
+wrong-password requests answered **403 eight times and then 429 six times**, on
+the shipped 10/min per-IP budget, which was never raised for this run. The
+pending-state **read** and the **cancel** are deliberately *not* in that bucket:
+a settings page load must not be able to exhaust a budget shared with sign-in.
+
+**The UI.** `ChangeEmailSection` on `/settings/security`, above the Password
+card — the address is the more consequential of the two, and both are gated on
+the same current-password proof. It is a **named region** for the reason the
+Password card is one: with two-factor on, the page now carries three correctly
+labelled "Current password" inputs, and the section name is what tells them
+apart to a screen reader. The card is two-step in the UI as well as the API:
+asking shows the **pending** state — which address is waiting, with **Resend**
+and **Cancel** — because "we mailed a link to an address you cannot read" is the
+one state a user needs a way out of. The two 409s are different sentences on
+purpose (an address in use is not an account with no password, and the latter
+links to `/reset-password`). `/email-change/confirm` mirrors
+`/verify-email/confirm` and `/reset-password/confirm`, with one difference that
+matters: this endpoint needs the session too, so a signed-out reader is asked to
+sign in and **the token stays in the URL** rather than being spent on a request
+with no bearer token and lost for good; it also waits for the boot-time session
+restore before submitting, which is one of its five tests.
+`lib/api/generated.ts` was regenerated from the branch's spec via the documented
+workflow.
+
+Driven in real Chromium against the production frontend build, twice, after hard
+reloads: the card shows the current address, the request produces the pending
+state, **the pending state survives a hard reload** (it is server state, not
+component state) with the account still showing the old address, the real
+message arrives at the new address, a **wrong** token lands on an explicit
+failure and claims nothing, the real token states the new address, a hard reload
+of the settings page shows the new address and not the old one with the form
+back, the old mailbox has the notice naming the new address, **replaying the
+consumed link is refused**, the old address no longer signs in while the new one
+does, and a signed-out reader is asked to sign in instead of having the token
+spent. Zero uncaught page errors.
+
+Gates: core `make ci` **passed** (fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race) plus the tagged `internal/store`, `internal/account` and
+`internal/federation` integration lanes against real PostgreSQL 16 at **schema
+129**, including the new `TestEmailChangeQueriesPersist`. Twenty new Go tests
+(10 service, 9 handler, 1 real-PostgreSQL). Frontend: TypeScript clean, lint 0
+errors with the same 2 pre-existing warnings, icons clean, and **241 files /
+2365 tests** — up from 239/2355 by exactly this slice's two new files and ten
+new tests — on nvm Node 24.4.1. Per vidra-user's AGENTS.md the e2e suites were
+**not** run locally; repo CI owns them, and its `frontend` lane (Playwright
+included) is green. `vidra-search` was not modified and not run — nothing here
+reaches the search boundary — and no compose or script files were touched, so
+the meta render was not needed. SC5 no-regression, all live: the password change
+from the previous slice still answers 204 **on the account that just moved** and
+its notice follows the address to the new mailbox; the reset flow round-trips
+end to end over real SMTP on the moved address; the registration
+verify-email flow still works on a fresh account; and the two flows **compose**
+— a verified account then changed its address and the change confirmed.
+
+Failures worth keeping. The lab's **first run reported three failures that were
+one harness error**: the username-collision case made carol both the actor and
+the account whose username was the lookalike, so it asserted a refusal for a
+"collision" with herself. The code was right and the *rule* was under-stated;
+both halves are now separate assertions. The **`getByRole("status")` trap
+recorded by the previous two A12 slices hit again**, and harder: this page
+carries three polite live regions (the search announcer, the session spinner,
+and the confirmation page's own), so an unscoped query is a strict-mode
+violation rather than a wrong answer — every browser query is now by exact text
+or scoped to the Email card. The **second and third browser runs 429'd** on the
+shipped **120/min general** limiter, not the auth one: a settings page load
+costs about ten calls and three back-to-back walkthroughs exceed the budget. The
+limit was not raised; the runs were paced apart, and two complete walkthroughs
+passed clean. The Go **lint rule `react-hooks/set-state-in-effect`** rejected
+both new components' first shape (a `setState` called synchronously inside an
+effect); they were rewritten into the promise-chain form the two-factor card
+already uses, which is better code and not a workaround. And a **real
+regression signal from an existing test**: `SecuritySettingsView.test.tsx` mocks
+`@/lib/api` method by method, so mounting a card that reads its pending state on
+mount turned it red with *"authApi.getEmailChange is not a function"* — the mock
+gained the stub and **no assertion was weakened**. The real-PostgreSQL test also
+corrected an assumption of mine rather than the code: `DeleteUnusedEmailChange
+Requests` sweeps **expired** rows too ("unused" is `used_at IS NULL` and says
+nothing about expiry), which is why the pending read filters on `expires_at`
+itself instead of trusting the table to hold only live rows.
+
+**CI.** Core #166 is **green on all six functional lanes** (build-test,
+integration, ipfs-integration, ipfs-private-integration, openapi,
+prev-release-against-new-schema) **and on GitGuardian** — the fixture discipline
+the previous slice paid for held: every credential-shaped string this branch
+adds is an obviously fake fixture (`pw-fixture-alice`, `token-fixture-1`) from
+its first commit, and the check that has been red since core#165 is green here.
+The PR is marked ready. Frontend #164 is green on `frontend` (the canonical
+gate, Playwright included) and all four backed lanes; `contract` is red for the
+ordering reason and nothing else — *"Frontend calls paths that do NOT exist in
+vidra-core's openapi.yaml: /api/v1/auth/me/email-change …"* — so **that PR stays
+a draft until core#166 merges**.
+
+**A12's stopping criterion is met.** Every clause of the AUTH-05 procedure now
+has live evidence behind it: profile/privacy and the account archive
+(`a12-profile-archive`), deactivation and deletion with content, DM retention,
+media cleanup and the search hook (`a12-deletion`), password change with
+re-verification on session-bound access tokens (`a12-password-change`), and
+email change with re-verification (`a12-email-change`). The row flips to **PASS
+(candidate; unmerged)** — candidate because nothing here is merged and nothing
+is deployed. The open **product rulings** recorded across the A12 sections are
+follow-ups, not blockers, and none of them is a gap in what the row asserts:
+Block-vs-Mute optimistic removal; what "deactivated" should mean for visibility;
+whether an admin may "Reactivate" a tombstoned row; the **10/min auth limiter
+being keyed per IP and shared**, which behind a proxy that does not set a
+trusted client IP lets one user exhaust everyone's budget (this slice adds three
+more routes to that bucket, so it is now the most consequential of them);
+per-comment deep links; and mention notifications, which are not a shipped
+capability. Two smaller ones from this slice: on an instance with **no working
+SMTP** an email change cannot be completed at all — the confirmation is the
+flow, so it fails closed rather than silently, which is the safe direction but
+means the AUTH-03/A05 SMTP-selection gate now governs one more capability; and
+there is still **no in-app notification type for account-security events**, so
+both the password-change and email-change notices are email-only. Delivery
+order: **core#166 first** (it changes `api/openapi.yaml` and carries migration
+0129), then **frontend#164** (its `contract-ci` goes green only after core
+merges), then this evidence PR. Nothing is merged here and no deployment is
+authorized.

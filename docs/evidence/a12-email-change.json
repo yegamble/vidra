@@ -1,0 +1,191 @@
+{
+  "status": "A12's stopping criterion is MET and the AUTH-05 register row flips to PASS (candidate; unmerged). This slice BUILDS the last missing capability the row names \u2014 a two-step email change with re-verification \u2014 and proves it on real SMTP, real PostgreSQL and real Chromium. Nothing is merged and no deployment is authorized.",
+  "scope": "A12 / AUTH-05 slice (d): email change with re-verification. The two-step flow, its refusals, its consequences, the UI and the confirmation landing route, plus a no-regression pass over the four flows the earlier A12 slices closed.",
+  "core_revision": "a12/email-change @ b760f57 (two commits on origin/main 7e0ed54)",
+  "frontend_revision": "a12/email-change @ 5744c10 (one commit on origin/main a1bd6e5)",
+  "search_revision": "vidra-search NOT modified and NOT run \u2014 nothing in this slice touches the search boundary",
+  "pull_requests": {
+    "core": "yegamble/vidra-core#166 (ready; green on all six functional lanes AND GitGuardian)",
+    "frontend": "yegamble/vidra-user#164 (DRAFT; green on `frontend` and all four backed lanes, `contract` red for the ordering reason only)",
+    "meta": "this evidence PR",
+    "dependency_order": "core#166 FIRST (it changes api/openapi.yaml and carries migration 0129), then frontend#164 (its contract-ci regenerates lib/api/generated.ts from vidra-core@main and goes green only after core merges), then the meta evidence PR."
+  },
+  "environment": "Disposable LOCAL lab. PostgreSQL 16 and Redis in the repo's own compose profile; a THROWAWAY database migrated 0 -> 129; vidra-core built from the branch and run on 127.0.0.1:8088 with VIDRA_ENV=development, VIDRA_ROLE=all, local blob storage, TRANSCODING_ENABLED=false, CORS scoped to the lab frontend origin. MAIL_ENABLED=true against a THROWAWAY Mailpit container over real SMTP, with the DEV_MAIL_CAPTURE_ENABLED seam deliberately OFF, so both messages are proven end to end. The vidra-user PRODUCTION build served on 127.0.0.1:3100 via `next start` (the standalone chunk-404 finding from two slices ago was not re-tested and remains open). Synthetic actors only; the owner claimed through the real first-run bootstrap. The shipped rate limits were NEVER raised (10/min auth, 120/min general).",
+  "browser": "Chromium via Playwright (headless, real browser, production frontend build, separate browser contexts, 1440x1000)",
+  "actors": {
+    "mallory": "the instance owner, claimed through the real first-run bootstrap",
+    "alice": "the account under test for the change itself \u2014 two sessions, one of which does the changing",
+    "bob": "the wrong actor (confirming alice's token), and the lifecycle actor for supersede / resend / expiry / cancel",
+    "carol": "a LEGACY-shaped account whose USERNAME looks like an address (registration bans '@' in new names, so the row is written directly) \u2014 the collision the username rule exists for, and the refusal actor",
+    "oscar": "a throwaway whose password hash was emptied in the database to produce the OAuth/ATProto-only shape",
+    "dave": "the SC5 actor \u2014 registration verify-email round trip, then a change on top of it, so the flows are proven to compose",
+    "gina<suffix>": "the browser walkthrough's own actor, registered through the real signup form; a fresh one per run because the walkthrough moves its own address and is not idempotent"
+  },
+  "model_chosen": {
+    "storage": "A separate table, email_change_requests (migration 0129, append-only, with its .down.sql): id, user_id, new_email, token_hash, expires_at, used_at, created_at, a UNIQUE index on token_hash and an index on user_id. Mirrors password_reset_tokens (0012) and email_verification_tokens (0013).",
+    "why_not_columns_on_users": "The lifecycle a pending change needs \u2014 issued / used / expired / superseded \u2014 is exactly the lifecycle those two tables already have; the hot users row stays untouched by a flow that may never complete; and ON DELETE CASCADE disposes of pending requests with the account (proven against real PostgreSQL).",
+    "token": "256 bits of entropy, delivered ONCE to the NEW address; only its hex SHA-256 is persisted. SHA-256 rather than bcrypt because the token is already random. TTL 1 hour \u2014 the password-reset window, not the 24h verification one: the user is in their settings when they ask, so an hour is ample and the window in which a stolen mailbox link is worth anything is as small as it can be.",
+    "atomicity": "ConfirmEmailChange is ONE statement. A CTE consumes the token (its predicate includes token_hash, user_id, used_at IS NULL and expires_at > now()) and the outer UPDATE users moves the address and sets email_verified from the CTE's returned row. No transaction is needed, two concurrent confirmations cannot both win, and there is no window in which the token is spent and the address is not.",
+    "indistinctness": "Unknown, already used, expired, or issued to ANOTHER account all match nothing, return no row, and answer 400 \u2014 one answer, so a caller cannot probe which.",
+    "pending_state": "GET /api/v1/auth/me/email-change always answers 200: {pending:false} or {pending:true, new_email, requested_at, expires_at}. It never carries the token. An EXPIRED request does not read as pending (the read filters on expires_at itself)."
+  },
+  "shipped_rules_as_shipped": {
+    "request": "POST /api/v1/auth/me/email-change {current_password, new_email} -> 202 with the pending state. Re-verifies the CURRENT password; the live users.email is untouched; a single-use expiring token is mailed to the NEW address. A second request supersedes the first (the previous unused row is deleted BEFORE the new one is written, never the other way round).",
+    "confirm": "POST /api/v1/auth/me/email-change/confirm {token} -> 200 {email}. Behind requireAuth as well as the token: the mail token proves the mailbox, the session proves whose account it is. Sets email_verified TRUE in the same statement \u2014 consuming a token delivered to the address IS the possession proof, so an account can never hold an address it has not verified.",
+    "resend": "POST /api/v1/auth/me/email-change/resend -> 202, superseding the token. Takes NO body and does not re-ask for the password: the pending row is itself the record that the password was proven, and the message can only ever go to the address that request already named. 404 when nothing is pending.",
+    "cancel": "DELETE /api/v1/auth/me/email-change -> 204, killing the token. 404 when nothing was pending, rather than reporting success for a no-op.",
+    "wrong_password": "403 'incorrect password', with the stored hash byte-identical afterwards and nothing pending.",
+    "passwordless_accounts": "409 with 'this account has no password: use the password reset flow to set one' \u2014 the same rule the password slice set, and for the same reason: bcrypt can never verify an empty hash, so no supplied password could satisfy it and a 403 would be unfalsifiable.",
+    "address_already_in_use": "409 'that email address is already in use on this instance' when the address resolves to ANOTHER account's SIGN-IN identifier \u2014 its email OR its username. The username half matters because sign-in accepts both with EMAIL TAKING PRECEDENCE, so an address equal to somebody's username would silently shadow their sign-in, and usernames predating the '@' ban may literally be addresses.",
+    "own_username_is_allowed": "An address equal to the CALLER'S OWN username is ACCEPTED: it shadows nobody, and a legacy account whose username IS an address must be able to set it. This is the deliberate other half of the collision rule.",
+    "disclosure_rule": "Refusing a taken address discloses exactly what registration already discloses: registration answers 409 'username or email already taken' today, anonymously. So an authenticated caller learns nothing here that an anonymous one cannot already learn, and the wording is a single sentence for both the email and the username case (the audit reason distinguishes them).",
+    "same_address": "422 'that is already the address on this account', case-insensitively.",
+    "malformed": "422, by the same looksLikeEmail rule registration uses.",
+    "anonymous": "401 on all five routes, including the confirmation.",
+    "rate_limit": "The request, the resend and the confirmation are behind the SAME strict auth limiter as login and the password change, which runs BEFORE requireAuth. The pending-state READ and the CANCEL deliberately are not: a settings page load must not be able to exhaust a budget shared with sign-in.",
+    "sessions": "NOT revoked. An email address is not a credential \u2014 knowing it grants nothing \u2014 and the change is already gated on the password, so signing every device out would be a cost with no security bought. Nothing here stamps revoked_reason because nothing here signs anything out. The old-address notice is the safeguard instead.",
+    "mail_confirmation": "To the NEW address and nowhere else. NOT best-effort: a pending request whose message never left is a dead end the user cannot see, so a failed send fails the request and leaves the address alone.",
+    "mail_notice": "To the OLD address, best-effort (the address has already moved; reporting a failure would read as 'your address did not change'), and it NAMES the new address \u2014 it is the last message that mailbox will ever get, and its reader needs to know what happened and be able to prove it to an operator. No token, no link that could change anything.",
+    "audit": "auth.email_change.request / .confirm / .cancel, success and failure with a reason naming the RULE (invalid_password, password_not_set, email_unchanged, email_taken, invalid_token). NEITHER ADDRESS appears in any event \u2014 the sensitive-key discipline keeps email out of the audit trail, asserted by scanning the whole captured log."
+  },
+  "criteria": {
+    "SC1_two_step_flow": {
+      "result": "PASS",
+      "assertions": "roughly half of the 114, across the SC1 and SC1b phases, 0 failed",
+      "request_changes_nothing": "202 with the pending state; the DB's users.email is unchanged and /auth/me still reads the old address; the pending state is readable; exactly one pending row exists and its stored key is the SHA-256 of the delivered token, not the token.",
+      "delivery": "Exactly one message, to the NEW address, over real SMTP from the configured SMTP_FROM, subject naming the instance, carrying NO password and saying in words that the account keeps its current address until the code is used. NOTHING was sent to the old address at this step.",
+      "confirm": "200 returning the new address; the DB shows the address moved and email_verified TRUE; the password hash is untouched; the pending state is cleared; the OLD address receives the notice, which names the new address and carries no token; the new address gets no second message.",
+      "single_use": "Replaying the token is 400.",
+      "supersede": "A second request issues a different token and kills the first: the superseded token is 400 and moves nothing, and the pending state names the newest address.",
+      "resend": "202, keeps the pending address, issues a NEW token, and the pre-resend token is dead.",
+      "expiry": "With the row aged past its window, the request no longer reads as pending and its token is 400 \u2014 and moves nothing.",
+      "cancel": "204 (and it sweeps the dead rows too), then 404 for a second cancel and for a resend with nothing pending; a cancelled token is 400.",
+      "rate_limit": "PROVEN on the route itself: an unpaced burst of 14 wrong-password requests answered 403 x8 then 429 x6, on the shipped 10/min per-IP auth limiter, which was never raised."
+    },
+    "SC2_refusals": {
+      "result": "PASS",
+      "assertions": "every refusal is followed by an independent DB read of the address, a pending-count read, and a mail-sink read; 0 failed",
+      "wrong_password": "403, hash byte-identical, counted by the limiter (the burst above is the proof).",
+      "passwordless": "409 whose body points at the reset flow; the empty hash is still empty afterwards.",
+      "same_address": "422, including the different-case form.",
+      "another_accounts_address": "409.",
+      "another_accounts_username": "409 \u2014 bob asking for carol's username-shaped login is refused.",
+      "own_username": "202 \u2014 stated as its own assertion, because it is the deliberate other half of the rule.",
+      "malformed_and_missing": "422 for a malformed address and for a missing current_password.",
+      "anonymous": "401 on POST, GET, DELETE, resend and confirm.",
+      "another_users_token": "400, alice's address unmoved, bob's address unmoved, AND the refused attempt did not consume the token (alice's own confirmation still worked afterwards).",
+      "no_side_effects": "The whole refusal phase sent ZERO messages to the sink."
+    },
+    "SC3_consequences": {
+      "result": "PASS",
+      "login_moved": "Login with the OLD address is 401; with the NEW address 200.",
+      "me": "/auth/me shows the new address and email_verified true; so does the settings UI after a hard reload.",
+      "password_reset_follows_the_address": "A reset requested for the NEW address is delivered there and NOT to the old one; a reset requested for the OLD address is still 202 (enumeration-safe) and delivers nothing.",
+      "sessions_not_revoked": "A second session opened before the change keeps working afterwards, and the database shows ZERO revoked session rows for the account. Recorded as the shipped decision with its reasoning, not as an oversight.",
+      "revoked_reason": "Not written by this flow, because this flow signs nothing out."
+    },
+    "SC4_ui": {
+      "result": "PASS",
+      "where": "components/auth/ChangeEmailSection.tsx, mounted in SecuritySettingsView ABOVE the Password card \u2014 the address is the more consequential of the two and both are gated on the same current-password proof. A NAMED region, because with two-factor on the page now carries three correctly-labelled 'Current password' inputs.",
+      "states": "Current address; then either the form (new address + current password, submit disabled until both are filled) or the PENDING state naming the address with Resend and Cancel \u2014 the way out of 'we mailed a link to an address you cannot read'.",
+      "errors": "Through the shared Alert (role=alert): 403 'That is not your current password.', and the TWO 409s as different sentences \u2014 an address already in use, versus an account that signs in without a password, which links to /reset-password. Success is Alert variant=success (role=status).",
+      "landing_route": "app/email-change/confirm/page.tsx + components/auth/ConfirmEmailChangeForm.tsx, mirroring /verify-email/confirm and /reset-password/confirm. One difference: this endpoint needs the SESSION too, so a signed-out reader is asked to sign in and the token STAYS in the URL rather than being spent on a request with no bearer token; it also waits for the boot-time session restore before submitting.",
+      "tests": "components/auth/ChangeEmailSection.test.tsx (5 cases) and components/auth/ConfirmEmailChangeForm.test.tsx (5 cases).",
+      "contract": "lib/api/generated.ts regenerated from the core branch's api/openapi.yaml via the documented workflow; never hand-edited.",
+      "browser": "23 assertions per walkthrough, twice, 0 failed \u2014 see browser_walkthrough."
+    },
+    "SC5_no_regression": {
+      "result": "PASS",
+      "password_change": "The previous slice's POST /auth/me/password still answers 204, ON THE ACCOUNT THAT JUST MOVED, and its 'your password was changed' notice follows the address to the new mailbox.",
+      "reset_flow": "End to end over real SMTP on the moved address: 202, the token lifted from the real message body, confirm 204, and the new password logs in.",
+      "verify_email_flow": "A fresh account starts unverified, POST /auth/verify-email is 202, the token comes out of the real message, confirm is 204 and the account is verified.",
+      "flows_compose": "That same verified account then changed its address and the change confirmed.",
+      "core_gates": "make ci passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race) plus the tagged internal/store, internal/account and internal/federation integration lanes against real PostgreSQL 16 at schema 129, including the new TestEmailChangeQueriesPersist.",
+      "named_A12_tests": "The named tests from every merged A12 slice pass, in the same lanes."
+    }
+  },
+  "gates": {
+    "core_make_ci": "PASS \u2014 ci: gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race).",
+    "core_tagged_integration": "PASS \u2014 internal/store 6.08s, internal/account 0.69s, internal/federation 3.56s against real PostgreSQL 16 at schema 129.",
+    "core_github_ci": "GREEN on all six functional lanes (build-test, integration, ipfs-integration, ipfs-private-integration, openapi, prev-release-against-new-schema) AND on GitGuardian. PR marked ready.",
+    "core_gitguardian": "PASS \u2014 and worth naming: this check has been red since core#165 because it scans every commit in a PR. Every credential-shaped string this branch adds is an obviously fake fixture (pw-fixture-alice, token-fixture-1) present from its FIRST commit, so it never went red here.",
+    "frontend": "PASS \u2014 npx tsc --noEmit clean; npm run lint 0 errors / the same 2 pre-existing warnings; npm run lint:icons clean; npm run test 241 files, 2365 tests.",
+    "frontend_e2e": "NOT RUN locally, per vidra-user's AGENTS.md \u2014 repo CI owns the Playwright suites, and its `frontend` lane is green.",
+    "frontend_github_ci": "GREEN on `frontend` (the canonical gate, Playwright included) and all four backed lanes. `contract` is red for the ordering reason and nothing else \u2014 'Frontend calls paths that do NOT exist in vidra-core's openapi.yaml: /api/v1/auth/me/email-change \u2026' \u2014 so that PR stays a DRAFT until core#166 merges.",
+    "search": "NOT RUN \u2014 vidra-search is untouched by this slice and nothing here reaches the search boundary.",
+    "meta_compose_render": "NOT NEEDED \u2014 no compose or script files touched.",
+    "migrations": "0129_email_change_requests, append-only, with its matching .down.sql. Applied 0 -> 129 from scratch in the lab; prev-release-against-new-schema is green. internal/store/sqlcgen regenerated with make sqlc, never hand-edited."
+  },
+  "counts": {
+    "api_assertions": "114 across five phases on ONE clean database (SC1 two-step, SC1b lifecycle, SC2 refusals, SC3 consequences, SC1c limiter, SC5 regression), 0 failed",
+    "browser_assertions": "23 per walkthrough in real Chromium, TWO complete walkthroughs, 0 failed",
+    "http_429": "ZERO in the final API run other than the 6 the limiter phase deliberately provokes as its own assertion, and ZERO in either passing browser walkthrough",
+    "new_go_tests": "20 \u2014 10 service (internal/auth/emailchange_test.go), 9 handler (internal/httpapi/auth_email_change_test.go), 1 real-PostgreSQL (internal/store/email_change_integration_test.go)",
+    "frontend_tests": "241 files / 2365 tests \u2014 up from 239/2355 by exactly this slice's two new files and ten new tests"
+  },
+  "defects_and_corrections": {
+    "harness_made_the_collision_actor_its_own_victim": {
+      "found_by": "the acceptance lab's first run",
+      "symptom": "'another account's USERNAME is 409: got 202' plus two consequential failures",
+      "cause": "The case used carol as BOTH the requester and the account whose username was the lookalike, so it demanded a refusal for a collision with herself.",
+      "outcome": "The code was right; the RULE was under-stated. Both halves are now separate assertions \u2014 another account's username is 409, the caller's own username is 202 \u2014 and the reasoning (an address equal to your own username shadows nobody, and a legacy account whose username IS an address must be able to set it) is now written down rather than implied."
+    },
+    "unscoped_role_queries_hit_for_the_third_time": {
+      "found_by": "the browser walkthrough",
+      "symptom": "strict mode violation: getByRole('status') resolved to 3 elements \u2014 the search announcer, the session spinner, and the confirmation page's own",
+      "outcome": "Every browser query is now by exact text or scoped to the Email card. The previous two A12 slices both recorded this trap; on this page it is a hard failure rather than a wrong answer, which is at least honest."
+    },
+    "react_hooks_lint_rejected_the_first_component_shape": {
+      "found_by": "npm run lint",
+      "symptom": "react-hooks/set-state-in-effect on both new components",
+      "outcome": "Rewritten into the promise-chain form the two-factor card already uses (no state set synchronously inside an effect). Better code, not a workaround."
+    },
+    "existing_test_caught_the_new_mount": {
+      "found_by": "npm run test",
+      "symptom": "SecuritySettingsView.test.tsx: 'authApi.getEmailChange is not a function' x3",
+      "outcome": "That test mocks @/lib/api method by method, so a new card that reads its pending state on mount breaks it. The mock gained the stub; NO assertion was weakened."
+    },
+    "delete_unused_sweeps_expired_rows_too": {
+      "found_by": "the real-PostgreSQL test, which expected 2 deletions and got 3",
+      "outcome": "The assumption was mine, not a bug: 'unused' is used_at IS NULL and says nothing about expiry, so a superseding request tidies up every dead row it owns. That is why the pending READ filters on expires_at itself instead of trusting the table to hold only live rows. The test now asserts 3 and says why."
+    }
+  },
+  "attempts_and_corrections": [
+    "The lab's own bootstrap was wrong twice: the owner-claim response's token field is `token`, not `access_token`, and a DROP DATABASE issued while the previous API process still held connections silently failed, so a 'fresh' run started on the old data and found no first-run token. Both are harness bugs; the driver now resets the database with the API stopped.",
+    "The auth limiter is 10/min per IP and shared across register / login / reset / password change / and now the three email-change writes, so the driver paces itself to 9 per rolling 60s and only stops pacing inside the limiter phase, which is its assertion. The limit was never raised.",
+    "The GENERAL 120/min limiter ended two back-to-back browser runs: a settings page load costs about ten calls, and three walkthroughs in a couple of minutes exceed the budget. The runs were paced apart instead of raising the limit; two complete walkthroughs then passed clean.",
+    "The first browser attempt at the replay case waited on a locator that had already settled differently; it now settles and reads the page text, which is stable across both runs.",
+    "Two unit-test mutations were run to prove the new tests are load-bearing rather than merely green: swapping the sign-in lookup for a plain email lookup turns the username-collision case red, and removing the supersede-delete turns the superseded-token case red. Both restored."
+  ],
+  "browser_walkthrough": [
+    "Signed up through the real form as a fresh actor and reached /settings/security.",
+    "The Email card is present and shows the current address.",
+    "Requesting the change shows the pending state naming the NEW address, with Cancel offered.",
+    "A HARD RELOAD keeps the pending state (it is server state) and the card still shows the OLD address.",
+    "The confirmation arrived at the new address over real SMTP and carried a token.",
+    "A WRONG token lands on an explicit failure, claims no success, and changes nothing.",
+    "The real token's landing page states the new address.",
+    "A hard reload of /settings/security shows the NEW address, not the old one, with the form back (nothing pending).",
+    "The OLD mailbox has the notice, and it names the new address.",
+    "Replaying the consumed link is refused.",
+    "In a separate context: the OLD address no longer signs in, the NEW one does.",
+    "In another context: a signed-out reader is asked to sign in rather than having the token spent.",
+    "Zero uncaught page errors."
+  ],
+  "findings_recorded_not_fixed": [
+    "On an instance with NO working SMTP an email change cannot be completed at all: the confirmation IS the flow, so it fails closed rather than silently. That is the safe direction, but it means the AUTH-03 / A05 SMTP-selection gate now governs one more capability.",
+    "There is still no in-app notification type for account-security events (internal/notification's vocabulary is follow / comment / comment_reply / message / report_resolved / video_rejected / caption_ready / new_video / new_report), so the password-change and email-change notices are email-only. Adding a type is a product decision plus a prefs-registry row.",
+    "The auth limiter is keyed per IP and SHARED across register / login / reset / password change / email change. This slice adds three more routes to that bucket, which makes the standing finding \u2014 behind a proxy that does not set a trusted client IP, one user can exhaust everyone's budget \u2014 the most consequential of the open A12 rulings.",
+    "The admin surface still cannot move an address: PATCH /admin/users/{id} 422s an email and can only toggle email_verified. An operator helping a user who has lost BOTH their password and their mailbox therefore has no supported path. Deliberately out of scope here (self-service was the clause), but it is the obvious next question.",
+    "The .next/standalone chunk-404 finding from the profile slice was NOT re-tested \u2014 this walkthrough used `next start` against the production build, as the last two did \u2014 so it remains open."
+  ],
+  "open_product_rulings_carried_forward": [
+    "Block-vs-Mute optimistic removal semantics.",
+    "What 'deactivated' should mean for visibility.",
+    "Whether an admin may 'Reactivate' a tombstoned row.",
+    "The 10/min auth limiter being keyed per IP and shared, behind proxies that do not set a trusted client IP.",
+    "Per-comment deep links.",
+    "Mention notifications, which are not a shipped capability."
+  ],
+  "a12_stopping_criterion": "MET. Every clause of the AUTH-05 procedure has live evidence: profile/privacy and the account archive (a12-profile-archive), deactivation and deletion with content, DM retention, media cleanup and the search hook (a12-deletion), password change with re-verification on session-bound access tokens (a12-password-change), and email change with re-verification (a12-email-change). The row flips to PASS (candidate; unmerged) \u2014 candidate because nothing is merged and nothing is deployed. The open rulings above are follow-ups, not blockers, and none is a gap in what the row asserts."
+}
