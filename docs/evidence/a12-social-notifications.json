@@ -1,0 +1,104 @@
+{
+  "status": "PASS (SOC-01 reply-recipient slice only; A12 remains OPEN)",
+  "scope": "A12 / SOC-01 comment REPLY notification recipients. Mentions deliberately out of scope (see mentions_decision). Ratings, preferences beyond this type, reports/mutes/blocks as their own surfaces, profile/archive/deactivation/account deletion all remain open.",
+  "core_revision": "2dd2f8889c4a7affa484ce31493c51caba7938b7",
+  "frontend_revision": "c9988a91d5e926511cef49d87dfd03bff8b9a3af",
+  "core_baseline_revision": "b7a27556ba1bc59c22682ec1d7e9c6ef28ee6cac",
+  "pull_requests": {
+    "core": "yegamble/vidra-core#161 (ready for review; all checks pass)",
+    "frontend": "yegamble/vidra-user#159 (draft; blocked on core#161 — see contract_job_expected_red)",
+    "meta": "this evidence PR"
+  },
+  "environment": "Disposable LOCAL lab, no Docker: the Docker engine on this machine is crashed with 'no space left on device' (the host disk is at 100%). Substituted native Homebrew PostgreSQL 16 + Redis, the core API built from the branch and run on 127.0.0.1:8088 with VIDRA_ENV=development and local blob storage, and the vidra-user PRODUCTION build (next build + next start) on 127.0.0.1:3100. Schema 127 (migrate up from 0). Three synthetic actors registered through the public API on this throwaway instance; no shared or restored data, no API interception, no changed rate limits (requests paced, 429 retried with backoff).",
+  "browser": "Chromium 151.0.7922.34 via Playwright 1.62.1 (headless, real browser, production frontend build)",
+  "actors": {
+    "carol": "video owner (channel a12carol)",
+    "alice": "author of the parent comment",
+    "bob": "the replier"
+  },
+  "reproduction_of_the_gap": {
+    "binary": "core built from origin/main b7a2755 (pre-change), same database and same three actors",
+    "result": "FAIL as recorded in the A12 register: after bob replied to alice's comment, alice had 0 notifications and unread_count 0. carol (the owner) held 2 'comment' notifications — one for alice's comment, one for bob's reply. The person being answered was told nothing.",
+    "artifact": "before.json in the private lab directory"
+  },
+  "criteria": {
+    "SC1_reply_reaches_parent_author": {
+      "result": "PASS",
+      "api_readback": "alice: 1 notification, type 'comment_reply', actor a12bob, video_id + video_title of carol's video, comment_id = bob's reply id, unread_count 1",
+      "browser": "After a HARD RELOAD of /notifications in Chromium against the production build, alice's Inbox renders 'a12bob replied to your comment on “A12 reply thread”'. Text asserted to contain 'replied to your comment', to name a12bob and the video, and NOT to say 'commented on'. Screenshot visually inspected.",
+      "link": "The row links to /videos/{video_id}; clicking it landed on the watch page for that video (title 'A12 reply thread', served via its short code). See deep_link_limitation."
+    },
+    "SC2_owner_notification_unchanged": {
+      "result": "PASS",
+      "evidence": "carol received a 'comment' notification for BOTH alice's parent comment and bob's reply, identical in shape to the pre-change run (type/actor/video_id/video_title/comment_id). Her count went from 2 (before phase) to 4 (after phase) — two new comments, two new notifications."
+    },
+    "SC3_no_self_no_duplicate": {
+      "result": "PASS",
+      "self_reply": "bob replied to his own comment: 0 new notifications for bob (0 before, 0 after).",
+      "owner_is_parent_author": "carol commented under her own video and bob replied to her: exactly 1 new notification for carol, type 'comment_reply' — not one reply plus one comment.",
+      "unit": "TestCommentReplyNotificationNeverSelfOrDuplicates (internal/httpapi)"
+    },
+    "SC4_privacy_preserved": {
+      "result": "PASS",
+      "mechanism_found": "core HAS both mechanisms: internal/mute (muted_accounts) and internal/block (user_blocks, symmetric). They are already join conditions in NotifyFollowersOfNewVideo, and the reply query mirrors that exclusion.",
+      "live": {
+        "alice_muted_bob": "0 new notifications for alice",
+        "alice_blocked_bob": "0 new notifications for alice",
+        "bob_blocked_alice": "0 new notifications for alice",
+        "control_no_relationship": "1 new notification for alice — the control proves the exclusions did the work, not a broken fixture"
+      },
+      "real_postgres": "store.TestCommentReplyRecipientOnRealPG applies AND lifts each exclusion (mute, block both directions, tombstoned parent, deactivated author, deleted author) and asserts the recipient returns after each lift.",
+      "negative_control": "Deleting the mute/block clauses from CommentReplyRecipient made that test FAIL on all three relationship cases ('resolved recipient … even though the parent's author muted the replier', and the two block directions). Clauses restored and re-verified green."
+    },
+    "SC5_unread_and_read_marking": {
+      "result": "PASS",
+      "evidence": "Through the SHARED endpoints, unaltered: unread-count 2 → POST /me/notifications/{id}/read on the comment_reply row returned 204 → unread-count 1 → POST /me/notifications/read-all returned 204 → unread-count 0, and the row's read flag read back true. No per-type code path: ListNotifications / CountUnreadNotifications / MarkNotificationRead are type-agnostic and were not touched."
+    },
+    "SC6_mentions": {
+      "result": "NOT IMPLEMENTED — recorded as a follow-up slice, per the decision rule",
+      "finding": "Mention notifications are not a shipped capability. vidra-user's 'mention' is a client-DERIVED attribution prefix: lib/comments.ts replyMention reads parent_id against the already-loaded comment list and renders a plain, non-linked '@handle' before a nested reply's body (CommentsSection). There is no autocomplete picker, no 'mention someone' affordance, no linkification of handles typed into a comment body, and no promise of delivery. vidra-core has no mention feature at all. Building one would mean a parser, a resolution rule, an abuse story and a new notification type — deliberately NOT widened into this PR."
+    }
+  },
+  "gates": {
+    "core_make_ci": "PASS — fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race (full suite, -count=1 not cached: the Go build cache had to be cleared to free disk, so every package rebuilt and re-ran)",
+    "core_integration": "PASS — go test -tags=integration ./internal/store/... ./internal/federation/... against native PostgreSQL 16 at schema 127 and Redis",
+    "frontend": "PASS on Node 24.4.1 — tsc --noEmit clean; eslint 0 errors / 2 pre-existing warnings; lint:icons clean; vitest 237 files / 2338 tests passed; production next build succeeded",
+    "node_version_note": "Node 24.20.0 is NOT present on this machine (nvm has 24.4.1 and 25.x; the Homebrew node@24 symlink still resolves to Node 25). Gates ran on nvm 24.4.1, which satisfies the repo's .nvmrc '24' and package.json engines '>=24' and CI's node-version '24'.",
+    "not_run": [
+      "npm run e2e and npm run e2e:backed — vidra-user AGENTS.md forbids running them locally; repo CI covers them and both backed lanes plus ipfs and channel-sync PASS on PR #159",
+      "meta docker compose config gate — not needed, no compose or script files touched"
+    ]
+  },
+  "tdd_red_first": {
+    "core_unit": "With NotifyCommentReply stubbed to the pre-change no-op: TestCommentReplyNotifiesTheParentAuthor failed 'bob has 0 notifications, want 1', TestCommentReplyNotificationNeverSelfOrDuplicates failed 'newest notification = \"comment\", want \"comment_reply\"', TestNotifyCommentReply and TestNotifyCommentReplySkips failed in internal/notification. Stub removed → all green.",
+    "core_sql": "See SC4 negative_control.",
+    "frontend": "2 failed / 3 passed before the change: 'expected \" started following your channel\" to contain \"replied to your comment\"' (the unknown type fell through to the follow default — the same failure class as the historic new_video bug) and 'missing TYPE_LABELS entry for comment_reply'. After the change: 5 passed."
+  },
+  "implementation_notes": {
+    "no_migration": "notifications.type is unconstrained TEXT (migration 0018, restated by 0103), so a new type needs no schema change. Latest migration remains 0127.",
+    "selection_rules_live_in_sql": "One new :one query, CommentReplyRecipient, following the 0101/0103 set-based idiom: local parent author only (a federated parent has NULL user_id per 0053), no tombstones (0057), no self-notification, active non-deleted account, mute and block excluded in both directions.",
+    "mutual_exclusion": "handleCreateComment resolves the reply recipient FIRST and skips the owner's 'comment' notification only when the video's owner IS that recipient.",
+    "best_effort_preserved": "Both notifications remain best-effort side effects: a failure is logged and never fails the comment."
+  },
+  "attempts_and_corrections": [
+    "Docker would not start: the engine had crashed with 'no space left on device' (host disk 100% full, 741Mi free). Restarting Docker Desktop did not help. Cleared the regenerable Go build cache (6.1G) to get the race build to link, then substituted a native PostgreSQL/Redis lab.",
+    "The first core race build reported spurious '[build failed]' for internal/video and internal/searchclient; the same packages passed individually. It was the disk, not the code — make ci passed end to end after freeing space.",
+    "The lab driver first posted {\"login\": …} to /auth/login; the contract field is {\"identifier\": …} (422 'must be a valid email').",
+    "Comments 404'd until the lab video was moved out of 'draft' (no transcoder in this lab), done as a database fixture, not a code change.",
+    "The first Chromium run was blocked by CORS: CORS_ALLOWED_ORIGINS listed http://localhost:3100 but the browser origin was http://127.0.0.1:3100. Both are listed now.",
+    "Playwright's networkidle never settles on this app (polling); switched the driver to domcontentloaded with explicit waits."
+  ],
+  "contract_job_expected_red": "vidra-user#159's 'contract' check regenerates lib/api/generated.ts from yegamble/vidra-core@main and currently wants to REMOVE the comment_reply lines, because core#161 is not merged. Every other check on #159 passes, including both e2e-backed lanes. The dependency order is core#161 → user#159 → this evidence PR; #159 stays draft until core merges.",
+  "deep_link_limitation": "A reply notification links to the video, not to the comment. There is no per-comment anchor anywhere in vidra-user, and replies render inside a collapsed 'View N replies' control, so a #comment-<id> fragment would target a node that is not in the DOM. Deep-linking a notification to the exact comment needs anchors plus auto-expansion of the containing thread — recorded as the next slice, not built here.",
+  "unrelated_findings": [
+    "NotifyComment (the video-owner notification) does NOT consult mutes or blocks: an account the owner has muted or blocked still reaches the owner's inbox by commenting on their video. The new reply path excludes them; the older owner path was left exactly as it was rather than silently changing behaviour under an unrelated slice.",
+    "The frontend's Notification type is a generated string union, so a backend type with no UI case falls through describeNotification's final return and renders as 'started following your channel'. NotificationPrefsView degrades safely (unknown keys render raw), but the Inbox does not — a default arm that renders something neutral would turn this class of bug from wrong into merely plain."
+  ],
+  "helpers_sha256": {
+    "drive.py (three-actor before/after API driver)": "83f5dc649bcd50079e43061ced92681226d03fae7aa931d7f7bddcfe984a9962",
+    "drive2.py (SC3/SC4/SC5 live checks)": "b755cad31eab5c129cad1f2ae8037418abcdcdf47c26b828d2cf2c10a05cd9cf",
+    "ui-proof.mjs (Chromium SC1 UI half)": "dfb6e5a175b4afd481ecd0e271e7c1155292161caa631e209955758f5f2aba2e"
+  },
+  "helpers_location": "Private session scratch directory; results (before.json, after.json, sc345.json) and screenshots stay there and are not committed.",
+  "register": "SOC-01 row NOT flipped: this slice closes the reply-recipient criterion only, and the row's other criteria (ratings/preferences/unread beyond this type, reports/mutes/blocks as surfaces, mentions) are untouched. A12 remains OPEN."
+}

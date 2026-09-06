@@ -1705,3 +1705,101 @@ workflows remain unverified and do not close other A12 criteria. The independent
 production browser run above has three passing checks and zero skips. Frontend
 work branch cleanup follows the confirmed merge. Evidence PR #104 records this
 bounded result; the complete A12 item remains OPEN.
+
+## A12 social notification recipients — 2026-09-05
+
+**A12 OPEN; the SOC-02 reply-recipient criterion PASSES.** Observable success for
+this focused slice: when B replies to A's comment on C's video, A is told — told
+that it was a reply, by whom, and where — while C's existing owner notification
+is untouched and one reply never produces two. [Core #161](https://github.com/yegamble/vidra-core/pull/161),
+revision `2dd2f88`, and [frontend #159](https://github.com/yegamble/vidra-user/pull/159),
+revision `c9988a9`. Authorization, best-effort semantics and error shapes are
+unchanged; no migration (`notifications.type` is unconstrained TEXT, latest
+migration stays 0127) and no hand-edited generated files.
+
+The previous record's static reading is confirmed, then reproduced live. Built
+from `origin/main` `b7a2755` and run against the same database and the same three
+synthetic actors, bob's reply to alice left **alice with 0 notifications** while
+carol, the video's owner, held 2. That failing run is kept. The correction adds
+one `comment_reply` type and one `CommentReplyRecipient` statement that keeps
+every selection rule in SQL — local parent author only, no tombstones, no
+self-notification, active account, mute and block excluded in **both** directions
+— following the 0101/0103 set-based idiom rather than an N+1 of Go lookups.
+`handleCreateComment` resolves the reply recipient first and skips the owner's
+`comment` notification only when the owner IS that recipient.
+
+[Sanitized evidence](evidence/a12-social-notifications.json) records the live
+proof: alice now holds exactly one `comment_reply` naming a12bob with the video
+and the reply's comment id; carol still receives a `comment` for the parent AND
+the reply; bob replying to himself notifies nobody; carol, when she is both the
+video's owner and the parent's author, receives **one** notification for one
+reply, and it is the reply. Mute, alice-blocks-bob and bob-blocks-alice each
+deliver nothing, and a control run with every relationship lifted delivers again
+— so the exclusions, not a broken fixture, are doing the work. Unread counting
+and read-marking use the untouched shared endpoints: 2 → 1 on mark-one → 0 on
+read-all, with the row's read flag true. The UI half ran in real Chromium
+151.0.7922.34 against the **production-built** frontend: after a hard reload
+alice's Inbox reads "a12bob replied to your comment on “A12 reply thread”", never
+"commented on", and the row navigates to that video's watch page. The screenshot
+was visually inspected.
+
+TDD failed first in every lane. Core: with the reply path stubbed to its
+pre-change no-op, "bob has 0 notifications, want 1" and "newest notification =
+“comment”, want “comment_reply”". SQL: deleting the mute/block clauses made
+the real-PostgreSQL test fail on all three relationship cases, and it passes
+again with them restored. Frontend: 2 failed / 3 passed, with the unknown type
+falling through to "started following your channel" — the same failure class as
+the historic `new_video` bug — plus a missing preference label.
+
+Gates: core `make ci` passes uncached (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race), and `go test -tags=integration
+./internal/store/... ./internal/federation/...` passes against real PostgreSQL 16
+at schema 127 with Redis. Frontend passes TypeScript, icons, lint (zero errors,
+two existing warnings), **237 files / 2338 tests**, and the production build.
+**Node 24.20.0 is not present on this machine** — nvm carries 24.4.1 and 25.x,
+and the Homebrew `node@24` symlink still resolves to Node 25 — so gates ran on
+24.4.1, which satisfies `.nvmrc` "24", `engines >=24` and CI's `node-version:
+"24"`. Per vidra-user's AGENTS.md the local e2e suites were **not run**; CI runs
+them and both backed lanes, IPFS and channel-sync all pass on #159.
+
+**Docker was unavailable for the whole slice**: its engine had crashed with "no
+space left on device" because the host disk is 100% full, and restarting Docker
+Desktop did not recover it. The lab was rebuilt without Docker on native
+PostgreSQL 16 + Redis with the API and the production frontend run directly.
+Clearing the regenerable Go build cache was required before the race build would
+link; before that, `make ci` reported spurious "[build failed]" for packages that
+passed individually. Other failed attempts are recorded in the evidence: the
+wrong login field (`login` instead of `identifier`, 422), comments 404ing until
+the lab video left `draft`, a CORS refusal from `127.0.0.1` vs `localhost`, and
+Playwright's `networkidle` never settling against this app's polling.
+
+Two items are deliberately NOT done. **Mention notifications are not a shipped
+capability** and were not built: vidra-user's "mention" is a client-derived
+`@handle` prefix computed from `parent_id` (`lib/comments.ts` `replyMention`) —
+plain non-linked text, no picker, no linkification, no delivery promise — and
+core has no mention feature at all. And a reply notification links to the video,
+not the comment: no per-comment anchor exists, and replies sit inside a collapsed
+"View N replies" control, so a `#comment-<id>` fragment would target a node that
+is not in the DOM.
+
+Two unrelated findings. `NotifyComment` — the older owner notification — does
+**not** consult mutes or blocks, so an account the owner muted or blocked still
+reaches their inbox by commenting on their video; it was left exactly as it was
+rather than changed under an unrelated slice. And an unknown notification type
+falls through `describeNotification`'s final return and renders as "started
+following your channel"; a neutral default arm would make that class of drift
+plain rather than wrong.
+
+Register rows are unchanged. The reply-recipient criterion belongs to **SOC-02**
+(comments/replies/ratings, mentions, reports and notification preferences), not
+SOC-01, and SOC-02's remaining criteria — ratings, reports, the mute/block
+surfaces themselves, and mentions — are untouched, so the row stays UNVERIFIED.
+
+Delivery order: core #161 (contract owner, all checks pass, ready for review),
+then frontend #159, then this evidence PR. #159 stays **draft on purpose**: its
+`contract` job regenerates from `vidra-core@main` and wants to remove the
+`comment_reply` lines until #161 merges; every other check on it passes. Nothing
+is merged here and no deployment is authorized. Next: deep-link a notification to
+its comment (anchor + thread auto-expansion), then ratings/reports and the
+mute/block surfaces, then profile/archive/deactivation/account deletion. The
+complete A12 acceptance remains OPEN.
