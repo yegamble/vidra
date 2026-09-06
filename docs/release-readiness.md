@@ -1275,3 +1275,91 @@ but that toast assertion is not relabeled as a success.
 Next: review the pending collector permission and observe #154's updated CI.
 Keep A11 open until physical cleanup is proved. Independent A12 work can proceed
 while that external approval remains pending; the A09–A40 goal stays active.
+## A36 backup confidentiality and failure checkpoint — 2026-09-05
+
+**A36 OPEN.** A09 is already merged as #90 (`56ef7a8`); source-dependent
+A18–A23 await a sanitized source inventory. A36 is independently ready after
+A03/A07 and is being completed before A37. Actual offsite storage selection
+was requested; a local host rehearsal must not be labelled separate-region proof.
+
+The retained A08 fixture ran the real backup script successfully. Inspection
+exposed insufficient default permissions for database artifacts. The focused
+fix applies `umask 077` before any backup file/directory creation, covering the
+dump, partial/decompressed verification files, and marker as well as config.
+Two regression tests failed first and then passed. No dump format, retention,
+success-marker contract or deploy/migration ordering changed.
+
+The [required real helper](../tests/backup-smoke.py) and
+[complete sanitized evidence](evidence/a36-backup-local.json) record script/helper
+hashes, fixture identity, archive filenames/modes, and independent verification.
+Command: `python3 tests/backup-smoke.py /tmp/vidra-a08-caption-fixture-r1
+/tmp/vidra-a36-smoke-r1` (arguments on one command line). Exit 0, two groups PASS,
+zero skips. Real `pg_restore -l` finds core and search tables. Both configuration
+members match the active files byte-for-byte, including presence of sealing and
+session keys; values are never output. New directory mode is 0700 and new files
+0600. A second real `pg_dump` against a nonexistent DB exits 1, leaves only a
+private partial, finalizes no archive, and does not change `last_success`.
+
+Local tests: Python22 PASS; `bash -n deploy/backup.sh`, `shellcheck -x
+ deploy/backup.sh`, helper compile and diff checks PASS. Private diagnostics and
+archives remain only in the disposable lab and `/tmp/vidra-a36-*`. This is a
+focused A36 fix/checkpoint, not full recovery acceptance: encrypted retrieval,
+matched media snapshot, independent restore and selected offsite target remain
+required. Next: quiesce fixture writers, capture a matched media/DB/config set,
+then encrypt/retrieve and validate it before A37 replacement-host recovery.
+
+## A36 matched capture and encrypted B2 retrieval — 2026-09-05
+
+**A36 runtime acceptance PASS; delivery remains open pending merge authorization.**
+The user selected a new Backblaze B2 test bucket and explicitly authorized
+uploading the client-encrypted synthetic DB/config (including test sealing and
+session keys)/media archives. No DigitalOcean source data has been accessed.
+The backup permission fix is green in [PR #96](https://github.com/yegamble/vidra/pull/96),
+revision `fdfed44`; its merge was rejected by automatic approval review, and
+explicit approval for it and subsequent acceptance merges was requested.
+
+[Matched capture helper](../tests/backup-capture-smoke.py) stops only the
+synthetic fixture's API/search/frontend writers, verifies the exact running
+images and backup script hash, takes the DB/config backup, then snapshots the
+actual canonical media volume with the same stamp. Services restart in `finally`.
+[Offsite helper](../tests/backup-offsite-smoke.py) uploads through S3 with rclone
+crypt, retrieves into a fresh private directory, and compares every archive
+SHA-256 and size. [Complete final result](evidence/a36-offsite.json) includes
+exact images/source revisions, both helper hashes, backup hash, capture times,
+and all archive checksums. No keys, tokens or archive contents are committed.
+
+Final commands (exit 0 each; capture PASS and three recovered archives PASS):
+
+```sh
+python3 tests/backup-capture-smoke.py /tmp/vidra-a08-caption-fixture-r1 /tmp/vidra-a36-set-r3
+python3 tests/backup-offsite-smoke.py /tmp/vidra-a36-set-r3 \
+  /tmp/vidra-a36-b2/private-rclone.conf /tmp/vidra-a36-b2/private-key.json \
+  vidra-acceptance-20260905-a36 /tmp/vidra-a36-offsite-r3
+```
+
+The independently provisioned test bucket is `vidra-acceptance-20260905-a36`,
+endpoint `https://s3.us-east-005.backblazeb2.com`. Bucket readback confirms
+`allPrivate` and `SSE-B2` / AES256. Client encryption and encrypted names are
+also verified by opaque object names and the actual rclone ciphertext header.
+A bucket-scoped seven-day application key provides S3 read/write access;
+the crypt recovery configuration stays outside the bucket, private on the
+operator host. The first attempt failed because rclone tried to create an
+already-existing bucket with that restricted key; `no_check_bucket=true` fixed
+the configuration without granting broader privileges.
+
+All three final archives recover byte-for-byte; the media tar contains 64 files
+and the exact A06 audiovisual fixture. The preceding real `pg_restore -l` and
+configuration comparison prove both schemas and exact config/key inclusion;
+the failed-dump probe proves no finalized failed archive or advanced marker.
+Search models are rebuildable and Redis is disposable per the existing runbook.
+This certifies the synthetic local-storage set to an independent remote B2
+provider, not an unselected production geographic redundancy or S3 version
+retention policy. These are test archives, retained for A37; private recovery
+material and downloaded archives remain under `/tmp/vidra-a36-*`.
+
+Python22, Node3, helper compilation, production Compose validation and diff
+checks PASS; no product behavior changed in this evidence slice. Next: A37
+replacement-host restore from this retrieved set, with login, usable media,
+reindex and measured recovery. Source migration A18–A23 still needs the SSH
+host/user and read-only inventory; other selected integration decisions remain
+explicitly open. The A09–A40 goal is not complete.
