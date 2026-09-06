@@ -1,0 +1,184 @@
+{
+ "slice": "A16 moderation hardening — the defects slice 2 recorded but could not take",
+ "date": "2026-09-06",
+ "register_row": {
+  "row": "ADM-02",
+  "verdict": "unchanged — this slice flips nothing; slice 3 (mutes, watched words) still owns the row"
+ },
+ "prs": {
+  "vidra-core": "https://github.com/yegamble/vidra-core/pull/173",
+  "vidra-user": "https://github.com/yegamble/vidra-user/pull/170",
+  "meta": "this evidence PR",
+  "merge_order": "core#173 -> user#170 (contract-ci red until core merges, by construction) -> this"
+ },
+ "migration": {
+  "number": "0130_video_rejections",
+  "why": "no column in the database held the moderator's rejection note; slice 2 swept all 290 text/JSON columns and found zero",
+  "shape": "video_id PK -> videos ON DELETE CASCADE, note TEXT NOT NULL DEFAULT '', rejected_by -> users ON DELETE SET NULL, created_at — deliberately identical to video_blocks (0021)",
+  "down": "0130_video_rejections.down.sql drops the table",
+  "applied_in_lab": "schema 130, dirty=false"
+ },
+ "lab": {
+  "topology": "one origin: a pipe-only node proxy on 127.0.0.1:3201 in front of the Next standalone server on :3101 and vidra-core on :8090. Ports deliberately disjoint from the vidra-search agent's 55433/56380.",
+  "postgres": "native PostgreSQL 16, fresh cluster on 55434 (unix socket forced to /tmp — the scratchpad path exceeds the 103-byte socket limit), migrated to 130",
+  "redis": "native redis on 56381",
+  "frontend": "production `next build` served from .next/standalone with .next/static and public copied in; NEVER `next start`",
+  "core": "built from the a16/moderation-hardening branch; INTERNAL_API_BASE_URL=http://127.0.0.1:8090",
+  "media": "TRANSCODING_ENABLED=false, real 30,271-byte H.264/AAC mp4 from ffmpeg — a synthetic mp4 header fails the ffprobe media probe and the video lands `failed`, which cost one seeding round",
+  "search": "SEARCH_ENABLED=false — no search assertions are made here",
+  "rate_limits": "RATE_LIMIT_ENABLED=false (this lab measures caching latency windows, not limiter behaviour); no limiter claim is made",
+  "browser": "real Chromium, hard navigations, one signed-in session at a time",
+  "teardown": "postgres and redis stopped and their data directories removed; both builds, the core binary and the media root deleted; nothing left on 3101/3201/8090/55434/56381"
+ },
+ "actors": {
+  "mona": "instance owner/admin (OWNER_CLAIM_TOKEN)",
+  "cora": "creator, role user, channel @coratube, bypass_quarantine false",
+  "blake": "ordinary viewer",
+  "anonymous": "no credentials"
+ },
+ "SC1_cache_leak": {
+  "verdict": "FIXED and measured on both builds",
+  "mechanism_chosen": "no-store on the three public watch-document reads in lib/video.server.ts",
+  "why_not_a_shorter_window": "Next's data cache does not replace a cached successful body with a FAILED revalidation, so the entry never clears — the window length is irrelevant; ANY window leaks indefinitely once the video 404s.",
+  "why_not_tag_invalidation": "tag-based revalidation would need vidra-core to call back into the frontend; there is no such channel",
+  "cost_per_page_view": "one uncached GET /api/v1/videos/{id} per watch-page RENDER (not two: React cache() still deduplicates generateMetadata and the page body within one pass). Previously concurrent views of one video could share a single backend read for up to 60 s. The home page's featured-banner read is also uncached now, but /app/page.tsx was already dynamic because lib/feed.server.ts is no-store, so that page gains one request and loses no caching tier.",
+  "baseline_reproduction": {
+   "build": "origin/main's lib/video.server.ts, production build",
+   "video": "Control Clip, public, published, warmed once before the block",
+   "block_at": "16:53:50",
+   "fetches": 30,
+   "window": "16:53:59 -> 16:56:55 (176 s)",
+   "every_response_carried": [
+    "<title>Control Clip</title>",
+    "og:title",
+    "og:description",
+    "og:url (canonical /v/{code})",
+    "og:image (thumbnail endpoint)",
+    "<h1>Control Clip",
+    "the serialized video document in the flight payload"
+   ],
+   "api_status_throughout": 404,
+   "cold_url_same_instant": "/v/{code}, never rendered before the block: 0 title hits — which is what identifies the mechanism as the data cache rather than the route"
+  },
+  "baseline_privacy_and_deletion": {
+   "actions_at": "16:57:23 (PATCH privacy=private on one warmed video, DELETE on another)",
+   "measured": "16:58:28 -> 16:58:44, i.e. 65-81 s after the action, past the 60 s window",
+   "private_video_title_hits": 2,
+   "deleted_video_title_hits": 2,
+   "api_status": 404,
+   "conclusion": "privacy changes and deletion share the path and leaked identically"
+  },
+  "fixed_measurement": {
+   "build": "the patched frontend, production build, three videos warmed hard (uuid form three times, /v/{code} once)",
+   "actions_at": "16:59:53 (block + privacy flip + delete)",
+   "fetches": 12,
+   "window": "16:59:53 -> 17:01:22 (89 s), starting the same second as the actions",
+   "blocked_uuid_title_hits": 0,
+   "blocked_shortcode_title_hits": 0,
+   "private_title_hits": 0,
+   "deleted_title_hits": 0,
+   "rows_with_any_leak": 0
+  },
+  "fixed_page_inspection": {
+   "title": "<title>Vidra (dev)</title> (the instance default)",
+   "og_tags": 0,
+   "description_hits": 0,
+   "thumbnail_url_hits": 0,
+   "no_js_body_text": "Loading video…",
+   "chromium": "renders 'Video not found — this video does not exist, or it is private'; the browser TAB title is 'Vidra (dev)', where slice 2 recorded the stale video title still on it"
+  },
+  "not_changed": "the watch route still answers HTTP 200 with a loading shell for a blocked/unknown video rather than 404. That is pre-existing (slice 2 recorded the same for a cold URL) and out of scope; no title, description, og tag, thumbnail URL or document is served."
+ },
+ "SC2_rejection_note": {
+  "verdict": "FIXED — stored, delivered to the creator, read back by staff",
+  "stored_where": "video_rejections (0130), one row, note + rejected_by + created_at",
+  "creator_surface": "GET /me/notifications -> the video_rejected item's moderation_note; rendered in the inbox as 'A moderator rejected your upload “Held Upload” — it was not published: <note>' after a hard navigation",
+  "staff_surface": "GET /admin/videos -> moderation_note on the inventory row; rendered at /moderation/videos as 'Rejected: <note>' under the state pills. A rejected video has left the quarantine queue, so this is the only staff surface it still appears on.",
+  "audit_row": "unchanged: Reason='moderator_rejected' plus metadata reason_provided=true|false. A SQL sweep of audit_log for the note's text returned 0 rows.",
+  "deviation_from_the_brief": "SC2 asked for the note in 'the audit row's structured payload'. That is not implementable and would have been a regression: audit.normalizeEvent validates metadata against a CLOSED key allowlist with a 256-byte value cap and states 'user prose, URLs, payloads, headers and process output never belong here'; an unknown key or an over-long value makes the WHOLE event invalid (ErrInvalidEvent), so a 2000-character note would have deleted the audit row rather than enriched it. TestQuarantineRejectNotifiesOwner also already asserted the prose does not reach the log stream, and weakening a test was not an option. The note therefore lives in the moderation domain and the ledger keeps the classification.",
+  "moderator_identity": "still never exposed — the notification's actor is null"
+ },
+ "SC3_creator_visible_block": {
+  "verdict": "FIXED for the owner's listing and the notification; the single-video Studio deep link is recorded, not changed",
+  "owner_listing": "GET /channels/{handle}/videos read by someone who can manage the channel now carries blocked:true (SQL EXISTS on video_blocks). Measured: state stays 'published' and privacy stays 'public' — a block changes neither, which is why the marker had to be its own column.",
+  "notification_type": "video_blocked — a NEW type. video_rejected did not fit: it means an upload that NEVER published, while a block takes down live content and is reversible, and reusing it would have told the creator their upload was never published. KnownTypes(), knownType(), the preference default and the frontend renderer + prefs label all learned it, TDD.",
+  "reason_visibility": "NOT shown to the creator. The notification payload was checked for the block reason string across the whole response: absent. The Studio row says 'Blocked by moderation — this video is not available to viewers, including you, until a moderator lifts the block. Nothing else about it has changed.'",
+  "block_not_weakened": "the owner's GET /videos/{id} is still 404 after the block, measured",
+  "unfixed_and_recorded": "/studio?video={id} (ManagedVideoView) still shows its generic error for the owner of a blocked video, because it fetches GET /videos/{id}, which 404s for them. Opening that read would flip a measured promise (watch detail 404 for the owner) and was deliberately not done; the creator reaches the same video, badged, from /studio/content.",
+  "also_unfixed": "unblocking sends the creator no notification"
+ },
+ "SC4_predicate_gaps": {
+  "embed_privacy_on_a_rejected_video": {
+   "anonymous": 404,
+   "viewer": 404,
+   "owner": 200,
+   "staff": 200,
+   "detail_route_anonymous_for_comparison": 404,
+   "note": "the rule now lives in videoReadBase as rejectedHidesVideo, so the detail route and embed-privacy answer the same question the same way. Deliberately NOT extended to draft/processing: the detail route answers 200 for those too, by the compatibility rule videoVisibleForMedia documents, and the point of the fix is that the two agree."
+  },
+  "playlist_add_of_a_blocked_video": {
+   "result": 404,
+   "unknown_video_for_comparison": 404,
+   "playlist_items_rows_after": 0,
+   "note": "same answer as an unknown id, so the route is not an existence oracle for taken-down content. Uses videoHiddenByBlock, the shared helper, so staff keep the same inspection exemption they have on every read path."
+  }
+ },
+ "SC5_clear_all_copy": {
+  "verdict": "DONE",
+  "file": "components/SearchSettingsView.tsx",
+  "replaced": "…use Clear all below, which erases your stored searches immediately and unlinks the rest from your account.",
+  "with": "To remove it now, use Clear all below: it deletes your stored searches and the search service's raw records of them outright — not just your name from them. The anonymous popularity totals this site keeps are recomputed without you within a day, except the trending counters, which cannot be edited and instead expire within 8 days.",
+  "source_comment_fixed": "the ~line 369 comment said the clear 'anonymizes the raw query_log and behavior_events rows'; it now says DELETES and names vidra-search#37",
+  "confirm_modal": "unchanged — 'This permanently removes every search you have made on this instance' is now true",
+  "test": "a new SearchSettingsView test pins the new sentence and asserts the old one is gone; verified RED against the pre-change component and GREEN after",
+  "rendered": "read back in Chromium at /settings/search",
+  "unverified": "the 'within a day' and '8 day' numbers come from vidra-search#37; nothing in this lab re-measured them (SEARCH_ENABLED=false)"
+ },
+ "wrong_actor_attempts": {
+  "reject_as_creator": 403,
+  "reject_anonymous": 401,
+  "block_as_viewer": 403,
+  "admin_inventory_as_creator": 403,
+  "admin_inventory_anonymous": 401,
+  "blocked_marker_for_a_non_owner_viewer": "absent",
+  "blocked_marker_anonymous": "absent",
+  "state_after": "video_rejections still one row, note unchanged (82 chars)"
+ },
+ "gates": {
+  "vidra-core": {
+   "make ci": "PASS (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race)",
+   "go vet -tags=integration ./...": "clean",
+   "repo CI": "7/7 green on core#173 — build-test, integration, ipfs-integration, ipfs-private-integration, openapi, prev-release-against-new-schema, GitGuardian"
+  },
+  "vidra-user": {
+   "npx tsc --noEmit": "clean",
+   "npm run lint": "0 errors, 2 warnings (both pre-existing on main)",
+   "npm run lint:icons": "PASS",
+   "npm run test": "2358 passed, 82 failed — the SAME 82 fail on clean origin/main in this environment",
+   "pre_existing_failure": "7 files fail with 'localStorage.clear is not a function' under local Node 25 + this jsdom; baseline measured by stashing the branch and re-running: 82 failed / 2345 passed on origin/main vs 82 failed / 2358 passed here. Repo CI is the authority.",
+   "e2e": "NOT run — vidra-user AGENTS.md forbids it locally; repo CI covers it"
+  },
+  "meta": "compose render NOT re-run — no compose, script or env file changed"
+ },
+ "unverified": [
+  "vidra-search was not stood up (SEARCH_ENABLED=false), so nothing here re-proves the block's search suppression; slice 2 measured it",
+  "no remote/federated rows exist in this lab, so the admin inventory's remote arm returning '' for moderation_note is asserted from the SQL, not measured",
+  "the store integration lane was not run locally (native lab, not the compose stack); repo CI's `integration` job ran it green on core#173",
+  "the frontend e2e and e2e-backed suites"
+ ],
+ "findings_recorded_not_fixed": [
+  "The Studio single-video deep link /studio?video={id} still errors for the owner of a BLOCKED video, because GET /videos/{id} 404s for them.",
+  "Unblocking sends the creator no notification, so a creator learns their video is back only by looking.",
+  "The watch route answers 200 with a loading shell for a blocked, deleted or unknown video rather than 404 (pre-existing; no content leaks).",
+  "A creator can still PATCH a blocked video's metadata (the update path has no block gate) while they cannot read it — inconsistent, inert, and out of scope here.",
+  "Reason-visibility for BLOCKS is an open product ruling: the block reason is currently staff-only. Rejection notes are shown, blocks are not, and that asymmetry is deliberate but unratified."
+ ],
+ "for_a16_slice_3_and_the_admin_follow_up": [
+  "The fake-fidelity lesson bit again: videoFakeRepo's ListVideosByChannel had to learn video_blocks before the owner-marker test could prove anything. Mute/watched-word predicates will have the same shape — mirror the SQL in the fake FIRST.",
+  "A new notification type costs four edits that must move together: the constant, knownType(), KnownTypes(), and the frontend TYPE_LABELS + TYPE_ORDER + describeNotification case. A missing describeNotification case falls through to 'started following'.",
+  "audit_log cannot carry prose. Any slice that wants a moderator's words persisted needs a moderation-domain table; the ledger takes a classification only.",
+  "An inline ': ' inside a plain-scalar OpenAPI description parses in Go and BREAKS the frontend codegen's YAML loader. Use an em dash or a block scalar.",
+  "PATCH /admin/instance-settings takes a FLAT object ({\"quarantine_new_uploads\":true}); {\"settings\":{...}} is 422.",
+  "A synthetic mp4 fails the ffprobe media probe and the upload lands `failed` — generate a real clip with ffmpeg."
+ ]
+}
