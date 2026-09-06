@@ -1,0 +1,238 @@
+{
+ "slice": "A16 mutes, instance mutes and watched words",
+ "date": "2026-09-06",
+ "register_row": "ADM-02 (Reports, video blocks/quarantine, mutes, watched words and appeals/context)",
+ "prs": {
+  "vidra-core": {
+   "number": 175,
+   "url": "https://github.com/yegamble/vidra-core/pull/175",
+   "title": "[claude] notifications: a muted or blocked account cannot reach your inbox by following",
+   "migration": null,
+   "openapi_change": false,
+   "schema": "131 unchanged"
+  },
+  "vidra-user": {
+   "number": 172,
+   "url": "https://github.com/yegamble/vidra-user/pull/172",
+   "title": "[claude] moderation: the Word matches page describes the queue it actually shows",
+   "contract_dependency": "none"
+  },
+  "delivery_order": "core#175 and user#172 are independent (neither changes a route or a response shape); the meta evidence PR last"
+ },
+ "lab": {
+  "topology": "one origin (a pipe-only node proxy on 127.0.0.1:3200 in front of `node .next/standalone/server.js` on :3100 and vidra-core on :8088), because vidra_refresh is SameSite=Lax with Path=/api/v1/auth",
+  "postgres": "native PostgreSQL 16.15 on a private port (55432, -k /tmp), fresh cluster, migrated to schema 131",
+  "redis": "native redis on a private port (56379)",
+  "vidra_search": "stood up natively on :8089 at search schema 18 with its own database - every recommendation/related rail in the table below reports source=\"search\", so the rails were served by the real service, not the core fallback",
+  "media": "TRANSCODING_ENABLED=true with ffmpeg; every video is a real 30,271-byte mp4 generated with ffmpeg (a synthetic mp4 fails the ffprobe media probe)",
+  "frontend": "production `next build` served from .next/standalone with .next/static and public copied in; Node 24.4.1",
+  "browser": "real Chromium against that origin, hard reloads, one signed-in session at a time",
+  "rate_limits": "shipped defaults, never raised: general 120/min per IP (paced at ~109/min), auth 10/min per IP (logins 6.5 s apart)",
+  "remote_content": "one synthetic remote_actors + remote_videos + federated comment row on remote.example, inserted directly at the DB level - honest local rows, not a second instance",
+  "binaries": "two: origin/main (`vidra-api`) for the baseline follow-notification measurement, and the patched branch (`vidra-api-fixed`) for the paired re-measurement"
+ },
+ "actors": {
+  "M": "mona - admin, the instance owner (owner claim)",
+  "D": "dana - moderator (promoted by M)",
+  "U": "uma - the muter; owns umachan + one video",
+  "B": "bram - the muted account; owns bramchan + 2 published videos + comments",
+  "C": "cleo - the control account; owns cleochan + 2 published videos + comments",
+  "anonymous": "no token"
+ },
+ "rate_limit_429s": 0,
+ "requests_logged": 819,
+ "totals": {
+  "assertions_pass": 125,
+  "assertions_fail": 1,
+  "recorded_values": 42
+ },
+ "failed_rows_are_deliberate": "one row failed on the LAB, not the product: the instance block/unblock audit assertion queried action IN ('instance.block','instance.unblock') when the shipped action names are 'moderation.instance.block'/'moderation.instance.unblock'. Restated in the next run and passing (2 rows). Kept rather than silently re-run.",
+ "browser_lab_errors": "two Unmute clicks on /settings/mutes/instances issued no DELETE at all (clicked before the row had rendered / a stale element ref). Re-run carefully, the same button deleted the row: DELETE 204 at 19:01:21 and `SELECT ... FROM muted_instances` returned no rows. The control is not broken.",
+ "probe_guard": "every viewer-scoped probe asserts GET /auth/me = 200 first. Added after the 'restored' run read as anonymous: every discovery route is optionalAuth, so an EXPIRED bearer is silently treated as anonymous and the probe would have measured the wrong viewer. The earlier baseline and muted runs are still sound because /me/subscriptions/videos is requireAuth and answered 200 in both.",
+ "mute_per_surface_table": {
+  "legend": "count of B's two published videos (or 1/0 for B's comment, channel, account) visible to that actor; status where it is a status",
+  "columns": [
+   "U before the mute",
+   "U with the mute",
+   "U after unmuting",
+   "C (control) with U's mute in place",
+   "anonymous with U's mute in place"
+  ],
+  "rows": {
+   "home feed / /videos ?sort=recent": [
+    2,
+    0,
+    2,
+    2,
+    2
+   ],
+   "feed ?sort=trending": [
+    2,
+    0,
+    2,
+    2,
+    2
+   ],
+   "subscriptions feed": [
+    2,
+    0,
+    2,
+    "0 (C follows nobody)",
+    "401"
+   ],
+   "comment thread (GET /videos/{id}/comments)": [
+    "1 of 3",
+    "0 of 2",
+    "1 of 3",
+    "1 of 3",
+    "1 of 3"
+   ],
+   "related rail (GET /videos/{id}/recommendations, source=search)": [
+    2,
+    0,
+    2,
+    2,
+    2
+   ],
+   "home rail (GET /recommendations/home, source=search)": [
+    2,
+    0,
+    2,
+    2,
+    2
+   ],
+   "video search (GET /videos/search)": [
+    2,
+    0,
+    2,
+    2,
+    2
+   ],
+   "channel search (GET /search/channels)": [
+    1,
+    0,
+    1,
+    1,
+    1
+   ],
+   "account search (GET /search/accounts)": [
+    1,
+    0,
+    1,
+    1,
+    1
+   ],
+   "autosuggest (GET /search/suggestions)": [
+    "4 suggestions",
+    "4 suggestions - IDENTICAL to anonymous",
+    "4",
+    "4",
+    "4"
+   ],
+   "B's channel page (GET /channels/bramchan/videos)": [
+    2,
+    "2 - STILL VISIBLE",
+    2,
+    2,
+    2
+   ],
+   "watch detail by direct URL (GET /videos/{B video})": [
+    "200",
+    "200 - deliberate",
+    "200",
+    "200",
+    "200"
+   ],
+   "notifications: B comments on U's video": [
+    "1 row",
+    "0 rows",
+    "-",
+    "-",
+    "-"
+   ],
+   "notifications: B follows U's channel (origin/main)": [
+    "1 row",
+    "1 row - DEFECT",
+    "-",
+    "-",
+    "-"
+   ],
+   "notifications: B follows U's channel (patched)": [
+    "1 row",
+    "0 rows",
+    "1 row (control)",
+    "-",
+    "-"
+   ],
+   "DM: B opens a conversation with U": [
+    "201",
+    "201 - a mute does not cut DMs",
+    "201",
+    "-",
+    "-"
+   ],
+   "DM: same, with a BLOCK instead of a mute": [
+    "201",
+    "403 - a block does",
+    "-",
+    "-",
+    "-"
+   ]
+  }
+ },
+ "semantics_as_shipped": {
+  "account_mute": "one-way: the muted account's content is hidden FROM the muter. It never restricts the muted account - B still commented on U's video (201), still followed U's channel (204), still opened and sent a DM (201). B is never told: B's own mute and block lists stay empty (total 0).",
+  "block_vs_mute": "a block does everything a mute does (same SQL predicate, both tables read as one) PLUS cuts direct messaging in both directions: POST /conversations is 403 with a block in place and 201 with a mute.",
+  "instance_mute": "per-user; hides remote videos AND remote comments from that domain for the muter only. Domain is normalised (lowercased, scheme/space/path rejected 422), idempotent, PK(muter_id, domain).",
+  "instance_block": "admin/moderator, instance-wide: the same remote rows vanish for the muter, for the control account AND for anonymous, it carries a reason, and both block and unblock are audited (moderation.instance.block / .unblock). A user cannot see it on their own mute list.",
+  "watched_words": "CASE-INSENSITIVE SUBSTRING (`strpos(lower(text), lower(word)) > 0`) - not word-boundary, not regex: the term 'Casserole' matched 'casseroles are underrated'. Runs on comment create AND edit, and on video create AND edit over `title + \"\\n\" + description`. Best-effort: it never blocks or hides the content. STAFF TIER, not admin-only: a moderator adds, lists and deletes words and reads the match queue, exactly like an admin. Duplicates differing only in case are 409 (the unique index is on lower(word)). Idempotent per word+target."
+ },
+ "appeals_and_context": {
+  "appeal_path": "still none. `git grep -in appeal` returns 0 lines in vidra-core and 0 in vidra-user. There is no route, no notification type and no UI, so a user has nothing to appeal a mute or a match to - and a mute needs none, since the muted account is never told and is never restricted.",
+  "match_context": "a watched-word match carries: word, type (comment|video), author_username, video_id (a link to the video), video_title, comment_body, created_at.",
+  "report_context": "a comment report carries: id, reporter, reason, status, moderator_note, target_type, comment_id, comment_body, created_at - and NO author field of any kind, confirming the slice-2 finding on the same lab.",
+  "conclusion": "on the one axis that matters for acting on a person, the watched-word queue gives a moderator MORE than a report does: it names the author and links to the video. The report gives a reporter and a reason the match has no equivalent of. Neither carries prior-action history."
+ },
+ "unauthorized_and_bulk": {
+  "GET /me/mutes/accounts": "anonymous 401; the caller is always the muter (no route accepts a muter parameter, so muting on someone else's behalf is unrepresentable)",
+  "POST /me/mutes/accounts/{id}": "anonymous 401; self-mute 422 'cannot mute yourself'; unknown uuid 404; non-uuid 404; idempotent 204 with exactly one row",
+  "DELETE /me/mutes/accounts/{id}": "anonymous 401; idempotent",
+  "GET|POST|DELETE /me/mutes/instances[/{domain}]": "anonymous 401 on all three; scheme in the domain 422; space in the domain 422; idempotent; every refusal left muted_instances at 0 rows",
+  "GET|POST /admin/watched-words": "moderator 200/201, admin 200/201, user 403, anonymous 401",
+  "DELETE /admin/watched-words/{id}": "moderator 204 (idempotent), user 403, anonymous 401",
+  "GET /admin/watched-word-matches": "moderator 200, admin 200, user 403, anonymous 401",
+  "POST /admin/instances/blocked": "user 403, anonymous 401, moderator 204 - blocked_instances still 0 rows after both refusals",
+  "bulk_endpoints": "NONE. Every mutating verb on the match queue is 404 (POST/PUT/PATCH/DELETE on the collection and on a single match id). No route this slice touches accepts an array body; a `{\"words\":[...]}` body is 422 and a collection POST on mutes is 404. The UI has no checkboxes and no selection state.",
+  "after_every_refusal": "muted_accounts 0, muted_instances 0, blocked_instances 0, watched_words unchanged"
+ },
+ "defect_fixed": {
+  "what": "a muted or blocked account could put its username in the muter's inbox by FOLLOWING their channel, repeatedly",
+  "why_it_matters": "the handler raises the notification whenever the follow row is genuinely new, so unfollow-then-follow produces another row - an account the viewer has BLOCKED could ping them without limit. Every other notification path (comment, comment_reply, new_video) already carried the mute/block predicate in SQL; NotifyFollow took its recipient from the caller and consulted neither table.",
+  "baseline_on_origin_main": "with uma having BLOCKED bram, bram followed umachan: uma's inbox went 2 -> 3 rows, the new one ('follow','bram'). With a MUTE instead: 0 -> 1, ('follow','bram').",
+  "patched_paired_probe": "same lab, same actors, only the binary different - blocked re-follow delta 0, muted re-follow delta 0, and the CONTROL with every relationship lifted delta 1. The exclusions, not a broken fixture, do the work.",
+  "red_proof": "with the fake's mute/block mirror removed the handler test fails on all three relationships; with the statement's two NOT EXISTS clauses replaced by `AND TRUE` and sqlc regenerated the real-PostgreSQL test fails on the same three."
+ },
+ "findings_recorded_not_fixed": [
+  "A muted account's videos are still listed on THEIR OWN CHANNEL PAGE for the muter. ListPublicVideosByChannel / CountPublicVideosByChannelVisible carry the video_blocks predicate but no per-viewer mute/block clause, unlike every other list. Measured in Chromium: with bram muted, /channels/bramchan reads 'BRAMCHAN - 1 follower - 2 videos' with both cards. Contract-conformant (POST /me/blocks/{id} enumerates 'their videos leave the blocker's feed, search, and subscriptions'), but /settings/mutes promises 'Their videos and comments are hidden from you'. A product ruling, not a patch.",
+  "Autosuggest leaks the muted account by name. GET /search/suggestions returns BYTE-IDENTICAL payloads to the muter, the control and an anonymous caller: the channel 'BRAMCHAN' plus both video titles. The screenshot that matters shows the dropdown offering 'Bram Beta Clip' and 'Bram Alpha Clip' over a results page reading 'No results - Nothing matched \"bram\"'. The channel suggestion links straight to the channel page above, so the two findings compose into one route back to everything the mute hid.",
+  "The watched-word match EXCERPT is a live join, not a snapshot. ListWatchedWordMatches reads c.body, so a flagged comment edited to remove the term keeps its match row and now quotes a body with no term in it. Measured and visible in Chromium: a row badged `pineapple / Comment / by cleo` quoting 'never mind, plain cheese'. A moderator cannot see what was flagged, and an author can edit the evidence away while the flag stands. The DM report path solved exactly this with message_body_snapshot (0064); this table has no equivalent. Needs a migration, so recorded rather than patched.",
+  "Deleting the flagged COMMENT deletes its match (comment_id FK is ON DELETE CASCADE, 0030) - measured, the queue went 5 -> 4. So the author has a second, complete way to remove the evidence.",
+  "Deleting a WORD deletes all of its existing matches (watched_word_id FK is ON DELETE CASCADE, 0030) - measured, the queue went 4 -> 2. A moderator pruning the term list silently discards its review history.",
+  "There is NO resolve or dismiss on the match queue. Every mutating verb is 404 and the view renders no action control. A row leaves only when its content or its word is deleted, so an instance with an active term accumulates matches forever with no triage state - unlike the report queue, which has status and a moderator note.",
+  "A muted account's DM still notifies the muter (a `message` row naming them). That is coherent with the shipped design - a mute does not cut DMs, a block does - but it is the one inbox row a mute leaves.",
+  "The muted account's channel stays in the viewer's own FOLLOWING sidebar rail (measured: 'BRAMCHAN' is the single occurrence of that string on the muted home page). The viewer chose to follow, so this is defensible; noted because it is the one place the name still appears.",
+  "The UI offers only ONE place to mute an account: a comment's overflow menu (api.muteAccount has exactly one call site, CommentsSection). There is no Mute on a channel page, a video card or a profile. An account that never comments cannot be muted from the UI at all.",
+  "Instance muting likewise needs remote content on screen - the control lives on a remote comment's overflow menu and on RemoteWatchView. /settings/mutes/instances is a management surface only, and says so in its empty state."
+ ],
+ "unverified": [
+  "Federation itself. The remote video, remote actor and federated comment are honest local rows inserted at the DB level on one instance; no delivery, signature or two-instance behaviour was exercised. A29 owns that. What IS proven here is the PREDICATE: the instance-mute clause hides those rows from the muter and from nobody else, on the live feed, in the comment thread and in search.",
+  "The frontend e2e and e2e-backed suites - this repo's AGENTS.md forbids running them locally. Repo CI is the authority.",
+  "The meta compose render was not re-run: no compose, script or env file changed."
+ ],
+ "gates": {
+  "vidra-core": "make ci PASSED, exit 0 (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race; 79 packages ok, 0 failures). go vet -tags=integration ./... clean. go test -tags=integration ./internal/store/... ./internal/federation/... PASSED against native PostgreSQL 16 at schema 131 on a scratch database.",
+  "vidra-user": "npx tsc --noEmit clean; npm run lint 0 errors (2 warnings, both pre-existing on main); npm run lint:icons pass; npm run test 248 files / 2449 tests passed. Node 24.4.1.",
+  "no_regression": "52 named A12/A16 test functions pass beside the new ones, including TestFollowCreatesNotificationForOwner, TestCommentNotificationRespectsMutesAndBlocks, TestReportVideoAndModerate, TestReportCommentAndUnknown, TestReportAccountAndModerate, TestReportValidationAndAuth, TestAdminUserManagement, TestDeleteAccountFlow, TestClaimOwnerEndpointCreatesAdmin, TestFollowFlowAndFollowerCount and TestFollowNotificationBellEndpoint.",
+  "settled_session": "no new viewer-scoped client read was added, so lib/use-settled-session.ts needed no new caller."
+ }
+}

@@ -120,7 +120,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | MSG-02 Approved 100 MiB / 30-file and office-document attachment behavior | C U | F03; product decision §14a vs Composer limits | FAIL | Boundary values, 31st file and oversize refusal; document kind renders; multi-file recipient API/UI readback; configured scanner failure semantics | MSG-01, INT-04 → A14 |
 | MSG-03 E2EE device/session lifecycle and honest unsupported attachments | C U | `internal/e2ee`, Olm client; backed e2ee; D7 defers encrypted blobs; live two-device evidence `a15-e2ee` (real Olm in two Chromium profiles, 290-column plaintext scan, unlink cascade, attachment refusal, enumerated IPFS block store) | PASS (candidate; unmerged) | Two devices establish encryption; inspect server stores ciphertext only; restart/recover/unlink as supported; plain attachment affordance absent and API rejection; no IPFS pin for DM bytes | AUTH-02 → A15; encrypted blobs remain SCP-03 |
 | ADM-01 Users/roles/quotas/suspensions/signup approval with lockout guards | C U | Backed admin-users/registration-approval; `requireRole` and self guards; live evidence `a16-users-roles` (three-role matrix over 43 admin-only + 24 staff routes, role change biting a LIVE session, real over/under-quota uploads, bypass_quarantine proven against the quarantine gate, deactivate/reactivate/delete with the tombstone made irreversible, approval queue and audit rows) | PASS (candidate; unmerged) | Admin vs moderator vs user; quotas, verified/bypass flags, deactivate/reactivate, reject self-demotion; session revocation and audit evidence | AUTH-02 → A16; no last-admin or owner guard ships (recorded) |
-| ADM-02 Reports, video blocks/quarantine, mutes, watched words and appeals/context | C U S | Backed moderation/admin-comments/blocked-videos/watched-word-matches/instance-mutes | UNVERIFIED | Report video/comment/message; staff review and note; owner notifications; ban/block/unblock and affected feeds/search; unauthorized and bulk behavior inventoried explicitly | SRC-02, SOC-02 → A16 |
+| ADM-02 Reports, video blocks/quarantine, mutes, watched words and appeals/context | C U S | Backed moderation/admin-comments/blocked-videos/watched-word-matches/instance-mutes; live evidence `a16-quarantine-blocks` (236 assertions, per-surface table for quarantine/block/reject with vidra-search readbacks, oEmbed leak and empty DM report fixed), `a16-moderation-hardening` (stale watch-page cache, rejection note persisted, creator told of a block) and `a16-mutes-watched-words` (125 assertions: per-surface mute table with search-service rails, instance mutes proven against real remote rows, watched-word semantics, and a blocked account's repeatable follow notification fixed) | PASS (candidate; unmerged) | Report video/comment/message; staff review and note; owner notifications; ban/block/unblock and affected feeds/search; unauthorized and bulk behavior inventoried explicitly | SRC-02, SOC-02 → A16; remote/federated content is A29-owned; muted accounts still visible on their own channel page and in autosuggest (recorded) |
 | ADM-03 Runtime config, branding/legal documents and feature capability truth | M C U S | Instance registry/config parity W1–W15; core settings poller and search config events | UNVERIFIED | Change typed settings/documents/images in admin; observe public/UI/worker/search after refresh and restart; dependencies missing must be explained; test dangerous custom CSS/JS confirmation path | INS-05, SRC-01 → A17 |
 | ADM-04 Health/jobs/audit/infra/storage-GC dashboards reflect real operations | M C U S | Core admin system/jobs/audit/media-GC; backed admin-system/admin-audit; `vidra doctor` | UNVERIFIED | Create failed job and degraded dependency, inspect status/log correlation/retry; doctor identifies drift and backup age; regular users denied; no secrets in responses/logs | PUB-03 → A17 |
 | MIG-01 Source/version/storage preflight and truthful dry-run | M C U | Importer Preflight/report/version, admin import UI; F07 | BLOCKED | Obtain sanitized source/schema; read-only DB role and source filesystem/bucket; preview includes conflicts/unsupported/counts and destination probe side effects; unsupported version refused without automated override | INS-04 + source inventory → A18 |
@@ -4835,3 +4835,287 @@ deployment is authorized. The lab was torn down — Postgres, Redis and Mailpit
 stopped and their data directories removed, both binaries and the `origin/main`
 worktree deleted, no listener left on 8088/3100/3200 — and no lab artefact is
 committed.
+
+## A16 mutes, instance mutes and watched words — 2026-09-06
+
+**ADM-02 flips to PASS (candidate; unmerged). A16's stopping criterion is met:
+ADM-01 + ADM-02 are both PASS, so the item closes.** This is the third and last
+A16 slice — the half of the row slice 2 left open. One defect was found and
+fixed: **an account you have BLOCKED could put its username in your inbox by
+following your channel, repeatedly.** Two surfaces still show a muted account to
+the muter and are recorded rather than changed, because both are product calls
+this slice should not make alone: the muted account's **own channel page**, and
+**autosuggest**. [Core #175](https://github.com/yegamble/vidra-core/pull/175)
+and [user #172](https://github.com/yegamble/vidra-user/pull/172). **No
+migration** (core stays at schema 131), **no OpenAPI change**, no route or
+response-shape change, no generated file hand-edited. [Sanitized
+evidence](evidence/a16-mutes-watched-words.json) records **125 passing
+assertions across eleven phases on one clean database**, with vidra-search stood
+up natively — every recommendation and related rail below answers
+`source: "search"`, so the rails were served by the real service and not core's
+fallback — plus a real-Chromium walkthrough on the production build. **One row
+failed, on the lab and not the product**, and is restated in an addendum rather
+than quietly re-run.
+
+**The shipped semantics, established from the code and then measured, not
+assumed.** A mute is **one-way**: it hides the muted account's content FROM the
+muter and never restricts the muted account. Proven by having the muted account
+do everything a mute does not stop — bram commented on uma's video (**201**),
+followed her channel (**204**), opened a conversation with her and sent a
+message (**201**) — while uma had him muted. He is never told: his own mute and
+block lists both read `total: 0` throughout. A **block** is the same predicate
+plus one thing more, and the control isolates it: with a block in place
+`POST /conversations` is **403** in both directions, with a mute it is **201**.
+Core reads `muted_accounts` and `user_blocks` as one clause everywhere, so a
+block inherits every row of the table below.
+
+**The per-surface promise, measured on one account rather than reasoned about.**
+Five actors and a synthetic federated instance, against every surface the mute
+could reach. Each cell counts bram's two published videos (or his one comment,
+one channel, one account) visible to that actor.
+
+| surface | U before | U muted | U unmuted | C (control) | anonymous |
+|---|---|---|---|---|---|
+| home feed / `/videos` `?sort=recent` | 2 | **0** | 2 | 2 | 2 |
+| feed `?sort=trending` | 2 | **0** | 2 | 2 | 2 |
+| subscriptions feed | 2 | **0** | 2 | 0 (follows nobody) | 401 |
+| comment thread | 1 of 3 | **0 of 2** | 1 of 3 | 1 of 3 | 1 of 3 |
+| related rail (`source: search`) | 2 | **0** | 2 | 2 | 2 |
+| home rail (`source: search`) | 2 | **0** | 2 | 2 | 2 |
+| `GET /videos/search` | 2 | **0** | 2 | 2 | 2 |
+| `GET /search/channels` | 1 | **0** | 1 | 1 | 1 |
+| `GET /search/accounts` | 1 | **0** | 1 | 1 | 1 |
+| `GET /search/suggestions` | 4 | **4 — byte-identical to anonymous** | 4 | 4 | 4 |
+| B's own channel page | 2 | **2 — still visible** | 2 | 2 | 2 |
+| watch detail by direct URL | 200 | 200 | 200 | 200 | 200 |
+| notification: B comments on U's video | 1 row | **0 rows** | — | — | — |
+| notification: B follows U's channel (`origin/main`) | 1 row | **1 row — the defect** | — | — | — |
+| notification: B follows U's channel (patched) | 1 row | **0 rows** | 1 row (control) | — | — |
+| DM: B opens a conversation with U | 201 | **201 — a mute does not cut DMs** | 201 | — | — |
+| the same, with a **block** instead | 201 | **403 — a block does** | — | — | — |
+
+The search hydration predicate is core-side and that is what the table proves:
+vidra-search returned ranked ids for a muted author and core's
+`ListPublicVideosByIDs` dropped them, so the rail went to zero while still
+reporting `source: "search"`. Every "0" has a live control beside it — cleo and
+the anonymous caller still saw all of it at the same instant — so the exclusion,
+not an empty index, is doing the work.
+
+**The defect: a blocked account could ping you at will.** Every other
+notification path already carried the mute/block predicate in SQL — the video
+owner's `comment` (closed in A12), the `comment_reply`, the `new_video` fan-out
+— but `NotifyFollow` took its recipient from the caller and consulted neither
+table. It is also the one an unwanted account can repeat: the handler raises the
+notification whenever the follow row is **genuinely new**, so unfollow and
+follow again produces another. Measured on the `origin/main` binary with uma
+having **blocked** bram: he followed umachan and her inbox went from 2 rows to
+3, the new one reading `('follow', 'bram')`. `NotifyFollow` now resolves its own
+recipient through a new `FollowNotificationRecipient` statement shaped exactly
+like `CommentVideoOwnerRecipient` — the channel's owner, excluded on a
+self-follow, an inactive or deleted owner, a mute, or a block in either
+direction — because the caller cannot see the relationship. Paired probe, same
+lab, same actors, only the binary different: blocked re-follow **delta 0**,
+muted re-follow **delta 0**, and the control with every relationship lifted
+**delta 1**.
+
+TDD failed first, both ways, which is the part that matters. With the fake's
+mute/block mirror removed, the handler test fails on all three relationships
+(*"owner has 1 notifications after \"ada muted bob\", want 0"*); with the
+statement's two `NOT EXISTS` clauses replaced by `AND TRUE` and sqlc
+regenerated, the real-PostgreSQL test fails on the same three. The
+`notifFakeRepo` mirrors both clauses on purpose — slice 2's fake-fidelity lesson
+is what made a green handler test worth anything here.
+
+**Instance mutes are fully proven, including their effect, and that was not
+guaranteed going in.** The schema makes remote content representable locally, so
+rather than mark the facet unverified this slice inserted one honest
+`remote_actors` + `remote_videos` row and one federated comment on
+`remote.example` at the DB level and measured the predicate. Before: uma, cleo
+and an anonymous caller each saw the remote video on `?scope=all` and the
+federated comment in the thread. With uma's mute: **the remote video and the
+remote comment are gone for uma, present for cleo, present for anonymous**, and
+her `GET /videos/search?scope=all` for it returns 0 where cleo's returns 1.
+Unmuting restores both. The round trip is complete in the UI too — muted from
+the **remote comment's own overflow menu** ("Mute instance"), listed on
+`/settings/mutes/instances` as *"remote.example · muted just now"*, unmuted from
+that page with the row gone from Postgres. Idempotent and normalised: muting
+`REMOTE.EXAMPLE` a second time leaves exactly one lowercased row; a scheme or a
+space in the domain is 422 and writes nothing.
+
+**Instance mute versus instance block, on the same domain, minutes apart.** The
+mute is **per-viewer**: uma stops seeing `remote.example`, cleo and anonymous
+are untouched, nothing is audited, and no other user can tell. The moderator's
+block is **instance-wide**: the same rows vanish for uma, for cleo **and for
+anonymous**, it carries a reason that reads back through the admin API, and both
+the block and the unblock are audited (`moderation.instance.block` /
+`moderation.instance.unblock`). A user cannot see the block on their own mute
+list (`total: 0` while it stands), so the two never collide. An ordinary user
+blocking an instance is 403 and anonymous is 401, with `blocked_instances` still
+at zero rows after both.
+
+**Watched words, as shipped.** Matching is **case-insensitive substring**
+(`strpos(lower(text), lower(word)) > 0`) — not word-boundary, not regex: the
+term `Casserole` matched *"casseroles are underrated"*. It runs on **comment
+create and edit**, and on **video create and edit** over `title + "\n" +
+description` — an edit that introduces a term produced a match on both. It is
+**staff tier, not admin-only**: dana the moderator added, listed and deleted
+words and read the match queue exactly as mona the admin did. A duplicate
+differing only in case is **409** (the unique index is on `lower(word)`); a
+blank word is 422. **Matching never hides anything** — the flagged comment was
+accepted 201 and stayed publicly visible to an anonymous reader while its match
+sat in the queue. A match carries the term, the type badge, **the author's
+username**, a link to the video, the video's title and the comment's body.
+
+**Three things about that queue a moderator should know, all measured.**
+**(1) There is no resolve and no dismiss** — every mutating verb is 404 on the
+collection and on a single match id, and the view renders no action control. A
+row leaves only when its content or its word is deleted, so an instance with an
+active term accumulates matches forever with no triage state, unlike the report
+queue, which has a status and a note. **(2) The excerpt is a live join, not a
+snapshot.** `ListWatchedWordMatches` reads `c.body`, so a flagged comment edited
+to remove the term keeps its match and now quotes a body with no term in it: the
+queue really renders a row badged `pineapple / Comment / by cleo` above
+*"never mind, plain cheese"*. The DM report path solved exactly this with
+`message_body_snapshot` (0064); this table has no equivalent, so a moderator
+cannot see what was flagged and an author can edit the evidence away while the
+flag stands. **(3) Both deletions cascade.** Deleting the flagged comment
+removes its match (`comment_id` is `ON DELETE CASCADE`, 0030) — the queue went
+5 → 4 — and deleting a **word** removes all of its existing matches — 4 → 2 —
+so a moderator pruning the term list silently discards its review history. A
+deleted word raises no new matches, which is the half that is clearly right.
+
+**Appeals and context: there is still none, and a mute needs none.**
+`git grep -in appeal` returns **0** lines in vidra-core and **0** in
+vidra-user — no route, no notification type, no UI. For mutes that is coherent
+rather than a gap: the muted account is never told and never restricted, so
+there is nothing to appeal. For a watched-word match it is the same, because a
+match neither hides nor notifies. On staff context the comparison is worth
+stating exactly, because it inverts slice 2's finding: a watched-word match
+**names its author and links to its video**, while a comment report on the same
+lab carries `reporter`, `reason`, `status`, `moderator_note`, `comment_id`,
+`comment_body` and **no author field of any kind**. The report has a reporter
+and a reason the match has no equivalent of; neither carries prior-action
+history.
+
+**Unauthorized and bulk, inventoried explicitly.** Anonymous is 401 on all six
+mute routes; a self-mute is 422 *"cannot mute yourself"*; an unknown or
+malformed target is 404; muting on someone else's behalf is **unrepresentable**
+— no route accepts a muter parameter, the caller always is one. The four
+watched-word routes are **staff**: moderator and admin succeed, an ordinary user
+is 403 and anonymous is 401, on the list, the add, the delete and the match
+queue alike. After every refusal `muted_accounts`, `muted_instances` and
+`blocked_instances` were still at zero rows and the word list was unchanged.
+**There is no bulk endpoint**: every mutating verb on the match queue is 404, no
+route this slice touches accepts an array body (`{"words":[…]}` is 422, a
+collection POST on mutes is 404), and the UI has no checkboxes and no selection
+state. **Zero 429s** across **819 logged requests** at shipped limits (general
+120/min paced at ~109, auth 10/min with logins 6.5 s apart).
+
+**The browser walkthrough.** Real Chromium against the production build served
+from `.next/standalone` behind one origin. Signed in as uma: bram muted from his
+comment's own overflow menu, and after a **hard reload** the thread reads
+"Comments (7)" with his comment gone and cleo's and the federated one untouched
+(8 → 7). Muting `remote.example` from the federated comment's menu takes it to
+**6**, with the two mechanisms visibly independent. `/settings/mutes` lists
+*"bram · @bram · muted 1m ago"* under *"Accounts you have muted. Their videos and
+comments are hidden from you."*, `/settings/mutes/instances` lists the domain,
+and unmuting from each page restores exactly what it hid — bram's comment came
+back, the count returned to 7. The search page reads **"No results — Nothing
+matched 'bram'"**. `/moderation/watched-words` renders as dana with the section
+nav, "2 watched words", the add form, and each row's *"added 14m ago by dana"*;
+`/moderation/watched-word-matches` renders "2 flagged items" with the
+`Video` / `Comment` badges, the author, the video link and the stale excerpt
+above. An ordinary user and an anonymous visitor both get the shared
+**"Moderators only"** gate on both pages, and nothing fetches.
+
+**The two surfaces that still show a muted account, and why they were not
+patched.** **(a) The muted account's own channel page.**
+`ListPublicVideosByChannel` and `CountPublicVideosByChannelVisible` carry the
+`video_blocks` predicate but no per-viewer mute/block clause, unlike every other
+list — so with bram muted, `/channels/bramchan` reads *"BRAMCHAN · 1 follower ·
+2 videos"* with both cards. That is **contract-conformant**: `POST
+/me/blocks/{id}` enumerates its promise as *"their videos leave the blocker's
+feed, search, and subscriptions, and their comments are filtered from comment
+lists"*, and a channel page is none of those. It is also what Mastodon and
+Twitter do. But `/settings/mutes` promises *"Their videos and comments are
+hidden from you"* without qualification, so the contract and the copy disagree
+and one of them has to move. **(b) Autosuggest.**
+`GET /search/suggestions` returns **byte-identical** payloads to the muter, the
+control and an anonymous caller — the channel `BRAMCHAN` and both video titles.
+The screenshot worth keeping is the dropdown offering *"Bram Beta Clip"* and
+*"Bram Alpha Clip"* over a results page reading *"No results"*. Filtering it is
+not surgical: vidra-search's index stores static eligibility and **never
+per-viewer state** by design, which is exactly what makes the ranked-ids
+contract visibility-safe, and the free-text query suggestions have no owner to
+join against. **The two compose**: the channel suggestion links straight to the
+channel page, so together they are a complete route back to everything the mute
+hid. Recorded with the file, the query and the measurement rather than changed.
+
+**Gates.** vidra-core `make ci` **passed**, exit 0 (fmt-check, vet,
+migrate-lint, openapi-verify, sqlc-verify, test-race; **79 packages ok, 0
+failures**); `go vet -tags=integration ./...` clean; `go test -tags=integration
+./internal/store/... ./internal/federation/...` **passed** against native
+PostgreSQL 16 at schema 131 on a scratch database. vidra-user: `npx tsc
+--noEmit` clean, `npm run lint` 0 errors (2 warnings, both pre-existing on
+main), `npm run lint:icons` pass, `npm run test` **248 files / 2,449 tests
+passed** on Node 24.4.1. No-regression: **52 named A12/A16 test functions pass**
+beside the new ones, including `TestFollowCreatesNotificationForOwner`,
+`TestCommentNotificationRespectsMutesAndBlocks`, `TestReportVideoAndModerate`,
+`TestReportCommentAndUnknown`, `TestReportAccountAndModerate`,
+`TestReportValidationAndAuth`, `TestAdminUserManagement`,
+`TestDeleteAccountFlow`, `TestClaimOwnerEndpointCreatesAdmin`,
+`TestFollowFlowAndFollowerCount` and `TestFollowNotificationBellEndpoint`. No
+new viewer-scoped client read was added, so `lib/use-settled-session.ts` needed
+no new caller. **Unverified:** federation itself — the remote rows are honest
+local rows on one instance and no delivery, signature or two-instance behaviour
+was exercised, which **A29 owns**; what is proven here is the predicate, not the
+plumbing. Also the frontend e2e and e2e-backed suites, which this repo's
+AGENTS.md forbids running locally. The meta compose render was not re-run: no
+compose, script or env file changed.
+
+**What failed first, beyond the defect.** One assertion failed on the **lab**:
+the instance block/unblock audit check queried `action IN ('instance.block',
+'instance.unblock')` when the shipped names are `moderation.instance.*`. Kept,
+and restated in the next run at the correct names — 2 rows. Two browser errors
+worth the same treatment: two `Unmute` clicks on `/settings/mutes/instances`
+issued **no `DELETE` at all** (clicked before the row had rendered, then on a
+stale element ref), which looked exactly like a broken control until the core
+log showed no request; re-run carefully the same button deleted the row (`DELETE
+204`, table empty). And a probe that should have been guarded from the start:
+the "unmuted" column first read as the **anonymous** answer because uma's
+15-minute access token had expired — **every discovery route is `optionalAuth`,
+so an expired bearer is silently treated as anonymous** rather than refused.
+Every viewer-scoped probe now asserts `GET /auth/me = 200` first. The earlier
+baseline and muted runs survive that scare on their own evidence:
+`/me/subscriptions/videos` is `requireAuth` and answered 200 in both.
+
+**Findings recorded, not fixed.** (1) The channel page, above. (2) Autosuggest,
+above. (3) The match excerpt is a live join, not a snapshot — the sharpest of
+the three, and the only one needing a migration. (4) Deleting the comment, or
+the word, destroys the match history. (5) No resolve or dismiss on the match
+queue. (6) A muted account's DM still leaves one `message` row in the muter's
+inbox — coherent, since a mute does not cut DMs, but it is the one row a mute
+leaves. (7) The muted channel stays in the viewer's own FOLLOWING sidebar rail;
+the viewer chose to follow, so it is defensible, but it is the one place the
+name still shows. (8) **The UI offers exactly one place to mute an account** — a
+comment's overflow menu, `api.muteAccount`'s single call site — so an account
+that never comments cannot be muted from the UI at all; instance muting likewise
+needs remote content on screen.
+
+**ADM-02 → PASS (candidate; unmerged)**, evidence
+`docs/evidence/a16-mutes-watched-words.json` beside `a16-quarantine-blocks` and
+`a16-moderation-hardening`. **A16's stopping criterion is met** — ADM-01 and
+ADM-02 are both PASS — so **A16 closes**. The follow-ups recorded across its
+four sections are follow-ups, not blockers: no ownership transfer route; the
+last-admin guard is check-then-act rather than atomic; unblocking notifies
+nobody; block-reason visibility to the creator is an open product ruling;
+`/studio?video={id}` still errors for the owner of a blocked video; an owner can
+still `PATCH` a blocked video's metadata; a report carries no comment author and
+no DM sender; the quarantine queue shows no prior-action history; the two
+mute surfaces above; the watched-word excerpt and its missing triage state; and
+**everything about remote/federated content, which A29 owns**.
+
+**Delivery order: core#175 and user#172 are independent** — neither changes a
+route or a response shape, so vidra-user needs no regenerated client and there
+is no `contract-ci` ordering failure to expect — then this evidence PR. Nothing
+is merged here and no deployment is authorized. The lab was torn down.
