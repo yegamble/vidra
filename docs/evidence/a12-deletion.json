@@ -1,0 +1,4 @@
+{
+  "status": "IN PROGRESS — acceptance run under way; this file is replaced by the sanitized evidence before the PR is marked ready.",
+  "scope": "A12 / AUTH-05 slice (b): account deactivation and deletion with real content — visibility, tokens, tombstones, search deletion hook, DM retention, media cleanup, wrong-actor paths."
+}
