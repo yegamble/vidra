@@ -1,0 +1,2825 @@
+{
+ "slice": "A16 quarantine, video blocks and report context (ADM-02 video/report half \u2014 slice 2 of 3)",
+ "date": "2026-09-06",
+ "register_row": {
+  "row": "ADM-02",
+  "verdict": "NOT flipped \u2014 mutes and watched words remain (slice 3)"
+ },
+ "prs": {
+  "vidra-core": "https://github.com/yegamble/vidra-core/pull/172",
+  "vidra-user": "none \u2014 no frontend change was needed",
+  "meta": "this evidence PR"
+ },
+ "lab": {
+  "topology": "one origin (a pipe-only node proxy on :3200 in front of `node .next/standalone/server.js` on :3100 and vidra-core on :8088), because vidra_refresh is SameSite=Lax and Path=/api/v1/auth",
+  "postgres": "native PostgreSQL 16 on a private port (55432), fresh cluster, migrated to schema 129",
+  "redis": "native redis on a private port (56379), flushed before seeding",
+  "vidra_search": "stood up natively on :8089 with its own database at search schema 16 \u2014 every index assertion is a readback of search.documents, not an inference",
+  "media": "TRANSCODING_ENABLED=true with ffmpeg 8.1; every upload is a real 36,859-byte mp4 through create -> upload-session -> PUT chunks -> complete",
+  "frontend": "production `next build` served from .next/standalone with .next/static and public copied in",
+  "browser": "real Chromium, hard reloads, one signed-in session at a time",
+  "rate_limits": "shipped defaults, never raised: general 120/min per IP (paced at ~109/min), auth 10/min per IP (one login per actor, 6.5 s apart)",
+  "teardown": "postgres and redis stopped and their data directories removed; both binaries, the search binary and the standalone build artefacts deleted; nothing left on 8088/8089/3100/3200"
+ },
+ "actors": {
+  "M": "mona \u2014 instance owner, admin (first account, claimed with OWNER_CLAIM_TOKEN)",
+  "D": "dana \u2014 moderator (promoted by M)",
+  "C": "cora \u2014 creator with a channel and three real uploads",
+  "A": "avery \u2014 viewer, subscriber of C's channel, reporter",
+  "B": "blake \u2014 viewer, DM sender and commenter",
+  "anonymous": "no credentials"
+ },
+ "totals": {
+  "assertions": 236,
+  "failed": 12,
+  "phases": 21
+ },
+ "rate_limit_429s": 0,
+ "failed_rows_are_deliberate": {
+  "genuine_baseline_reproductions": [
+   "P9.6",
+   "P9.11"
+  ],
+  "explanation": "P9.6 and P9.11 are the DEFECT: on the origin/main binary the moderation queue's message report carries no message_body at all, so the moderator reads nothing of the reported DM. They are restated as P9.6' and P9.11'/P9.11''/P9.11''' on the patched binary.",
+  "lab_errors_restated": {
+   "P0.2": "wrong settings path; registration was already open at its default \u2014 restated P0.2'",
+   "P3.C.feeds": "GET /channels/{handle}/videos is the OWNER'S MANAGEMENT view, not a public surface \u2014 restated P3.C.feeds'/P3.C.feeds''",
+   "P5.rej.index": "expected absence; the shipped behaviour is a suppression tombstone \u2014 restated P5.rej.index'/P5.rej.index''",
+   "P6.blocked.C.feeds": "same owner-management-view confusion \u2014 the real finding is in the P6 addendum",
+   "P9.7": "the reporter is nested under reporter.username \u2014 restated P9.7'",
+   "P9.14": "same nesting \u2014 restated P9.14'",
+   "P9.15": "the fixture text itself contained the word 'blake' \u2014 restated P9.15'",
+   "P9.17": "resolve answers 204, not 200 \u2014 restated P9.17'",
+   "P9.11'": "the sender's delete is a TOMBSTONE, not a hard delete \u2014 restated P9.11'/P9.11''",
+   "P13.1": "the access token had expired (15 min TTL); restated after a re-login"
+  }
+ },
+ "consistency_tables": {
+  "quarantined": {
+   "by_actor": {
+    "anon": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "search_api": "absent",
+     "watch_detail": 404,
+     "embed_privacy": 404,
+     "thumbnail": 404,
+     "hls_master": 404
+    },
+    "A": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 404,
+     "embed_privacy": 404,
+     "thumbnail": 404,
+     "hls_master": 404
+    },
+    "B": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 404,
+     "embed_privacy": 404,
+     "thumbnail": 404,
+     "hls_master": 404
+    },
+    "C": {
+     "home_feed": "absent",
+     "channel_page": "in",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 404
+    },
+    "D": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 404
+    },
+    "M": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 404
+    }
+   },
+   "root_anonymous": {
+    "rss": "absent",
+    "sitemap": "absent",
+    "oembed": 404,
+    "oembed_leaks_title": false
+   },
+   "search_index": "ABSENT",
+   "db_state": "quarantined",
+   "video_blocks_rows": "0"
+  },
+  "approved": {
+   "by_actor": {
+    "anon": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "A": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "in",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "B": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "absent",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "C": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "absent",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "D": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "absent",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "M": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "absent",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    }
+   },
+   "root_anonymous": {
+    "rss": "in",
+    "sitemap": "in",
+    "oembed": 200,
+    "oembed_leaks_title": true
+   },
+   "search_index": "true/NULL",
+   "db_state": "published",
+   "video_blocks_rows": "0"
+  },
+  "rejected": {
+   "by_actor": {
+    "anon": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "search_api": "absent",
+     "watch_detail": 404,
+     "embed_privacy": 200,
+     "thumbnail": 404,
+     "hls_master": 404
+    },
+    "A": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 404,
+     "embed_privacy": 200,
+     "thumbnail": 404,
+     "hls_master": 404
+    },
+    "B": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 404,
+     "embed_privacy": 200,
+     "thumbnail": 404,
+     "hls_master": 404
+    },
+    "C": {
+     "home_feed": "absent",
+     "channel_page": "in",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 404
+    },
+    "D": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 404
+    },
+    "M": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 404
+    }
+   },
+   "root_anonymous": {
+    "rss": "absent",
+    "sitemap": "absent",
+    "oembed": 404,
+    "oembed_leaks_title": false
+   },
+   "search_index": "false/moderated",
+   "db_state": "failed",
+   "video_blocks_rows": "0"
+  },
+  "before-block": {
+   "by_actor": {
+    "anon": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "A": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "in",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "B": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "absent",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "C": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "absent",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "D": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "absent",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "M": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "absent",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    }
+   },
+   "root_anonymous": {
+    "rss": "in",
+    "sitemap": "in",
+    "oembed": 200,
+    "oembed_leaks_title": true
+   },
+   "search_index": "true/NULL",
+   "db_state": "published",
+   "video_blocks_rows": "0"
+  },
+  "blocked": {
+   "by_actor": {
+    "anon": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "search_api": "absent",
+     "watch_detail": 404,
+     "embed_privacy": 404,
+     "thumbnail": 404,
+     "hls_master": 404
+    },
+    "A": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 404,
+     "embed_privacy": 404,
+     "thumbnail": 404,
+     "hls_master": 404
+    },
+    "B": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 404,
+     "embed_privacy": 404,
+     "thumbnail": 404,
+     "hls_master": 404
+    },
+    "C": {
+     "home_feed": "absent",
+     "channel_page": "in",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 404,
+     "embed_privacy": 404,
+     "thumbnail": 404,
+     "hls_master": 404
+    },
+    "D": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "M": {
+     "home_feed": "absent",
+     "channel_page": "absent",
+     "videos_listing": "absent",
+     "subscriptions_feed": "absent",
+     "search_api": "absent",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    }
+   },
+   "root_anonymous": {
+    "rss": "absent",
+    "sitemap": "absent",
+    "oembed": 404,
+    "oembed_leaks_title": false
+   },
+   "search_index": "false/blocked",
+   "db_state": "published",
+   "video_blocks_rows": "1"
+  },
+  "unblocked": {
+   "by_actor": {
+    "anon": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "A": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "in",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "B": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "absent",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "C": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "absent",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "D": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "absent",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    },
+    "M": {
+     "home_feed": "in",
+     "channel_page": "in",
+     "videos_listing": "in",
+     "subscriptions_feed": "absent",
+     "search_api": "in",
+     "watch_detail": 200,
+     "embed_privacy": 200,
+     "thumbnail": 200,
+     "hls_master": 200
+    }
+   },
+   "root_anonymous": {
+    "rss": "in",
+    "sitemap": "in",
+    "oembed": 200,
+    "oembed_leaks_title": true
+   },
+   "search_index": "true/NULL",
+   "db_state": "published",
+   "video_blocks_rows": "0"
+  }
+ },
+ "rows": [
+  {
+   "phase": "P0 seed",
+   "id": "P0.1",
+   "claim": "owner claim mints the admin M",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P0 seed",
+   "id": "P0.2",
+   "claim": "admin opens registration for the synthetic actors",
+   "expected": 200,
+   "observed": 404,
+   "pass": false
+  },
+  {
+   "phase": "P0 seed",
+   "id": "P0.dana",
+   "claim": "register dana (moderator)",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P0 seed",
+   "id": "P0.cora",
+   "claim": "register cora (creator C)",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P0 seed",
+   "id": "P0.avery",
+   "claim": "register avery (viewer A)",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P0 seed",
+   "id": "P0.blake",
+   "claim": "register blake (viewer B)",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P0 seed",
+   "id": "P0.3",
+   "claim": "M promotes dana to moderator",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P0 seed",
+   "id": "P0.4",
+   "claim": "postgres agrees dana is a moderator",
+   "expected": "moderator",
+   "observed": "moderator",
+   "pass": true
+  },
+  {
+   "phase": "P0 seed",
+   "id": "P0.5",
+   "claim": "dana's existing token reaches the staff queue after promotion",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P1 control upload",
+   "id": "P1.1",
+   "claim": "C creates a channel",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P1 control upload",
+   "id": "P1.2",
+   "claim": "with the quarantine gate off, C's finished upload publishes",
+   "expected": "published",
+   "observed": "published",
+   "pass": true
+  },
+  {
+   "phase": "P2 quarantine gate",
+   "id": "P2.0",
+   "claim": "A follows C's channel (subscriptions feed becomes a real surface)",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P2 quarantine gate",
+   "id": "P2.0b",
+   "claim": "the control video is in A's subscriptions feed before any moderation",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P2 quarantine gate",
+   "id": "P2.1",
+   "claim": "admin turns quarantine_new_uploads on",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P2 quarantine gate",
+   "id": "P2.2",
+   "claim": "the setting reads back on and overridden",
+   "expected": [
+    true,
+    true
+   ],
+   "observed": [
+    true,
+    true
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P2 quarantine gate",
+   "id": "P2.V_appr",
+   "claim": "with the gate on, C's finished upload parks in quarantine",
+   "expected": "quarantined",
+   "observed": "quarantined",
+   "pass": true
+  },
+  {
+   "phase": "P2 quarantine gate",
+   "id": "P2.V_rej",
+   "claim": "with the gate on, C's finished upload parks in quarantine",
+   "expected": "quarantined",
+   "observed": "quarantined",
+   "pass": true
+  },
+  {
+   "phase": "P2 quarantine gate",
+   "id": "P2.3",
+   "claim": "C has no bypass_quarantine flag",
+   "expected": "f",
+   "observed": "f",
+   "pass": true
+  },
+  {
+   "phase": "P2 quarantine gate",
+   "id": "P2.4",
+   "claim": "the quarantine queue is readable by a moderator",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P2 quarantine gate",
+   "id": "P2.5",
+   "claim": "both held uploads are in the queue",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P2 quarantine gate",
+   "id": "P2.6",
+   "claim": "queue context fields as shipped",
+   "expected": [
+    "id",
+    "title",
+    "privacy",
+    "state",
+    "channel_handle",
+    "channel_display_name",
+    "owner_username",
+    "created_at"
+   ],
+   "observed": [
+    "channel_display_name",
+    "channel_handle",
+    "created_at",
+    "id",
+    "owner_username",
+    "privacy",
+    "state",
+    "title"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P2 quarantine gate",
+   "id": "P2.7",
+   "claim": "the queue entry carries no reason and no prior-action history",
+   "expected": [
+    false,
+    false
+   ],
+   "observed": [
+    false,
+    false
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.anon.feeds",
+   "claim": "a quarantined video is on no feed for anon",
+   "expected": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "observed": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.anon.watch",
+   "claim": "the direct watch URL 404s for anon",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.anon.media",
+   "claim": "thumbnail and HLS 404 for anon",
+   "expected": [
+    404,
+    404
+   ],
+   "observed": [
+    404,
+    404
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.A.feeds",
+   "claim": "a quarantined video is on no feed for A",
+   "expected": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "observed": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.A.watch",
+   "claim": "the direct watch URL 404s for A",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.A.media",
+   "claim": "thumbnail and HLS 404 for A",
+   "expected": [
+    404,
+    404
+   ],
+   "observed": [
+    404,
+    404
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.B.feeds",
+   "claim": "a quarantined video is on no feed for B",
+   "expected": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "observed": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.B.watch",
+   "claim": "the direct watch URL 404s for B",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.B.media",
+   "claim": "thumbnail and HLS 404 for B",
+   "expected": [
+    404,
+    404
+   ],
+   "observed": [
+    404,
+    404
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.A.subs",
+   "claim": "a quarantined video is not in a subscriber's feed",
+   "expected": "absent",
+   "observed": "absent",
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.C.watch",
+   "claim": "the OWNER can still open the held video's detail",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.C.feeds",
+   "claim": "but it is on none of the owner's public surfaces either",
+   "expected": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "observed": [
+    "absent",
+    "in",
+    "absent",
+    "absent"
+   ],
+   "pass": false
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.D.watch",
+   "claim": "staff (D) can open the held video",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.M.watch",
+   "claim": "staff (M) can open the held video",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.rss",
+   "claim": "the RSS feed does not carry a quarantined video",
+   "expected": "absent",
+   "observed": "absent",
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.sitemap",
+   "claim": "the sitemap does not carry it",
+   "expected": "absent",
+   "observed": "absent",
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.oembed",
+   "claim": "oEmbed 404s on a quarantined video (state is not published)",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P3 quarantined surface table",
+   "id": "P3.index",
+   "claim": "it was never indexed in vidra-search",
+   "expected": "ABSENT",
+   "observed": "ABSENT",
+   "pass": true
+  },
+  {
+   "phase": "P3 addendum (lab correction)",
+   "id": "P3.C.feeds'",
+   "claim": "the owner's own channel listing is the management view and shows the held video with its state",
+   "expected": "quarantined",
+   "observed": "quarantined",
+   "pass": true
+  },
+  {
+   "phase": "P3 addendum (lab correction)",
+   "id": "P3.C.feeds''",
+   "claim": "the SAME route anonymously is the public list and omits it",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P3 addendum (lab correction)",
+   "id": "P3.C.feeds'",
+   "claim": "the owner's own channel listing is the management view and shows the held video with its state",
+   "expected": "quarantined",
+   "observed": "quarantined",
+   "pass": true
+  },
+  {
+   "phase": "P3 addendum (lab correction)",
+   "id": "P3.C.feeds''",
+   "claim": "the SAME route anonymously is the public list and omits it",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P3 addendum (lab correction)",
+   "id": "P3.C.uploads",
+   "claim": "/me/uploads lists upload SESSIONS and reports no moderation state",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.wrong.approve.A",
+   "claim": "approve is refused for A (ordinary user)",
+   "expected": 403,
+   "observed": 403,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.wrong.reject.A",
+   "claim": "reject is refused for A (ordinary user)",
+   "expected": 403,
+   "observed": 403,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.wrong.queue.A",
+   "claim": "the queue itself is refused for A (ordinary user)",
+   "expected": 403,
+   "observed": 403,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.wrong.approve.anonymous",
+   "claim": "approve is refused for anonymous",
+   "expected": 401,
+   "observed": 401,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.wrong.reject.anonymous",
+   "claim": "reject is refused for anonymous",
+   "expected": 401,
+   "observed": 401,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.wrong.queue.anonymous",
+   "claim": "the queue itself is refused for anonymous",
+   "expected": 401,
+   "observed": 401,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.wrong.unchanged",
+   "claim": "both videos are still quarantined after all six refusals",
+   "expected": [
+    "quarantined",
+    "quarantined"
+   ],
+   "observed": [
+    "quarantined",
+    "quarantined"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.approve",
+   "claim": "a MODERATOR may approve (staff tier)",
+   "expected": 204,
+   "observed": 204,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.approve.state",
+   "claim": "the approved video is published",
+   "expected": "published",
+   "observed": "published",
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.approve.repeat",
+   "claim": "approving an already-published video is 409, not a second publish",
+   "expected": 409,
+   "observed": 409,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.reject",
+   "claim": "a moderator may reject with a note",
+   "expected": 204,
+   "observed": 204,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.reject.state",
+   "claim": "the rejected video is 'failed' and never publishes",
+   "expected": "failed",
+   "observed": "failed",
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.reject.repeat",
+   "claim": "rejecting it again is 409",
+   "expected": 409,
+   "observed": 409,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.notify.rejected",
+   "claim": "C receives exactly one video_rejected, for the rejected video",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.notify.approved",
+   "claim": "APPROVAL notifies the owner of nothing",
+   "expected": 0,
+   "observed": 0,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.note.notification",
+   "claim": "the notifications table has no column that could carry the moderator's note",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.note.audit",
+   "claim": "the note's text is nowhere in the audit ledger either",
+   "expected": "0",
+   "observed": "0",
+   "pass": true
+  },
+  {
+   "phase": "P4 approve / reject",
+   "id": "P4.note.owner_read",
+   "claim": "and the owner's own read of the rejected video carries no rejection reason",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P4 audit (restated)",
+   "id": "P4.audit",
+   "claim": "both moderation actions are audited as successes",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P4 audit (restated)",
+   "id": "P4.audit.note",
+   "claim": "the reject audit row records only WHETHER prose was supplied, never the prose",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P4 audit (restated)",
+   "id": "P4.audit.actor",
+   "claim": "the reject audit row names the moderator and the video",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P4 audit (restated)",
+   "id": "P4.note.audit",
+   "claim": "the note's text is nowhere in the audit ledger",
+   "expected": "0",
+   "observed": "0",
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.anon.feeds",
+   "claim": "an approved video is published on every public feed for anon",
+   "expected": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "observed": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.anon.watch",
+   "claim": "and its watch page is 200 for anon",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.A.feeds",
+   "claim": "an approved video is published on every public feed for A",
+   "expected": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "observed": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.A.watch",
+   "claim": "and its watch page is 200 for A",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.B.feeds",
+   "claim": "an approved video is published on every public feed for B",
+   "expected": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "observed": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.B.watch",
+   "claim": "and its watch page is 200 for B",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.C.feeds",
+   "claim": "an approved video is published on every public feed for C",
+   "expected": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "observed": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.C.watch",
+   "claim": "and its watch page is 200 for C",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.subs",
+   "claim": "an approved video reaches a subscriber's feed",
+   "expected": "in",
+   "observed": "in",
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.rss",
+   "claim": "approval puts it in the RSS feed",
+   "expected": "in",
+   "observed": "in",
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.sitemap",
+   "claim": "and in the sitemap",
+   "expected": "in",
+   "observed": "in",
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.oembed",
+   "claim": "and oEmbed answers for it",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.appr.index",
+   "claim": "and vidra-search indexed it as eligible",
+   "expected": "true/NULL",
+   "observed": "true/NULL",
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.rej.anon.feeds",
+   "claim": "a rejected video is on no feed for anon",
+   "expected": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "observed": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.rej.anon.watch",
+   "claim": "its watch URL stays 404 for anon",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.rej.A.feeds",
+   "claim": "a rejected video is on no feed for A",
+   "expected": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "observed": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.rej.A.watch",
+   "claim": "its watch URL stays 404 for A",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.rej.B.feeds",
+   "claim": "a rejected video is on no feed for B",
+   "expected": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "observed": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.rej.B.watch",
+   "claim": "its watch URL stays 404 for B",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.rej.rss",
+   "claim": "it is in no RSS feed",
+   "expected": "absent",
+   "observed": "absent",
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.rej.oembed",
+   "claim": "oEmbed 404s on it",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.rej.index",
+   "claim": "and it is not in the search index",
+   "expected": "ABSENT",
+   "observed": "false/moderated",
+   "pass": false
+  },
+  {
+   "phase": "P5 after approve / after reject",
+   "id": "P5.rej.owner",
+   "claim": "the owner can still open the failed video (the 'failed' state is not a hide)",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.before",
+   "claim": "the control video is live on every public surface before the block",
+   "expected": [
+    "in",
+    "in",
+    "in",
+    "in",
+    200,
+    "in",
+    200
+   ],
+   "observed": [
+    "in",
+    "in",
+    "in",
+    "in",
+    200,
+    "in",
+    200
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.before.index",
+   "claim": "and eligible in the search index",
+   "expected": "true/NULL",
+   "observed": "true/NULL",
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.wrong.block.user",
+   "claim": "block is refused for user",
+   "expected": 403,
+   "observed": 403,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.wrong.unblock.user",
+   "claim": "unblock is refused for user",
+   "expected": 403,
+   "observed": 403,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.wrong.list.user",
+   "claim": "the block list is refused for user",
+   "expected": 403,
+   "observed": 403,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.wrong.block.anon",
+   "claim": "block is refused for anon",
+   "expected": 401,
+   "observed": 401,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.wrong.unblock.anon",
+   "claim": "unblock is refused for anon",
+   "expected": 401,
+   "observed": 401,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.wrong.list.anon",
+   "claim": "the block list is refused for anon",
+   "expected": 401,
+   "observed": 401,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.wrong.unchanged",
+   "claim": "no block row exists after the four refusals",
+   "expected": "0",
+   "observed": "0",
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.block",
+   "claim": "a moderator may block a published video",
+   "expected": 204,
+   "observed": 204,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.block.idempotent",
+   "claim": "blocking twice is idempotent (204, one row)",
+   "expected": [
+    204,
+    "1"
+   ],
+   "observed": [
+    204,
+    "1"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.block.state",
+   "claim": "a block changes neither state nor privacy",
+   "expected": "published|public",
+   "observed": "published|public",
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.anon.feeds",
+   "claim": "a blocked video is on no feed for anon",
+   "expected": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "observed": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.anon.watch",
+   "claim": "its watch URL is 404 for anon (the OWNER included)",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.anon.media",
+   "claim": "thumbnail and HLS 404 for anon",
+   "expected": [
+    404,
+    404
+   ],
+   "observed": [
+    404,
+    404
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.A.feeds",
+   "claim": "a blocked video is on no feed for A",
+   "expected": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "observed": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.A.watch",
+   "claim": "its watch URL is 404 for A (the OWNER included)",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.A.media",
+   "claim": "thumbnail and HLS 404 for A",
+   "expected": [
+    404,
+    404
+   ],
+   "observed": [
+    404,
+    404
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.B.feeds",
+   "claim": "a blocked video is on no feed for B",
+   "expected": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "observed": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.B.watch",
+   "claim": "its watch URL is 404 for B (the OWNER included)",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.B.media",
+   "claim": "thumbnail and HLS 404 for B",
+   "expected": [
+    404,
+    404
+   ],
+   "observed": [
+    404,
+    404
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.C.feeds",
+   "claim": "a blocked video is on no feed for C",
+   "expected": [
+    "absent",
+    "absent",
+    "absent",
+    "absent"
+   ],
+   "observed": [
+    "absent",
+    "in",
+    "absent",
+    "absent"
+   ],
+   "pass": false
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.C.watch",
+   "claim": "its watch URL is 404 for C (the OWNER included)",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.C.media",
+   "claim": "thumbnail and HLS 404 for C",
+   "expected": [
+    404,
+    404
+   ],
+   "observed": [
+    404,
+    404
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.subs",
+   "claim": "it leaves the subscriber's feed",
+   "expected": "absent",
+   "observed": "absent",
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.rss",
+   "claim": "it leaves the RSS feed",
+   "expected": "absent",
+   "observed": "absent",
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.sitemap",
+   "claim": "it leaves the sitemap",
+   "expected": "absent",
+   "observed": "absent",
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.oembed",
+   "claim": "oEmbed 404s on it (the fix in core#172)",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.oembed.title",
+   "claim": "and leaks no title",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.index",
+   "claim": "the search index suppresses it via the outbox",
+   "expected": "false/blocked",
+   "observed": "false/blocked",
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.D.watch",
+   "claim": "staff (D) can still open it",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.blocked.M.watch",
+   "claim": "staff (M) can still open it",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.notify",
+   "claim": "blocking notifies the owner of NOTHING",
+   "expected": "2",
+   "observed": "2",
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.list",
+   "claim": "the blocked video is listed with its reason and the moderator who blocked it",
+   "expected": [
+    1,
+    "A16 lab block: synthetic fixture, blocked to prove the hide.",
+    "dana"
+   ],
+   "observed": [
+    1,
+    "A16 lab block: synthetic fixture, blocked to prove the hide.",
+    "dana"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P6 block / unblock a published video",
+   "id": "P6.audit",
+   "claim": "the block is audited",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P6 addendum: what the owner sees",
+   "id": "P6.owner.listing",
+   "claim": "the owner's channel management listing still lists the blocked video",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P6 addendum: what the owner sees",
+   "id": "P6.owner.state",
+   "claim": "and reports it as 'published'",
+   "expected": "published",
+   "observed": "published",
+   "pass": true
+  },
+  {
+   "phase": "P6 addendum: what the owner sees",
+   "id": "P6.owner.nomarker",
+   "claim": "with no field that says it was blocked",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P6 addendum: what the owner sees",
+   "id": "P6.owner.detail",
+   "claim": "while the owner's own detail read of it is 404",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P6 addendum: what the owner sees",
+   "id": "P6.admin.marker",
+   "claim": "the ADMIN inventory does carry a blocked marker",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.unblock",
+   "claim": "a moderator may unblock",
+   "expected": 204,
+   "observed": 204,
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.unblock.row",
+   "claim": "the block row is gone",
+   "expected": "0",
+   "observed": "0",
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.unblock.idempotent",
+   "claim": "unblocking an unblocked video is still 204",
+   "expected": 204,
+   "observed": 204,
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.anon.feeds",
+   "claim": "the video is back on every public feed for anon",
+   "expected": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "observed": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.anon.watch",
+   "claim": "and its watch URL is 200 again for anon",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.anon.media",
+   "claim": "thumbnail and HLS serve again for anon",
+   "expected": [
+    200,
+    200
+   ],
+   "observed": [
+    200,
+    200
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.A.feeds",
+   "claim": "the video is back on every public feed for A",
+   "expected": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "observed": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.A.watch",
+   "claim": "and its watch URL is 200 again for A",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.A.media",
+   "claim": "thumbnail and HLS serve again for A",
+   "expected": [
+    200,
+    200
+   ],
+   "observed": [
+    200,
+    200
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.B.feeds",
+   "claim": "the video is back on every public feed for B",
+   "expected": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "observed": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.B.watch",
+   "claim": "and its watch URL is 200 again for B",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.B.media",
+   "claim": "thumbnail and HLS serve again for B",
+   "expected": [
+    200,
+    200
+   ],
+   "observed": [
+    200,
+    200
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.C.feeds",
+   "claim": "the video is back on every public feed for C",
+   "expected": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "observed": [
+    "in",
+    "in",
+    "in",
+    "in"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.C.watch",
+   "claim": "and its watch URL is 200 again for C",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.C.media",
+   "claim": "thumbnail and HLS serve again for C",
+   "expected": [
+    200,
+    200
+   ],
+   "observed": [
+    200,
+    200
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.subs",
+   "claim": "it returns to the subscriber's feed",
+   "expected": "in",
+   "observed": "in",
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.rss",
+   "claim": "it returns to the RSS feed",
+   "expected": "in",
+   "observed": "in",
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.sitemap",
+   "claim": "and the sitemap",
+   "expected": "in",
+   "observed": "in",
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.oembed",
+   "claim": "and oEmbed answers again",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.index",
+   "claim": "and vidra-search re-indexed it as eligible through the outbox upsert",
+   "expected": "true/NULL",
+   "observed": "true/NULL",
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.list",
+   "claim": "the block list no longer carries it",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P7 unblock",
+   "id": "P7.audit",
+   "claim": "the unblock is audited",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.0",
+   "claim": "the lab holds no federated content (A29 owns two-instance proof)",
+   "expected": [
+    "0",
+    "0"
+   ],
+   "observed": [
+    "0",
+    "0"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.1",
+   "claim": "a moderator may read the instance blocklist",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.2",
+   "claim": "a moderator may block an instance",
+   "expected": 204,
+   "observed": 204,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.3",
+   "claim": "it round-trips with its reason",
+   "expected": [
+    1,
+    "A16 lab: synthetic domain"
+   ],
+   "observed": [
+    1,
+    "A16 lab: synthetic domain"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.4",
+   "claim": "postgres agrees",
+   "expected": "1",
+   "observed": "1",
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.5",
+   "claim": "blocking the same domain twice is idempotent (one row)",
+   "expected": [
+    204,
+    "1"
+   ],
+   "observed": [
+    204,
+    "1"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.wrong.block.user",
+   "claim": "instance block is refused for user",
+   "expected": 403,
+   "observed": 403,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.wrong.list.user",
+   "claim": "the instance blocklist is refused for user",
+   "expected": 403,
+   "observed": 403,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.wrong.unblock.user",
+   "claim": "instance unblock is refused for user",
+   "expected": 403,
+   "observed": 403,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.wrong.block.anon",
+   "claim": "instance block is refused for anon",
+   "expected": 401,
+   "observed": 401,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.wrong.list.anon",
+   "claim": "the instance blocklist is refused for anon",
+   "expected": 401,
+   "observed": 401,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.wrong.unblock.anon",
+   "claim": "instance unblock is refused for anon",
+   "expected": 401,
+   "observed": 401,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.6",
+   "claim": "nothing was added by the six refusals",
+   "expected": "1",
+   "observed": "1",
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.7",
+   "claim": "unblocking removes it",
+   "expected": [
+    204,
+    "0"
+   ],
+   "observed": [
+    204,
+    "0"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.8",
+   "claim": "both instance actions are audited",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.9",
+   "claim": "the remote-video blocklist reads (empty in this lab)",
+   "expected": [
+    200,
+    0
+   ],
+   "observed": [
+    200,
+    0
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.10",
+   "claim": "blocking a remote video that does not exist is 404",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.wrong.remote.user",
+   "claim": "the remote blocklist is refused for user",
+   "expected": 403,
+   "observed": 403,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.wrong.remote.anon",
+   "claim": "the remote blocklist is refused for anon",
+   "expected": 401,
+   "observed": 401,
+   "pass": true
+  },
+  {
+   "phase": "P8 remote-video and instance blocks",
+   "id": "P8.11",
+   "claim": "the affected-feeds facet for remote content is UNVERIFIED: no federated content exists in this lab and A29 owns the two-instance proof",
+   "expected": "unverified",
+   "observed": "unverified",
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.1",
+   "claim": "B opens a plaintext conversation with A",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.2",
+   "claim": "B sends a plaintext DM",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.wrong.anon",
+   "claim": "reporting a message is refused for anon",
+   "expected": 401,
+   "observed": 401,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.wrong.outsider",
+   "claim": "a NON-PARTICIPANT reporting the message gets 404 (existence not leaked)",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.wrong.outsider.norow",
+   "claim": "and no report row was created by it",
+   "expected": "0",
+   "observed": "0",
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.3",
+   "claim": "A (a participant) may report the DM",
+   "expected": 204,
+   "observed": 204,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.4",
+   "claim": "reporting the same message twice is idempotent (one row)",
+   "expected": [
+    204,
+    "1"
+   ],
+   "observed": [
+    204,
+    "1"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.5",
+   "claim": "the report is in the moderator's queue",
+   "expected": 200,
+   "observed": 200,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.6",
+   "claim": "the queue entry carries the message body SNAPSHOT",
+   "expected": "A16 lab fixture DM from blake: synthetic abusive-sounding text for the queue.",
+   "observed": null,
+   "pass": false
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.7",
+   "claim": "and names the REPORTER",
+   "expected": "avery",
+   "observed": null,
+   "pass": false
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.8",
+   "claim": "but names the SENDER nowhere \u2014 a moderator cannot tell who wrote it",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.9",
+   "claim": "and gives no way to open the conversation",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.10",
+   "claim": "B deletes the message",
+   "expected": 204,
+   "observed": 204,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.11",
+   "claim": "the moderator still reads the snapshot after the sender deletes it",
+   "expected": "A16 lab fixture DM from blake: synthetic abusive-sounding text for the queue.",
+   "observed": null,
+   "pass": false
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.12",
+   "claim": "B comments on C's video",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.13",
+   "claim": "A reports the comment",
+   "expected": 204,
+   "observed": 204,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.14",
+   "claim": "a comment report carries the comment body and the reporter",
+   "expected": [
+    "A16 lab fixture comment from blake.",
+    "avery"
+   ],
+   "observed": [
+    "A16 lab fixture comment from blake.",
+    null
+   ],
+   "pass": false
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.15",
+   "claim": "but names the comment's AUTHOR nowhere either",
+   "expected": false,
+   "observed": true,
+   "pass": false
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.16",
+   "claim": "and carries no link to the video the comment sits on",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.wrong.resolve.user",
+   "claim": "resolving is refused for user",
+   "expected": 403,
+   "observed": 403,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.wrong.resolve.anon",
+   "claim": "resolving is refused for anon",
+   "expected": 401,
+   "observed": 401,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.wrong.resolve.unchanged",
+   "claim": "the report is still open after both refusals",
+   "expected": "open",
+   "observed": "open",
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.17",
+   "claim": "a moderator resolves the message report with an internal note",
+   "expected": 200,
+   "observed": 204,
+   "pass": false
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.18",
+   "claim": "status, note and resolved_at are stored",
+   "expected": [
+    "accepted",
+    "A16 lab internal note: reviewed, fixture content, no action.",
+    true
+   ],
+   "observed": [
+    "accepted",
+    "A16 lab internal note: reviewed, fixture content, no action.",
+    true
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.19",
+   "claim": "the REPORTER is notified (report_resolved), and the note is not on the notification",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.20",
+   "claim": "the reported party (B) is told nothing",
+   "expected": "0",
+   "observed": "0",
+   "pass": true
+  },
+  {
+   "phase": "P9 message and comment report context",
+   "id": "P9.21",
+   "claim": "and the moderator is not named on the reporter's notification",
+   "expected": "",
+   "observed": "",
+   "pass": true
+  },
+  {
+   "phase": "P9 restated on the patched binary",
+   "id": "P9.6'",
+   "claim": "PATCHED: the queue entry carries the message body snapshot",
+   "expected": "A16 lab fixture DM from blake: synthetic abusive-sounding text for the queue.",
+   "observed": "A16 lab fixture DM from blake: synthetic abusive-sounding text for the queue.",
+   "pass": true
+  },
+  {
+   "phase": "P9 restated on the patched binary",
+   "id": "P9.11'",
+   "claim": "and it survives the sender having deleted the message (message_id is gone, the text is not)",
+   "expected": [
+    true,
+    "A16 lab fixture DM from blake: synthetic abusive-sounding text for the queue."
+   ],
+   "observed": [
+    false,
+    "A16 lab fixture DM from blake: synthetic abusive-sounding text for the queue."
+   ],
+   "pass": false
+  },
+  {
+   "phase": "P9 restated on the patched binary",
+   "id": "P9.7'",
+   "claim": "the reporter is named under `reporter.username`",
+   "expected": "avery",
+   "observed": "avery",
+   "pass": true
+  },
+  {
+   "phase": "P9 restated on the patched binary",
+   "id": "P9.8'",
+   "claim": "the SENDER is still named nowhere \u2014 a moderator cannot tell who wrote it",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P9 restated on the patched binary",
+   "id": "P9.14'",
+   "claim": "a comment report carries the comment body and the reporter",
+   "expected": [
+    "A16 lab fixture comment from blake.",
+    "avery"
+   ],
+   "observed": [
+    "A16 lab fixture comment from blake.",
+    "avery"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P9 restated on the patched binary",
+   "id": "P9.15'",
+   "claim": "and no author field for the comment either",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P9 restated on the patched binary",
+   "id": "P9.16'",
+   "claim": "and no video_id, so the moderator cannot reach the video the comment sits on",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P9 restated on the patched binary",
+   "id": "P9.17'",
+   "claim": "resolve answers 204 (not 200) as shipped",
+   "expected": 204,
+   "observed": 204,
+   "pass": true
+  },
+  {
+   "phase": "P9 restated on the patched binary",
+   "id": "P9.22",
+   "claim": "the resolved comment report keeps its note and leaves the open queue",
+   "expected": [
+    "rejected",
+    "A16 lab: comment note"
+   ],
+   "observed": [
+    "rejected",
+    "A16 lab: comment note"
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P9 restated on the patched binary",
+   "id": "P9.23",
+   "claim": "the open queue no longer carries either resolved report",
+   "expected": false,
+   "observed": false,
+   "pass": true
+  },
+  {
+   "phase": "P9.11 restated",
+   "id": "P9.11'",
+   "claim": "the sender's delete TOMBSTONES the row (it is not a hard delete), so message_id survives",
+   "expected": "true",
+   "observed": "true",
+   "pass": true
+  },
+  {
+   "phase": "P9.11 restated",
+   "id": "P9.11''",
+   "claim": "the live message body is emptied by the tombstone while the report keeps the original text",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P9.11 restated",
+   "id": "P9.11'''",
+   "claim": "the participant's thread shows the deleted placeholder",
+   "expected": [
+    "[deleted]",
+    true
+   ],
+   "observed": [
+    "[deleted]",
+    true
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P10 an encrypted thread's report surface",
+   "id": "P10.1",
+   "claim": "A registers an E2EE device",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P10 an encrypted thread's report surface",
+   "id": "P10.2",
+   "claim": "B registers an E2EE device",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P10 an encrypted thread's report surface",
+   "id": "P10.3",
+   "claim": "B opens an ENCRYPTED conversation with A (immutable at creation)",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P10 an encrypted thread's report surface",
+   "id": "P10.4",
+   "claim": "and it is a distinct conversation row flagged encrypted",
+   "expected": "t",
+   "observed": "t",
+   "pass": true
+  },
+  {
+   "phase": "P10 an encrypted thread's report surface",
+   "id": "P10.5",
+   "claim": "B sends an encrypted envelope",
+   "expected": 201,
+   "observed": 201,
+   "pass": true
+  },
+  {
+   "phase": "P10 an encrypted thread's report surface",
+   "id": "P10.6",
+   "claim": "the encrypted send writes NO row to the plaintext messages table",
+   "expected": "0",
+   "observed": "0",
+   "pass": true
+  },
+  {
+   "phase": "P10 an encrypted thread's report surface",
+   "id": "P10.7",
+   "claim": "it writes an e2ee_messages envelope instead",
+   "expected": "1",
+   "observed": "1",
+   "pass": true
+  },
+  {
+   "phase": "P10 an encrypted thread's report surface",
+   "id": "P10.8",
+   "claim": "reporting the envelope id through the message-report route is 404 \u2014 an encrypted message CANNOT be reported at all, so nothing of it can be exposed",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P10 restated with the real envelope id",
+   "id": "P10.8'",
+   "claim": "reporting the REAL envelope id through /messages/{id}/report is 404 \u2014 an encrypted message cannot be reported at all, so nothing of it can be exposed to a moderator",
+   "expected": 404,
+   "observed": 404,
+   "pass": true
+  },
+  {
+   "phase": "P10 restated with the real envelope id",
+   "id": "P10.9'",
+   "claim": "and no report row was created for it",
+   "expected": "0",
+   "observed": "0",
+   "pass": true
+  },
+  {
+   "phase": "P10 restated with the real envelope id",
+   "id": "P10.10'",
+   "claim": "the ciphertext is stored byte-identically; the server holds no plaintext of it",
+   "expected": "YTE2LWxhYi1vcGFxdWUtY2lwaGVydGV4dC1ibG9i",
+   "observed": "YTE2LWxhYi1vcGFxdWUtY2lwaGVydGV4dC1ibG9i",
+   "pass": true
+  },
+  {
+   "phase": "P10 restated with the real envelope id",
+   "id": "P10.11",
+   "claim": "there is no report route for an encrypted envelope anywhere in the contract",
+   "expected": 0,
+   "observed": 0,
+   "pass": true
+  },
+  {
+   "phase": "P11 browser fixtures",
+   "id": "P11.1",
+   "claim": "a third upload parks in quarantine for the browser walkthrough",
+   "expected": "quarantined",
+   "observed": "quarantined",
+   "pass": true
+  },
+  {
+   "phase": "P11 browser fixtures",
+   "id": "P11.2",
+   "claim": "A reports the published video so the queue has a video report too",
+   "expected": 204,
+   "observed": 204,
+   "pass": true
+  },
+  {
+   "phase": "P12 the rejection note, swept",
+   "id": "P12.1",
+   "claim": "the moderator's rejection prose appears in NO text column of the whole database \u2014 the UI promises it is 'recorded in the audit trail' and it is not recorded anywhere",
+   "expected": [],
+   "observed": [],
+   "pass": true
+  },
+  {
+   "phase": "P12 the rejection note, swept",
+   "id": "P12.2",
+   "claim": "290 text/json columns were swept",
+   "expected": true,
+   "observed": true,
+   "pass": true
+  },
+  {
+   "phase": "P13 restore",
+   "id": "P13.1",
+   "claim": "every block lifted",
+   "expected": "0",
+   "observed": "3",
+   "pass": false
+  },
+  {
+   "phase": "P13 restore",
+   "id": "P13.1",
+   "claim": "every block lifted",
+   "expected": "0",
+   "observed": "0",
+   "pass": true
+  },
+  {
+   "phase": "P13 restore",
+   "id": "P13.2",
+   "claim": "the quarantine setting is CLEARED back to the untouched default, not merely set to false",
+   "expected": [
+    false,
+    false
+   ],
+   "observed": [
+    false,
+    false
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P13 restore",
+   "id": "P13.3",
+   "claim": "no instance-settings override remains from this slice",
+   "expected": 0,
+   "observed": 0,
+   "pass": true
+  },
+  {
+   "phase": "P13 restore",
+   "id": "P13.4",
+   "claim": "no blocked instance remains",
+   "expected": "0",
+   "observed": "0",
+   "pass": true
+  },
+  {
+   "phase": "P14 remaining restatements",
+   "id": "P0.2'",
+   "claim": "registration was open at its untouched registry default \u2014 the synthetic actors needed no setting change, and none was made",
+   "expected": [
+    true,
+    false
+   ],
+   "observed": [
+    true,
+    false
+   ],
+   "pass": true
+  },
+  {
+   "phase": "P14 remaining restatements",
+   "id": "P5.rej.index'",
+   "claim": "a rejected video is written to the search index as a SUPPRESSION tombstone (eligible=false, suppressed_reason=moderated), which is the shipped backstop, not absence",
+   "expected": "false|moderated",
+   "observed": "false|moderated",
+   "pass": true
+  },
+  {
+   "phase": "P14 remaining restatements",
+   "id": "P5.rej.index''",
+   "claim": "and it is therefore not retrievable by search",
+   "expected": "absent",
+   "observed": "absent",
+   "pass": true
+  }
+ ]
+}
