@@ -2217,7 +2217,11 @@ cannot reach — and passed on a re-run in 1m53s, so core#163 is marked ready. *
 expected red until core#163 merges** — it regenerates `lib/api/generated.ts` from
 `vidra-core@main` and this branch carries the regen for an unmerged spec change;
 that PR stays draft until then. Per vidra-user's AGENTS.md the local e2e suites
-were **not run**. SC5 no-regression: the named tests from all three merged A12
+were **not run** — and CI earned its keep for it: the first push turned the
+`frontend` lane red on `e2e/account-data.spec.ts`, which pins the import summary
+line character for character and so moved with the copy fix. The spec now asserts
+the corrected string, exactly as strictly as before; vitest was green throughout,
+only the Playwright expectation was stale. SC5 no-regression: the named tests from all three merged A12
 slices pass, including the tagged real-PostgreSQL
 `TestCommentReplyRecipientOnRealPG` and `TestCommentVideoOwnerRecipientOnRealPG`.
 

@@ -2,7 +2,7 @@
   "status": "A12 stays OPEN and the AUTH-05 row is NOT flipped. This slice closes AUTH-05's first half — profile/privacy and the account archive PASS; password change and email change are UNVERIFIABLE AS WRITTEN because the capabilities the row names DO NOT EXIST, and that is proven rather than assumed. Deactivation and deletion are the next slice.",
   "scope": "A12 / AUTH-05 slice (a): profile and privacy, password change with re-verification, email change with re-verification, and the account archive (export + import). Deactivation, deletion, DM retention, media cleanup and search deletion hooks are deliberately out of scope and untouched — except that SC2's session question required proving what a password change does to a signed-in session, which is recorded here for the deletion slice to reuse.",
   "core_revision": "a12/profile-archive @ e4bde3b (one commit on origin/main 789bc21)",
-  "frontend_revision": "a12/profile-archive @ 32f6b57 (one commit on origin/main e6ebbb4)",
+  "frontend_revision": "a12/profile-archive @ 1d35b51 (two commits on origin/main e6ebbb4)",
   "pull_requests": {
     "core": "yegamble/vidra-core#163 (READY — all CI lanes green)",
     "frontend": "yegamble/vidra-user#162 (draft)",
@@ -97,7 +97,8 @@
       "npm run e2e and npm run e2e:backed — vidra-user's AGENTS.md forbids running them locally; repo CI covers them",
       "meta compose render gate — not needed, no compose or script files touched",
       "the vidra-search index side of the unlisted opt-out — vidra-search is not running in this lab (the core-side outbox event IS proven)"
-    ]
+    ],
+    "frontend_e2e_caught_a_real_break": "The e2e suite is NOT runnable locally (vidra-user's AGENTS.md forbids it), and CI earned its keep: the first push turned the `frontend` lane red on e2e/account-data.spec.ts:139 \"importing an archive renders the returned per-category summary\", which pins the summary line character for character and therefore moved with the copy fix. The spec was updated to the corrected string — still a full-string assertion, nothing weakened or skipped — and vitest was 238 files / 2348 tests passing throughout; only the Playwright expectation was stale."
   },
   "counts": {
     "api_assertions": "224 across seven drivers (SC1 57, SC1-outbox 5, SC2 30, SC3 20, SC3-SMTP 10, SC4 59, SC4b 43), 0 failed",
@@ -113,7 +114,8 @@
     "Two walkthroughs failed on state left behind by an ABORTED earlier run (A still private, dave already holding an import). Both now assert from an explicitly established starting state rather than assuming one.",
     "The import summary assertion first read the page's FIRST [role=\"status\"] element, which is a spinner, not the summary; it now scopes to the \"Your data\" section.",
     "`next start` cannot serve this repo's output:\"standalone\" build (recorded by the previous slice and re-confirmed): the lab copies .next/static and public into .next/standalone and runs node server.js. The served chunks were checked to come back as application/javascript before the walkthrough ran.",
-    "No transcoder runs in this lab, so each fixture video is moved out of 'draft' with a direct UPDATE — a database fixture, not a code change."
+    "No transcoder runs in this lab, so each fixture video is moved out of 'draft' with a direct UPDATE — a database fixture, not a code change.",
+    "The copy fix broke an e2e expectation nobody could see locally. e2e/account-data.spec.ts asserts the whole rendered Follows line, so changing the wording turned the `frontend` CI lane red on the first push. The spec now pins the corrected string — the assertion is exactly as strict as it was. This is the argument for the AGENTS.md rule: the lane that cannot run locally is the lane that has to run in CI before a PR is called green."
   ],
   "unrelated_findings": [
     "After a successful import applies the profile, the profile FORM above it still shows the pre-import display name and bio until a reload — the import card never refreshes the session user. Visible in sc4-import-summary.png: the summary reads \"display name and bio applied\" while the Display name input still reads the old value.",
