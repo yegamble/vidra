@@ -4420,3 +4420,173 @@ bulk inventory. **Remaining for the row: mutes (accounts and instances) and
 watched words** — slice 3 — plus the remote-content facet that A29's two-instance
 lab owns. Delivery order: **core#172 first**, then this evidence PR. Nothing is
 merged here and no deployment is authorized. The lab was torn down.
+
+## A16 moderation hardening — 2026-09-06
+
+**No register row changes.** This is the repair slice for what A16 slice 2
+recorded and could not take, plus one copy correction the search work left
+behind. Five things were wrong and four of them are now fixed with a measurement
+either side: **the server-rendered watch page kept serving a blocked video
+indefinitely**, **the rejection note a moderator types was discarded while the UI
+said it was recorded**, **a block was invisible to the creator it was aimed at**,
+and **two block/state predicates disagreed with the per-surface promise**. One
+migration ([0130](../vidra-core/migrations/0130_video_rejections.up.sql),
+`video_rejections`, with its `.down.sql`), one additive OpenAPI change, one new
+notification type. [Sanitized
+evidence](evidence/a16-moderation-hardening.json) carries the timestamps,
+the actor matrix and the numbers below.
+
+**The cache leak, reproduced before it was fixed.** On a production build of
+`origin/main`, a watch URL rendered once before the block was fetched **30 times
+over 176 seconds** after it (block at 16:53:50, fetches 16:53:59 → 16:56:55), and
+**every single response** carried `<title>Control Clip</title>`, `og:title`,
+`og:description`, the canonical `og:url`, an `og:image` pointing at the thumbnail
+endpoint, an `<h1>` in the body and the whole serialized video document in the
+flight payload — while `GET /api/v1/videos/{id}` answered **404** to the same
+anonymous caller throughout. The `/v/{code}` form of the *same* video, never
+rendered before the block, was clean at the same instant: that is what identifies
+the mechanism as Next's data cache rather than the route. **Privacy changes and
+deletion share the path and leaked identically**: a video flipped to `private`
+and another deleted at 16:57:23 were both still serving their titles at 16:58:44,
+65–81 seconds later — past the 60-second window, because the window was never the
+variable. Next does not replace a cached successful body with a *failed*
+revalidation, so once the document 404s the last good copy is served forever.
+
+**The mechanism chosen, and its cost, honestly.** `no-store` on the three public
+watch-document reads in `lib/video.server.ts`. Shortening the window fixes
+nothing, for the reason above; tag-based invalidation would need vidra-core to
+call back into the frontend, and there is no such channel. **The cost is one
+uncached `GET /api/v1/videos/{id}` per watch-page RENDER** — not two: React
+`cache()` still deduplicates `generateMetadata` and the page body within a pass —
+where concurrent views of one video could previously share a single backend read
+for up to a minute. On a hot video that is the difference between roughly one
+request a minute and one per view. The home page's featured-banner read is
+uncached now too, but that page was already dynamic (`lib/feed.server.ts` is
+`no-store`), so it gains one request and loses no caching tier. On the patched
+build, the same three actions fired at 16:59:53 and **12 fetches over 89 seconds
+starting the same second** returned **zero** hits on all four counters — blocked
+by uuid, blocked by short code, made private, deleted — with the API 404
+throughout. The blocked page now serves the instance's own `<title>`, **no `og:*`
+tags at all**, no description, no thumbnail URL, and a "Loading video…" shell for
+a no-JS reader; in Chromium it reads "Video not found" and the **browser tab
+title is the instance name**, where slice 2 recorded the stale video title still
+sitting on it. What did *not* change: the route still answers **200** with a
+loading shell rather than 404 for a blocked or unknown video. That is
+pre-existing, it leaks nothing, and it is recorded rather than widened.
+
+**The rejection note, and the one place it deliberately does not go.** The reject
+route has always accepted a `reason`; slice 2 swept all 290 text/JSON columns and
+found it in none of them. It now lands in `video_rejections` (0130 — shaped
+exactly like `video_blocks`: one row per video, the acting moderator, the
+moment), reaches the creator on their `video_rejected` notification, and is read
+back by staff on the moderation-inventory row, which is the only staff surface a
+rejected video still appears on once it has left the quarantine queue. Measured
+end to end: the creator's inbox reads *"A moderator rejected your upload “Held
+Upload” — it was not published: Third-party music you do not hold the rights
+to…"* after a hard navigation, `/moderation/videos` shows *"Rejected: …"* under
+the state pills, and a SQL sweep of `audit_log` for the note's text returns
+**zero rows**. That last part is a deliberate deviation from the brief, which
+asked for the note in the audit row's structured payload. It is not
+implementable and would have been a regression: `audit.normalizeEvent` validates
+metadata against a **closed key allowlist with a 256-byte value cap** and states
+that user prose never belongs there, so a 2000-character note makes the whole
+event invalid and **deletes the audit row rather than enriching it** — and the
+existing reject test already fails if the prose reaches the log stream. The
+ledger keeps `reason_provided`; the words live in the moderation domain.
+
+**The creator now learns their video was blocked, and is not told why.** The
+owner/editor channel listing carries `blocked` (the SQL's `EXISTS`, mirrored in
+the fake — the slice-2 fake-fidelity lesson bit again, and the marker test proved
+nothing until `ListVideosByChannel`'s fake learned `video_blocks`). Measured with
+a block in place, the row still reads `state=published` and `privacy=public`,
+because a block changes neither — which is exactly why the marker had to be its
+own field. The Studio row badges it **BLOCKED** beside **PUBLISHED** and says
+*"Blocked by moderation — this video is not available to viewers, including you,
+until a moderator lifts the block. Nothing else about it has changed."* The
+notification is a **new `video_blocked` type**: `video_rejected` does not fit,
+because it means an upload that never published, while a block takes down live
+content and is reversible, and reusing it would have told the creator something
+false. The whole payload was checked for the moderator's block reason: **absent**.
+**Whether a creator may read a block reason is left OPEN as a product ruling** —
+rejection notes are shown, block reasons are not, and that asymmetry is
+deliberate but unratified. The block itself is unweakened: the owner's
+`GET /videos/{id}` is still 404. **What is not fixed and is recorded**: the
+single-video Studio deep link `/studio?video={id}` still shows its generic error
+for the owner of a blocked video, because it reads `GET /videos/{id}`; opening
+that read would flip a promise this slice measured, so the creator reaches the
+video, badged, from `/studio/content` instead. **Unblocking still notifies
+nobody.**
+
+**The two predicate gaps.** `GET /videos/{id}/embed-privacy` answered **200** to
+an anonymous caller for a rejected (`failed`) video: it reaches the row through
+`videoReadBase`, which gated blocks, quarantine, scheduled and transcoding and
+simply did not know about `failed`, while the detail route applied that rule
+separately. The rule now lives in `videoReadBase` and the two agree — measured
+404 anon, 404 viewer, 200 owner, 200 staff, against 404 anon on the detail route.
+It is deliberately **not** extended to `draft`/`processing`: the detail route
+answers 200 for those by the compatibility rule `videoVisibleForMedia` documents,
+and the point of the fix is that the two routes agree. `handleAddPlaylistItem`
+ignored `video_blocks`; adding a blocked video is now **404, byte-identical to an
+unknown id**, so the route is not an existence oracle for taken-down content, and
+`playlist_items` stayed empty.
+
+**Clear-all copy.** vidra-search#37 made "Clear all" delete the search service's
+raw records instead of anonymising them, so `/settings/search` saying it "unlinks
+the rest from your account" **understated its own button** — as wrong as
+overstating it, because that sentence is what a reader uses to decide whether
+pressing it is enough. Replaced with the deletion wording, including what cannot
+be deleted (the aggregate counters are recomputed within a day; the trending
+counters cannot be edited and expire within eight days). The source comment
+claiming the clear "anonymizes the raw `query_log` and `behavior_events` rows"
+was corrected, the confirm modal is now true as written and was left alone, and a
+component test pins the new sentence and asserts the old one is gone — verified
+red against the pre-change component. **The one-day and eight-day figures come
+from vidra-search#37 and were not re-measured here.**
+
+**Unauthorized, once each.** Rejecting as the creator is 403 and anonymously 401;
+blocking as a viewer is 403; the moderation inventory — where the note is
+readable — is 403 for the creator and 401 anonymously; the `blocked` marker never
+appears for a non-owner viewer or an anonymous caller. After all of them,
+`video_rejections` still held exactly one row with the note unchanged.
+
+**Gates.** vidra-core `make ci` **passed** (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race), `go vet -tags=integration ./...` is
+clean, and repo CI on core#173 is **7/7 green** including `integration` and
+`prev-release-against-new-schema`. vidra-user: `npx tsc --noEmit` clean,
+`npm run lint` 0 errors (2 warnings, both pre-existing on main), `npm run
+lint:icons` pass, `npm run test` **2358 passed / 82 failed — and the same 82 fail
+on clean `origin/main` in this environment**, seven files dying on
+`localStorage.clear is not a function` under local Node 25 and this jsdom
+(baseline measured by stashing the branch: 82 failed / 2345 passed on main).
+Repo CI is the authority for those. **Unverified:** the frontend e2e and
+e2e-backed suites (this repo's AGENTS.md forbids running them locally); the
+`internal/store` integration lane locally, which repo CI ran green; anything
+about **vidra-search**, which was switched off in this lab, so nothing here
+re-proves a block's search suppression; and anything **remote/federated**, since
+the lab holds no remote rows — the admin inventory's remote arm returning an
+empty `moderation_note` is asserted from the SQL, not measured. The meta compose
+render was not re-run: no compose, script or env file changed.
+
+**Findings recorded, not fixed.** (1) The Studio single-video deep link, above.
+(2) Unblocking notifies nobody. (3) The watch route's 200-with-a-shell for a
+blocked, deleted or unknown video. (4) A creator can still `PATCH` a blocked
+video's metadata — the update path has no block gate — while they cannot read it;
+inert, inconsistent, out of scope here. (5) Reason-visibility for blocks, left
+open above.
+
+**For slice 3 and the admin follow-up.** A new notification type costs four edits
+that must move together — the constant, `knownType()`, `KnownTypes()`, and the
+frontend's `TYPE_LABELS` + `TYPE_ORDER` + `describeNotification` case; a missing
+case falls through to "started following", this repo's most-repeated frontend
+bug. `audit_log` cannot carry prose, so any slice wanting a moderator's words
+persisted needs a moderation-domain table. Mirror a new predicate in
+`videoFakeRepo` **before** trusting a green handler test. An inline `": "` inside
+a plain-scalar OpenAPI description parses in Go and **breaks the frontend
+codegen's YAML loader**. `PATCH /admin/instance-settings` takes a flat object;
+the `{"settings":{…}}` shape is 422. And a synthetic mp4 fails the ffprobe media
+probe, landing the upload in `failed` — generate a real clip with ffmpeg.
+
+**Delivery order: core#173 → user#170 → this evidence PR.** user#170's
+`contract-ci` is red until core#173 merges, by construction, because
+`lib/api/generated.ts` is regenerated from core's branch. Nothing is merged here
+and no deployment is authorized. The lab was torn down.
