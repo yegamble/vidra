@@ -1,0 +1,327 @@
+{
+  "item": "Frontend hardening",
+  "register_rows": [
+    "SOC-02 (Block-vs-Mute follow-up)",
+    "SRC-03 (double query_log row follow-up)"
+  ],
+  "date": "2026-09-06",
+  "verdict": "session-restore class CLOSED; Block/Mute parity applied; one query_log row per browser search. Delivery open awaiting merge.",
+  "note": "Sanitized. Every credential, address and identifier below belongs to a disposable local lab that was torn down; no production data, keys or private paths appear here.",
+  "lab": {
+    "shape": "single origin, mirroring the production Caddy topology so the httpOnly SameSite=Lax vidra_refresh cookie is first-party: a pipe-only Node proxy on 127.0.0.1:3000 that inspects, rewrites and mocks nothing, in front of the frontend (127.0.0.1:3100) and vidra-core (127.0.0.1:8088)",
+    "postgres": "native postgresql@16, two databases (core at schema 129, vidra-search at 0016). No migration in this slice.",
+    "redis": "native redis, logical db 8 for core and 9 for vidra-search, both flushed before seeding",
+    "vidra_search": "stood up as a real dependency from its working tree; NOT modified. Its query_log was read back directly.",
+    "frontend": "production build (npm run build) served by `node .next/standalone/server.js`. `next start` refuses this repo (output: standalone) and serves stale route output.",
+    "browser": "real Chromium via Playwright, one persistent context per viewer. No route interception anywhere.",
+    "rate_limits": "left at the shipped defaults (120/min general, 10/min auth); the harness paced itself",
+    "429s_in_the_reported_runs": 0,
+    "429s_earlier": "35, during seeding and two discarded passes (the auth limiter during four registrations, then bursts). Every measurement reported here comes from a later, re-paced run whose window contains zero 429s.",
+    "lab_trap_worth_keeping": "INTERNAL_API_BASE_URL defaults to http://localhost:8080, so with core on 8088 every SERVER-side read (the home feed's first page, the watch page's video seed) silently returned null and the seeded code paths were never exercised. The first sweep looked clean for the wrong reason. Setting INTERNAL_API_BASE_URL is mandatory for any lab that wants to see the SSR seeds at all."
+  },
+  "sc1_inventory": {
+    "method": "every client-side read in vidra-user was enumerated from the source (107 'use client' modules that call api.get*/list*/search*/fetch*/resolve*), then classified against vidra-core's route table: which run behind optionalAuth, and which of those answer differently per viewer.",
+    "client_modules_with_a_read": 107,
+    "vulnerable_found": 7,
+    "already_fixed_migrated_onto_the_seam": 4,
+    "safe_with_a_reason": [
+      {
+        "component": "components/ChannelView.tsx",
+        "endpoint": "GET /channels/{handle}, /channels/{handle}/videos",
+        "reason": "already waits: renders a Spinner while restoring and remounts on a key carrying status and user.id"
+      },
+      {
+        "component": "components/PlaylistDetailView.tsx, components/PlaylistCoverImage.tsx, lib/use-playlist-next.ts",
+        "endpoint": "GET /playlists/{id}, /playlists/{id}/thumbnail",
+        "reason": "already waits (spinner / null while restoring, session in the load deps)"
+      },
+      {
+        "component": "components/HomeShelves.tsx, components/auth/PlayerSettingsBootstrap.tsx",
+        "endpoint": "GET /me/subscriptions/videos, GET /me/player-settings",
+        "reason": "already guarded on the settled session"
+      },
+      {
+        "component": "components/WatchView.tsx (captions)",
+        "endpoint": "GET /videos/{id}/captions",
+        "reason": "a server seed exists only for a PUBLIC video, and a public video's captions are public. A private video has no seed, so the read waits for the client video fetch, which waits for the session."
+      },
+      {
+        "component": "components/WatchView.tsx (resume position)",
+        "endpoint": "GET /videos/{id}/watch-progress",
+        "reason": "gated on authed, so it cannot run before the settle"
+      },
+      {
+        "component": "lib/use-chapters.ts, components/ChaptersManager.tsx",
+        "endpoint": "GET /videos/{id}/chapters",
+        "reason": "same public-seed argument as captions"
+      },
+      {
+        "component": "components/VideoCardPreview.tsx",
+        "endpoint": "GET /videos/{id}/captions",
+        "reason": "hovering a card that is already public in this viewer's list"
+      },
+      {
+        "component": "components/LiveNowRail.tsx",
+        "endpoint": "GET /live",
+        "reason": "ListLivePublic takes no viewer — the same answer for everybody"
+      },
+      {
+        "component": "components/SupportButton.tsx",
+        "endpoint": "GET /channels/{handle}/donation-addresses, /users/{id}/donation-addresses",
+        "reason": "public, viewer-independent"
+      },
+      {
+        "component": "components/RemoteWatchView.tsx",
+        "endpoint": "GET /remote-videos/{id}",
+        "reason": "the route carries no auth middleware at all"
+      },
+      {
+        "component": "components/EmbedPlayer.tsx",
+        "endpoint": "GET /videos/{id}, /videos/{id}/embed-privacy",
+        "reason": "the embed is deliberately anonymous — a credentialed embed would kill the CDN (phase 4 ruling)"
+      },
+      {
+        "component": "components/ChannelLiveBadge.tsx",
+        "endpoint": "GET /me/live-streams",
+        "reason": "fetches only when the viewer is the channel owner, which requires a resolved user"
+      },
+      {
+        "component": "components/SaveButton.tsx, SidebarFollowing.tsx, BottomTabBar.tsx, NotificationsBell.tsx, AddToPlaylistButton.tsx, PlaylistPickerDialog.tsx, lib/use-video-action-permissions.ts",
+        "endpoint": "various /me/*",
+        "reason": "each tests status === \"authed\" before reading"
+      },
+      {
+        "component": "every signed-in-only view (NotificationsView, LibraryView, WatchHistoryView, SearchSettingsView, MutedAccountsView, MutedInstancesView, BlockedUsersView, NotificationPrefsView, PlaylistsView, WatchedWordsView, DonationSettingsView, RemoteFollowsSection, ChannelSyncSection, ConnectionsView, messaging/ConversationRail, ConversationView, e2ee/DevicesView, auth/SettingsView and its sections)",
+        "endpoint": "/me/*, /auth/*",
+        "reason": "the outer component returns a SignInGate unless status === \"authed\", so the fetching component does not MOUNT while restoring"
+      },
+      {
+        "component": "every studio surface (StudioContext and its consumers) and every admin/moderation view",
+        "endpoint": "/me/channels, /admin/*, /moderation/*",
+        "reason": "StudioLayout and the admin RoleGate mount their children only when the session has settled to authed with the required role"
+      },
+      {
+        "component": "lib/playback-session.ts, lib/playback-qoe.ts",
+        "endpoint": "POST /videos/{id}/playback-session, POST /qoe/events",
+        "reason": "anonymous playback is the common case; these are not viewer-scoped reads"
+      }
+    ],
+    "session_status_transitions": "AuthProvider derives status as `user ? \"authed\" : restored ? \"anon\" : \"restoring\"`. It starts \"restoring\" on every hard load while one silent POST /auth/refresh redeems the httpOnly cookie, then settles ONCE — to \"authed\" (setUser and setRestored land in the same batch) or to \"anon\". Later transitions are sign-in and sign-out only. The access token lives in memory, so before the settle there is no Authorization header to send.",
+    "why_an_early_read_is_not_self_healing": "apiRequest only retries a 401 when it USED a stored token (usedStoredToken = opts.token === undefined && getAccessToken() !== null). During the restore there is no stored token, so a 401 is final — and an optionalAuth endpoint does not 401 at all: it answers, as an anonymous visitor, and the effect never re-runs.",
+    "fixed": [
+      {
+        "component": "components/VideoFeed.tsx",
+        "endpoint": "GET /videos",
+        "viewer_scoped_because": "ListPublicVideosSorted drops muted and blocked authors, muted instances, and applies the viewer's own sensitive-content policy override (0100)",
+        "could_fire_while_restoring": true,
+        "extra": "the home page's first page is SERVER-rendered and therefore anonymous; before this slice it was never replaced, so a signed-in muter's home page kept the muted author's videos with no browser request at all"
+      },
+      {
+        "component": "components/SearchResults.tsx (VideoResults)",
+        "endpoint": "GET /videos/search",
+        "viewer_scoped_because": "per-viewer visibility, mutes/blocks, and personalized ranking",
+        "could_fire_while_restoring": true
+      },
+      {
+        "component": "components/SearchResults.tsx (EntityResults)",
+        "endpoint": "GET /search/channels, GET /search/accounts",
+        "viewer_scoped_because": "SearchPublic / SearchPublicAccounts take the viewer and drop what they have muted or blocked",
+        "could_fire_while_restoring": true
+      },
+      {
+        "component": "components/SearchAutocomplete.tsx",
+        "endpoint": "GET /search/suggestions",
+        "viewer_scoped_because": "a signed-in caller gets their own past searches back as history-typed personal suggestions",
+        "could_fire_while_restoring": true,
+        "extra": "its per-prefix suggestion cache was keyed by prefix ALONE, so an anonymous answer taken during the restore would be replayed to the signed-in viewer for the rest of the tab's life; entries are now keyed by viewer too"
+      },
+      {
+        "component": "components/WatchView.tsx (channel read)",
+        "endpoint": "GET /channels/{handle}",
+        "viewer_scoped_because": "is_following is per viewer",
+        "could_fire_while_restoring": true,
+        "extra": "does NOT inherit the video read's wait: a public watch page is server-rendered, so the seed paints on the first render and the handle is present immediately"
+      },
+      {
+        "component": "components/DownloadButton.tsx (DownloadDialog)",
+        "endpoint": "GET /videos/{id}/download",
+        "viewer_scoped_because": "videoForDownload resolves the file set for the caller",
+        "could_fire_while_restoring": true
+      },
+      {
+        "component": "components/UserProfileView.tsx (UserProfileLoader)",
+        "endpoint": "GET /users/{username}/profile",
+        "viewer_scoped_because": "core resolves an OWNER's own profile from the account row rather than the public projection, and only that branch exposes the linked Bluesky handle",
+        "could_fire_while_restoring": true
+      },
+      {
+        "component": "components/LiveWatchView.tsx",
+        "endpoint": "GET /live/{id}",
+        "viewer_scoped_because": "a private stream is visible only to its owner and the channel's content managers; everyone else gets 404",
+        "could_fire_while_restoring": true
+      }
+    ],
+    "already_fixed_migrated": [
+      {
+        "component": "components/CommentsSection.tsx",
+        "endpoint": "GET /videos/{id}/comments",
+        "shipped_in": "user#160"
+      },
+      {
+        "component": "components/RatingControls.tsx",
+        "endpoint": "GET /videos/{id}/rating",
+        "shipped_in": "user#161"
+      },
+      {
+        "component": "components/HomeRecommendationsRail.tsx",
+        "endpoint": "GET /recommendations/home",
+        "shipped_in": "user#165"
+      },
+      {
+        "component": "components/RelatedVideos.tsx",
+        "endpoint": "GET /videos/{id}/recommendations",
+        "shipped_in": "user#165"
+      },
+      {
+        "component": "components/WatchView.tsx (video read)",
+        "endpoint": "GET /videos/{id}",
+        "shipped_in": "an earlier slice; moved onto the seam here, behaviour unchanged"
+      }
+    ]
+  },
+  "sc2_the_seam": {
+    "file": "vidra-user lib/use-settled-session.ts",
+    "exports": [
+      "useSettledSession",
+      "useSettledOptionalSession"
+    ],
+    "contract": {
+      "settled": "false only while the boot-time silent refresh is in flight. The effect guard.",
+      "authed": "settled AND a signed-in account",
+      "viewerId": "the signed-in account id, or null",
+      "viewerKey": "\"anon\" | \"authed:<id>\" — the dependency-list value. It reads \"anon\" WHILE RESTORING on purpose: a server-rendered first page was fetched with no viewer, so it IS the anonymous answer, and keying it that way lets a visitor who settles anonymous keep the seed and issue no browser request at all."
+    },
+    "why_two_hooks": "useSettledSession goes through useSession (throws outside an AuthProvider); useSettledOptionalSession mirrors useOptionalSession for the components that also render bare, where no viewer can ever arrive and delaying would hang the surface instead of guarding it.",
+    "why_both_settled_and_viewerKey": "settled alone never re-runs the read; viewerKey alone never fires for a visitor who settles anonymous (their key never changed). The exhaustive-deps lint rule enforces that a guard reading `settled` lists it.",
+    "list_seam": "lib/use-appending-list.ts gained ONE option, `viewer`, taking useSettledSession whole. It holds the first request until settled, joins viewerKey to the query signature, and pins `initialPage` to the ANONYMOUS key rather than the mount-time key — so arriving already signed in (a client-side navigation) still replaces the seed.",
+    "tests": "10 for the hook, 6 for the list option, plus a 'does not fetch while restoring' / 'fetches once settled' pair for every fixed component"
+  },
+  "sc3_browser_proof": {
+    "method": "real Chromium, production build, one origin. alice is signed in and has MUTED dave; she also FOLLOWS bob's channel. Each page is a hard load; every /api/v1 request is counted and checked for an Authorization header.",
+    "fixture_control": "an ANONYMOUS visitor sees dave on the home page, the watch page and the search results — so 'alice sees no dave' is the exclusion working, not an empty fixture.",
+    "baseline_build": "origin/main ff59a72, same lab, same data",
+    "baseline": {
+      "home": "GET /api/v1/videos was NEVER REQUESTED (the anonymous server seed stood), and dave — whom alice muted — was VISIBLE on her home page",
+      "search": "GET /videos/search and GET /search/suggestions both went out with NO Authorization header, and dave was VISIBLE in her results",
+      "watch": "GET /channels/bobchan went out 15 ms after the refresh POST, unauthenticated, on 3 of 3 runs — and the watch page's follow control read \"Follow\" for a channel alice already follows, on 3 of 3 runs"
+    },
+    "fixed": {
+      "home_signed_in": "GET /api/v1/videos — 1 request, WITH Authorization; dave absent",
+      "home_anonymous": "GET /api/v1/videos — 0 requests; the server seed stands, exactly as before",
+      "search_signed_in": "GET /videos/search 1 with auth, GET /search/suggestions 1 with auth; dave absent",
+      "watch_signed_in": "GET /videos/{id}, /comments, /rating, /recommendations, /channels/{handle} — 1 each, ALL with Authorization; the follow control reads \"Following\" on 3 of 3 runs",
+      "channel_notifications_settings": "1 request per viewer-scoped endpoint, all with Authorization",
+      "muted_author_visible_on": "none of watch, home, channel, notifications, settings, search",
+      "anonymous_pages": "1 request per endpoint, none carrying Authorization"
+    },
+    "honest_caveat": "the server-rendered HTML of the home page is still the ANONYMOUS feed, because vidra_refresh is Path=/api/v1/auth and the Next server cannot read it — so a signed-in viewer's hard load paints the anonymous first page for the moment before hydration replaces it with their own. What changed is that it is now replaced at all; before, it never was."
+  },
+  "sc4_block_removal_parity": {
+    "ruling": "the owner's: blocking a commenter removes their comments immediately, exactly as Mute does",
+    "why_it_is_not_test_weakening": "core's blockUser contract already filters a blocked author out of the blocker's comment list, per viewer, with the same predicate it applies to mutes (ListComments carries both user_blocks and muted_accounts). The row disappeared on the next load either way; leaving it until then only made two controls with the same effect look like they had different ones.",
+    "specs_updated": [
+      "e2e/blocks.spec.ts",
+      "e2e-backed/blocks.spec.ts"
+    ],
+    "e2e_backed_reshaped_because": "after the block there is no comment row left to open a menu from, so the direct message is opened BEFORE the block and the thread URL kept; the spec then proves the removal survives a hard reload, that a send into the existing thread is refused, and that unblocking brings the comment back",
+    "browser_proof": {
+      "before_block": [
+        "bob says hello",
+        "carol says hello"
+      ],
+      "block_response": 204,
+      "after_block_no_reload": [
+        "bob says hello"
+      ],
+      "after_hard_reload": [
+        "bob says hello"
+      ],
+      "unblock_response": 204,
+      "after_unblock_next_load": [
+        "bob says hello",
+        "carol says hello"
+      ],
+      "note": "dave's comment is absent throughout — alice muted him, which is the other half of the same predicate"
+    },
+    "copy": {
+      "blocks_page_before": "Accounts you have blocked. Neither of you can send the other a direct message.",
+      "blocks_page_after": "Accounts you have blocked. Their videos and comments are hidden from you, and neither of you can send the other a direct message.",
+      "mutes_page_before": "Accounts you have muted. Their comments are hidden from you.",
+      "mutes_page_after": "Accounts you have muted. Their videos and comments are hidden from you.",
+      "why": "both pages under-promised: ListPublicVideosSorted carries the same user_blocks and muted_accounts predicates ListComments does, so both controls hide videos as well as comments"
+    },
+    "dead_code_removed": "the per-item `blocked` state and its \"Blocked\" menu label — nothing can render them once the item is gone"
+  },
+  "sc5_single_search_emit": {
+    "what_was_wrong": "one browser search wrote TWO query_log rows: the client's POST /search/events batch (the row that reaches the user's own history page — handleSearchEvents is the only ingest path that sets allow_history) and the routed search.submitted core emits behind the same GET /videos/search",
+    "correction_to_the_earlier_note": "the A13 opt-out section attributed the routed row to 'the frontend's server-side fetch of GET /videos/search'. There is no such fetch: vidra-user server-renders /instance, the home feed and the watch video, and nothing else. The routed row landed anonymous because the BROWSER's own search request went out before the session had settled — the same defect this slice's SC1 closes — and because api.searchVideos sends no X-Vidra-Session either.",
+    "mechanism": "a client that emits its own search.submitted declares it on the request: X-Vidra-Search-Events: client. Core skips its routed emit for that request only.",
+    "why_the_client_must_be_the_one_to_say_so": "nothing on the server distinguishes a browser (which will send the event) from an API consumer (which will not), and an API consumer must keep the routed emit — it is the ONLY record its searches ever leave. Accepting the caller's word is safe in the one direction that matters: the declaration can only make core collect LESS about that caller, and never touches anyone else's rows. An unrecognised value fails toward recording.",
+    "contract": "no OpenAPI change: the header follows X-Vidra-Session, the sibling client-supplied search header this contract also carries only in prose.",
+    "lab_readback_of_search.query_log": [
+      {
+        "case": "BASELINE origin/main, signed-in browser search",
+        "rows": 2,
+        "detail": "one unattributed routed row (no session id, anonymous subject) plus the client's attributed row"
+      },
+      {
+        "case": "signed-in, opted-in browser search",
+        "rows": 1,
+        "detail": "user_id set, session id set, no anonymous subject"
+      },
+      {
+        "case": "opted-out user's browser search",
+        "rows": 1,
+        "detail": "user_id NULL, anonymous subject_id set — the A13 consent rule, unchanged"
+      },
+      {
+        "case": "curl with a bearer and no frontend",
+        "rows": 1,
+        "detail": "the routed emit, attributed, no session id — unchanged"
+      },
+      {
+        "case": "a paging request (offset=20) sent twice, once declared and once not",
+        "rows": 1,
+        "detail": "from the undeclared one only"
+      }
+    ],
+    "entry_surfaces_walked_in_the_browser": {
+      "results_page_load": 1,
+      "autocomplete_submit": 1,
+      "filter_change": 1,
+      "total_rows_written": 3,
+      "every_request_carried": "X-Vidra-Search-Events: client AND an Authorization header",
+      "pagination": "not reachable in this fixture (6 videos, PAGE_SIZE 20). Covered by a vitest case (no client event for offset > 0) and by the paired curl above."
+    }
+  },
+  "gates": {
+    "vidra_user_npm_run_ci": "PASS in repo CI on the final revision — typecheck, lint (0 errors, 2 pre-existing warnings), lint:icons, 245 test files / 2421 vitest tests, production build, and 623 Playwright specs, ALL passed. The same gate run locally on Node 24.4.1 was green except 5 e2e specs that failed under CPU competition and passed 44/44 unloaded — the documented flakiness, not a regression.",
+    "vidra_core_make_ci": "PASS — fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race; exit 0",
+    "vidra_core_integration": "go vet -tags=integration ./... passes; the tagged lane itself was NOT run (the lab is native rather than the compose stack)",
+    "vidra_search": "not modified; stood up as a dependency and its query_log read back directly",
+    "node_25_warning": "vitest is broken on Node 25 in this repo — 82 failures with window.localStorage.clear is not a function. .nvmrc and every workflow pin Node 24.",
+    "vidra_user_e2e_backed": "PASS in repo CI (frontend-e2e-backed, 4 jobs) on the final revision — this is the lane that actually RUNS the reshaped e2e-backed/blocks.spec.ts against a real vidra-core + PostgreSQL."
+  },
+  "unverified": [
+    "Pagination as a browser gesture: the fixture has 6 videos and PAGE_SIZE is 20, so no Load more appeared. Proven instead by a vitest case and by two identical paging requests, one declared and one not.",
+    "The e2e and e2e-backed block specs were EDITED but not run locally (vidra-user's AGENTS.md reserves both suites for repo CI). The unit and browser proofs stand on their own; the specs' own verdict is CI's.",
+    "A muted author on a signed-in viewer's home page is still present in the server-rendered HTML for the moment before hydration. Measured as a fact, not fixed: the Next server cannot read vidra_refresh (Path=/api/v1/auth) and so cannot know there is a viewer."
+  ],
+  "findings_recorded_not_fixed": [
+    "GET /me/notifications/unread-count is requested TWICE per page load, by NotificationsBell and by BottomTabBar independently. Both carry the bearer; it is a duplicate fetch, not a correctness bug.",
+    "GET /me/oauth-identities is requested twice on /settings, by ConnectedLogins and BlueskyVisibilityToggle.",
+    "GET /channels/{handle}/donation-addresses is requested twice on the watch page.",
+    "api.searchVideos sends no X-Vidra-Session, so before this slice the routed row it produced could not be correlated with the client's row for the same search even in principle.",
+    "The watch page's captions read can still go out unauthenticated when a public server seed paints first. Harmless (a public video's captions are public), but it is the one read left that fires before the settle."
+  ]
+}
