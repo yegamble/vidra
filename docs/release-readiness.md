@@ -1814,7 +1814,7 @@ surfaces round-trip and read differently; and a parent comment that is gone,
 by either of the two conventions, leaves neither text nor a notification behind.
 [Core #162](https://github.com/yegamble/vidra-core/pull/162), revision `a0a96a3`,
 and [frontend #160](https://github.com/yegamble/vidra-user/pull/160), revision
-`e8a946f`. Authorization, best-effort semantics and error shapes are unchanged;
+`a90d697`. Authorization, best-effort semantics and error shapes are unchanged;
 no migration (latest stays 0127), no route or response-shape change, and no
 hand-edited generated files.
 
@@ -1841,9 +1841,8 @@ by the server, which therefore had no viewer to filter for and handed the muted
 author's comments back to the person who hid them. The effect never re-ran, so
 the mute held only for as long as the client-side filter survived: mute, and the
 comment vanishes; reload, and it is back. The effect now waits for the session to
-settle. Blocking from a comment's menu also now hides that author's comments, as
-muting does — the code said `a block doesn't hide content` while the contract
-says a block filters comments "per-viewer, exactly like mutes".
+settle, and that single change is what makes a mute or a block hold across a
+reload at all.
 
 The shipped promise was established before anything was called a defect, and it
 is narrow: **a mute one-directionally hides the muted account's content from the
@@ -1862,10 +1861,12 @@ carol muted bob from the comment's own overflow menu, and after a HARD reload th
 thread read "Comments (2)" with bob's comment and his reply both gone and alice's
 untouched; `/settings/mutes` listed him and `GET /me/blocks` was empty, so the
 state was unambiguously the mute; unmuting from that page restored the comment.
-Blocking repeated the whole round trip against `/settings/blocks`, which reads
-"Accounts you have blocked. Neither of you can send the other a direct message."
-against the mutes page's "Their comments are hidden from you." — different
-routes, different headings, different promises. With bob blocked, his fresh
+Blocking repeated the whole round trip: the control reads "Blocked", and after a
+hard reload the server has filtered the comment out — "Comments (2)" again, with
+alice untouched — while `/settings/blocks` lists him and `GET /me/mutes/accounts`
+is empty. That page reads "Accounts you have blocked. Neither of you can send the
+other a direct message." against the mutes page's "Their comments are hidden from
+you." — different routes, different headings, different promises. With bob blocked, his fresh
 comment left carol's Inbox at four rows after a hard reload; after unblocking,
 the same action produced a fifth, "bobu3 commented on …". Screenshots were
 visually inspected.
@@ -1888,14 +1889,20 @@ TDD failed first in every lane. Core HTTP: `owner has 1 notifications after
 control passing. SQL: replacing the two `NOT EXISTS` clauses with `AND TRUE` and
 regenerating sqlc made the real-PostgreSQL test fail on exactly those three cases,
 and it passes again with them restored. Frontend: three failures, including
-`getVideoComments` being called while the session was still restoring, and
-"expected null, received `<p>from bob</p>`" for the block.
+`getVideoComments` being called while the session was still restoring. The third
+covered a second change — blocking removing the author's comments at once, as
+muting does — which was **reverted**: repo CI showed `e2e/blocks.spec.ts` ("The
+comment stays (a block doesn't hide content)") and `e2e-backed/blocks.spec.ts`
+both pin the current behaviour, and editing an existing e2e spec to make a change
+fit is exactly what vidra-user's AGENTS.md forbids. Whether the row should also
+go immediately is a product call for its owner; it is cosmetic either way, since
+the server hides it on the next load regardless.
 
 Gates: core `make ci` passes (exit 0; fmt-check, vet, migrate-lint,
 openapi-verify, sqlc-verify, test-race; 79 packages, 0 failures), and
 `go test -tags=integration ./internal/store/...` passes against native
 PostgreSQL 16 at schema 127. Frontend passes TypeScript, lint (zero errors, two
-pre-existing warnings), icons, **237 files / 2341 tests**, and the production
+pre-existing warnings), icons, **237 files / 2340 tests**, and the production
 build, on nvm Node 24.4.1 (24.20.0 is still absent from this machine; 24.4.1
 satisfies `.nvmrc` "24", `engines >=24` and CI's `node-version: "24"`). Per
 vidra-user's AGENTS.md the local e2e suites were **not run**. On #162 the
@@ -1913,9 +1920,12 @@ the shipped 120 req/min rate limiter (35 × 429), which put the comment list int
 its error state and produced a false negative; it was re-run with cool-downs
 between phases and a hard failure on any 429, rather than by raising the limit.
 
-Three unrelated findings. The "fetch on mount, before the session is restored"
+Four unrelated findings. The "fetch on mount, before the session is restored"
 shape may apply to other client-side reads whose answer is viewer-scoped; not
-swept here. `/settings/blocks` under-promises — it mentions only direct messages,
+swept here. Mute and Block sit in the same overflow menu and behave differently
+on the spot — Mute removes the comment, Block leaves it reading "Blocked" — and
+two e2e specs pin the Block half, so it needs a ruling rather than a patch.
+`/settings/blocks` under-promises — it mentions only direct messages,
 while the contract says a block also hides the blocked account's videos and
 comments from the blocker. And a notification **about** a comment outlives that
 comment's account-level tombstoning: nothing leaks (no body is stored, the actor
