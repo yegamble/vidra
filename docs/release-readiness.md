@@ -2221,7 +2221,9 @@ were **not run** — and CI earned its keep for it: the first push turned the
 `frontend` lane red on `e2e/account-data.spec.ts`, which pins the import summary
 line character for character and so moved with the copy fix. The spec now asserts
 the corrected string, exactly as strictly as before; vitest was green throughout,
-only the Playwright expectation was stale. SC5 no-regression: the named tests from all three merged A12
+only the Playwright expectation was stale. With that corrected the whole lane is
+green — `frontend` (the canonical gate, e2e included) plus all four backed lanes
+— and `contract` is the only red check left, for the ordering reason above. SC5 no-regression: the named tests from all three merged A12
 slices pass, including the tagged real-PostgreSQL
 `TestCommentReplyRecipientOnRealPG` and `TestCommentVideoOwnerRecipientOnRealPG`.
 
