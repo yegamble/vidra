@@ -1,0 +1,91 @@
+{
+  "status": "PASS",
+  "vm": "vidra-a02-20260905194815-89796",
+  "checks": {
+    "offline_delete_visible_error": "PASS",
+    "failed_delete_persisted": "PASS",
+    "explicit_delete_retry_reload": "PASS"
+  },
+  "browser": "151.0.7922.34",
+  "parent_id": "14d48961-5038-4fee-b1a0-150bdf780db7",
+  "frontend_revision": "a220c9ec18617f7a558b45654ea68f86355dd746",
+  "scope": "A12 / SOC-02 comment deletion recovery; broader A12 remains open",
+  "environment": "Local Next development frontend through localhost:19144 proxy to disposable restored HTTPS API; real PostgreSQL. No API interception or changed rate limits.",
+  "command": "node /tmp/vidra-a12-delete.mjs /tmp/vidra-a12-delete-after-r3",
+  "exit_code": 0,
+  "pass_count": 3,
+  "skip_count": 0,
+  "reproduction": {
+    "component": "1 failed / 17 passed before fix; missing alert",
+    "browser": "/tmp/vidra-a12-delete-before-r2: failed waiting for an alert after real browser offline Delete"
+  },
+  "helpers": {
+    "/tmp/vidra-a12-delete.mjs": "ea41bc0ff75889f2307308dbe77e3f30d81199245b51bac2236b73c8f65f6f0f",
+    "/tmp/vidra-a12-social.mjs": "0245bdce4f94e1ef90ebda43bfa0131c7eff901344987133a224f5ba91ebc11c",
+    "/tmp/a14-proxy.cjs": "513d809e771105ba6b4878472b43c4365952579662f4c7dee7f52574bd2d7687"
+  },
+  "other_evidence": {
+    "three_actor_reply_chain": "PASS in /tmp/vidra-a12-social-before-r1: browser-created parent/reply; fresh API parent_id and author_username readback",
+    "notification_recipients": "UNVERIFIED: initial helper used incorrect route and got 404; corrected helper hit 429 before recipient reads",
+    "visual_check": "delete-error.png inspected; shared danger Alert appears below retained comment"
+  },
+  "attempts": [
+    "Initial social helper used /notifications instead of contract /me/notifications (404).",
+    "Subsequent comment creation and login hit unchanged limiter (429).",
+    "Initial implementation placed deleteError in wrong component; focused suite caught it; corrected before passing tests.",
+    "First changed browser run encountered that component failure.",
+    "Second changed browser run passed offline error and persisted readback, then explicit retry got 429.",
+    "Final run reused the existing parent and removed a redundant pre-action reload; all three checks passed.",
+    "Initial full unit diagnostic used Homebrew node@24 symlink, which actually resolves to Node 25.9.0; interrupted after localStorage failures. Final gates use cached actual Node 24.20.0."
+  ],
+  "remaining": [
+    "Reply/mention notification recipients: current core handleCreateComment only notifies video owner; requires separate focused reproduction/implementation.",
+    "Ratings, notification preferences/unread, moderation reports/mutes/blocks, deleted-account tombstones.",
+    "Profile/privacy/archive/deactivation/account deletion."
+  ],
+  "production_browser": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "offline_delete_visible_error": "PASS",
+      "failed_delete_persisted": "PASS",
+      "explicit_delete_retry_reload": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "parent_id": "d42d2be6-b9d0-47e4-bd5c-9b0a2d0bd92c",
+    "command": "Node 24.20.0: node /tmp/vidra-a12-delete.mjs /tmp/vidra-a12-delete-production-r1 /tmp/vidra-a12-social-before-r2/result.json",
+    "exit_code": 0,
+    "helper_sha256": "63cf57b4d713af69c8f4691a1d19f3d2d0d9914e83c32bebbe337f360f9814e6",
+    "pass_count": 3,
+    "skip_count": 0
+  },
+  "runtime_images": {
+    "api": "sha256:11da5f5c256020b56d86ead9b8961ff914731af63823c9054fcd36968c91a785",
+    "postgres": "sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2",
+    "search": "sha256:9c38c0817c60f9bbecc04f9f90183d8f61d87f295b5cbc2dad5a1f4aa7032fbe"
+  },
+  "gates": {
+    "node": "24.20.0",
+    "focused_tests": {
+      "passed": 18,
+      "exit": 0
+    },
+    "typecheck": 0,
+    "lint": {
+      "exit": 0,
+      "errors": 0,
+      "existing_warnings": 2
+    },
+    "icons": 0,
+    "unit": {
+      "files": 237,
+      "passed": 2336,
+      "skipped": 0,
+      "exit": 0
+    },
+    "production_build": 0,
+    "meta_compose_config_q": 0,
+    "full_backed_suites": "CI pending"
+  },
+  "implementation_pr": "https://github.com/yegamble/vidra-user/pull/158"
+}
