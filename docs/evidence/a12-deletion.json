@@ -1,0 +1,143 @@
+{
+ "status": "A12 stays OPEN and the AUTH-05 row does NOT flip. This slice closes AUTH-05's second half \u2014 deactivation and deletion with content \u2014 on real evidence, with two defects found and fixed and three recorded. The row still cannot flip because its 'email/password changes \u2026 with re-verification' criterion describes capabilities the product does not have (proven in the previous slice).",
+ "scope": "A12 / AUTH-05 slice (b): deactivation and deletion with real content \u2014 the shipped visibility promise, which token dies when, the \u00a71 tombstone and its leak surfaces, the search deletion hook, DM retention, media cleanup, and the wrong-actor/edge paths.",
+ "core_revision": "a12/deactivation-deletion @ 7475c5a (one commit on origin/main dcd2360)",
+ "frontend_revision": "vidra-user@main 3bd9bfe \u2014 NOT modified by this slice",
+ "search_revision": "vidra-search@main e8a1f76 \u2014 NOT modified by this slice; RUN for real (this is the first A12 slice that could exercise the search hook)",
+ "pull_requests": {
+  "core": "yegamble/vidra-core#164 (READY \u2014 all six CI lanes green)",
+  "frontend": "none \u2014 the frontend needed no change in this slice",
+  "meta": "yegamble/vidra#109 (this evidence PR)",
+  "dependency_order": "core#164 FIRST (it changes internal/store/sqlcgen via make sqlc and the account purge checklist), then this evidence PR. No contract change, so there is no contract-ci ordering problem this time."
+ },
+ "environment": "Disposable LOCAL lab, native. Homebrew PostgreSQL 16.15 + Redis; vidra-core built from the branch on 127.0.0.1:8088 with VIDRA_ENV=development, VIDRA_ROLE=all, TRANSCODING_ENABLED=true (ffmpeg 8.1 \u2014 the fixtures went through the REAL transcode pipeline, so the HLS/CMAF ladder, renditions, thumbnails and storyboards on disk are genuine), local blob storage, CORS scoped to the lab frontend origin, and a throwaway database migrated 0 -> 127. vidra-search built from main on 127.0.0.1:8090 against its own throwaway database at schema 16, wired to core through SEARCH_SERVICE_URL + a lab-only SEARCH_INTERNAL_SECRET. The vidra-user PRODUCTION build served on 127.0.0.1:3100. Synthetic actors only; the owner is claimed through the real first-run bootstrap. Torn down at the end: services stopped, databases and role dropped, binaries, media and build artifacts removed.",
+ "browser": "Chromium via Playwright 1.62.1 (headless, real browser, production frontend build, separate browser contexts per actor, 1440x1000)",
+ "actors": {
+  "A": "alice \u2014 the account under test for the API run: one channel, two published videos with real media, a playlist, a saved video, watch history, a rating, two comments on other people's videos plus one on her own, follows in both directions, an E2EE DM thread with B, one stored notification preference and a completed account export",
+  "B": "bob \u2014 the counterpart: comments and replies both ways, follows A, saves and watches A's video, holds the other half of the DM thread",
+  "C": "carol \u2014 a third party who keeps A's video in a playlist, in Saved and in watch history, so a post-deletion leak would show up in someone else's library",
+  "M": "mallory \u2014 the instance owner, claimed through the real first-run bootstrap",
+  "E": "erin \u2014 a second account under test for the BROWSER run, deactivated, reactivated by the owner and then deleted entirely through the shipped UI against the PATCHED binary",
+  "oscar": "a throwaway whose password hash was emptied in the database to produce the OAuth-only shape (bcrypt can never verify an empty hash)"
+ },
+ "shipped_promises_as_shipped": {
+  "deactivation_ui_copy": "\"Deactivate account \u2014 This disables your account and signs you out everywhere. You will not be able to sign in again. Confirm your password to continue.\" (verbatim from /settings in Chromium)",
+  "deactivation_what_it_actually_does": "POST /auth/me/deactivate re-confirms the current password (204), sets users.is_active FALSE, does NOT stamp deleted_at, leaves the username intact, and revokes every session row. Login is then 403 'account is disabled'. VISIBILITY: the PROFILE goes to 404 for everyone including the instance owner, and the account leaves /search/accounts and its channel leaves /search/channels (both queries filter u.is_active). Everything else stays fully public: the channel page 200 with its video grid, the videos 200 by direct URL and IN THE ANONYMOUS FEED, thumbnails/HLS/original 200, and the account's comments still render with its username on them. Deactivation enqueues NO search event, so the account's videos stay searchable in vidra-search (2 hits before, 2 hits after).",
+  "deactivation_which_token_dies_when": "REFRESH tokens die instantly (every session row is revoked; POST /auth/refresh is 401 immediately). The already-issued 15-minute ACCESS JWT does NOT: requireAuth verifies the JWT alone and never re-reads the account. Proven route by route right after deactivation \u2014 GET /auth/me 401 (it loads the user), but PATCH /auth/me 200, GET /me/notifications 200, GET /me/conversations 200, POST /videos/{id}/save 204, GET /me/playlists 200, GET /me/export 200 and POST /channels/{handle}/videos 201. The database confirmed the writes: the deactivated account changed its own bio and created a video row.",
+  "reactivation_path": "ADMIN-ONLY. There is no self-service reactivation: login stays 403 while is_active is false, and the UI says so. The instance owner flips it back with PATCH /admin/users/{id} {\"is_active\": true}, exposed in the UI as a per-row Reactivate action in /admin/users (driven in Chromium). Everything returns: login 200, profile 200, the videos back in the feed, /search/accounts back to 1.",
+  "deletion_ui_copy": "\"Delete account permanently \u2014 This permanently deletes your account. Your channels and videos are removed for good, your comments are replaced with anonymous \u201c[deleted]\u201d tombstones (replies to them are kept), and your playlists, follows, history, and settings are erased. This cannot be undone \u2014 if you might come back, use Deactivate above instead.\" (verbatim from /settings)",
+  "deletion_what_it_actually_does": "DELETE /auth/me re-confirms the password (204, 0.30s for this fixture). The users row is ANONYMISED, not removed: username -> deleted-<8 hex>, email -> deleted-<8 hex>@deleted.invalid, password hash cleared, display_name and bio emptied, is_active false, deleted_at stamped. Channels and videos are hard-deleted; per-user rows (ratings, saved, history, playlists, follows both directions, notification prefs, account_exports) are purged; sessions revoked; comments on OTHER people's videos become tombstones with an emptied body while the replies under them stay readable; a comment on the account's OWN video goes with the video.",
+  "dm_retention": "THE RECIPIENT KEEPS THEIR COPY. The conversation, the message rows and the E2EE ciphertext all survive the sender's deletion; only the sender's IDENTITY is anonymised. B's /messages list after E's deletion reads 'deleted-251d3f2e \u2014 Encrypted conversation', and B can still open the thread (200). Nothing in B's view names the deleted account.",
+  "media_cleanup": "SYNCHRONOUS AND BEST-EFFORT, INSIDE THE DELETE \u2014 there is no ledger and no GC gate on this path. account.Service.Delete collects every DB-recorded blob key for each video (original, renditions, thumbnail, storyboard + its VTT, captions) before the rows cascade, deletes each object, then deletes the whole HLS key prefix, then the channel avatar/banner, the account avatar/banner and the export archives. Failures are swallowed so cleanup can never abort the deletion. Nothing is scheduled for later: MEDIA_GC_ENABLED and the media-GC worker are not involved in an account delete at all."
+ },
+ "criteria": {
+  "SC1_deactivation": {
+   "result": "PASS \u2014 with the shipped promise stated exactly, and one gap recorded",
+   "api": "19 assertions, 0 failed. The refusal paths were already proven by the previous slice; this exercised the SUCCESS path and everything downstream. is_active FALSE, deleted_at untouched, username untouched, 7 session rows all revoked, refresh 401, login 403 'account is disabled'. Follows survive in BOTH directions (2 followers of the account's channel, 1 outgoing follow, unchanged). B still sees the DM thread.",
+   "visibility": "See shipped_promises_as_shipped.deactivation_what_it_actually_does. Profile 404 to anonymous, to B and to the OWNER; channel 200, channel videos 200, both videos still in the anonymous feed, thumbnail/HLS 200, the account's comment still rendered with its username.",
+   "token": "See deactivation_which_token_dies_when \u2014 refresh instantly, access up to JWT_ACCESS_TTL (15 minutes).",
+   "reactivation": "Admin-only, proven end to end by API and in Chromium; everything returns.",
+   "browser": "Driven from /settings: the Deactivate card and its copy, the deactivation itself, the landing on / and a HARD RELOAD of /settings showing the signed-out state; then the anonymous profile 404 beside the still-public channel page (screenshot 07 shows 'Erin Makes \u00b7 1 video' with the thumbnail, signed out)."
+  },
+  "SC2_deletion_with_content": {
+   "result": "PASS on the tombstone and every leak surface; ONE DEFECT FIXED (the e2ee device directory) and ONE RECORDED (the post-deletion write window)",
+   "tombstone": "username deleted-312a3b06, email deleted-312a3b06@deleted.invalid, password hash cleared, display_name and bio empty, is_active false, deleted_at stamped; no row anywhere still holds the old username or address.",
+   "comments": "Every comment written BEFORE the deletion is a tombstone with an emptied body, rendered as '[deleted]' under the anonymised handle with an empty display name; both replies under it stay live and readable; the comment on the account's own (deleted) video went with the video. No old text survives anywhere. The literal string 'alice' that remains in the thread is OTHER users' own comment bodies ('bob replies to alice'), which is their writing, not a leak \u2014 asserted explicitly.",
+   "videos_and_media_urls": "Both videos 404 by direct URL, out of the anonymous feed, channel page 404, channel videos 404, thumbnail / HLS master / original download / storyboard all 404.",
+   "other_peoples_rows": "C's playlist item, C's and B's saved rows and every watch-history row pointing at the deleted videos are GONE; C's playlist, Saved and History pages no longer name the video; B's subscription list no longer holds the channel.",
+   "notifications": "The three notification rows whose actor is the deleted account are KEPT but resolve through the anonymised row: B's notification list reads actor username 'deleted-312a3b06' with an empty display name. Nothing names the old identity.",
+   "sessions_and_tokens": "Every session row revoked; refresh 401; login 401. The 15-minute ACCESS JWT again survives \u2014 see the recorded finding.",
+   "account_exports": "ANSWERED, and the prior slice's worry does not hold: the export ROW is deleted and the archive BLOB is removed from storage inside the delete (DeleteAccountExportsByUser returns the keys and each is deleted). GET /me/export/download with the deleted account's own token is 404. A stranger with the link could not pull a deleted user's archive.",
+   "search_deletion_side": "see SC3"
+  },
+  "SC3_search_deletion_hook": {
+   "result": "PASS \u2014 vidra-search was actually running for this, both core-side and service-side",
+   "before": "A's two videos were indexed as eligible documents (search.documents), returned by a signed /internal/v1/search for 'alice', and by core's /videos/search.",
+   "after_deletion": "The outbox delivered user.suppress(unlisted=true) + user.history_deleted(all) and core issued the direct DELETE /internal/v1/users/{id}. In vidra-search: 0 hits for 'alice', 0 eligible documents (both rows now carry suppressed_reason 'deleted'), and search.query_log / behavior_events / user_search_history / user_watch_projection all 0 for the account. In core: /videos/search 0, /search/accounts 0, /search/channels 0, and core's OWN search_outbox holds no data-bearing row naming the account.",
+   "after_deletion_second_actor": "Repeated for E, deleted through the UI against the patched binary: 0 documents eligible (suppressed_reason 'deleted'), the account's video never returned for either query, core's three search surfaces all 0.",
+   "after_deactivation": "THE GAP, recorded: deactivation enqueues NO search event. The account's videos were still returned by vidra-search (2 hits) and by core's /videos/search (2) while deactivated; only /search/accounts and /search/channels dropped it, and those are core-local SQL filtered on u.is_active, not the index. So 'deactivated' is invisible to vidra-search \u2014 unlike 'unlisted', which does enqueue user.suppress.",
+   "residue": "Delivered video.upsert rows in core's search_outbox still carry the deleted account's owner_id and video titles. The erasure deliberately targets only payloads that name the user AT THE TOP LEVEL (query text, behavioural events, watch progress); these wait for the search_event_retention_days prune."
+  },
+  "SC4_dm_retention": {
+   "result": "PASS",
+   "policy": "See shipped_promises_as_shipped.dm_retention \u2014 the recipient's copy is kept in full; only the sender's identity is anonymised.",
+   "proof": "API: the conversation row, both message rows and the E2EE ciphertext rows survive; B's GET /conversations/{id}/messages is 200 with the same envelope count as before; nothing in the thread or the conversation list names the deleted account. Browser: B's /messages shows 'deleted-251d3f2e \u2014 Encrypted conversation' for the account deleted through the UI, and 'deleted-312a3b06' for the API one.",
+   "leak_check": "No display name, username or address of either deleted account appears anywhere in B's messaging views."
+  },
+  "SC5_media_cleanup": {
+   "result": "PASS \u2014 and there is no gate to record, because this path has none",
+   "gating": "Nothing is deferred to media GC or a purge ledger. The blobs are deleted synchronously inside the account delete, best-effort. This slice therefore proves PHYSICAL removal, not just scheduling.",
+   "proof": "Real transcoded media on local disk: 55 objects before, of which 37 belonged to the account under test (originals, 240p renditions, thumbnails, storyboards + VTT, the CMAF/HLS ladder, and the export archive). After the delete, ZERO objects on disk carry either video id or the account id, video_files and streaming_playlists rows are gone, and every media URL (thumbnail, HLS master, original download, storyboard) answers 404. The counterpart's media is untouched. Repeated for E after the UI deletion: no blob survives, all five URLs 404."
+  },
+  "SC6_wrong_actor_and_edges": {
+   "result": "PASS",
+   "wrong_actor": "There is no route by which one user deletes another: DELETE /auth/me is self-scoped, and B's DELETE /admin/users/{A} is 403 (requireRole admin). An anonymous DELETE /auth/me is 401.",
+   "wrong_password": "403 'incorrect password' with NOTHING changed \u2014 is_active still true, deleted_at still null, username still the original, all three videos still owned. A missing password is 422 with the field error.",
+   "oauth_only_rule": "An account with an empty password hash (the OAuth-only shape) cannot self-delete OR self-deactivate: 422 on an empty password, 403 on any non-empty one, and the account is untouched afterwards. bcrypt can never verify an empty hash, so ConfirmPassword always fails.",
+   "admin_delete": "Exercised only as the 403 refusal for a non-admin. The admin variant's self-guard was not re-exercised here (it is covered by TestAdminDeleteUser)."
+  },
+  "SC7_no_regression": {
+   "result": "PASS",
+   "core_make_ci": "ci: gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race).",
+   "core_integration": "internal/store and internal/account tagged integration lanes against real PostgreSQL 16 at schema 127 \u2014 both ok.",
+   "named_tests_from_the_merged_A12_slices": "TestCommentReplyRecipientOnRealPG and TestCommentVideoOwnerRecipientOnRealPG (tagged, real PostgreSQL) both PASS; TestCommentReplyNotifiesTheParentAuthor, TestCommentReplyNotificationNeverSelfOrDuplicates, TestCommentReplyNotificationRespectsMutesAndBlocks, the TestImportArchive*, TestAccountExport*, TestDeactivateAccount*, TestDeleteAccount*, TestAdminDeleteUser* and TestSearchPurge* families all PASS.",
+   "frontend": "vidra-user was not modified, so its gates were not run and no PR was opened there."
+  }
+ },
+ "defects_found_and_fixed": {
+  "e2ee_device_directory_outlived_the_account": {
+   "where": "vidra-core internal/account/delete.go + a new DeleteE2EEDevicesByUser query (core#164)",
+   "found_by": "reading the \u00a71 purge checklist against the database after a real hard delete",
+   "mechanism": "the delete ANONYMISES the users row instead of removing it, so the ON DELETE CASCADE on e2ee_devices.user_id never fires; the checklist covered MFA and recovery codes but not the encrypted-messaging device directory",
+   "impact": "after the account was gone, the counterpart's GET /users/{id}/e2ee/devices still answered 200 with the USER-CHOSEN device_name ('alice-lab') and both public keys, and POST /users/{id}/e2ee/claim still handed out a claim for it \u2014 the tombstone anonymised the username while a name the user chose stayed readable",
+   "red_first": "TestDeletePurgesE2EEDeviceDirectory failed with 'e2ee devices left behind for the deleted account: [cc53d2a5-\u2026]' and 'one-time keys left behind for device \u2026: 3'; TestDeleteRunsFullChecklist failed with 'purge \"e2ee_devices\" did not run'",
+   "fix": "a DeleteE2EEDevicesByUser purge in the checklist; e2ee_one_time_keys.device_id ON DELETE CASCADE takes the keys with it",
+   "post_fix_proof": "E was deleted through the shipped UI against the patched binary: 0 device rows, and the counterpart's device listing for E comes back empty. The pre-fix deletion's row is still there, unchanged, which is what proves nothing retro-fixed it."
+  },
+  "comment_writes_committed_then_500d_for_a_disabled_account": {
+   "where": "vidra-core internal/httpapi/comments.go (core#164)",
+   "found_by": "probing every write route with a deactivated account's still-unexpired access JWT",
+   "mechanism": "requireAuth verifies the access JWT alone and never re-reads the account, so a token minted before the lifecycle change still reaches the handler. Both comment write paths ran the MUTATION first and only then resolved the author for the response; UserByID refuses an inactive account, so the insert/edit was already committed when it failed",
+   "impact": "a comment on the page from an account that no longer exists, and {\"code\":\"internal_error\"} to the client. Reproduced live twice \u2014 once after a deactivation, once after a hard delete",
+   "red_first": "TestCommentWritesRefuseADisabledAccount failed with 'create with a disabled account = 500, want 401', 'edit with a disabled account = 500, want 401' and 'comments after the refused writes = 2, want 1'",
+   "fix": "resolve the author BEFORE the write in both handlers and map auth.ErrAccountNotFound to 401 'account no longer available' \u2014 the same wording handleDeleteAccount already uses for the same condition",
+   "post_fix_proof": "live against the patched binary: both are 401 'account no longer available', the comment count is unchanged and the existing body is byte-identical"
+  }
+ },
+ "findings_recorded_not_fixed": [
+  "THE HEADLINE. requireAuth never re-checks the account, so for the rest of JWT_ACCESS_TTL (15 minutes by default) a DEACTIVATED or HARD-DELETED account's still-valid access token keeps writing on every route that does not itself load the user. Proven AFTER the hard delete: PATCH /auth/me 200, POST /videos/{id}/save 204, GET /me/playlists 200, POST /playlists 201, POST /channels 201, POST /me/export 200 \u2014 the deleted account created a channel, a playlist, a saved row and a FRESH DATA ARCHIVE OF ITSELF, all after its own tombstone was written, and a comment it posted in that window is live and untombstoned in the public thread under the handle deleted-<suffix>. The UI's 'signs you out everywhere' and the doc comment's 'its access tokens stop resolving' are both true only of refresh tokens and of the handful of routes that read the user row. Closing it is a design decision (a per-request account read, a revocation set, or session-bound access tokens), not a surgical diff, so it is recorded rather than patched.",
+  "Deactivation is a login switch, not a visibility switch. It hides the profile and drops the account from /search/accounts and /search/channels, but the channel page, the videos, the public feed, playback and the account's comments \u2014 with its username still on them \u2014 all stay public, and vidra-search keeps serving the videos because deactivation enqueues no search event at all (unlisted does). Whatever the intended product answer is, the UI copy does not describe this either way.",
+  "An instance owner can flip is_active back to true on a TOMBSTONED row from /admin/users (the row shows up in the Users list as 'deleted-<suffix>' with Reactivate and Delete actions). Doing so makes a public profile page for deleted-<suffix> answer 200 again; login still fails (the hash is cleared) and the account does not return to /search/accounts. Harmless as observed, but 'Reactivate' on a hard-deleted account is a control that should probably not exist.",
+  "Delivered video.upsert rows in core's search_outbox still carry a deleted account's owner_id and video titles until the search_event_retention_days prune; the erasure deliberately only takes payloads that name the user at the top level.",
+  "UNRELATED, frontend packaging: on vidra-user@3bd9bfe a hard load of /settings served from .next/standalone/server.js \u2014 with .next/static and public copied in exactly as the Dockerfile does \u2014 404s a turbopack runtime chunk that the build never emits, and the route falls back to 'Something went wrong'. Reproduced on two clean builds (rm -rf .next each time). The same build served by `next start` renders /settings correctly, which is what this walkthrough used. Worth checking against the released image before treating it as shipped-broken, but the standalone server is what the container runs."
+ ],
+ "gates": {
+  "core_make_ci": "PASS \u2014 ci: gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race).",
+  "core_tagged_integration": "PASS \u2014 internal/store and internal/account against real PostgreSQL 16 at schema 127",
+  "core_github_ci": "ALL GREEN on core#164 \u2014 GitGuardian, build-test (3m28s), integration (6m39s), ipfs-integration (2m20s), ipfs-private-integration (1m54s), openapi (35s). PR marked ready.",
+  "frontend": "NOT RUN and no PR \u2014 vidra-user was not modified by this slice",
+  "search": "NOT RUN as a gate \u2014 vidra-search was not modified; it was RUN as a dependency and its index was asserted directly",
+  "meta_compose_render": "NOT NEEDED \u2014 no compose or script files touched",
+  "migrations": "none; 0127 stays the latest. internal/store/sqlcgen regenerated with make sqlc, never hand-edited."
+ },
+ "counts": {
+  "api_assertions": "168 across eight drivers (seed 6, content 29, SC1 19, SC6+pre-delete+tombstone 22, post-delete 51, post-fix 12, corrected re-assertions 18, second-actor SC3/SC5 11)",
+  "api_failures": "5, all in the post-delete driver on their FIRST wording: four were mis-worded by the harness (a comment that legitimately went with its video, and 'alice' appearing in OTHER users' comment bodies) and are restated and green in the re-assertion driver; the fifth was the real e2ee device defect, now fixed and re-proven green",
+  "browser_assertions": "24 across one continuous walkthrough, 0 failed, ZERO 429 responses, 21 document loads",
+  "screenshots": "31 captured; the danger zone, the goodbye state and the anonymous channel page of a deactivated account were inspected visually",
+  "http_429": "ZERO in every driver and in the browser walkthrough \u2014 the shipped limits (10/min auth, 120/min general) were never raised; the pacer is file-backed so the budget survives across scripts"
+ },
+ "attempts_and_corrections": [
+  "The lab directory still held the PREVIOUS slice's state.json, so the first seed run skipped the owner claim and every registration came back 403 owner_claim_required. Worse, the `rm -f a b out-*.json` that was meant to clear it aborted whole under zsh's nomatch, so the file survived a second time. Every phase now starts from an explicitly established state.",
+  "The login response key is `token`, not `access_token`; videos have no transcode_state column; the tables are notification_prefs and e2ee_messages, not notification_preferences and message_envelopes. Five harness guesses corrected against the live schema.",
+  "psql -At with a field separator drops TRAILING empty columns, so an assertion about the wiped display_name and bio crashed the post-delete driver on an IndexError AFTER the (one-shot) deletion had already run. Its remaining assertions were completed by a continuation driver using the access token state.json still held, and every query that reads a possibly-empty column now wraps it in '['||col||']'.",
+  "Two assertions were simply wrong about the shipped behaviour and are restated: a comment on the account's OWN video is not a missing tombstone (it goes with the video), and the string 'alice' left in a thread is other users' comment text, not an identity leak.",
+  "The frontend could not serve /settings from .next/standalone (a turbopack chunk 404) \u2014 recorded as an unrelated finding; the walkthrough uses `next start` against the same production build.",
+  "Playwright: the admin Users row button is only actionable at a wider viewport (it timed out at 1280x900 and works at 1440x1000), and the row's Reactivate control lives behind the row detail, not in the list.",
+  "The browser walkthrough is not idempotent \u2014 it deactivates its actor \u2014 so a re-run needs the owner to reactivate first. Recorded rather than worked around."
+ ],
+ "for_the_next_slice": {
+  "what_remains_for_AUTH_05_to_flip": "Only the criterion's 'email/password changes \u2026 with re-verification'. Deactivation, deletion with content, the search deletion hook, DM retention and media cleanup are now all closed on evidence, and profile/privacy plus the archive were closed by the previous slice. There is no password-change endpoint and no email-change flow anywhere in the product (proven by 23 route probes in that slice), so the row cannot flip until the owner either builds current-password-authenticated password change and email change with re-verification, or rewrites the register row's criterion to describe what Vidra ships (a mailbox-possession reset, and an address that is fixed at registration). That is a product decision, not an engineering gap.",
+  "highest_value_follow_up": "the post-deletion write window \u2014 a deleted account should not be able to create a channel or a fresh archive of itself for fifteen minutes"
+ }
+}
