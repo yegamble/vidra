@@ -1409,3 +1409,16 @@ Private scripts/logs and recovery material remain under `/tmp/vidra-a37-*`;
 the checkpoint records helper hashes, not credentials or archive contents.
 This evidence checkpoint depends on A36 PR #97 (which depends on #96), and does
 not close A37 or the wider A09–A40 goal.
+
+
+## Merge delivery checkpoint — 2026-09-05
+
+The user explicitly instructed “make sure we're merging to main and push as we
+go.” Merge authorization is resolved. A10 implementation PRs core #160 and
+frontend #152/#153 are merged after green checks; the prior runtime PASS remains
+supported by its individual evidence. A11 chapter recovery frontend #154 and A12
+session restoration frontend #155 are also merged; their broader acceptance
+items remain open as recorded. A36 offsite proof meta #97 and the A37 checkpoint
+#98 are merged. A14 frontend #150 is merged; its dependent #151 is retargeted to
+main and its new checks are running. Completed base branches are removed only
+after dependents are retargeted. No production deployment or release occurred.
