@@ -45,5 +45,18 @@
     "Immediate clear-history reload assertion timed out; a fresh session confirmed empty persisted history with HTTP 200."
   ],
   "history_position_seconds": 12,
-  "cover_revision": "de7bd33"
+  "cover_revision": "de7bd33",
+  "playlist_continuation": {
+    "status": "FAIL",
+    "stored_order": [
+      "08e65f08-ebc3-4cbd-a2bf-dfad22e1c28e",
+      "1850cdb2-8e8f-4b40-b010-effad608d7aa",
+      "84fdfd9a-f4a5-4c21-bcff-2be211acd00c"
+    ],
+    "expected_next": "1850cdb2-8e8f-4b40-b010-effad608d7aa",
+    "offered_next": "84fdfd9a-f4a5-4c21-bcff-2be211acd00c",
+    "queue": [],
+    "actual_media_end_seconds": 5,
+    "next_experiment": "Add a failing playlist-navigation test that preserves ordered remaining items as playback context, then repeat this three-item real-media proof."
+  }
 }

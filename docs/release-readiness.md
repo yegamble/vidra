@@ -1332,3 +1332,14 @@ warnings), 232 files / 2,301 tests. Backed tests now cover public and private
 owner reload with a decodable PNG. Full local/S3 CI for #156 is pending; all
 checks for #155 are green. A12 remains OPEN for playlist continuation and the
 remaining social/profile/archive/deletion criteria.
+
+
+A12 continuation reproduction: a three-item saved playlist ordered “A12 short →
+A11 other → A12 long” played the first item to its natural 5-second end, but the
+end card offered “A12 long” from recommendations; the playback queue was empty.
+The first two-item experiment was inconclusive because recommendation order
+happened to match playlist order. One later attempt returned 429 before adding
+the item; after waiting, add/order/read and real playback succeeded, isolating
+the wrong next-item behavior. Next: TDD for playlist navigation carrying ordered
+remaining items into playback, followed by this discriminating browser case.
+The synthetic playlist retains the recorded three-item order for reproduction.
