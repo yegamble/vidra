@@ -1630,3 +1630,14 @@ prerequisites fail. It verifies exact images, walks the advertised HLS tree,
 checks caption/storyboard/original access through privacy/password transitions,
 and restores temporary settings/objects. The output contains sanitized results;
 keep its `private-error.txt`, credentials, and guest deploy logs out of git.
+
+For a required disposable recovery rehearsal, `tests/backup-capture-smoke.py`
+accepts an exact prepared A08 fixture and a new private output directory. It
+quiesces the lab writers and captures DB/config/media with one timestamp.
+`tests/backup-offsite-smoke.py` takes that directory, a private rclone crypt
+config, a private bucket-scoped S3 key JSON, the authorized B2 test bucket, and a
+new output directory. It requires actual encrypted upload/download and exact
+archive checksums; missing credentials or services fail rather than skip.
+Retain the crypt recovery config separately from the encrypted bucket. These
+helpers do not configure production durability, replace a restore drill, or
+select retention policy for an operator.
