@@ -1073,3 +1073,49 @@ replacement-host restore from this retrieved set, with login, usable media,
 reindex and measured recovery. Source migration A18–A23 still needs the SSH
 host/user and read-only inventory; other selected integration decisions remain
 explicitly open. The A09–A40 goal is not complete.
+
+## A37 replacement-host recovery checkpoint — 2026-09-05
+
+**A37 OPEN / UNVERIFIED.** Observable acceptance requires restored accounts,
+sealed-secret decryption, old and new media playback, search rebuild and measured
+recovery time. [Checkpoint evidence](evidence/a37-restore-checkpoint.json) records
+real recovery of the approved A36 B2 set onto replacement VM
+`vidra-a02-20260905194815-89796`; source VM and test runner remain intact.
+
+The initial image import hung the replacement VM. Both Multipass stop modes
+stalled; administrator intervention was requested. Once the VM was observed
+stopped, restarting only that VM and importing the already-transferred verified
+archive succeeded. Configuration and canonical media were extracted before
+running the repository's normal `restore.sh` against its empty database.
+Both migrators passed, core ledger is `127|f`, and blob verification found every
+referenced object. Stack recovery took **970.73 seconds**, including the VM
+interruption, from staging start to services ready. This is a measured lab
+interval, not a production RTO guarantee. The data point and archive hashes are
+those recorded in `a36-offsite.json`; application writes were quiesced for that
+matched snapshot. Browser verification completed after the stack-ready interval.
+
+Actual Chromium checks passed restored-account login, exact original-media
+SHA-256, old-video audio/video decoding and seeking, new browser upload and
+processing, and new-video decoding/seeking after its transcode job completed.
+The first new-playback probe expected HLS before the job completed and observed
+original-file playback instead; that failed probe remains in the evidence.
+The bounded retry waited for actual `transcode_jobs.state=done` and passed.
+Search evidence deletes only a synthetic video's restored index entry, restarts
+only the replacement API, verifies a rebuilt reconciliation entry, and finds
+and opens the video through the browser search UI. The recorded search event
+confirms `source=search`, excluding a local fallback as proof of index recovery.
+
+Remaining blocker: decryption of a restored sealed fixture is **unverified**.
+A temporary synthetic MFA enrollment was captured locally and removed from the
+source after capture. Automatic approval review rejected uploading that newer
+archive because it includes a new temporary TOTP secret beyond the previously
+approved payload. Explicit approval for that upload remains pending. No new
+MFA archive has been uploaded. Next experiment: after approval, encrypt/upload
+and retrieve that matched set, restore it on this replacement VM, then prove
+MFA authentication using the recovered sealing key. Keep the original failure
+and successful retry evidence; do not rerun blank-host provisioning.
+
+Private scripts/logs and recovery material remain under `/tmp/vidra-a37-*`;
+the checkpoint records helper hashes, not credentials or archive contents.
+This evidence checkpoint depends on A36 PR #97 (which depends on #96), and does
+not close A37 or the wider A09–A40 goal.
