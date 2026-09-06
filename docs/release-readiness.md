@@ -1675,7 +1675,8 @@ preserves its original reply-chain assertions.
 
 Actual Node 24.20.0 gates pass: TypeScript, icons, lint (zero errors, two existing
 warnings), 237 unit files / 2,336 tests, production build, and diff check. Meta
-production Compose config-q passes with dummy configuration. CI is pending.
+production Compose config-q passes with dummy configuration. All frontend CI
+checks pass, including contract, frontend, local/S3 backed, IPFS and channel sync.
 Failed attempts remain recorded: wrong notification route in the helper (404),
 unchanged rate limiting (429), initial implementation state placed in the wrong
 component (caught by tests), and an interrupted Node 25 diagnostic unit run.
@@ -1696,3 +1697,11 @@ Delivery order: frontend #158, then this evidence PR. Merge is authorized by the
 user's final instruction; no release or production deployment is authorized.
 Private helpers/results stay under /tmp/vidra-a12-{social,delete}-*. The complete
 A12 acceptance remains open even after this focused fix is merged.
+
+
+A12 social delivery: frontend #158 is merged as `c0160dc` after all CI passed.
+Local and S3 backed lanes each report **100 passed / 11 skipped**; skipped
+workflows remain unverified and do not close other A12 criteria. The independent
+production browser run above has three passing checks and zero skips. Frontend
+work branch cleanup follows the confirmed merge. Evidence PR #104 records this
+bounded result; the complete A12 item remains OPEN.

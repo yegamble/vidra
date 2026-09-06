@@ -85,7 +85,25 @@
     },
     "production_build": 0,
     "meta_compose_config_q": 0,
-    "full_backed_suites": "CI pending"
+    "full_backed_suites": {
+      "run": 34002217917,
+      "local": {
+        "passed": 100,
+        "skipped": 11
+      },
+      "s3": {
+        "passed": 100,
+        "skipped": 11
+      },
+      "limitation": "Skipped cases remain unverified; these lane results do not certify other A12 workflows."
+    }
   },
-  "implementation_pr": "https://github.com/yegamble/vidra-user/pull/158"
+  "implementation_pr": "https://github.com/yegamble/vidra-user/pull/158",
+  "delivery": {
+    "frontend_pr": 158,
+    "state": "MERGED",
+    "merge_revision": "c0160dcc7563c8382328ada85a10288b230af160",
+    "all_frontend_checks": "PASS",
+    "frontend_run": 34002217901
+  }
 }
