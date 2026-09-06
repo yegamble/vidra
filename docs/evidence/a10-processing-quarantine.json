@@ -1,0 +1,82 @@
+{
+  "acceptance": "A10 PUB-04 processing and quarantine slices",
+  "status": "PARTIAL_PASS",
+  "core_revision": "39be454",
+  "core_pr": "https://github.com/yegamble/vidra-core/pull/160",
+  "frontend_revision": "fd7ce8f",
+  "transcode_hold": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "transcode_hold_persisted": "PASS",
+      "held_public_search_denied": "PASS",
+      "ready_public_search_playback": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "video_id": "2c53cd8c-3279-438f-b5f3-c373a3d1e085",
+    "title": "A10hold1788646285303",
+    "hls_url": "/api/v1/videos/2c53cd8c-3279-438f-b5f3-c373a3d1e085/hls/master.m3u8",
+    "playback": {
+      "time": 2.616914,
+      "frames": 68
+    }
+  },
+  "candidate_quarantine": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "base_image": "sha256:11da5f5c256020b56d86ead9b8961ff914731af63823c9054fcd36968c91a785",
+    "binary_sha256": "4fb2f5305ace4a7b99c23db9f10256a67697bbf99b43a233fec3e1f5d86e8a67",
+    "candidate_image": "sha256:d983482146b817024f0180628c49811c5b1187ce1faa4090fa374f292c0f89c1",
+    "quarantine": {
+      "status": "PASS",
+      "vm": "vidra-a02-20260905194815-89796",
+      "checks": {
+        "quarantine_persisted_hidden_role_denied": "PASS",
+        "approve_reject_browser_persistence_notification": "PASS"
+      },
+      "browser": "151.0.7922.34",
+      "original_setting": {
+        "key": "quarantine_new_uploads",
+        "type": "bool",
+        "value": false,
+        "default": false,
+        "overridden": false,
+        "page": "general",
+        "section": "moderation"
+      },
+      "videos": [
+        {
+          "id": "bce0ba17-d0c9-4684-b486-774346920b9f",
+          "title": "A10quarantineapprove1788646895698",
+          "action": "approve"
+        },
+        {
+          "id": "a582dc3a-04d2-49de-9069-5a2d44478913",
+          "title": "A10quarantinereject1788646897819",
+          "action": "reject"
+        }
+      ],
+      "setting_restored": "PASS"
+    },
+    "original_image_configuration_restored": "PASS"
+  },
+  "verification": {
+    "httpapi": "PASS",
+    "make_ci": "PASS (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race)",
+    "integration_vet": "PASS",
+    "full_tagged_store_federation": "NOT RUN; real targeted behavior exercised with lab PostgreSQL",
+    "meta_compose": "PASS; nested core 39be454"
+  },
+  "prior_attempt": "security: needs owner attention; private regression reproduction retained",
+  "reproduction_sha256": {
+    "/tmp/vidra-a10-transcode-hold.mjs": "e4f047c845b07be285e94e42235820de65633ad3e6e8d9b241b2dcc8829414ec",
+    "/tmp/vidra-a10-quarantine.mjs": "12c7d7c36dab1819b4712a7ea0ca5464d5f875ab257dd8358d6de63b937b6b07",
+    "/tmp/vidra-a10-quarantine-candidate.mjs": "a8568bba7917895f11c0bb31c7fd7598346abd6f8baeedf7a18dd737ad0b3b7f",
+    "/tmp/vidra-a10-candidate-runtime.mjs": "6c6cbd20ea9010318f073b3d35066b6956294afba36d390e014c8a4e5c36ca38"
+  },
+  "remaining": [
+    "replacement identity/metadata and old/new generation playback",
+    "failed replacement retains prior usable generation",
+    "partial cleanup and reload recovery"
+  ]
+}

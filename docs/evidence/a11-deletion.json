@@ -1,0 +1,34 @@
+{
+  "status": "PARTIAL_PASS",
+  "vm": "vidra-a02-20260905194815-89796",
+  "checks": {
+    "delete_reload_media_discovery": "PASS"
+  },
+  "browser": "151.0.7922.34",
+  "video_id": "a07b8163-59fb-48fc-93c9-7b6968fb81cc",
+  "stored_keys": [
+    "web-videos/a07b8163-59fb-48fc-93c9-7b6968fb81cc.mp4",
+    "storyboards/a07b8163-59fb-48fc-93c9-7b6968fb81cc.jpg",
+    "storyboards/a07b8163-59fb-48fc-93c9-7b6968fb81cc.vtt",
+    "web-videos/a07b8163-59fb-48fc-93c9-7b6968fb81cc/240p.mp4",
+    "thumbnails/a07b8163-59fb-48fc-93c9-7b6968fb81cc.jpg"
+  ],
+  "hls_files": [
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/240p/video-only.mp4",
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/240p/video.mp4",
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/audio.m4a",
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/cmaf/chunk-1-00001.m4s",
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/cmaf/init-1.mp4",
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/cmaf/iframe-0.mp4",
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/cmaf/stream.mpd",
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/cmaf/init-0.mp4",
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/cmaf/iframe-0.m3u8",
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/cmaf/media_1.m3u8",
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/cmaf/media_0.m3u8",
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/cmaf/chunk-0-00001.m4s",
+    "/app/data/media/streaming-playlists/a07b8163-59fb-48fc-93c9-7b6968fb81cc/master.m3u8"
+  ],
+  "byte_cleanup": "UNVERIFIED \u2014 collector approval pending; no GC executed",
+  "acceptance": "A11 CRT-01 deletion",
+  "approval_blocker": "Automatic review rejected executing the whole collector because it also removes about 105 pre-existing orphan objects. Explicit user approval pending. No collector execution or manual blob deletion performed."
+}
