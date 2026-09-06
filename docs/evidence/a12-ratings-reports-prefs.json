@@ -1,0 +1,140 @@
+{
+  "status": "PASS (SOC-02's last open criteria: ratings, notification-preference refresh, unread counts and report resolution; A12 itself remains OPEN for AUTH-05)",
+  "scope": "A12 / SOC-02, four criteria: the video rating round trip (there are no comment ratings), notification preferences gating delivery, unread counts staying truthful, and report resolution end to end. With the mute/block, tombstoned-parent, reply-attribution and recipient criteria already closed by the two preceding slices, this closes the row.",
+  "frontend_revision": "1972ac0",
+  "frontend_baseline_revision": "bb1e4e1 (origin/main; the RatingControls.tsx file reverted to its pre-change state for the baseline build)",
+  "core_revision": "789bc21 (origin/main, UNCHANGED — this slice needed no backend change)",
+  "pull_requests": {
+    "core": "none — vidra-core is untouched",
+    "frontend": "yegamble/vidra-user#161",
+    "meta": "this evidence PR",
+    "dependency_order": "None. The frontend PR changes no contract call and vidra-core is untouched, so contract-ci regenerates cleanly from vidra-core@main and #161 waits on nothing. The evidence PR goes last."
+  },
+  "environment": "Disposable LOCAL lab, native (no Docker images or volumes exist on this host, so a compose lab would have to re-pull the world). Homebrew PostgreSQL 16 + Redis; the core API built from origin/main and run on 127.0.0.1:8088 with VIDRA_ENV=development, local blob storage, and a throwaway database `a12lab` migrated from 0 to schema 127. The vidra-user PRODUCTION build served on 127.0.0.1:3100. Synthetic actors only; the instance owner is claimed through the real first-run bootstrap, not a SQL role bump. Torn down at the end: brew services stopped, database and role dropped, binaries and build artifacts removed.",
+  "serving_the_production_build": "next.config.ts sets output:\"standalone\", and `next start` CANNOT serve that build's static chunks — they come back as text/plain, Chromium refuses to execute them, and every client page hangs (the watch page sat on \"Loading video…\" having issued only /instance and /auth/refresh). The lab copies .next/static and public into .next/standalone and runs `node server.js`. Worth keeping: a walkthrough against that broken server would have failed everything for the wrong reason.",
+  "browser": "Chromium 151.0.7922.34 via Playwright (headless, real browser, production frontend build)",
+  "actors": {
+    "A": "alice — rates, reports, and owns the notification preferences under test",
+    "B": "bob — rates independently; his comment is the second report target",
+    "C": "carol — owns the channel and the video; the reported party",
+    "M": "the instance OWNER/admin, created by redeeming the one-time first-run claim token"
+  },
+  "reproduction_of_the_gap": {
+    "SC1_own_rating_lost_on_every_hard_reload": {
+      "found_by": "reading RatingControls.tsx against the CommentsSection defect #160 had just fixed, then reproducing it live",
+      "mechanism": "`my_rating` is PER VIEWER and resolved by the server from the request's bearer token, but RatingControls read the summary from a useEffect with deps [videoId] that fired on mount. The access token is restored asynchronously from the refresh cookie, so the read went out with NO Authorization header, the server answered `my_rating: null`, and the effect never re-ran.",
+      "baseline_build": "the same production build with only components/RatingControls.tsx reverted",
+      "result": "FAIL, live, in Chromium: 6 of 15 SC1 browser assertions failed. After a hard reload A's own like showed `likePressed:false` while GET /videos/{id}/rating as A answered `my_rating: \"like\"` — the count was right and the pressed state was wrong. Same for the flip, and same for B in his own context.",
+      "it_is_not_only_cosmetic": "Because the component toggles by comparing the click to the `my_rating` it holds, a reloaded page with `my_rating: null` turned the clear-my-rating click into a SET. The baseline's \"remove A's rating\" step left the dislike in place (dislike stayed 1) and the anonymous check then read 1 like / 1 dislike instead of 1 / 0. On a freshly loaded page the viewer could not take their own rating off at all.",
+      "artifact": "ui-baseline.json in the private lab directory (15 assertions, 6 failed, zero 429s)"
+    }
+  },
+  "criteria": {
+    "SC1_ratings_round_trip": {
+      "result": "PASS after one surgical frontend fix; the backend already matched the promise",
+      "scope_note": "Video-level only, confirmed: /api/v1/videos/{id}/rating is the ONLY rating path in the whole OpenAPI document. There are no comment ratings.",
+      "api_readback": {
+        "fresh": "0 / 0, my_rating null",
+        "A_likes": "1 / 0, mine=like; an independent GET as A agrees; the same GET as B returns 1 / 0 with my_rating null",
+        "A_flips": "0 / 1, mine=dislike — the aggregate moves with the flip, it does not double-count",
+        "B_likes_independently": "1 / 1; A's own GET still reads mine=dislike, so B's rating never becomes A's",
+        "A_removes": "1 / 0, mine=null — the aggregate returns and B's survives; a second DELETE is idempotent",
+        "invalid_value": "422",
+        "anonymous": "GET returns the aggregate with my_rating null; PUT is 401 and DELETE is 401"
+      },
+      "browser": "In Chromium against the production build: the capsule reads 0/0 unpressed, A's like registers as 1 + aria-pressed=true, and — the point of the fix — SURVIVES a hard reload. The flip to dislike survives a hard reload; B's like is B's and survives HIS hard reload while A still holds only her own dislike; clearing returns the aggregate to 1/0 with B's like intact. Screenshot sc1-a-like-after-hard-reload.png was visually inspected: the Like segment is filled with the accent colour and reads 1.",
+      "anonymous_ux_exactly": "The counts render for everyone. For a signed-out visitor BOTH buttons are `disabled` with aria-pressed=false and a \"Sign in to rate\" link sits beside the capsule; the API answers 401 to an anonymous PUT or DELETE. There is no anonymous rating path at all.",
+      "privacy_as_shipped": "Nobody can learn WHO rated a video. /api/v1/videos/{id}/rating is the only rating route in the contract; a probe of GET /videos/{id}/ratings as the ADMIN is 404. Every read of the video_ratings table in the codebase is either a COUNT (the aggregate, the search outbox, the stats rollups) or the caller's own single row — no query, and no response shape, names a rater. The Video schema carries no rater field.",
+      "self_rating_as_shipped": "An owner MAY rate their own video: PUT as C returned 200 with my_rating=like and the count incremented, and in the browser the owner's own capsule is enabled exactly like anyone else's. There is no self-rating guard anywhere in the rating service or handler.",
+      "frontend_fix": "components/RatingControls.tsx: the summary read now waits for the session restore to settle and re-reads when the session changes, so it goes out as the signed-in viewer and the server can answer with that viewer's own rating. One `if (status === \"restoring\") return;` plus `status` in the dependency array."
+    },
+    "SC2_notification_preferences_gate_delivery": {
+      "result": "PASS as shipped",
+      "known_types": ["caption_ready", "comment", "comment_reply", "follow", "message", "new_report", "new_video", "report_resolved", "video_rejected"],
+      "defaults": "GET /me/notification-prefs returns every known type enabled for a new account, matching notification.KnownTypes().",
+      "comment_reply_for_A": {
+        "control": "with the type on, B's reply to A's comment created exactly 1 comment_reply for A",
+        "disabled": "PATCH {comment_reply:false} answered with it off, an independent GET agreed, and the DB row (notification_prefs) reads enabled=false; a subsequent reply created NO notification (count unchanged)",
+        "re_enabled": "PATCH {comment_reply:true}, and the NEXT reply delivered again",
+        "partial_patch": "every other type is untouched by the partial update"
+      },
+      "comment_for_C_the_second_type": "C turned the owner `comment` type off in the UI, a top-level comment by B produced no owner notification, and re-enabling made the next one deliver.",
+      "browser": "Driven from /settings/notifications, not from the API: the Replies switch starts aria-checked=true, flips to false, and is STILL false after a hard reload, with GET /me/notification-prefs agreeing; the same round trip runs for C's Comments switch. Screenshot sc2-replies-off.png was visually inspected — the Replies row is the only one off, and the page names all nine types with human copy.",
+      "error_semantics": "An unknown type rejects the WHOLE update with 422 and writes nothing; the endpoints are 401 without auth.",
+      "out_of_scope_stated": "PUT /channels/{handle}/follow/notifications is the PER-CHANNEL bell for the new_video type — a different route, a different store and a different surface, not adjacent to this switchboard. Deliberately not exercised; the global new_video switch is what this page owns."
+    },
+    "SC3_unread_counts_stay_truthful": {
+      "result": "PASS as shipped; the shared endpoints were reused, nothing was re-implemented",
+      "api_readback": "GET /me/notifications/unread-count equals the list response's unread_count, equals the number of unread rows in the list, and equals a direct COUNT over notifications with read_at IS NULL. Mark-one-read decrements by exactly 1 and is idempotent on repeat; read-all zeroes it; the rows themselves survive read-all. B marking A's notification read is 404; the endpoint is 401 without auth.",
+      "browser": "With a real backlog of 4 unread, the bell's accessible name is \"Notifications (4 unread)\" and its badge digit is 4 — equal to /me/notifications/unread-count. Marking one read on /notifications takes the shared endpoint to 3, and after a HARD RELOAD the bell reads \"Notifications (3 unread)\" with badge 3. \"Mark all as read\" takes it to 0, and after a hard reload the bell carries no count and no badge at all, no row is left unread, and the rows are still there. Screenshots sc3-bell-badge.png and sc3-all-read.png were visually inspected.",
+      "note_on_the_zero_label": "At zero the bell's accessible name is plain \"Notifications\" with no badge element, by design — not \"(0 unread)\". A first attempt at this criterion asserted the latter and failed on its own wrong expectation; it was corrected, not the app."
+    },
+    "SC4_report_resolution_end_to_end": {
+      "result": "PASS as shipped",
+      "filing": "A reported C's video from the watch page's Report button (a modal with a required reason) and B's comment through the same contract. Each reached M's queue with the correct target (video_id / comment_id) and the correct reporter; both open. The reporter is thanked and never shown the queue.",
+      "staff_signal": "M received one new_report per filing. A normal user cannot read the queue (403) or resolve (403).",
+      "resolution_from_the_browser": "M opened the report in /moderation, typed an internal note and pressed Accept. API readback: status accepted, resolved_at set, moderator_note stored, gone from ?status=open and present under ?status=resolved. The UI's Resolved filter shows it wearing its outcome. A rejection on the second report behaves the same and carries its own outcome.",
+      "the_reporter_is_told": "A's inbox reads \"A moderator accepted your video report\" — the outcome in words, carried by report_status/report_target_type on the notification. It never names the moderator (actor_id is deliberately left null on this type) and never leaks the internal note. Screenshot sc4-reporter-inbox.png was visually inspected.",
+      "the_reported_party_is_told_nothing": "C holds zero report-typed notifications and none of her rows carries a report id — her inbox is eight ordinary `comment` rows. No report row renders on her page. B, whose comment was reported, is the same. Neither is told a report exists, let alone who filed it.",
+      "what_resolve_actually_does": "Resolve CLOSES the report and nothing else. It stamps accepted|rejected, resolved_at and the internal note, moves the row out of the open queue, and notifies the reporter with the outcome. It carries NO content action: after accepting, GET /videos/{id} is still 200, the video still renders on the watch page for everyone, the video row is still state=published privacy=public with zero rows in video_blocks, and the reported comment is still in the thread. Taking the reported thing down is a SEPARATE, independent control — the same detail pane's \"Block video\" button (POST /admin/videos/{id}/block) or admin comment deletion — which a moderator may use with or without resolving.",
+      "hard_delete": "DELETE /admin/reports/{id} is admin-only (a non-admin is 403), is 204 for the admin, removes the row from the queue, and its report_resolved notification cascades away (0 rows left referencing it).",
+      "error_semantics": "An invalid outcome is 422; an unknown report id is 404."
+    },
+    "SC5_no_regression": {
+      "result": "PASS",
+      "core_tests_from_161_162": "TestCommentReplyNotifiesTheParentAuthor, TestCommentReplyNotificationNeverSelfOrDuplicates, TestCommentReplyNotificationRespectsMutesAndBlocks (3 subtests) and TestCommentNotificationRespectsMutesAndBlocks (4 subtests incl. the control) all pass; internal/notification TestNotifyCommentSkips passes; the real-PostgreSQL TestCommentReplyRecipientOnRealPG and TestCommentVideoOwnerRecipientOnRealPG pass at schema 127.",
+      "frontend_tests_from_159_160": "The whole vitest suite passes — 238 files / 2346 tests, up from 237 / 2340 by exactly this slice's new RatingControls.test.tsx (6 tests). CommentsSection's session-gating tests and NotificationsView's comment_reply rendering tests are untouched and green."
+    }
+  },
+  "gates": {
+    "core": "NOT APPLICABLE — vidra-core is unchanged by this slice, so no core PR and no `make ci` requirement. The named #161/#162 tests were still run (see SC5) and pass, including the tagged real-PostgreSQL lane.",
+    "frontend_tsc": "PASS — npx tsc --noEmit, exit 0",
+    "frontend_lint": "PASS — eslint: 0 errors, 2 pre-existing warnings (WatchView internal navigation, an unused variable in remote-search.test). During the lab the two untracked scratch harness files sitting in the repo produced 17 no-console errors; they are not part of the change and were removed before the final run.",
+    "frontend_lint_icons": "PASS — no emoji/glyph icons",
+    "frontend_vitest": "PASS — 238 files / 2346 tests",
+    "frontend_build": "PASS — production next build succeeded (run three times: fixed, reverted baseline, fixed again)",
+    "node_version_note": "Node 24.20.0 is still absent from this machine; gates ran on nvm 24.4.1, which satisfies .nvmrc \"24\", engines \">=24\" and CI's node-version \"24\".",
+    "not_run": [
+      "npm run e2e and npm run e2e:backed — vidra-user's AGENTS.md forbids running them locally; repo CI covers them",
+      "core `make ci` — not required, vidra-core is untouched",
+      "meta compose render gate — not needed, no compose or script files touched"
+    ]
+  },
+  "tdd_red_first": {
+    "frontend_unit": "components/RatingControls.test.tsx was written first against the unchanged component: 2 failed / 4 passed. The two failures were exactly the session-gating cases (\"does not read the summary until the session has resolved\" and \"reads once for an anonymous visitor, after the restore attempt settles\") — getVideoRating fired while the session was still restoring. After the change: 6 passed / 6.",
+    "browser": "The whole SC1 walkthrough was run against a production build with only RatingControls.tsx reverted: 6 of 15 assertions failed, and passed on the fixed build. The component had NO test file at all before this slice, which is how the defect survived.",
+    "no_new_test_for_SC2_SC3_SC4": "Deliberate: those criteria passed as shipped and no code changed for them, so a new unit test would assert nothing that was at risk. Their proof is the live API readback plus the browser."
+  },
+  "counts": {
+    "api_driver": "69 assertions, 0 failed, 86 API calls",
+    "browser_walkthrough_fixed_build": "56 assertions, 0 failed, zero 429s",
+    "browser_walkthrough_baseline_build": "15 assertions, 6 failed (SC1 only), zero 429s"
+  },
+  "attempts_and_corrections": [
+    "Registration on a fresh lab is not merely closed, it is 403 owner_claim_required until the instance owner is claimed. The driver's first run died on a 401 from login because register had never succeeded. M is now created by redeeming the boot-logged one-time token — which is the truer fixture anyway: a real instance owner rather than a SQL role bump.",
+    "The login response field is `token`, not `access_token`.",
+    "Three table names were guessed wrong and corrected against the live schema: notification_preferences -> notification_prefs, blocked_videos -> video_blocks, and videos.published_at does not exist (the column is publish_at).",
+    "`next start` cannot serve an output:\"standalone\" build: the JS chunks come back as text/plain, Chromium refuses to execute them and every client-rendered page hangs. The first browser attempt failed with the watch page stuck on \"Loading video…\" having issued only two API calls. Fixed by copying .next/static and public into .next/standalone and running node server.js.",
+    "The shipped auth limiter is 10 requests/minute per IP on login/register/claim-owner, separate from the 120/min general budget. The seeder spends most of it, so the walkthrough's second sign-in 429'd. Fixed by waiting out a fresh window before the sign-in batch and signing each actor in exactly ONCE for the whole run — not by raising the limit.",
+    "One watch-page load costs ~14 API calls, so the first paced attempt still tripped the 120/min limiter mid-SC1 and produced a false negative (the comment list fell into its error state). The walkthrough now budgets document loads: a short settle after each and a full window cool-down every fourth. Any 429 still voids the run.",
+    "Two harness bugs were corrected rather than the app: SC3 asserted the bell would read \"Notifications (0 unread)\" at zero (it correctly reads plain \"Notifications\" with no badge, and \"Mark all as read\" is correctly disabled), and it started from a single unread row, which cannot distinguish a decrement from a zeroing — it now seeds a real backlog of four.",
+    "The first SC4 \"the reported party is never told\" pair was too crude — it failed on /report/i matching page chrome and on C's inbox legitimately naming A, who had commented on C's video. Replaced with precise assertions: the two ways a report can render in an inbox, plus an API readback that C holds zero report-typed notifications and no row carrying a report id. The DB confirms C's eight rows are all ordinary `comment`.",
+    "No transcoder runs in this lab, so each fixture video is moved out of 'draft' with a direct UPDATE — a database fixture, not a code change."
+  ],
+  "unrelated_findings": [
+    "The \"fetch on mount, before the session is restored\" shape has now been found twice (CommentsSection in #160, RatingControls here). Both were viewer-scoped reads behind optionalAuth. A sweep of every optionalAuth-backed client read whose answer depends on the viewer would be cheap and is not done here.",
+    "NotificationsView and NotificationsBell keep independent unread counters. Marking a notification read on /notifications does not update the header bell until the next route change or reload (the bell refetches on [status, pathname]). Both are correct against the server after any navigation, and both were correct after every hard reload in this slice, but on-page they can disagree for the life of one view.",
+    "describeNotification returns href \"#\" for report_resolved — the only notification type with nowhere to go. A reporter told their report was accepted cannot reach the report, because there is no reporter-facing report view at all (GET /admin/reports is staff-only). Either an inert row or a missing surface; a product call, not a patch.",
+    "The moderation queue's \"Block video\" button sits in the same action bar as Accept/Reject with no visual grouping, so \"resolve the report\" and \"take the content down\" read as peers. They are independent operations and a moderator can resolve without ever touching the content — worth a design pass now that the semantics are recorded.",
+    "GET /me/blocks returns {\"users\": …} while GET /me/mutes/accounts returns {\"accounts\": …}; noted again here because it cost time in a second slice."
+  ],
+  "helpers_sha256": {
+    "drive.py (four-actor API driver, SC1-SC4)": "13515a9029d69837d21286037023753efdfac50bbc518e97ee5c5c09ad0b077a",
+    "setup_ui.py (browser fixture seeder)": "fef88ce00dcd73fe82e8953f11ccc64b6aca2711a7892fad0130500121da2031",
+    "ui-proof.mjs (Chromium walkthrough for SC1-SC4)": "4c599782ec76c79229a1481539bc8d2a19bdfb2660c400d73f5b4ffad03a5b20",
+    "reset.sh (rebuild the disposable lab; asserts which pid holds :8088)": "5905dfa4f61e79d401c3a3206ee1b3c49bfa98da9799c102ee6eb96ec049a809",
+    "serve.sh (serve the standalone production build)": "6e1b4da3a883b9da18ab9aa2f8df579ec6760725dab29e4f54824d1ead67ff83"
+  },
+  "helpers_location": "Private session scratch directory; results (api-run1.json, ui-baseline.json, ui-proof.json) and the nine screenshots stay there and are not committed.",
+  "register": "SOC-02 row FLIPPED to PASS (candidate; unmerged). Its criteria are now all closed across three slices: reply attribution and intended-recipient notification (#161/#159), blocked/muted content and the deleted/tombstoned parent (#162/#160), and ratings, notification-preference refresh, unread counts and report resolution (this slice). Mentions are named in the row's title but are NOT a shipped capability — core has no mention feature and vidra-user's \"mention\" is a client-derived @handle prefix on a reply, plain text with no picker, no linkification and no delivery promise — so there is no mention behaviour to accept or refuse; that is recorded rather than counted as a pass. A12 itself remains OPEN: AUTH-05 (profile/privacy, email/password changes, deactivation/deletion and account archive) is untouched."
+}
