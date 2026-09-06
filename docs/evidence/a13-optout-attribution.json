@@ -1,0 +1,133 @@
+{
+  "status": "A13 owner ruling applied — opt-out means no attributed collection. SRC-03 flips to PASS (candidate; unmerged).",
+  "scope": "The one clause the two A13 slices could not certify: 'no personalized data when off'. As shipped, opting out stopped the SERVING completely and did not stop the COLLECTION — a fully opted-out user's searches and plays still landed in vidra-search's query_log and behavior_events under their raw account UUID, still counted toward the instance-wide k-anonymity floors, and still keyed trending. The owner ruled that the switch means collection too. This slice implements that rule in vidra-core (the only writer of identity), splits the projection gate off the history gate in vidra-search, makes the settings page honest about both, and re-proves the whole path in a real lab.",
+  "core_revision": "origin/main eb85a98 + PR #169 (a13/optout-attribution)",
+  "search_revision": "origin/main 4b0814a + PR #35 (a13/optout-attribution)",
+  "frontend_revision": "origin/main 6c7932b + PR #167 (a13/optout-attribution)",
+  "pull_requests": {
+    "vidra-core#169": "fix(search): attribution is exactly 'may this feed a store that is running' — one decision point on all three behavioural emit paths",
+    "vidra-search#35": "fix(event): the watch projection follows the personalization control, not the history control",
+    "vidra-user#167": "fix(settings): gate the recommendations toggle in simple mode, and say what opting out does",
+    "meta": "this evidence + the release-readiness section + the SRC-03 flip",
+    "order": "core#169 and search#35 are independent of each other (search accepts an absent allow_personalization and falls back to allow_history, so either may merge first); user#167 touches no contract and is independent of both; this evidence PR last",
+    "openapi": "unchanged in core — no route or shape change, so vidra-user's contract-ci is expected GREEN, not red",
+    "migrations": "NONE. core stays at 129, search stays at 0016. See sc3_existing_rows for why there is no 0017."
+  },
+
+  "the_rule": "An authenticated caller's behavioural search event carries their account id only when it may feed at least one durable per-user store that is actually running: allow_history (the instance runs search history AND the user keeps theirs) or allow_personalization (the instance is in advanced search mode AND at least one personalization feature is enabled instance-wide with the user's matching control on). attributed == allow_history || allow_personalization, because the account id exists in these payloads to key one of those two stores and nothing else. When neither holds — an anonymous visitor, a user who has switched their controls off, or an instance where none of those features is running — the event is built exactly as an anonymous visitor's would be: no user_id, no account-derived value under any key in props, and the day-scoped anonymous subject core already derives for anonymous callers (anonSearchSubject, core#167) beside the client's session id, so vidra-search counts them ONCE in every k floor however many session ids they rotate through and never keys trending or co-visitation to the account. Each surviving control then feeds only its own store: allow_history gates user_search_history (the user's own search-history page), allow_personalization gates user_watch_projection (the vector every personalized generator reads). The decision is taken per event at emit time on all three of core's emit paths, so it is forward-only: re-enabling resumes attribution from that moment and changes nothing already written.",
+
+  "environment": "Disposable LOCAL lab, native, torn down at the end. Homebrew PostgreSQL 16 + Redis 8. vidra-core built from the branch on 127.0.0.1:8088 (VIDRA_ENV=development, VIDRA_ROLE=all, local blob storage, real ffmpeg transcode to HLS, throwaway database migrated 0 -> 129, its own Redis logical database). vidra-search built from the branch on 127.0.0.1:8090 against its own throwaway database at schema 16 and its own Redis logical database, both flushed before seeding, wired to core through SEARCH_SERVICE_URL + a lab-only SEARCH_INTERNAL_SECRET. The vidra-user PRODUCTION build served by the standalone server on 127.0.0.1:3100 behind a pipe-only proxy on 127.0.0.1:3000 that inspects, rewrites and mocks nothing — frontend and API on ONE origin, because the vidra_refresh cookie is SameSite=Lax and Path=/api/v1/auth and cross-origin sign-in silently reads as signed-out. Shipped rate limits left ON at defaults and the harness paced itself: zero 429 responses in any phase.",
+  "browser": "Chromium via Playwright (headless, real browser, production frontend build, 1440x1000). No route interception anywhere — responses are only observed. No fake search server. Hard reloads where stated.",
+
+  "lab_artifact_stated_plainly": "The anonymous subject is a keyed, day-scoped digest of the CONNECTING ADDRESS. Every actor in this lab, and the Next server's own SSR fetches, reach core from 127.0.0.1, so every unattributed row here shares the single subject c88b8344ff39… That is the derivation working as documented (one subject per address per day, and a NAT collapses many people into one, which UNDER-counts), but it means this lab cannot distinguish 'A's subject' from 'another anonymous visitor's subject' — and does not need to: the claims proven are that no user_id and no account-derived value is written, that rotating the session header mints no new subjects, and that the k floor therefore counts the actor once.",
+
+  "actors": {
+    "A": "aurelia — the actor who opts out, THROUGH SearchSettingsView in Chromium",
+    "B": "bertil — stays opted in throughout (the control)",
+    "C": "cassio — a third signed-in user, present only to put the discriminator query on the k floor's edge",
+    "anonymous": "no session cookie, no Authorization header",
+    "M": "mallory — instance owner, claimed through the real first-run bootstrap"
+  },
+  "fixture": {
+    "channel": "vantrix (owner)",
+    "videos": "3 real uploads through POST /channels/{h}/videos + POST /videos/{id}/file (2 s 320x180 clips, real ffmpeg transcode to HLS, all published, all indexed by the real outbox -> /internal/v1/events path): Zorbalt Drift, Zorbalt Ember, Kwellin Tide",
+    "query_strings": "krellvax, vondrash, thelgorn, bertilonly — chosen to match no catalogue text, so the un-gated document streams cannot answer instead",
+    "instance": "search_mode = simple (the shipped default) throughout the browser phases"
+  },
+
+  "criteria": {
+    "SC1_rule_stated_and_implemented": {
+      "verdict": "PASS",
+      "single_decision_point": "vidra-core internal/httpapi/search_attribution.go — searchEventIdentity(c), used by ALL THREE behavioural emit paths: handleSearchEvents (POST /search/events), emitSearchSubmitted (the routed GET /videos/search emit) and emitWatchProgress (the authenticated PUT /videos/{id}/watch-progress emit). A rule applied on some paths is a rule applied on none: one browser search alone writes two query_log rows through two different paths.",
+      "a_zero_attributed_rows": "PROVEN — see SC2. After the opt-out, every new row across query_log and behavior_events carried user_id NULL, an anonymous subject in props, allow_history=false and allow_personalization=false; no key in props held the account id.",
+      "b_each_control_feeds_only_its_own_feature": "allow_history gates search.user_search_history; the NEW allow_personalization gates search.user_watch_projection. Before this, one flag decided both, so a user with history ON and personalization OFF had a projection built for them that no feature they had enabled could read. Proven at the table level by vidra-search's TestIntegrationProjectionFollowsPersonalizationNotHistory (history-only user: 1 history row, 0 projection rows; personalization-only user: 0 history rows, 1 projection row).",
+      "c_core_is_authoritative_on_both_paths": "serverDerivedSearchEventFields now strips user_id, session_id, subject_id, allow_history AND allow_personalization from every client event before the server writes its own values (strip-then-set, never conditional-overwrite). Proven by TestOptedOutClientCannotReattachIdentity: an opted-out caller posting a forged user_id + allow_history + allow_personalization + subject_id is stored unattributed with the server's own subject.",
+      "d_forward_only": "The decision is per event at emit time; nothing is migrated and nothing is retro-attributed. Proven live in SC2 and by TestOptOutIsForwardOnly.",
+      "where_consent_stops": "The test is not 'did the user leave a switch on' but 'may this event feed a store that is actually running' — the user's control AND the operator's setting AND, for the projection, the search mode. A control the site has switched off is one the settings page already tells the user is unavailable; collecting on the strength of it would be collecting on a consent the product has just declared moot. It is also what makes the promise REACHABLE: every control that could still justify attribution is one the page leaves live.",
+      "the_cost_taken_deliberately": "On the shipped `simple` default no user_watch_projection is built at all any more — nothing in simple mode reads one, every personalized generator is behind `advanced` — so an instance that later flips to advanced personalizes from that moment rather than from months of quietly accumulated history. That is the trade the ruling asks for: a durable per-user store nothing can read is exactly the collection it forbids. Pinned by TestSimpleModeCollectsNoProjectionConsent."
+    },
+
+    "SC2_proof": {
+      "verdict": "PASS",
+      "opt_out_through_the_shipped_page": {
+        "toggles_on_arrival": "history {checked:true, disabled:false}; personalized_search {checked:true, disabled:true}; personalized_recs {checked:true, disabled:true}",
+        "simple_mode_reasons_rendered": [
+          "This site ranks search with simple heuristics, so personalized results are not available.",
+          "This site ranks search with simple heuristics, so personalized recommendations are not available."
+        ],
+        "inert_controls_refuse_the_click": "clicks dispatched at BOTH personalization checkboxes past the disabled attribute changed nothing — after a hard reload both still read true",
+        "the_live_control_is_enough": "unchecking 'Keep my search history' produced 'Saved.' and, after a HARD RELOAD, history=false, personalized_search=true, personalized_recs=true. On this instance (simple mode) the history control is the only one that could still justify attribution, so switching it off is the whole opt-out — which is exactly why it is never mode-gated."
+      },
+      "new_rows_after_the_opt_out": "A searched through the UI and played a real HLS video to the end (currentTime 2.02 s on a 2 s clip). Every row her actions wrote reads: user_id NULL, session_id preserved (or absent on the SSR-issued routed emit), props.subject_id = the day-scoped anonymous digest, allow_history=false, allow_personalization=false — behavior_events ids 6,7,8,9 (search.submitted x2, video.watch_progress, video.play_started) and both matching query_log rows. Identical in shape to the anonymous visitor rows in the same table.",
+      "history_page_empty": "GET /me/search-history -> {entries: []}; the page rendered 'You have no saved searches.'",
+      "rail_is_generic": "home heading rendered 'Trending now'; GET /recommendations/home answered personalized=false with items item-for-item identical to the anonymous caller's ['Zorbalt Drift','Kwellin Tide'] (B, opted in, gets the same in simple mode — core#168's mode gate)",
+      "k_floor_counts_her_once": {
+        "probe": "'vondrash' — a string A typed only AFTER opting out, four times from one address with FOUR different X-Vidra-Session values",
+        "result": "4 rows, 0 distinct user_id, 1 distinct COALESCE(subject_id, session_id) -> the floor counts 1",
+        "why_it_matters": "without the server-derived subject, 'no attribution' would have handed her the anonymous forgery hole core#167 closed: N rotated sessions counting as N people toward the default floor of 3"
+      },
+      "trending_and_covisitation_never_key_the_account": {
+        "redis_guard_keys_after_the_opt_out": "guard:trend:q:c88b8344…:vondrash, guard:trend:q:c88b8344…:thelgorn, guard:trend:q:c88b8344…:krellvax, guard:trend:v:c88b8344…:<Zorbalt Drift>, guard:trend:v:c88b8344…:<Kwellin Tide> — the anonymous digest, never her account UUID",
+        "her_only_account_keyed_guard": "guard:trend:q:<A>:krellvax, written BEFORE the opt-out, TTL 3481 s (the 1 h cap window) — it expires on its own",
+        "co_visitation": "A, opted out, played two videos in one session. covis_rollup recorded search.co_watch (count 1) and published NOTHING: search.item_neighbors is empty, because the pair has exactly ONE distinct subject and the k floor (search#34) is 3. The floor's own expression over her rows returns distinct_subjects = 1."
+      },
+      "B_is_attributed_as_before": "B's client-event search + play + watch-progress carry user_id, no subject, allow_history=true, allow_personalization=false (false only because the instance is in simple mode), and B is the ONLY holder of a user_search_history row in the whole database",
+      "re_enable_is_forward_only": {
+        "through_the_page": "A re-checked 'Keep my search history' in SearchSettingsView -> 'Saved.'",
+        "next_search_attributed": "the very next search ('thelgorn') wrote an attributed client-event row (user_id = A, allow_history=true) and one user_search_history row",
+        "earlier_rows_untouched": "her pre-opt-out behavior_events rows (ids 1, 4, 5) still carried her user_id afterwards, and none of her opted-out rows gained one"
+      }
+    },
+
+    "SC3_existing_rows": {
+      "verdict": "PASS — decided, not guessed: NO backfill migration, and the settings copy says so",
+      "why_search_cannot_do_it": "vidra-search holds NO per-user preference state at all. Its entire schema is documents, events_inbox, service_config, query_log, query_aggregates, user_search_history, user_watch_projection, behavior_events, query_video_engagement, worker_cursors, co_watch, co_search, item_neighbors, models, experiments — there is no users table and no place a preference could live. Preferences reach the service ONLY as the per-event allow_* booleans; search.config_updated carries instance settings (search_mode, the three feature switches, retention days, the floor, hide-sensitive default) and never per-user ones. A 0017_ migration could therefore only guess which accounts are currently opted out, so there is none.",
+      "what_happens_to_those_rows_instead": "They age out under search_event_retention_days (default 90). The settings page now says this in plain words rather than leaving it implied.",
+      "the_remedy_that_already_exists_and_was_measured": "DELETE /me/search-history — the 'Clear all' control on the same page — erases them on demand, today, in every durable store. Measured on A's own pre-opt-out rows: behavior_events attributed to her 4 -> 0, query_log attributed to her 2 -> 0 (ANONYMIZED, not deleted: the seven krellvax/thelgorn rows survive so instance aggregates do), user_search_history 1 -> 0, and core's OWN search_outbox rows naming her 4 -> 1 (the one that remains is the purge event itself, which PurgeUserSearchOutbox excludes structurally).",
+      "the_reachability_bug_this_exposed_and_fixed": "That remedy was UNREACHABLE for exactly the users who need it. 'Clear all' rendered only when the history list was non-empty, and an opted-out user's list is empty by construction. It is now offered whenever the list has loaded — the list is user_search_history alone, while the clear also anonymizes the raw ledgers and erases core's outbox copy of the query text, so an empty list never meant there was nothing to clear. Proven in Chromium: 'Clear all' visible above 'You have no saved searches.'"
+    },
+
+    "SC4_honest_toggle": {
+      "verdict": "PASS",
+      "what_was_wrong": "vidra-core computes the rails' personalized flag as searchAdvanced() && instancePersonalizedRecs() && authed && prefs.PersonalizedRecs (core#168 added the mode half), so in the shipped simple default 'Personalize my recommendations' was exactly as inert as its search sibling — but it carried no gate: it accepted a click, answered 'Saved.' in green, and changed nothing.",
+      "fix": "instanceGates mode-gates BOTH personalization controls with the same copy pattern and the same one-line reason. The history control is deliberately NOT mode-gated — it stores rows, it does not rank them, and it works identically in both modes.",
+      "tests": "components/SearchSettingsView.test.tsx — 20 passed. The two-toggle mode-gate case additionally proves neither reaches PATCH /auth/me and no 'Saved.' appears. One existing assertion moved deliberately: the old 'disables personalized search when the instance ranks with simple mode' case asserted the recommendations toggle was NOT disabled — it pinned the bug.",
+      "live": "both boxes rendered disabled with their reasons in Chromium; forced clicks at both changed nothing across a hard reload"
+    },
+
+    "SC5_register_flip": {
+      "verdict": "SRC-03 -> PASS (candidate; unmerged)",
+      "wording_corrected": "'user search-discovery opt-in' -> the controls are opt-OUT and all three default true (observed again here on the owner claim and on all three registrations)",
+      "evidence_cited": "a13-suggest-trending, a13-recommendations-history, a13-optout-attribution",
+      "a13_stopping_criterion": "met — every clause of the SRC-03 procedure now has live evidence, including 'no personalized data when off' under the owner's reading of it as 'no attributed collection'",
+      "follow_ups_not_blockers": [
+        "co_watch / co_search are cumulative and nothing ever prunes them (search#34)",
+        "total can undercount the page it ships: vidra-search's recall admits trigram title similarity and core's own count does not",
+        "reason: 'subscribed' is reported for channels the viewer never subscribed to (the advanced recommender relabels any candidate whose channel affinity clears 0.8)",
+        "clear-all does not reach vidra-search's Redis session-recency list (sess:q:<session-id>, ~2 h TTL); closing it means core passing the caller's session id on the purge call — a change to the internal contract in both repos",
+        "one browser search still writes two query_log rows (the routed emit plus the client event), so total_count and decayed_freq double for browser traffic while distinct_users does not",
+        "the routed search.submitted emit still never sets allow_history, so an API-only client's searches are retained and never appear on the user's own history page. Deliberately NOT fixed here: setting it would double-count use_count for every browser search, which writes both rows"
+      ]
+    },
+
+    "SC6_no_regression": {
+      "core": "make ci PASSED — fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race, exit 0. go vet -tags=integration ./... clean (the tagged lane itself was not run: the lab was native rather than the compose stack).",
+      "search": "make ci PASSED — fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race, exit 0. The real-PostgreSQL lane (-tags=integration against native postgres@16 + redis, this repo's own database) also PASSED, internal/store 6.06 s.",
+      "frontend": "npm run ci PASSED on the repo's pinned Node 24 — typecheck, lint, lint:icons, 242 test files / 2376 vitest tests, production build, 621 Playwright specs. Two e2e specs (admin-users 'cancelling the admin delete keeps the user', oauth 'settings lists the linked identities and unlink removes a row') failed on the loaded run and BOTH PASS when re-run unloaded (20/20) — the documented CPU-competition flakiness, with the lab's Postgres, Redis, core and search all running at the time.",
+      "named_A13_tests_still_pass": "core#167's subject tests and core#168's paging/personalization/claim-owner tests all pass inside core's green make ci; search#34's covis-floor integration tests all pass inside the green -tags=integration lane (TestIntegrationCovisFloor* × 6)."
+    }
+  },
+
+  "unrelated_findings": [
+    "The routed search.submitted from a BROWSER search is emitted by the frontend's server-side fetch, which carries no bearer token and no X-Vidra-Session — so for a signed-IN user it lands anonymous, with the subject derived from the Next server's own address. Every SSR-issued search on an instance therefore collapses into ONE subject. That under-counts, which is the safe direction for a k floor, and it is unchanged by this slice; it is recorded because the earlier A13 note ('one browser search writes two query_log rows') did not say that one of the two is anonymous.",
+    "vitest is broken on Node 25 in this repo — 82 tests across 7 files fail with 'window.localStorage.clear is not a function'. Reproduced on clean origin/main, so it is the environment, not a regression; .nvmrc and every workflow pin Node 24, where the same files pass. Worth a note for anyone running the suite on a newer local Node.",
+    "`next start` cannot serve this app: next.config sets output: standalone and prints a warning, then serves stale route output — the settings page rendered WITHOUT its instance gates under it, which looked exactly like a bug in the gate. The standalone server (node .next/standalone/server.js, with .next/static and public copied in) serves it correctly. Any future lab must use the standalone server."
+  ],
+
+  "for_the_frontend_slice": [
+    "The fetch-before-session-restore family: /search issues its routed search through the SERVER, not the browser, so that request is anonymous by construction. It is not the AuthProvider race user#165 fixed on the home and related rails, and no client-side fix reaches it — but it belongs in the same sweep of 'which fetches go out as nobody'.",
+    "SearchSettingsView's gate helper (instanceGates) is now the pattern for any control whose effect is half operator and half user: compute a Gate per key, disable with a one-line reason, and refuse the write in the handler as well as in the DOM."
+  ],
+
+  "teardown": "All lab services stopped; the throwaway databases (a13core, a13search), the Redis logical databases 8 and 9, the media root and the built binaries live only under the session scratchpad and were never committed. No secrets, no env files and no dumps are in any commit; every credential used was an obviously fake lab-only literal."
+}
