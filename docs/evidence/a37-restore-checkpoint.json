@@ -1,0 +1,180 @@
+{
+  "vm": "vidra-a02-20260905194815-89796",
+  "project": "vidra-a03-20260905124354-92490",
+  "root": "/home/ubuntu/vidra-a37-restore-1788638154",
+  "started_at": 1788638154.565747,
+  "ready_at": 1788639125.29269,
+  "restore_elapsed_seconds": 970.7269430160522,
+  "checks": {
+    "transferred_verified_input": "PASS",
+    "config_and_media_first": "PASS",
+    "normal_restore": "PASS",
+    "blob_existence": "PASS",
+    "recovery": "PASS"
+  },
+  "core_ledger": "127|f",
+  "restore_exit": 0,
+  "status": "UNVERIFIED",
+  "offsite_evidence": "a36-offsite.json",
+  "limitations": [
+    "Sealed-secret decryption after restore remains unverified; new MFA archive upload awaits explicit approval.",
+    "Full A37 acceptance is not complete."
+  ],
+  "browser": {
+    "status": "FAIL",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "login": "PASS",
+      "restored-original-playback": "PASS",
+      "channel-draft-upload": "PASS",
+      "new-upload-playback": "FAIL"
+    },
+    "browser": "151.0.7922.34",
+    "restored_original": {
+      "status": 200,
+      "content_type": "video/mp4",
+      "sha256": "23febdedf00e4ffc6ac7ca70f8ba0e5c08712708864381869a3ab6ff271bad6b"
+    },
+    "ready_sample": {
+      "ready": 4,
+      "duration": 5,
+      "attribute": "https://secure.video.test/api/v1/videos/8688739a-4b75-40e8-a5b9-afe9d6223b4d/original",
+      "src": "https://secure.video.test/api/v1/videos/8688739a-4b75-40e8-a5b9-afe9d6223b4d/original"
+    },
+    "last_sample": {
+      "time": 1.650298,
+      "muted": false,
+      "paused": false,
+      "ended": false,
+      "ready": 4,
+      "width": 320,
+      "height": 240,
+      "frames": 48,
+      "audio_decoded_bytes": 27377,
+      "src": "blob:https://secure.video.test/69e412f0-3cbb-48bf-99c1-141557c5b31f"
+    },
+    "last_playback": {
+      "time": 1.650298,
+      "muted": false,
+      "paused": false,
+      "ended": false,
+      "ready": 4,
+      "width": 320,
+      "height": 240,
+      "frames": 48,
+      "audio_decoded_bytes": 27377,
+      "src": "blob:https://secure.video.test/69e412f0-3cbb-48bf-99c1-141557c5b31f"
+    },
+    "old_playback": {
+      "time": 1.650298,
+      "muted": false,
+      "paused": false,
+      "ended": false,
+      "ready": 4,
+      "width": 320,
+      "height": 240,
+      "frames": 48,
+      "audio_decoded_bytes": 27377,
+      "src": "blob:https://secure.video.test/69e412f0-3cbb-48bf-99c1-141557c5b31f",
+      "seek": 3.5
+    },
+    "channel_id": "71049ee8-b49e-429f-9601-e3521b35ec4f",
+    "channel_handle": "a06d80ca616e8",
+    "video_id": "8688739a-4b75-40e8-a5b9-afe9d6223b4d",
+    "upload_id": "2bef2d46-e067-4f50-86dd-fdfd2f3e7700",
+    "video": {
+      "state": "published",
+      "privacy": "private",
+      "width": 320,
+      "height": 240,
+      "duration_seconds": 5
+    },
+    "original": {
+      "size_bytes": 225521,
+      "content_type": "",
+      "original_name": "a06-clip.mp4"
+    },
+    "original_response": {
+      "status": 200,
+      "content_type": "video/mp4",
+      "sha256": "23febdedf00e4ffc6ac7ca70f8ba0e5c08712708864381869a3ab6ff271bad6b"
+    }
+  },
+  "new_playback_retry": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "completed_transcode_playback": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "ready_sample": {
+      "ready": 4,
+      "duration": 5.013333,
+      "attribute": "blob:https://secure.video.test/01c0a573-1172-46f5-ba0d-c2d021cb39ec",
+      "src": "blob:https://secure.video.test/01c0a573-1172-46f5-ba0d-c2d021cb39ec"
+    },
+    "last_sample": {
+      "time": 1.630172,
+      "muted": false,
+      "paused": false,
+      "ended": false,
+      "ready": 4,
+      "width": 320,
+      "height": 240,
+      "frames": 47,
+      "audio_decoded_bytes": 27064,
+      "src": "blob:https://secure.video.test/01c0a573-1172-46f5-ba0d-c2d021cb39ec"
+    },
+    "last_playback": {
+      "time": 1.630172,
+      "muted": false,
+      "paused": false,
+      "ended": false,
+      "ready": 4,
+      "width": 320,
+      "height": 240,
+      "frames": 47,
+      "audio_decoded_bytes": 27064,
+      "src": "blob:https://secure.video.test/01c0a573-1172-46f5-ba0d-c2d021cb39ec"
+    },
+    "playback": {
+      "time": 1.630172,
+      "muted": false,
+      "paused": false,
+      "ended": false,
+      "ready": 4,
+      "width": 320,
+      "height": 240,
+      "frames": 47,
+      "audio_decoded_bytes": 27064,
+      "src": "blob:https://secure.video.test/01c0a573-1172-46f5-ba0d-c2d021cb39ec",
+      "seek": 3.5
+    },
+    "video_id": "8688739a-4b75-40e8-a5b9-afe9d6223b4d"
+  },
+  "search": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "search-reindex": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "reconciled": {
+      "video_id": "0a0991c0-8656-4fb2-9ff2-ea6b2f1d78a4",
+      "title": "A37Recovery1788639337384",
+      "eligible": true,
+      "reconcile_run_id": "a6078361-17ca-4aad-a768-8b59d9af9d97"
+    },
+    "search_source": "search",
+    "ui_href": "/v/2zyPjYv9d6Q"
+  },
+  "helpers": {
+    "vidra-a37-stage.py": "e5ac31cf2507ad9cf9e032ddcae3650051a1d33aa4fd3860a80599f391f19221",
+    "vidra-a37-resume-stage.py": "0c6034c14dd9fae3bbfe9ed6f3f5d1a424be9101b1ed9d816bfd66d5d09d4b27",
+    "vidra-a37-restore.py": "517b08516c6b248b513c0f5baecd016be5a5424d6e4d0f713c0ad601a19d70c0",
+    "vidra-a37-browser.mjs": "f3df9b413f902fedaf039f148ae972470095ff25eeccadeb6b0c68c1bebd18e2",
+    "vidra-a37-new-playback.mjs": "0553538782cfe296fa192c9a3dd1e03e85052fe1e51eea76cad260ae5f39802b",
+    "vidra-a37-search.mjs": "4e60fd364323bc7db5f341803b7d6f75c69c82d2d2115e632565aef36979e77d"
+  },
+  "interruption": "Initial docker image import stalled the disposable VM; after it stopped, restarting that VM and loading the existing verified archive succeeded. Source VM and test runner remained running."
+}
