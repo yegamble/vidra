@@ -115,7 +115,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | SRC-02 Search privacy, retries, deletion and degraded fallback | C S U | Core search hydration predicate; S idempotent events/privacy/retention; health probe | UNVERIFIED | Duplicate/reorder/retry events; private/quarantine/unlisted/delete/block transitions; stop search and retain safe SQL fallback; restart/reconcile and verify history/personalization opt-out | SRC-01 → A09 |
 | SRC-03 Discovery, suggestions, trending, recommendations and history controls | C S U | S APIs/worker jobs; user search-discovery opt-in; ranked IDs rehydrated in core | UNVERIFIED | Seed synthetic multi-user engagement above privacy thresholds; check filters/paging/ranking, related/home cards and suggestion bans; history delete survives reload/reconcile; no personalized data when off | SRC-02 → A13 |
 | SOC-01 Follow/subscriptions, saves, playlists and watch history | C U S | Backed subscribe/subscriptions/save/playlists/history/continue-watching | UNVERIFIED | Two accounts; follow then publish notification/feed; unfollow; playlist CRUD/privacy/order/cover and playback continuation; history disable/clear and watch-later persistence | PUB-03, AUTH-02 → A12 |
-| SOC-02 Comments/replies/ratings, mentions, reports and notification preferences | C U | Backed comments/comment-replies/rating/report/notifications/notification-prefs | UNVERIFIED | Three actors: reply attribution, intended recipient notification, deleted/tombstoned parent, blocked/muted content; refresh unread counts/preferences and resolve report | SOC-01 → A12 |
+| SOC-02 Comments/replies/ratings, mentions, reports and notification preferences | C U | Backed comments/comment-replies/rating/report/notifications/notification-prefs; live three-actor evidence `a12-social-notifications`, `a12-mute-block`, `a12-ratings-reports-prefs` (mentions are not a shipped capability — recorded, not accepted) | PASS (candidate; unmerged) | Three actors: reply attribution, intended recipient notification, deleted/tombstoned parent, blocked/muted content; refresh unread counts/preferences and resolve report | SOC-01 → A12 |
 | MSG-01 Plaintext DM timeline, retry/read receipts/delete/report and attachments | C U | `internal/messaging`; backed messaging/message-compose; frontend P-MSG2 unfinished boxes | UNVERIFIED | Two browser contexts send/poll/read, prepend history without jumps/duplicates, retry once, receipts opt-out, delete/report; recipient downloads attachment, third party denied | AUTH-02 → A14 |
 | MSG-02 Approved 100 MiB / 30-file and office-document attachment behavior | C U | F03; product decision §14a vs Composer limits | FAIL | Boundary values, 31st file and oversize refusal; document kind renders; multi-file recipient API/UI readback; configured scanner failure semantics | MSG-01, INT-04 → A14 |
 | MSG-03 E2EE device/session lifecycle and honest unsupported attachments | C U | `internal/e2ee`, Olm client; backed e2ee; D7 defers encrypted blobs | UNVERIFIED | Two devices establish encryption; inspect server stores ciphertext only; restart/recover/unlink as supported; plain attachment affordance absent and API rejection; no IPFS pin for DM bytes | AUTH-02 → A15; encrypted blobs remain SCP-03 |
@@ -1942,3 +1942,144 @@ regenerated client), then this evidence PR. Nothing is merged here and no
 deployment is authorized. Next: ratings and report resolution with the
 notification-preference refresh, then per-comment deep links, then mentions. The
 complete A12 acceptance remains OPEN.
+
+## A12 social ratings, reports and preferences — 2026-09-06
+
+**A12 OPEN; SOC-02 PASSES and its register row flips.** Observable success for
+this slice: a viewer's own rating is theirs, survives a hard reload and can be
+changed or removed; a notification type turned off in the UI actually stops
+delivery and stays off; the bell never lies about how many unread notifications
+exist; and a report travels from the reporter through the moderator's queue to a
+resolution the reporter is told about and the reported party never hears of.
+[Frontend #161](https://github.com/yegamble/vidra-user/pull/161), revision
+`1972ac0`. **vidra-core is untouched** — three of the four criteria pass exactly
+as shipped, so there is no core PR, no contract change, no migration (latest
+stays 0127) and no hand-edited generated file.
+
+One gap was found, and it was found by reading the ratings control against the
+defect [#160](https://github.com/yegamble/vidra-user/pull/160) had just fixed
+next door. **`RatingControls` read the rating summary anonymously.** Its effect
+had deps `[videoId]` and fired on mount, but `my_rating` is per-viewer and
+resolved by the server from the request's bearer token, which is restored
+asynchronously from the refresh cookie — so the read carried no `Authorization`
+header, the server answered `my_rating: null`, and the effect never re-ran. That
+failing build was kept and run: on a production build with only that file
+reverted, **6 of 15 SC1 browser assertions failed**, with A's own like showing
+`aria-pressed=false` after a hard reload while `GET /videos/{id}/rating` as A
+answered `"like"`. It is not merely cosmetic. The control toggles by comparing
+the click to the `my_rating` it holds, so on a freshly loaded page the
+clear-my-rating click became a *set*: the baseline's removal step left the
+dislike in place and the run drifted to 1 like / 1 dislike. **A viewer could not
+take their own rating off a page they had just loaded.** The correction is the
+same one `CommentsSection` took: wait for the restore to settle, and re-read when
+the session changes. The component had **no test file at all**, which is how this
+survived; it has one now.
+
+[Sanitized evidence](evidence/a12-ratings-reports-prefs.json) records the proof —
+**69 API assertions and 56 browser assertions, none failed, and no 429 in either
+run**. Ratings are video-level only, and that is confirmed rather than assumed:
+`/api/v1/videos/{id}/rating` is the sole rating path in the whole OpenAPI
+document, so there are no comment ratings to accept. A likes (1/0, mine=like),
+flips (0/1 — the aggregate moves rather than double-counting), B likes
+independently (1/1, and A's own read still says dislike), A removes (1/0, B's
+survives, and a second DELETE is idempotent). In Chromium every one of those
+states survives a hard reload, in A's context and in B's separately. **Two
+shipped promises, as shipped and not as preferred: nobody can learn who rated —
+`/videos/{id}/rating` is the only rating route, a probe of `GET
+/videos/{id}/ratings` as the admin is 404, and every read of `video_ratings` in
+the codebase is either a COUNT or the caller's own row, so no response shape
+names a rater; and an owner MAY rate their own video — PUT as the owner is 200
+with the count incremented, the owner's capsule is enabled like anyone else's,
+and no self-rating guard exists.** A signed-out visitor sees the counts with both
+buttons `disabled` and a "Sign in to rate" link, and the API answers **401** to
+an anonymous PUT or DELETE.
+
+Preferences and counts were driven from the UI, not the API. A turned **Replies**
+off on `/settings/notifications`; it was still off after a hard reload, `GET
+/me/notification-prefs` agreed and the `notification_prefs` row read
+`enabled=false`; B's next reply created **no** notification, and re-enabling made
+the one after that deliver. The same round trip ran for C's owner **Comments**
+type. An unknown type still rejects the whole update with 422. The per-channel
+follow bell (`PUT /channels/{handle}/follow/notifications`) is a different route,
+store and surface — **out of scope**, and named as such. For counts, with a real
+backlog of four the bell's accessible name and badge both equalled
+`/me/notifications/unread-count`; marking one read took the shared endpoint to 3
+and the bell agreed **after a hard reload**; read-all zeroed both, left no unread
+row, and left every row in place. No endpoint was re-implemented.
+
+**What "resolve" does is now precise: it closes the report and nothing else.** A
+reported C's video from the watch page and B's comment through the same contract;
+both reached M's queue with the right target and the right reporter, and M got a
+`new_report` for each. M accepted one from the browser with an internal note:
+status `accepted`, `resolved_at` set, note stored, out of the open queue and into
+the resolved one, with API readback agreeing. A's inbox reads "A moderator
+accepted your video report" — the outcome in words — and never names the
+moderator (`actor_id` is deliberately null on that type) or leaks the note. C
+holds **zero** report-typed notifications and no row carrying a report id; B, whose
+comment was reported, the same. **Neither is told a report exists, let alone who
+filed it.** And accepting changed nothing about the content: the video is still
+200, still `published`/`public` with zero `video_blocks` rows, still on screen for
+everyone, and the reported comment is still in the thread. Taking content down is
+a separate control in the same pane (`POST /admin/videos/{id}/block`, or admin
+comment deletion) that a moderator may use with or without resolving.
+`DELETE /admin/reports/{id}` was cheap and is included: 403 for a non-admin, 204
+for the admin, gone from the queue, and its `report_resolved` notification
+cascades away. Screenshots were visually inspected.
+
+Gates: frontend TypeScript, lint (0 errors, the same 2 pre-existing warnings),
+icons, **238 files / 2346 tests** — up from 237/2340 by exactly this slice's six
+new tests — and the production build, on nvm Node 24.4.1 (24.20.0 is still absent
+from this machine). TDD failed first: the new
+`components/RatingControls.test.tsx` ran **2 failed / 4 passed** against the
+unchanged component, both failures the session-gating cases. Core `make ci` is
+**not required and not claimed** — vidra-core is unchanged — but the named
+#161/#162 tests were run and pass, including the tagged real-PostgreSQL
+`TestCommentReplyRecipientOnRealPG` and `TestCommentVideoOwnerRecipientOnRealPG`
+at schema 127. Per vidra-user's AGENTS.md the local e2e suites were **not run**.
+Docker is present again but holds no images or volumes, so the lab stayed native
+PostgreSQL 16 + Redis with the API and the production frontend run directly.
+
+Failures worth keeping. **`next start` cannot serve this repo's
+`output: "standalone"` build**: the JS chunks come back as `text/plain`, Chromium
+refuses to execute them, and the watch page sat on "Loading video…" having issued
+two API calls — a walkthrough against that server would have failed everything
+for the wrong reason. The shipped auth limiter is **10 requests/minute per IP**
+on login/register/claim-owner, separate from the 120/min general budget, and the
+seeder spends most of it; the run now waits out a fresh window and signs each
+actor in exactly **once**, rather than raising the limit. One watch-page load
+costs ~14 API calls, so an early paced attempt still tripped the general limiter
+mid-SC1; document loads are now budgeted with a window cool-down every fourth,
+and any 429 voids the run. Registration on a fresh instance is `403
+owner_claim_required` until the owner is claimed, so M is now created through the
+real first-run bootstrap rather than a SQL role bump. Two harness bugs were
+corrected rather than the app: the bell correctly reads plain "Notifications"
+with no badge at zero, and "the reported party is never told" needed precise
+assertions instead of a `/report/i` match that hit page chrome.
+
+Four unrelated findings. The **"fetch on mount, before the session is restored"**
+shape has now been found twice, both times on viewer-scoped reads behind
+`optionalAuth`; a sweep of the rest would be cheap and is not done here.
+`NotificationsView` and `NotificationsBell` keep independent unread counters, so
+marking a row read on `/notifications` leaves the header bell stale until the next
+route change — both agree with the server after any navigation, and both were
+correct after every hard reload here, but they can disagree on-page.
+`describeNotification` returns `href: "#"` for `report_resolved`, the only type
+with nowhere to go: a reporter told their report was accepted cannot reach it,
+because there is no reporter-facing report view at all. And the queue's "Block
+video" button sits in the same action bar as Accept/Reject with no grouping, so
+"resolve the report" and "take the content down" read as peers when they are
+independent.
+
+**The SOC-02 register row flips to PASS (candidate; unmerged)**, its criteria
+closed across three slices: reply attribution and intended-recipient notification
+(#161/#159), blocked/muted content and the deleted/tombstoned parent (#162/#160),
+and ratings, preferences, unread counts and report resolution (this one).
+*Mentions* appear in the row's title but are **not a shipped capability** — core
+has no mention feature and vidra-user's "mention" is a client-derived `@handle`
+prefix on a reply, plain text with no picker, no linkification and no delivery
+promise — so there is no mention behaviour to accept; that is recorded, not
+counted as a pass. Delivery order: frontend #161 alone (no contract dependency,
+`contract-ci` regenerates cleanly from `vidra-core@main`), then this evidence PR.
+Nothing is merged here and no deployment is authorized. **A12 remains OPEN**:
+AUTH-05 — profile/privacy, email/password changes, deactivation/deletion and the
+account archive — is untouched, and is the next slice.
