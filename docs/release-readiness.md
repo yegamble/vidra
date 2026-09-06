@@ -1651,3 +1651,57 @@ including production frontend, local/S3 backed suites, contract, channel sync
 and IPFS. The final merge/branch cleanup is being completed under the user’s
 explicit instruction. A12 remains open for the individually listed social and
 account lifecycle criteria; green library checks do not certify those slices.
+
+
+## A12 social deletion recovery — 2026-09-05
+
+**A12 OPEN; SOC-02 comment deletion recovery PASS.** Observable success for this
+focused slice: a failed Delete visibly explains the failure and retains the
+comment, an explicit retry reaches the service, and a fresh API read and UI reload
+agree with the confirmed deletion. [Frontend #158](https://github.com/yegamble/vidra-user/pull/158),
+revision `a220c9e`, uses the existing Alert and error mapper; authorization and
+server error semantics are unchanged. No contract, SQL or generated-file edits.
+
+[Sanitized evidence](evidence/a12-comment-delete.json) records the actual Chromium
+reproduction: offline Delete re-enabled the button but produced no alert. TDD
+also failed first (1 failed / 17 passed). The correction passes 18 focused tests.
+Browser checks pass against both development and **production-built** frontend,
+using the existing disposable restored API/PostgreSQL. Browser offline mode
+caused the real transport failure; fresh API readback confirmed the row remained.
+Explicit retry returned 204; deletion persisted after reload. Three checks pass
+in each final run, zero skips. The error screenshot was visually inspected.
+The backed threaded-comment regression now covers the same failure/retry and
+preserves its original reply-chain assertions.
+
+Actual Node 24.20.0 gates pass: TypeScript, icons, lint (zero errors, two existing
+warnings), 237 unit files / 2,336 tests, production build, and diff check. Meta
+production Compose config-q passes with dummy configuration. All frontend CI
+checks pass, including contract, frontend, local/S3 backed, IPFS and channel sync.
+Failed attempts remain recorded: wrong notification route in the helper (404),
+unchanged rate limiting (429), initial implementation state placed in the wrong
+component (caught by tests), and an interrupted Node 25 diagnostic unit run.
+The misleading Homebrew node@24 symlink resolves to Node 25; cached Node 24.20.0
+was used for the final gates and production browser run. No tests were weakened.
+
+The three existing synthetic actors also posted a parent and reply via browser;
+a fresh API read proved parent_id and reply author identity. Recipient reads did
+not complete, so notification delivery is **unverified**. Static inspection of
+core handleCreateComment finds only video-owner notifications, with no separate
+reply/mention path. This is a separate A12 finding, not fixed in this small PR.
+Next: reproduce intended reply/mention recipients with those actors, then
+ratings/preferences/unread, reports/mutes/blocks, and profile/archive/deactivation/
+account deletion. Deleted-account tombstones remain unverified. Prior library
+and playlist proofs are retained; no global audit was repeated.
+
+Delivery order: frontend #158, then this evidence PR. Merge is authorized by the
+user's final instruction; no release or production deployment is authorized.
+Private helpers/results stay under /tmp/vidra-a12-{social,delete}-*. The complete
+A12 acceptance remains open even after this focused fix is merged.
+
+
+A12 social delivery: frontend #158 is merged as `c0160dc` after all CI passed.
+Local and S3 backed lanes each report **100 passed / 11 skipped**; skipped
+workflows remain unverified and do not close other A12 criteria. The independent
+production browser run above has three passing checks and zero skips. Frontend
+work branch cleanup follows the confirmed merge. Evidence PR #104 records this
+bounded result; the complete A12 item remains OPEN.
