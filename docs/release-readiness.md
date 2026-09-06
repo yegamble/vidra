@@ -3706,3 +3706,229 @@ would double-count `use_count` for every browser search. **Delivery order:** cor
 first — then user #167, which touches no contract, then this evidence PR. Nothing
 is merged here and no deployment is authorized. The lab was torn down; no lab
 artefact is committed.
+
+## Frontend hardening — session-restore sweep, Block parity, single search emit — 2026-09-06
+
+**No register row changes. The defect the last four slices each fixed once is
+closed as a CLASS, and two rulings the owner has made are applied.** Four
+components in four slices — `CommentsSection` (#160), `RatingControls` (#161),
+`HomeRecommendationsRail` and `RelatedVideos` (#165) — carried the same bug: a
+viewer-scoped read fired from a mount effect, before `AuthProvider` had redeemed
+the httpOnly `vidra_refresh` cookie, so the request left with no `Authorization`
+header and core answered it as an anonymous visitor. This slice sweeps the whole
+frontend for it, introduces the one seam that spells the fix, applies the Block
+removal ruling, and closes the double `query_log` row the A13 opt-out slice
+recorded. Three PRs: [core
+#170](https://github.com/yegamble/vidra-core/pull/170), [user
+#168](https://github.com/yegamble/vidra-user/pull/168), and this evidence. **No
+migration** (core stays 129), **no OpenAPI change**, no generated file touched.
+[Sanitized evidence](evidence/frontend-hardening.json) records the run. Rate
+limits were left ON at their shipped defaults; the reported runs contain **zero
+429 responses**.
+
+**The inventory, because "we looked" is not a finding.** Every client-side read
+in vidra-user was enumerated from the source — **107 `"use client"` modules that
+call `api.get*/list*/search*/fetch*/resolve*`** — and classified against core's
+route table: which sit behind `optionalAuth`, and which of those answer
+differently per viewer. **Seven were vulnerable**, four were the already-fixed
+ones, and **96 are safe with a reason recorded next to each** rather than by
+silence. The reasons fall into four shapes: the surface already waits
+(`ChannelView` renders a spinner while restoring and remounts on a key carrying
+`status` and `user.id`); the endpoint is not viewer-scoped at all (`GET /live`
+takes no viewer; `/remote-videos/{id}` carries no auth middleware); the read is
+gated on `authed` so it cannot run before the settle (`SaveButton`,
+`SidebarFollowing`, `NotificationsBell`); or the fetching component does not
+MOUNT while restoring, because its parent returns a `SignInGate` or a `RoleGate`
+first — which is what covers every settings page, every studio surface and every
+admin view in one argument.
+
+**State the transition precisely, because everything below keys off it.**
+`AuthProvider` derives `status` as `user ? "authed" : restored ? "anon" :
+"restoring"`. Every hard load starts at `"restoring"` while one silent `POST
+/auth/refresh` redeems the cookie, and it settles **once** — to `"authed"`
+(`setUser` and `setRestored` land in the same batch) or to `"anon"`. Later
+transitions are sign-in and sign-out only. And the mistake is not self-healing:
+`apiRequest` retries a 401 only when it *used* a stored token
+(`usedStoredToken = opts.token === undefined && getAccessToken() !== null`), and
+during the restore there is no stored token — while an `optionalAuth` endpoint
+does not 401 at all. It answers, as nobody, and the effect never re-runs.
+
+**One seam, `useSettledSession`, and it needs both of its halves.** `settled` is
+the guard; `viewerKey` (`"anon"` | `"authed:<id>"`) is the dependency that makes
+the delayed read happen and happen again across a sign-in, a sign-out, and the
+account switch that never passes through `"anon"`. Neither alone is enough:
+`settled` never re-runs the read, and `viewerKey` never fires for a visitor who
+settles anonymous, because their key never changed. `viewerKey` reads `"anon"`
+**while restoring** on purpose — a server-rendered first page was fetched with no
+viewer, so it *is* the anonymous answer, and keying it that way is what lets an
+anonymous visitor keep the seed and issue no browser request at all. A sibling
+`useSettledOptionalSession` mirrors `useOptionalSession` for the components that
+also render bare, where no viewer can ever arrive and delaying would hang the
+surface instead of guarding it. `useAppendingList` grew exactly one option,
+`viewer`, taking the hook's return whole; it pins `initialPage` to the
+**anonymous** key rather than the mount-time key, so arriving already signed in —
+a client-side navigation — still replaces the seed.
+
+**The seven, and what each got wrong.** `VideoFeed` (`GET /videos`, which drops
+muted and blocked authors, muted instances and the viewer's own
+sensitive-content override). `SearchResults`' video tab (`GET /videos/search`)
+and its channel/account tabs (`/search/channels`, `/search/accounts`, both of
+which take the viewer and drop what they have muted or blocked).
+`SearchAutocomplete` (`/search/suggestions`, which returns the caller's own past
+searches as `history`-typed personal suggestions) — and it needed one thing more
+than the wait, because its per-prefix cache belonged to **no viewer**, so an
+anonymous answer taken during the restore would be replayed to the signed-in
+viewer for the rest of the tab's life; entries are now keyed by viewer too, and
+the existing LRU ages the superseded ones out. `WatchView`'s channel read, which
+supplies `is_following` and does **not** inherit the video read's wait, because a
+public watch page is server-rendered and that seed paints on the first render.
+`DownloadButton`, where `videoForDownload` resolves the file set for the caller.
+`UserProfileLoader`, where core resolves an **owner's** own profile from the
+account row rather than the public projection. And `LiveWatchView`, where a
+private stream 404s for everyone but its owner.
+
+**What failed first, in the browser, on `origin/main`.** The baseline was built
+from `ff59a72` and run against the same lab and the same data, with alice signed
+in, muting dave and following bob's channel. Her home page **never requested
+`GET /api/v1/videos` at all** — the anonymous server seed stood — and **dave was
+visible on it**. Her search page sent `GET /videos/search` and `GET
+/search/suggestions` with **no `Authorization` header**, and **dave was visible
+in her results**. On the watch page `GET /channels/bobchan` went out 15 ms after
+the refresh POST, unauthenticated, on 3 of 3 runs, and the follow control read
+**"Follow"** for a channel she already follows, on 3 of 3 runs. The control that
+makes those negatives mean something: an **anonymous** visitor sees dave on all
+three pages, so "alice sees no dave" is the exclusion working and not an empty
+fixture.
+
+**What passes now, same lab, same data.** Signed in: `GET /api/v1/videos` — one
+request, **with** the bearer, dave absent. `GET /videos/search` and
+`/search/suggestions` — one each, with the bearer, dave absent. The watch page's
+`/videos/{id}`, `/comments`, `/rating`, `/recommendations` and
+`/channels/{handle}` — **one each, all authenticated** — and the follow control
+reads **"Following"** on 3 of 3 runs. The channel page, notifications and
+settings likewise: one request per viewer-scoped endpoint, every one carrying
+`Authorization`. Anonymous: one request per endpoint, none carrying it — and
+`GET /api/v1/videos` is **not requested at all**, because the server seed still
+stands for the viewer it was rendered for. Dave appears on none of alice's six
+pages.
+
+**One thing this does not fix, stated rather than discovered later.** The
+server-rendered HTML of the home page is still the ANONYMOUS feed, because
+`vidra_refresh` is `Path=/api/v1/auth` and the Next server cannot read it — so a
+signed-in viewer's hard load paints the anonymous first page for the moment
+before hydration replaces it with their own. What changed is that it is now
+replaced at all; before, it never was.
+
+**Block removal parity: the owner's ruling, applied.** Blocking a commenter from
+the comment's overflow menu now removes their comments at once, exactly as Mute
+already did. This is not test weakening and the commit says so: core's
+`blockUser` contract already filters a blocked author out of the blocker's
+comment list per viewer, with the same predicate it applies to mutes —
+`ListComments` carries `user_blocks` and `muted_accounts` side by side — so the
+row disappeared on the next load either way. Leaving it until then only made two
+controls with the same effect look like they had different ones. The two specs
+that pinned the old behaviour are updated: `e2e/blocks.spec.ts` gains a second
+author so it can tell "the blocked author's rows went" from "the list emptied",
+and `e2e-backed/blocks.spec.ts` is reshaped around the fact that there is no
+comment row left to open a menu from — it opens the DM **before** the block,
+then proves the removal survives a hard reload, that a send into the existing
+thread is refused, and that unblocking brings the comment back. In real Chromium:
+alice's thread read "bob says hello / carol says hello" (dave's already gone to
+her mute), Block answered 204 and carol's row vanished **with no reload**, a
+**hard reload** kept it gone — that is the server's own filter answering, not the
+client's optimistic removal — and after Unblock (204) the next load had it back.
+The dead `blocked` state and its "Blocked" menu label went with it: nothing can
+render them once the item is gone.
+
+**And the settings copy now says what the server does.** `/settings/blocks`
+promised only the messaging half; a block also hides the account's videos and
+comments. The mutes page had the mirror-image gap — it mentioned only comments,
+while `ListPublicVideosSorted` carries `muted_accounts` too. Both pages were
+read back in the browser after the change.
+
+**Single search emit, and a correction to the note that raised it.** One browser
+search wrote **two** `query_log` rows: the client's `POST /search/events` batch —
+the row that reaches the user's own history page, because `handleSearchEvents`
+is the only ingest path that sets `allow_history` — and the routed
+`search.submitted` core emits behind the same `GET /videos/search`. The A13
+opt-out section attributed the second row to "the frontend's **server-side**
+fetch of `GET /videos/search`". **There is no such fetch**: vidra-user
+server-renders `/instance`, the home feed and the watch video, and nothing else.
+The routed row landed anonymous because the **browser's own** search request went
+out before the session had settled — the same defect this slice's sweep closes —
+and because `api.searchVideos` sends no `X-Vidra-Session` either. Both halves are
+fixed here.
+
+**The mechanism is a declaration, not a heuristic.** A client that emits its own
+`search.submitted` says so on the request — `X-Vidra-Search-Events: client` — and
+core skips its routed emit for that request only. It has to be the client that
+says so: nothing on the server distinguishes a browser, which will send the
+event, from an API consumer, which will not — and an API consumer must keep the
+routed emit, because it is the **only** record its searches ever leave. Accepting
+the caller's word is safe in the one direction that matters: the declaration can
+only make core collect *less* about that caller, and can never touch anyone
+else's rows. An unrecognised value fails toward recording, which is what every
+existing client already does. No OpenAPI change: the header follows
+`X-Vidra-Session`, the sibling client-supplied search header this contract also
+carries only in prose. Nine core tests, six RED first.
+
+**Read back from vidra-search's own `query_log`.** On the baseline build, one
+signed-in browser search wrote **2** rows — an unattributed routed row with no
+session id beside the client's attributed one. On the fixed build: a signed-in
+opted-in search writes **1**, `user_id` set; an **opted-out** user's search
+writes **1**, `user_id` NULL with the day-scoped anonymous `subject_id` (the A13
+consent rule, untouched); a `curl` with a bearer and no frontend writes **1**,
+the routed emit, attributed and unchanged. A paging request (`offset=20`) sent
+twice — once declared, once not — wrote exactly one row, from the undeclared one.
+Walking the entry surfaces in the browser (results-page load → autocomplete
+submit → filter change) wrote **3 rows for 3 searches**, every request carrying
+both the declaration and the bearer.
+
+**Gates.** vidra-user's `npm run ci` passes in repo CI on the final revision:
+typecheck, lint (0 errors, 2 pre-existing warnings), icons, **245 test files /
+2421 vitest tests**, the production build, and **623 Playwright specs, all
+passed** — and `frontend-e2e-backed` passes too, which is the lane that actually
+RUNS the reshaped `e2e-backed/blocks.spec.ts` against a real vidra-core +
+PostgreSQL. Core `make ci` passes (fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race; exit 0) plus `go vet -tags=integration ./...`; the tagged
+lane itself was **not** run, because the lab is native rather than the compose
+stack. vidra-search was **not modified** — it was stood up as a dependency and
+its `query_log` read back directly. Run locally, the same frontend gate was green
+except five e2e specs that failed under CPU competition and passed **44/44
+unloaded**: the documented flakiness, not a regression. **vitest is still broken
+on Node 25** in this repo (82 failures on `window.localStorage.clear`); `.nvmrc`
+and every workflow pin Node 24.
+
+**One lab trap worth keeping.** `INTERNAL_API_BASE_URL` defaults to
+`http://localhost:8080`, so with core on 8088 every SERVER-side read — the home
+feed's first page, the watch page's video seed — silently returned null, and the
+seeded code paths were never exercised at all. The first sweep therefore looked
+clean for entirely the wrong reason, and the `VideoFeed` and `WatchView` defects
+were invisible. Any future lab that wants to see the SSR seeds must set it. (The
+`next start` trap the A13 slice recorded still holds: `node
+.next/standalone/server.js` is the only way to serve this build, and a stale
+server left listening on the port will happily answer with the previous slice's
+bundle.)
+
+**Findings recorded, not fixed.** (1) `GET /me/notifications/unread-count` is
+requested **twice** per page load, by `NotificationsBell` and `BottomTabBar`
+independently; both carry the bearer, so it is a duplicate fetch rather than a
+correctness bug. (2) `GET /me/oauth-identities` is requested twice on
+`/settings`, and `GET /channels/{handle}/donation-addresses` twice on the watch
+page — the same shape. (3) `api.searchVideos` sends no `X-Vidra-Session`, so
+before this slice the routed row it produced could not have been correlated with
+the client's row for the same search even in principle. (4) The watch page's
+captions read can still go out unauthenticated when a public server seed paints
+first; harmless, because a public video's captions are public, but it is the one
+read left that fires before the settle.
+
+**SOC-02's recorded follow-up is closed with no row change:** the Block-vs-Mute
+"open product ruling" the mute/block slice left for its owner has been ruled and
+implemented here, and SOC-02 stays **PASS (candidate; unmerged)** on the evidence
+it already had.
+
+**Delivery order:** core #170 first (the frontend's declaration is inert until
+core honours it, and shipping the frontend alone would leave the double row
+exactly as it is), then user #168, then this evidence PR. Nothing is merged here
+and no deployment is authorized. The lab was torn down; no lab artefact is
+committed.
