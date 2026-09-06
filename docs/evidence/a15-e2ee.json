@@ -1,0 +1,13 @@
+{
+  "item": "A15",
+  "register_row": "MSG-03",
+  "status": "in-progress",
+  "date": "2026-09-06",
+  "lab": {
+    "note": "Disposable local lab; every credential below is a synthetic fixture value, never a real secret.",
+    "postgres": "native postgresql@16 on 127.0.0.1:55432, fresh cluster, schema 129",
+    "redis": "native redis on 127.0.0.1:56379, empty",
+    "core_api": "built from the working tree, http://127.0.0.1:8088",
+    "frontend": "production build (next build) served with next start on :3100"
+  }
+}
