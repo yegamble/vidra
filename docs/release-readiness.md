@@ -2922,3 +2922,167 @@ order: **core#166 first** (it changes `api/openapi.yaml` and carries migration
 0129), then **frontend#164** (its `contract-ci` goes green only after core
 merges), then this evidence PR. Nothing is merged here and no deployment is
 authorized.
+
+
+## A13 suggestions, trending and discovery opt-out — 2026-09-06
+
+**A13 stays OPEN and the SRC-03 row does NOT flip.** This is the first half of
+A13 — autosuggest thresholds, suggestion bans, the trending gates and the user's
+own discovery controls — and all of it passes on live evidence against a real
+vidra-search. The second half (recommendations, related and home cards, search
+filters/paging/ranking, history delete and reconcile) was not attempted, so the
+row stays UNVERIFIED by construction. [Core
+#167](https://github.com/yegamble/vidra-core/pull/167) (`a324ebd`) carries one
+TDD-first fix; no migration (latest stays 0129), no OpenAPI change, no generated
+file touched, and **no frontend change was needed, so no vidra-user PR exists
+for this slice**. [Sanitized evidence](evidence/a13-suggest-trending.json)
+records the full run. Shipped rate limits were left ON at their defaults and the
+harness paced itself instead of widening them: **zero 429 responses in any
+browser phase**.
+
+**State the numbers, because the register row asks for "thresholds" and there
+are four of them.** A normalized query becomes instance-wide suggestible only
+when `distinct_users >= minimum_query_user_count` (the `service_config` overlay,
+falling back to `MIN_QUERY_USER_COUNT`, **default 3**) **and** it is not banned.
+That count is an exact recount over the retention window
+(`search_event_retention_days`, default 90 days): distinct `user_id`s plus, for
+rows carrying no user, distinct `COALESCE(subject_id, session_id)`. The
+`aggregates_rollup` worker writes it on a **60 s** cadence, and ordering inside
+the stream uses `decayed_freq` with a **168 h** half-life. Trending is gated
+twice by `trending_sweeper`, also every **60 s**: the *same* distinct-user floor
+of **3**, counted from a per-day HyperLogLog over a **2-day** window, and then a
+Wilson lower bound of distinct/total at z=1.96 that must clear **0.10**. Scores
+decay with a **6 h** half-life, and one `(subject,item)` may bump the *ranking*
+score only once per **1 h** while its raw count and its distinct-user
+contribution are always recorded. The three user controls are **opt-OUT, not
+opt-in** — all three default `true`, observed on the registration response for
+all five synthetic accounts — so SRC-03's phrase "user search-discovery opt-in"
+mislabels the shipped default. A ban needs no worker at all.
+
+**The threshold behaves exactly as documented, and the fixture says so four
+ways.** `zynthara`, typed by exactly three distinct signed-in users, reached
+`distinct_users=3, suggestible=true` and appeared in the anonymous
+`SearchAutocomplete` listbox in Chromium. `qwoplex`, typed by two, stayed at
+`false` and was absent from both the API and the listbox. `vurblok`, typed
+**twelve times by one user**, recorded `total_count=12, distinct_users=1` and was
+absent — volume alone never clears the floor. And the streams the floor does
+*not* gate are worth naming: title, channel and tag prefixes come straight off
+`search.documents`, plus a trigram typo fallback at similarity ≥ 0.35, none of
+them threshold-gated, because they surface public catalogue text rather than what
+people typed.
+
+**What failed first is the anonymous half of that floor, and it was open on one
+of the two ingest paths.** vidra-search counts distinct `session_id`s for rows
+with no user, and `X-Vidra-Session` is client-supplied and validated for UUID
+*shape* only — so core derives `subject_id`, a keyed, domain-separated,
+day-scoped HMAC of the connecting address, precisely to stop one client minting
+identities by rotating the header. It was attached on `POST /search/events`
+only. `GET /videos/search` emits its **own** `search.submitted`, that event lands
+in the **same** `query_log`, and it carried `session_id` alone. Three anonymous
+searches from one address with three rotated headers therefore gave
+`distinct_users=3, suggestible=true`, and the string only that client had ever
+typed appeared in anonymous autosuggest. The identical attack through
+`POST /search/events` gave `distinct_users=1`. Core #167 puts the subject on both
+paths; three tests were written first and two were RED (`subject_id missing ("" /
+"")`, `two different client addresses produced the same subject_id ""`). Replayed
+against the patched binary with four rotated headers: four rows, four distinct
+sessions, **one** subject, `distinct_users=1, suggestible=false`, absent from the
+Chromium listbox. The authenticated shape is pinned unchanged — `user_id` is
+already the trustworthy subject, so no address-derived value goes beside it.
+
+**Bans are immediate, and the one place they are not is measurable.** The ban
+upsert writes `banned=true` *and* `suggestible=false` in a single statement, so
+it waits on no worker: **4 ms** from the API call to the suggestion being gone on
+an uncached prefix, with vidra-search's own row reading `true/false` and the
+entry visible both in core's admin list and in a separately signed call at the
+service's `/internal/v1` surface. The single staleness window is the
+non-personalized short-prefix cache — prefixes of at most **3 runes**, TTL
+**60 s** — and it was forced on purpose: `pli` kept returning the banned string
+for exactly 60 seconds while `plind` lost it instantly. A non-admin gets **403**
+and anonymous **401**; both write a `moderation.search.suggestion_*` audit row
+fingerprinting the key the *service* moved rather than the operator's input. Two
+more distinct users then searched the banned string while it was banned
+(`distinct_users` 3 → 5) and a full rollup pass that saw that traffic still left
+it `banned=true, suggestible=false`. **An unban never promotes**: right after
+`DELETE` the row read `banned=false, suggestible=FALSE`, and the query only
+returned to autosuggest after real traffic plus one rollup. The whole lifecycle
+was then driven again through `SuggestionBansView` at `/moderation/autosuggest`
+as the owner, including a **hard reload** between the ban and the readback.
+
+**Trending: the distinct-user gate bites, and the page called "Trending" is not
+this.** The video played by three distinct users reached HLL 3 and score 3.0 and
+was the *only* member of the gated list after a sweeper pass; the video played by
+two reached HLL 2 and score 2.0 and never entered it, with
+`vidra_search_trending_gate_rejections_total{domain="v",reason="distinct_users"}`
+climbing once per pass. The gated list's only outlet is the home rail, where
+`GET /recommendations/home` answered `source=search` with the hot fixture
+carrying `reason=trending` and the cold one absent — identically for anonymous, a
+signed-in user and the opted-out user. That is recorded **as the gate's readout
+only**; home cards and their ordering belong to the next slice. Meanwhile
+`/trending` in vidra-user is core's own public feed: watching its traffic in
+Chromium, it calls `GET /api/v1/videos?sort=trending`. **No surface in the
+product renders vidra-search's gated trending list under that name.** The Wilson
+gate could not bite in this fixture — with the 1 h cap window, total tracked
+distinct, and the lower bound of 3/3 at z=1.96 is 0.579 against a 0.10 floor — so
+its live behaviour under a bot-shaped ratio is **unverified**, as is the decay
+half-life and HLL window edge, which cannot be forced without leaving the shipped
+configuration.
+
+**The opt-out keeps every promise the product makes, and the register row asks
+for one it does not make.** With all three controls off, the actor wrote **zero**
+`user_search_history` rows and **zero** `user_watch_projection` rows; a query
+they made while opted out came back to them as an empty listbox in Chromium;
+`/recommendations/home` answered them `personalized=false` — the same flag and
+the same items an anonymous visitor gets. The setting survived a `GET /auth/me`
+readback, a brand-new login (it lives on the user row, not the session) and a
+hard reload of `/settings/search`, and toggling it in the UI wrote through to
+core's `users` row both ways. Re-enabling is **forward-only**: nothing already
+searched appeared, and the very next search produced exactly one history row.
+**But the same fully opted-out user still had 5 `query_log` rows and 8
+`behavior_events` rows carrying their raw `user_id` and their raw query text,
+still counted toward the instance-wide floor** — the discriminator query, typed
+by them plus two others, reached `distinct_users=3` and became suggestible where
+it would have stopped at 2 — **and their play still bumped trending under a Redis
+guard key literally named with their account UUID**. The shipped copy only ever
+says "new searches are not stored to your history", so this is not a broken
+promise; it *is* short of SRC-03's "no personalized data when off" if that is read
+as "no attributed collection". Recorded as a **product ruling for the owner**,
+not changed here.
+
+**What search stores per attributed event, read off the schema and the rows.**
+`query_log` holds the normalized query, the **raw query text as typed**, the
+**raw account UUID**, the client-supplied session id, the day-scoped subject
+digest, a result count and a timestamp; `behavior_events` holds the same identity
+columns plus the whole delivered payload verbatim in `props`. **No email address,
+username, display name, IP address or user agent appears in any search table** —
+the anonymous subject is a keyed HMAC and the address itself is never persisted.
+The flag: for a *signed-in* user the attribution key is the durable account id
+rather than a rotating pseudonym, written for every search whatever their
+controls say, and nothing in the schema needs a durable id to enforce a
+k-anonymity floor — a day-scoped digest would count identically.
+
+**Gates.** Core `make ci` passed (`fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race`, exit 0). On core#167: GitGuardian, build-test,
+integration, ipfs-private-integration and openapi all green;
+**ipfs-integration** failed on `TestIntegrationPublicVideoRoundTrip` after
+301.77 s — a public-IPFS-gateway round trip in a lane that normally finishes in
+~90 s and passed on every recent `main` and PR run, and which a one-line change
+in `emitSearchSubmitted` cannot reach — so it was re-run. vidra-search was **not
+modified**, so its gate was not run; it was run as a dependency and its tables,
+its Redis state and its signed internal API were asserted directly. vidra-user
+was not modified, so no frontend gate and no frontend PR.
+
+**Traps for the second slice.** One browser search writes **two** `query_log`
+rows — core's own emit plus the frontend's client event — so `total_count` and
+`decayed_freq` double for browser traffic against API traffic while
+`distinct_users` does not; only the client row carries `allow_history`, so an
+API-only client's searches are retained yet never appear on the user's own
+search-history page; **Redis state outlives a fresh database**, and an earlier
+lab's trend ZSETs and HLLs had to be flushed before the trending fixture meant
+anything; the 15-minute access JWT expires mid-run; and any threshold fixture
+must use strings that match no catalogue text, or the un-gated document streams
+answer instead. Delivery order: **core#167 first** (the only code change), then
+this evidence PR. Nothing is merged here and no deployment is authorized. Next:
+A13's second slice — recommendations/related/home cards, filters, paging and
+ranking, and history delete surviving reload and reconcile — which is what SRC-03
+still needs before it can flip.
