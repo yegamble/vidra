@@ -3086,3 +3086,296 @@ this evidence PR. Nothing is merged here and no deployment is authorized. Next:
 A13's second slice — recommendations/related/home cards, filters, paging and
 ranking, and history delete surviving reload and reconcile — which is what SRC-03
 still needs before it can flip.
+
+## A13 recommendations, ranking and history controls — 2026-09-06
+
+**A13 is now fully attempted and SRC-03 still does NOT flip — but for one
+named reason, not for want of evidence.** This is the second half of A13:
+co-visitation into related cards, the home rail and its sources, search
+filters/paging/ranking, and the search-history controls. Every claim below is a
+live readback against a real vidra-core, a real vidra-search (its own database
+and its own Redis logical database), and real Chromium on the production
+frontend build — no route interception, no fake search server, no skipped lane.
+Three defects were found and fixed TDD-first in [core
+#168](https://github.com/yegamble/vidra-core/pull/168) and two in [user
+#165](https://github.com/yegamble/vidra-user/pull/165); no migration (core stays
+0129, search stays 0016), no OpenAPI change, and vidra-search itself was **not
+modified** — it was stood up as a dependency and its tables, Redis keys and
+signed internal API were asserted directly. [Sanitized
+evidence](evidence/a13-recommendations-history.json) records the run. Rate
+limits were left ON at their shipped defaults and the harness paced itself:
+**zero 429 responses in any phase**.
+
+**State the numbers again, because the register row asks for thresholds and this
+half has a different set.** Co-visitation is rolled up by `covis_rollup` on
+`SEARCH_COVIS_INTERVAL`, **default 15 minutes** — not the 60 s cadence the
+aggregates and trending sweepers run at, so a related rail is up to a quarter of
+an hour behind the watching that shaped it. It pairs each new
+`video.play_started` / `video.meaningful_watch` only with EARLIER events in the
+**same `session_id`** inside `SEARCH_COVIS_WINDOW_SECONDS`, **default 3600 s**,
+then rebuilds `search.item_neighbors` from scratch as a shrunk cosine
+(`raw = cooc/sqrt(totI·totJ)`, `shrunk = raw · cooc/(cooc+λ)`, **λ default 10**)
+blended **0.7 co-watch + 0.3 co-search**, keeping the top **100** neighbours per
+item. The fixture matches the formula to five decimals: three distinct users
+each watching A1 then A2 gave `cooc=3, totI=totJ=3`, so `0.7 · 1.0 · 3/13 =
+0.16154`, and that is exactly the stored score.
+
+**The first thing to say about co-visitation is what it does NOT have: a
+distinct-user floor.** The only filter in the neighbour rebuild is `score > 0`.
+Dave alone, in one session, watching C1 → P → U produced **three public
+neighbour edges** at 0.03182 each. Autosuggest gates a query behind
+`minimum_query_user_count` (default 3) and trending gates a video behind the
+same floor plus a Wilson bound; the index that decides "watch this next" gates
+nothing, so on a quiet instance one person's session is enough to publish an
+association between two videos to everybody. Recorded as a **product ruling for
+the owner**, not changed here — the k-anonymity argument that justifies the
+suggestion floor applies to this table verbatim.
+
+**The second thing to say is that in the shipped default, co-visitation reaches
+nobody.** `search_mode` defaults to `simple`, and vidra-search dispatches BOTH
+recommendation rails on it: `relatedSimple` composes up to two recent
+same-channel videos, then tag/category/language overlap, then a popular fill,
+and **never reads `item_neighbors` at all**. With the A1↔A2 edge sitting in the
+table at its full 0.16154, `GET /videos/{A1}/recommendations` in simple mode
+returned ten `similar` cards and A2 was not among them. Flip the instance to
+`advanced` and the same request answers `A2` first with `reason: "co_watch"`,
+and the watch page renders it. So SC1 passes — the pipeline works end to end —
+but only on a setting no shipped instance has on.
+
+**What failed first is what the API said about that.** `personalized` is not
+decoration: `HomeRecommendationsRail` picks its heading from it, "For you" when
+true and "Trending now" when false. Core computed it as
+`instancePersonalizedRecs() && authed && prefs.PersonalizedRecs` — **without the
+mode gate that personalized search has carried all along**. In the shipped
+simple default a signed-in user's home rail and related rail came back
+**byte-identical to the anonymous ones** with `personalized: true`, so the
+product shipped a "For you" rail that was nobody's. Core #168 adds the gate; the
+flag is now false in simple mode for everyone and, in advanced, true only for a
+signed-in user whose instance and preference both allow it — verified as a gate
+and not a mute: in advanced, alice gets `personalized: true` and a genuinely
+different list, while erin (opted out) and anonymous get `false` and the generic
+one.
+
+**The second failure was a paging lie, and it was live on the shipped page
+size.** Core asks vidra-search for an over-fetch — `(offset+limit)·2+10` ids at
+offset 0 — hydrates them under the canonical predicate, slices the caller's
+window out, and then forwarded the service's `has_more` **verbatim**. The
+service answers for ITS window, so any match set that fits inside the over-fetch
+came back `has_more: false` on page one. `vidra-user`'s `resolveHasMore`
+believes an explicit `has_more` over `loaded < total`, so it hides "Load more".
+At `PAGE_SIZE = 20` the over-fetch is 50, which means **every query matching 21
+to 50 visible videos lost its tail**. Reproduced in Chromium before the fix: 23
+matching fixture videos, "23 results" under the heading, twenty cards, **no Load
+more** — and it survived a hard reload. At `limit=5` the flag even flipped
+mid-walk (`offset=0 → true`, `offset=5..20 → false`) while five pages remained.
+After core #168 the same page shows a Load-more control, a hard reload keeps it,
+and clicking it brings the count to the full 23. The fix is careful about the
+one thing the old behaviour got right: a service too old to report the field
+still leaves it **absent**, because absent means unknown, and
+`TestSearchServicePagingFieldsAbsentMeansUnknown` still passes.
+
+**Paging itself was already sound, and the walk proves it.** Walking `?q=plexoid`
+at `limit=5` from offset 0 to exhaustion returned **23 rows, 23 distinct**, in
+stable order, with no duplicates and no gaps against the 23 eligible documents
+in `search.documents` — and `total: 23` all the way down, which is core's own
+per-viewer count and correctly excluded the two fixtures that had been flipped to
+private and unlisted.
+
+**Filters narrow, and the API and the database agree on every one.** From a
+25-document corpus: `tag=zephqar` → 3, `category=1` → 11, `language=fr` → 1,
+`license=7` → 2 (these four route to vidra-search), and `tags_all_of=plexoid,
+mirvane` → 2, `tags_one_of=quolbex,traskil` → 5, `duration_min=5` → 0 (every clip
+is 2 s), `duration_max=5` → 13, `published_before=now-30d` → exactly the one
+backdated fixture, `published_after=now-30d` → the other 12 (these run on core's
+local SQL because `searchServiceCanRank` refuses anything but the relevance sort
+with the four facets the service knows). The date windows sum to the whole set,
+which is the check that a window filter is a partition and not a sieve.
+
+**Ranking: the live ranker is the SQL one, and it behaves as documented.**
+`search_mode` defaults to `simple`, so the live path is vidra-search's
+`SearchSimple`: `0.5·ts_rank_cd + 0.2·trigram(title,q) + 0.1·(title exact 1.0 +
+channel exact 0.5 + tag exact 0.5) + 0.1·ln(1+views)/20 + 0.1·exp(-ln2 · age/30)`,
+tie-broken by `published_at DESC, video_id`. `?q=wondrix` put the video titled
+exactly `wondrix` first, ahead of two partial matches titled `wondrix drift log`
+— the exact-title flag plus the higher trigram similarity, as the formula says.
+And on the two videos with **identical** titles and tags, one backdated 120 days
+in core and re-indexed, the fresh one ranks above the stale one on both queries:
+the 30-day half-life term is the only thing separating them. The
+`internal/experiment` / LightGBM shadow ranker is **not live in simple mode** and
+was not exercised — recorded as out of scope, not as passing.
+
+**The per-viewer predicate holds on two independent layers, and the second one
+is the load-bearing one.** The private and unlisted fixtures were co-visited
+while public, so their neighbour edges outlive their eligibility — after the
+flip, `search.item_neighbors` still carried C1→P and C1→U. In normal operation
+vidra-search drops them itself (its documents go `eligible=false`), so nothing
+leaked. To test the layer that matters, the index was then deliberately made
+**stale** — `eligible` forced back to true on both — and the service duly
+returned the private and unlisted ids at the TOP of the ranked list with
+`reason: co_watch`. **Core's `HydrateByIDs` dropped both for every viewer**:
+anonymous, another signed-in user, the admin, **and carol, who owns them**. No
+id, no title, no thumbnail, in any response. That last part is worth stating
+plainly because the acceptance criterion asks the opposite: the hydration
+predicate requires `privacy = 'public'`, so **recommendation rails are
+public-only for everybody, the owner included** — an owner never sees their own
+private or unlisted video in a related rail. That is the safe behaviour and it is
+what ships; it is not what "while their owner does" expects.
+
+**Muted and blocked authors disappear from both rails.** Alice muting dave
+removed exactly dave's two candidates (D2, F8) from her related rail and her home
+rail and nothing else; blocking bob removed exactly bob's (B1, F11). Both are the
+same `NOT EXISTS` branches of `ListPublicVideosByIDs`, and both were exercised
+through the shipped `/me/mutes/accounts/{id}` and `/me/blocks/{id}` controls and
+reversed afterwards. Anonymous callers get the non-personalised set on both rails
+in both modes.
+
+**The home rail, per viewer, in real Chromium on a hard load.** Anonymous:
+heading **"Trending now"**, `personalized: false`, and the two videos at the top
+carry `reason: trending` — they are exactly the two members of the gated Redis
+list `trend:v:top`, the sweeper's post-gate output, which is where the first
+slice's distinct-user gate was proven. Alice, who has history: heading **"For
+you"**, `personalized: true`, and A1 and A2 are **gone from her rail** because
+`homeAdvanced` excludes the last 200 videos she watched. Erin, opted out:
+**"Trending now"**, `personalized: false`, and her rail is item-for-item the
+anonymous one. Frank, a brand-new account that has never watched anything:
+`personalized: true` and the **generic list** — cold start as shipped, because
+every personalized generator keys off `user_watch_projection`. Every id rendered
+on every one of those rails is visible to that viewer under the predicate.
+
+**That hard-load result took a frontend fix to become true, and the same bug on
+the watch page was worse.** Before user #165, loading `/` while signed in fired
+the home rail's fetch **twice** — once carrying the `Authorization` header and
+once without, because `AuthProvider` re-renders the tree while the refresh cookie
+is being redeemed — and the anonymous answer landed last. So a signed-in viewer
+got the generic list under "Trending now" on every hard load, and the
+personalized rail only after a client-side navigation. `RelatedVideos` had the
+identical shape — a mount effect keyed on the video with no session dependency —
+and there the consequence is not a heading. **That rail is filtered per viewer by
+core's hydration predicate, so an anonymous fetch walks straight past the
+viewer's own mute and block lists.** Proven in Chromium: alice muted dave, hard-
+loaded a watch page, and dave's "Traskil Echo Beta" rendered in her watch-next
+rail off a single related request carrying `auth: false`; the mute only bit after
+a client-side navigation. The API layer was never wrong about this — muting dave
+removed exactly his two candidates from alice's rails, and blocking bob removed
+exactly his — it was the browser asking as nobody. Both rails now wait for the
+session to settle and take its status as a dependency, so the one request that
+goes out carries the viewer it is filtered for.
+
+**History: what is stored, what the page shows, and the gap between them.** The
+first slice's finding stands and was re-observed: **the `search.submitted` that
+`GET /videos/search` emits itself never sets `allow_history`**, so two API
+searches produced two `query_log` rows and **zero** history entries, while three
+client-emitted `search.submitted` events (what the browser sends) produced three.
+An API-only client's searches are retained and never appear on the page that is
+supposed to show them. Erin, with all three controls off, produced **zero**
+history rows from both paths.
+
+**The search-history page shows the right rows and its delete control is
+exact.** In Chromium, `/settings/search` listed alice's four stored queries
+alongside the three preference toggles; the per-row control is labelled *Remove
+"<query>" from your search history*, clicking it removed `krondal` from the list
+and left `brimseq` standing, and after a **hard reload** `krondal` was still gone
+with the endpoint answering `[xylthorn, brimseq, flendric]`. Erin's page, with all
+three controls off, listed nothing.
+
+**Delete works, and survives everything that could undo it.** A single-entry
+`DELETE /me/search-history/{query}` removed `flendric` and it did not come back
+after `aggregates_rollup`, `engagement_rollup`, `sessionizer`, `covis_rollup`,
+`trending_sweeper`, `suggestible_reeval` and `reconcile_guard` were each driven
+to completion, nor after a hard reload of `/settings/search`. `DELETE
+/me/search-history` (clear all) is exact in every durable store: history rows
+2→0, `query_log` rows attributed to that user 5→0 (anonymized, not deleted, so
+instance aggregates survive), `behavior_events` 9→0, and core's OWN
+`search_outbox` rows naming the user 14→6 — the six that remain are the purge
+events themselves, which `PurgeUserSearchOutbox` excludes structurally. It too
+survives every worker pass. Re-searching a deleted query recreates the row
+fresh, which is the documented behaviour.
+
+**One promise is not kept, and it is the strongest one on the page.** The
+clear-all confirm says "This permanently removes every search you have made on
+this instance. This cannot be undone." It does not reach vidra-search's Redis
+**session-recency list**. After the clear, `brimseq` and `krondal` were still
+returned to alice by `GET /search/suggestions` as personal, `history`-typed
+suggestions; sending the identical request **without** the `X-Vidra-Session`
+header returned nothing, which isolates the source exactly. The key is
+`sess:q:<session-id>` with a **TTL of about two hours**. Single-entry delete has
+the same hole. It is not a small fix in one repo: the list is keyed by session,
+which the search-side history service never sees, so closing it means core
+passing the caller's session id on the purge call — a change to the internal
+contract in both repos. Recorded precisely, not attempted.
+
+**Authorization holds.** There is no public user-scoped history route at all
+(`GET`/`DELETE /users/{id}/search-history` → 404); `?user_id=` on
+`/me/search-history` is ignored and the caller still gets only their own rows;
+and bob issuing `DELETE /me/search-history/xylthorn` — the exact normalized query
+alice had — returned 204 and **left alice's entry intact**, because the delete is
+scoped to the caller's principal. (204 for an entry that does not exist is an
+idempotent no-op and does not disclose whether it existed.) vidra-search's
+`/internal/v1` history surface answered **401** to an unsigned request and 401 to
+a forged `X-Vidra-Internal-Auth`.
+
+**One more response was lying, found on the way in.** `POST
+/setup/claim-owner` reported all three of the owner's discovery controls as
+**false** while the row it had just created carried the schema defaults (all
+true, migration 0093) and `/auth/me` agreed — `ClaimOwner` hand-copied a subset
+of columns into a fresh `sqlcgen.User` and the rest went out as Go zero values.
+The operator's first view of `/settings/search` therefore showed three controls
+they never turned off. Fixed in core #168; registration was already correct, and
+all six synthetic accounts registered with all three true.
+
+**Gates.** Core `make ci` passed (`fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race`) — **exit 0, 79 packages ok, 0 failures**. vidra-user
+`npm run ci` passed — typecheck, lint, lint:icons, **241 test files / 2369
+vitest tests**, production build, and **623 Playwright specs**, exit 0.
+vidra-search was not modified, so its gate was not run on a diff; it was run as a
+dependency and asserted directly against its tables, its Redis keys and its
+signed internal API. Core's `-tags=integration` lane was **not** run: the lab was
+native (Homebrew Postgres + Redis) rather than the compose stack, so `go vet
+-tags=integration ./...` is the only compile-level assurance for it here.
+
+**Unverified.** The LightGBM / `internal/experiment` shadow ranker — not live in
+`simple` mode, out of scope by the brief. The Wilson trending gate and the HLL
+window edge — still unverified from the first slice and not reachable in this
+fixture either. Co-visitation's `co_search` half (blend weight 0.3) — no
+`search.result_clicked` traffic was generated, so only the `co_watch` half of the
+blend was exercised; the SQL and its Go mirror agree by unit test. The ε-greedy
+exploration slot and the MMR diversity reranker were observed only as part of the
+composed advanced feed, never isolated.
+
+**The exact remaining gap for SRC-03.** Everything in the row's procedure now has
+live evidence except one clause, and it is the same clause the first slice
+flagged: **"no personalized data when off"**. As shipped, opting out stops the
+*serving* completely — no `user_search_history` rows, no `user_watch_projection`
+rows, no personal suggestions, an item-for-item anonymous home rail, and
+`personalized: false` on the wire — but it does not stop the *collection*. An
+opted-out user's searches still land in `query_log` and `behavior_events` under
+their **raw account UUID with their raw query text**, still count toward the
+instance-wide k-anonymity floor, and their plays still bump trending under a
+Redis guard key literally named with their account UUID; this slice adds that
+their queries are also written to the two-hour `sess:q:<session-id>` Redis list
+(they are not served back to them, because the read side is gated). The shipped
+UI copy only ever promises that new searches are not stored to *your history*, so
+this is not a broken promise — it is short of the register row's phrasing if that
+is read as "no attributed collection". **The owner's ruling on that sentence is
+the only thing standing between this row and PASS**; if the ruling is that the
+shipped copy is the promise, SRC-03 can flip on this evidence plus the first
+slice's, and the row's "user search-discovery opt-in" wording should be corrected
+to opt-OUT at the same time.
+
+**Findings recorded, not fixed.** (1) Co-visitation has no k-anonymity floor —
+one user's single session publishes a neighbour edge. (2) `total` can undercount
+the page it ships: `?q="wondrix drift log"` returned `total: 2` with **three**
+hydrated videos, because vidra-search's recall also admits trigram title
+similarity and core's own count does not — the two backends disagree on recall,
+which is a contract decision across two repos. (3) The clear-all Redis
+session-recency gap above. (4) `reason: "subscribed"` is reported for channels
+the viewer never subscribed to — the advanced recommender relabels any candidate
+whose normalized channel affinity clears 0.8, and vidra-search holds no
+subscription data at all. (5) `SearchSettingsView` gates the *Personalize my
+search results* toggle on simple mode with an honest reason, but *Personalize my
+recommendations* has no such gate and is equally inert in simple mode — it
+accepts a click, says "Saved.", and changes nothing.
+
+**Delivery order:** core #168 first (it changes what the rails report and what
+`has_more` means), then user #165, then this evidence. Nothing is merged here and
+no deployment is authorized.

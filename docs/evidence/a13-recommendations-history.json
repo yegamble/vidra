@@ -1,0 +1,2303 @@
+{
+ "status": "A13 second slice \u2014 recommendations, ranking and history controls. SRC-03 does NOT flip.",
+ "scope": "Co-visitation -> related cards, the home rail and its sources, search filters/paging/ranking, search-history controls and their authorization. Watch-history controls were proven in A12 and are not repeated. Autosuggest thresholds, suggestion bans and the trending gates are the FIRST slice (docs/evidence/a13-suggest-trending.json) and are not re-certified here.",
+ "core_revision": "origin/main 425f146 + PR #168 (a13/recommendations-history)",
+ "search_revision": "origin/main e8a1f76 (UNMODIFIED \u2014 run as a dependency, asserted directly)",
+ "frontend_revision": "origin/main a1b6db8 + PR #165 (a13/recommendations-history)",
+ "pull_requests": {
+  "vidra-core#168": "fix(search): has_more describes the client page; personalized is mode-gated; claim-owner returns the discovery controls",
+  "vidra-user#165": "fix(home): HomeRecommendationsRail waits for the session to settle",
+  "meta": "this evidence + release-readiness section",
+  "order": "core#168 first (it changes what the rails report), then user#165, then the meta evidence PR"
+ },
+ "environment": "Disposable LOCAL lab, native. Homebrew PostgreSQL 16 + Redis 8. vidra-core built from the branch on 127.0.0.1:8088 (VIDRA_ENV=development, VIDRA_ROLE=all, local blob storage, ffmpeg present, throwaway database migrated 0 -> 129). vidra-search built from main on 127.0.0.1:8090 against its own throwaway database at schema 16 and its own Redis logical database (flushed before seeding), wired to core through SEARCH_SERVICE_URL + a lab-only SEARCH_INTERNAL_SECRET. The vidra-user PRODUCTION build served on 127.0.0.1:3100. Shipped rate limits left ON at defaults (120 general / 10 auth per IP per minute) and the harness paced itself: zero 429 responses. Synthetic actors only; the owner claimed through the real first-run bootstrap. Torn down at the end.",
+ "browser": "Chromium via Playwright 1.62.1 (headless, real browser, production frontend build, one browser context per actor, 1440x1000). No route interception anywhere \u2014 responses are only observed. No fake search server. Hard reloads where stated.",
+ "actors": {
+  "M": "mallory \u2014 instance owner, claimed through the real first-run bootstrap",
+  "U1..U3": "alice, bob, carol \u2014 three signed-in users; each watched the SAME pair (A1 then A2) in one session",
+  "U4": "dave \u2014 watched C1 -> P -> U alone in one session (the single-user co-visitation probe)",
+  "U5": "erin \u2014 turned all three search/personalisation controls OFF",
+  "U6": "frank \u2014 registered late and never watched anything (the cold-start probe)",
+  "anonymous": "no session cookie, no Authorization header"
+ },
+ "fixture": {
+  "channels": "zephqar (alice), mirvane (bob), quolbex (carol), traskil (dave), vandrel (erin)",
+  "videos": "25 real uploads through POST /channels/{h}/videos + POST /videos/{id}/file (2 s 320x180 clips), all published, all indexed by the real outbox -> /internal/v1/events path. A1..A3, B1..B2, C1, D1..D2, E1..E3, F1..F12 public; P (Quolbex Vault Private) and U (Quolbex Vault Unlisted) created public, co-visited, then flipped to private/unlisted so their neighbour edges outlive their eligibility. E3 backdated 120 days in core and re-indexed for the freshness probe. Every description carries the token 'plexoid', which matches no catalogue text."
+ },
+ "shipped_rules_as_shipped": {
+  "co_visitation": "covis_rollup worker, cadence SEARCH_COVIS_INTERVAL, DEFAULT 15 MINUTES (not 60 s like the aggregates and trending sweepers). It folds behavior_events of type video.play_started / video.meaningful_watch into search.co_watch, and search.result_clicked into search.co_search, pairing each NEW event only with EARLIER events in the SAME session_id within SEARCH_COVIS_WINDOW_SECONDS, DEFAULT 3600 s. It then rebuilds search.item_neighbors (model_version 'covis-v1') from scratch: shrunk cosine raw = cooc/sqrt(totI*totJ), shrunk = raw * cooc/(cooc+lambda) with SEARCH_COVIS_LAMBDA DEFAULT 10, blended 0.7*co_watch + 0.3*co_search, top SEARCH_COVIS_TOP_M DEFAULT 100 neighbours per item. THERE IS NO DISTINCT-USER FLOOR ON CO-VISITATION: the only filter is score > 0. Autosuggest and trending both enforce minimum_query_user_count = 3; the co-visitation index enforces nothing.",
+  "related_source": "vidra-search dispatches GET /internal/v1/recommendations/related on the instance search_mode. simple (THE SHIPPED DEFAULT) runs relatedSimple: up to 2 recent same-channel videos, then tag/category/language overlap, then a popular fill \u2014 CO-VISITATION IS NOT CONSULTED AT ALL. advanced runs relatedAdvanced: item_neighbors for the seed (reason co_watch, priority 3, the highest) union the simple sets union the session's co-watch seed union a popular fill, reranked by base + 0.6*neighbour affinity + 0.4*channel affinity + 0.3*freshness (30-day half-life) with a 0.5 novelty penalty, MMR-diversified at lambda 0.7, a per-channel cap of 2, and a deterministic epsilon=0.1 exploration slot.",
+  "home_rail_source": "GET /api/v1/recommendations/home -> vidra-search /internal/v1/recommendations/home. simple: the gated Redis trending list (trend:v:top, the sweeper's post-gate output, cached 5 min), falling back to a SQL HN-gravity query when it is empty, round-robin interleaved with fresh and popular under a per-channel cap of 2. Personalization is IGNORED in this mode. advanced adds, for a personalized signed-in caller, NeighborsForUserWatches (co-visitation of everything the user watched, weighted by the decayed watch projection) and EXCLUDES the last 200 videos they watched. Core hydrates the ranked ids under the canonical predicate and falls back to its own trending feed when the service errors or returns nothing.",
+  "cold_start": "A brand-new signed-in user with no watch projection gets the generic list \u2014 the same items as anonymous \u2014 because every personalized candidate generator keys off user_watch_projection. In advanced mode the response still reports personalized=true for them, so the rail is headed 'For you' over the generic list; that is cold start as shipped, not a bug in the flag.",
+  "live_ranker": "search_mode DEFAULTS TO simple, so the live ranker is vidra-search's SearchSimple SQL: score = 0.5*ts_rank_cd(tsv, websearch_to_tsquery(q)) + 0.2*similarity(lower(title), q) + 0.1*(title exact 1.0 + channel exact 0.5 + tag exact 0.5) + 0.1*ln(1+views)/20 + 0.1*exp(-ln2 * age_days / 30), ordered score DESC, published_at DESC NULLS LAST, video_id. Recall unions full-text, trigram title similarity (candidate threshold 0.3) and exact tag/channel match. The internal/experiment + LightGBM shadow path is NOT live in simple mode and was not exercised.",
+  "search_routing": "searchServiceCanRank: the vidra-search path is taken ONLY for the default relevance sort with none of duration/publish-window/tag-set filters active. tag, category, language and license go to the service; duration_min/max, published_after/before, tags_all_of/tags_one_of and any non-relevance sort run on core's local SQL, on both sides of the healthy/unhealthy line. `total` is always CORE's own per-viewer count.",
+  "history_write_rule": "A durable user_search_history row is written only for an event carrying allow_history=true AND a signed-in user_id. allow_history is set by core on POST /search/events only (instanceSearchHistoryEnabled && authed && prefs.History). The search.submitted that GET /videos/search emits itself never sets it, so an API-only client's searches are retained in query_log and NEVER appear on that user's search-history page. Confirmed again here.",
+  "history_delete": "DELETE /me/search-history: enqueue the durable user.history_deleted FIRST, then erase core's own search_outbox rows for the user, then proxy to the service, which in ONE transaction deletes user_search_history and NULLs user_id in query_log and behavior_events. DELETE /me/search-history/{query} is an honest proxy only: a hard delete of that one history row, with no durable event and no core-side erasure (documented in the handler \u2014 user.history_deleted has no query field, and core stores raw text while the path parameter is the service's normalized form). Nothing recreates a deleted row except the user searching again."
+ },
+ "criteria": {
+  "SC1_covisitation_to_related_cards": {
+   "verdict": "PASS with a named caveat: the pipeline works, but ONLY when the instance search_mode is advanced.",
+   "covis_built": {
+    "co_watch_counts": {
+     "A1<->A2": 3,
+     "C1<->P": 1,
+     "C1<->U": 1,
+     "P<->U": 1
+    },
+    "item_neighbors": {
+     "A1->A2": 0.16154,
+     "A2->A1": 0.16154,
+     "C1->P": 0.03182,
+     "C1->U": 0.03182,
+     "P->C1": 0.03182,
+     "P->U": 0.03182,
+     "U->C1": 0.03182,
+     "U->P": 0.03182
+    },
+    "formula_check": "cooc=3, totI=totJ=3 -> raw=1.0, shrunk=3/13=0.23077, blend=0.7*0.23077=0.16154 \u2014 matches the stored score",
+    "no_distinct_user_floor": "dave ALONE, in one session, produced three public neighbour edges. The rebuild filters only on score > 0.",
+    "worker_run": "SEARCH_RUN_JOB=covis_rollup one-shot (the shipped cadence is 15 minutes)"
+   },
+   "simple_mode_related_A1": {
+    "anonymous": {
+     "code": 200,
+     "source": "search",
+     "personalized": false,
+     "items": [
+      [
+       "F10",
+       "similar"
+      ],
+      [
+       "F5",
+       "similar"
+      ],
+      [
+       "F12",
+       "similar"
+      ],
+      [
+       "F11",
+       "similar"
+      ],
+      [
+       "F9",
+       "similar"
+      ],
+      [
+       "F8",
+       "similar"
+      ],
+      [
+       "F7",
+       "similar"
+      ],
+      [
+       "F6",
+       "similar"
+      ],
+      [
+       "F4",
+       "similar"
+      ],
+      [
+       "F3",
+       "similar"
+      ]
+     ]
+    },
+    "alice": {
+     "code": 200,
+     "source": "search",
+     "personalized": true,
+     "items": [
+      [
+       "F10",
+       "similar"
+      ],
+      [
+       "F5",
+       "similar"
+      ],
+      [
+       "F12",
+       "similar"
+      ],
+      [
+       "F11",
+       "similar"
+      ],
+      [
+       "F9",
+       "similar"
+      ],
+      [
+       "F8",
+       "similar"
+      ],
+      [
+       "F7",
+       "similar"
+      ],
+      [
+       "F6",
+       "similar"
+      ],
+      [
+       "F4",
+       "similar"
+      ],
+      [
+       "F3",
+       "similar"
+      ]
+     ]
+    },
+    "carol": {
+     "code": 200,
+     "source": "search",
+     "personalized": true,
+     "items": [
+      [
+       "F10",
+       "similar"
+      ],
+      [
+       "F5",
+       "similar"
+      ],
+      [
+       "F12",
+       "similar"
+      ],
+      [
+       "F11",
+       "similar"
+      ],
+      [
+       "F9",
+       "similar"
+      ],
+      [
+       "F8",
+       "similar"
+      ],
+      [
+       "F7",
+       "similar"
+      ],
+      [
+       "F6",
+       "similar"
+      ],
+      [
+       "F4",
+       "similar"
+      ],
+      [
+       "F3",
+       "similar"
+      ]
+     ]
+    },
+    "C1_anon": {
+     "code": 200,
+     "source": "search",
+     "items": [
+      [
+       "F12",
+       "similar"
+      ],
+      [
+       "F7",
+       "similar"
+      ],
+      [
+       "F11",
+       "similar"
+      ],
+      [
+       "F10",
+       "similar"
+      ],
+      [
+       "F9",
+       "similar"
+      ],
+      [
+       "F8",
+       "similar"
+      ],
+      [
+       "F6",
+       "similar"
+      ],
+      [
+       "F5",
+       "similar"
+      ],
+      [
+       "F4",
+       "similar"
+      ],
+      [
+       "F3",
+       "similar"
+      ]
+     ]
+    }
+   },
+   "advanced_mode_related_A1": {
+    "A1_anonymous": {
+     "code": 200,
+     "source": "search",
+     "personalized": false,
+     "items": [
+      [
+       "A2",
+       "co_watch"
+      ],
+      [
+       "F12",
+       "similar"
+      ],
+      [
+       "E2",
+       "similar"
+      ],
+      [
+       "D2",
+       "similar"
+      ],
+      [
+       "U",
+       "similar"
+      ],
+      [
+       "B1",
+       "similar"
+      ],
+      [
+       "F11",
+       "similar"
+      ],
+      [
+       "F10",
+       "similar"
+      ],
+      [
+       "F9",
+       "similar"
+      ],
+      [
+       "F8",
+       "similar"
+      ]
+     ]
+    },
+    "A1_alice": {
+     "code": 200,
+     "source": "search",
+     "personalized": true,
+     "items": [
+      [
+       "A2",
+       "subscribed"
+      ],
+      [
+       "F10",
+       "subscribed"
+      ],
+      [
+       "E2",
+       "similar"
+      ],
+      [
+       "D2",
+       "similar"
+      ],
+      [
+       "U",
+       "similar"
+      ],
+      [
+       "B1",
+       "similar"
+      ],
+      [
+       "F12",
+       "similar"
+      ],
+      [
+       "F11",
+       "similar"
+      ],
+      [
+       "F9",
+       "similar"
+      ],
+      [
+       "F8",
+       "similar"
+      ]
+     ]
+    },
+    "A1_carol_owner_of_P_U": {
+     "code": 200,
+     "source": "search",
+     "personalized": true,
+     "items": [
+      [
+       "A2",
+       "subscribed"
+      ],
+      [
+       "F10",
+       "subscribed"
+      ],
+      [
+       "E2",
+       "similar"
+      ],
+      [
+       "D2",
+       "similar"
+      ],
+      [
+       "U",
+       "similar"
+      ],
+      [
+       "B1",
+       "similar"
+      ],
+      [
+       "F12",
+       "similar"
+      ],
+      [
+       "F11",
+       "similar"
+      ],
+      [
+       "F9",
+       "similar"
+      ],
+      [
+       "F8",
+       "similar"
+      ]
+     ]
+    },
+    "C1_anonymous": {
+     "code": 200,
+     "source": "search",
+     "items": [
+      [
+       "U",
+       "co_watch"
+      ],
+      [
+       "P",
+       "co_watch"
+      ],
+      [
+       "E2",
+       "similar"
+      ],
+      [
+       "D2",
+       "similar"
+      ],
+      [
+       "B1",
+       "similar"
+      ],
+      [
+       "A2",
+       "similar"
+      ],
+      [
+       "F11",
+       "similar"
+      ],
+      [
+       "F10",
+       "similar"
+      ],
+      [
+       "F9",
+       "similar"
+      ],
+      [
+       "F8",
+       "similar"
+      ]
+     ],
+     "titles": [
+      "Quolbex Vault Unlisted",
+      "Quolbex Vault Private",
+      "wondrix drift log",
+      "Traskil Echo Beta",
+      "Mirvane Drift One",
+      "Zephqar Vault Beta",
+      "Plexoid Filler 11",
+      "Plexoid Filler 10",
+      "Plexoid Filler 09",
+      "Plexoid Filler 08"
+     ]
+    },
+    "C1_carol_owner": {
+     "code": 200,
+     "source": "search",
+     "items": [
+      [
+       "A2",
+       "subscribed"
+      ],
+      [
+       "A1",
+       "subscribed"
+      ],
+      [
+       "U",
+       "co_watch"
+      ],
+      [
+       "P",
+       "co_watch"
+      ],
+      [
+       "E2",
+       "similar"
+      ],
+      [
+       "D2",
+       "similar"
+      ],
+      [
+       "B1",
+       "similar"
+      ],
+      [
+       "F11",
+       "similar"
+      ],
+      [
+       "F9",
+       "similar"
+      ],
+      [
+       "F8",
+       "similar"
+      ]
+     ],
+     "titles": [
+      "Zephqar Vault Beta",
+      "Zephqar Vault Alpha",
+      "Quolbex Vault Unlisted",
+      "Quolbex Vault Private",
+      "wondrix drift log",
+      "Traskil Echo Beta",
+      "Mirvane Drift One",
+      "Plexoid Filler 11",
+      "Plexoid Filler 09",
+      "Plexoid Filler 08"
+     ]
+    },
+    "C1_alice_other": {
+     "code": 200,
+     "source": "search",
+     "items": [
+      [
+       "A2",
+       "subscribed"
+      ],
+      [
+       "A1",
+       "subscribed"
+      ],
+      [
+       "U",
+       "co_watch"
+      ],
+      [
+       "P",
+       "co_watch"
+      ],
+      [
+       "E2",
+       "similar"
+      ],
+      [
+       "D2",
+       "similar"
+      ],
+      [
+       "B1",
+       "similar"
+      ],
+      [
+       "F11",
+       "similar"
+      ],
+      [
+       "F9",
+       "similar"
+      ],
+      [
+       "F8",
+       "similar"
+      ]
+     ],
+     "titles": [
+      "Zephqar Vault Beta",
+      "Zephqar Vault Alpha",
+      "Quolbex Vault Unlisted",
+      "Quolbex Vault Private",
+      "wondrix drift log",
+      "Traskil Echo Beta",
+      "Mirvane Drift One",
+      "Plexoid Filler 11",
+      "Plexoid Filler 09",
+      "Plexoid Filler 08"
+     ]
+    }
+   },
+   "per_viewer_predicate_normal": {
+    "service_anon": {
+     "code": 200,
+     "model": "advanced-v1",
+     "keys": [
+      "F12",
+      "E2",
+      "D2",
+      "B1",
+      "A2",
+      "F11",
+      "F10",
+      "F9",
+      "F8",
+      "F7"
+     ],
+     "leaks_P": false,
+     "leaks_U": false
+    },
+    "service_carol": {
+     "code": 200,
+     "model": "advanced-v1",
+     "keys": [
+      "A2",
+      "A1",
+      "E2",
+      "D2",
+      "B1",
+      "F12",
+      "F11",
+      "F9",
+      "F8",
+      "F7"
+     ],
+     "leaks_P": false,
+     "leaks_U": false
+    },
+    "core_anonymous": {
+     "code": 200,
+     "source": "search",
+     "keys": [
+      "F12",
+      "E2",
+      "D2",
+      "B1",
+      "A2",
+      "F11",
+      "F10",
+      "F9",
+      "F8",
+      "F7"
+     ],
+     "leaks_P_id": false,
+     "leaks_U_id": false,
+     "leaks_P_title": false,
+     "leaks_U_title": false
+    },
+    "core_alice": {
+     "code": 200,
+     "source": "search",
+     "keys": [
+      "A2",
+      "A1",
+      "E2",
+      "D2",
+      "B1",
+      "F12",
+      "F11",
+      "F9",
+      "F8",
+      "F7"
+     ],
+     "leaks_P_id": false,
+     "leaks_U_id": false,
+     "leaks_P_title": false,
+     "leaks_U_title": false
+    },
+    "core_carol_owner": {
+     "code": 200,
+     "source": "search",
+     "keys": [
+      "A2",
+      "A1",
+      "E2",
+      "D2",
+      "B1",
+      "F12",
+      "F11",
+      "F9",
+      "F8",
+      "F7"
+     ],
+     "leaks_P_id": false,
+     "leaks_U_id": false,
+     "leaks_P_title": false,
+     "leaks_U_title": false
+    },
+    "core_mallory_admin": {
+     "code": 200,
+     "source": "search",
+     "keys": [
+      "F12",
+      "E2",
+      "D2",
+      "B1",
+      "A2",
+      "F11",
+      "F10",
+      "F9",
+      "F8",
+      "F7"
+     ],
+     "leaks_P_id": false,
+     "leaks_U_id": false,
+     "leaks_P_title": false,
+     "leaks_U_title": false
+    }
+   },
+   "per_viewer_predicate_forced_stale_index": {
+    "service_stale_index": {
+     "keys": [
+      "U",
+      "P",
+      "E2",
+      "D2",
+      "B1",
+      "A2",
+      "F11",
+      "F10",
+      "F9",
+      "F8"
+     ],
+     "returns_P": true,
+     "returns_U": true,
+     "reasons": [
+      [
+       "U",
+       "co_watch"
+      ],
+      [
+       "P",
+       "co_watch"
+      ],
+      [
+       "E2",
+       "similar"
+      ],
+      [
+       "D2",
+       "similar"
+      ]
+     ]
+    },
+    "core_stale_anonymous": {
+     "keys": [
+      "E2",
+      "D2",
+      "B1",
+      "A2",
+      "F11",
+      "F10",
+      "F9",
+      "F8"
+     ],
+     "leaks_P_id": false,
+     "leaks_U_id": false,
+     "leaks_P_title": false,
+     "leaks_U_title": false
+    },
+    "core_stale_alice": {
+     "keys": [
+      "A2",
+      "A1",
+      "E2",
+      "D2",
+      "B1",
+      "F11",
+      "F9",
+      "F8"
+     ],
+     "leaks_P_id": false,
+     "leaks_U_id": false,
+     "leaks_P_title": false,
+     "leaks_U_title": false
+    },
+    "core_stale_carol_owner": {
+     "keys": [
+      "A2",
+      "A1",
+      "E2",
+      "D2",
+      "B1",
+      "F11",
+      "F9",
+      "F8"
+     ],
+     "leaks_P_id": false,
+     "leaks_U_id": false,
+     "leaks_P_title": false,
+     "leaks_U_title": false
+    }
+   },
+   "muted_author_excluded": {
+    "daves": [
+     "D1",
+     "D2",
+     "F3",
+     "F8"
+    ],
+    "before_rel": [
+     "A2",
+     "F10",
+     "E2",
+     "D2",
+     "C1",
+     "B1",
+     "F12",
+     "F11",
+     "F9",
+     "F8"
+    ],
+    "after_rel": [
+     "A2",
+     "F10",
+     "E2",
+     "C1",
+     "B1",
+     "F12",
+     "F11",
+     "F9"
+    ],
+    "before_home": [
+     "F10",
+     "A3",
+     "B2",
+     "E2",
+     "D2",
+     "C1",
+     "B1",
+     "F12",
+     "F9",
+     "F8"
+    ],
+    "after_home": [
+     "F10",
+     "A3",
+     "B2",
+     "E2",
+     "C1",
+     "B1",
+     "F12",
+     "F9"
+    ]
+   },
+   "blocked_author_excluded": {
+    "bobs": [
+     "B1",
+     "B2",
+     "E3",
+     "F1",
+     "F11",
+     "F6"
+    ],
+    "before": [
+     "A2",
+     "F10",
+     "E2",
+     "D2",
+     "C1",
+     "B1",
+     "F12",
+     "F11",
+     "F9",
+     "F8"
+    ],
+    "after": [
+     "A2",
+     "F10",
+     "E2",
+     "D2",
+     "C1",
+     "F12",
+     "F9",
+     "F8"
+    ]
+   },
+   "owner_note": "ListPublicVideosByIDs requires privacy='public', so a private/unlisted video is dropped for EVERY viewer including its owner and the admin. The criterion's 'while their owner does' does not describe what ships; public-only is what ships.",
+   "browser_watch_page": {
+    "before_user165_hard_load_signed_in_with_dave_muted": {
+     "related_requests": [
+      {
+       "auth": false
+      }
+     ],
+     "shows_muted_authors_video_D2": true,
+     "note": "the per-viewer mute filter was bypassed because the rail asked as nobody"
+    },
+    "after_user165": {
+     "related_requests": [
+      {
+       "auth": true
+      }
+     ],
+     "shows_muted_D2": false,
+     "shows_muted_D1": false,
+     "shows_A2": true,
+     "shows_private": false,
+     "shows_unlisted": false
+    },
+    "watch_page_rails": {
+     "watch_related_alice": {
+      "seed": "Zephqar Vault Alpha",
+      "api_items": [
+       [
+        "A2",
+        "co_watch"
+       ],
+       [
+        "F12",
+        "similar"
+       ],
+       [
+        "E2",
+        "similar"
+       ],
+       [
+        "D2",
+        "similar"
+       ],
+       [
+        "C1",
+        "similar"
+       ],
+       [
+        "B1",
+        "similar"
+       ]
+      ],
+      "api_personalized": false,
+      "page_shows_A2": true,
+      "page_shows_private": false,
+      "page_shows_unlisted": false
+     },
+     "watch_related_anonymous_C1": {
+      "seed": "Quolbex Signal",
+      "api_items": [
+       [
+        "F12",
+        "similar"
+       ],
+       [
+        "E2",
+        "similar"
+       ],
+       [
+        "D2",
+        "similar"
+       ],
+       [
+        "B1",
+        "similar"
+       ],
+       [
+        "A2",
+        "similar"
+       ],
+       [
+        "F11",
+        "similar"
+       ]
+      ],
+      "page_shows_private": false,
+      "page_shows_unlisted": false
+     },
+     "watch_related_owner_C1": {
+      "page_shows_private": false,
+      "page_shows_unlisted": false
+     },
+     "settings_alice_before": {
+      "entries": [],
+      "shows_krondal": false
+     },
+     "settings_alice_after_delete": {
+      "clicked": false,
+      "shows_krondal": false
+     },
+     "settings_alice_after_hard_reload": {
+      "shows_krondal": false
+     }
+    }
+   }
+  },
+  "SC2_home_rail": {
+   "verdict": "PASS (after core#168 + user#165). Source stated; cold start stated.",
+   "gated_trending_list": "trend:v:top held exactly [A2, A1] \u2014 the two videos played by 3 distinct users; C1/P/U (1 user) never entered it",
+   "api_simple_default_before_fix": {
+    "mode": "simple (shipped default)",
+    "home_anonymous": {
+     "code": 200,
+     "source": "search",
+     "personalized": false,
+     "keys": [
+      "A2",
+      "F12",
+      "A1",
+      "F11",
+      "F9",
+      "F8",
+      "F7",
+      "F6",
+      "F4",
+      "F3"
+     ],
+     "reasons": [
+      "trending",
+      "fresh",
+      "trending",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh"
+     ]
+    },
+    "home_alice_with_history": {
+     "code": 200,
+     "source": "search",
+     "personalized": true,
+     "keys": [
+      "A2",
+      "F12",
+      "A1",
+      "F11",
+      "F9",
+      "F8",
+      "F7",
+      "F6",
+      "F4",
+      "F3"
+     ],
+     "reasons": [
+      "trending",
+      "fresh",
+      "trending",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh"
+     ]
+    },
+    "home_erin_opted_out": {
+     "code": 200,
+     "source": "search",
+     "personalized": false,
+     "keys": [
+      "A2",
+      "F12",
+      "A1",
+      "F11",
+      "F9",
+      "F8",
+      "F7",
+      "F6",
+      "F4",
+      "F3"
+     ],
+     "reasons": [
+      "trending",
+      "fresh",
+      "trending",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh"
+     ]
+    },
+    "home_frank_cold_start": {
+     "code": 200,
+     "source": "search",
+     "personalized": true,
+     "keys": [
+      "A2",
+      "F12",
+      "A1",
+      "F11",
+      "F9",
+      "F8",
+      "F7",
+      "F6",
+      "F4",
+      "F3"
+     ],
+     "reasons": [
+      "trending",
+      "fresh",
+      "trending",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh"
+     ]
+    },
+    "rel_anonymous": {
+     "personalized": false,
+     "keys": [
+      "F10",
+      "F5",
+      "F12",
+      "F11",
+      "F9",
+      "F8",
+      "F7",
+      "F6",
+      "F4",
+      "F3"
+     ],
+     "reasons": [
+      "similar"
+     ]
+    },
+    "rel_alice": {
+     "personalized": true,
+     "keys": [
+      "F10",
+      "F5",
+      "F12",
+      "F11",
+      "F9",
+      "F8",
+      "F7",
+      "F6",
+      "F4",
+      "F3"
+     ],
+     "reasons": [
+      "similar"
+     ]
+    },
+    "identical_home_alice_vs_anon": true,
+    "identical_rel_alice_vs_anon": true
+   },
+   "api_advanced_before_fix": {
+    "mode": "advanced",
+    "anonymous": {
+     "code": 200,
+     "source": "search",
+     "personalized": false,
+     "keys": [
+      "A2",
+      "A1",
+      "B2",
+      "F12",
+      "E2",
+      "D2",
+      "C1",
+      "B1",
+      "F9",
+      "F8"
+     ],
+     "reasons": [
+      "fresh",
+      "trending"
+     ]
+    },
+    "alice_with_history": {
+     "code": 200,
+     "source": "search",
+     "personalized": true,
+     "keys": [
+      "F10",
+      "A3",
+      "B2",
+      "E2",
+      "D2",
+      "C1",
+      "B1",
+      "F12",
+      "F9",
+      "F8"
+     ],
+     "reasons": [
+      "fresh",
+      "subscribed"
+     ]
+    },
+    "erin_opted_out": {
+     "code": 200,
+     "source": "search",
+     "personalized": false,
+     "keys": [
+      "A2",
+      "A1",
+      "B2",
+      "F12",
+      "E2",
+      "D2",
+      "C1",
+      "B1",
+      "F9",
+      "F8"
+     ],
+     "reasons": [
+      "fresh",
+      "trending"
+     ]
+    },
+    "frank_cold_start": {
+     "code": 200,
+     "source": "search",
+     "personalized": true,
+     "keys": [
+      "A2",
+      "A1",
+      "B2",
+      "F12",
+      "E2",
+      "D2",
+      "C1",
+      "B1",
+      "F9",
+      "F8"
+     ],
+     "reasons": [
+      "fresh",
+      "trending"
+     ]
+    },
+    "dave_with_history": {
+     "code": 200,
+     "source": "search",
+     "personalized": true,
+     "keys": [
+      "A2",
+      "F12",
+      "A1",
+      "F7",
+      "B2",
+      "E2",
+      "D2",
+      "B1",
+      "F9",
+      "F8"
+     ],
+     "reasons": [
+      "fresh",
+      "subscribed",
+      "trending"
+     ]
+    },
+    "service_home_anon": {
+     "code": 200,
+     "model": "advanced-v1",
+     "keys": [
+      "A2",
+      "A1",
+      "B2",
+      "F12",
+      "E2",
+      "D2",
+      "C1",
+      "B1",
+      "F9",
+      "F8"
+     ],
+     "reasons": [
+      "trending",
+      "trending",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh",
+      "fresh"
+     ]
+    }
+   },
+   "api_advanced_after_fix": {
+    "anonymous": {
+     "home_personalized": false,
+     "home": [
+      "A2",
+      "A1",
+      "B2",
+      "F12",
+      "E2",
+      "D2"
+     ],
+     "related_personalized": false,
+     "related": [
+      [
+       "A2",
+       "co_watch"
+      ],
+      [
+       "F12",
+       "similar"
+      ],
+      [
+       "E2",
+       "similar"
+      ],
+      [
+       "D2",
+       "similar"
+      ]
+     ]
+    },
+    "alice": {
+     "home_personalized": true,
+     "home": [
+      "F10",
+      "A3",
+      "B2",
+      "E2",
+      "D2",
+      "C1"
+     ],
+     "related_personalized": true,
+     "related": [
+      [
+       "A2",
+       "subscribed"
+      ],
+      [
+       "F10",
+       "subscribed"
+      ],
+      [
+       "E2",
+       "similar"
+      ],
+      [
+       "D2",
+       "similar"
+      ]
+     ]
+    },
+    "erin_opted_out": {
+     "home_personalized": false,
+     "home": [
+      "A2",
+      "A1",
+      "B2",
+      "F12",
+      "E2",
+      "D2"
+     ],
+     "related_personalized": false,
+     "related": [
+      [
+       "A2",
+       "co_watch"
+      ],
+      [
+       "F12",
+       "similar"
+      ],
+      [
+       "E2",
+       "similar"
+      ],
+      [
+       "D2",
+       "similar"
+      ]
+     ]
+    },
+    "frank_cold_start": {
+     "home_personalized": true,
+     "home": [
+      "A2",
+      "A1",
+      "B2",
+      "F12",
+      "E2",
+      "D2"
+     ],
+     "related_personalized": true,
+     "related": [
+      [
+       "A2",
+       "co_watch"
+      ],
+      [
+       "F12",
+       "similar"
+      ],
+      [
+       "E2",
+       "similar"
+      ],
+      [
+       "D2",
+       "similar"
+      ]
+     ]
+    }
+   },
+   "browser_after_fix": {
+    "search": {
+     "resultLine": "23 results",
+     "distinctTitlesOnPage": 21,
+     "loadMoreButtons": 1,
+     "api_first_page": [
+      {
+       "url": "/api/v1/videos/search?q=plexoid&limit=20&offset=0",
+       "total": 23,
+       "search_total": 23,
+       "has_more": true,
+       "n": 20
+      }
+     ]
+    },
+    "search_after_hard_reload": {
+     "resultLine": "23 results",
+     "distinctTitlesOnPage": 21,
+     "loadMoreButtons": 1
+    },
+    "search_after_load_more": {
+     "distinctTitlesOnPage": 23
+    },
+    "home_anonymous": {
+     "railHeading": "Trending now",
+     "railItems": [
+      "A2",
+      "A1",
+      "B2",
+      "F12",
+      "E2",
+      "D2",
+      "C1",
+      "B1",
+      "F9",
+      "F8"
+     ],
+     "api_personalized": false,
+     "api_source": "search"
+    },
+    "home_alice": {
+     "railHeading": "For you",
+     "railItems": [
+      "F10",
+      "A3",
+      "B2",
+      "E2",
+      "D2",
+      "C1",
+      "B1",
+      "F12",
+      "F9",
+      "F8"
+     ],
+     "api_personalized": true,
+     "api_source": "search"
+    },
+    "home_erin": {
+     "railHeading": "Trending now",
+     "railItems": [
+      "A2",
+      "A1",
+      "B2",
+      "F12",
+      "E2",
+      "D2",
+      "C1",
+      "B1",
+      "F9",
+      "F8"
+     ],
+     "api_personalized": false,
+     "api_source": "search"
+    },
+    "home_frank": {
+     "railHeading": "For you",
+     "railItems": [
+      "A2",
+      "A1",
+      "B2",
+      "F12",
+      "E2",
+      "D2",
+      "C1",
+      "B1",
+      "F9",
+      "F8"
+     ],
+     "api_personalized": true,
+     "api_source": "search"
+    },
+    "watch_related": {
+     "seed": "Zephqar Vault Alpha",
+     "api_items": [
+      [
+       "A2",
+       "subscribed"
+      ],
+      [
+       "F10",
+       "subscribed"
+      ],
+      [
+       "E2",
+       "similar"
+      ],
+      [
+       "D2",
+       "similar"
+      ],
+      [
+       "C1",
+       "similar"
+      ],
+      [
+       "B1",
+       "similar"
+      ]
+     ],
+     "api_personalized": true,
+     "page_mentions_A2": true,
+     "page_mentions_private": false,
+     "page_mentions_unlisted": false
+    },
+    "settings_alice_before": {
+     "shows_xylthorn": true,
+     "history_api": {
+      "entries": [
+       {
+        "query": "krondal",
+        "normalized_query": "krondal",
+        "last_used_at": "2026-09-06T12:19:40Z",
+        "use_count": 1
+       },
+       {
+        "query": "flendric",
+        "normalized_query": "flendric",
+        "last_used_at": "2026-09-06T12:19:40Z",
+        "use_count": 1
+       },
+       {
+        "query": "xylthorn",
+        "normalized_query": "xylthorn",
+        "last_used_at": "2026-09-06T12:19:40Z",
+        "use_count": 2
+       }
+      ],
+      "limit": 100,
+      "offset": 0
+     }
+    },
+    "settings_alice_after_delete": {
+     "clicked": true,
+     "shows_xylthorn": false
+    },
+    "settings_alice_after_hard_reload": {
+     "shows_xylthorn": false
+    },
+    "settings_erin": {
+     "history_entries": 0,
+     "toggles_off": 3
+    }
+   },
+   "browser_before_fix": {
+    "search": {
+     "resultLine": "23 results",
+     "distinctTitlesOnPage": 21,
+     "loadMoreButtons": 0,
+     "api_first_page": [
+      {
+       "url": "/api/v1/videos/search?q=plexoid&limit=20&offset=0",
+       "total": 23,
+       "search_total": 23,
+       "has_more": false,
+       "n": 20
+      }
+     ]
+    },
+    "search_after_hard_reload": {
+     "resultLine": "23 results",
+     "distinctTitlesOnPage": 21,
+     "loadMoreButtons": 0
+    },
+    "home_anonymous": {
+     "railHeading": "Trending now",
+     "railItems": [
+      "A2",
+      "F12",
+      "A1",
+      "F11",
+      "F9",
+      "F8",
+      "F7",
+      "F6",
+      "F4",
+      "F3"
+     ],
+     "api_personalized": false,
+     "api_source": "search"
+    },
+    "home_alice": {
+     "railHeading": "Trending now",
+     "railItems": [
+      "A2",
+      "F12",
+      "A1",
+      "F11",
+      "F9",
+      "F8",
+      "F7",
+      "F6",
+      "F4",
+      "F3"
+     ],
+     "api_personalized": false,
+     "api_source": "search"
+    },
+    "home_erin": {
+     "railHeading": "Trending now",
+     "railItems": [
+      "A2",
+      "F12",
+      "A1",
+      "F11",
+      "F9",
+      "F8",
+      "F7",
+      "F6",
+      "F4",
+      "F3"
+     ],
+     "api_personalized": false,
+     "api_source": "search"
+    }
+   }
+  },
+  "SC3_filters_paging_ranking": {
+   "verdict": "PASS; one paging defect found and fixed (has_more), one recall/count mismatch recorded unfixed.",
+   "filters_and_ranking": {
+    "baseline": {
+     "code": 200,
+     "source": null,
+     "total": 13,
+     "search_total": 13,
+     "n": 13,
+     "keys": [
+      "P",
+      "E3",
+      "E2",
+      "E1",
+      "D2",
+      "D1",
+      "U",
+      "C1",
+      "B2",
+      "B1",
+      "A3",
+      "A2",
+      "A1"
+     ]
+    },
+    "filters": {
+     "tag_zephqar": {
+      "code": 200,
+      "source": null,
+      "total": 3,
+      "n": 3,
+      "keys": [
+       "A3",
+       "A2",
+       "A1"
+      ]
+     },
+     "category_1": {
+      "code": 200,
+      "source": null,
+      "total": 11,
+      "n": 11,
+      "keys": [
+       "P",
+       "E3",
+       "E2",
+       "E1",
+       "D2",
+       "D1",
+       "U",
+       "C1",
+       "B1",
+       "A2",
+       "A1"
+      ]
+     },
+     "language_fr": {
+      "code": 200,
+      "source": null,
+      "total": 1,
+      "n": 1,
+      "keys": [
+       "A3"
+      ]
+     },
+     "license_7": {
+      "code": 200,
+      "source": null,
+      "total": 2,
+      "n": 2,
+      "keys": [
+       "B2",
+       "A3"
+      ]
+     },
+     "tags_all_of": {
+      "code": 200,
+      "source": null,
+      "total": 2,
+      "n": 2,
+      "keys": [
+       "B2",
+       "B1"
+      ]
+     },
+     "tags_one_of": {
+      "code": 200,
+      "source": null,
+      "total": 5,
+      "n": 5,
+      "keys": [
+       "P",
+       "D2",
+       "D1",
+       "U",
+       "C1"
+      ]
+     },
+     "duration_min5": {
+      "code": 200,
+      "source": null,
+      "total": 0,
+      "n": 0,
+      "keys": []
+     },
+     "duration_max5": {
+      "code": 200,
+      "source": null,
+      "total": 13,
+      "n": 13,
+      "keys": [
+       "P",
+       "E2",
+       "E1",
+       "D2",
+       "D1",
+       "U",
+       "C1",
+       "B2",
+       "B1",
+       "A3",
+       "A2",
+       "A1",
+       "E3"
+      ]
+     },
+     "published_after_tomorrow": {
+      "code": 200,
+      "source": null,
+      "total": 0,
+      "n": 0,
+      "keys": []
+     },
+     "published_before_2000": {
+      "code": 200,
+      "source": null,
+      "total": 0,
+      "n": 0,
+      "keys": []
+     }
+    },
+    "paging": {
+     "pages": [
+      {
+       "offset": 0,
+       "keys": [
+        "P",
+        "E3",
+        "E2"
+       ],
+       "total": 13,
+       "source": null,
+       "search_total": 13,
+       "has_more": false
+      },
+      {
+       "offset": 3,
+       "keys": [
+        "E1",
+        "D2",
+        "D1"
+       ],
+       "total": 13,
+       "source": null,
+       "search_total": 13,
+       "has_more": false
+      },
+      {
+       "offset": 6,
+       "keys": [
+        "U",
+        "C1",
+        "B2"
+       ],
+       "total": 13,
+       "source": null,
+       "search_total": 13,
+       "has_more": false
+      },
+      {
+       "offset": 9,
+       "keys": [
+        "B1",
+        "A3",
+        "A2"
+       ],
+       "total": 13,
+       "source": null,
+       "search_total": 13,
+       "has_more": false
+      },
+      {
+       "offset": 12,
+       "keys": [
+        "A1"
+       ],
+       "total": 13,
+       "source": null,
+       "search_total": 13,
+       "has_more": false
+      },
+      {
+       "offset": 15,
+       "keys": [],
+       "total": 13,
+       "source": null,
+       "search_total": 13,
+       "has_more": false
+      }
+     ],
+     "n_returned": 13,
+     "n_distinct": 13
+    },
+    "ranking_exact": {
+     "code": 200,
+     "source": null,
+     "total": 3,
+     "order": [
+      "E1",
+      "E3",
+      "E2"
+     ],
+     "titles": [
+      "wondrix",
+      "wondrix drift log",
+      "wondrix drift log"
+     ]
+    },
+    "ranking_fresh": {
+     "code": 200,
+     "source": null,
+     "order": [
+      "E3",
+      "E2",
+      "E1"
+     ],
+     "titles": [
+      "wondrix drift log",
+      "wondrix drift log",
+      "wondrix"
+     ]
+    }
+   },
+   "paging_walk_before_fix": {
+    "pages": [
+     {
+      "offset": 0,
+      "keys": [
+       "F12",
+       "F11",
+       "F10",
+       "F9",
+       "F8"
+      ],
+      "total": 25,
+      "has_more": true,
+      "search_total": 25
+     },
+     {
+      "offset": 5,
+      "keys": [
+       "F7",
+       "F6",
+       "F5",
+       "F4",
+       "F3"
+      ],
+      "total": 25,
+      "has_more": false,
+      "search_total": 25
+     },
+     {
+      "offset": 10,
+      "keys": [
+       "F2",
+       "F1",
+       "P",
+       "E2",
+       "E1"
+      ],
+      "total": 25,
+      "has_more": false,
+      "search_total": 25
+     },
+     {
+      "offset": 15,
+      "keys": [
+       "D2",
+       "D1",
+       "U",
+       "C1",
+       "B2"
+      ],
+      "total": 25,
+      "has_more": false,
+      "search_total": 25
+     },
+     {
+      "offset": 20,
+      "keys": [
+       "B1",
+       "A3",
+       "A2",
+       "A1",
+       "E3"
+      ],
+      "total": 25,
+      "has_more": false,
+      "search_total": 25
+     },
+     {
+      "offset": 25,
+      "keys": [],
+      "total": 25,
+      "has_more": false,
+      "search_total": 25
+     }
+    ],
+    "returned": 25,
+    "distinct": 25,
+    "ids": [
+     "<fixture:F12>",
+     "<fixture:F11>",
+     "<fixture:F10>",
+     "<fixture:F9>",
+     "<fixture:F8>",
+     "<fixture:F7>",
+     "<fixture:F6>",
+     "<fixture:F5>",
+     "<fixture:F4>",
+     "<fixture:F3>",
+     "<fixture:F2>",
+     "<fixture:F1>",
+     "<fixture:P>",
+     "<fixture:E2>",
+     "<fixture:E1>",
+     "<fixture:D2>",
+     "<fixture:D1>",
+     "<fixture:U>",
+     "<fixture:C1>",
+     "<fixture:B2>",
+     "<fixture:B1>",
+     "<fixture:A3>",
+     "<fixture:A2>",
+     "<fixture:A1>",
+     "<fixture:E3>"
+    ]
+   },
+   "paging_and_flag_after_fix": {
+    "paging_after": {
+     "pages": [
+      {
+       "offset": 0,
+       "n": 5,
+       "total": 23,
+       "has_more": true,
+       "search_total": 23,
+       "keys": [
+        "F12",
+        "F11",
+        "F10",
+        "F9",
+        "F8"
+       ]
+      },
+      {
+       "offset": 5,
+       "n": 5,
+       "total": 23,
+       "has_more": true,
+       "search_total": 23,
+       "keys": [
+        "F7",
+        "F6",
+        "F5",
+        "F4",
+        "F3"
+       ]
+      },
+      {
+       "offset": 10,
+       "n": 5,
+       "total": 23,
+       "has_more": true,
+       "search_total": 23,
+       "keys": [
+        "F2",
+        "F1",
+        "E2",
+        "E1",
+        "D2"
+       ]
+      },
+      {
+       "offset": 15,
+       "n": 5,
+       "total": 23,
+       "has_more": true,
+       "search_total": 23,
+       "keys": [
+        "D1",
+        "C1",
+        "B2",
+        "B1",
+        "A3"
+       ]
+      },
+      {
+       "offset": 20,
+       "n": 3,
+       "total": 23,
+       "has_more": false,
+       "search_total": 23,
+       "keys": [
+        "A2",
+        "A1",
+        "E3"
+       ]
+      },
+      {
+       "offset": 25,
+       "n": 0,
+       "total": 23,
+       "has_more": false,
+       "search_total": 23,
+       "keys": []
+      }
+     ],
+     "returned": 23,
+     "distinct": 23
+    },
+    "frontend_page_after": {
+     "n": 20,
+     "total": 23,
+     "has_more": true
+    },
+    "flag_anonymous": {
+     "home_personalized": false,
+     "related_personalized": false
+    },
+    "flag_alice": {
+     "home_personalized": false,
+     "related_personalized": false
+    }
+   },
+   "ranking_exact_title": "?q=wondrix -> [wondrix (exact), wondrix drift log (fresh), wondrix drift log (120d old)]",
+   "ranking_freshness": "?q='wondrix drift log' -> the fresh duplicate outranks the 120-day-old one; 30-day half-life term is the only separator",
+   "total_undercount": "?q='wondrix drift log' returned total=2 with THREE hydrated videos (core's SQL recall vs the service's trigram recall)"
+  },
+  "SC4_history_controls": {
+   "verdict": "PASS on delete durability and opt-out; FAIL on 'the deleted entry no longer feeds personalisation' via the Redis session-recency list.",
+   "write_paths": {
+    "after_api_only_search": {
+     "code": 200,
+     "entries": []
+    },
+    "after_client_events": {
+     "code": 200,
+     "entries": [
+      [
+       "brimseq",
+       1
+      ],
+      [
+       "krondal",
+       1
+      ],
+      [
+       "flendric",
+       1
+      ]
+     ]
+    },
+    "erin_opted_out_history": {
+     "code": 200,
+     "entries": []
+    }
+   },
+   "single_entry_delete_and_worker_passes": {
+    "before": {
+     "history": [
+      "brimseq",
+      "krondal",
+      "flendric"
+     ],
+     "personal_fl": [
+      [
+       "flendric",
+       "history",
+       true
+      ]
+     ],
+     "db_rows": null
+    },
+    "single_delete_status": 204,
+    "after_single_delete": {
+     "history": [
+      "brimseq",
+      "krondal"
+     ],
+     "personal_fl": [
+      [
+       "flendric",
+       "history",
+       true
+      ]
+     ]
+    },
+    "raw_after_single_delete": {
+     "query_log_flendric_rows_with_user": "2",
+     "history_rows": "2"
+    },
+    "after_worker_passes": {
+     "history": [
+      "brimseq",
+      "krondal"
+     ],
+     "personal_fl": [
+      [
+       "flendric",
+       "history",
+       true
+      ]
+     ]
+    }
+   },
+   "clear_all_and_worker_passes": {
+    "before_clear": {
+     "history": [
+      "brimseq",
+      "krondal"
+     ],
+     "search_outbox_rows_for_alice": "14",
+     "query_log_attributed": "5",
+     "behavior_events_attributed": "9",
+     "user_search_history": "2",
+     "user_watch_projection": "2",
+     "sugg_br": [
+      [
+       "brimseq",
+       "history"
+      ]
+     ],
+     "sugg_kr": [
+      [
+       "krondal",
+       "history"
+      ]
+     ]
+    },
+    "clear_status": 204,
+    "after_clear": {
+     "history": [],
+     "search_outbox_rows_for_alice": "6",
+     "query_log_attributed": "0",
+     "behavior_events_attributed": "0",
+     "user_search_history": "0",
+     "user_watch_projection": "2",
+     "sugg_br": [
+      [
+       "brimseq",
+       "history"
+      ]
+     ],
+     "sugg_kr": [
+      [
+       "krondal",
+       "history"
+      ]
+     ]
+    },
+    "after_worker_passes": {
+     "history": [],
+     "user_search_history": "0",
+     "sugg_br": [
+      [
+       "brimseq",
+       "history"
+      ]
+     ],
+     "sugg_kr": [
+      [
+       "krondal",
+       "history"
+      ]
+     ]
+    }
+   },
+   "session_recency_gap": "After clear-all, GET /search/suggestions still returned 'brimseq' and 'krondal' to alice as personal history-typed suggestions WHEN the X-Vidra-Session header was sent, and nothing when it was not. Source: vidra-search Redis key sess:q:<session-id>, TTL ~2 h, which the search-side history service never touches. Same hole on single-entry delete.",
+   "server_emit_never_sets_allow_history": "Two GET /videos/search calls produced two query_log rows and ZERO history entries; three client-emitted search.submitted events produced three.",
+   "browser_settings_page": {
+    "settings_alice_before": {
+     "api_entries": [
+      "xylthorn",
+      "brimseq",
+      "krondal",
+      "flendric"
+     ],
+     "page_shows_krondal": true,
+     "page_shows_brimseq": true
+    },
+    "settings_delete_button_found": 1,
+    "settings_alice_after_delete": {
+     "page_shows_krondal": false,
+     "page_shows_brimseq": true
+    },
+    "settings_alice_after_hard_reload": {
+     "page_shows_krondal": false,
+     "page_shows_brimseq": true,
+     "api_entries": [
+      "xylthorn",
+      "brimseq",
+      "flendric"
+     ]
+    },
+    "settings_erin": {
+     "api_entries": 0,
+     "switches_off": 0,
+     "switches_on": 0
+    }
+   }
+  },
+  "SC5_authorization_and_leakage": {
+   "verdict": "PASS",
+   "probes": {
+    "bob_own_history": {
+     "code": 200,
+     "entries": [
+      "grumsel"
+     ]
+    },
+    "alice_own_history": {
+     "code": 200,
+     "entries": []
+    },
+    "cross_user_probes": {
+     "public_user_scoped_get": {
+      "code": 404,
+      "body": "{\"error\": {\"code\": \"not_found\", \"message\": \"Not Found\", \"request_id\": \"xxsjubVAMxodXMuCcKoNGAaaQkVrXiOE\"}}"
+     },
+     "public_user_scoped_del": {
+      "code": 404,
+      "body": "{\"error\": {\"code\": \"not_found\", \"message\": \"Not Found\", \"request_id\": \"akqxdYsQlGZJTWnTKlsDFPcfFuKUWhfB\"}}"
+     },
+     "me_with_query_param": {
+      "code": 200,
+      "body": "{\"entries\": [{\"query\": \"grumsel\", \"normalized_query\": \"grumsel\", \"last_used_at\": \"2026-09-06T11:56:44Z\", \"use_count\": 1}], \"limit\": 20, \"offset\": 0}"
+     },
+     "delete_alice_entry_via_me": {
+      "code": 204,
+      "body": "null"
+     },
+     "internal_unsigned_get": {
+      "code": 401,
+      "body": "{\"error\": {\"code\": \"unauthorized\", \"message\": \"invalid or missing internal authentication\", \"request_id\": \"JNLlXZmihUCVvTfPLXElNbddaMbpoYGS\"}}"
+     },
+     "internal_forged_get": {
+      "code": 401,
+      "body": "{\"error\": {\"code\": \"unauthorized\", \"message\": \"invalid or missing internal authentication\", \"request_id\": \"svdJwJELVQnfPgtwEiWZJyVzLXzoKeVH\"}}"
+     }
+    },
+    "alice_history_after_bob_delete": [],
+    "bob_history_after_own_delete": []
+   },
+   "cross_user_delete": {
+    "alice_entry_survives_bobs_delete": true,
+    "bob_delete_status": 204
+   }
+  },
+  "SC6_no_regression": {
+   "verdict": "PASS",
+   "core_make_ci": "exit 0 \u2014 fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race; 79 packages ok, 0 failures",
+   "user_npm_run_ci": "exit 0 \u2014 typecheck, lint, lint:icons, 241 test files / 2367 vitest tests, production build, 623 Playwright specs",
+   "search_make_ci": "not run \u2014 vidra-search was NOT modified; it was exercised as a live dependency",
+   "core_integration_tag_lane": "NOT run (native lab, no compose stack)",
+   "first_half_core_tests": "core#167's emitSearchSubmitted tests are inside internal/httpapi and passed in the same make ci run"
+  }
+ },
+ "not_certified_here": "The LightGBM / internal/experiment shadow ranker (not live in simple mode). The Wilson trending gate and the HLL window edge (first slice, still unverified). Watch-history controls (A12). Suggestion bans and autosuggest thresholds (A13 first slice).",
+ "findings_recorded_not_fixed": [
+  "FIXED in user#165, recorded because it was live: both discovery rails fetched before the session settled on a hard load; the watch page's related rail thereby bypassed the viewer's own mute/block filter.",
+  "Co-visitation has no k-anonymity floor: one user's single session publishes a public neighbour edge, while autosuggest and trending both enforce minimum_query_user_count=3.",
+  "In the shipped search_mode=simple default, co-visitation reaches no product surface at all: relatedSimple/homeSimple never read item_neighbors.",
+  "total can undercount the page it ships (core's SQL recall vs vidra-search's trigram recall) \u2014 cross-repo contract decision.",
+  "Clear-all does not reach the Redis session-recency list (sess:q:<session-id>, TTL ~2h), so cleared queries keep coming back as personal suggestions under copy promising permanence.",
+  "reason='subscribed' is reported for channels the viewer never subscribed to (channel-affinity relabel at 0.8; vidra-search holds no subscription data).",
+  "SearchSettingsView gates the personalized-SEARCH toggle on simple mode with an honest reason but leaves the personalized-RECOMMENDATIONS toggle ungated, although it is equally inert in simple mode."
+ ],
+ "src03_remaining_gap": "Only the clause 'no personalized data when off'. Opting out stops SERVING completely (zero user_search_history rows, zero user_watch_projection rows, no personal suggestions, an item-for-item anonymous home rail, personalized=false on the wire) but not COLLECTION: an opted-out user's searches still land in query_log and behavior_events under their raw account UUID with their raw query text, still count toward the instance-wide k-anonymity floor, their plays still bump trending under a Redis guard key named with their account UUID, and their queries are written to the ~2 h sess:q:<session-id> Redis list (not served back to them \u2014 the read side is gated). The shipped UI copy only promises that new searches are not stored to YOUR HISTORY. Owner ruling pending. If the ruling is that the shipped copy is the promise, SRC-03 can flip on this evidence plus the first slice's, and the row's phrase 'user search-discovery opt-in' should be corrected to opt-OUT."
+}
