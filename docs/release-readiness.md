@@ -1275,6 +1275,74 @@ but that toast assertion is not relabeled as a success.
 Next: review the pending collector permission and observe #154's updated CI.
 Keep A11 open until physical cleanup is proved. Independent A12 work can proceed
 while that external approval remains pending; the A09–A40 goal stays active.
+
+
+## A12 library checkpoint — 2026-09-05
+
+**A12 OPEN — partial library proof; remaining acceptance slices unverified.**
+Observable success remains all AUTH-05, SOC-01 and SOC-02 criteria: persistent
+library actions, intended social recipients/privacy, and complete profile,
+archive, deactivation and deletion behavior. No suite result substitutes for
+those individual workflows.
+
+The session-restoration defect is fixed in [frontend draft PR #155](https://github.com/yegamble/vidra-user/pull/155), revision `4a84aac`:
+channel follow state and private playlist detail wait for the restored viewer;
+changing identity clears pending resource/editor state. Four new regressions
+failed before implementation; all six focused tests now pass. Required gates:
+TypeScript and icons pass; ESLint has zero errors and two existing warnings;
+229 test files / 2,295 tests pass. Backed follow/unfollow and private-playlist
+reload regressions were added; full local/S3 PR CI is pending.
+
+[Library evidence](evidence/a12-library.json) records real Chromium against the
+disposable restored API/PostgreSQL/search/media worker: follow before actual
+uploads, notification/feed after publication, saved reload, owner private
+playlist reload and other-user refusal, add/order/reload, unlisted metadata and
+write denial, and uploaded cover decoding/reload. Registration was temporarily
+enabled only for the three synthetic actors and the exact closed setting was
+restored. Harness rate-limit and expected-status corrections are recorded.
+
+Private detail now loads correctly, but its owner's image element receives 404
+because the cover request lacks bearer authentication. Anonymous refusal still
+passes. Next: a failing authenticated-cover regression and scoped correction,
+then real history/continuation/unfollow, social, profile/archive and deletion
+proof. No production or source migration data was used. A11 frontend PR #154
+and meta PR #102 now have all checks green; physical GC remains approval-blocked.
+
+
+Further A12 browser evidence: actual long-video playback saved a 12-second
+position; the in-progress history query and a hard reload retained it, and
+Resume played from that position. Clear-history persisted in a fresh session
+(HTTP 200 empty list); the immediate post-clear assertion timed out and is
+recorded separately. Unfollow survived reload and removed the channel's videos
+from the subscription feed. Disabling “Keep my watch history” survived reload;
+12 seconds of actual playback created no history. The original enabled setting
+was restored and verified after reload. These checks pass; playlist continuation,
+private-cover rendering and the social/profile/archive/deletion slices remain
+open. Evidence PR: [meta #103](https://github.com/yegamble/vidra/pull/103), stacked
+on #102; all checks passed for its initial `bdbe88f` revision.
+
+
+A12 private covers corrected in [frontend #156](https://github.com/yegamble/vidra-user/pull/156),
+revision `de7bd33`, stacked after #155. Owner images now fetch authenticated bytes
+in the editor, playlist grid and Library; all three decoded in real Chromium,
+with anonymous denial intact. TDD manager regression failed before the fix;
+six focused tests pass, including viewer changes, cancellation and stale-response
+cleanup. Required gates pass: TypeScript/icons, zero lint errors (two existing
+warnings), 232 files / 2,301 tests. Backed tests now cover public and private
+owner reload with a decodable PNG. Full local/S3 CI for #156 is pending; all
+checks for #155 are green. A12 remains OPEN for playlist continuation and the
+remaining social/profile/archive/deletion criteria.
+
+
+A12 continuation reproduction: a three-item saved playlist ordered “A12 short →
+A11 other → A12 long” played the first item to its natural 5-second end, but the
+end card offered “A12 long” from recommendations; the playback queue was empty.
+The first two-item experiment was inconclusive because recommendation order
+happened to match playlist order. One later attempt returned 429 before adding
+the item; after waiting, add/order/read and real playback succeeded, isolating
+the wrong next-item behavior. Next: TDD for playlist navigation carrying ordered
+remaining items into playback, followed by this discriminating browser case.
+The synthetic playlist retains the recorded three-item order for reproduction.
 ## A36 backup confidentiality and failure checkpoint — 2026-09-05
 
 **A36 OPEN.** A09 is already merged as #90 (`56ef7a8`); source-dependent
@@ -1562,3 +1630,24 @@ after dependents are retargeted. No production deployment or release occurred.
 A14 final delivery: frontend #150 and #151 are now merged after all gates passed.
 The combined runtime acceptance remains PASS; this evidence PR completes its
 delivery record once its final validation passes and it is merged.
+
+A12 playlist continuation is fixed in [frontend #157](https://github.com/yegamble/vidra-user/pull/157),
+revision `9c2a0e3`. Watch links and end-card navigation retain a playlist id;
+the current viewer reauthorizes a fresh saved-order read. Unavailable reads
+show retry and suppress unrelated recommendations. The last item stops.
+Real Chromium proved the discriminating three-item order after reload, two
+natural five-second endings, manual/countdown navigation with retained context,
+and final completion after seeking near the end of the long item. Focused tests
+pass 24/24; full suite passes 233 files / 2,307 tests, TypeScript/icons pass,
+lint has zero errors and two existing warnings. An initial unrelated StudioContext
+timeout passed in isolation and then in the full one-worker rerun without test
+changes. Temporary harness navigation/role/duplicate-label errors were corrected;
+the instrumented final run passed with no 429. Production build and the two
+corrected cover Chromium tests also pass. #157 CI is pending. Remaining A12
+social/profile/archive/deactivation/deletion criteria stay open.
+
+Final implementation gates: frontend #156 and #157 both pass all checks,
+including production frontend, local/S3 backed suites, contract, channel sync
+and IPFS. The final merge/branch cleanup is being completed under the user’s
+explicit instruction. A12 remains open for the individually listed social and
+account lifecycle criteria; green library checks do not certify those slices.
