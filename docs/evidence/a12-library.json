@@ -23,11 +23,14 @@
     "history_setting_restored": "PASS",
     "private_cover_owner_decode": "PASS",
     "private_grid_cover_decode": "PASS",
-    "private_library_cover_decode": "PASS"
+    "private_library_cover_decode": "PASS",
+    "first_natural_end_saved_order_after_reload": "PASS",
+    "second_natural_end_retains_remaining_order": "PASS",
+    "countdown_advances_with_context": "PASS",
+    "final_item_stops_without_recommendation": "PASS"
   },
   "registration_restored": "PASS",
   "remaining": [
-    "playlist playback continuation",
     "three-actor social workflows",
     "profile/archive/deactivation/deletion"
   ],
@@ -47,7 +50,7 @@
   "history_position_seconds": 12,
   "cover_revision": "de7bd33",
   "playlist_continuation": {
-    "status": "FAIL",
+    "status": "PASS after 9c2a0e3",
     "stored_order": [
       "08e65f08-ebc3-4cbd-a2bf-dfad22e1c28e",
       "1850cdb2-8e8f-4b40-b010-effad608d7aa",
@@ -57,6 +60,7 @@
     "offered_next": "84fdfd9a-f4a5-4c21-bcff-2be211acd00c",
     "queue": [],
     "actual_media_end_seconds": 5,
-    "next_experiment": "Add a failing playlist-navigation test that preserves ordered remaining items as playback context, then repeat this three-item real-media proof."
+    "next_experiment": "Verify full PR #157 CI, then merge after its cover dependency.",
+    "revision": "9c2a0e3"
   }
 }

@@ -1343,3 +1343,166 @@ the item; after waiting, add/order/read and real playback succeeded, isolating
 the wrong next-item behavior. Next: TDD for playlist navigation carrying ordered
 remaining items into playback, followed by this discriminating browser case.
 The synthetic playlist retains the recorded three-item order for reproduction.
+## A36 backup confidentiality and failure checkpoint — 2026-09-05
+
+**A36 OPEN.** A09 is already merged as #90 (`56ef7a8`); source-dependent
+A18–A23 await a sanitized source inventory. A36 is independently ready after
+A03/A07 and is being completed before A37. Actual offsite storage selection
+was requested; a local host rehearsal must not be labelled separate-region proof.
+
+The retained A08 fixture ran the real backup script successfully. Inspection
+exposed insufficient default permissions for database artifacts. The focused
+fix applies `umask 077` before any backup file/directory creation, covering the
+dump, partial/decompressed verification files, and marker as well as config.
+Two regression tests failed first and then passed. No dump format, retention,
+success-marker contract or deploy/migration ordering changed.
+
+The [required real helper](../tests/backup-smoke.py) and
+[complete sanitized evidence](evidence/a36-backup-local.json) record script/helper
+hashes, fixture identity, archive filenames/modes, and independent verification.
+Command: `python3 tests/backup-smoke.py /tmp/vidra-a08-caption-fixture-r1
+/tmp/vidra-a36-smoke-r1` (arguments on one command line). Exit 0, two groups PASS,
+zero skips. Real `pg_restore -l` finds core and search tables. Both configuration
+members match the active files byte-for-byte, including presence of sealing and
+session keys; values are never output. New directory mode is 0700 and new files
+0600. A second real `pg_dump` against a nonexistent DB exits 1, leaves only a
+private partial, finalizes no archive, and does not change `last_success`.
+
+Local tests: Python22 PASS; `bash -n deploy/backup.sh`, `shellcheck -x
+ deploy/backup.sh`, helper compile and diff checks PASS. Private diagnostics and
+archives remain only in the disposable lab and `/tmp/vidra-a36-*`. This is a
+focused A36 fix/checkpoint, not full recovery acceptance: encrypted retrieval,
+matched media snapshot, independent restore and selected offsite target remain
+required. Next: quiesce fixture writers, capture a matched media/DB/config set,
+then encrypt/retrieve and validate it before A37 replacement-host recovery.
+
+## A36 matched capture and encrypted B2 retrieval — 2026-09-05
+
+**A36 runtime acceptance PASS; delivery remains open pending merge authorization.**
+The user selected a new Backblaze B2 test bucket and explicitly authorized
+uploading the client-encrypted synthetic DB/config (including test sealing and
+session keys)/media archives. No DigitalOcean source data has been accessed.
+The backup permission fix is green in [PR #96](https://github.com/yegamble/vidra/pull/96),
+revision `fdfed44`; its merge was rejected by automatic approval review, and
+explicit approval for it and subsequent acceptance merges was requested.
+
+[Matched capture helper](../tests/backup-capture-smoke.py) stops only the
+synthetic fixture's API/search/frontend writers, verifies the exact running
+images and backup script hash, takes the DB/config backup, then snapshots the
+actual canonical media volume with the same stamp. Services restart in `finally`.
+[Offsite helper](../tests/backup-offsite-smoke.py) uploads through S3 with rclone
+crypt, retrieves into a fresh private directory, and compares every archive
+SHA-256 and size. [Complete final result](evidence/a36-offsite.json) includes
+exact images/source revisions, both helper hashes, backup hash, capture times,
+and all archive checksums. No keys, tokens or archive contents are committed.
+
+Final commands (exit 0 each; capture PASS and three recovered archives PASS):
+
+```sh
+python3 tests/backup-capture-smoke.py /tmp/vidra-a08-caption-fixture-r1 /tmp/vidra-a36-set-r3
+python3 tests/backup-offsite-smoke.py /tmp/vidra-a36-set-r3 \
+  /tmp/vidra-a36-b2/private-rclone.conf /tmp/vidra-a36-b2/private-key.json \
+  vidra-acceptance-20260905-a36 /tmp/vidra-a36-offsite-r3
+```
+
+The independently provisioned test bucket is `vidra-acceptance-20260905-a36`,
+endpoint `https://s3.us-east-005.backblazeb2.com`. Bucket readback confirms
+`allPrivate` and `SSE-B2` / AES256. Client encryption and encrypted names are
+also verified by opaque object names and the actual rclone ciphertext header.
+A bucket-scoped seven-day application key provides S3 read/write access;
+the crypt recovery configuration stays outside the bucket, private on the
+operator host. The first attempt failed because rclone tried to create an
+already-existing bucket with that restricted key; `no_check_bucket=true` fixed
+the configuration without granting broader privileges.
+
+All three final archives recover byte-for-byte; the media tar contains 64 files
+and the exact A06 audiovisual fixture. The preceding real `pg_restore -l` and
+configuration comparison prove both schemas and exact config/key inclusion;
+the failed-dump probe proves no finalized failed archive or advanced marker.
+Search models are rebuildable and Redis is disposable per the existing runbook.
+This certifies the synthetic local-storage set to an independent remote B2
+provider, not an unselected production geographic redundancy or S3 version
+retention policy. These are test archives, retained for A37; private recovery
+material and downloaded archives remain under `/tmp/vidra-a36-*`.
+
+Python22, Node3, helper compilation, production Compose validation and diff
+checks PASS; no product behavior changed in this evidence slice. Next: A37
+replacement-host restore from this retrieved set, with login, usable media,
+reindex and measured recovery. Source migration A18–A23 still needs the SSH
+host/user and read-only inventory; other selected integration decisions remain
+explicitly open. The A09–A40 goal is not complete.
+
+## A37 replacement-host recovery checkpoint — 2026-09-05
+
+**A37 OPEN / UNVERIFIED.** Observable acceptance requires restored accounts,
+sealed-secret decryption, old and new media playback, search rebuild and measured
+recovery time. [Checkpoint evidence](evidence/a37-restore-checkpoint.json) records
+real recovery of the approved A36 B2 set onto replacement VM
+`vidra-a02-20260905194815-89796`; source VM and test runner remain intact.
+
+The initial image import hung the replacement VM. Both Multipass stop modes
+stalled; administrator intervention was requested. Once the VM was observed
+stopped, restarting only that VM and importing the already-transferred verified
+archive succeeded. Configuration and canonical media were extracted before
+running the repository's normal `restore.sh` against its empty database.
+Both migrators passed, core ledger is `127|f`, and blob verification found every
+referenced object. Stack recovery took **970.73 seconds**, including the VM
+interruption, from staging start to services ready. This is a measured lab
+interval, not a production RTO guarantee. The data point and archive hashes are
+those recorded in `a36-offsite.json`; application writes were quiesced for that
+matched snapshot. Browser verification completed after the stack-ready interval.
+
+Actual Chromium checks passed restored-account login, exact original-media
+SHA-256, old-video audio/video decoding and seeking, new browser upload and
+processing, and new-video decoding/seeking after its transcode job completed.
+The first new-playback probe expected HLS before the job completed and observed
+original-file playback instead; that failed probe remains in the evidence.
+The bounded retry waited for actual `transcode_jobs.state=done` and passed.
+Search evidence deletes only a synthetic video's restored index entry, restarts
+only the replacement API, verifies a rebuilt reconciliation entry, and finds
+and opens the video through the browser search UI. The recorded search event
+confirms `source=search`, excluding a local fallback as proof of index recovery.
+
+Remaining blocker: decryption of a restored sealed fixture is **unverified**.
+A temporary synthetic MFA enrollment was captured locally and removed from the
+source after capture. Automatic approval review rejected uploading that newer
+archive because it includes a new temporary TOTP secret beyond the previously
+approved payload. Explicit approval for that upload remains pending. No new
+MFA archive has been uploaded. Next experiment: after approval, encrypt/upload
+and retrieve that matched set, restore it on this replacement VM, then prove
+MFA authentication using the recovered sealing key. Keep the original failure
+and successful retry evidence; do not rerun blank-host provisioning.
+
+Private scripts/logs and recovery material remain under `/tmp/vidra-a37-*`;
+the checkpoint records helper hashes, not credentials or archive contents.
+This evidence checkpoint depends on A36 PR #97 (which depends on #96), and does
+not close A37 or the wider A09–A40 goal.
+
+
+## Merge delivery checkpoint — 2026-09-05
+
+The user explicitly instructed “make sure we're merging to main and push as we
+go.” Merge authorization is resolved. A10 implementation PRs core #160 and
+frontend #152/#153 are merged after green checks; the prior runtime PASS remains
+supported by its individual evidence. A11 chapter recovery frontend #154 and A12
+session restoration frontend #155 are also merged; their broader acceptance
+items remain open as recorded. A36 offsite proof meta #97 and the A37 checkpoint
+#98 are merged. A14 frontend #150 is merged; its dependent #151 is retargeted to
+main and its new checks are running. Completed base branches are removed only
+after dependents are retargeted. No production deployment or release occurred.
+
+
+A12 playlist continuation is fixed in [frontend #157](https://github.com/yegamble/vidra-user/pull/157),
+revision `9c2a0e3`. Watch links and end-card navigation retain a playlist id;
+the current viewer reauthorizes a fresh saved-order read. Unavailable reads
+show retry and suppress unrelated recommendations. The last item stops.
+Real Chromium proved the discriminating three-item order after reload, two
+natural five-second endings, manual/countdown navigation with retained context,
+and final completion after seeking near the end of the long item. Focused tests
+pass 24/24; full suite passes 233 files / 2,307 tests, TypeScript/icons pass,
+lint has zero errors and two existing warnings. An initial unrelated StudioContext
+timeout passed in isolation and then in the full one-worker rerun without test
+changes. Temporary harness navigation/role/duplicate-label errors were corrected;
+the instrumented final run passed with no 429. Production build and the two
+corrected cover Chromium tests also pass. #157 CI is pending. Remaining A12
+social/profile/archive/deactivation/deletion criteria stay open.

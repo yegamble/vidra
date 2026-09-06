@@ -1,0 +1,34 @@
+{
+  "status": "PASS",
+  "vm": "vidra-a02-20260905123822-89250",
+  "project": "vidra-a03-20260905124354-92490",
+  "checks": {
+    "archive_contents_and_permissions": "PASS",
+    "failed_dump_not_published": "PASS"
+  },
+  "helper_sha256": "6ee695384e58a5c15325b0ebba5f9aefe886f358f8b929df699b9b9a1c16f7dd",
+  "backup_sha256": "52b832686ac604dfbfb61230338352ec2c639c389a15eac06005fd704e32d702",
+  "guest_backup_dir": "/home/ubuntu/vidra-a36-1788636882",
+  "archive": {
+    "modes": {
+      "vidra-20260905T193443Z.dump.gz": 384,
+      "vidra-config-20260905T193443Z.tar.gz": 384,
+      "last_success": 384
+    },
+    "core_and_search_toc": true,
+    "config_exact_match": true,
+    "sealing_key_present": true,
+    "marker": "2026-09-05T19:34:44Z vidra-20260905T193443Z.dump.gz\n",
+    "files": [
+      "vidra-20260905T193443Z.dump.gz",
+      "vidra-config-20260905T193443Z.tar.gz"
+    ]
+  },
+  "failure": {
+    "exit_nonzero": true,
+    "marker_unchanged": true,
+    "no_finalized_failure": true,
+    "partial_private": true,
+    "exit_code": 1
+  }
+}
