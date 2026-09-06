@@ -4590,3 +4590,248 @@ probe, landing the upload in `failed` — generate a real clip with ffmpeg.
 `contract-ci` is red until core#173 merges, by construction, because
 `lib/api/generated.ts` is regenerated from core's branch. Nothing is merged here
 and no deployment is authorized. The lab was torn down.
+
+## A16 admin guards and signup notices — 2026-09-06
+
+**No register row changes. ADM-01 stays PASS.** This is the ruling slice for the
+two findings A16 slice 1 recorded and did not patch: **an ordinary admin demoted
+the instance owner and got HTTP 200**, and **approving or rejecting a signup
+notified the applicant of nothing**. Both were reproduced on the `origin/main`
+binary before anything was written, so the "before" is a measurement rather than
+a citation. One migration
+([0131](../vidra-core/migrations/0131_users_is_owner.up.sql), `users.is_owner`,
+with its `.down.sql`), one additive OpenAPI field, two new mailer methods, no new
+notification type. [Core #174](https://github.com/yegamble/vidra-core/pull/174)
+and [user #171](https://github.com/yegamble/vidra-user/pull/171). [Sanitized
+evidence](evidence/a16-admin-guards.json) records **137 assertions on one
+database, across a baseline binary and a patched one, plus a real-Chromium
+walkthrough**, with **six failing rows that are all lab bugs, each restated and
+passing in an addendum**.
+
+**What origin/main actually did.** Admin `avery` demoted the instance owner
+`mona` to `user` — **200**, and Postgres read `mona=user` afterwards. Deactivating
+the owner was **200** too. Then the whole path to zero administrators, in three
+calls: avery demoted mona, avery deactivated *itself* through
+`POST /auth/me/deactivate` (**204**, because the admin routes' self-guard does
+not cover the self-service ones), and
+`SELECT count(*) … role='admin' AND is_active` answered **0**. The lab had to be
+repaired with SQL, which is the point: there is no API route back, because every
+route that could promote an admin requires an admin to call it. Signup, on the
+same binary and a real SMTP sink: applying, approving and rejecting produced
+**0 messages** and **0 notification rows**; the reviewer's note reached nobody.
+
+**The owner marker, and exactly what its backfill can determine.** The marker is
+`users.is_owner`, a column rather than an id in `instance_settings`, for three
+reasons stated in the migration: the guards already read the target's `users` row
+so it costs no extra query and cannot go stale between reads;
+`users_single_owner_idx` (partial, `WHERE is_owner`) makes **at most one owner a
+database invariant** — proven by a direct `UPDATE` on a second account being
+refused by that index; and `instance_settings` is writable by every admin, which
+is precisely the principal the guard restrains. It is written in exactly one
+place: the owner-claim CTE.
+
+The backfill uses **two independent, exact sources**, and marks a row only when
+they resolve to one live account: the `auth.owner_claim` **success audit row**,
+whose `actor_id` is the created account; and the equality
+**`owner_claim_tokens.claimed_at = users.created_at`**, which is exact *by
+construction* rather than a tolerance window — the claim is one statement whose
+`UPDATE` sets `claimed_at = now()` while the `INSERT` takes `created_at` from its
+`DEFAULT now()`, and inside one statement `now()` is the transaction timestamp.
+That was confirmed on real Postgres, not reasoned about: the lab's two timestamps
+are byte-identical to the microsecond. Each source alone was then shown to
+identify the owner on its own, on a database seeded at schema 130 and migrated
+up. What the backfill **cannot** determine, each proven to mark nobody: a
+pre-0104 upgrade with no claim row and no audit row; an instance whose owner
+account was hard-deleted (the tombstone is excluded on purpose — it can never
+authenticate and would spend the single owner slot); the two sources naming
+different accounts; and two accounts created at the exact claim instant. The
+real backfill ran on the lab's own pre-0131 data and marked `mona` and nobody
+else. The `.down.sql` drops the column and its index and the up re-applies
+afterwards — applied directly with psql, because the api binary has **no
+`migrate down` subcommand** (its usage is `up|version|force`).
+
+**`vidra doctor` says so when it could not tell.** An instance with no marked
+owner would otherwise be silent for ever: nothing badges anybody and no route
+sets the marker afterwards. The new `instance owner` check reports ✓ with a
+marked owner, and — measured against a seeded pre-0131 database — ⚠ *"no account
+is marked as this instance's owner, so every administrator here is equal"*,
+naming both sources the backfill needed and warning that there is **exactly one
+owner slot and no transfer route** before it tells anyone to write it by hand.
+Zero active administrators is a ✗ in the same check, because that is the state
+the last-admin guard exists to prevent and the recovery is a database edit.
+
+**The guards, and what they deliberately still allow.** Another admin demoting
+the owner to `user` or to `moderator`, deactivating it, or deleting it is **422
+`owner_protected`** on all four, with the row reading `admin/true/live`
+afterwards. Editing the owner's **quota**, its **email_verified** flag, or
+re-asserting the `admin` role it already holds is still **200** — none can lock
+anybody out. The owner's **own** self-guards are untouched: self-demote is still
+422 with *"cannot demote or deactivate yourself"*, not the new message, so the
+sentence the owner has always read did not silently move. A moderator, an
+ordinary user and anonymous are refused **before** any of this (403/403/401 on
+both PATCH and DELETE, six refusals with the owner untouched after all of them).
+The last-admin guard is **422 `last_admin`** and its reachable home is the
+self-service pair: the sole admin's `POST /auth/me/deactivate` and
+`DELETE /auth/me` — the exact call that took the baseline to zero — are both
+refused, the account stays `admin/true`, and **the refusal is not a sign-out**
+(`/auth/me` still answers 200 on the same token). Promote a second admin and the
+same call is **204**. A plain user's own account still closes normally. Both
+guards also cover `PATCH`/`DELETE /admin/users/{id}` as defence in depth, where
+`requireRole` means the caller is always an active admin and the branch is not
+reachable — said plainly in the code rather than dressed up as coverage. **This
+is a check-then-act guard, not an atomic one**: two admins removing each other in
+the same instant can still each pass their own count, and closing that needs
+`SERIALIZABLE` or an advisory lock around the write. Recorded, not half-built.
+
+**Tombstone writes (slice 1 finding 4).** All seven admin writes to a
+hard-deleted row — reactivate, deactivate again, role, quota, both flags, and a
+combined body — are now **422**, and a field-by-field readback shows **not one of
+them landed**. Deleting an already-deleted row keeps its shipped **404**. The
+refusal reuses the reactivation refusal's own 422 rather than minting a code for
+it, and all seven are audited as failures carrying `reason_code=deleted_account`.
+There is no legitimate surviving write: the session lookup requires
+`deleted_at IS NULL`, so every one of those fields was inert, and "accepted and
+ignored" is the shape that lets a console report a change that never happens.
+
+**Signup notices, over real SMTP.** Approval mails the applicant *"Your account
+on <instance> was approved"* carrying the account name, the sign-in page when a
+public base URL is configured (`…/login`, built from the trimmed origin) and
+**no credential** — checked, the fixture password does not appear in the body —
+and the approved applicant then really signs in with the password from the
+application. When the instance ALSO holds new accounts for email verification the
+message says so instead of promising a sign-in that would be refused. Rejection
+mails the applicant and **carries the reviewer's note verbatim**; a sweep of
+`audit_log` for the note's text returns **zero rows**, which is deliberate — the
+envelope's metadata allowlist caps values at 256 bytes and states that user prose
+never belongs there, so prose travels by mail and the ledger keeps the shape.
+Applying sends nothing (the decision is what the applicant is waiting on), a
+repeat decision is 404 and sends nothing more, and the wrong-actor refusals — a
+non-admin's 403 on both routes, anonymous 401 — send **nothing**, with the
+request still pending afterwards. The queue stays admin-only. **Best-effort was
+proven by killing the relay**, not asserted: with the SMTP sink down, approval is
+still 204 and creates the account, rejection is still 204 and resolves the
+request, and the two failures are logged without the applicant's address. The
+reject SQL now `RETURNING`s the applicant so the notice needs no second read
+racing the write.
+
+**Audit shape (slice 1 finding 5) — implementable after all.** The envelope's
+`allowedChangeFields` already carried `role`, `account_enabled`,
+`email_verified` and `bypass_quarantine`; `storage_quota_bytes` was added beside
+them (a byte count, not content). `admin.user.update` now writes the structured
+`changes` array with **before and after on every field the request carried** —
+measured: `role: admin→moderator`, `email_verified: false→true`,
+`bypass_quarantine: false→true`, `storage_quota_bytes: default→2048`, and no
+entry for the field the request did not mention — plus `resource_type=user` and
+the target's id. The human `reason` line the admin audit view already renders is
+**kept**, because removing it would break a shipped surface to fix a machine
+consumer. The guard refusals carry `reason_code` (`owner_protected` ×4,
+`last_admin` ×2, `deleted_account` ×7). Nothing secret leaks: the fixture
+password and every address are absent from `reason` and from `changes`.
+
+**The browser walkthrough.** Real Chromium against the production frontend build
+served from `.next/standalone` behind one origin, signed in as **avery — the
+other admin, the actor the guard defends against**. `/admin/users` renders the
+OWNER badge on `mona` and on nobody else, beside avery's own YOU pill. Opening
+mona shows **Deactivate and Delete account both disabled** (in the DOM, checked
+by property, on the desktop detail *and* the mobile card), the role control
+replaced by a static ADMIN pill where bob and pat still have their three-way
+switches, and the line *"This is the instance owner's account — the account that
+completed first-run setup. Another administrator can't change its role,
+deactivate it or delete it."* The quota controls and both flag switches stay
+live. **The handler refuses regardless of the DOM**, proven from inside the page:
+re-enabling the button and clicking it does nothing (React resets `disabled`
+first), so the write was issued directly from the page's own session — **422
+`owner_protected`** on both the PATCH and the DELETE. Then the last-admin half on
+its reachable surface: with avery demoted, mona's own `/settings` Danger Zone
+answers her deactivate with the server's sentence verbatim — *"this is the last
+active administrator on this instance; promote another admin first, or the
+instance would have nobody who can reach its own console"* — and her account is
+still `admin/true`.
+
+**The console's last-admin gate is deliberately conservative, and one branch of
+it is unreachable in the UI.** `GET /admin/users` filters by search text only, so
+a searched or paged view cannot prove how many admins an instance has; the
+frontend gate therefore fires only when the loaded rows are the whole unfiltered
+instance, and otherwise leaves the control live for core to refuse. Separately,
+the last-admin *reason* can never be the one an admin reads on `/admin/users`:
+precedence is self → owner → last-admin, and reaching the last-admin branch for
+a **non-self** target requires a caller who is not themselves a live admin, which
+`requireRole` makes impossible. The vitest cases cover the branch; the console
+surface that actually shows it is `/settings`.
+
+**Gates.** vidra-core `make ci` **passed** (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race) on the final revision and
+`go vet -tags=integration ./...` is clean. Repo CI on core#174 is **7/7 green**
+— GitGuardian, build-test, integration, ipfs-integration, ipfs-private-integration,
+openapi and prev-release-against-new-schema. `ipfs-integration` failed once first,
+on `TestIntegrationPublicVideoRoundTrip` **timing out at 301 s** — an IPFS
+round-trip this slice does not touch, which had passed on the same branch's
+previous revision — and passed on re-run in 5m22s; it is recorded as flaky here
+rather than filed away as green. vidra-user: `npx tsc --noEmit` clean, `npm run lint` 0 errors
+(2 pre-existing warnings), `npm run lint:icons` pass, `npm run test` **247 files
+/ 2,448 tests pass on Node 24** (vitest is still broken on Node 25 here). User CI
+on user#171: **six of seven green** including `frontend`, both `e2e-backed`
+lanes, `ipfs-backed` and `channel-sync-backed`; **`contract` is red and expected
+to be** — `lib/api/generated.ts` was regenerated (never hand-edited) from
+core#174's spec, and its diff is exactly the one additive field. SC7
+no-regression: `TestAdminUserManagement`, `TestClaimOwnerEndpointCreatesAdmin`,
+`TestDeleteAccountFlow` and the A12 session-revocation suites all pass beside the
+new tests. `TestDeleteAccountFlow` and `TestDeleteAccountErasesCoreOwnSearchRows`
+needed one honest edit each: their single account is the harness's only admin, so
+they now promote a successor before it stands down — which is the operator flow
+the guard exists to force. The meta compose render was not re-run: no compose,
+script or env file changed. **Unverified:** the tagged real-PostgreSQL
+`internal/store` integration lane was not run locally (the lab is native rather
+than the compose stack) — repo CI's `integration` job ran it and is green; and
+vidra-search was not started, which nothing here needs.
+
+**What failed first, beyond the two defects.** Six assertions failed on the lab
+rather than the product and are restated in addenda rather than quietly re-run:
+a multi-statement psql seed that omitted `audit_log.domain` **rolled the whole
+seed back**, so a backfill case that should have found the owner found an empty
+table; the api binary has **no `migrate down`**, so the down migration had to be
+applied with psql; an account registered while approval mode was on never existed
+to sign in with; a duplicate application is 409, not 202; `json.load(strict=True)`
+rejects a mail body's own control characters; and one comparison passed
+expected/actual in the wrong order. Two lab traps beyond those: the frontend's
+`NEXT_PUBLIC_API_BASE_URL` is an **origin**, not an API path — building it as
+`…/3100/api/v1` produced `POST /api/v1/api/v1/auth/login` and a login form that
+said only *"Not Found"* — and it is **inlined at build time**, so fixing it needs
+a rebuild, not a restart. `form_input` on the login form set values React never
+saw; typing into the field worked.
+
+**Findings recorded, not fixed.** (1) **There is no ownership transfer.**
+`is_owner` is written only by the first-run claim, there is no route that moves
+it, and an owner who deletes their own account leaves the instance permanently
+unmarked. That is the natural next slice. (2) The last-admin guard is
+**check-then-act**; simultaneous mutual removal is still theoretically possible
+and needs `SERIALIZABLE` or an advisory lock. (3) An instance the backfill could
+not resolve can only be marked with a hand-written `UPDATE`, which `vidra doctor`
+now tells the operator — but an admin **system view** would be a better home for
+it than a CLI. (4) The approval queue remains **admin-only**, so a moderator
+still cannot triage signups; unchanged product call. (5) Unblocking still
+notifies nobody (carried from the previous slice).
+
+**For A16 slice 3 (account/instance mutes, watched words).** The audit envelope's
+`changes` array is now a worked example: `allowedChangeFields` is a small
+allowlist, adding to it is one line, and before/after needs the service to hand
+back its pre-image — `admin.UpdateUserDetailed` is the shape. `audit_log` still
+cannot carry prose (256-byte values, closed key vocabulary), so watched words
+belong in a moderation-domain table and reach a person by mail or notification,
+never through the ledger. Adding a `Mailer` method costs **four** implementations
+that must move together — the interface, `noopMailer`, `mail.SMTP` and
+`auth.CaptureMailer` — plus every test double in `internal/httpapi` and
+`internal/auth` that satisfies the interface (`captureMailer`,
+`captureResetMailer`); the compiler finds them, but budget for it. Adding a
+column to `users` means appending it to **every** full-row column list in
+`internal/store/queries/users.sql` or sqlc stops mapping those queries to
+`sqlcgen.User` and generates per-query row structs instead. And any harness whose
+single account is its only admin now needs a successor before that account can
+deactivate or delete itself.
+
+**Delivery order: core#174 → user#171 → this evidence PR.** user#171's `contract`
+check goes green the moment core#174 merges. Nothing is merged here and no
+deployment is authorized. The lab was torn down — Postgres, Redis and Mailpit
+stopped and their data directories removed, both binaries and the `origin/main`
+worktree deleted, no listener left on 8088/3100/3200 — and no lab artefact is
+committed.
