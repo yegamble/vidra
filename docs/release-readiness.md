@@ -2210,10 +2210,10 @@ sqlc-verify, test-race) plus the tagged `internal/store` and `internal/account`
 integration lanes against real PostgreSQL 16 at schema 127; frontend TypeScript,
 lint (0 errors, the same 2 pre-existing warnings), icons, **238 files / 2348
 tests** — up from 237/2346 by exactly this slice's two new tests — and the
-production build, on nvm Node 24.4.1. Core CI is green except `ipfs-integration`,
-which failed on `TestIntegrationPublicVideoRoundTrip` timing out at 300s — a lane
-this diff (`internal/account` plus an OpenAPI description) cannot reach; it was
-re-run and the result is on the PR. **`contract-ci` on the frontend PR is
+production build, on nvm Node 24.4.1. Core CI is **all green**:
+`ipfs-integration` failed once on `TestIntegrationPublicVideoRoundTrip` timing
+out at 300s — a lane this diff (`internal/account` plus an OpenAPI description)
+cannot reach — and passed on a re-run in 1m53s, so core#163 is marked ready. **`contract-ci` on the frontend PR is
 expected red until core#163 merges** — it regenerates `lib/api/generated.ts` from
 `vidra-core@main` and this branch carries the regen for an unmerged spec change;
 that PR stays draft until then. Per vidra-user's AGENTS.md the local e2e suites

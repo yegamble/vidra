@@ -4,7 +4,7 @@
   "core_revision": "a12/profile-archive @ e4bde3b (one commit on origin/main 789bc21)",
   "frontend_revision": "a12/profile-archive @ 32f6b57 (one commit on origin/main e6ebbb4)",
   "pull_requests": {
-    "core": "yegamble/vidra-core#163 (draft)",
+    "core": "yegamble/vidra-core#163 (READY — all CI lanes green)",
     "frontend": "yegamble/vidra-user#162 (draft)",
     "meta": "yegamble/vidra#108 (this evidence PR, draft)",
     "dependency_order": "core#163 FIRST (it changes api/openapi.yaml) -> user#162 SECOND (contract-ci regenerates lib/api/generated.ts from vidra-core@main and diffs, so it is RED until core#163 merges; that failure is expected and not a defect in the branch) -> meta#108 LAST."
@@ -85,7 +85,7 @@
   "gates": {
     "core_make_ci": "PASS — `ci: gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race).`",
     "core_tagged_integration": "PASS — internal/store and internal/account integration lanes against real PostgreSQL 16 at schema 127",
-    "core_github_ci": "backend-ci PASS, backend-integration PASS, openapi PASS, ipfs-private-integration PASS, GitGuardian PASS. ipfs-integration FAILED on TestIntegrationPublicVideoRoundTrip timing out at 300s — an IPFS lane this change cannot reach (the diff is internal/account plus an OpenAPI description); it was re-run and the result is recorded on the PR.",
+    "core_github_ci": "ALL GREEN. backend-ci, backend-integration, openapi, ipfs-private-integration and GitGuardian passed on the first run. ipfs-integration failed once on TestIntegrationPublicVideoRoundTrip timing out at 300s — a lane this diff (internal/account plus an OpenAPI description) cannot reach — and PASSED on a re-run in 1m53s. A timeout flake, not a regression.",
     "frontend_tsc": "PASS — npx tsc --noEmit, exit 0",
     "frontend_lint": "PASS — eslint 0 errors, 2 PRE-EXISTING warnings (WatchView location.assign, an unused variable in remote-search.test)",
     "frontend_lint_icons": "PASS — no emoji/glyph icons",
