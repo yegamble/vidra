@@ -1,0 +1,250 @@
+{
+  "status": "PASS",
+  "scope": "A14 candidate runtime acceptance; delivery pending merge",
+  "frontend_revision": "3a69671",
+  "checks": {
+    "report_delete": "PASS",
+    "scanner": "PASS",
+    "oversize": "PASS",
+    "incoming_poll": "PASS",
+    "explicit_send_retry": "PASS",
+    "receipt_on": "PASS",
+    "receipt_opt_out": "PASS"
+  },
+  "retry_and_receipt_on": {
+    "status": "FAIL",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "offline-send-explicit-retry": "PASS",
+      "receipt-on": "PASS",
+      "receipt-opt-out": "FAIL"
+    },
+    "browser": "151.0.7922.34",
+    "conversation_id": "6aaed400-60bc-420e-8212-3fb18dc497a3",
+    "retry_body": "A14retry1788641719044",
+    "retry_message_id": "00e70a60-be2f-41b4-982a-a561765a1e0b",
+    "private_body": "A14private1788641730514",
+    "private_message_id": "b559401b-c432-422c-898d-953e2044ff1a",
+    "preferences_restored": false
+  },
+  "receipt_opt_out": {
+    "status": "FAIL",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "receipt-opt-out": "PASS",
+      "report-and-delete": "FAIL"
+    },
+    "browser": "151.0.7922.34",
+    "http_failures": [
+      {
+        "phase": "login",
+        "path": "/api/v1/channels/a062c0fd875c2/avatar",
+        "status": 404
+      },
+      {
+        "phase": "login",
+        "path": "/api/v1/users/274afe1e-f756-4662-8922-59cbd35373c3/avatar",
+        "status": 404
+      },
+      {
+        "phase": "receipt-opt-out",
+        "path": "/api/v1/users/274afe1e-f756-4662-8922-59cbd35373c3/avatar",
+        "status": 404
+      },
+      {
+        "phase": "receipt-opt-out",
+        "path": "/api/v1/me/oauth-identities",
+        "status": 404
+      },
+      {
+        "phase": "receipt-opt-out",
+        "path": "/api/v1/me/export",
+        "status": 404
+      },
+      {
+        "phase": "receipt-opt-out",
+        "path": "/api/v1/me/oauth-identities",
+        "status": 404
+      },
+      {
+        "phase": "receipt-opt-out",
+        "path": "/api/v1/users/274afe1e-f756-4662-8922-59cbd35373c3/avatar",
+        "status": 404
+      },
+      {
+        "phase": "receipt-opt-out",
+        "path": "/api/v1/me/oauth-identities",
+        "status": 404
+      },
+      {
+        "phase": "receipt-opt-out",
+        "path": "/api/v1/me/export",
+        "status": 404
+      },
+      {
+        "phase": "receipt-opt-out",
+        "path": "/api/v1/me/oauth-identities",
+        "status": 404
+      },
+      {
+        "phase": "receipt-opt-out",
+        "path": "/api/v1/users/b5fe0b20-feb1-4663-8555-d5b6950f73f3/avatar",
+        "status": 404
+      },
+      {
+        "phase": "report-and-delete",
+        "path": "/api/v1/messages/584b86f8-b41a-41e1-b352-758d1c9c3ca1",
+        "status": 404
+      },
+      {
+        "phase": "report-and-delete",
+        "path": "/api/v1/me/notifications/unread-count",
+        "status": 429
+      },
+      {
+        "phase": "report-and-delete",
+        "path": "/api/v1/me/notifications/unread-count",
+        "status": 429
+      },
+      {
+        "phase": "report-and-delete",
+        "path": "/api/v1/conversations/6aaed400-60bc-420e-8212-3fb18dc497a3/read",
+        "status": 429
+      },
+      {
+        "phase": "report-and-delete",
+        "path": "/api/v1/users/274afe1e-f756-4662-8922-59cbd35373c3/avatar",
+        "status": 404
+      },
+      {
+        "phase": "report-and-delete",
+        "path": "/api/v1/messages/584b86f8-b41a-41e1-b352-758d1c9c3ca1",
+        "status": 429
+      },
+      {
+        "phase": "report-and-delete",
+        "path": "/api/v1/me/messaging-prefs",
+        "status": 429
+      }
+    ],
+    "conversation_id": "6aaed400-60bc-420e-8212-3fb18dc497a3",
+    "private_body": "A14private1788642021842",
+    "private_message_id": "584b86f8-b41a-41e1-b352-758d1c9c3ca1",
+    "preferences_restored": false
+  },
+  "report_delete": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "report-and-delete": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "http_failures": [
+      {
+        "phase": "login",
+        "path": "/api/v1/users/b5fe0b20-feb1-4663-8555-d5b6950f73f3/avatar",
+        "status": 404
+      },
+      {
+        "phase": "report-and-delete",
+        "path": "/api/v1/messages/584b86f8-b41a-41e1-b352-758d1c9c3ca1",
+        "status": 404
+      },
+      {
+        "phase": "report-and-delete",
+        "path": "/api/v1/users/274afe1e-f756-4662-8922-59cbd35373c3/avatar",
+        "status": 404
+      },
+      {
+        "phase": "report-and-delete",
+        "path": "/api/v1/users/274afe1e-f756-4662-8922-59cbd35373c3/avatar",
+        "status": 404
+      }
+    ],
+    "conversation_id": "6aaed400-60bc-420e-8212-3fb18dc497a3",
+    "message_id": "584b86f8-b41a-41e1-b352-758d1c9c3ca1"
+  },
+  "scanner": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "benign-document": "PASS",
+      "eicar-rejection": "PASS",
+      "unavailable-scanner": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "original_flags": {
+      "MALWARE_SCAN_ENABLED": "false",
+      "CLAMAV_ADDR": "",
+      "CLAMAV_TIMEOUT": "60s",
+      "MALWARE_SCAN_MODE": "fail-closed"
+    },
+    "scanner_image": "sha256:f0954d679017eb6d48221e2b2be3ac5457bf278a844f39b672376f55a085f591",
+    "scanner_version": "ClamAV 1.5.4/28108/Sun Aug 30 06:27:10 2026",
+    "active_flags": {
+      "MALWARE_SCAN_ENABLED": "true",
+      "CLAMAV_ADDR": "clamav:3310",
+      "CLAMAV_TIMEOUT": "5s",
+      "MALWARE_SCAN_MODE": "fail-closed"
+    },
+    "conversation_id": "6aaed400-60bc-420e-8212-3fb18dc497a3",
+    "before": {
+      "rows": 35,
+      "blobs": 35
+    },
+    "benign_id": "004f4676-345c-4f52-8290-baffdb1ce62d",
+    "after": {
+      "rows": 36,
+      "blobs": 36
+    },
+    "configuration_restored": true,
+    "scanner_stopped": true
+  },
+  "oversize": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "one_byte_over": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "file_bytes": 104857601,
+    "upload_requests": 0
+  },
+  "incoming_poll": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "incoming_poll_position_and_read": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "message_id": "8737638b-1572-4e46-8f4c-a33aad36bc0a",
+    "scroll_delta_px": 0
+  },
+  "preference_cleanup": {
+    "status": "PASS",
+    "read_receipts": true,
+    "restored_at": "2026-09-05T21:05:20.346Z"
+  },
+  "related_evidence": [
+    "a14-attachment-checkpoint.json",
+    "a14-history-checkpoint.json"
+  ],
+  "attempt_notes": [
+    "Partial control runs retain their FAIL statuses; only their completed phases are used above.",
+    "Proxy exited on an unhandled WebSocket ECONNRESET; socket handling fixed only in private test proxy, then preference explicitly restored.",
+    "Real HTTP 429 interrupted delete and preference cleanup; limits remained unchanged, scoped retry completed and preference restoration verified.",
+    "An isolated delete test initially reloaded the sender home page; corrected navigation to the existing conversation.",
+    "Pinned ClamAV has only an amd64 image; lab used its existing QEMU support. No image pins changed."
+  ],
+  "helpers": {
+    "vidra-a14-controls.mjs": "b76faef9a90e7b890c3773eb2964c676f3b6cc4ec7104a5d38fdde2c7a490a8f",
+    "vidra-a14-scan.mjs": "76d128d219fc0aa2f6b1a3f19d11aecace533bcf00fe49cdd34143e0e146fcbe",
+    "vidra-a14-oversize.mjs": "8e9c27b2b126d1aeaf943b7e7fd79da6e72be0918c207dcc7051d8c6f27dd1fd",
+    "vidra-a14-poll.mjs": "f23bb97fdf059738ac2f63df4c368f09b45eb242a84b9a2bff028e57baa386fb",
+    "a14-proxy.cjs": "513d809e771105ba6b4878472b43c4365952579662f4c7dee7f52574bd2d7687"
+  },
+  "ci": {
+    "frontend_pr_150": "all checks PASS",
+    "frontend_pr_151": "all checks PASS, including frontend and local/S3 backed suites"
+  }
+}
