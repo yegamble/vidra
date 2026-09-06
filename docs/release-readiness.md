@@ -1221,3 +1221,57 @@ harnesses supplement committed tests and do not replace their gates. Temporary p
 suffix removed; component checkouts are clean. The wider
 A09–A40 goal remains open. Next action: resolve pending merge authorization and
 review these candidates; continue the next dependency-ready item separately.
+
+## A11 Studio and statistics checkpoint — 2026-09-05
+
+**A11 OPEN — stored-byte deletion awaits collector approval.** Dependency-ready
+from A07/A09. Observable success requires persisted Studio field/media edits,
+chapter order and real frame/sprite behavior, deletion removing media/discovery,
+and correctly attributed owner-scoped video/channel/account analytics, including
+channel-switch races and historical totals without fabricated daily history.
+
+- [Chapter evidence](evidence/a11-chapters.json): failed initial GET was presented
+  as an empty editable set; Save genuinely erased two synthetic stored chapters.
+  The chapters were restored after reproduction. Frontend
+  [#154](https://github.com/yegamble/vidra-user/pull/154) now disables whole-set
+  replacement until the read succeeds, shows the design-system error/retry UI,
+  and loads the authoritative rows before editing. Actual Chromium/API retry,
+  changed chapter order and reload persistence PASS. Two TDD regressions failed
+  first; all 8 focused chapter tests and 228 files / 2294 full tests PASS.
+  TypeScript, lint (two existing warnings), icons and diff checks PASS.
+- [Studio evidence](evidence/a11-studio.json): title, description, taxonomy,
+  tags, privacy, sensitive flag/reason and comment/download toggles persisted
+  through fresh read/reload. Valid custom PNG upload matched stored SHA and
+  decoded in-browser; actual frame picker at two seconds returned JPEG;
+  playback hover rendered the real storyboard sprite/VTT. Schedule and source
+  replacement remain covered by the separate A10 evidence, not duplicated here.
+- [Statistics evidence](evidence/a11-stats.json): repeated view/like calls
+  deduped; real comment attribution and daily rollup matched expected deltas.
+  Two creators' video/channel stats enforce 404 for the other owner (including
+  staff), account sums exclude the other creator, and UI/account/per-video
+  reload checks PASS. A delayed actual channel stats request clears previous
+  totals, then shows the new channel's 500 historical views and zero recent
+  views. The 500 total is an explicitly synthetic aggregate without daily rows;
+  this proves analytics semantics, not PeerTube migration. A Playwright route
+  cleanup race was corrected and rerun on the same fixtures.
+- [Deletion evidence](evidence/a11-deletion.json): Studio confirmation returned
+  204; reload stayed deleted, public detail/thumbnail/storyboard/HLS and owner
+  original returned 404, file rows vanished, and real search excluded the ID.
+  Physical object deletion remains UNVERIFIED. The existing collector dry run
+  found about 105 earlier lab orphans before this deletion, within its unchanged
+  25% circuit breaker. Automatic approval review rejected running that complete
+  set because it extends beyond the focused A11 fixture. User approval is
+  pending; no collector or manual blob deletion was performed.
+
+Frontend revision `e085945` adds the backed chapter read-failure regression and
+replaces the old eight-byte thumbnail header fixture with a decodable PNG plus
+browser decode assertion. Its updated CI is pending. #154 is stacked on A10
+frontend #153; review/merge #153 first, then #154. This evidence is stacked on
+meta #101. No core contract/SQL change, client regeneration, dependency change,
+workflow edit, production deployment or merge. An initial upload toast timeout
+on the new fixture is recorded separately; persisted publication was verified,
+but that toast assertion is not relabeled as a success.
+
+Next: review the pending collector permission and observe #154's updated CI.
+Keep A11 open until physical cleanup is proved. Independent A12 work can proceed
+while that external approval remains pending; the A09–A40 goal stays active.

@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "vm": "vidra-a02-20260905194815-89796",
+  "checks": {
+    "metadata_persistence_reload": "PASS",
+    "thumbnail_upload_real_image": "PASS",
+    "real_frame_picker": "PASS",
+    "storyboard_hover_real_sprite": "PASS"
+  },
+  "browser": "151.0.7922.34",
+  "video_id": "a07b8163-59fb-48fc-93c9-7b6968fb81cc",
+  "title": "A11studio1788649037492edited",
+  "saved_fields": {
+    "title": "A11studio1788649037492edited",
+    "description": "A11 description with **formatting** and a second line.",
+    "category": "7",
+    "language": "fr",
+    "license": "1",
+    "tags": [
+      "a11studio"
+    ],
+    "privacy": "unlisted",
+    "is_sensitive": true,
+    "sensitive_reason": "Synthetic test warning",
+    "comments_policy": "disabled",
+    "download_enabled": false
+  },
+  "acceptance": "A11 CRT-01 metadata and media tools",
+  "frontend_revision": "a04d8c6"
+}

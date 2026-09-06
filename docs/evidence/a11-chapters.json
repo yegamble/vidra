@@ -1,0 +1,37 @@
+{
+  "acceptance": "A11 CRT-01 chapter recovery",
+  "status": "PASS",
+  "frontend_revision": "e085945",
+  "frontend_pr": "https://github.com/yegamble/vidra-user/pull/154",
+  "before": {
+    "status": "REPRODUCED",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "failed_read_can_clear_existing_chapters": "REPRODUCED"
+    },
+    "browser": "151.0.7922.34",
+    "video_id": "a07b8163-59fb-48fc-93c9-7b6968fb81cc",
+    "title": "A11studio1788649037492",
+    "chapters_restored": "PASS"
+  },
+  "after": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "failed_read_preserves_chapters": "PASS",
+      "retry_edit_order_reload": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "video_id": "a07b8163-59fb-48fc-93c9-7b6968fb81cc",
+    "title": "A11studio1788649037492"
+  },
+  "tests": {
+    "before": "2 failed / 6 passed",
+    "focused_after": "8 passed",
+    "full": "228 files / 2294 passed",
+    "typecheck": "PASS",
+    "lint": "PASS; 2 pre-existing warnings",
+    "icons": "PASS"
+  },
+  "unrelated_observation": "Initial new-upload Published! toast assertion timed out despite a persisted published video. The same existing fixture was used for the successful chapter reproduction; upload toast success is not claimed."
+}
