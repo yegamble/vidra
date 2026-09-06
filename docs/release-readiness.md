@@ -4178,3 +4178,245 @@ merges), then this evidence PR. Nothing is merged here and no deployment is
 authorized. The lab was torn down — Postgres and Redis stopped, their data
 directories removed, both binaries and the `origin/main` worktree deleted, no
 listener left on 8088/3100/3200 — and no lab artefact is committed.
+
+## A16 quarantine, video blocks and report context — 2026-09-06
+
+**ADM-02 does NOT flip. A16 stays OPEN.** This is the second of three A16
+slices — the video-and-report half of the moderation row. Three defects were
+found: **a blocked video was still embeddable through oEmbed**, **a reported
+direct message reached the moderator with no message in it**, and **the
+server-rendered watch page keeps serving a blocked video's title and its whole
+video document to anonymous crawlers indefinitely**. The first two are fixed
+TDD-first in [core #172](https://github.com/yegamble/vidra-core/pull/172); the
+third is a vidra-user caching decision and is recorded, not patched. **No
+migration** (core stays at schema 129), **no OpenAPI change** (both fixed fields
+were already documented), no generated file hand-edited, and **no vidra-user PR**
+— the frontend already renders everything the fixes restore. [Sanitized
+evidence](evidence/a16-quarantine-blocks.json) records **236 assertions across
+twenty-one phases on one clean database**, with vidra-search stood up natively so
+every index claim is a `search.documents` readback, plus a real-Chromium
+walkthrough. Twelve rows failed: **two are the defect answering wrong** and ten
+are lab errors, every one restated in an addendum rather than quietly re-run.
+
+**The per-surface promise, measured on one video per state rather than reasoned
+about.** Six actors (anonymous, two viewers, the owner, a moderator, the admin)
+against nine authenticated surfaces plus the three anonymous root ones, for each
+of five actions. `in`/`absent` is feed membership; a number is the HTTP status.
+
+| surface | quarantined | approved | blocked | unblocked | rejected |
+|---|---|---|---|---|---|
+| home feed / `/videos` listing | absent for **all six**, owner included | `in` for all | absent for all | `in` for all | absent for all |
+| channel page (public) | absent | `in` | absent | `in` | absent |
+| channel page (owner/editor view) | **listed, state `quarantined`** | listed | **listed, state `published`, no block marker** | listed | listed, `failed` |
+| subscriptions feed | absent | `in` | absent | `in` | absent |
+| `GET /videos/search` | absent | `in` | absent | `in` | absent |
+| watch detail | 404 anon/A/B · **200 owner** · 200 staff | 200 all | **404 anon/A/B/owner** · 200 staff | 200 all | 404 anon/A/B · 200 owner · 200 staff |
+| thumbnail + HLS bytes | 404 anon/A/B · 200 owner/staff | 200 all | 404 anon/A/B/owner · 200 staff | 200 all | 404 anon/A/B · 200 owner/staff |
+| `GET /videos/{id}/embed-privacy` | 404 anon/A/B | 200 | 404 anon/A/B/owner | 200 | **200 for anonymous** |
+| RSS `/feeds/videos.xml` | absent | `in` | absent | `in` | absent |
+| `/sitemap.xml` | absent | `in` | absent | `in` | absent |
+| oEmbed `/services/oembed` | 404 | 200 | **200 → 404 (fixed here)** | 200 | 404 |
+| vidra-search index | never indexed | `eligible=true` | `eligible=false, suppressed_reason=blocked` | re-indexed `eligible=true` | `eligible=false, suppressed_reason=moderated` |
+
+Everything in that table is a readback, not a claim: feed membership is the
+video's id in the response, the index column is a row from `search.documents` in
+the search service's own database, and the block column was taken with a
+`video_blocks` row present and the video still reading `published`/`public` —
+**a block changes neither state nor privacy**, which is exactly why the two
+checks around the oEmbed leak both passed on it.
+
+**Defect 1: a blocked video was still embeddable.** `handleOEmbed` asked
+"published?" and "public or unlisted?" and nothing else, so a moderator block —
+which touches neither — left it answering **200 with the title, the channel
+name, a thumbnail URL and a ready-made `<iframe>`** to any CMS that resolved the
+share link, in all three URL forms (`/videos/{uuid}`, `/embed/{uuid}`,
+`/v/{code}`). It now consults `videoHiddenByBlock`, the same helper every other
+read path uses; the route is unauthenticated so that helper's staff escape never
+applies, and a blocked video is `404 "no video matches the url"`, byte-identical
+to an unknown one. **The reason nothing caught it is worth more than the bug**:
+`videoFakeRepo` modelled `video_blocks` only in `adminInventory`, while the
+public-feed, channel, subscription, search, by-ids and related fakes all ignored
+blocks — and every one of those SQL queries carries `NOT EXISTS (SELECT 1 FROM
+video_blocks …)`. The fakes said a block changes nothing about what a viewer
+sees, so **no handler test could have proved a block hides a video from any
+feed**. `blockedFromFeed` now puts the predicate where the SQL has it, and the
+new test asserts all three distribution surfaces at once.
+
+**Defect 2: a reported DM arrived empty.** The whole message-report path worked
+except the part that makes it useful. The body is snapshotted at report time
+into `message_body_snapshot`, `ListReports` joins it, `moderation.Item` carries
+it, `api/openapi.yaml` documents `message_id` and `message_body` on `Report`,
+and `ModerationQueue.tsx` renders `report.message_body || "(message
+unavailable)"` — but `reportView` never had the two fields, so **every reported
+direct message in the queue read "(message unavailable)"**. A conversation is
+private: that snapshot is the only thing a moderator will ever see of the
+reported message, so the queue entry was unactionable. Two things hid it:
+`TestDMReportMessage` asserted the 204 and stopped without ever reading the
+queue back, and the fake report repo did not store the snapshot either.
+`TestOpenAPIContract` fails on a route without a doc and a doc without a route —
+**not on a response shape** — so a contract promising two fields the server never
+sent was invisible. Paired probe, same lab, same report row, only the binary
+different: on the pre-fix binary `message_body` is absent; on the patched one the
+moderator reads the full text, in the API and in Chromium.
+
+**The appeal path, stated because it was asked: there is none.** The string
+"appeal" does not occur anywhere in vidra-core or vidra-user — no route, no
+notification type, no UI. A creator whose upload is rejected receives one
+`video_rejected` notification and has nowhere to answer it.
+
+**What the moderator sees, and what the creator is told.** The quarantine queue
+carries exactly eight fields — id, title, privacy, state, channel handle,
+channel display name, **owner username** and created-at — and **no reason, no
+prior-action history and no report linkage**; a moderator triaging a held upload
+sees who uploaded it and what it is called, and nothing about whether this
+creator has been actioned before. A report entry carries the reporter's username,
+the reason, the status, the note and the target's context — and **never the
+author of the reported thing**: a reported comment names its body but not its
+commenter, and a reported DM names its text but not its sender, so the moderator
+cannot act on the person without leaving the queue. A comment report also carries
+no `video_id`, so there is no route from the report to the video the comment sits
+on. On the creator's side: **approval notifies nobody**, **blocking notifies
+nobody**, and rejection sends a `video_rejected` notification that names the
+video and nothing else. The quarantine UI's own label says the rejection reason
+is *"recorded in the audit trail — not shown to the owner"*; the first half is
+not true. A sweep of **all 290 text/JSON columns in the database** for the note's
+text found **zero** — the audit row records only `reason_provided: true|false`,
+by the deliberate rule that moderator prose must not enter the security ledger.
+So the prose a moderator types on rejection is **discarded entirely**, and the
+UI promises otherwise.
+
+**Blocking is invisible to the creator, which is the sharpest thing here.** A
+blocked video 404s for its owner too (only staff are exempt), it leaves every
+public surface, and no notification is sent — but the owner's own channel
+management listing **still lists it, still reading `published`, with no field
+that could say otherwise**. The admin inventory carries a `blocked: true` marker;
+the owner's projection has no equivalent. A creator's video therefore becomes
+unreachable to everyone including themselves while their own dashboard says it is
+live, and nothing anywhere tells them why, when, or by whom.
+
+**Defect 3, recorded not patched: the watch page keeps serving a blocked
+video.** `lib/video.server.ts` reads the public video document with `next:
+{ revalidate: 60 }` and a comment accepting that "watch metadata may lag a
+title/thumbnail edit by up to a minute". Applied to a moderation hide it does not
+lag by a minute — **it does not clear at all**. Measured: a watch URL rendered
+once before the block was fetched **30 times over 175 seconds** after it, every
+single response carrying `<title>Control Clip</title>`, `og:title`, the canonical
+`og:url`, an `og:image` pointing at the thumbnail endpoint, **an `<h1>` in the
+body and the whole serialized video document in the flight payload** — while
+`GET /api/v1/videos/{id}` answered 404 to the same anonymous caller throughout.
+A URL never rendered before the block is clean (200 with the generic title and a
+"Loading video…" shell), which is what identifies the mechanism: Next's data
+cache does not replace a cached successful body with a failed revalidation, so
+the last good copy is served indefinitely. A JavaScript-enabled visitor still
+lands on **"Video not found — this video does not exist, or it is private"**
+because the client re-fetches; a crawler, a link-preview unfurler, a no-JS reader
+or anything reading the HTML gets the video back. The fix is a policy call this
+slice should not make alone — `freshness: "no-store"` on the two watch reads
+buys correctness at one uncached core request per watch load, and a narrower fix
+would need the cache to treat a 404 as invalidating — so it is recorded with the
+file, the constant and the measurement rather than changed.
+
+**Remote and instance blocks, and the line under them.** The instance blocklist
+round-trips fully: a moderator blocks `blocked-instance.example` with a reason,
+it reads back through the API with that reason, Postgres agrees, a second block
+of the same domain is idempotent at one row, unblocking removes it, and both
+actions are audited. All six wrong-actor attempts (ordinary user 403, anonymous
+401, on block/list/unblock) leave the table at exactly one row. The remote-video
+blocklist reads (empty), blocking an unknown remote id is 404, and the list is
+403/401 for a user/anonymous. **The "affected feeds and search" facet for remote
+content is UNVERIFIED**: this lab holds **zero** `remote_videos` and zero remote
+actors, federation is not enabled, and A29 owns the two-instance proof — so no
+remote video was hidden from anything here, and nothing in this section should be
+read as evidence that it would be.
+
+**Unauthorized and bulk, inventoried explicitly.** Every route this slice touches
+was attempted by the wrong actor and answered the shipped way with nothing
+changed: approve, reject and the quarantine queue are **staff** (moderator 204/
+200, user 403, anonymous 401); block, unblock and both block lists are **staff**;
+report resolution is **staff** and report deletion is **admin-only**; reporting
+anything needs auth (anonymous 401) and reporting a DM you are not a participant
+of is **404**, not 403, so the existence of the message is not leaked. After the
+six quarantine refusals both held videos were still `quarantined`; after the four
+block refusals `video_blocks` was still empty; after the two resolve refusals the
+report was still `open`. Idempotency: blocking twice is 204 with one row,
+unblocking an unblocked video is 204, reporting the same message twice creates
+one row, approving an already-published video is **409** (not a second publish)
+and rejecting an already-rejected one is 409. **There is no bulk endpoint and no
+multi-select anywhere**: no admin or moderation route in the OpenAPI document
+takes an array body, and `ModerationQueue`, `QuarantineQueueView` and
+`BlockedVideosView` have no checkboxes and no selection state — a moderator
+acts on exactly one item at a time. **Zero 429s** in the whole run, at shipped
+limits (general 120/min paced at ~109, auth 10/min with one login per actor).
+
+**The E2EE promise holds because encrypted messages cannot be reported at all.**
+An encrypted conversation is a distinct, immutably-flagged row whose traffic
+lives in `e2ee_messages`, while `POST /messages/{id}/report` resolves ids in
+`messages`. Proven rather than described: B registered a device, opened an
+encrypted conversation with A and sent an envelope; the send wrote **zero** rows
+to `messages` and one to `e2ee_messages`, the ciphertext round-tripped
+byte-identically, and A reporting the real envelope id is **404** with no report
+row created. There are five report routes in the contract and none of them
+accepts an envelope, and `EncryptedThreadView` renders no `ReportButton` — so the
+UI offers nothing the API would refuse. Nothing of an encrypted message can reach
+a moderator, and nothing pretends otherwise.
+
+**The browser walkthrough.** Real Chromium against the production build served
+from `.next/standalone` behind one origin, with hard reloads. Signed in as the
+moderator: the Moderation nav appears, `/moderation` renders the queue with
+Accept / Reject / **Block video**, and the message report's detail pane shows the
+DM's text under a "Direct message" label with the internal note — the visible
+proof of defect 2's fix, where the same pane read "(message unavailable)" before.
+`/moderation/quarantine` lists the held upload with `QUARANTINED` / `PUBLIC`
+pills, the owner and channel, and the rejection-reason box carrying the label
+this section quotes. Blocking from the queue's own button turns the action bar
+into "Video blocked · Manage", records the **report's reason** as the block
+reason, and `/moderation/blocked` then lists the video with "blocked 24s ago · by
+dana", the reason and an Unblock button; `/moderation/blocked/remote` renders
+`BlockedRemoteVideosView` with its empty state. Signed out, with all three
+videos blocked, the anonymous channel page reads **"0 videos — this channel has
+not published anything"** and the watch URL renders **"Video not found"** — with
+the stale `<title>` from defect 3 still on the browser tab.
+
+**Gates.** Core `make ci` **passed** (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race); `go test ./internal/httpapi/ -count=1`
+passes at every revision. SC7 no-regression: the named A16 slice-1 and A12 report
+tests — `TestReportVideoAndModerate`, `TestReportCommentAndUnknown`,
+`TestReportAccountAndModerate`, `TestReportValidationAndAuth`,
+`TestReportsStatusFilterIsValidated`, `TestAdminUserManagement`,
+`TestAdminSetsEmailVerified`, `TestDeleteAccountFlow` — plus the oEmbed, RSS and
+sitemap suites, **24 test functions, all pass** alongside the changed one.
+vidra-user was not modified, so its gates are **not claimed and were not run**;
+neither were the e2e suites, per its AGENTS.md. The meta compose render was not
+re-run: no compose, script or env file changed. **Unverified:** the tagged
+real-PostgreSQL `internal/store` integration lane was not run locally (the lab is
+native rather than the compose stack) — repo CI's `integration` job covers it;
+and everything about **remote/federated** content, as stated above.
+
+**Findings recorded, not fixed.** (1) **Defect 3 above** — the stale
+server-rendered watch page, the most serious open item in this slice.
+(2) **A blocked video is invisible to its owner in every way except the one
+listing that would tell them**, with no notification and no reason. (3) **The
+rejection note is discarded**, while the UI says it is recorded in the audit
+trail. (4) **A moderator cannot see who wrote the content they are judging** —
+no author on a comment report, no sender on a message report — and a comment
+report carries no link to its video. (5) `GET /videos/{id}/embed-privacy`
+answers **200 for a rejected (`failed`) video to anonymous callers**: it goes
+through `videoReadBase`, which gates blocks, quarantine, scheduled and
+transcoding but not `failed` (measured) or `draft` (from the same code path). It returns only `{"status":"enabled"}`,
+so it is an existence oracle for a uuid the caller already holds, not a content
+leak. (6) `handleAddPlaylistItem` does not check `video_blocks`, so a blocked
+video can still be added to a playlist; the read side filters it, so the row is
+inert. (7) The AP outbox's `CountPublicVideosByChannel` deliberately counts
+blocked videos, so a federated `totalItems` over-reports what the collection will
+serve — unverified in this lab, from code. (8) The quarantine queue shows a
+moderator **no prior-action history** for the account whose upload they are
+holding.
+
+**ADM-02 stays OPEN.** Closed here: reports (video, comment, message) with staff
+review, notes and resolution; video blocks and unblocks with their affected feeds
+and search; quarantine approve and reject; the remote-video and instance
+blocklists as far as a single instance can prove them; and the unauthorized and
+bulk inventory. **Remaining for the row: mutes (accounts and instances) and
+watched words** — slice 3 — plus the remote-content facet that A29's two-instance
+lab owns. Delivery order: **core#172 first**, then this evidence PR. Nothing is
+merged here and no deployment is authorized. The lab was torn down.
