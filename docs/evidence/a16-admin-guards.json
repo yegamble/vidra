@@ -1,0 +1,1185 @@
+{
+  "slice": "A16 admin guards and signup notices",
+  "date": "2026-09-06",
+  "register_rows_changed": [],
+  "register_row_touched": "ADM-01 (stays PASS — no row change)",
+  "prs": {
+    "core": "yegamble/vidra-core#174",
+    "user": "yegamble/vidra-user#171",
+    "meta": "this evidence PR"
+  },
+  "migration": "0131_users_is_owner (with .down.sql); core schema 130 -> 131",
+  "lab": {
+    "shape": "native postgres@16 on 127.0.0.1:55432 (socket -k /tmp), native redis on 56379, mailpit SMTP 51025 / API 58025, vidra-core on 8088, vidra-user .next/standalone on 3200, one origin via a pipe-only proxy on 3100",
+    "why_one_origin": "vidra_refresh is SameSite=Lax on Path=/api/v1/auth: two origins and the browser never sends it back",
+    "binaries": {
+      "baseline": "origin/main worktree at 875dcfc, built to vidra-api-baseline",
+      "patched": "a16/admin-guards working tree, built to vidra-api-patched"
+    },
+    "serving_binary_checked": "lsof -ti :8088 was resolved to the binary path before every patched assertion (slice 1's baseline-probe trap)",
+    "teardown": "postgres and redis stopped and their data directories removed, mailpit stopped and its database removed, both binaries and the origin/main worktree deleted, no listener left on 8088/3100/3200; no lab artefact committed"
+  },
+  "totals": {
+    "assertions": 137,
+    "pass": 131,
+    "fail": 6
+  },
+  "failing_rows_are_all_lab_bugs_restated_in_addenda": [
+    {
+      "id": "backfill.audit_row_alone_identifies_owner",
+      "why": "the seed omitted audit_log.domain, so psql rolled the whole multi-statement seed back and no users were inserted either",
+      "addendum": "backfill.audit_row_alone_identifies_owner.addendum"
+    },
+    {
+      "id": "schema.down_removes_the_column",
+      "why": "the api binary has no `migrate down` subcommand (usage is up|version|force)",
+      "addendum": "schema.down_removes_the_column.addendum + schema.down_sql_reverses_cleanly"
+    },
+    {
+      "id": "guard.lastadmin.plain_user_may_close_account",
+      "why": "the account was registered while approval mode was on, so it never existed to sign in with",
+      "addendum": "guard.lastadmin.plain_user_may_close_account.addendum"
+    },
+    {
+      "id": "mail.apply_status",
+      "why": "re-applied for an applicant who was already pending (409)",
+      "addendum": "mail.apply_status.addendum"
+    },
+    {
+      "id": "mail.reject_body_carries_the_reviewer_note",
+      "why": "json.load(strict=True) rejects the message body's own control characters",
+      "addendum": "mail.reject_body_carries_the_reviewer_note.addendum"
+    },
+    {
+      "id": "audit.changes_role",
+      "why": "expected/actual were passed in the wrong argument order and compared unsorted dict reprs",
+      "addendum": "audit.changes_role.addendum"
+    }
+  ],
+  "results_by_area": {
+    "baseline": [
+      {
+        "id": "baseline.owner_demote_by_other_admin",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "origin/main: an ordinary admin demotes the instance owner",
+        "at": "2026-09-06T17:52:51-04:00"
+      },
+      {
+        "id": "baseline.owner_deactivate_by_other_admin",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "origin/main: an ordinary admin deactivates the instance owner",
+        "at": "2026-09-06T17:52:51-04:00"
+      },
+      {
+        "id": "baseline.last_admin_self_deactivate",
+        "expected": "204",
+        "actual": "204",
+        "pass": true,
+        "note": "origin/main: the last active admin switches itself off",
+        "at": "2026-09-06T17:53:06-04:00"
+      },
+      {
+        "id": "baseline.active_admins_after",
+        "expected": "0",
+        "actual": "0",
+        "pass": true,
+        "note": "origin/main: the instance is left with no administrator",
+        "at": "2026-09-06T17:53:06-04:00"
+      },
+      {
+        "id": "baseline.recovery_needs_sql",
+        "expected": "a database edit",
+        "actual": "a database edit",
+        "pass": true,
+        "note": "recovering from zero admins has no API path",
+        "at": "2026-09-06T17:53:07-04:00"
+      },
+      {
+        "id": "baseline.signup_queued",
+        "expected": "202",
+        "actual": "202",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:53:22-04:00"
+      },
+      {
+        "id": "baseline.approve",
+        "expected": "204",
+        "actual": "204",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:53:22-04:00"
+      },
+      {
+        "id": "baseline.approval_mails_sent",
+        "expected": "0",
+        "actual": "0",
+        "pass": true,
+        "note": "origin/main: approving a signup mails the applicant nothing",
+        "at": "2026-09-06T17:53:23-04:00"
+      },
+      {
+        "id": "baseline.approval_notification_rows",
+        "expected": "0",
+        "actual": "0",
+        "pass": true,
+        "note": "origin/main: and creates no in-app notification either",
+        "at": "2026-09-06T17:53:23-04:00"
+      },
+      {
+        "id": "baseline.reject",
+        "expected": "204",
+        "actual": "204",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:53:24-04:00"
+      },
+      {
+        "id": "baseline.rejection_mails_sent",
+        "expected": "0",
+        "actual": "0",
+        "pass": true,
+        "note": "origin/main: the reviewer's note reaches nobody",
+        "at": "2026-09-06T17:53:25-04:00"
+      }
+    ],
+    "backfill": [
+      {
+        "id": "backfill.pre_0104_upgrade_marks_nobody",
+        "expected": "(none)",
+        "actual": "(none)",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:54:02-04:00"
+      },
+      {
+        "id": "backfill.audit_row_alone_identifies_owner",
+        "expected": "root",
+        "actual": "(none)",
+        "pass": false,
+        "note": "",
+        "at": "2026-09-06T17:54:03-04:00"
+      },
+      {
+        "id": "backfill.claim_timestamp_alone_identifies_owner",
+        "expected": "root",
+        "actual": "root",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:54:03-04:00"
+      },
+      {
+        "id": "backfill.tombstoned_owner_marks_nobody",
+        "expected": "(none)",
+        "actual": "(none)",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:54:04-04:00"
+      },
+      {
+        "id": "backfill.disagreeing_sources_mark_nobody",
+        "expected": "(none)",
+        "actual": "(none)",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:54:05-04:00"
+      },
+      {
+        "id": "backfill.ambiguous_timestamp_marks_nobody",
+        "expected": "(none)",
+        "actual": "(none)",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:54:06-04:00"
+      },
+      {
+        "id": "backfill.audit_row_alone_identifies_owner.addendum",
+        "expected": "root",
+        "actual": "root",
+        "pass": true,
+        "note": "restated: the first run's seed omitted audit_log.domain and the whole seed rolled back",
+        "at": "2026-09-06T17:54:29-04:00"
+      },
+      {
+        "id": "backfill.disagreeing_sources_mark_nobody.addendum",
+        "expected": "(none)",
+        "actual": "(none)",
+        "pass": true,
+        "note": "restated: same seed bug; the two sources now really do disagree",
+        "at": "2026-09-06T17:54:30-04:00"
+      }
+    ],
+    "schema": [
+      {
+        "id": "schema.second_owner_refused",
+        "expected": "refused by users_single_owner_idx",
+        "actual": "refused by users_single_owner_idx",
+        "pass": true,
+        "note": "the partial unique index makes at-most-one-owner a database invariant",
+        "at": "2026-09-06T17:54:43-04:00"
+      },
+      {
+        "id": "schema.down_removes_the_column",
+        "expected": "130/0",
+        "actual": "131/1",
+        "pass": false,
+        "note": "",
+        "at": "2026-09-06T17:54:43-04:00"
+      },
+      {
+        "id": "schema.up_again_rebackfills",
+        "expected": "131/mona",
+        "actual": "131/mona",
+        "pass": true,
+        "note": "the backfill is idempotent across a down/up round trip",
+        "at": "2026-09-06T17:54:43-04:00"
+      },
+      {
+        "id": "schema.down_sql_reverses_cleanly",
+        "expected": "1/0/0",
+        "actual": "1/0/0",
+        "pass": true,
+        "note": "0131 down drops the column and its partial index (applied directly: the api binary has no migrate down)",
+        "at": "2026-09-06T17:55:03-04:00"
+      },
+      {
+        "id": "schema.up_sql_reapplies_after_down",
+        "expected": "1",
+        "actual": "1",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:04-04:00"
+      },
+      {
+        "id": "schema.down_removes_the_column.addendum",
+        "expected": "no migrate down subcommand",
+        "actual": "no migrate down subcommand",
+        "pass": true,
+        "note": "restated: the first attempt asked the api binary for 'migrate down', which it does not implement (usage is up|version|force)",
+        "at": "2026-09-06T17:55:04-04:00"
+      }
+    ],
+    "lab": [
+      {
+        "id": "lab.serving_binary",
+        "expected": "/private/tmp/claude-501/-Users-yosefgamble-github-vidra/f194dcd8-4751-4595-a921-0e996bc010ac/scratchpad/lab/vidra-api-patched",
+        "actual": "/private/tmp/claude-501/-Users-yosefgamble-github-vidra/f194dcd8-4751-4595-a921-0e996bc010ac/scratchpad/lab/vidra-api-patched",
+        "pass": true,
+        "note": "the patched binary really is the one answering (slice 1's baseline-probe trap)",
+        "at": "2026-09-06T17:55:39-04:00"
+      },
+      {
+        "id": "lab.relay_down",
+        "expected": "000",
+        "actual": "000",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:44-04:00"
+      },
+      {
+        "id": "lab.relay_back",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:47-04:00"
+      },
+      {
+        "id": "lab.avery_restored",
+        "expected": "admin",
+        "actual": "admin",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:32-04:00"
+      },
+      {
+        "id": "lab.avery_restored_again",
+        "expected": "admin",
+        "actual": "admin",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:45-04:00"
+      },
+      {
+        "id": "lab.api_restarted",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T18:04:03-04:00"
+      },
+      {
+        "id": "lab.demote_avery_for_lastadmin_ui",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T18:08:49-04:00"
+      },
+      {
+        "id": "lab.active_admins_for_ui",
+        "expected": "1",
+        "actual": "1",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T18:08:49-04:00"
+      },
+      {
+        "id": "lab.restore_avery_admin",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T18:09:57-04:00"
+      },
+      {
+        "id": "lab.approval_override_cleared",
+        "expected": "false/overridden=false",
+        "actual": "false/overridden=false",
+        "pass": true,
+        "note": "the deliberate registration-mode change was cleared, not merely set back",
+        "at": "2026-09-06T18:10:10-04:00"
+      }
+    ],
+    "api": [
+      {
+        "id": "api.owner_flag_on_list",
+        "expected": "true",
+        "actual": "true",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:39-04:00"
+      },
+      {
+        "id": "api.owner_flag_false_for_other_admin",
+        "expected": "false",
+        "actual": "false",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:39-04:00"
+      }
+    ],
+    "guard.owner": [
+      {
+        "id": "guard.owner.role_user.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.role_user.code",
+        "expected": "owner_protected",
+        "actual": "owner_protected",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.role_moderator.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.role_moderator.code",
+        "expected": "owner_protected",
+        "actual": "owner_protected",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.deactivate.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.deactivate.code",
+        "expected": "owner_protected",
+        "actual": "owner_protected",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.delete.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.delete.code",
+        "expected": "owner_protected",
+        "actual": "owner_protected",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.unchanged",
+        "expected": "admin true false",
+        "actual": "admin true false",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.quota_allowed",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.email_verified_allowed",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.reassert_admin_allowed",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.self_demote.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.self_demote.message",
+        "expected": "cannot demote or deactivate yourself",
+        "actual": "cannot demote or deactivate yourself",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      },
+      {
+        "id": "guard.owner.self_hard_delete.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:55:53-04:00"
+      }
+    ],
+    "guard.lastadmin": [
+      {
+        "id": "guard.lastadmin.setup_demote_second_admin",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:11-04:00"
+      },
+      {
+        "id": "guard.lastadmin.active_admins_now",
+        "expected": "1",
+        "actual": "1",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:11-04:00"
+      },
+      {
+        "id": "guard.lastadmin.self_deactivate.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "the exact call that took the baseline to zero admins",
+        "at": "2026-09-06T17:56:11-04:00"
+      },
+      {
+        "id": "guard.lastadmin.self_deactivate.code",
+        "expected": "last_admin",
+        "actual": "last_admin",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:11-04:00"
+      },
+      {
+        "id": "guard.lastadmin.self_delete.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:11-04:00"
+      },
+      {
+        "id": "guard.lastadmin.self_delete.code",
+        "expected": "last_admin",
+        "actual": "last_admin",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:11-04:00"
+      },
+      {
+        "id": "guard.lastadmin.still_admin",
+        "expected": "admin true",
+        "actual": "admin true",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:11-04:00"
+      },
+      {
+        "id": "guard.lastadmin.session_still_works",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "the refusal is not a sign-out",
+        "at": "2026-09-06T17:56:11-04:00"
+      },
+      {
+        "id": "guard.lastadmin.repromote",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:11-04:00"
+      },
+      {
+        "id": "guard.lastadmin.self_deactivate_released",
+        "expected": "204",
+        "actual": "204",
+        "pass": true,
+        "note": "with a second live admin the owner may stand down",
+        "at": "2026-09-06T17:56:12-04:00"
+      },
+      {
+        "id": "guard.lastadmin.plain_user_may_close_account",
+        "expected": "204",
+        "actual": "401",
+        "pass": false,
+        "note": "",
+        "at": "2026-09-06T17:56:12-04:00"
+      },
+      {
+        "id": "guard.lastadmin.plain_user_may_close_account.addendum",
+        "expected": "204",
+        "actual": "204",
+        "pass": true,
+        "note": "restated: the first attempt registered while approval mode was on, so the account never existed to sign in with",
+        "at": "2026-09-06T18:04:04-04:00"
+      }
+    ],
+    "settings": [
+      {
+        "id": "settings.approval_mode_on",
+        "expected": "true",
+        "actual": "true",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:32-04:00"
+      }
+    ],
+    "mail": [
+      {
+        "id": "mail.apply_status",
+        "expected": "202",
+        "actual": "409",
+        "pass": false,
+        "note": "",
+        "at": "2026-09-06T17:56:32-04:00"
+      },
+      {
+        "id": "mail.apply_sends_nothing",
+        "expected": "0",
+        "actual": "0",
+        "pass": true,
+        "note": "applying is not the event the applicant is waiting on",
+        "at": "2026-09-06T17:56:33-04:00"
+      },
+      {
+        "id": "mail.approve_anonymous",
+        "expected": "401",
+        "actual": "401",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:33-04:00"
+      },
+      {
+        "id": "mail.reject_anonymous",
+        "expected": "401",
+        "actual": "401",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:33-04:00"
+      },
+      {
+        "id": "mail.refusals_send_nothing",
+        "expected": "0",
+        "actual": "0",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:33-04:00"
+      },
+      {
+        "id": "mail.approve_status",
+        "expected": "204",
+        "actual": "204",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:33-04:00"
+      },
+      {
+        "id": "mail.approve_sends_one",
+        "expected": "1",
+        "actual": "1",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:35-04:00"
+      },
+      {
+        "id": "mail.approve_body_has_sign_in_link",
+        "expected": "yes",
+        "actual": "yes",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:56-04:00"
+      },
+      {
+        "id": "mail.approve_body_carries_no_credential",
+        "expected": "no-credential",
+        "actual": "no-credential",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:56-04:00"
+      },
+      {
+        "id": "mail.approve_body_no_verify_clause_when_gate_off",
+        "expected": "no-verification-clause",
+        "actual": "no-verification-clause",
+        "pass": true,
+        "note": "the verification gate is off on this instance, so the message does not invent a second step",
+        "at": "2026-09-06T17:56:56-04:00"
+      },
+      {
+        "id": "mail.approved_applicant_can_sign_in",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "the mail's promise is true",
+        "at": "2026-09-06T17:56:56-04:00"
+      },
+      {
+        "id": "mail.apply_status.addendum",
+        "expected": "202",
+        "actual": "202",
+        "pass": true,
+        "note": "restated: the first attempt re-applied for an applicant who was already pending (409); this is a fresh one",
+        "at": "2026-09-06T17:56:57-04:00"
+      },
+      {
+        "id": "mail.approve_by_plain_user",
+        "expected": "403",
+        "actual": "403",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:57-04:00"
+      },
+      {
+        "id": "mail.reject_by_plain_user",
+        "expected": "403",
+        "actual": "403",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:57-04:00"
+      },
+      {
+        "id": "mail.wrong_actor_sends_nothing",
+        "expected": "0",
+        "actual": "0",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:57-04:00"
+      },
+      {
+        "id": "mail.wrong_actor_left_it_pending",
+        "expected": "pending",
+        "actual": "pending",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:56:57-04:00"
+      },
+      {
+        "id": "mail.reject_status",
+        "expected": "204",
+        "actual": "204",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:13-04:00"
+      },
+      {
+        "id": "mail.reject_sends_one",
+        "expected": "1",
+        "actual": "1",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:15-04:00"
+      },
+      {
+        "id": "mail.reject_body_carries_the_reviewer_note",
+        "expected": "carries-the-note",
+        "actual": "missing",
+        "pass": false,
+        "note": "",
+        "at": "2026-09-06T17:57:15-04:00"
+      },
+      {
+        "id": "mail.reject_creates_no_account",
+        "expected": "0",
+        "actual": "0",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:15-04:00"
+      },
+      {
+        "id": "mail.reject_note_persisted",
+        "expected": "We only accept applicants introduced by an existing member of the co-op.",
+        "actual": "We only accept applicants introduced by an existing member of the co-op.",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:15-04:00"
+      },
+      {
+        "id": "mail.reject_note_absent_from_audit",
+        "expected": "0",
+        "actual": "0",
+        "pass": true,
+        "note": "prose never reaches the ledger — the metadata allowlist would reject it",
+        "at": "2026-09-06T17:57:15-04:00"
+      },
+      {
+        "id": "mail.repeat_reject",
+        "expected": "404",
+        "actual": "404",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:15-04:00"
+      },
+      {
+        "id": "mail.repeat_approve",
+        "expected": "404",
+        "actual": "404",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:15-04:00"
+      },
+      {
+        "id": "mail.repeats_send_nothing",
+        "expected": "0",
+        "actual": "0",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:15-04:00"
+      },
+      {
+        "id": "mail.reject_body_carries_the_reviewer_note.addendum",
+        "expected": "carries-the-note",
+        "actual": "carries-the-note",
+        "pass": true,
+        "note": "restated: the first read used json.load(strict=True), which rejects the message body's own control characters",
+        "at": "2026-09-06T17:57:27-04:00"
+      },
+      {
+        "id": "mail.approve_with_dead_relay.status",
+        "expected": "204",
+        "actual": "204",
+        "pass": true,
+        "note": "the relay is down; the approval must not fail closed",
+        "at": "2026-09-06T17:57:44-04:00"
+      },
+      {
+        "id": "mail.approve_with_dead_relay.account_created",
+        "expected": "1",
+        "actual": "1",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:44-04:00"
+      },
+      {
+        "id": "mail.approve_with_dead_relay.request_resolved",
+        "expected": "approved",
+        "actual": "approved",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:44-04:00"
+      },
+      {
+        "id": "mail.reject_with_dead_relay.status",
+        "expected": "204",
+        "actual": "204",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:45-04:00"
+      },
+      {
+        "id": "mail.reject_with_dead_relay.request_resolved",
+        "expected": "rejected",
+        "actual": "rejected",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:45-04:00"
+      },
+      {
+        "id": "mail.dead_relay_is_logged",
+        "expected": "2",
+        "actual": "2",
+        "pass": true,
+        "note": "the failure is recorded without naming the applicant",
+        "at": "2026-09-06T17:57:45-04:00"
+      },
+      {
+        "id": "mail.dead_relay_log_has_no_address",
+        "expected": "0",
+        "actual": "0",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:57:45-04:00"
+      }
+    ],
+    "tombstone": [
+      {
+        "id": "tombstone.delete",
+        "expected": "204",
+        "actual": "204",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:01-04:00"
+      },
+      {
+        "id": "tombstone.reactivate.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:01-04:00"
+      },
+      {
+        "id": "tombstone.deactivate_again.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:01-04:00"
+      },
+      {
+        "id": "tombstone.role.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:01-04:00"
+      },
+      {
+        "id": "tombstone.quota.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:01-04:00"
+      },
+      {
+        "id": "tombstone.email_verified.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:01-04:00"
+      },
+      {
+        "id": "tombstone.bypass_quarantine.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:01-04:00"
+      },
+      {
+        "id": "tombstone.combined.status",
+        "expected": "422",
+        "actual": "422",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:01-04:00"
+      },
+      {
+        "id": "tombstone.row_unchanged",
+        "expected": "user|false|false|false|null",
+        "actual": "user|false|false|false|null",
+        "pass": true,
+        "note": "not one of the seven writes landed",
+        "at": "2026-09-06T17:58:01-04:00"
+      },
+      {
+        "id": "tombstone.redelete_still_404",
+        "expected": "404",
+        "actual": "404",
+        "pass": true,
+        "note": "the shipped answer for deleting an already-deleted row is unchanged",
+        "at": "2026-09-06T17:58:01-04:00"
+      },
+      {
+        "id": "tombstone.refusals_audited",
+        "expected": "7",
+        "actual": "7",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:01-04:00"
+      }
+    ],
+    "audit": [
+      {
+        "id": "audit.update_status",
+        "expected": "200",
+        "actual": "200",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:17-04:00"
+      },
+      {
+        "id": "audit.changes_role",
+        "expected": "{'after': 'moderator', 'field': 'role', 'before': 'admin'}",
+        "actual": "{'field': 'role', 'before': 'admin', 'after': 'moderator'}",
+        "pass": false,
+        "note": "before/after both present",
+        "at": "2026-09-06T17:58:17-04:00"
+      },
+      {
+        "id": "audit.changes_field_count",
+        "expected": "4",
+        "actual": "4",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:17-04:00"
+      },
+      {
+        "id": "audit.changes_fields",
+        "expected": "account_enabled? no; bypass_quarantine,email_verified,role,storage_quota_bytes",
+        "actual": "account_enabled? no; bypass_quarantine,email_verified,role,storage_quota_bytes",
+        "pass": true,
+        "note": "only the fields the request carried",
+        "at": "2026-09-06T17:58:17-04:00"
+      },
+      {
+        "id": "audit.resource_named",
+        "expected": "user/e2d7817d-229a-4932-bd51-68079bfc39e4",
+        "actual": "user/e2d7817d-229a-4932-bd51-68079bfc39e4",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:18-04:00"
+      },
+      {
+        "id": "audit.reason_kept_for_humans",
+        "expected": "1",
+        "actual": "1",
+        "pass": true,
+        "note": "the human line the admin audit view renders is unchanged",
+        "at": "2026-09-06T17:58:18-04:00"
+      },
+      {
+        "id": "audit.changes_role.addendum",
+        "expected": "{\"after\": \"moderator\", \"before\": \"admin\", \"field\": \"role\"}",
+        "actual": "{\"after\": \"moderator\", \"before\": \"admin\", \"field\": \"role\"}",
+        "pass": true,
+        "note": "restated: the first comparison put expected/actual in the wrong argument order and compared unsorted dict reprs",
+        "at": "2026-09-06T17:58:32-04:00"
+      },
+      {
+        "id": "audit.owner_protected_failures",
+        "expected": "4",
+        "actual": "4",
+        "pass": true,
+        "note": "three PATCHes and one DELETE",
+        "at": "2026-09-06T17:58:32-04:00"
+      },
+      {
+        "id": "audit.last_admin_failures",
+        "expected": "2",
+        "actual": "2",
+        "pass": true,
+        "note": "the self-deactivate and the self-delete",
+        "at": "2026-09-06T17:58:32-04:00"
+      },
+      {
+        "id": "audit.no_secrets_in_ledger",
+        "expected": "0",
+        "actual": "0",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:32-04:00"
+      }
+    ],
+    "authz": [
+      {
+        "id": "authz.MOD.patch_owner",
+        "expected": "403",
+        "actual": "403",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:44-04:00"
+      },
+      {
+        "id": "authz.MOD.delete_owner",
+        "expected": "403",
+        "actual": "403",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:44-04:00"
+      },
+      {
+        "id": "authz.USER.patch_owner",
+        "expected": "403",
+        "actual": "403",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:44-04:00"
+      },
+      {
+        "id": "authz.USER.delete_owner",
+        "expected": "403",
+        "actual": "403",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:45-04:00"
+      },
+      {
+        "id": "authz.ANON.patch_owner",
+        "expected": "401",
+        "actual": "401",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:45-04:00"
+      },
+      {
+        "id": "authz.ANON.delete_owner",
+        "expected": "401",
+        "actual": "401",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:45-04:00"
+      },
+      {
+        "id": "authz.owner_untouched",
+        "expected": "admin true",
+        "actual": "admin true",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T17:58:45-04:00"
+      }
+    ],
+    "doctor": [
+      {
+        "id": "doctor.marked_owner_reported",
+        "expected": "the instance owner is marked",
+        "actual": "the instance owner is marked",
+        "pass": true,
+        "note": "vidra doctor, real database",
+        "at": "2026-09-06T18:03:35-04:00"
+      },
+      {
+        "id": "doctor.unmarked_owner_reported",
+        "expected": "warns",
+        "actual": "warns",
+        "pass": true,
+        "note": "the pre-0104 upgrade case doctor must not leave silent",
+        "at": "2026-09-06T18:03:35-04:00"
+      },
+      {
+        "id": "doctor.no_admin_reported",
+        "expected": "fails",
+        "actual": "fails",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T18:03:36-04:00"
+      }
+    ],
+    "ui": [
+      {
+        "id": "ui.owner_badge_on_list",
+        "expected": "OWNER badge on mona only",
+        "actual": "OWNER badge on mona only",
+        "pass": true,
+        "note": "real Chromium, signed in as avery (the other admin), /admin/users hard load",
+        "at": "2026-09-06T18:08:48-04:00"
+      },
+      {
+        "id": "ui.owner_detail_actions_disabled",
+        "expected": "Deactivate+Delete disabled",
+        "actual": "Deactivate+Delete disabled",
+        "pass": true,
+        "note": "both the desktop detail and the mobile card render them disabled",
+        "at": "2026-09-06T18:08:48-04:00"
+      },
+      {
+        "id": "ui.owner_role_control_is_a_static_pill",
+        "expected": "static ADMIN pill",
+        "actual": "static ADMIN pill",
+        "pass": true,
+        "note": "no radiogroup for mona; bob and pat still have theirs",
+        "at": "2026-09-06T18:08:48-04:00"
+      },
+      {
+        "id": "ui.owner_reason_shown",
+        "expected": "This is the instance owner's account — the account that completed first-run setup. Another administrator can't change its role, deactivate it or delete it.",
+        "actual": "This is the instance owner's account — the account that completed first-run setup. Another administrator can't change its role, deactivate it or delete it.",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T18:08:48-04:00"
+      },
+      {
+        "id": "ui.owner_flags_and_quota_still_live",
+        "expected": "quota + both switches enabled",
+        "actual": "quota + both switches enabled",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T18:08:48-04:00"
+      },
+      {
+        "id": "ui.handler_refuses_regardless_of_dom",
+        "expected": "422 owner_protected / 422 owner_protected",
+        "actual": "422 owner_protected / 422 owner_protected",
+        "pass": true,
+        "note": "PATCH and DELETE issued from the page's own session, bypassing the disabled controls entirely",
+        "at": "2026-09-06T18:08:48-04:00"
+      },
+      {
+        "id": "ui.last_admin_message_in_settings",
+        "expected": "this is the last active administrator on this instance; promote another admin first, or the instance would have nobody who can reach its own console",
+        "actual": "this is the last active administrator on this instance; promote another admin first, or the instance would have nobody who can reach its own console",
+        "pass": true,
+        "note": "real Chromium, /settings Danger Zone, the sole admin's own deactivate",
+        "at": "2026-09-06T18:09:56-04:00"
+      },
+      {
+        "id": "ui.last_admin_account_untouched",
+        "expected": "admin true",
+        "actual": "admin true",
+        "pass": true,
+        "note": "",
+        "at": "2026-09-06T18:09:57-04:00"
+      }
+    ]
+  }
+}
