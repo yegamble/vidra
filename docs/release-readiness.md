@@ -4761,12 +4761,13 @@ surface that actually shows it is `/settings`.
 
 **Gates.** vidra-core `make ci` **passed** (fmt-check, vet, migrate-lint,
 openapi-verify, sqlc-verify, test-race) on the final revision and
-`go vet -tags=integration ./...` is clean. Repo CI on core#174: **six of seven
-green** — GitGuardian, build-test, integration, ipfs-private-integration, openapi
-and prev-release-against-new-schema — with `ipfs-integration` failing on
-`TestIntegrationPublicVideoRoundTrip` **timing out at 301 s**, an IPFS round-trip
-this slice does not touch, which passed on the same branch's previous revision;
-re-run requested. vidra-user: `npx tsc --noEmit` clean, `npm run lint` 0 errors
+`go vet -tags=integration ./...` is clean. Repo CI on core#174 is **7/7 green**
+— GitGuardian, build-test, integration, ipfs-integration, ipfs-private-integration,
+openapi and prev-release-against-new-schema. `ipfs-integration` failed once first,
+on `TestIntegrationPublicVideoRoundTrip` **timing out at 301 s** — an IPFS
+round-trip this slice does not touch, which had passed on the same branch's
+previous revision — and passed on re-run in 5m22s; it is recorded as flaky here
+rather than filed away as green. vidra-user: `npx tsc --noEmit` clean, `npm run lint` 0 errors
 (2 pre-existing warnings), `npm run lint:icons` pass, `npm run test` **247 files
 / 2,448 tests pass on Node 24** (vitest is still broken on Node 25 here). User CI
 on user#171: **six of seven green** including `frontend`, both `e2e-backed`

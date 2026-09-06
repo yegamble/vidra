@@ -1181,5 +1181,9 @@
         "at": "2026-09-06T18:09:57-04:00"
       }
     ]
+  },
+  "ci": {
+    "core#174": "7/7 green (ipfs-integration failed once on TestIntegrationPublicVideoRoundTrip timing out at 301s — unrelated to this slice — and passed on re-run)",
+    "user#171": "6/7 green; `contract` red by construction until core#174 merges"
   }
 }
