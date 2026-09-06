@@ -1,0 +1,75 @@
+{
+  "acceptance": "A11 CRT-02 statistics",
+  "status": "PASS",
+  "engagement_checkpoint": {
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "deduped_engagement_attribution": "PASS",
+      "owner_scope_historical_vs_daily": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "video_id": "a07b8163-59fb-48fc-93c9-7b6968fb81cc",
+    "primary_channel": "a06a4ddb201e4",
+    "history": {
+      "handle": "a11history1788649593516",
+      "id": "aeecde33-ebf4-47a8-b565-b82265faaeda"
+    },
+    "other": {
+      "handle": "a11other1788649598639",
+      "id": "1850cdb2-8e8f-4b40-b010-effad608d7aa"
+    },
+    "historical_counter_fixture": {
+      "views": 500,
+      "daily_rows": 0,
+      "source": "synthetic aggregate only; not migration proof"
+    },
+    "before": {
+      "views": 1,
+      "likes": 0,
+      "dislikes": 0,
+      "comments": 0,
+      "daily_views_total": 1,
+      "daily_series_days": 30
+    },
+    "after": {
+      "views": 2,
+      "likes": 1,
+      "dislikes": 0,
+      "comments": 1,
+      "daily_views_total": 2,
+      "daily_series_days": 30
+    }
+  },
+  "channel_switch": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "channel_switch_pending_and_historical_ui": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "primary_channel": "a06a4ddb201e4",
+    "history": {
+      "handle": "a11history1788649593516",
+      "id": "aeecde33-ebf4-47a8-b565-b82265faaeda"
+    }
+  },
+  "account_and_video_ui": {
+    "status": "PASS",
+    "vm": "vidra-a02-20260905194815-89796",
+    "checks": {
+      "account_sum_and_other_creator_isolation": "PASS",
+      "account_video_stats_ui_reload": "PASS"
+    },
+    "browser": "151.0.7922.34",
+    "totals": {
+      "views": 510,
+      "likes": 0,
+      "dislikes": 0,
+      "comments": 0,
+      "followers": 0,
+      "videos": 25
+    }
+  },
+  "harness_note": "Initial engagement/owner-scope assertions passed before an unhandled Playwright route cleanup race. Channel switch rerun passed using the same fixtures.",
+  "limitation": "Historical total was seeded explicitly as a synthetic aggregate with no daily rows. This is analytics proof, not source migration proof."
+}

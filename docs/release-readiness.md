@@ -103,9 +103,9 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | AUTH-04 TOTP enrollment, recovery and removal; OAuth/OIDC login/link/unlink | C U M | Core auth/MFA/OAuth routes; backed mfa/oauth-identities; real provider not supplied | BLOCKED | TOTP second login/recovery/revoke; local OIDC provider callback/state/PKCE, account collision and unlink-last-method policy; never substitute a precreated identity for login | AUTH-02 + OIDC selection → A05 |
 | AUTH-05 Profile/privacy, email/password changes, deactivation/deletion and account archive | C U S | Backed profile-edit/deactivate/delete-account/account-export; core account and search deletion hooks | UNVERIFIED | Mutate profile/unlisted/email/password with re-verification, export and import supported archive; delete/deactivate with content, sessions, follows and search history; verify recipient DM retention policy and media cleanup | AUTH-02, SRC-02 → A12 |
 | PUB-01 Create channel and draft; upload a real file within quota | C U M | `internal/video`, upload routes; backed upload/studio/channel-management | UNVERIFIED | Browser-create channel/draft; upload generated audiovisual clip; inspect original metadata, owner quota accounting and durable state; deny nonowner/overquota/invalid input | AUTH-02 → A06 |
-| PUB-02 Resumable upload, cancel, draft recovery and batch publishing | C U | W2 plans; backed upload-draft-recovery/upload-cancel/upload-batch | UNVERIFIED | Interrupt network and restart service between chunks; resume without duplicate files/charges; recover draft on another session; cancel cleanup; partial batch failure retained | PUB-01 → A10 |
+| PUB-02 Resumable upload, cancel, draft recovery and batch publishing | C U | W2 plans; backed upload-draft-recovery/upload-cancel/upload-batch | PASS (candidate; unmerged) | Interrupt network and restart service between chunks; resume without duplicate files/charges; recover draft on another session; cancel cleanup; partial batch failure retained | PUB-01 → A10 |
 | PUB-03 Transcode durable jobs into playable CMAF/HLS ladder | C M U | `internal/media/hls.go`, CMAF packager, transcode jobs; backed hls-playback | UNVERIFIED | Real ffmpeg job: source→processing→ready; fetch advertised master, audio/video variants, init/segments; decode audio and video; retry crash without duplicate promotion | PUB-01 → A07 |
-| PUB-04 Schedule/quarantine/privacy gates survive processing and replacement | C U S | Schedule/quarantine backed specs; replace handlers; instance gates | UNVERIFIED | Publish-after-transcode and schedule, quarantine approve/reject, replacement preserving URL/metadata; no premature discovery; concurrent old/new playback; failed replacement retains prior usable generation | PUB-03, SRC-02 → A10 |
+| PUB-04 Schedule/quarantine/privacy gates survive processing and replacement | C U S | Schedule/quarantine backed specs; replace handlers; instance gates | PASS (candidate; unmerged) | Publish-after-transcode and schedule, quarantine approve/reject, replacement preserving URL/metadata; no premature discovery; concurrent old/new playback; failed replacement retains prior usable generation | PUB-03, SRC-02 → A10 |
 | PLAY-01 Watch, seek, quality, speed, resume, PiP/theater and mobile/native playback | C U | `components/player`, HLS hook, backed hls-playback/player-settings/history | UNVERIFIED | Browser actual currentTime advance and audible track, seek, quality change and saved preferences; Chromium plus native-HLS Safari on representative ladder; original fallback when appropriate | PUB-03 → A07 |
 | PLAY-02 Canonical/legacy links, sharing, embeds, oEmbed/feed/sitemap | C U M | F01 resolved at final snapshot; resolver and imported UUID mapping now present; no actual browser route proof | UNVERIFIED | Run path guard first; follow canonical and old PeerTube/UUID/short links through edge with timestamps; verify privacy/password unlock and embed origin rules, metadata and downloadable file | REL-01, PLAY-01 → A01 then A08 |
 | PLAY-03 Private, unlisted, password, embed and download revocation | C U S | Backed video-password/embed; HTTP media auth and purge helpers | UNVERIFIED | Copy all manifest/segment/original/caption/storyboard URLs to unauthorized session; enforce token expiry, unlisted discovery exclusion and changed download policy; test account-unlisted transition | PLAY-01, SRC-02 → A08 |
@@ -985,6 +985,296 @@ Meta #95 carries this final delivery record; merge it on its final green checks,
 then delete its work branch. The fixture remains restored and stopped. A08 is
 the only acceptance item completed here; the earlier runtime limitations remain.
 
+
+## A10 recovery checkpoint — 2026-09-05
+
+**A10 OPEN — resume/cancel slice verified; remaining lifecycle acceptance unverified.**
+Dependencies A07/A09 have prior runtime evidence. Observable PUB-02 outcomes:
+interruption and service restart preserve uploaded chunks, a fresh session resumes
+without duplicate files/quota, and failed cancellation remains recoverable until
+cleanup succeeds. PUB-02 batch and PUB-04 publishing lifecycle remain separate
+required work; this checkpoint does not mark either entire row PASS.
+
+Frontend [PR #152](https://github.com/yegamble/vidra-user/pull/152), revision
+`420bc56`, fixes two false-success paths: failed inventory checks were hidden,
+and failed cancellation/deletion removed the recovery row. Inventory now has a
+retry action. Discard waits for confirmed cancellation and draft deletion; failed
+draft deletion remains retryable and disables unsafe resume. No API/SQL contract,
+authorization, privacy, dependencies or workflow changes.
+
+[Evidence](evidence/a10-recovery.json): real Chromium and the restored lab API
+proved an 11,207,830-byte two-chunk MP4 survives interruption and API restart.
+A fresh browser rejected the wrong file, sent only chunk 1, and downloaded a
+published original with matching SHA-256. SQL showed one original and quota
+matched stored files. Browser network fault injection proved inventory retry
+and failed Discard retaining its row. The real cleanup retry removed the draft,
+left quota unchanged and left zero session chunk files on disk. API final health
+is healthy; the source VM and test runner were untouched.
+
+TDD: three new tests failed before implementation and passed after. Required
+frontend gates PASS: TypeScript, lint (0 errors, 2 existing warnings), icons,
+229 unit files / 2,292 tests. Meta Compose config and diff/JSON checks PASS
+(nested core `6a6ea24`). No scripts changed. Runtime used the development frontend and actual
+lab backend; PR CI is pending, so no production-build CI result is claimed.
+
+Failed attempts retained: the first draft fixture used a channel UUID where the
+contract requires a handle (404); the corrected run persisted chunk 0, then its
+service-outage UI assertion timed out while the VM temporarily lost SSH. Immediate
+API recovery also failed. A later successful restart resumed that same session;
+the inventory error UI was separately proven through request-level network abort.
+No mocked success responses, raised limits or duplicate replacement drafts.
+
+Next: PUB-02 partial batch failures, then PUB-04 schedule/quarantine/replacement
+with processing, search and browser persistence evidence. Also verify recovery
+across reload between successful cancellation and failed draft deletion. The
+private reproduction paths/hashes are recorded in evidence. This focused slice
+is reviewable; A10 and the wider A09–A40 goal remain open. Merge authorization
+is still pending; no merge is claimed.
+
+
+### A10 batch retry evidence — 2026-09-05
+
+Frontend PR #152, revision `20fd27b`, now also fixes batch retries abandoning their original
+draft/session and the capacity backoff timer leaving a queued row stalled.
+Retries read the existing session and reuse server identity; successful rows
+remain untouched. Cancellation cleanup errors remain Failed instead of being
+reported as Cancelled. No contract or migration changed.
+
+[Batch evidence](evidence/a10-batch.json) records the real pre-fix failure:
+three chosen files, one interrupted chunk stream, then four database rows after
+retry (one abandoned draft plus three published videos). After the fix the same
+scenario retained the failed file/title, retried only that row, and produced
+exactly three published private videos whose original SHA-256 hashes matched.
+A second actual browser test filled the backend's five-session limit, observed
+`429 too_many_active_uploads`, released only its four seeded reservations, and
+proved automatic recovery to two completed videos with no extra draft. All
+seeded reservations/drafts were cleaned up; existing lab sessions were preserved.
+
+Regression tests reproduced duplicate draft creation and stalled backoff before
+their fixes. Three focused batch tests now pass, including honest cleanup error
+state. Final frontend gates: 230 files / 2,295 tests, TypeScript, lint (0 errors,
+2 existing warnings), icons and diff check PASS. Live tests exercised the real
+API and processing pipeline through a development frontend. Updated PR CI is
+pending and must be checked independently; the prior revision's checks do not
+prove this revision.
+
+PUB-04 remains UNVERIFIED. Next experiment: schedule a small real upload through
+the ordinary UI without holding its completion request, then check persistence,
+processing/search visibility, due-time publication, quarantine and replacement.
+The existing schedule spec deliberately holds completion until metadata PATCH;
+that cannot by itself prove the ordinary user flow is free from that race.
+Reload during partially completed cancellation cleanup also remains unverified.
+A10 and the A09–A40 goal remain OPEN; no merge is claimed.
+
+
+### A10 ordinary scheduling checkpoint — 2026-09-05
+
+**A10 remains OPEN; scheduling slice verified, other PUB-04 paths unverified.**
+Frontend [PR #153](https://github.com/yegamble/vidra-user/pull/153), candidate
+`fd7ce8f`, fixes an observed ordinary-flow race: a small upload
+finalized as privately published before the creator saved a schedule, making the
+API correctly reject `publish_at` with 422. Bytes still upload immediately, but
+finalization now waits for the Publish metadata PATCH to succeed. Failed saves
+remain retryable, and waiting uploads remain cancellable. This preserves the
+existing API/authorization contract; no SQL/API client regeneration was needed.
+
+[Scheduling evidence](evidence/a10-scheduling.json): a real upload stayed in draft
+with no video-file rows after transfer, accepted its schedule through the ordinary
+UI, survived a page reload, and was excluded from public detail/search before due
+time. The same video was public and indexed 16 seconds after due time; its
+original hash matched the audiovisual fixture. Cancel after transfer sent zero
+completion requests and removed the real draft and chunk files. The earlier
+failed cancellation attempt's single orphan draft was separately deleted using
+the owner API and the cleanup was verified.
+
+Three new regressions failed before implementation; 34 focused tests pass.
+Final full suite: 228 files / 2,292 tests PASS with two workers and unchanged
+timeouts. The initial default-worker run failed two unrelated component timeouts
+while the VM status probe also timed out; the original failures are retained.
+TypeScript, lint (0 errors, 2 existing warnings), icons and diff checks PASS.
+Existing backed schedule specs now exercise fully transferred files without an
+artificial completion-route gate; exact revised specs await CI, whereas actual
+lab browser/API/search tests above ran. No green CI claim for this new revision.
+
+Other failed attempts remain explicit: a test-only wrong search URL, temporary
+Multipass info timeout, and a real 429 during repeated pre-due reads. The final
+follow-up used bounded reads after the limit reset; it does not prove continuous
+visibility monitoring during that interval. No server limits were raised.
+
+Next: publish-after-transcode state and discovery, then real quarantine approve/
+reject and replacement preserving identity and playable generations. Recovery
+across partial cleanup/reload remains recorded. Review this scheduling change
+and the independent recovery/batch PR #152 before their shared evidence record.
+No production deployment or merge occurred; the A09–A40 goal remains OPEN.
+
+
+### A10 processing and quarantine checkpoint — 2026-09-05
+
+**A10 OPEN — replacement and partial-cleanup verification remain.**
+[Evidence](evidence/a10-processing-quarantine.json) adds actual processing and
+moderation proof using frontend `fd7ce8f` and the isolated PostgreSQL-backed API:
+
+- A real 11 MB audiovisual upload with publish-after-transcode enabled entered
+  the persisted hold and was excluded from public detail/search. It later became
+  published and discoverable with an advertised ready HLS master. Chromium
+  playback advanced past two seconds and decoded 68 frames. No processing jobs
+  or success responses were mocked; existing A07 evidence covers the full ladder
+  and audio decoding separately.
+- Real uploads under temporarily enabled quarantine entered the held state.
+  Browser approval/rejection, reload persistence, intended viewer policy, owner
+  notification and moderation response semantics passed on candidate core
+  `39be454` in [PR #160](https://github.com/yegamble/vidra-core/pull/160).
+  Security: needs owner attention; detailed prior reproduction remains private.
+- The quarantine setting was restored with its original override status. The
+  candidate API was built only in the disposable VM from the unchanged lab base
+  plus the scoped binary; original image and complete environment were restored
+  and health verified. Source VM/test runner were untouched. Temporary frontend
+  and proxy processes were stopped, and generated unrelated instructions removed.
+
+Core TDD regression failed before the fix; full HTTP API suite PASS. Required
+`make ci` PASS (format, vet, migration lint, OpenAPI, generated SQL, race tests),
+with bounded build concurrency. Integration-tagged vet PASS. Full tagged store/
+federation suites were NOT RUN; targeted acceptance ran against actual lab
+PostgreSQL through the API/browser. No SQL or API shape changed, so no migration
+or client regeneration was needed. New core PR CI remains pending.
+
+Review core #160 and independent frontend #152/#153 before this evidence record;
+there is no contract dependency order among those implementation PRs. Next:
+replacement must preserve stable identity/metadata and playable old/new
+versions, including failure retaining the previous usable generation. Partial
+cleanup/reload gaps remain recorded. No merge, release or production deployment;
+the wider A09–A40 goal remains OPEN.
+
+### A10 replacement and CI checkpoint — 2026-09-05
+
+**A10 OPEN — replacement failure retention and scheduling CI pending.**
+[Replacement evidence](evidence/a10-replacement.json) records real Chromium
+playback during a 48 MB replacement and after its HLS generation was promoted.
+The video ID, short link, channel, title, description, privacy, creation time and
+publish-after-transcode setting stayed equal. Views did not decrease; the
+returned original matched the replacement SHA-256. The existing player kept
+advancing with no media error before, during and after promotion, including a
+seek after promotion. The replacement feature override was restored exactly.
+
+An invalid replacement did not settle within the test's 90-second terminal wait.
+Read-only inspection found the existing five-attempt exponential retry policy,
+with the safe error "the file is not a playable video" and a pending job after
+attempt four. This is not terminal-failure proof. Next: observe the natural final
+attempt, then verify the previous master/original and actual playback survive.
+No retries, job states or clocks were modified to manufacture completion.
+
+Scheduling frontend #153's first CI run exposed stale test sequencing: the
+shared backed fixture and two mocked tests waited for finalization before
+Publish. Revision `217b083` saves metadata first, then asserts the unchanged
+processing outcome; the mocked publish test additionally requires zero
+completion requests before Publish and exactly one afterward. Typecheck, lint
+(two existing warnings), production build and both previously failing mocked
+Chromium tests PASS (2/2). Full updated local/S3 CI is pending. Earlier unit and
+icon gates remain recorded above; this follow-up changes only tests.
+
+Recovery frontend #152 and core #160 now have green CI, including their actual
+integration suites. This supplements, rather than reclassifies, the explicitly
+unrun local tagged core suites. Partial-discard fault injection confirms honest
+cleanup errors and a retained draft discoverable in its channel after reload;
+[Partial-cleanup evidence](evidence/a10-partial-cleanup.json) now confirms UI
+deletion, API 404, zero video-file rows and unchanged used quota after reload.
+Test-selector corrections and transient inventory failure remain in private
+checkpoints. Meta Compose config, evidence JSON and diff checks PASS.
+No acceptance completion, merge, release or production deployment is claimed.
+
+### A10 candidate acceptance — 2026-09-05
+
+**A10 implementation and acceptance proof are reviewable; delivery remains OPEN
+— awaiting merge.** This checkpoint supersedes the pending observations above.
+PUB-02/PUB-04 candidate success means resumable transfers survive network/service
+interruption and a fresh session without duplicate files/quota; cancellation
+and partial batch failures remain recoverable; schedule, processing and
+quarantine enforce visibility; replacement preserves identity and playable
+media, including when the replacement fails.
+
+The invalid replacement naturally exhausted the existing five-attempt retry
+policy. Its job and session became failed without manipulating their state or
+clock. The prior HLS master, original SHA-256 and video metadata remained intact;
+an anonymous Chromium player then advanced 3.006 seconds and decoded 77 frames
+with no media error. [Replacement evidence](evidence/a10-replacement.json) now
+PASS. [Partial-cleanup evidence](evidence/a10-partial-cleanup.json) PASS includes
+zero remaining chunks under the verified media root. Earlier failed harness
+attempts and the initial 90-second wait remain recorded, not relabeled as passes.
+
+Implementation revisions and green CI:
+
+- Frontend recovery/batch `20fd27b`, [#152](https://github.com/yegamble/vidra-user/pull/152):
+  frontend, local/S3 backed, channel-sync, contract and IPFS checks PASS.
+- Frontend schedule `217b083`, [#153](https://github.com/yegamble/vidra-user/pull/153):
+  frontend [run 33996505843](https://github.com/yegamble/vidra-user/actions/runs/33996505843)
+  and local/S3 backed [run 33996505849](https://github.com/yegamble/vidra-user/actions/runs/33996505849)
+  PASS; contract, channel-sync and IPFS checks PASS.
+- Core intended viewer policy `39be454`, [#160](https://github.com/yegamble/vidra-core/pull/160):
+  build/test, OpenAPI, integration and IPFS integration checks PASS. Security:
+  needs owner attention; detailed original reproduction stays private.
+
+Review all three independent implementation PRs before accepting the linked
+meta evidence PR #101; none requires a contract migration or an ordering among
+implementation PRs. No production deployment/release or merge occurred. Local
+core full tagged suites were not run (CI integration passed); temporary browser
+harnesses supplement committed tests and do not replace their gates. Temporary proxy/frontend processes were stopped and the generated instruction
+suffix removed; component checkouts are clean. The wider
+A09–A40 goal remains open. Next action: resolve pending merge authorization and
+review these candidates; continue the next dependency-ready item separately.
+
+## A11 Studio and statistics checkpoint — 2026-09-05
+
+**A11 OPEN — stored-byte deletion awaits collector approval.** Dependency-ready
+from A07/A09. Observable success requires persisted Studio field/media edits,
+chapter order and real frame/sprite behavior, deletion removing media/discovery,
+and correctly attributed owner-scoped video/channel/account analytics, including
+channel-switch races and historical totals without fabricated daily history.
+
+- [Chapter evidence](evidence/a11-chapters.json): failed initial GET was presented
+  as an empty editable set; Save genuinely erased two synthetic stored chapters.
+  The chapters were restored after reproduction. Frontend
+  [#154](https://github.com/yegamble/vidra-user/pull/154) now disables whole-set
+  replacement until the read succeeds, shows the design-system error/retry UI,
+  and loads the authoritative rows before editing. Actual Chromium/API retry,
+  changed chapter order and reload persistence PASS. Two TDD regressions failed
+  first; all 8 focused chapter tests and 228 files / 2294 full tests PASS.
+  TypeScript, lint (two existing warnings), icons and diff checks PASS.
+- [Studio evidence](evidence/a11-studio.json): title, description, taxonomy,
+  tags, privacy, sensitive flag/reason and comment/download toggles persisted
+  through fresh read/reload. Valid custom PNG upload matched stored SHA and
+  decoded in-browser; actual frame picker at two seconds returned JPEG;
+  playback hover rendered the real storyboard sprite/VTT. Schedule and source
+  replacement remain covered by the separate A10 evidence, not duplicated here.
+- [Statistics evidence](evidence/a11-stats.json): repeated view/like calls
+  deduped; real comment attribution and daily rollup matched expected deltas.
+  Two creators' video/channel stats enforce 404 for the other owner (including
+  staff), account sums exclude the other creator, and UI/account/per-video
+  reload checks PASS. A delayed actual channel stats request clears previous
+  totals, then shows the new channel's 500 historical views and zero recent
+  views. The 500 total is an explicitly synthetic aggregate without daily rows;
+  this proves analytics semantics, not PeerTube migration. A Playwright route
+  cleanup race was corrected and rerun on the same fixtures.
+- [Deletion evidence](evidence/a11-deletion.json): Studio confirmation returned
+  204; reload stayed deleted, public detail/thumbnail/storyboard/HLS and owner
+  original returned 404, file rows vanished, and real search excluded the ID.
+  Physical object deletion remains UNVERIFIED. The existing collector dry run
+  found about 105 earlier lab orphans before this deletion, within its unchanged
+  25% circuit breaker. Automatic approval review rejected running that complete
+  set because it extends beyond the focused A11 fixture. User approval is
+  pending; no collector or manual blob deletion was performed.
+
+Frontend revision `e085945` adds the backed chapter read-failure regression and
+replaces the old eight-byte thumbnail header fixture with a decodable PNG plus
+browser decode assertion. Its updated CI is pending. #154 is stacked on A10
+frontend #153; review/merge #153 first, then #154. This evidence is stacked on
+meta #101. No core contract/SQL change, client regeneration, dependency change,
+workflow edit, production deployment or merge. An initial upload toast timeout
+on the new fixture is recorded separately; persisted publication was verified,
+but that toast assertion is not relabeled as a success.
+
+Next: review the pending collector permission and observe #154's updated CI.
+Keep A11 open until physical cleanup is proved. Independent A12 work can proceed
+while that external approval remains pending; the A09–A40 goal stays active.
 ## A36 backup confidentiality and failure checkpoint — 2026-09-05
 
 **A36 OPEN.** A09 is already merged as #90 (`56ef7a8`); source-dependent
@@ -1256,3 +1546,19 @@ not close A37 or the wider A09–A40 goal.
 A14 delivery update: merge authorization is now explicit. Frontend #150 is
 merged; #151 is retargeted to main with CI rerunning. This conflict resolution
 preserves both the complete A14 and the independent A36/A37 evidence.
+
+## Merge delivery checkpoint — 2026-09-05
+
+The user explicitly instructed “make sure we're merging to main and push as we
+go.” Merge authorization is resolved. A10 implementation PRs core #160 and
+frontend #152/#153 are merged after green checks; the prior runtime PASS remains
+supported by its individual evidence. A11 chapter recovery frontend #154 and A12
+session restoration frontend #155 are also merged; their broader acceptance
+items remain open as recorded. A36 offsite proof meta #97 and the A37 checkpoint
+#98 are merged. A14 frontend #150 is merged; its dependent #151 is retargeted to
+main and its new checks are running. Completed base branches are removed only
+after dependents are retargeted. No production deployment or release occurred.
+
+A14 final delivery: frontend #150 and #151 are now merged after all gates passed.
+The combined runtime acceptance remains PASS; this evidence PR completes its
+delivery record once its final validation passes and it is merged.

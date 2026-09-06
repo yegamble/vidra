@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "vm": "vidra-a02-20260905194815-89796",
+  "checks": {
+    "partial_failure_retained": "PASS",
+    "draft_discoverable_after_reload": "PASS",
+    "reload_cleanup_draft_files_quota": "PASS"
+  },
+  "browser": "151.0.7922.34",
+  "video_id": "3a7a3a1c-faa7-4871-a6d2-1a85203e8a3b",
+  "upload_id": "7cf0d45e-5ea7-46c1-bd72-66a855abb1c5",
+  "quota_bytes": 182506459,
+  "acceptance": "A10 partial discard and reload",
+  "frontend_revision": "20fd27b",
+  "prior_attempts": "Partial error text, selected channel and lowercase draft badge required harness corrections. A later inventory attempt failed before discard; after a 60-second pause the same existing session completed the full proof.",
+  "cancelled_chunk_files_remaining": 0,
+  "storage_root": "/app/data/media"
+}
