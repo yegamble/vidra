@@ -2476,3 +2476,236 @@ shipped — a mailbox-possession reset, and an address fixed at registration.
 That is a product decision, not an engineering gap. Delivery order: **core#164
 first**, then this evidence PR. Nothing is merged here and no deployment is
 authorized.
+
+## A12 password change and token revocation — 2026-09-06
+
+**A12 stays OPEN and the AUTH-05 row does NOT flip.** The previous two slices
+closed everything the row's procedure names except one clause, and reported that
+the clause described a product Vidra does not ship. The owner's answer was to
+build it. This slice builds **half** of it — current-password-authenticated
+password change — and, because the deletion slice proved that revoking sessions
+kills only refresh tokens, it builds the revocation mechanism underneath it
+once, properly. Email change with re-verification is the remaining half and the
+next slice, so the row still cannot flip.
+[Core #165](https://github.com/yegamble/vidra-core/pull/165) (`2863a54`, three
+commits, **migration 0128**) and [frontend
+#163](https://github.com/yegamble/vidra-user/pull/163) (`8ce8666`). [Sanitized
+evidence](evidence/a12-password-change.json) records **127 API assertions across
+six drivers on one clean database and 23 browser assertions across two Chromium
+contexts, none failed**, with **zero 429s** other than the five the rate-limit
+phase deliberately provokes as its own assertion.
+
+**The mechanism, and why this one.** Access tokens now carry `sid` — the id of
+the `sessions` row they were minted from — and the auth middleware resolves that
+session on every authenticated request. It costs **one indexed read**: a
+primary-key lookup on `sessions` joined to `users` by primary key. That single
+query covers four revocation sources at once, because it re-reads the *account*
+rather than trusting the token's copy of it — session revoked, session expired,
+account deactivated, account tombstoned. There is deliberately **no in-process
+cache**: vidra runs multiple replicas, so a cache on one process could not be
+invalidated by a revocation served by another, and immediate invalidation is the
+entire property being bought. A per-user `token_version` or `sessions_revoked_at`
+column was rejected — both need a migration and a `users` change for no extra
+coverage, and the timestamp form additionally has a one-second `iat` race. A
+token that names **no** session fails closed; only the previous binary could
+mint one, its holder's refresh token is untouched, and clients re-authenticate
+transparently on the next 401. That is the one upgrade-visible behaviour here.
+`optionalAuth` and the private-media access cookie get the same check, so a
+revoked or tombstoned principal is not a principal anywhere.
+
+**The deletion slice's reproduction, re-run and now refused.** That slice proved
+a hard-deleted account creating a channel, a playlist and a fresh archive of
+itself after its own tombstone was written. On this binary, all eight of the
+probed routes — `GET /auth/me`, `PATCH /auth/me`, `GET /me/playlists`, `POST
+/playlists`, `POST /channels`, `POST /me/export`, `GET /me/notifications`, `GET
+/me/conversations` — answer **401**, and the database confirms the deleted
+account created no channel, no playlist and no `account_exports` row. The same
+eight are 401 for a **deactivated** account, where `PATCH /auth/me` was 200
+before. An **admin** flipping `is_active` false through `PATCH
+/admin/users/{id}` reaches the account's access token too; re-enabling does not
+resurrect the old token, because that path also revokes the sessions, so the
+user signs in again — recorded as the shipped behaviour rather than argued with.
+The strongest form of the claim is pinned in the tagged real-PostgreSQL test:
+`DeactivateUser` writes **no session row at all** and the surviving session
+immediately stops resolving.
+
+**The endpoint.** `POST /api/v1/auth/me/password` behind `requireAuth` **and**
+the strict auth limiter — supplying a current password makes it a guessing
+surface exactly like login, and the limiter runs first, so an unauthenticated
+attacker cannot bypass it. That is proven on the route itself and not inferred:
+an unpaced burst of 14 wrong-password attempts answers 403 nine times and then
+**429**, on the shipped 10/min per-IP limit, which was never raised for this run.
+A wrong current password is 403 with the stored hash **byte-identical**
+afterwards and the caller not signed out; the 403 echoes neither password. The
+new password is validated by the same policy as registration and the reset
+(8–72), plus a refusal when it equals the current one — a no-op "change" would
+still sign out every device and mail a security notice. **The password-less rule
+is explicit**: an account with an empty stored hash (the OAuth/ATProto-only
+shape) is refused **409** with *"this account has no password: use the password
+reset flow to set one"*, deliberately not the unfalsifiable 403 it would
+otherwise get, since bcrypt can never verify an empty hash and no supplied
+password could ever satisfy it. On success every **other** session is revoked
+(0.64s to the other browser's first 401, exactly one un-revoked session row
+left) and the changer's own keeps reading and writing. Its refresh token is
+**not** rotated, and that is a decision, not an omission: it is a 256-bit random
+secret with no relation to the password, and the property that matters — killing
+whatever an attacker holds — is the revocation of the other sessions.
+
+**A defect the lab found, not the reading.** The SC2 driver asserted that the
+changer's own session survives, and it did not: *"the changer's refresh still
+works: got 401, want 200"*, *"un-revoked session rows: 0, want 1"*.
+Refresh-token **reuse detection** assumed compromise and revoked every session
+whenever a revoked refresh token was presented — correct for a replayed
+*rotated* token, wrong for a device that was deliberately signed out and whose
+client simply retried on its first 401, which is what every client does the
+moment a password change signs it out. The escalation then took down the very
+session the change was meant to keep. **Migration 0128** (append-only) adds
+`sessions.revoked_reason`: rotation stamps `rotated`, every deliberate sign-out
+stamps `signed_out`, and only a replayed `rotated` token still escalates. Rows
+revoked before 0128 carry `''` and keep escalating exactly as before, which is
+the safe direction. A second test pins what must **not** weaken — a replayed
+rotated token still takes every session down, including a freshly rotated one
+and an unrelated second browser — and the real-PostgreSQL test asserts both
+reasons are actually written.
+
+**The notice, over real SMTP.** The dev capture seam was deliberately **off** and
+a throwaway Mailpit container was the sink, so `SendPasswordChanged` (the new
+sibling of `SendPasswordReset`) is proven end to end: exactly one message, to the
+account's own address, from the configured `SMTP_FROM`, subject *"Your password
+on … was changed"*, a body that says every other device was signed out and tells
+the reader what to do if it was not them, and — asserted, not assumed — **no
+password, no token and no link of any kind**. With the sink stopped the change
+still answered 204 and the new password logged in, so the notice can never fail
+the change. There is **no in-app notification convention for security events** to
+use: `internal/notification`'s vocabulary is follow / comment / comment_reply /
+message / report_resolved / video_rejected / caption_ready / new_video /
+new_report, none of them account-security shaped. Email-only is recorded as the
+shipped answer, and adding a type is a product decision plus a prefs-registry
+row.
+
+**The UI.** `ChangePasswordSection` on `/settings/security`, mounted between the
+two-factor card and "Signed-in devices" — adjacent on purpose, because a change
+signs the other devices out. Current / new / confirm, every field label-bound and
+`type="password"` with `current-password` / `new-password` / `new-password`
+autocomplete tokens, submit disabled until all three are filled, Tab moving
+Current → New. Errors go through the shared `Alert`: the confirmation mismatch
+and the 8-character floor are caught client-side with **no** request, 403 renders
+*"That is not your current password."*, and 409 renders a sentence with a real
+link to `/reset-password`. Success is a `role="status"` Alert stating the
+consequence — *"Your password was changed, and every other device was signed
+out."* — and the typed passwords are cleared from the form. Driven in real
+Chromium after hard reloads: the changer survives a hard reload signed in, the
+**second browser context** is signed out on its next hard reload 2.5s after the
+change with no settings form left, the old password does not sign it back in and
+the new one does. `lib/api/generated.ts` was regenerated from the branch's spec
+via the documented workflow.
+
+Gates: core `make ci` **passed** (fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race) plus the tagged `internal/store` and `internal/account`
+integration lanes against real PostgreSQL 16 at **schema 128**, including the new
+`TestSessionRevocationQueriesPersist`. Frontend: TypeScript clean, lint 0 errors
+with the same 2 pre-existing warnings, icons clean, and **239 files / 2355
+tests** — up from 238/2348 by exactly this slice's seven new tests, and the same
+counts CI reports on the green `frontend` lane — on nvm Node 24.4.1. Per
+vidra-user's AGENTS.md the e2e suites were **not** run locally; repo CI owns
+them. `vidra-search` was not modified and not run — nothing here reaches the
+search boundary — and no compose or script files were touched, so the meta render
+was not needed. SC5 no-regression: the reset flow passes end to end over real
+SMTP (19 assertions: 202, an unknown address still 202, the token lifted from the
+real message body, a wrong token 400 and a short password 422 both leaving the
+hash untouched, the real token 204, a replay 400, old password 401 and new 200),
+the two flows **compose** (the account then changed the password the reset had
+just set), and a pre-reset access token is now 401 immediately instead of living
+out its TTL. The two comment-write tests from core#164 still pass; they are now
+partly redundant with the middleware and are deliberately **kept**, because they
+pin the handler's own ordering guarantee — resolve the author *before* the insert
+— independently of it.
+
+Failures worth keeping. The **first full vitest run reported 18 failures across
+12 files**, every one an unrelated component with a 5–21 second duration, run
+while a Go build, a docker pull and the lab API competed for the machine; re-run
+unloaded it is 1 failure (AdminMediaView's 501-item orphan list timing out at 5s)
+which passes alone, 24/24. The status-contract guard broke **honestly**: its
+probe minted a session-less token, which now 401s everywhere, so it saw *"only 1
+of 304 operations were observed to 403"* — it now authenticates as a fixed
+principal with a live session, floors unchanged. **tsc, not vitest, caught** the
+test's `ApiError` stand-in taking a bare status number where the real class takes
+an object; vitest was green on the wrong shape. The admin phase first probed
+`POST /admin/users/{id}/deactivate`, which does not exist — eight assertions
+"failed" against an account that had never been disabled, and its writes landed
+and survived into the next attempt, so that phase now deletes its own residue
+first. An assumption that the admin path writes no session row was simply
+**wrong** (it revokes them) and is restated. The rate-limit phase first measured
+`requireAuth` rather than the limiter, because it used a token SC2 had correctly
+killed. Playwright's `getByLabel("New password")` matches *"Confirm new
+password"* too, and an unscoped `getByRole("status")` grabbed a two-factor
+spinner and made a failed change look successful — **the same harness trap the
+previous slice recorded, hit again**; every browser query is now exact and scoped
+to the Password card. And the walkthrough is not idempotent (it changes its
+actor's password), so it now registers a fresh actor per run.
+
+Findings worth a decision, none fixed here. The session lookup already reads the
+account, so making a **role demotion** effective immediately rather than at token
+expiry is now a one-field change; it was left out to keep the diff to the
+revocation question. The auth limiter is **keyed per IP and shared** across
+register / login / reset / and now change, so on an instance behind a proxy that
+does not set a trusted client IP one user can exhaust everyone's budget — noted
+because this slice adds a route to that bucket. On an instance with no working
+SMTP a password change produces **no notice at all**, the same gap the reset flow
+has. And the previous slice's `.next/standalone` chunk-404 finding was **not
+re-tested** — this walkthrough used `next start` against the same production
+build, as that one did — so it remains open.
+
+**CI, and what it caught.** Core #165 is **green on all six functional lanes**
+(build-test, integration, ipfs-integration, ipfs-private-integration, openapi,
+prev-release-against-new-schema) and is marked ready. Two of them went red once
+and passed on re-run: `integration` on `TestStateFlipClaimsAreExclusive` — a
+queue-lease concurrency test this diff cannot reach — and `ipfs-integration` on
+`TestIntegrationPublicVideoRoundTrip` timing out at 300s, the same lane and the
+same test that flaked on core#163. **GitGuardian is red and needs owner
+attention**: it reports *"1 secret uncovered"*, and nothing in the branch is a
+live credential — every credential-shaped string it adds is a test fixture
+password or the long-standing test JWT signing secret that already sits in about
+twenty test files on `main`. Two follow-up commits removed the newly-introduced
+copies anyway (the fixture passwords now have one definition each, and the test
+wiring was deduplicated so the signing secret does too), and neither cleared the
+check, because GitGuardian scans **every commit in the PR** and a finding in the
+first survives its removal in a later one. Clearing it needs someone with
+dashboard access.
+
+Frontend #163 is green on `frontend` (the canonical gate, Playwright included)
+and all four backed lanes; `contract` is red for the ordering reason and nothing
+else — *"Frontend calls paths that do NOT exist in vidra-core's openapi.yaml:
+/api/v1/auth/me/password"* — so **that PR stays a draft until core#165 merges**.
+One backed lane failed in 11s on `unauthorized: authentication required` pulling
+a compose image and passed on re-run.
+
+And CI earned its keep. The first push turned the `frontend` lane red on two
+cases in `e2e/security-settings.spec.ts` with *"strict mode violation:
+getByLabel('Current password') resolved to 2 elements"* — when two-factor is on,
+`/settings/security` now carries **two correctly-labelled "Current password"
+inputs**, the disable form's and this card's. The spec's two locators are scoped
+to the card that owns the "Turn off two-factor authentication" button, which is
+what they always meant; no assertion changed, and both were reproduced failing
+and then passing locally. The ambiguity is not only a test problem — two
+identically-labelled password inputs are indistinguishable to a screen reader
+too — so the Password card is now a **named region**, with a test.
+`e2e/settings.spec.ts` and `e2e-backed/deactivate.spec.ts` use the same label but
+on `/settings`, where this card is not mounted; that was checked, not assumed.
+
+**The AUTH-05 row is not flipped and A12 remains OPEN.** What remains is
+**email change with re-verification, and nothing else**: an account's address is
+still fixed at registration, `PATCH /auth/me` rejects an `email` with 422, and
+even the instance owner cannot move one. The next slice should know that the
+re-verification shape is now settled and reusable, that revocation is no longer
+an open question, that an email change needs *both* the current password and
+possession of the new address (so it is a two-step pending-email flow, not a
+PATCH), that the obvious fourth mailer sender is a notice to the **old** address
+— the only signal that reaches a user whose address was stolen — that login
+resolves email-or-username with **email taking precedence** so a new address must
+not collide with a username-shaped login, and that a deliberate sign-out must
+stamp `revoked_reason = 'signed_out'` or a signed-out client's retry will revoke
+everything. Delivery order: **core#165 first** (it changes `api/openapi.yaml` and
+carries migration 0128), then **frontend#163** (its `contract-ci` goes green only
+after core merges), then this evidence PR. Nothing is merged here and no
+deployment is authorized.
