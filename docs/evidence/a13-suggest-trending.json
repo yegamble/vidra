@@ -1,0 +1,104 @@
+{
+  "status": "A13 stays OPEN and the SRC-03 row does NOT flip. This is the first half of A13 — autosuggest thresholds, suggestion bans, trending gates and the user's discovery controls — and those pass on real evidence against a real vidra-search. Recommendations/related/home cards, search filters/paging/ranking and history delete/reconcile are the second half and were not attempted here.",
+  "scope": "A13 / SRC-03 slice (a): suggestion thresholds and bans, trending, discovery opt-out",
+  "core_revision": "a13/suggest-trending-optout @ a324ebd (one commit on origin/main 7e28eb5)",
+  "search_revision": "vidra-search@main e8a1f76 — NOT modified by this slice; RUN for real, workers on, cadences left at shipped defaults",
+  "frontend_revision": "vidra-user@main a1b6db8 — NOT modified by this slice; production build served and driven in Chromium",
+  "pull_requests": {
+    "core": "yegamble/vidra-core#167",
+    "frontend": "none — the frontend needed no change in this slice",
+    "meta": "the evidence PR carrying this file and the readiness section",
+    "dependency_order": "core#167 FIRST (the only code change in the slice), then the meta evidence PR."
+  },
+  "environment": "Disposable LOCAL lab, native. Homebrew PostgreSQL 16 + Redis. vidra-core built from the branch on 127.0.0.1:8088 (VIDRA_ENV=development, VIDRA_ROLE=all, TRANSCODING_ENABLED=true with ffmpeg, local blob storage, throwaway database migrated 0 -> 129). vidra-search built from main on 127.0.0.1:8090 against its own throwaway database at schema 16 and its own Redis logical database, wired to core through SEARCH_SERVICE_URL + a lab-only SEARCH_INTERNAL_SECRET. The vidra-user PRODUCTION build served on 127.0.0.1:3100. Shipped rate limits left ON at defaults (120 general / 10 auth per IP per minute) and the helper paced itself instead of widening them — ZERO 429 responses in any browser phase. Synthetic actors only; the owner claimed through the real first-run bootstrap. Torn down at the end.",
+  "browser": "Chromium 151.0.7922.34 via Playwright 1.62.1 (headless, real browser, production frontend build, a separate browser context per actor, 1440x1000). No route interception anywhere, no fake search server, no skipped lane.",
+  "actors": {
+    "M": "mallory — the instance owner, claimed through the real first-run bootstrap; places and lifts the suggestion ban",
+    "U1..U3": "alice, bob, carol — three signed-in users, exactly the shipped distinct-user threshold",
+    "U4": "dave — one user who repeats a single query twelve times",
+    "U5": "erin — the actor who turns every search/personalisation control OFF before searching",
+    "anonymous": "one address, several rotated X-Vidra-Session headers"
+  },
+  "shipped_rules_as_shipped": {
+    "suggestion_threshold": "A normalized query becomes instance-wide suggestible only when distinct_users >= minimum_query_user_count — the service_config overlay value, falling back to MIN_QUERY_USER_COUNT, DEFAULT 3 — and NOT banned. distinct_users is an exact recount over the retention window (search_event_retention_days, default 90 days): count(DISTINCT user_id) plus, for rows with no user_id, count(DISTINCT COALESCE(subject_id, session_id)). Written by the aggregates_rollup worker, cadence SEARCH_AGGREGATES_INTERVAL, DEFAULT 60s, cursor-driven over query_log.id. Ordering within the stream uses decayed_freq, half-life SEARCH_QUERY_HALF_LIFE_HOURS, DEFAULT 168h.",
+    "threshold_does_not_gate_everything": "The floor gates the QUERY stream only. Autosuggest also runs title/channel/tag prefix streams straight off search.documents plus a trigram typo fallback (similarity >= 0.35) — none of them threshold-gated, because they surface public catalogue text rather than what people typed.",
+    "suggestion_cache": "Non-personalized suggestion responses for prefixes of at most 3 runes are cached in Redis for 60s. A request carrying include_history plus a user or session bypasses the shared cache entirely, so one viewer's history can never be served to another.",
+    "ban_propagation": "PUT/DELETE /api/v1/admin/search/suggestion-bans/{query} (admin OR moderator). The ban upsert writes banned=true AND suggestible=false in one statement, so it depends on no worker pass: measured 4 ms from the API call to the suggestion being gone on an uncached prefix. The ONLY staleness window is the 60s short-prefix cache, measured at exactly 60s on a 3-rune prefix. An unban clears banned but deliberately does NOT restore suggestible — the query must re-earn the floor from real distinct users at the next rollup that sees traffic for it, or at the daily suggestible_reeval pass (SEARCH_REEVAL_INTERVAL, default 24h).",
+    "trending": "trending_sweeper, cadence SEARCH_TRENDING_INTERVAL, DEFAULT 60s, over two Redis domains ('q' queries, 'v' videos). Two gates, both must pass: (1) distinct-user floor — the same minimum_query_user_count, DEFAULT 3, counted from a per-day HyperLogLog over TrendWindowDays, DEFAULT 2; (2) Wilson lower bound of distinct/total at z=1.96 must clear SEARCH_TRENDING_WILSON_FLOOR, DEFAULT 0.10. Scores decay with TRENDING_HALF_LIFE_HOURS, DEFAULT 6h; prune floor 0.01; top-K 50; the gated list is cached for 5 minutes. One (subject,item) may bump the RANKING score at most once per SEARCH_TREND_CAP_WINDOW, DEFAULT 1h, while the raw count and the distinct-user HLL are always bumped. The trending subject is user_id when signed in, else subject_id, else session_id.",
+    "opt_out_default": "OPT-OUT, NOT OPT-IN. All three controls default TRUE and were observed true on the registration response for all five synthetic accounts: search_history_enabled, personalized_search_enabled, personalized_recommendations_enabled. Each is ANDed with an instance setting (search_history_enabled, personalized_search_enabled, personalized_recommendations_enabled), and personalized SEARCH is additionally mode-gated: search_mode defaults to 'simple', in which core never applies behavioural ranking for anyone. SRC-03's phrase 'user search-discovery opt-in' mislabels the shipped default.",
+    "opt_out_promise": "The shipped UI copy is narrower than 'do not collect'. Keep my search history: 'While off, new searches are not stored to your history.' Personalize my search results: 'While off, everyone sees the same results for a query.' Personalize my recommendations: 'While off, you'll see trending and related videos that aren't personalized.' Nothing on the page promises that a search stops being counted."
+  },
+  "what_search_stores_per_attributed_event": {
+    "query_log": "normalized_query, display_query (THE RAW QUERY TEXT AS TYPED), user_id (the RAW account UUID, not hashed), session_id (the client-supplied UUID text), subject_id (core's keyed, domain-separated, day-scoped HMAC of 'ip:<address>' — never the address itself), results_count, submitted_at.",
+    "behavior_events": "type, user_id (raw UUID), session_id, normalized_query, video_id, position, model_version, occurred_at, and props — the whole delivered payload verbatim, so the raw query text, user_id, session_id, subject_id and allow_history are all present a second time.",
+    "never_stored": "No email address, username, display name, IP address or user agent appears in any search table. Confirmed by reading every column of query_log and behavior_events and their live rows.",
+    "retention": "search_event_retention_days, default 90, sweeps query_log and behavior_events; the daily suggestible_reeval then re-reads what survives so a suggestion cannot outlive the evidence for it.",
+    "finding": "The raw account UUID is the attribution key, not a pseudonym. The anonymous half of the same floor uses a keyed day-scoped digest specifically so it cannot be inverted or joined across days; the signed-in half stores the durable account id beside the raw query text for the full retention window, for every signed-in search, whatever the user's controls say."
+  },
+  "criteria": {
+    "SC1_real_pipeline": {
+      "result": "PASS",
+      "recipe": "core + vidra-search + the search worker loop all running, joined by the real HMAC internal API (hex HMAC-SHA256 over ts\\nMETHOD\\nPATH, presented as v1:{ts}:{sig}), with core's search outbox delivering. 86 outbox rows delivered, 0 pending. Assertions were made through core's public API, through a separately SIGNED call straight at vidra-search's own /internal/v1 surface, and by reading both databases directly.",
+      "same_ids_end_to_end": "Three fixtures uploaded through the real API + transcode pipeline appear as eligible documents in search.documents. A search for 'Lab Hot' typed into the header in Chromium returned exactly one video whose id is the uploaded V_HOT id, rendered its watch link, and wrote a search.submitted whose props carry source='search' — the routed-to-service branch, not the local fallback.",
+      "note": "A query that matches nothing takes the documented cold-index branch and records source='local'. That is the shipped behaviour A09 already pinned, not a routing failure."
+    },
+    "SC2_suggestion_thresholds": {
+      "result": "PASS on the threshold itself; ONE DEFECT FOUND AND FIXED on how the anonymous half of it is counted",
+      "at_threshold": "'zynthara' typed by exactly 3 distinct signed-in users -> query_aggregates distinct_users=3, suggestible=true; present in GET /search/suggestions and in the SearchAutocomplete listbox in Chromium for an anonymous visitor.",
+      "below_threshold": "'qwoplex' typed by 2 distinct users -> distinct_users=2, suggestible=false; absent from both the API and the listbox.",
+      "repetition_is_not_distinct_users": "'vurblok' typed TWELVE times by ONE user -> total_count=12, distinct_users=1, suggestible=false; absent from both. Volume alone never clears the floor.",
+      "anonymous_before_the_fix": "'xhemra' searched three times from ONE address with three ROTATED X-Vidra-Session headers -> three query_log rows, subject_id NULL on all three, distinct_users=3, suggestible=TRUE, and the string appeared in anonymous autosuggest. One client promoted a query only it had ever typed.",
+      "anonymous_on_the_other_path": "The same attack through POST /search/events -> three rows carrying ONE identical subject_id, distinct_users=1, suggestible=false. The defence existed; it was on one ingest path only.",
+      "anonymous_after_the_fix": "'shalvorn' searched four times from one address with four rotated headers against the PATCHED binary -> 4 rows, 4 distinct session_ids, ONE distinct subject_id, distinct_users=1, suggestible=false, and absent from the Chromium listbox.",
+      "fix": "core#167 attaches the server-derived subject to the search.submitted emitted by GET /videos/search, exactly as POST /search/events already did. Three tests written first, two RED. The authenticated shape is pinned unchanged: user_id is already the trustworthy subject, so no address-derived value goes beside it."
+    },
+    "SC3_suggestion_bans": {
+      "result": "PASS — 14 API assertions plus 7 browser assertions",
+      "authorization": "Non-admin PUT -> 403. Anonymous PUT -> 401. The routes require admin OR moderator, and both write a moderation audit row (moderation.search.suggestion_ban / _unban) fingerprinting the key the SERVICE moved rather than the operator's input.",
+      "effect_and_delay": "Owner ban -> 200 {normalized_query, banned:true}; the suggestion was gone from an uncached prefix 4 ms later, with no worker pass. vidra-search's own row read back banned=true / suggestible=false, and the entry appeared both in core's admin ban list and in a separately signed service-side list.",
+      "cache_window": "Measured on purpose: a 3-rune prefix ('pli') that had been requested before the ban kept returning the banned string for exactly 60 seconds — the shipped short-prefix cache TTL — while the 5-rune prefix ('plind') lost it immediately.",
+      "no_re_entry_while_banned": "Two more distinct users searched the banned string while it was banned (distinct_users 3 -> 5). After a full aggregates_rollup pass that saw the new traffic, the row still read banned=true / suggestible=false and the string was still absent from autosuggest.",
+      "unban": "DELETE -> 204. Immediately afterwards banned=false but suggestible=FALSE: an unban never promotes a query. After real traffic plus one rollup it returned to autosuggest (5/false/true) and left the admin ban list.",
+      "browser": "The whole lifecycle driven again through SuggestionBansView at /moderation/autosuggest as the owner: ban placed through the form, entry rendered, HARD RELOAD, entry still there, vidra-search's row read back true/false, audit row counted, anonymous autosuggest confirmed empty from a separate browser context, then the two-step Unban -> Confirm, after which the row left the list and the database read false/false."
+    },
+    "SC4_trending": {
+      "result": "PASS on the gate; the window edge is UNVERIFIED",
+      "above_threshold": "V_HOT played by 3 distinct signed-in users -> per-day HLL PFCOUNT 3, trend:v score 3.0, and after one trending_sweeper pass the GATED list trend:v:top contains exactly that one item.",
+      "below_threshold": "V_COLD played by 2 distinct users -> HLL PFCOUNT 2, raw ZSET score 2.0, and it is NEVER in the gated list. The sweeper counted the rejection under vidra_search_trending_gate_rejections_total{domain=\"v\",reason=\"distinct_users\"}, which climbed one per pass.",
+      "readout": "The gated list's only user-visible outlet is the home rail: GET /recommendations/home answered source='search' with V_HOT carrying reason='trending' and V_COLD absent, identically for anonymous, for a signed-in user and for the opted-out user. This is recorded as the trending gate's readout ONLY — home cards, related rails and their ordering belong to the second A13 slice and were not certified here.",
+      "the_ui_trending_page_is_not_this": "The /trending page in vidra-user is NOT vidra-search's gated list. Watching its network traffic in Chromium, it calls GET /api/v1/videos?sort=trending — core's own public feed ordering. No surface in the product renders vidra-search's trending list as 'Trending'.",
+      "wilson_gate": "Not separately forced. With the per-(subject,item) cap window at its 1h default, total tracked distinct in this fixture, so the Wilson lower bound of 3/3 at z=1.96 is 0.579, far above the 0.10 floor, and only the distinct-user gate could bite. The Wilson branch's arithmetic is covered by the shipped unit tests; its live behaviour under a bot-shaped distinct/total ratio is UNVERIFIED here.",
+      "window_edge": "UNVERIFIED. Forcing the 6h decay half-life or the 2-day HLL window edge needs clock or config manipulation that would no longer be the shipped configuration, so it was not attempted."
+    },
+    "SC5_discovery_opt_out": {
+      "result": "PARTIAL — every promise the product actually makes holds; the register row's stronger phrasing does not",
+      "default": "Opt-OUT. All three controls default ON; see shipped_rules_as_shipped.opt_out_default.",
+      "what_the_opt_out_does_stop": "With all three off, the user's searches and plays wrote ZERO user_search_history rows and ZERO user_watch_projection rows. Their autosuggest carries nothing personal: a query they made while opted out came back with an empty listbox in Chromium. GET /recommendations/home answers personalized=false for them — the same non-personalised flag an anonymous visitor gets, and the same items.",
+      "what_the_opt_out_does_NOT_stop": "The same user still had 5 query_log rows and 8 behavior_events rows carrying their RAW user_id and their raw query text; their searches still counted toward the instance-wide distinct-user floor (the discriminator query 'plindar', typed by the opted-out user plus two others, reached distinct_users=3 and became suggestible — it would have stopped at 2 had the opt-out excluded them); and their play still bumped trending under a Redis guard key literally named with their account UUID (guard:trend:v:<their id>:<video id>).",
+      "is_that_a_broken_promise": "Not of the shipped copy, which only ever says 'not stored to your history'. It IS short of SRC-03's procedure line 'no personalized data when off' if that is read as 'no attributed collection'. Recorded as a product decision for the owner, not changed here.",
+      "persistence": "The setting survived a GET /auth/me readback, a brand-new login (it lives on the user row, not the session), and a HARD RELOAD of /settings/search in Chromium, where all three controls rendered unchecked. Toggling in the UI wrote through to core's users row both ways, each confirmed by direct SQL.",
+      "resumes_forward_only": "Re-enabling search history added no rows for anything already searched (still 0), and the very next search produced exactly one history row for that query alone. Attribution resumes going forward; it is never retroactive.",
+      "anonymous": "An anonymous visitor's suggestion panel contained no personal or history group at all, and the shared prefix cache is structurally unreachable for any personalized request."
+    },
+    "SC6_privacy_of_what_is_stored": {
+      "result": "PASS as a description; ONE over-retention observation flagged",
+      "detail": "See what_search_stores_per_attributed_event. Anonymous rows carry a keyed, domain-separated, day-scoped HMAC pseudonym and never the address. Signed-in rows carry the raw account UUID beside the raw query text for the whole retention window.",
+      "flagged": "For a signed-in user the attribution key is the durable account id, not a rotating pseudonym, and it is written for every search regardless of that user's controls. Nothing in the schema needs the durable id to enforce a k-anonymity floor — a day-scoped digest would count identically — so this is more identity than the feature requires."
+    },
+    "SC7_no_regression": {
+      "result": "PASS",
+      "core_make_ci": "PASS — 'ci: gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race)', exit 0.",
+      "core_github_ci": "GitGuardian pass, build-test pass, integration pass, ipfs-private-integration pass, openapi pass. ipfs-integration failed on TestIntegrationPublicVideoRoundTrip after 301.77s — a public-IPFS-gateway round trip in a lane that normally finishes in ~90s and passed on every recent main and PR run; unrelated to a one-line change in emitSearchSubmitted, and re-run.",
+      "search": "NOT RUN as a gate — vidra-search was not modified. It was RUN as a dependency and its tables, its Redis state and its signed internal API were all asserted directly.",
+      "frontend": "NOT RUN as a gate and no PR — vidra-user was not modified. Its production build was served and driven.",
+      "a09_tests": "Not touched, so not re-run."
+    }
+  },
+  "fixture_left_for_the_next_slice": {
+    "note": "The lab was torn down; these are the shapes to rebuild, not live ids.",
+    "videos": "Three fixtures on one channel: a HOT one played by 3 distinct users (in the gated trending list), a COLD one played by 2 (rejected by the distinct-user gate), and a CONTROL one never played by the cohort.",
+    "queries": "zynthara (at threshold, 3 users), qwoplex (below, 2), vurblok (1 user x 12), xhemra (anonymous rotation, PRE-fix), shalvorn (anonymous rotation, POST-fix), plindar (opt-out discriminator), trebnix/grumsel (client-event path), flendric/krondal/brimseq (history controls).",
+    "traps": "1) One browser search writes TWO query_log rows — core's own emit plus the frontend's client event — so total_count and decayed_freq double for browser traffic against API traffic while distinct_users does not. 2) Only the client-event row carries allow_history, so an API-only client's searches are retained but never appear on the user's own search-history page. 3) Redis state OUTLIVES a fresh database: an earlier lab's trend ZSETs and HLLs were still in the logical database and had to be flushed before the trending fixture meant anything. 4) The 15-minute access JWT expires mid-run; re-login before any long phase. 5) Autosuggest also draws un-gated candidates from document titles/channels/tags, so a threshold fixture must use strings that match no catalogue text."
+  },
+  "not_certified_here": "Recommendations and related rails, home cards and their ordering, search filters, paging and ranking, search-history delete and its reconcile behaviour. Those are A13's second slice. SRC-03 must not be flipped on this evidence."
+}
