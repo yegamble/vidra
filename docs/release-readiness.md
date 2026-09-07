@@ -5702,7 +5702,14 @@ back rather than by a runner: the spec's `MATCHES` route pattern is anchored at
 escaped to a backend that is not running under `npm run ci`, and the case would
 have failed as *"the row is still there"* rather than *"the request never
 happened"*. It has its own pattern now, and the list fixture keeps serving the
-row so the assertion proves the **view** drops it on the 204.
+row so the assertion proves the **view** drops it on the 204. And the two new
+cases then failed on their first assertion for a reason worth keeping: in a
+mocked spec `page.goto` is a **full load**, which restarts session restore, and
+that needs `POST /auth/refresh` against a backend `npm run ci` does not run — so
+the session comes back **anonymous**, `RoleGate` renders "Moderators only" and
+nothing fetches. The file's own anonymous-gate case depends on exactly that
+behaviour, which is what identifies it; both new cases now click through
+**Moderation → Word matches**, as the pre-existing case always did.
 
 **One lab artefact worth keeping.** The browser's network panel reported **503**
 for the resolve POST while core logged **204** and the client took the success
