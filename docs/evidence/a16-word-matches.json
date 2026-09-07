@@ -128,13 +128,14 @@
    "npm run test": "2406 passed / 82 failed — the SAME 82 fail on clean origin/main in this environment (baseline measured by stashing: 82 failed / 2390 passed). Seven files die under local Node 25.9.0 rather than the repo's Node 24. Repo CI is the authority for those.",
    "next build": "pass (production build, served from .next/standalone for the walkthrough)",
    "new_tests": "17 (15 in components/WatchedWordMatchesView.test.tsx, 2 in lib/api/endpoints.test.ts) plus 2 added cases in the existing mocked e2e spec. No existing assertion was weakened or removed.",
-   "red_proof": "with the snapshot rendering reverted to the live body and the divergence notice removed, 6 of the 14 new component tests fail — including the one asserting the queue does NOT render 'never mind, plain cheese' — while the pure splitSnapshot cases and the backfilled / term-removed cases keep passing"
+   "red_proof": "with the snapshot rendering reverted to the live body and the divergence notice removed, 6 of the 14 new component tests fail — including the one asserting the queue does NOT render 'never mind, plain cheese' — while the pure splitSnapshot cases and the backfilled / term-removed cases keep passing",
+   "repo_ci_vitest": "2,489 tests / 251 files, all passing on CI's Node 24 — the 82 local failures are this machine's Node 25.9.0 and do not exist on the runner."
   },
   "meta": "compose render NOT re-run — no compose, script or env file changed",
   "repo_ci": {
    "vidra-core#178": "7/7 green — build-test, integration, ipfs-integration, ipfs-private-integration, openapi, prev-release-against-new-schema, GitGuardian. prev-release-against-new-schema passing is the one-release compat argument checked by the job that exists to check it.",
    "vidra#124": "4/4 green — validate, bundle, boot, GitGuardian",
-   "vidra-user#175": "contract and e2e-backed are the EXPECTED ordering failures (both read core's main, which has no matched_text / resolve route yet). The first `frontend` run failed for a real reason and was fixed — see caught_by_ci."
+   "vidra-user#175": "frontend PASS (251 test files / 2,489 vitest tests, then 625 Playwright specs including the three watched-word ones), channel-sync-backed PASS, ipfs-backed PASS, GitGuardian PASS. contract and both e2e-backed jobs are the EXPECTED core-first ordering failures: they read core's main, which has no matched_text and no resolve route yet. Getting frontend green took four rounds and each round found something real — see caught_by_ci."
   }
  },
  "unverified": [

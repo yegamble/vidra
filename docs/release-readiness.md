@@ -5670,7 +5670,14 @@ assertions were added to, never weakened. No new viewer-scoped client read was a
 `lib/use-settled-session.ts` needed no new caller. The meta compose render was
 not re-run: no compose, script or env file changed. Repo CI: **core #178 is 7/7 green**, including `integration` and
 `prev-release-against-new-schema` — which is the compat argument above, checked
-by the job that exists to check it — and meta #124 is 4/4 green.
+by the job that exists to check it — meta #124 is 4/4 green, and on user #175
+**`frontend` passes**: 251 vitest files / **2,489 tests** on the runner's Node 24
+(the 82 failures on this machine are its Node 25.9.0 and do not exist there),
+then **625 Playwright specs** including the three watched-word ones. Its
+`contract` and both `e2e-backed` jobs are the expected core-first ordering
+failures — they read core's `main`, which has neither `matched_text` nor the
+resolve route yet. Getting `frontend` green took four rounds, and each round
+found something real rather than something cosmetic.
 **Unverified locally:** the frontend
 e2e and e2e-backed suites, which vidra-user's AGENTS.md forbids running locally
 (repo CI is the authority, and it found the spec above);
