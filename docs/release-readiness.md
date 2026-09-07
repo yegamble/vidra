@@ -133,7 +133,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | STO-02 Reference-mode foreign media is protected from garbage collection | C M | `internal/mediagc` ownership marker, foreign-layout adoption refusal and keep rules | UNVERIFIED | Disposable shared bucket with foreign and Vidra keys; dry-run/adoption refusal/orphan breaker; delete imported record then sweep; foreign objects remain byte-identical | MIG-01, STO-01 → A24 |
 | STO-03 Storage migration/copy/verification/abort and GC interlocks | C U M | `internal/storagemigration`; phase-2 plan and integration tests | UNVERIFIED | Local→MinIO copy with checksums, failures/resume and final authority switch; prove reads during movement and old-store retention; GC cannot race migration | STO-01, REC-01 → A25 |
 | INT-01 Live RTMP ingest→HLS watch→replay with moderation | M C U | `media` profile, live service/hooks/replay; backed tests simulate hook transitions | BLOCKED | Actual RTMP publisher with audio; live watch advances, authorization and stream-key rotation; terminate/max-duration/disconnect→replay; verify selected ladder/latency; hooks alone insufficient | PUB-03 + live selection/ingest plane → A26 |
-| INT-02 Direct URL import, yt-dlp platform import and channel auto-sync | M C U | Videoimport/channelsync; W2; released image yt-dlp build arg; dedicated channel-sync CI | UNVERIFIED | Local fixture origin/file and extractor fixture; scheduled channel discovers new item once; restart/retry/SSRF/disabled gates; verify released image actually contains executable | PUB-03 → A27 |
+| INT-02 Direct URL import, yt-dlp platform import and channel auto-sync | M C U | Videoimport/channelsync; W2; released image yt-dlp build arg; dedicated channel-sync CI; live evidence `a27-import-sync` (a local fixture origin and an html5 extractor fixture on a two-process core: direct import stored, probed, transcoded and published with a stamped correlation id; sandboxed `resolver=ytdlp` published with h264+aac and prefilled the empty draft field; one scheduled channel sync discovered exactly one item, imported nothing on two `sync-now` runs and two scheduled runs, discovered exactly one new item after the source published one, recorded a real outage as `failed` with a safe reason and recovered with no re-import; a SIGKILLed worker was requeued by the lease sweep and retried to success with no duplicate and the correlation id preserved across processes; seven SSRF probes refused with zero stored bytes, including a public redirector to a private address that imported before this slice; and every disabled/boot gate refused once) | PASS | Local fixture origin/file and extractor fixture; scheduled channel discovers new item once; restart/retry/SSRF/disabled gates; verify released image actually contains executable | PUB-03 → A27. Released-image proof is `ghcr.io/yegamble/vidra-core:v0.6.2` (amd64) carrying `/usr/local/bin/yt-dlp` 2026.07.04 + Python 3.14.7 + ffmpeg 8.1.2 from the `YTDLP_VERSION` build arg — that image PREDATES the fixes in core#184, so the released image is proven to contain the executable but not to run this behaviour. Follow-ups, none blocking: the three boot-capability 503s (`resolver=ytdlp`, sync create, sync-now) are bare `echo.NewHTTPError` so the 5xx scrubber replaces their sentences with "an unexpected error occurred" (A17's open item, measured here on two more routes); URL import has a hard 60-second budget for the WHOLE download (`videoimport.fetchTimeout` is the `http.Client.Timeout`), so `UPLOAD_MAX_SIZE` is not the real ceiling; a failed sync reschedules at the plain `CHANNEL_SYNC_INTERVAL` with no backoff; `channel_syncs` is still unprojected into `job_runs` and has no admin surface (this slice added only a WARN line); a runtime limit change binds the worker only after its settings-poll interval; the channel-sync dedupe key falls back to the entry URL when the extractor reports no id; and the explicit `resolver=ytdlp` path is still not dial-pinned by design. The `channel-sync-backed` lane was NOT run against this branch (it needs Docker Compose); S3 was not exercised |
 | INT-03 Manual captions and Whisper generation/review | M C U | Caption routes/CaptionsManager; backed captions/whisper-captions opt-in | BLOCKED | Manual VTT CRUD, watch track and language; configured Whisper audio→job→editable caption; outage/timeout and unsupported language; owner-only access | PUB-03 + Whisper selection/endpoint → A28 |
 | INT-04 ClamAV scanning actually gates all ingestion | M C U | Scanner service; scan profile; uploads/imports/DM hooks and config policy | BLOCKED | Disposable scanner: benign file, standard EICAR fixture, unavailable scanner, approved fail policy; never publish/link rejected bytes; test URL and DM paths as well as upload | PUB-01 + scanner selection → A28 |
 | INT-05 ActivityPub remote discover/follow/accept/video/comment/delete/moderation | M C U | Federation service/integration tests; user federation queues; no two-instance backed lane | BLOCKED | Two isolated instances: signed inbox/outbox, approved/rejected follow, new/update/delete videos, reply, block server/account, remote URL; source identity after migration | INS-05, ADM-02 + AP selection → A29 |
@@ -6944,3 +6944,310 @@ Delivery order: **core#183 first** — it makes the mail the frontend copy point
 at actually redeemable — then **frontend#180**, then this evidence PR. They are
 independent at the code level. Nothing is merged here and no deployment is
 authorized.
+
+## A27 URL import, yt-dlp import and channel sync — 2026-09-07
+
+**A27's stopping criterion is MET and INT-02 flips to PASS.** Direct URL import,
+the sandboxed yt-dlp platform import and one scheduled channel sync were driven
+end to end against a local fixture origin on a two-process core (api + a separate
+worker), with the SSRF and disabled gates proven as refusals *before* any
+success, a worker killed mid-import, and the Studio surfaces walked in Chromium.
+[Core #184](https://github.com/yegamble/vidra-core/pull/184) carries three
+behavioural fixes and one observability fix, every one of them a failing test
+first; **no migration** (latest stays 0133), **no OpenAPI change**, no generated
+file touched, and **no frontend change was needed** — the two Studio surfaces
+already do the right thing and the one session-restore suspicion did not
+reproduce.
+
+**What failed first, and it was the whole capability.** *yt-dlp platform import
+could not import from the fixture at all, on the shipped default configuration.*
+`downloadArgs` builds its format selector with the `YTDLP_MAX_HEIGHT` cap as
+`height<=1080` — and yt-dlp **excludes** a format whose compared field is
+missing unless the operator carries `?`. A format's height is routinely missing:
+`yt-dlp --list-formats` on the fixture watch page reports exactly one format,
+`0 mp4 unknown | http | unknown unknown`. So the selector matched nothing, yt-dlp
+exited *"Requested format is not available"*, and `POST /videos/{id}/import`
+with `resolver=ytdlp` dead-lettered as *"the URL could not be imported from this
+platform"* — measured through the product, not just the binary. The same page
+downloads clean with `height<=?1080` (h264 + **aac**, so the A08 split-audio
+lesson still holds), and so does the uncapped selector, which is why
+`YTDLP_MAX_HEIGHT=0` was the only working configuration and nobody noticed. This
+is not a fixture artefact: the very case the selector's own comment is written
+for — a PeerTube "static web video", whose codecs it already documents as
+UNKNOWN — reports an unknown height for the same reason. Every height comparison
+now carries `?`, which still caps everything that declares one.
+
+**The second defect was a security one, and the SSRF guard's own refusal was the
+trigger.** `resolver=auto` probes the URL with the guarded client and then, when
+that probe returns nothing useful, routes to the yt-dlp extractor — whose
+outbound sockets `internal/ytdlp` documents it cannot dial-pin. Every probe
+failure was flattened to "unknown", **including the guard refusing the address**.
+Measured: an import of a public-hostname URL that 302s to `127.0.0.1` was
+accepted (202), the guarded HEAD was refused, the job resolved to `ytdlp`, and
+the extractor followed the redirect and downloaded the loopback file — `state
+done`, bytes stored. The refusal is now read for what it is, and it takes **both**
+shapes the guard produces: `ErrBlockedAddress` from the dial-time control hook,
+and `ErrInvalidURL` from `CheckRedirect` re-validating a hop — which is the path
+a *literal* private address in a `Location` header takes and never the first, a
+distinction the first cut of the fix got wrong and the lab caught. A 405 on HEAD,
+a timeout, a TLS error and a redirect loop still fall through, so a platform URL
+that simply does not answer HEAD is unchanged. An explicit `resolver=ytdlp`
+against an attacker-chosen hostname is untouched and remains the operator's
+documented residual risk — off by default, `YTDLP_PROXY` recommended.
+
+**The third was the master switch that was not master.** `imports_enabled` is
+documented in the settings registry as the switch above the import family, and
+turning it off does answer 403 `feature_disabled` on `POST /videos/{id}/import`
+and report `features.imports` **and** `features.import_http` false. Channel
+auto-sync did not read it — on either the HTTP gate or the per-tick worker
+predicate. Measured on the shipped code: with URL import off instance-wide,
+`GET /instance` still advertised `channel_sync: true`, `POST /channel-syncs`
+answered **201** and `sync-now` **202**, and the sync worker enqueues through
+`videoimport.Enqueue`, which sits *below* the handler that 403s. The operator's
+"imports off" therefore left a worker importing third-party uploads on a timer.
+Both predicates now fold it in, and the timer half was measured after the fix:
+with `imports_enabled=false` a sync forced due at 08:55:28 had **not** run 95
+seconds later (`last_sync_at` frozen at 08:53:48); with it back on the same
+forced run fired at 08:57:48.
+
+**SSRF posture, as shipped and as measured.** The relax key is
+**`HTTP_IMPORT_ALLOW_PRIVATE_URLS`** (`config.ImportAllowPrivateURLs`), default
+false, feeding both `videoimport.WithAllowPrivateFetch` and
+`channelsync.WithAllowPrivateURLs`; `validate()` **refuses to boot production**
+with it set, and a development boot logs *"URL-import SSRF guard RELAXED …
+NEVER enable this in production"* — its absence from the first phase's logs is
+how that phase is known to have run with the guard intact. DNS rebinding is
+answered from code and confirmed live: `ValidateURL` deliberately does **not**
+resolve hostnames, and the real check is `net.Dialer.Control`, which runs after
+resolution, once per candidate IP, so it also covers redirect hops;
+`CheckRedirect` additionally re-validates each target and caps the chain at 5;
+proxy environment variables are ignored so nothing can route around the dialer.
+With the guard at its default:
+
+| probe | enqueue | worker outcome |
+| --- | --- | --- |
+| `http://127.0.0.1:8199/media/clip-one.mp4` (loopback literal) | **422** `url must be a public http(s) URL` | never queued |
+| `http://10.0.0.5/…`, `http://169.254.169.254/latest/meta-data/`, `http://[::1]:8199/…`, `http://100.64.0.1/…` | **422** each | never queued |
+| `file:///etc/passwd`, `http://user:pw@example.com/clip.mp4` | **422** each | never queued |
+| `http://localtest.me:8199/media/clip-one.mp4` (public DNS name → 127.0.0.1, video extension) | 202 | `direct`, refused at dial: *"could not fetch the URL"* |
+| `http://localtest.me:8199/watch/one` (same name, no extension) | 202 | resolver stays `auto`, *"could not import from this URL"*, extractor never ran |
+| `https://httpbin.org/redirect-to?url=http://127.0.0.1:8199/media/clip-one.mp4` | 202 | *"could not import from this URL"* — **before the fix this one imported the loopback file** |
+| `https://httpbin.org/redirect-to?url=http://localtest.me:8199/watch/one` | 202 | *"could not import from this URL"* |
+
+Zero stored bytes across all of them (`video_files` for those drafts: 0). The
+same guard applies to a channel sync's source URL and was measured separately:
+`POST /channel-syncs` answers **422** `external_channel_url must be a public
+http(s) URL` for a loopback and for a link-local URL, **201** for a public
+hostname — and, worth an operator's attention, the URL is re-validated on **every
+run**, so a sync created while the dev relax was on flips to `failed` with *"the
+channel URL is not a public http(s) URL"* the moment the relax is removed.
+`httpbin.org` is the one external dependency in this slice, used only as a public
+redirector; everything else is local.
+
+**Disabled gates, one refusal each.** `imports_enabled=false` → `POST
+/videos/{id}/import` **403 `feature_disabled`** and `/instance` reports
+`imports:false, import_http:false`. `import_http_enabled=false` → an explicit
+`resolver=ytdlp` **403 `feature_disabled`**, `/instance` reports
+`import_http:false, channel_sync:false` (the documented nesting: the sync path IS
+a yt-dlp import path). `channel_sync_enabled=false` → `POST /channel-syncs` and
+`sync-now` **403 `feature_disabled`**. The BOOT-capability half is different and
+was proven on its own boot with `YTDLP_IMPORT_ENABLED=false`: the worker logs
+*"CHANNEL_SYNC_ENABLED but YTDLP_IMPORT_ENABLED is off — channel auto-sync stays
+disabled"*, starts the import worker but **not** the channel-sync worker (the
+`BootCapable()` gate A17 added), `/instance` reports `import_http:false
+channel_sync:false` while `imports` stays true, and `resolver=ytdlp`, sync
+create and sync-now all answer **503**. Those three 503s are the A17 follow-up
+still open, now measured on two more routes: they are bare `echo.NewHTTPError`,
+so the central 5xx scrubber replaces *"platform-URL import is not enabled on this
+instance"* and *"channel auto-sync is not enabled on this instance"* with **"an
+unexpected error occurred"**. The typed-error idiom that fixes it already ships
+next door (`live_not_configured`, `mail_not_configured`); it is recorded here, not
+fixed, to keep this diff surgical.
+
+**Direct URL import, end to end.** A creator's draft plus `POST
+/videos/{id}/import` against an ffmpeg-made mp4 on the fixture origin: 202 with
+the queued job, the worker resolved `auto` → `direct`, stored the original
+(44,936 bytes), probed it, generated thumbnail, storyboard and VTT, transcoded a
+180p rendition and published. Anonymous readback gives `state published`,
+`duration_seconds 3`, `320x180`, `has_thumbnail`, a short code, and an HLS master
+that fetches 200 `application/vnd.apple.mpegurl` carrying an `EXT-X-MEDIA` audio
+group. Its `job_runs` row is stamped with the originating request id, the
+correlation id and the creator as actor; **23 of 23** import runs in this lab are
+fully stamped. The bounds were exercised one refusal each: a non-video body
+(`/feed.xml`, `resolver=direct`) → *"the URL is not an accepted video
+container"*; `upload_max_size_bytes=1048576` against a 1,150,781-byte file →
+*"the file is too large"*; `default_user_quota_bytes=100000` against the same
+file → *"storing the file would exceed your storage quota"*. The size cap needed
+re-timing to measure: the first attempt imported anyway because the runtime
+overlay reaches the **worker** only on its settings-poll interval, and the job
+was claimed inside it — shipped behaviour, worth knowing before believing a
+just-changed limit.
+
+**yt-dlp platform import, through the sandbox, without the public internet.** The
+extractor fixture is a plain HTML page the **html5/generic** extractor parses
+(`<video><source src=…mp4>` plus `og:title`/`og:description`); no
+`--load-info-json` path exists in the resolver, so this is the shape available.
+With `YTDLP_IMPORT_ENABLED=true` and `resolver=ytdlp` the import succeeded end to
+end: original stored, `ffprobe` on the stored bytes reports **h264 video + aac
+audio**, a 180p rendition, published — and the extractor's description prefilled
+the draft's **empty** description field (`"A27 fixture description for one,
+extracted by yt-dlp."`) while the title the creator typed was left alone, which
+is exactly `PrefillMetadata`'s contract. The per-job workdir was gone afterwards.
+The sandbox as it actually runs: binary `YTDLP_PATH` (`/usr/local/bin/yt-dlp` in
+the release image, `/opt/homebrew/bin/yt-dlp` **2026.07.04** in this lab — the
+same version the image pins); argv built by pure functions with the URL always
+the final positional after `--`; `--ignore-config`, `--no-playlist`,
+`--no-warnings`, `--restrict-filenames`, `--no-part`, `--merge-output-format
+mp4/mkv`, `-o <private 0700 workdir>/media.%(ext)s`, `--max-filesize` from the
+upload cap, `--proxy` when `YTDLP_PROXY` is set; **no `--exec`, no `-U`**, no
+shell; a 15-minute wall clock (`YTDLP_TIMEOUT`) that kills the process group. The
+format selector is the load-bearing string and is now
+`bestvideo[height<=?1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=?1080][ext=mp4]+bestaudio/best[height<=?1080][ext=mp4]/best[height<=?1080][ext=webm]/best[height<=?1080]`
+— merge-with-any-audio before every single-file fallback (the split-audio
+lesson) and now `?` on every cap (this slice's). **The released image contains
+the executable**: `ghcr.io/yegamble/vidra-core:v0.6.2` (amd64) carries
+`/usr/local/bin/yt-dlp` 2026.07.04 with Python 3.14.7 and ffmpeg 8.1.2, baked by
+the `YTDLP_VERSION` build arg `publish-container.yml` sets and the Dockerfile's
+`ARG YTDLP_VERSION` block (verified by the architect ahead of this slice).
+
+**Channel sync: the source types are one type.** `internal/channelsync` lists a
+remote channel through **one** seam — `ytdlp.Client.Playlist`, a
+`--flat-playlist -J` probe — so there is no RSS reader, no Atom reader and no
+PeerTube client of its own; whatever yt-dlp's extractors accept is the supported
+set. The fixture channel is therefore an **RSS feed the generic extractor parses
+as a playlist**, whose items link to the watch pages. That exposed a dedupe
+detail worth recording: `--flat-playlist` reported `id: null` for those entries,
+so `parsePlaylist`'s documented fallback made the **entry URL** the
+`external_id` — stable here only because yt-dlp smuggles the feed `<guid>` into
+that URL. A source whose listing carries no stable id and whose URLs change would
+re-import.
+
+**Discovery, dedupe and the outage, with times.** `POST /channel-syncs` from the
+creator → **201 `waiting_first_run`**; the worker claimed it on its next tick and
+completed the first pass at **08:08:27**, discovering exactly one entry, creating
+a **private** draft titled from the extractor (*"Fixture One - the first
+upload"*) and enqueuing its `ytdlp` import — synced uploads land private for
+review, never auto-published. Dedupe: two `sync-now` calls (202, 202) and the run
+they scheduled at **08:09:28** imported nothing — 20 videos before, 20 after,
+seen-ledger still 1 — and the next *scheduled* run at **08:12:27** likewise. One
+item was then published to the fixture channel at **08:15:01**; the run at
+**08:15:27** discovered **exactly one** new entry (21 videos, ledger 2, *"Fixture
+Two - the second upload"*). Outage: the origin was stopped at **08:15:44**; the
+run due at 08:17:27 recorded `state=failed`, `last_error="could not list the
+external channel"` at **08:18:27**, `last_sync_at` left at the last success, and
+rescheduled — at the plain `CHANNEL_SYNC_INTERVAL` cadence, **no backoff**, so a
+permanently dead source is re-listed forever at that rate. It retried and failed
+again at 08:21:27; with the origin back the run at **08:24:27** succeeded, state
+→ `idle`, `last_error` cleared, `last_sync_at` advanced, and **nothing
+re-imported** — the ledger survived the outage. A second outage was run later to
+photograph the creator's view and repeated the shape exactly (failed 08:51:00,
+recovered 08:53:48). Wrong actors, once each: anonymous create **401**; the
+non-owner U creating a sync on C's channel **404**; U's `sync-now` on C's sync
+**404**; U's own list empty; a duplicate `(channel, URL)` **409**.
+
+**The creator sees the outage; the operator does not.** The creator surface is
+`ChannelSyncSection` on the Studio **Channel** tab, and it renders the whole
+truth: in Chromium the failed row read *"http://127.0.0.1:8199/feed.xml · Last
+synced 1m ago · into A27 Fixtures · **FAILED** · could not list the external
+channel · Sync now · Remove"*. The operator has nothing: `channel_syncs` is still
+not projected into `job_runs` (the lab's `job_runs` carries only `import_jobs`,
+`transcode_jobs`, `transcode_steps`), still has no admin surface — and, until
+this slice, **not one log line**: `recordFailure` wrote the row silently while
+per-entry failures already logged, so the more severe outcome was the quiet one.
+It now logs `channel sync pass failed` with the sync id and the safe reason and
+**nothing else** — verified live and verified not to contain the source URL,
+which can carry a credential. The projection remains the A17 item it was; a WARN
+line is what was surgical here.
+
+**Restart and retry.** The worker was `SIGKILL`ed mid-import against a trickling
+origin. The job stayed `running`: restarting the worker did **not** recover it,
+and should not have — the boot sweep only touches rows nobody is renewing, and
+the lease is 30 minutes. The lease clock was then advanced in the database rather
+than waited out, and the periodic `jobrecovery` sweep (2 minutes) logged
+*"requeued jobs whose worker stopped renewing their lease" queue=import_jobs
+requeued=1* and returned it with `attempts` incremented. The retry then failed
+for a reason worth its own line — see below — and once the origin was fixed the
+next attempt **succeeded**: one video, one import job, one original, no
+duplicate. The correlation id survives all of it: `wUnsdCInbOcbcqgOrRWtlhYBCxyBqSZk`
+is the request id of the original `POST /videos/{id}/import` at 08:25:24 in the
+**api** process's log, and it is on the run row and on the **restarted worker's**
+failure line — *"job attempt failed; a bounded retry was scheduled"* with
+`queue=import_jobs`, `job_id`, `run_id`, `worker_id`, `attempt=2`,
+`resource_id`. The A17 correlation chain holds across a process death.
+
+**URL import has a 60-second wall clock for the whole download.** That is what
+failed the retry: `videoimport.fetchTimeout` is 60 s and it is passed as the
+`http.Client.Timeout`, which bounds **the entire request including the body
+read** — the worker logged *"video import failed" stage="import attach original"
+error="context deadline exceeded … while reading body"*. So the effective ceiling
+on an import is not `UPLOAD_MAX_SIZE` (5 GiB by default) but 60 seconds of the
+origin's throughput; there is no knob. A creator importing a large file from a
+modest origin gets *"import failed"* five times and a dead letter. Recorded, not
+fixed — it needs a configuration surface and a product ruling, not a constant
+bump.
+
+**The Studio surfaces, in Chromium, after hard reloads.** Signed in as the
+creator: Studio → *Upload video* → *Import from URL* → the fixture URL →
+*Continue* → title → *Publish* enqueued **202**, the *Import progress* rail
+rendered, the sheet reported *Published!*, and after a full reload the Studio
+content list carries the imported video. With `imports_enabled=false` and a hard
+reload the URL tab gives way to *"Imports are disabled on this instance — the
+operator has turned off URL video import here"* instead of a dead form; with the
+same switch off the auto-sync section reads *"Auto-import is disabled on this
+instance"* with **zero** Connect buttons, which is this slice's master-switch fix
+visible in the UI. With only `channel_sync_enabled=false` the section shows the
+same honest state while existing rows stay manageable. *Sync now* confirms
+honestly — *"Sync scheduled — it'll run on the next pass."* — rather than
+pretending a sync ran. One suspicion did **not** reproduce: `ChannelSyncSection`
+fetches `GET /channel-syncs` in a bare `useEffect` without the
+`useSettledSession` seam, so it looked like the fetch-before-session-restore
+class; a cold hard load straight onto `/studio/channel` produced a single
+`GET /channel-syncs 200` and no error state, because the Studio layout does not
+render it before the session settles. No frontend change was made.
+
+Gates. Core `make ci` **passed** — fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race across 81 packages — plus `go vet -tags=integration ./...`
+clean; the four touched packages run **1,280 tests** green on their own. Core CI
+on #184 is green on all six lanes at `6e10977`: `build-test`, `openapi`,
+`integration`, `ipfs-integration`, `ipfs-private-integration` and GitGuardian.
+The dedicated **`channel-sync-backed`** CI lane was not run here (it needs Docker
+Compose, and Docker Hub pulls hang in this environment); it passed most recently
+on `vidra-user` main in run
+[34117613284](https://github.com/yegamble/vidra-user/actions/runs/34117613284),
+and it checks out `vidra-core`'s default branch and builds it, so it will
+exercise this change once #184 merges — its spec asserts create/list/sync-now/
+delete only and touches nothing this diff changes. vidra-user was **not modified
+and its gates were not run**; vidra-search was not touched.
+
+Unverified, and named as such: the `channel-sync-backed` lane against this
+branch; any import from a real platform (nothing in this slice touched the public
+internet except one redirector); the released image running these fixes (the
+image proof is v0.6.2, which predates them); and the S3 storage backend, since
+the lab ran `STORAGE_BACKEND=local` throughout.
+
+Findings recorded rather than fixed: the three boot-capability **503s are
+scrubbed** to "an unexpected error occurred" (A17's open item, now measured on
+`resolver=ytdlp`, sync create and sync-now); **import has a hard 60-second
+total-download budget**; **a failed sync has no backoff** and repeats at the full
+cadence forever; **`channel_syncs` is still unprojected** with no admin surface
+(a log line is all this slice added); a **runtime limit change reaches the worker
+only on its settings-poll interval**, so a just-lowered cap does not bind the
+next job; the **channel-sync dedupe key falls back to the entry URL** when the
+extractor reports no id; and the **explicit `resolver=ytdlp` path remains
+un-dial-pinned** by design — the documented residual risk that `YTDLP_PROXY` and
+the off-by-default flag exist to address, unchanged by this slice, which only
+closed the automatic route into it.
+
+Failures worth keeping, all mine. A tool-call timeout killed the fixture origin's
+process group mid-outage-test, so a "recovery" that never came was my harness,
+not the product — the origin now starts under `nohup … & disown`, and the sync
+recovered on the first run after a real restart. The first cut of the SSRF fix
+matched only `ErrBlockedAddress` and let the literal-IP redirect through; the lab
+caught it because the case was re-measured rather than assumed fixed. A polling
+script read `import_job['stage']`, which is `omitempty`, and threw `KeyError` for
+two minutes against a job that was fine. And several actors' 15-minute access
+tokens expired mid-phase, turning a real 202 into a confusing 401 until every
+phase started with a fresh login.
+
+Delivery order: **core#184 first**, then this evidence PR. Nothing is merged here
+and no deployment is authorized.
