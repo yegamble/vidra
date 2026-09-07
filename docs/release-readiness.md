@@ -5291,10 +5291,20 @@ and the same 82, in the same 7 files, fail on clean `origin/main` in this
 environment** (measured by stashing: 2,367 passed / 82 failed), dying on
 `window.localStorage.clear is not a function` under local Node 25 and this
 jsdom. Net: **+11 passing, zero new failures**; repo CI is the authority.
-**Unverified:** the frontend e2e and e2e-backed suites (this repo's AGENTS.md
-forbids running them locally); anything about **vidra-search**, which was not
-started, so nothing here re-proves that a block suppresses a search document;
-and anything **remote/federated** — the lab holds no remote rows. The meta
+**Unverified locally, and what repo CI then found.** vidra-user's AGENTS.md
+forbids running the e2e suites locally, so they were left to CI — and CI earned
+its keep: two shipped specs clicked "Block video" and waited for the POST, which
+no longer fires on that click, because a LOCAL block now asks the moderator for
+a reason first. `e2e/moderation.spec.ts` and `e2e-backed/blocked-videos.spec.ts`
+both write one and confirm; neither is weakened (each still waits for the same
+request and asserts the same outcome, with one step more in between), and the
+mocked one now additionally asserts the request carries the MODERATOR's words
+rather than the reporter's — which is the point of the change and was
+previously untested end to end. That is a regression the component tests
+structurally could not see, and it is recorded here rather than quietly fixed.
+Also **unverified**: anything about **vidra-search**, which was not started, so
+nothing here re-proves that a block suppresses a search document; and anything
+**remote/federated** — the lab holds no remote rows. The meta
 compose render was not re-run: no compose, script or env file changed.
 
 **Findings recorded, not fixed.** (1) The last-admin race, above. (2)

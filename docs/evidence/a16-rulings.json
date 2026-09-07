@@ -535,13 +535,13 @@
   "where": "the reason now lives on internal/admin/service.go ensureAdminRemains rather than in a report"
  },
  "unverified": [
-  "the frontend e2e and e2e-backed suites — vidra-user's AGENTS.md forbids running them locally; repo CI covers them",
+  "the frontend e2e and e2e-backed suites were not run locally — vidra-user's AGENTS.md forbids it. Repo CI ran them and found one real regression: two shipped specs clicked 'Block video' and waited for the POST, which no longer fires on that click because a LOCAL block now asks the moderator for a reason first. e2e/moderation.spec.ts and e2e-backed/blocked-videos.spec.ts both write one and confirm; neither is weakened, and the mocked one now asserts the request carries the MODERATOR's words rather than the reporter's.",
   "anything about vidra-search: it was not started, so nothing here re-proves that a block suppresses a search document",
   "anything remote/federated: the lab holds no remote rows",
   "the meta compose render was not re-run — no compose, script or env file changed"
  ],
  "ci": {
   "core#176": "see the release-readiness section — ipfs-integration failed once on TestIntegrationPublicVideoRoundTrip timing out at 301.92s, the same IPFS round-trip this slice does not touch that the previous slice recorded as flaky, and was re-run",
-  "user#173": "`contract` is red and expected to be until core#176 merges"
+  "user#173": "`contract` is red and expected to be until core#176 merges (it reports exactly one unknown path, /api/v1/admin/owner/transfer). The first run also failed `frontend` and both `e2e-backed` lanes on the two block specs above; fixed and re-run."
  }
 }
