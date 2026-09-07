@@ -1,0 +1,189 @@
+{
+  "status": "A27's stopping criterion is MET. INT-02 flips to PASS: direct URL import, sandboxed yt-dlp platform import and one scheduled channel sync were driven end to end on a two-process core against a local fixture origin, with SSRF and disabled gates refused before any success, a worker killed mid-import, and the Studio surfaces walked in Chromium.",
+  "scope": "A27 / backlog item 29. Register row INT-02 (direct URL import, yt-dlp platform import and channel auto-sync).",
+  "core_revision": "a27/import-sync @ 6e10977 (three commits on origin/main 0449b90)",
+  "frontend_revision": "vidra-user NOT modified and its gates NOT run — the two Studio surfaces already behave correctly and the one session-restore suspicion did not reproduce",
+  "search_revision": "vidra-search NOT touched and NOT run",
+  "pull_requests": {
+    "core": "yegamble/vidra-core#184",
+    "meta": "yegamble/vidra#130 (this evidence PR)",
+    "dependency_order": "core#184 first, then this evidence PR. core#184 changes NO OpenAPI and adds NO migration, so there is no contract-ci ordering dependency and no frontend PR."
+  },
+  "migration": "none — latest core migration stays 0133",
+  "environment": {
+    "core": "built from the branch, run natively as TWO processes: VIDRA_ROLE=api on 127.0.0.1:8088 and a separate VIDRA_ROLE=worker. VIDRA_ENV=development, STORAGE_BACKEND=local + STORAGE_LOCAL_ROOT, TRANSCODING_ENABLED=true, YTDLP_IMPORT_ENABLED=true, YTDLP_PATH=/opt/homebrew/bin/yt-dlp, CHANNEL_SYNC_ENABLED=true, CHANNEL_SYNC_INTERVAL=2m, CHANNEL_SYNC_COOLDOWN=0s, PUBLIC_BASE_URL/CORS scoped to the lab origin.",
+    "database": "throwaway PostgreSQL 16.15 (native, -k /tmp, port 5442) migrated 0 -> 133; native Redis on 6389, flushed before the run.",
+    "frontend": "vidra-user production build served as `node .next/standalone/server.js` on 3101 behind a pipe-only proxy on 3100 that routes /api/v1 to core — ONE origin, because vidra_refresh is SameSite=Lax and Path=/api/v1/auth. Node 24.4.1.",
+    "browser": "Chromium via Playwright, headless, 1440x1000.",
+    "fixture_origin": "a local Python HTTP server on 127.0.0.1:8199 serving ffmpeg-made mp4s, html5 watch pages the yt-dlp generic extractor parses (og:title/og:description), an RSS channel feed whose items link to those pages, a trickling /slow/ endpoint for the restart test, and a 302 to a private address.",
+    "external_dependency": "httpbin.org, used ONLY as a public redirector for the redirect-to-private SSRF probes. Nothing else in this slice reached the public internet.",
+    "rate_limits": "RATE_LIMIT_ENABLED=false for the scripted phases — stated rather than paced. No auth-limiter claim is made in this slice."
+  },
+  "ssrf_posture_from_code": {
+    "package": "internal/urlsafety",
+    "pre_flight": "ValidateURL: http/https only, no embedded credentials, host required, and a LITERAL non-public IP refused. Hostnames are deliberately NOT resolved here.",
+    "real_guard": "net.Dialer.Control runs after DNS resolution, once per candidate IP — this is what defeats DNS rebinding and what covers redirect hops.",
+    "redirects": "CheckRedirect re-validates each target with ValidateURL and caps the chain at 5 (maxRedirects).",
+    "proxy": "http.Transport.Proxy is nil — HTTP(S)_PROXY cannot route around the dialer.",
+    "relax_key": "HTTP_IMPORT_ALLOW_PRIVATE_URLS -> config.ImportAllowPrivateURLs (config.go ~576), default false, feeding videoimport.WithAllowPrivateFetch AND channelsync.WithAllowPrivateURLs. validate() REFUSES to boot production with it set; a development boot logs 'URL-import SSRF guard RELAXED ... NEVER enable this in production'. Its absence from the phase-1 logs is how that phase is known to have run with the guard intact."
+  },
+  "ssrf_measurements": [
+    {"probe": "http://127.0.0.1:8199/media/clip-one.mp4", "enqueue": 422, "field_error": "url must be a public http(s) URL", "worker": "never queued"},
+    {"probe": "http://10.0.0.5/clip.mp4", "enqueue": 422, "worker": "never queued"},
+    {"probe": "http://169.254.169.254/latest/meta-data/", "enqueue": 422, "worker": "never queued"},
+    {"probe": "http://[::1]:8199/media/clip-one.mp4", "enqueue": 422, "worker": "never queued"},
+    {"probe": "http://100.64.0.1/clip.mp4", "enqueue": 422, "worker": "never queued"},
+    {"probe": "file:///etc/passwd", "enqueue": 422, "worker": "never queued"},
+    {"probe": "http://user:pw@example.com/clip.mp4", "enqueue": 422, "worker": "never queued"},
+    {"probe": "http://localtest.me:8199/media/clip-one.mp4 (public DNS name -> 127.0.0.1, video extension)", "enqueue": 202, "worker": "resolver direct, refused at DIAL: 'could not fetch the URL'"},
+    {"probe": "http://localtest.me:8199/watch/one (same name, no extension)", "enqueue": 202, "worker": "resolver stays auto, 'could not import from this URL', extractor never ran"},
+    {"probe": "https://httpbin.org/redirect-to?url=http://127.0.0.1:8199/media/clip-one.mp4", "enqueue": 202, "worker_before_fix": "resolver ytdlp, state done — the loopback file was IMPORTED", "worker_after_fix": "'could not import from this URL', extractor never ran"},
+    {"probe": "https://httpbin.org/redirect-to?url=http://localtest.me:8199/watch/one", "enqueue": 202, "worker": "'could not import from this URL', extractor never ran"},
+    {"probe": "POST /channel-syncs external_channel_url=http://127.0.0.1:8199/feed.xml (guard at default)", "status": 422, "field_error": "external_channel_url must be a public http(s) URL"},
+    {"probe": "POST /channel-syncs external_channel_url=http://169.254.169.254/feed.xml", "status": 422},
+    {"probe": "POST /channel-syncs external_channel_url=https://www.youtube.com/@... (public hostname)", "status": 201},
+    {"note": "stored bytes across every refusal above: 0 rows in video_files for those drafts. A sync created while the dev relax was on flips to failed with 'the channel URL is not a public http(s) URL' once the relax is removed — the URL is re-validated on EVERY run."}
+  ],
+  "disabled_and_boot_gates": {
+    "imports_enabled=false": "POST /videos/{id}/import -> 403 feature_disabled; /instance features imports=false, import_http=false; the Studio URL tab renders 'Imports are disabled on this instance'.",
+    "import_http_enabled=false": "explicit resolver=ytdlp -> 403 feature_disabled; /instance features import_http=false, channel_sync=false (the sync path IS a yt-dlp import path).",
+    "channel_sync_enabled=false": "POST /channel-syncs and POST /channel-syncs/{id}/sync-now -> 403 feature_disabled; the Studio section renders 'Auto-import is disabled on this instance' with zero Connect buttons.",
+    "YTDLP_IMPORT_ENABLED=false (boot capability)": "worker logs 'CHANNEL_SYNC_ENABLED but YTDLP_IMPORT_ENABLED is off — channel auto-sync stays disabled'; the import worker starts and the channel-sync worker does NOT (BootCapable gate); /instance import_http=false channel_sync=false while imports stays true; resolver=ytdlp, sync create and sync-now all 503.",
+    "503_message_scrubbing": "All three 503s are bare echo.NewHTTPError, so the central 5xx scrubber replaces 'platform-URL import is not enabled on this instance' and 'channel auto-sync is not enabled on this instance' with 'an unexpected error occurred'. This is A17's recorded open item, measured here on two more routes. Recorded, not fixed."
+  },
+  "extractor_as_it_runs": {
+    "binary": "/usr/local/bin/yt-dlp in the release image (config key YTDLP_PATH, default 'yt-dlp' on PATH); /opt/homebrew/bin/yt-dlp 2026.07.04 in this lab — the same version the image pins.",
+    "released_image_proof": "ghcr.io/yegamble/vidra-core:v0.6.2 (amd64) contains /usr/local/bin/yt-dlp 2026.07.04, Python 3.14.7 and ffmpeg 8.1.2, baked by the YTDLP_VERSION build arg publish-container.yml sets (=2026.07.04) and the Dockerfile ARG YTDLP_VERSION block. Verified by the architect ahead of this slice. That image PREDATES core#184, so it proves the executable is present, not that it runs this behaviour.",
+    "metadata_argv": "--ignore-config --no-playlist --no-warnings -J --no-download [--proxy P] -- URL",
+    "playlist_argv": "--ignore-config --no-warnings --flat-playlist -J [--playlist-end N] [--proxy P] -- URL",
+    "download_argv": "--ignore-config --no-playlist --no-warnings --restrict-filenames --no-part -f <selector> --merge-output-format mp4/mkv -o <private 0700 workdir>/media.%(ext)s [--max-filesize N] [--proxy P] -- URL",
+    "format_selector_after_fix_cap_1080": "bestvideo[height<=?1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=?1080][ext=mp4]+bestaudio/best[height<=?1080][ext=mp4]/best[height<=?1080][ext=webm]/best[height<=?1080]",
+    "sandbox": "pure argv builders, URL always the final positional after '--', no shell, no --exec, no -U/--update, --ignore-config so a planted config cannot inject flags, a 15-minute wall clock (YTDLP_TIMEOUT) that kills the process group, and a private 0700 per-job workdir removed on Close (verified gone after the import)."
+  },
+  "channel_sync_source_types": {
+    "shipped": "ONE seam: ytdlp.Client.Playlist, a --flat-playlist -J probe. There is no RSS reader, no Atom reader and no PeerTube client of its own — whatever yt-dlp's extractors accept is the supported set.",
+    "fixture_used": "an RSS feed the yt-dlp GENERIC extractor parses as a playlist, whose items link to html5 watch pages.",
+    "dedupe_key": "parsePlaylist prefers the extractor id and falls back to the entry URL. --flat-playlist reported id=null for the RSS entries, so the external_id here IS the entry URL — stable only because yt-dlp smuggles the feed <guid> into it. A source with no stable id whose URLs change would re-import."
+  },
+  "channel_sync_timeline": [
+    {"t": "08:08:26", "event": "POST /channel-syncs (creator) -> 201 waiting_first_run"},
+    {"t": "08:08:27", "event": "first scheduled pass: 1 entry discovered, PRIVATE draft 'Fixture One - the first upload' created from the extractor title, ytdlp import enqueued; state idle"},
+    {"t": "08:09:07", "event": "two POST sync-now (202, 202)"},
+    {"t": "08:09:28", "event": "the run they scheduled imported NOTHING — 20 videos before and after, seen ledger still 1"},
+    {"t": "08:12:27", "event": "next SCHEDULED run also imported nothing (dedupe holds without a manual trigger)"},
+    {"t": "08:15:01", "event": "one item published to the fixture channel (guid fixture-two)"},
+    {"t": "08:15:27", "event": "scheduled run discovered EXACTLY ONE new entry: 21 videos, ledger 2, 'Fixture Two - the second upload' as a private draft"},
+    {"t": "08:15:44", "event": "fixture origin stopped (outage begins)"},
+    {"t": "08:18:27", "event": "the run due at 08:17:27 recorded state=failed, last_error='could not list the external channel', last_sync_at left at the last success, rescheduled at the plain CHANNEL_SYNC_INTERVAL — NO backoff"},
+    {"t": "08:21:27", "event": "retried and failed again at the same cadence"},
+    {"t": "~08:23", "event": "fixture origin restarted"},
+    {"t": "08:24:27", "event": "scheduled run SUCCEEDED: state idle, last_error cleared, last_sync_at advanced, and NOTHING re-imported — the ledger survived the outage"},
+    {"t": "08:51:00 / 08:53:48", "event": "a second outage repeated the shape exactly, photographed in Chromium as the creator's FAILED row"}
+  ],
+  "restart_and_retry": {
+    "kill": "the worker was SIGKILLed mid-import against a trickling origin; the job stayed 'running' with no video_files written",
+    "restart_alone": "restarting the worker did NOT recover it, and should not have — the boot sweep only touches rows nobody is renewing and the lease is 30 minutes (next_attempt_at pushed +30m on claim)",
+    "clock_advance": "the lease was advanced in the DATABASE rather than waited out (stated: a clock advance, not a 30-minute wait)",
+    "sweep": "the periodic jobrecovery sweep (2 minutes) logged 'requeued jobs whose worker stopped renewing their lease' queue=import_jobs requeued=1 and returned the row with attempts incremented",
+    "retry_failure": "the retry then failed 'context deadline exceeded ... while reading body' — videoimport.fetchTimeout (60s) is the http.Client.Timeout, which bounds the WHOLE request including the body read",
+    "success": "with a fixed origin the next attempt succeeded: 1 video, 1 import job, 1 original, no duplicate",
+    "correlation": "wUnsdCInbOcbcqgOrRWtlhYBCxyBqSZk is the request id of the original POST /videos/{id}/import at 08:25:24 in the API process's log, and it appears on the job_runs row and on the RESTARTED worker's failure line ('job attempt failed; a bounded retry was scheduled', queue=import_jobs, job_id, run_id, worker_id, attempt=2, resource_id). The A17 correlation chain survives a process death.",
+    "stamping": "23 of 23 import job_runs in this lab carry both request_id and correlation_id"
+  },
+  "defects_found_and_fixed": [
+    {
+      "id": "ytdlp height cap excluded unknown-height formats",
+      "measured": "yt-dlp --list-formats on the fixture watch page reports one format: '0 mp4 unknown | http | unknown unknown'. With the SHIPPED default YTDLP_MAX_HEIGHT=1080 the selector 'height<=1080' matched nothing, yt-dlp exited 'Requested format is not available', and resolver=ytdlp dead-lettered as 'the URL could not be imported from this platform'. The same page downloads clean with height<=?1080 (h264 + aac) and with the uncapped selector.",
+      "why_it_matters": "the case the selector's own comment is written for — a PeerTube static web video, whose codecs it documents as UNKNOWN — reports an unknown height for the same reason. YTDLP_MAX_HEIGHT=0 was the only working configuration.",
+      "fix": "every height comparison carries yt-dlp's '?' operator; the cap still binds every format that declares a height."
+    },
+    {
+      "id": "resolver=auto fell through to the unpinned extractor on an address the guard refused",
+      "measured": "an import of a public-hostname URL that 302s to 127.0.0.1 was accepted 202, the guarded HEAD was refused, the job resolved to ytdlp, and the extractor followed the redirect and downloaded the loopback file (state done, bytes stored).",
+      "fix": "probeContentType now reports the guard's refusal to the caller and probeAuto stops instead of falling back. BOTH sentinels count: ErrBlockedAddress from the dial-time control hook, and ErrInvalidURL from CheckRedirect re-validating a hop — the path a LITERAL private address in a Location header takes, which the first cut of the fix missed and the re-measurement caught. A 405, a timeout, a TLS error or a redirect loop still fall back, so no legitimate platform URL regresses. An explicit resolver=ytdlp is untouched."
+    },
+    {
+      "id": "imports_enabled did not stop channel auto-sync",
+      "measured": "with URL import off instance-wide (POST /videos/{id}/import 403, features.imports and features.import_http false), /instance still advertised channel_sync=true, POST /channel-syncs answered 201 and sync-now 202. The sync worker enqueues through videoimport.Enqueue, BELOW the handler that 403s, so the operator's master switch left a worker importing third-party uploads on a timer.",
+      "fix": "the master clause is folded into both the HTTP gate (httpapi.channelSyncEnabled) and the per-tick predicate (cmd/api's channelsync.WithEnabledFunc).",
+      "post_fix_measurement": "with imports_enabled=false a sync forced due at 08:55:28 had NOT run 95 seconds later (last_sync_at frozen at 08:53:48); with it back on the same forced run fired at 08:57:48. In Chromium the Studio auto-sync section shows its disabled state while imports are off."
+    },
+    {
+      "id": "a failed channel-sync pass logged nothing",
+      "measured": "the outage produced state=failed with a safe last_error and NOT ONE line in the worker log; per-entry failures already logged, so the more severe outcome was the silent one, and channel_syncs is neither projected into job_runs nor exposed to an admin.",
+      "fix": "recordFailure logs 'channel sync pass failed' with the sync id and the safe reason only. Verified live and verified NOT to contain the source URL, which can carry a credential."
+    }
+  ],
+  "direct_import_proof": {
+    "enqueue": "202 with the queued job; resolver auto rewritten to direct by the worker",
+    "storage": "original 44936 bytes, plus thumbnail, storyboard, storyboard_vtt and a 180p rendition; transcode job done",
+    "readback_anonymous": "state published, privacy public, duration_seconds 3, 320x180, has_thumbnail true, has_storyboard true, a short code, and an HLS master that fetches 200 application/vnd.apple.mpegurl carrying an EXT-X-MEDIA audio group",
+    "bounds": {
+      "type": "an HTML/RSS body via resolver=direct -> 'the URL is not an accepted video container'",
+      "size": "upload_max_size_bytes=1048576 against a 1150781-byte file -> 'the file is too large'",
+      "quota": "default_user_quota_bytes=100000 with 5.3 MB already used -> 'storing the file would exceed your storage quota'",
+      "timing_caveat": "the size cap needed re-timing: the first attempt imported anyway because the runtime overlay reaches the WORKER only on its settings-poll interval and the job was claimed inside it"
+    }
+  },
+  "ytdlp_import_proof": {
+    "fixture": "an html5/generic-parsable page (<video><source src=...mp4> plus og:title/og:description). No --load-info-json path exists in the resolver, so this is the shape available.",
+    "result": "resolver=ytdlp published end to end; ffprobe on the STORED original reports h264 video + aac audio (the A08 split-audio lesson holds); a 180p rendition; the per-job workdir was gone afterwards",
+    "metadata": "the extractor's description prefilled the draft's EMPTY description ('A27 fixture description for one, extracted by yt-dlp.') while the creator's typed title was left alone — PrefillMetadata's contract"
+  },
+  "wrong_actors": {
+    "anonymous POST /channel-syncs": 401,
+    "U creates a sync on C's channel": 404,
+    "U sync-now on C's sync": 404,
+    "U's own GET /channel-syncs": "empty, total 0",
+    "duplicate (channel, URL) for C": 409
+  },
+  "browser_walkthrough": {
+    "import": "Studio -> Upload video -> Import from URL -> fixture URL -> Continue -> title -> Publish: enqueue 202, the 'Import progress' rail rendered, the sheet reported 'Published!', and after a full reload the Studio content list carries the imported video",
+    "channel_sync_row": "'http://127.0.0.1:8199/feed.xml Last synced 2m ago · into A27 Fixtures IDLE Sync now Remove'",
+    "channel_sync_failed_row": "'http://127.0.0.1:8199/feed.xml Last synced 1m ago · into A27 Fixtures FAILED could not list the external channel Sync now Remove'",
+    "sync_now": "confirms honestly — 'Sync scheduled — it'll run on the next pass.' — rather than pretending a sync ran",
+    "disabled_states": "imports_enabled=false -> 'Imports are disabled on this instance' on the URL tab AND 'Auto-import is disabled on this instance' on the Channel tab (the master-switch fix, visible); channel_sync_enabled=false alone -> the same auto-sync empty state with 0 Connect buttons",
+    "session_restore": "a suspicion that did NOT reproduce: ChannelSyncSection fetches GET /channel-syncs in a bare useEffect without useSettledSession, but a cold hard load straight onto /studio/channel produced a single GET /channel-syncs 200 and no error state — the Studio layout does not render it before the session settles. No frontend change was made."
+  },
+  "findings_recorded_not_fixed": [
+    "The three boot-capability 503s (resolver=ytdlp, channel-sync create, sync-now) are bare echo.NewHTTPError, so the 5xx scrubber replaces their sentences with 'an unexpected error occurred'. A17's open item; the typed-error idiom that fixes it already ships next door as live_not_configured / mail_not_configured.",
+    "URL import has a hard 60-second budget for the WHOLE download: videoimport.fetchTimeout is passed as http.Client.Timeout, which bounds the body read. The effective ceiling is 60 seconds of the origin's throughput, not UPLOAD_MAX_SIZE (5 GiB by default), and there is no knob. Needs a configuration surface and a product ruling.",
+    "A failed channel sync has no backoff — it reschedules at the plain CHANNEL_SYNC_INTERVAL forever, so a permanently dead source is re-listed at full rate indefinitely.",
+    "channel_syncs is still unprojected into job_runs and still has no admin surface; this slice added only a WARN line.",
+    "A runtime limit change binds the worker only after its settings-poll interval, so a just-lowered cap does not necessarily apply to the next job.",
+    "The channel-sync dedupe key falls back to the entry URL when the extractor reports no id; a source with unstable URLs and no ids would re-import.",
+    "The explicit resolver=ytdlp path is still not dial-pinned, by design — the documented residual risk that the off-by-default flag and YTDLP_PROXY exist to address. This slice closed only the AUTOMATIC route into it."
+  ],
+  "attempts_and_corrections": [
+    "A tool-call timeout killed the fixture origin's process group mid-outage-test, so a 'recovery' that never came was the harness, not the product. The origin now starts under nohup ... & disown, and the sync recovered on the first run after a real restart.",
+    "The first cut of the SSRF fix matched only ErrBlockedAddress and let the literal-IP redirect through; re-measuring the case rather than assuming it fixed is what caught it.",
+    "A polling script read import_job['stage'], which is omitempty, and threw KeyError for two minutes against a healthy job.",
+    "Several actors' 15-minute access tokens expired mid-phase, turning real 202s into confusing 401s until every phase started with a fresh login.",
+    "upload_max_size_bytes=20000 was refused 422 by the settings validator (the floor is 1 MiB), so a >1 MiB fixture clip had to be generated before the size cap could be exercised at all."
+  ],
+  "gates": {
+    "core_make_ci": "PASSED — fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race across 81 packages",
+    "core_integration_vet": "go vet -tags=integration ./... clean",
+    "core_touched_packages": "internal/ytdlp, internal/videoimport, internal/channelsync, internal/httpapi — 1280 tests green with -count=1",
+    "core_ci": "all six lanes green on #184 at 6e10977: build-test, openapi, integration, ipfs-integration, ipfs-private-integration, GitGuardian",
+    "channel_sync_backed_lane": "NOT run against this branch (it needs Docker Compose, and Docker Hub pulls hang in this environment). It passed most recently on vidra-user main in run 34117613284 (2026-09-07). The lane checks out vidra-core's DEFAULT branch and builds it, so it will exercise this change once #184 merges; its spec asserts create/list/sync-now/delete only and touches nothing this diff changes.",
+    "frontend": "NOT modified, NOT run",
+    "search": "NOT touched, NOT run"
+  },
+  "counts": {
+    "import_jobs_in_lab": {"done": 17, "failed_dead_lettered": 6},
+    "videos_created": 34,
+    "import_job_runs": 23,
+    "import_job_runs_fully_stamped": 23,
+    "schema_version": 133
+  },
+  "unverified": [
+    "the channel-sync-backed CI lane against this branch",
+    "any import from a real platform — nothing in this slice reached the public internet except one redirector",
+    "the released image running these fixes (the image proof is v0.6.2, which predates core#184)",
+    "the S3 storage backend — the lab ran STORAGE_BACKEND=local throughout"
+  ],
+  "register_rows": {
+    "INT-02": "PASS"
+  }
+}
