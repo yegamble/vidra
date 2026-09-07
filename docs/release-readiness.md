@@ -5709,7 +5709,11 @@ that needs `POST /auth/refresh` against a backend `npm run ci` does not run — 
 the session comes back **anonymous**, `RoleGate` renders "Moderators only" and
 nothing fetches. The file's own anonymous-gate case depends on exactly that
 behaviour, which is what identifies it; both new cases now click through
-**Moderation → Word matches**, as the pre-existing case always did.
+**Moderation → Word matches**, as the pre-existing case always did. One last
+collision, of a kind only a runner shows: `getByRole` matches the accessible
+name as a **substring**, and the new status filter puts a **"Resolved"** chip on
+the same page as the row's **"Resolve"** button, so the click resolved to two
+elements. Adding a filter to a page is what created it.
 
 **One lab artefact worth keeping.** The browser's network panel reported **503**
 for the resolve POST while core logged **204** and the client took the success
