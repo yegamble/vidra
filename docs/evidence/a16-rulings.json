@@ -1,0 +1,547 @@
+{
+ "slice": "A16 rulings applied — creator-visible block reasons, unblock notices, ownership transfer",
+ "date": "2026-09-06",
+ "register_rows_changed": [],
+ "register_row_touched": "none — A16 closed on 2026-09-06 with ADM-01 + ADM-02 PASS; this slice implements the three product rulings it recorded and changes no row",
+ "prs": {
+  "core": "yegamble/vidra-core#176",
+  "user": "yegamble/vidra-user#173",
+  "meta": "this evidence PR",
+  "order": "core#176 -> user#173 -> meta; user#173's `contract` check is red until core#176 merges, by construction (lib/api/generated.ts is regenerated from core's branch spec, never hand-edited)"
+ },
+ "migration": "none — core stays at schema 131. video_blocks.reason (0021) and users.is_owner (0131) already existed; the ruling changes who may read them and adds one route.",
+ "openapi_changes_all_additive": [
+  "Video.block_reason (owner-only channel-management listing)",
+  "Notification.type enum + prefs enum gain video_unblocked",
+  "Notification.moderation_note now documented on video_blocked as well as video_rejected",
+  "POST /api/v1/admin/owner/transfer with TransferOwnershipRequest / OwnerTransferResponse",
+  "User.is_owner on the caller's own view"
+ ],
+ "lab": {
+  "shape": "native postgres@16 on 127.0.0.1:55432 + redis on 56379, the api binary from this branch on :8088, the vidra-user production standalone build on :3200, and ONE origin on :3100 (a pipe-only proxy routing /api/* to core) — mandatory, because vidra_refresh is SameSite=Lax and scoped to /api/v1/auth",
+  "mail": "a minimal real SMTP sink on :52525 (speaks the protocol, writes each message to a file); no mailpit on this machine",
+  "search": "vidra-search was NOT started — nothing here re-proves a block's search suppression",
+  "browser": "real Chromium against the production standalone build, signed in as each actor in turn",
+  "teardown": "postgres, redis, the SMTP sink, the api, the Next server and the proxy all stopped; the postgres data directory removed; no listener left on 3100/3200/8088/52525/55432/56379; no lab artefact committed"
+ },
+ "totals": {
+  "api_and_db_assertions": 91,
+  "failed": 0,
+  "note": "one clean run end to end on a freshly migrated database; the three checks that failed on the first run are the two lab bugs and the one product defect recorded below, all fixed and re-run"
+ },
+ "what_failed_first": [
+  "the owner-claim RESPONSE said is_owner:false about the account that had just claimed the instance — a real product defect, not a lab bug: the claim CTE writes the marker but the response's user view left the flag at Go's zero value. Fixed (core commit `setup: the owner-claim response says the caller is the owner`) with a test on TestClaimOwnerEndpointCreatesAdmin.",
+  "lab bug: the notification-preferences route is PATCH /me/notification-prefs, not PUT — the script's 404 said nothing about the product.",
+  "lab bug: the claim/register/login response field is `token`, not `access_token`.",
+  "lab bug: pat's session was revoked by a deactivate/reactivate earlier in the same script, so a later admin call answered 401 rather than the guard's 422 — the script now signs in again first.",
+  "lab bug: an order-sensitive comparison of the audit `changes` JSON text; it now parses the JSON."
+ ],
+ "results_by_area": {
+  "SC3": [
+   {
+    "check": "SC3 owner claim marks is_owner on the caller's own view",
+    "ok": true,
+    "got": true
+   },
+   {
+    "check": "SC3 the owner marker starts on mona",
+    "ok": true,
+    "got": "mona"
+   },
+   {
+    "check": "SC3 a non-owner admin is refused",
+    "ok": true,
+    "got": 403
+   },
+   {
+    "check": "SC3 a non-owner admin gets a stable code",
+    "ok": true,
+    "got": "owner_only"
+   },
+   {
+    "check": "SC3 the marker did not move for a non-owner admin",
+    "ok": true,
+    "got": "mona"
+   },
+   {
+    "check": "SC3 a moderator is refused",
+    "ok": true,
+    "got": 403
+   },
+   {
+    "check": "SC3 the marker did not move for a moderator",
+    "ok": true,
+    "got": "mona"
+   },
+   {
+    "check": "SC3 an ordinary user is refused",
+    "ok": true,
+    "got": 403
+   },
+   {
+    "check": "SC3 the marker did not move for an ordinary user",
+    "ok": true,
+    "got": "mona"
+   },
+   {
+    "check": "SC3 anonymous is refused",
+    "ok": true,
+    "got": 401
+   },
+   {
+    "check": "SC3 the marker did not move for anonymous",
+    "ok": true,
+    "got": "mona"
+   },
+   {
+    "check": "SC3 the owner with a wrong password is refused",
+    "ok": true,
+    "got": 403
+   },
+   {
+    "check": "SC3 the marker did not move",
+    "ok": true,
+    "got": "mona"
+   },
+   {
+    "check": "SC3 transfer to an ordinary user is refused",
+    "ok": true,
+    "got": 422
+   },
+   {
+    "check": "SC3 transfer to an ordinary user carries the stable code",
+    "ok": true,
+    "got": "owner_target_invalid"
+   },
+   {
+    "check": "SC3 the marker did not move (an ordinary user)",
+    "ok": true,
+    "got": "mona"
+   },
+   {
+    "check": "SC3 transfer to a moderator is refused",
+    "ok": true,
+    "got": 422
+   },
+   {
+    "check": "SC3 transfer to a moderator carries the stable code",
+    "ok": true,
+    "got": "owner_target_invalid"
+   },
+   {
+    "check": "SC3 the marker did not move (a moderator)",
+    "ok": true,
+    "got": "mona"
+   },
+   {
+    "check": "SC3 transfer to themselves is refused",
+    "ok": true,
+    "got": 422
+   },
+   {
+    "check": "SC3 transfer to themselves carries the stable code",
+    "ok": true,
+    "got": "owner_target_invalid"
+   },
+   {
+    "check": "SC3 the marker did not move (themselves)",
+    "ok": true,
+    "got": "mona"
+   },
+   {
+    "check": "SC3 transfer to an unknown account is refused",
+    "ok": true,
+    "got": 404
+   },
+   {
+    "check": "SC3 the marker did not move (an unknown account)",
+    "ok": true,
+    "got": "mona"
+   },
+   {
+    "check": "SC3 transfer to a deactivated admin is refused",
+    "ok": true,
+    "got": 422
+   },
+   {
+    "check": "SC3 ...with the stable code",
+    "ok": true,
+    "got": "owner_target_invalid"
+   },
+   {
+    "check": "SC3 the owner transfers to another admin",
+    "ok": true,
+    "got": 200
+   },
+   {
+    "check": "SC3 the response names the new owner",
+    "ok": true,
+    "got": "avery"
+   },
+   {
+    "check": "SC3 ...and the former one",
+    "ok": true,
+    "got": "mona"
+   },
+   {
+    "check": "SC3 the marker moved in the database",
+    "ok": true,
+    "got": "avery"
+   },
+   {
+    "check": "SC3 exactly one account holds it",
+    "ok": true,
+    "got": "1"
+   },
+   {
+    "check": "SC3 the former owner keeps their admin role",
+    "ok": true,
+    "got": "admin"
+   },
+   {
+    "check": "SC3 the former owner's own view says so",
+    "ok": true,
+    "got": false
+   },
+   {
+    "check": "SC3 the new owner's own view says so",
+    "ok": true,
+    "got": true
+   },
+   {
+    "check": "SC3 the new owner was mailed",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "check": "SC3 the former owner was mailed",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "check": "SC3 the new owner's mail names the former one",
+    "ok": true,
+    "got": true
+   },
+   {
+    "check": "SC3 ...and carries the console link",
+    "ok": true,
+    "got": true
+   },
+   {
+    "check": "SC3 ...and no credential",
+    "ok": true,
+    "got": false
+   },
+   {
+    "check": "SC3 the former owner's mail names the new one",
+    "ok": true,
+    "got": true
+   },
+   {
+    "check": "SC3 ...and no credential",
+    "ok": true,
+    "got": false
+   },
+   {
+    "check": "SC3 the transfer is audited",
+    "ok": true,
+    "got": "1"
+   },
+   {
+    "check": "SC3 the audit row carries the structured is_owner change",
+    "ok": true,
+    "got": [
+     {
+      "after": "true",
+      "field": "is_owner",
+      "before": "false"
+     }
+    ]
+   },
+   {
+    "check": "SC3 the audit ledger holds no password",
+    "ok": true,
+    "got": "0"
+   },
+   {
+    "check": "SC3 the FORMER owner can no longer transfer",
+    "ok": true,
+    "got": 403
+   },
+   {
+    "check": "SC3 ...with the stable code",
+    "ok": true,
+    "got": "owner_only"
+   },
+   {
+    "check": "SC3 the marker still sits with avery",
+    "ok": true,
+    "got": "avery"
+   }
+  ],
+  "SC1": [
+   {
+    "check": "SC1 before the block the owner row carries no marker",
+    "ok": true,
+    "got": false
+   },
+   {
+    "check": "SC1 before the block the owner row carries no reason",
+    "ok": true,
+    "got": ""
+   },
+   {
+    "check": "SC1 block by an admin",
+    "ok": true,
+    "got": 204
+   },
+   {
+    "check": "SC1 owner listing marks the block",
+    "ok": true,
+    "got": true
+   },
+   {
+    "check": "SC1 owner listing carries the moderator's reason",
+    "ok": true,
+    "got": "Third-party music you do not hold the rights to"
+   },
+   {
+    "check": "SC1 a block changes neither state...",
+    "ok": true,
+    "got": "published"
+   },
+   {
+    "check": "SC1 ...nor privacy",
+    "ok": true,
+    "got": "public"
+   },
+   {
+    "check": "SC1 the creator got exactly one video_blocked",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "check": "SC1 the notification carries the reason",
+    "ok": true,
+    "got": "Third-party music you do not hold the rights to"
+   },
+   {
+    "check": "SC1 the notification names the video",
+    "ok": true,
+    "got": "Control Clip"
+   },
+   {
+    "check": "SC1 the notification never names the moderator",
+    "ok": true,
+    "got": null
+   },
+   {
+    "check": "SC1 owner still gets 404 on the blocked video",
+    "ok": true,
+    "got": 404
+   },
+   {
+    "check": "SC1 stranger still gets 404 on the blocked video",
+    "ok": true,
+    "got": 404
+   },
+   {
+    "check": "SC1 moderator-as-viewer still gets 404 on the blocked video",
+    "ok": true,
+    "got": 200
+   },
+   {
+    "check": "SC1 anonymous still gets 404 on the blocked video",
+    "ok": true,
+    "got": 404
+   },
+   {
+    "check": "SC1 a stranger's channel listing carries no reason",
+    "ok": true,
+    "got": false
+   },
+   {
+    "check": "SC1 the anonymous channel listing carries no reason",
+    "ok": true,
+    "got": false
+   },
+   {
+    "check": "SC1 a stranger's inbox carries no reason",
+    "ok": true,
+    "got": false
+   }
+  ],
+  "SC2": [
+   {
+    "check": "SC2 before the unblock there is no video_unblocked",
+    "ok": true,
+    "got": 0
+   },
+   {
+    "check": "SC2 unblock",
+    "ok": true,
+    "got": 204
+   },
+   {
+    "check": "SC2 the creator got exactly one video_unblocked",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "check": "SC2 it links to the restored video",
+    "ok": true,
+    "got": "654df996-27ce-44fa-95a4-a789e8540278"
+   },
+   {
+    "check": "SC2 it names no moderator",
+    "ok": true,
+    "got": null
+   },
+   {
+    "check": "SC2 it carries no prose",
+    "ok": true,
+    "got": ""
+   },
+   {
+    "check": "SC2 the video really is back for its owner",
+    "ok": true,
+    "got": 200
+   },
+   {
+    "check": "SC2 a repeated unblock is still 204",
+    "ok": true,
+    "got": 204
+   },
+   {
+    "check": "SC2 ...and delivers no second notice",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "check": "SC2 the owner listing marker is cleared",
+    "ok": true,
+    "got": false
+   },
+   {
+    "check": "SC2 ...and so is the reason",
+    "ok": true,
+    "got": ""
+   },
+   {
+    "check": "SC2 the old block notice falls back to the neutral notice",
+    "ok": true,
+    "got": ""
+   },
+   {
+    "check": "SC2 the owner can turn video_unblocked off",
+    "ok": true,
+    "got": 200
+   },
+   {
+    "check": "SC2 a silenced owner gets no second unblock notice",
+    "ok": true,
+    "got": 1
+   }
+  ],
+  "SC4": [
+   {
+    "check": "SC4 owner self-deactivate is refused",
+    "ok": true,
+    "got": 422
+   },
+   {
+    "check": "SC4 ...with a stable code",
+    "ok": true,
+    "got": "owner_must_transfer"
+   },
+   {
+    "check": "SC4 owner self-delete is refused",
+    "ok": true,
+    "got": 422
+   },
+   {
+    "check": "SC4 ...with a stable code",
+    "ok": true,
+    "got": "owner_must_transfer"
+   },
+   {
+    "check": "SC4 the refusal is not a sign-out",
+    "ok": true,
+    "got": 200
+   },
+   {
+    "check": "SC4 the account is untouched",
+    "ok": true,
+    "got": "true/admin"
+   },
+   {
+    "check": "SC4 the former owner can now delete themselves",
+    "ok": true,
+    "got": 204
+   },
+   {
+    "check": "SC4 the row is a tombstone",
+    "ok": true,
+    "got": "t"
+   },
+   {
+    "check": "SC4 the instance still has an owner",
+    "ok": true,
+    "got": "avery"
+   }
+  ],
+  "SC6": [
+   {
+    "check": "SC6 owner_protected still refuses another admin demoting the owner",
+    "ok": true,
+    "got": 422
+   },
+   {
+    "check": "SC6 ...with its own stable code",
+    "ok": true,
+    "got": "owner_protected"
+   },
+   {
+    "check": "SC6 the new owner is untouched",
+    "ok": true,
+    "got": "admin/true"
+   }
+  ]
+ },
+ "browser_walkthrough": {
+  "creator (bob), Studio > Content": "the blocked row reads PUBLISHED + BLOCKED + Public and, underneath, 'Blocked by moderation — this video is not available to viewers, including you, until a moderator lifts the block. Nothing else about it has changed. Reason: Third-party music you do not hold the rights to'. The unblocked row carries no reason line at all.",
+  "creator (bob), notification bell": "three rows — 'A moderator blocked “Control Clip” — it is no longer available to viewers: Third-par…' (the reason), 'A moderator restored “Second Clip” — it is available to viewers again' (video_unblocked, NOT 'started following'), and 'A moderator blocked “Second Clip” — it is no longer available to viewers' with NO reason, because that block was lifted and the reason went with it",
+  "owner (mona), /admin/users": "mona badged YOU + OWNER and nobody else; opening avery (an active admin) shows the Instance ownership card with the consequences stated before the password is asked for; opening bob (an ordinary user) shows the same card with the control DISABLED and the reason 'Ownership can only go to another administrator. Change this account's role first.' and no password field",
+  "the transfer itself, from the browser": "after Transfer ownership: avery carries OWNER + ADMIN, avery's Deactivate and Delete account are disabled, avery's role control is replaced by a static ADMIN pill with the owner-protected sentence, and the Instance ownership card is GONE from mona's view — the session refreshed, so the former owner is no longer offered a control core would refuse",
+  "owner (mona), /settings Danger zone": "her own deactivate answers with the server's sentence verbatim — 'you are this instance's owner, and there is exactly one owner slot that only you can move; transfer ownership to another administrator first, then close your account' — and the row is still admin/active/owner afterwards",
+  "what the browser caught that the tests did not": [
+   "video_unblocked had no notification icon or chip entry, so the restoration notice rendered with the FOLLOW glyph in a neutral circle — the moderation event dressed as a new follower. Fixed (shield, green) with a test.",
+   "after a transfer the LIST reloaded but the SESSION did not, so the former owner was still offered a Transfer ownership control that core answers 403 owner_only. Fixed by refreshing the session, with a test."
+  ]
+ },
+ "mail_over_real_smtp": {
+  "new owner": "Subject 'You are now the owner of <instance>', names the former owner, carries the admin console URL, and contains no credential (the fixture password does not appear)",
+  "former owner": "Subject 'You are no longer the owner of <instance>', names the new owner, states that they remain an administrator and what they gave up, tells them to change their password if it was not them, and contains no credential",
+  "best_effort": "proven at the service level (TestTransferOwnershipNoticesAreBestEffort): with a failing mailer the transfer still commits and the marker still moves"
+ },
+ "real_postgres_tests": {
+  "TestTransferInstanceOwnerIsOneAtomicSwap": "the marker moves, exactly one row holds it, the former owner keeps admin, and every ineligible target (ordinary user, unknown id, deactivated admin, tombstoned admin) changes nothing — including the clear, which carries the same test",
+  "TestConcurrentOwnerTransfersCannotBothWin": "two transfers to DIFFERENT admins, interleaved deliberately: the second blocks on the first's uncommitted marker, and when the first commits the second is refused by users_single_owner_idx with SQLSTATE 23505 (mapped to 409 owner_transfer_conflict). One winner, one marked account. Firing both from goroutines proves nothing — they serialize and both legitimately succeed in order, which is why the test forces the interleaving."
+ },
+ "sc5_last_admin_race": {
+  "decision": "recorded, not built",
+  "why": "the guard has FOUR write paths (admin PATCH, self-deactivate, self-delete, admin hard delete) and they only serialize against each other if they share ONE lock, which means the count and the write must sit in the same transaction. Two are a single UPDATE and could carry a SELECT ... FOR UPDATE roster lock in-statement; the hard delete cannot — it is a multi-table erasure that also deletes blobs and fans a federation Delete out, and holding a roster lock across that is worse than the race. A partial fold buys almost nothing, because a mixed race (one admin PATCHing while the other self-deletes) stays open unless every path takes the lock. The real fix is a transaction seam threaded through admin, auth and account together: structural, not surgical.",
+  "where": "the reason now lives on internal/admin/service.go ensureAdminRemains rather than in a report"
+ },
+ "unverified": [
+  "the frontend e2e and e2e-backed suites were not run locally — vidra-user's AGENTS.md forbids it. Repo CI ran them and found one real regression: two shipped specs clicked 'Block video' and waited for the POST, which no longer fires on that click because a LOCAL block now asks the moderator for a reason first. e2e/moderation.spec.ts and e2e-backed/blocked-videos.spec.ts both write one and confirm; neither is weakened, and the mocked one now asserts the request carries the MODERATOR's words rather than the reporter's.",
+  "anything about vidra-search: it was not started, so nothing here re-proves that a block suppresses a search document",
+  "anything remote/federated: the lab holds no remote rows",
+  "the meta compose render was not re-run — no compose, script or env file changed"
+ ],
+ "ci": {
+  "core#176": "see the release-readiness section — ipfs-integration failed once on TestIntegrationPublicVideoRoundTrip timing out at 301.92s, the same IPFS round-trip this slice does not touch that the previous slice recorded as flaky, and was re-run",
+  "user#173": "`contract` is red and expected to be until core#176 merges (it reports exactly one unknown path, /api/v1/admin/owner/transfer). The first run also failed `frontend` and both `e2e-backed` lanes on the two block specs above; fixed and re-run."
+ }
+}
