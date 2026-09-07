@@ -118,7 +118,7 @@
       {"case": "client sends an explicit delivery_source:\"cdn\" FIELD alongside an api-proxy origin", "result": "api-proxy — the field is not even read"},
       {"case": "a second api process WITH DELIVERY_CDN_BASE_URL=https://cdn.a35.test, same beacon shape", "result": "the configured host -> cdn; an unrelated host -> other; https://cdn.a35.test.attacker.example -> OTHER, which is the boundary check a bare HasPrefix would have failed"}
     ],
-    "cdn_off": "the main api, with presign and CDN unconfigured, produced 10 beacons and ZERO cdn rows",
+    "cdn_off": "the main api, with presign and CDN unconfigured, took 17 beacon requests and produced ZERO cdn rows",
     "rollup": "the hourly worker rolled the walk's hour at 15:05:37 into exactly one row — api-proxy / hls-js / cmaf, event_count 3, start_count 3, verified_count 0, ttff p50 153 / p95 407 / p99 407 ms from a 112-bucket fixed-boundary histogram carrying exactly three marks (the raw TTFFs were 8, 135 and 361 ms)",
     "admin_surface": "GET /admin/qoe/playback-health returns that row in both projections; in Chromium after a hard reload AdminPlaybackHealthView reads `Through the API — Bytes streamed by this server itself`, 3 playbacks, TTFF p50 150 ms p95 410 ms p99 410 ms, Engines: hls.js, Attested 0%, with the sentence explaining that 0% is the expected reading on a public video",
     "viewer_identity": "qoe_events stores viewer_digest — internal/pseudonym's keyed, day-scoped MAC of `u:<account uuid>` when signed in and `ip:<address>` otherwise. The address is never stored. The key derives from JWT_SECRET, so a rotation is also a linkability reset",

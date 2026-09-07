@@ -7844,7 +7844,7 @@ measurement each:
 | an explicit `"delivery_source":"cdn"` **field** beside an api-proxy origin | `api-proxy` — the field is not even read |
 | `https://cdn.a35.test.attacker.example/…` against a process configured with `https://cdn.a35.test` | **`other`** — the boundary check a bare `HasPrefix` would have failed |
 
-With presign and CDN unconfigured the main api produced ten beacons and **zero**
+With presign and CDN unconfigured the main api took **17 beacon requests** and produced **zero**
 `cdn` rows; a second api process configured with a CDN base classified the
 configured host as `cdn` on the same beacon shape, which is what makes the zero a
 measurement rather than an absence. The hourly worker rolled the walk's hour at
