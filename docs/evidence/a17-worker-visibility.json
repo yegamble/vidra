@@ -1,0 +1,130 @@
+{
+  "slice": "A17 — dashboards see the worker: process heartbeats and job correlation",
+  "date": "2026-09-07",
+  "register_row": "ADM-04",
+  "verdict": "ADM-04 FLIPS to PASS. Both blocking gaps are closed and proven live: /admin/system now degrades within one staleness window when a worker dies and names it, and job_runs/job_events carry the originating request's identity while the worker writes one greppable line per failure. With ADM-03 already PASS, A17's stopping criterion is met.",
+  "prs": {
+    "core": "https://github.com/yegamble/vidra-core/pull/182",
+    "user": "https://github.com/yegamble/vidra-user/pull/179",
+    "meta": "this evidence PR",
+    "dependency_order": "core #182 -> user #179 -> meta. core changes api/openapi.yaml additively (SystemStatus.processes, SystemStatus.process_stale_seconds), so vidra-user's contract-ci compares lib/api/generated.ts against core main and stays RED until core merges.",
+    "migration": "core 0133_process_heartbeats (up + down); search unchanged at 18"
+  },
+  "lab": {
+    "topology": "one origin — a pipe-only node proxy on 127.0.0.1:8099 in front of `node .next/standalone/server.js` on :3100 and vidra-core on :8088 — because vidra_refresh is SameSite=Lax, Path=/api/v1/auth",
+    "processes": [
+      "vidra-core VIDRA_ROLE=api on :8088",
+      "vidra-core VIDRA_ROLE=worker — a real second process, no HTTP listener",
+      "Next.js production standalone server behind the proxy (never `next start`)"
+    ],
+    "postgres": "native PostgreSQL 16.15 on 55432 (-k /tmp), fresh cluster, database vidra",
+    "redis": "native redis on 56379, db 0",
+    "storage": "STORAGE_BACKEND=local with STORAGE_LOCAL_ROOT (NOT LOCAL_STORAGE_ROOT, which is silently ignored)",
+    "browser": "real Chromium (Playwright 1.62.1) against the proxy origin, hard reload between states",
+    "rate_limits": "RATE_LIMIT_ENABLED=false in this lab, so its zero 429s says nothing about the shipped limits",
+    "schema": "origin/main phase at 132; branch phase at 133",
+    "teardown": "core api + worker, the Next standalone server, the proxy, redis and postgres all stopped; the lab directory, its postgres cluster, the media root and both built binaries removed; the origin/main git worktree removed"
+  },
+  "reproduction_on_origin_main": {
+    "gap_1_dead_worker_reads_ok": {
+      "worker_killed_at": "02:53:39 (SIGKILL)",
+      "samples": "7 reads of GET /admin/system between 02:53:49 and 02:54:50",
+      "every_sample": "status=ok, settings_sync=ok, processes ABSENT",
+      "conclusion": "71 seconds after the worker died the page still reported a healthy instance with seven healthy components"
+    },
+    "gap_2_empty_correlation_columns": {
+      "job_runs": "1 run — 0 request_id, 0 correlation_id, 0 trace_id, 0 worker_id, 0 heartbeat_at, 0 lease_expires_at, 0 pipeline_run_id, 0 actor_id",
+      "job_events": "1 event — 0 request_id, 0 correlation_id, 0 worker_id",
+      "audit_log": "2 rows — 0 with job_id",
+      "worker_failure_logs": "an import of https://unreachable.invalid/video.mp4 failed attempt 1 with 'could not fetch the URL'; the worker process wrote ZERO WARN or ERROR lines about it (its only two WARNs were boot warnings). Grepping the request's correlation id found 1 line in the api log and 0 in the worker's."
+    }
+  },
+  "sc1_process_heartbeats": {
+    "verdict": "PASS",
+    "migration": "0133 — process_heartbeats (process_id PK = hostname:pid, role, hostname, pid, version, build_commit, state running|stopped, started_at, last_seen_at, last_settings_poll_success_at, last_settings_poll_error, stopped_at) plus a last_seen_at index. Down migration round-tripped on a scratch database (table gone, triggers 0; re-applied, table back, trigger 1).",
+    "writer": "internal/processheartbeat, upserted on every tick of the settings-version poller — the one loop that runs in EVERY role — plus once at boot. No second writer is needed: the poller is not role-gated (cmd/api/main.go states why at length).",
+    "staleness_rule": "three poll intervals = 30s. A row not seen inside 24h (ForgetAfter) is dropped from the fleet answer entirely and swept, so a decommissioned host stops degrading an instance it no longer belongs to.",
+    "observations": {
+      "healthy_fleet": "status=ok; two rows, api marked self, both settings_poll=ok; process_stale_seconds=30",
+      "worker_sigkilled": "killed 02:58:08; ok at 02:58:16 and 02:58:24; DEGRADED at 02:58:32 with settings_sync down: 'the worker process <id> has not checked in for 32s, so it is stopped, wedged or unable to reach the database; work it owns is not running and it may be serving stale instance settings/documents/branding'. Held degraded through 02:59:13 (1m12s).",
+      "restart_recovers": "worker restarted; status back to ok within 8s, both processes running/ok",
+      "clean_shutdown": "SIGTERM -> state=stopped with stopped_at set, page stayed ok 39s later with the replica still listed. A scale-down is not an outage.",
+      "worker_poll_broken_only": "the worker was started against a DB role with SELECT revoked on settings_version. The api's OWN poll stayed ok and its row read settings_poll=ok; the page went degraded naming the worker: 'the worker process <id> cannot read the settings version (last success never) ... : ERROR: permission denied for table settings_version (SQLSTATE 42501)'. The worker logged 2 'settings version poll failed' lines that, before this slice, nothing reported.",
+      "wrong_actors": "GET /admin/system: moderator 403, ordinary user 403, anonymous 401. GET /admin/jobs/runs: 403 / 403 / 401. Unchanged."
+    },
+    "ui": "Chromium, hard reload: a Processes section listing 'Worker RUNNING <process_id>' and 'API this process RUNNING <process_id>' with build, last seen and start time; after the SIGKILL, pill=Degraded, Worker STALE 'last seen 2m ago', and the settings_sync reason rendered as TEXT under the Dependencies row (it used to live only in a title attribute)."
+  },
+  "sc2_job_correlation": {
+    "verdict": "PASS",
+    "mechanism": "The projection triggers cannot fill these columns — neither the originating request nor the claiming process is a column of the queue table they read. internal/jobtrace carries both in from Go keyed on (queue, source_id); migration 0133 adds two BEFORE INSERT triggers so job_events inherit from their run and a CHILD run inherits from its parent (the child is the row /admin/jobs shows, because 0083's roll-up hides a parent that has children).",
+    "queues_wired": ["transcode_jobs", "import_jobs", "upload_finalize_jobs", "transcode_steps (via the parent-inheritance trigger)"],
+    "queues_not_wired": ["federation_deliveries", "caption_jobs", "account_exports", "atproto_posts", "peertube_import_runs", "storage_migrations"],
+    "correlation_chain_observed": {
+      "admin_retranscode": "POST /admin/videos/{id}/transcoding with X-Request-ID: a17-chain-retranscode-01 -> audit_log row content.video.transcode with job_id = 5ebbf251-4e70-40c0-b2a7-bfa365b77042, which IS the job_runs row (queue transcode_jobs, source 45187794-a00e-4961-85af-bcfb1e2af0d5) -> that run and its transcode_steps child -> 9 job_events. 11 rows across three tables sharing one correlation id.",
+      "upload_finalize_spawns_transcode": "one resumable upload carrying X-Request-ID: a17-finalize-02 produced upload_finalize_jobs -> transcode_jobs -> transcode_steps x2, all four runs carrying that request id and worker id, each row's parent naming the one above it. Before the precedence fix the same upload stamped the first row only."
+    },
+    "totals_after": {
+      "job_runs": "16 total; 10 with request_id and correlation_id, 14 with worker_id, 9 with heartbeat_at and lease_expires_at, 10 with actor_id, 9 with parent_job_id",
+      "job_runs_created_under_final_code": "4 of 4 fully stamped",
+      "job_events": "85 total; 50 with request_id and correlation_id, 77 with worker_id",
+      "audit_log": "2 rows carry job_id (the two admin re-transcodes; no other originating action creates a job in this lab)",
+      "unstamped_rows": "the remainder were created during the origin/main phase of this lab, before any stamp existed — an honest historical artifact, not a gap"
+    },
+    "run_detail_in_chromium": "Actor 6b215ec0-…, Worker Yosefs-MacBook-Air.local:20097, Request ID a17-chain-fail-01, Correlation ID a17-chain-fail-01, Claimed 3:07 AM, Heartbeat 3:07 AM, Lease expires 3:37 AM (exactly lease.Duration later). Pipeline run and Trace ID stay '—': nothing creates a pipeline_run, and OTEL is off in this lab.",
+    "jobs_table": "the WORKER column, '—' on every row before, now reads the worker's process id — the same string the status page's process list shows, so one can be pasted into the other's ?worker_id= filter."
+  },
+  "sc3_worker_failure_logs": {
+    "verdict": "PASS",
+    "shape": "one structured line per failure: queue, job_id, run_id, worker_id, attempt, state, request_id, correlation_id, resource_id, and the cause through jobstatus.RedactDetail (exported for this). WARN for retry_scheduled (the work will happen), ERROR for dead_lettered (it will not). A worker's context carries no request ids, so they are read back OFF the run the enqueue stamped — that read-back is what makes one grep walk the chain in both directions.",
+    "real_failures": [
+      "transcode_jobs, source object deleted: WARN attempt 1 retry_scheduled then ERROR attempt 5 dead_lettered, both carrying correlation_id a17-chain-fail-01",
+      "import_jobs, unreachable .invalid origin enqueued fresh: WARN attempt 1 retry_scheduled carrying a17-chain-import-01",
+      "import_jobs, the run created during the origin/main phase: ERROR attempt 5 dead_lettered with empty ids (it was enqueued before any stamp existed)"
+    ],
+    "grep_proof": "`a17-chain-fail-01` -> 2 hits in the api log (the audit line and the request line) and 2 in the WORKER's (the retry WARN and the dead-letter ERROR). On origin/main the same grep found 1 and 0. The run detail's own advice — 'Execution failed; inspect correlated system logs for diagnostic detail' — is now followable."
+  },
+  "sc4_media_gc_ruling": {
+    "verdict": "RECORDED, no change",
+    "statement": "MEDIA_GC_ENABLED gates only the DAILY sweep. The manual POST /admin/media/gc stays mounted and still deletes with the flag off — admin_media.go says so in as many words, and the previous slice proved it by experiment (flag off, enabled:false, POST {\"dry_run\":false} -> 200, mode=delete, deleted=1). user#177 already documents it on the page. Nothing in this slice touches it."
+  },
+  "sc5_no_regression": {
+    "core_make_ci": "gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race), run three times across the slice",
+    "core_integration_vet": "go vet -tags=integration ./... clean",
+    "core_real_pg_lane": "3 new tests in internal/store, run against the lab's real PostgreSQL 16.15 — heartbeat upsert/staleness/forget, both 0133 inheritance triggers, and the enqueue stamp's parent precedence. Proven RED at schema 132 with the 0133 objects dropped: 'event inherited \"\"/\"\"/\"\"/\"\", want the run's ids'.",
+    "user_gates": "Node 24.4.1 — tsc --noEmit clean, eslint 0 errors (2 pre-existing warnings), lint:icons pass, vitest 252 files / 2513 tests passed",
+    "a17_named_tests": "TestSystemStatusSettingsSyncComponent, TestSystemStatusObjectStoreProbe and the rest of internal/httpapi still pass; the AdminSystemStatusView suite grew from 11 to 17 tests with the existing 11 unchanged",
+    "fakes_mirrored": "GetLiveTranscodeJobID added to both transcode fakes returning pgx.ErrNoRows when there is no live job (the :one shape); ListProcessHeartbeatsOnHost/DeleteProcessHeartbeat added to the heartbeat fake",
+    "settled_session": "no new viewer-scoped read was added; the Processes section renders inside the existing admin RoleGate",
+    "probes_bounded": "the previously unbounded postgres/redis pings on /admin/system now share the 3s systemProbeTimeout, applied at the admin-page call site and NOT inside componentHealth (which /readyz also calls). Test wedges a 'connected then silent' pinger, which a TCP timeout cannot catch; the page answered in 3.0s."
+  },
+  "secret_sweep": {
+    "swept": "13 artefacts — 3 captured admin response bodies (/admin/system, /admin/jobs, /admin/jobs/runs) and all 10 core process logs from both roles",
+    "literals": ["JWT_SECRET", "INTERNAL_SECRET", "the owner's password", "the postgres DSN", "the redis DSN"],
+    "patterns": ["any postgres://|redis:// scheme", "a JWT", "a password/secret/token/*_key field with a value", "an email address", "a session id"],
+    "result": "ZERO findings across all 13 artefacts"
+  },
+  "unverified": [
+    "A real storage migration between two backends: the lab has one backend and no object-store credentials (carried forward from the previous slice).",
+    "The SMTP and object-store probes against a real relay or bucket — both report not_configured here, a supported shape rather than a fault.",
+    "A federation_deliveries, caption_jobs, account_exports, atproto_posts or peertube_import_runs failure: those queues stayed empty and their services do not call the recorder yet, so their runs still carry no request/worker id.",
+    "trace_id end to end: OTEL_ENABLED is off in this lab, so every trace_id is an honest blank. The stamp reads trace.SpanContextFromContext and is unit-tested, but no real trace was produced.",
+    "pipeline_run_id: nothing in the shipped code creates a pipeline_runs row, so the field stays '—' on the run detail. The column and the inheritance are wired; the producer does not exist.",
+    "npm run e2e and the backed Playwright suite (browser fleet + full backend) — repo CI covers them.",
+    "A multi-HOST fleet: both processes ran on one hostname, so the cross-host half of the forget window was exercised only by ageing a row in SQL."
+  ],
+  "findings_recorded_not_fixed": [
+    "jobstatus.RedactDetail does not remove a bare storage key. The transcode failure's cause is `media: ffprobe \"web-videos/<uuid>.mp4\" failed: exit status 1`, and that string now also reaches the WORKER LOG rather than only the admin-only API — the same operator, but a log aggregator is a wider audience than an admin page. It strips URL schemes and credential-shaped pairs (proven: a signed source URL with token=… is redacted). Fixing it would change the admin failure list's text, which the previous slice's evidence quotes, so it is left for a slice that owns that surface.",
+    "channel_syncs is still not projected into job_runs at all (0083 lists it among the tables needing distinct execution rows first) and has no queue row on /admin/jobs. The operator has no surface for a failed channel sync; only the channel owner sees it through GET /channel-syncs.",
+    "The operational retention queries (PruneOperationalJobEvents, PruneTerminalOperationalJobRuns, PruneTerminalPipelineRuns) are wired — the worker logs 'operational job retention worker started' — but process_heartbeats is swept by its own hourly tick inside the heartbeat writer rather than by that loop.",
+    "A pid REUSED by an unrelated program reads as alive to the boot reap, so a row for a genuinely dead process survives to the forget window. That errs toward keeping evidence and matches what the page already reports."
+  ],
+  "notes_for_other_slices": {
+    "A05 SMTP + TOTP": "Two things this lab confirms. (1) MAIL_ENABLED=false leaves the smtp component at not_configured, which never degrades the instance — so A05 must set SMTP_HOST/SMTP_FROM and watch the component move to ok|down, not merely watch the page stay healthy. (2) Every boot of this lab logged 'MFA_KEY_KEK unset — TOTP secrets are stored UNENCRYPTED' at WARN, once per process; A05 must set MFA_KEY_KEK (or share FEDERATION_KEY_KEK) or its TOTP evidence is of an unencrypted store."
+  },
+  "traps": {
+    "pkill_argument_order": "`pkill -f <pattern> -U $(id -u)` on macOS killed every process owned by the user, including the lab's postgres (it logged 'received smart shutdown request'). Put options BEFORE the pattern, or kill by pid.",
+    "next_admin_jobs_never_reaches_networkidle": "the jobs page holds an SSE stream, so Playwright's waitUntil: 'networkidle' times out; use 'domcontentloaded' plus an explicit wait.",
+    "run_detail_is_a_button": "the run detail expands from a 'View details' BUTTON inside the row, not a link.",
+    "upload_session_field": "POST /videos/{id}/upload-session takes `size`, not `total_bytes`."
+  }
+}
