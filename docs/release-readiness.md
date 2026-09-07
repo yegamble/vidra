@@ -6720,3 +6720,7 @@ The lab was torn down — core api and worker, the Next standalone server, the
 proxy, redis and postgres all stopped, and the lab directory, its postgres
 cluster, the media root, both built binaries and the `origin/main` git worktree
 removed. Nothing is merged here and no deployment is authorized.
+
+## A05 SMTP delivery, recovery mail and TOTP — 2026-09-07
+
+*Slice in progress — this section is rewritten before the PR leaves draft.*
