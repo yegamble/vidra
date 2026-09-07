@@ -144,7 +144,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | INT-10 CDN redirects, purge and versioned media remain correct | M C U | F06; CDN provider/resolver and purge ledger | FAIL | Edge simulator first, then selected edge: retranscode/replacement, privacy/delete/global download revoke and failed purge/retry; stale segments must never play; failure after redirect tested | PLAY-03 + CDN selection → A33 |
 | INT-11 Noncustodial donation addresses verify and display honestly | C U | Donation service; backed donations; product decision excludes custodial flows | UNVERIFIED | Address validation/challenge/ownership verification, update/remove and profile/watch support dialog; no fabricated payment confirmation or funds handling | AUTH-02 → A30 |
 | OPS-01 API/worker split updates settings and recovers leased jobs | M C S | All-role settings poller now fixed; job leases/sweeps; worker Compose profile | UNVERIFIED | API-only + two workers; edit config, observe both; kill one mid-transcode/import, recover once; Redis/DB outage and leader failover; no local-volume split across hosts | PUB-03, ADM-03, STO-01 → A34 |
-| OPS-02 Health, logs/trace correlation, metrics/QoE and retention are useful | M C S U | Observability/OTel/QoE packages; search metrics and privacy retention | UNVERIFIED | Follow one browser upload/play/search via correlation; inspect safe structured logs, failed worker status and bounded metrics; run retention; distinguish native-HLS/proxy/CDN source truth | SRC-01 → A35 |
+| OPS-02 Health, logs/trace correlation, metrics/QoE and retention are useful | M C S U | Observability/OTel/QoE packages; search metrics and privacy retention; live evidence `a35-observability` (one browser walk — ffmpeg upload → transcode → CMAF playback over MSE → search — followed on named id fields across eleven hops, with all four job runs and fourteen events carrying the enqueueing request's correlation, request and TRACE ids and the audit row's `job_id` naming the run in the worker's failure lines; a real OpenTelemetry collector showing one trace per server-rendered page spanning vidra-user and vidra-core; a fifteen-check secret sweep over twenty-two artefacts returning zero; a dead-lettered worker job on the admin surfaces with the queue gauge moving 0→1; label cardinality held under 180 requests over 120 distinct URLs with 60 nonsense paths folding into one `route="unmatched"`; a real playback classified `api-proxy` while four client-claimed sources were refused, rolled up with real percentiles and rendered in Chromium; and every retention window run through the shipped prune functions) | PASS | Follow one browser upload/play/search via correlation; inspect safe structured logs, failed worker status and bounded metrics; run retention; distinguish native-HLS/proxy/CDN source truth | SRC-01 → A35. Defects fixed on the way: `jobstatus.RedactDetail` let a bare storage key through into the worker log (core#190), every server-rendered read reached vidra-core with no correlation id and no traceparent (user#184), `vidra_search_table_rows` reported every table empty because PostgreSQL 14+ writes `reltuples = -1` until first analyze (search#39), and three config keys core#189 added never reached the compose environment anchor, which had kept the meta config gate red on `main` (core#190). Findings that need a ruling rather than a patch, none blocking: the QoE beacon ignores the discovery opt-out, so an opted-out viewer's playback still carries their day-scoped pseudonym; `audit_log` has no retention of any kind; `search_outbox` and `qoe_events` carry no correlation column, so both asynchronous hops start a fresh id; a SUCCESSFUL job writes no correlated worker log line; a creator's upload and publish write no audit row at all; the worker role builds a Prometheus registry it can never serve, which is the only place `vidra_search_dead_letters_total` can increment; core has no monotonic job-failure counter; core still logs `object_key`/`storage_key` in the media-GC and storage-migration paths; and vidra-search ships neither logging guard despite handling raw query text |
 | REC-01 Backup includes DB, settings/sealing keys and required media | M C S | `backup.sh`, config archive, deploy runbook local/S3 snapshots; search schema in same DB | UNVERIFIED | Disposable data: backup/check restore-list; failed dump never finalizes; encrypted offsite config/media retrieval with same timestamp; search models/rebuild plan and S3 version retention documented | INS-04, STO-01 → A36 |
 | REC-02 Restore on replacement host yields usable accounts/media/search | M C S U | `restore.sh`, disaster-recovery order; no audit rehearsal | UNVERIFIED | Destroy only disposable host; restore config before DB/media, apply known migrations, login and decrypt saved integrations, play old+new uploads, reindex search; measure RPO/RTO | REC-01, SRC-01 → A37 |
 | REC-03 Upgrade/rollback and dirty-schema recovery preserve data | M C S U | Deploy/rollback floor, separate ledger guards, schema-compat workflow | UNVERIFIED | Upgrade previous compatible release with data; injected migration failure abort; supported app-only rollback; incompatible schema uses tested backup restoration; no blind force/automatic down migrations | REL-01, REC-02 → A38 |
@@ -7652,3 +7652,349 @@ renders as binary noise, and every selector times out with no error anywhere
 (curl does not reproduce it — curl does not ask for gzip). A17's three scrubbed
 503s remain scrubbed. Full evidence:
 `docs/evidence/import-hardening.json`.
+
+## A35 correlation, QoE source truth and retention — 2026-09-07
+
+**OPS-02 flips to PASS, and A35's stopping criterion is met.** One browser walk
+— upload a real ffmpeg clip, transcode it, play its CMAF segments over MSE,
+search for it — was followed hop by hop on named id fields; all three services
+log structured JSON and a fifteen-check secret sweep over twenty-two artefacts
+found nothing; a real dead-lettered worker job appears on the admin surfaces and
+moves the queue gauge; every metric label space is bounded and stayed bounded
+under a 120-distinct-URL probe; a real playback classifies as api-proxy and a
+client-claimed source is refused; and every retention window was run and watched.
+Three PRs, all independent — [core
+#190](https://github.com/yegamble/vidra-core/pull/190), [user
+#184](https://github.com/yegamble/vidra-user/pull/184) and [search
+#39](https://github.com/yegamble/vidra-search/pull/39). **No migration and no
+OpenAPI change in any of them** (core stays at schema 135, search at 18), so
+there is no `contract-ci` ordering to respect. There is one other
+ordering: core#190 also closes a compose gap that has kept the meta repo's config
+gate red on `main` since this morning, so **this evidence PR's `validate` lane
+stays red until core#190 lands**. [Sanitized
+evidence](evidence/a35-observability.json).
+
+Measured on a two-process core — `VIDRA_ROLE=api` on `:8088` and a real
+`VIDRA_ROLE=worker` with no listener — plus vidra-search, a production Next
+standalone server behind a pipe-only single-origin proxy, native PostgreSQL
+16.15 and native redis, a real Chromium, and **a real OpenTelemetry collector**
+(`mirror.gcr.io/otel/opentelemetry-collector-contrib:0.160.0` — Docker Hub hangs
+here, the gcr mirror does not — exporting to a file so spans could be read back
+rather than admired in a UI). Rate limiting was **off**, so this lab says nothing
+about the shipped limits. `TRANSCODING_MIN_FREE_SCRATCH_MB=512` against the
+shipped 10 GiB floor, because this box had 4.7 GiB free and would otherwise have
+refused every claim.
+
+**What failed first, and it was the frontend.** Every **server-rendered** read of
+vidra-core went out with no `X-Correlation-ID` and no W3C `traceparent`. A header
+tap in front of the api caught both of the home page's reads arriving as
+`{"traceparent":null,"correlation":null}` — and with `OTEL_ENABLED=true` on all
+three processes the collector held **zero** traces spanning two services:
+vidra-user's `@vercel/otel` fetch span and vidra-core's server span for the same
+call had different trace ids. `lib/api/client.ts` has minted an id per request
+since the observability spec landed; `lib/server-json.ts` — the *other*
+server-side fetch path, and the one the watch page's `no-store` video read goes
+through — never grew one. user#184 adds both, and only on an **uncached** read:
+the Next data cache keys on the request headers, so a per-request header on a
+revalidated read mints one cache entry per render, which is the identical trap
+`lib/client-ip.server.ts`'s skip list already documents for the viewer IP, and a
+read served from that cache makes no backend request to correlate with anyway.
+After the fix the tap reads `traceparent: 00-af5dc86f…-01` on the watch page's
+video read and nothing at all on the revalidated `/api/v1/instance`, and the
+collector holds one trace per server-rendered page carrying **both** services,
+with vidra-core's `GET /api/v1/videos/:id` span parented on vidra-user's `render
+route (app) /videos/[id]`.
+
+**The walk, hop by hop.** Video `4947ad07-…`, title `A35walk1788805193`, played
+back as a `blob:` MSE source at `currentTime 6.013967` off real
+`chunk-0-00001.m4s`/`chunk-1-0000{1,2}.m4s`.
+
+| hop | field | what it carries |
+| --- | --- | --- |
+| browser fetch | `x-correlation-id`, minted **per fetch** | 128 API requests, 98 with an id and **98 distinct**; 30 element-issued media/image requests carry none |
+| browser server-render | none → `x-correlation-id` + `traceparent` on `no-store` reads | 0 of 2 before; both after, the revalidated read deliberately bare |
+| core response | `X-Request-Id` + `X-Correlation-Id` echoed | 127 of 128; on 97 the two **differ**, which is what proves the browser's id was accepted rather than minted |
+| core api log | `request_id`, `correlation_id`, `trace_id`, `span_id` | one `request` line per request |
+| `audit_log` | `request_id`, `correlation_id`, `trace_id`, `job_id` | 34 rows — 33 with a correlation id, 31 with a trace id, **1** with a job id |
+| `job_runs` | `request_id`/`correlation_id`/`trace_id`/`worker_id` | the walk's **4** runs all carry `dbc4e2fe-…`, `3bc92fe5…` and one worker id |
+| `job_events` | same, via 0133's inheritance trigger | **14** on that id; 42 of 42 populated overall |
+| worker log | the ten failure fields | **0** lines for the successful walk; 5 for the deliberate failure |
+| `search_outbox` → search | **nothing** — no such column | the beacon's id: 1 line in core, **0** in vidra-search |
+| live search → search | `X-Correlation-ID` off the request context | `50b2db4a-…`: **1 + 1**, core's `/api/v1/videos/search` and search's `/internal/v1/search` |
+| QoE beacon | its own per-fetch id; `qoe_events` has no correlation column | the only link back is `(video_id, session_id)` |
+
+The originating id is not "the upload": the browser mints a fresh id per fetch,
+so create / upload-session / chunk / complete / PATCH are five different ids and
+only the one that **enqueues** travels. It was `POST
+/api/v1/uploads/{id}/complete` carrying `dbc4e2fe-95d4-44d1-bcd0-1c2ada82b307`,
+and that exact string is on all four runs and their fourteen events. The other
+half of the chain is the audit trail: `content.video.transcode` carries `job_id
+56afac05-…`, which is the `run_id` in the worker's five failure lines, whose
+`trace_id 91172e59…` is the audit row's. **Trace ids are real here** where A17
+recorded an honest blank; core accepts and continues an inbound `traceparent`
+(proven with a synthetic parent), and the worker's own spans are separate roots
+because a job is asynchronous — `job_runs.trace_id` recording the *originating*
+trace is the honest link, not a continued span. **vidra-search has no
+OpenTelemetry at all**: no `OTEL_*` key exists in its config, so that hop can
+only ever be joined by `correlation_id`.
+
+**Safe logs, and the redaction A17 left open.** All three services log structured
+JSON; core's request line is `method, path (the route TEMPLATE), status,
+latency_ms, request_id, correlation_id` plus `trace_id`/`span_id` when a trace is
+active, vidra-search's is the same minus the trace fields, and vidra-user's
+`lib/logger.ts` adds a runtime redaction denylist. `TestNoForbiddenLogging` and
+`TestNoSensitiveLogKeys` both pass. **`LOG_LEVEL=debug` adds nothing on the
+request path** — a boot, a login, two reads and a search at debug produced 20 INFO
+lines and **0 DEBUG** lines, because the only debug call sites in the module are
+the IPFS mirror's (disabled here) and one jobtrace heartbeat-miss line. A sweep of
+nine literal secrets and six patterns across twenty-two artefacts — every core,
+search, Next and proxy log, seven captured admin and public bodies, three metrics
+scrapes — returned **zero** on all fifteen checks.
+
+That zero includes *a bare storage key*, which it would not have before core#190.
+A17 recorded that `jobstatus.RedactDetail` does not strip one and that the same
+text now also reaches the **worker log**; the transcode failure's cause is
+`media: ffprobe "web-videos/<uuid>.mp4" failed`. It now reads `media: ffprobe
+"[redacted-key]" failed: exit status 1` in all five worker lines and on the admin
+failure list in Chromium, and `web-videos/` appears zero times in any log. A key
+is told apart from `application/json`, `HTTP/1.1` or `attempt 3/5` by the resource
+UUID every key in this codebase carries; a **bare** UUID is deliberately left
+alone, because it is the run's own `resource_id` and the one thing that makes the
+failure actionable.
+
+core#190 also gives AGENTS.md rule 6 its missing half. The rule is *"never log
+tokens, passwords, **email addresses**, message bodies, or report reasons"*, and
+the denylist `TestNoSensitiveLogKeys` consults held only credentials plus
+`subject_id` — nothing stopped the next `"email", user.Email` from compiling. The
+first attempt at simply adding it **broke the account-archive assertion**, which
+reuses the same predicate, and correctly so: an export is *supposed* to carry the
+account's own address. So `IsSensitiveKey` stays the secret denylist that response
+bodies and archives are checked against, and a new `IsSensitiveLogKey` adds the
+direct identifiers — address, raw client address, session id, and the QoE viewer
+pseudonym, which is keyed and day-scoped precisely so it cannot follow a viewer
+across days. `user_id`/`actor_id` are deliberately not on it. No call site
+changed, which is the point of adding them before one appears.
+
+**A fourth defect, found by the meta gate rather than by the lab.** core#189
+added `IMPORT_FETCH_IDLE_TIMEOUT`, `IMPORT_FETCH_TIMEOUT` and
+`CHANNEL_SYNC_BACKOFF_MAX` this morning and did not add them to
+`vidra-core/docker-compose.yml`'s shared environment anchor, so a stock stack
+passed none of the three through — the knobs existed only for someone hand-editing
+a unit file. The meta repo's *"every config key vidra-core reads has a compose
+consumer"* gate has been **red on `main` since that merge**, naming all three, and
+it is what this evidence PR's `validate` lane trips on. core#190 adds them as
+**pass-throughs** rather than `${VAR:-x}` fallbacks, for the reason the anchor
+already spells out at `FEATURE_LIVE_ENABLED`: a fallback is an OVERRIDE, not a
+default, and these three have nothing to gain from being pinned in two places.
+Verified in the rendered model — all three appear in **both** the `api` and
+`worker` environment maps. **It makes core#190 a prerequisite for this evidence
+PR**, whose `validate` lane reads `vidra-core@main`.
+
+**A real failure, on the worker, end to end.** One video's source object was moved
+away and an admin re-transcode requested with `X-Request-ID: a35-fail-01`: four
+WARN retries on 1/2/4/8-minute backoff (14:28:45 → 14:36:15) and an ERROR
+dead-letter at 14:44:16 on attempt 5. `/admin/jobs` shows `transcode_jobs failed:
+1` and a recent-failure row with the redacted cause and `attempts 5`, rendered in
+Chromium after a hard reload; `vidra_queue_depth{queue="transcode_jobs",state="failed"}`
+moved **0 → 1** and `vidra_job_oldest_queued_age_seconds` tracked the retry gap.
+Worth stating plainly: **core exports no monotonic job-failure counter.** Failure
+is a queue-depth gauge and an age gauge, deliberately — A17 records the reason.
+
+**Metrics are bounded, and one of them was lying.** `/metrics` is root-mounted
+with no auth on both services, gated by `METRICS_ENABLED`, and hard-404'd at the
+public edge by `deploy/Caddyfile`; anonymous reads answer 200 inside the network
+and 404 through the single public origin. That is the shipped posture —
+network-scoped, not authenticated — and it is written down in both places.
+Cardinality held under a deliberate probe of **180 requests over 120 distinct
+URLs** (60 random UUIDs, 60 nonsense paths, 60 distinct queries):
+`vidra_http_requests_total` went from 61 to 63 series — two new *status classes* —
+all 60 nonsense paths folded into exactly one `route="unmatched"`, and **zero**
+UUIDs or query strings appear anywhere in either scrape.
+
+| metric family | series | labels | bound |
+| --- | --- | --- | --- |
+| `vidra_http_request_duration_seconds` | 780 | method 4 × route 55 × status_class 4 × 15 buckets | the route table |
+| `vidra_http_requests_total` | 60 | method × route × status_class | the route table |
+| `vidra_queue_depth` | 29 | queue 8 × state 5 | 40 |
+| `vidra_job_oldest_queued_age_seconds` / `_stale_running` | 3 each | queue | the queue list |
+| `vidra_search_http_request_duration_seconds` | 91 | method 2 × route 7 × status_class 1 | search's route table |
+| `vidra_search_events_total` | 7 | type 7 × outcome 2 | closed vocabularies |
+| `vidra_search_rollup_duration_seconds` | 104 | worker 8 | the fixed worker list |
+| `vidra_search_table_rows` | 15 | table 15 | the schema |
+
+No metric in either service takes a user, video, session or address label. The
+only shape that is not bounded by a *vocabulary* is
+`vidra_search_loaded_model{kind,version}` / `vidra_search_shadow_eval{version,metric}`,
+whose `version` grows with the number of model artifacts an instance has ever
+loaded — no series existed here, so it is recorded rather than measured.
+
+The liar was **`vidra_search_table_rows`, which reported 0 for all fifteen tables
+while `events_inbox` held 87 rows, `behavior_events` 78, `query_log` 63,
+`query_aggregates` 63 and `documents` 3**. It was sourced from
+`GREATEST(pg_class.reltuples, 0)`, and PostgreSQL 14+ writes `reltuples = -1` until
+VACUUM/ANALYZE first touches a relation — the documented *unknown* sentinel,
+deliberately distinct from 0 — with `last_analyze` and `last_autoanalyze` null on
+every one of them. It is the only capacity signal vidra-search exports, and on a
+freshly deployed instance it said the index was empty. search#39 prefers
+`pg_stat_user_tables.n_live_tup`, which the cumulative statistics system maintains
+on every write and is therefore live with no analyze, falls back to `reltuples`
+only when it is a real count, and emits **no series at all** when neither can
+answer, so a dashboard shows a gap rather than a confident zero. Both remain
+estimates and the lab measured the drift honestly: after repeated TRUNCATE+insert
+cycles `n_live_tup` read 6 for a table holding 1, and a plain `ANALYZE` reconciled
+both statistics to 1. Drift in an approximate number is not the same failure as a
+sentinel read as a count. CI then found what the lab could not: the statistics
+flush is rate-limited to about once a second, so a test that writes and reads
+back-to-back can legitimately still see zero — the test now polls for ten seconds
+and still fails loudly if the estimate never moves.
+
+**QoE tells the truth about where the bytes came from.** The client never names a
+source: it reports `source_url` with the query and fragment stripped client-side
+(that is where a `?pt=` token or a presigned signature lives) and the server
+classifies the **origin** against its own configured bases. Five cases, one
+measurement each:
+
+| what the client sent | classified as |
+| --- | --- |
+| a real HLS playback through this lab's api-proxy delivery | `api-proxy` — 3 of 3 events, engine `hls-js`, format `cmaf` |
+| an origin-relative `/api/v1/videos/…/master.m3u8` | `api-proxy` |
+| `https://cdn.evil.test/…` with no `DELIVERY_CDN_BASE_URL` configured | `other` — never `cdn` |
+| an explicit `"delivery_source":"cdn"` **field** beside an api-proxy origin | `api-proxy` — the field is not even read |
+| `https://cdn.a35.test.attacker.example/…` against a process configured with `https://cdn.a35.test` | **`other`** — the boundary check a bare `HasPrefix` would have failed |
+
+With presign and CDN unconfigured the main api took **17 beacon requests** and produced **zero**
+`cdn` rows; a second api process configured with a CDN base classified the
+configured host as `cdn` on the same beacon shape, which is what makes the zero a
+measurement rather than an absence. The hourly worker rolled the walk's hour at
+15:05:37 into exactly one row — `api-proxy / hls-js / cmaf`, `event_count 3`,
+`verified_count 0`, TTFF p50 153 / p95 407 / p99 407 ms out of a 112-bucket
+fixed-boundary histogram carrying exactly three marks (the raw TTFFs were 8, 135
+and 361 ms) — and `AdminPlaybackHealthView` renders it in Chromium after a hard
+reload as *"Through the API — Bytes streamed by this server itself"*, 3 playbacks,
+`Engines: hls.js`, `Attested 0%`, with the sentence that explains 0% is the
+expected reading on a public video rather than a fault.
+
+**The beacon batches, and the batch is where the id is lost.** `lib/playback-qoe.ts`
+holds an in-memory queue: twenty flushes immediately, a partial batch waits a 5 s
+tick, `visibilitychange`→hidden and `pagehide` flush with fetch `keepalive`, and a
+failed POST is dropped with no retry. Each flush is an ordinary `api.postQoEEvents`
+call, so it mints its **own** correlation id — a measurement is never correlated
+with the playback that produced it, and `(video_id, session_id)` is the only join
+there is.
+
+**One privacy question this slice cannot answer alone.** `qoe_events` stores
+`viewer_digest`: `internal/pseudonym`'s keyed, day-scoped MAC of `u:<account
+uuid>` when signed in and `ip:<address>` otherwise, with the address never stored
+and the key derived from `JWT_SECRET` so a rotation is also a linkability reset.
+The beacon consults **no user preference**. `a35viewer` turned off
+`history_enabled`, `search_history_enabled`, `personalized_search_enabled` and
+`personalized_recommendations_enabled`, and their very next playback wrote a row
+carrying the **same digest** as their pre-opt-out rows. Everything mitigating is
+also true — day-scoped so it cannot follow a viewer across days, unreversible
+without the secret, nothing aggregates by viewer, seven-day raw retention — so
+this is pseudonymous within-day linkage rather than raw attribution. But A13 ruled
+that an opted-out user must not be attributed in *search*, and nobody has ruled on
+whether that reaches playback telemetry. **This needs an owner's ruling, not a
+patch.**
+
+**Retention, every window, run.** Each window is a compile-time constant on an
+hourly or daily leader-gated tick, so each prune was driven through the **same
+exported function the loop calls**, against the lab database, by moving the `now`
+argument the function already takes. Nothing's timestamp was doctored except where
+the row says so.
+
+| family | window | knob | observed |
+| --- | --- | --- | --- |
+| `qoe_events` | 7 d, fixed | none, deliberately | 3 rows survived at `now` and at `now+6d23h`; all 3 deleted at `now+7d1h` |
+| `qoe_rollups` | 90 d, fixed | none | nothing older; batching and leader gate unchanged |
+| `job_events` | 30 d, fixed | none | 53 survived at `now`; all 53 deleted at `now+31d` |
+| `job_runs` / `pipeline_runs`, **terminal only** | 90 d, fixed | none | 13 survived at `now+31d`; all 13 deleted at `now+91d`. Active work is never deleted at any age |
+| `search_outbox` | `search_event_retention_days` (90, validated 1..365), **7-day forensic floor for `dead`** | instance setting | `days=0` is out of range and backstops to 90 (nothing). `days=1` at `now+2d` deleted 8 delivered rows and **held** the dead one; at `now+8d` the dead row went. `pending` is never pruned at any age |
+| `process_heartbeats` | 24 h forget, hourly | none | a planted row for a decommissioned host last seen 25 h ago was swept; both live rows kept |
+| vidra-search `query_log`/`behavior_events`/`events_inbox`/`user_watch_projection` | the same instance setting, via the `config_updated` overlay | instance setting | `PATCH search_event_retention_days=1` produced a `search.config_updated` outbox event, **delivered within 8 s**, and `search.service_config` carried the new value; the retention job then deleted exactly the 3 rows past the window and kept the 3 inside it |
+| **`audit_log`** | **none** | none | 34 rows before every prune above, 34 after. There is no `DELETE` against it anywhere in the tree |
+
+Two things the retention run taught. `EVENT_RETENTION_DAYS=1` on the search
+process changed **nothing**: `worker.retention` reads the `config_updated`
+overlay first and only falls back to the env, so the operator path is the
+instance setting and the env var is shadowed the moment core has ever pushed a
+config. And `suggestible_reeval` refused to run on the emptied ledger with its
+guard sentence — *"refusing to un-suggest every aggregate on an empty ledger"* —
+which is the A13 behaviour, still holding.
+
+**Wrong actors.** `/admin/qoe/playback-health`, `/admin/system`, `/admin/jobs`,
+`/admin/jobs/runs` and `/admin/audit-log`: anonymous **401**, ordinary user
+**403**, moderator **403**, admin **200** — five routes, four actors, twenty
+checks — and in Chromium a signed-in moderator gets *"Administrators only"* on the
+system and playback-health pages. `GET /internal/v1/search` without the HMAC
+header is **401**. `POST /api/v1/qoe/events` is `optionalAuth` by design and
+answers 202 to an anonymous caller; identity is enriched server-side and a body
+that claimed one is not read.
+
+**Gates.** core `make ci` — *"ci: gate passed (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race)"*; `go vet -tags=integration ./...` clean;
+repo CI green on `build-test`, `integration`, `ipfs-integration`,
+`ipfs-private-integration`, `openapi` and GitGuardian. search `make ci` passed,
+with a new `internal/store` integration test proven **RED** on the old query —
+*"documents estimated at 0 rows after a successful ingest — the never-analyzed
+reltuples sentinel is being read as empty"* — plus a five-case unit test of the
+estimate choice. user on **Node 24.4.1**: `tsc --noEmit` clean, `npm run lint` 0
+errors (2 pre-existing warnings in untouched files), `lint:icons` pass, **254
+files / 2539 tests** (2536 on `main`), `next build` clean twice; repo CI green on
+`frontend`, `contract`, `e2e-backed (local)`, `e2e-backed (s3)`,
+`channel-sync-backed`, `ipfs-backed` and GitGuardian. No script, compose or env
+file changed, so no `bash -n`, `shellcheck` or prod render was required.
+
+**Unverified.** A real CDN or presigned delivery path: `cdn` was proven against a
+second api process *configured* with `DELIVERY_CDN_BASE_URL`, not against bytes a
+CDN actually served, and `presigned`, `ipfs-gateway` and `origin-live` were never
+produced at all. The QoE rebuffer, bitrate-switch and error percentiles: a
+six-second clip on a loopback origin stalls, switches and fails zero times, so
+those counts are all 0 and the rebuffer histogram is empty. A multi-**host** fleet
+— both processes ran on one hostname, so the cross-host half of the heartbeat
+forget window was exercised only by planting a row. vidra-search under
+OpenTelemetry, which does not exist to enable. `npm run e2e` and the backed suites
+locally (repo CI owns them and is green on the PR), and core's `-tags=integration`
+lane locally (docker is its documented path; `go vet -tags=integration` compiles
+it and CI's lane is green). And the 30- and 90-day job windows at their real ages:
+they were exercised by moving the prune's clock argument, not by waiting.
+
+**Also found, not fixed.** `search_outbox` carries no request, correlation or
+trace column, so every event that reaches vidra-search asynchronously arrives with
+a fresh id — closing it is a migration plus every enqueue path, the same shape A17
+ruled on for `job_runs`. `qoe_events` carries no correlation column either. **A
+successful job writes no correlated worker log line at all**: the chain reaches the
+worker through `job_runs`/`job_events`, and through the worker's own log only when
+something fails. The creator's upload and publish write **no `audit_log` row**, so
+the audit trail is not on the content-creation path; `audit_log.job_id` was
+populated on exactly one row, the admin re-transcode. The **worker role builds a
+metrics registry it can never serve** — it logs `prometheus metrics enabled
+route=/metrics` and then `no HTTP listener in this role`, and the search-outbox
+drainer is worker-gated, so `vidra_search_dead_letters_total` is a counter that can
+only ever increment in a process with no scrape endpoint. `audit_log` has no
+retention of any kind. core logs `object_key`/`storage_key` as structured keys in
+the media-GC and storage-migration paths, which is now inconsistent with
+`jobstatus`'s stated invariant — one ruling, not a unilateral change. And
+**vidra-search ships neither logging guard**, despite handling raw query text and
+despite its logger being a declared TWIN of core's; a ported copy of both AST walks
+found 0 forbidden calls and 0 of its 32 distinct log keys on core's denylist, so it
+is clean today and unguarded tomorrow.
+
+**Six traps for the next lab, four of them expensive.** `published` is not
+`playable`: the state flips when the web video and poster are stored and the HLS
+**ladder** is a later step, so waiting on state hands the player a document with no
+`hls_url` and it plays the progressive `/original` — measured twice before the walk
+waited on `hls_url` instead. zsh's `path` **is** `PATH`: a `for path in …` loop
+silently destroys the environment mid-script. `psql -c` with several statements
+runs them in **one transaction**, so an error in the last one rolls back the first
+and a doctored timestamp that appears to have been applied may not have been.
+Running vidra-search's integration suite against a live lab database **TRUNCATEs
+the search schema**. `gofmt` may be shell-aliased to `gofmt -w .` on this box, which
+turns a lint into a repo-wide rewrite. And Docker Hub pulls still hang here —
+`mirror.gcr.io/<repo>` works and can be retagged, which is how the collector ran.
+
+The lab was torn down — core api and worker, vidra-search, the Next standalone
+server, both lab proxies, redis and postgres all stopped, the OpenTelemetry
+collector container removed, and the lab directory, its postgres cluster, the media
+root and the built binaries deleted. Nothing is merged here and no deployment is
+authorized.
