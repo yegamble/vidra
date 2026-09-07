@@ -5663,8 +5663,10 @@ lint:icons` pass, production `next build` pass, `npm run test` **2,406 passed /
 82 failed — and the same 82 fail on clean `origin/main` in this environment**
 (baseline measured by stashing: 82 failed / 2,390 passed), seven files dying
 under local Node 25.9.0 rather than the repo's Node 24; repo CI is the authority
-for those. All 16 new frontend tests live in one new file and two added cases; no
-existing spec was edited. No new viewer-scoped client read was added, so
+for those. The 17 new frontend tests live in one new file (15) and two added
+cases in `lib/api/endpoints.test.ts`; the only existing spec touched is the
+mocked e2e one above, whose fixture had to move with the contract and whose
+assertions were added to, never weakened. No new viewer-scoped client read was added, so
 `lib/use-settled-session.ts` needed no new caller. The meta compose render was
 not re-run: no compose, script or env file changed. Repo CI: **core #178 is 7/7 green**, including `integration` and
 `prev-release-against-new-schema` — which is the compat argument above, checked
