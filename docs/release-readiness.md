@@ -99,8 +99,8 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | INS-05 TLS/proxy/runtime URLs work at the installed domain | M C U | Caddy routes; user runtime-config and server API origin; five TLS modes in deploy library | UNVERIFIED | Real HTTPS edge: API, frontend, media Range, setup, static, well-known/federation and legacy watch routes; restart with new lab origin; test selected external/internal TLS mode separately | INS-04 → A03 |
 | AUTH-01 Owner claim is exclusive, one-time and grants admin | C U M | `auth/ownerclaim.go`, `e2e-backed/owner-claim.spec.ts`, setup routes | UNVERIFIED | Before claim all signup methods refuse; valid boot token claims once; restart invalidates old token; race two claims; admin/system succeeds only for claimant | INS-05 → A04 |
 | AUTH-02 Registration, approval, login, logout and session refresh persist | C U | Auth service/routes; backed auth-persistence/session/registration-approval tests; approval opt-in | UNVERIFIED | Open/closed/approval registration with two users; accept/reject; expiration/refresh/revoke; reload and multi-tab/logout; rejected credentials never create sessions | AUTH-01 → A04 |
-| AUTH-03 Email verification and password recovery deliver real mail | M C U | `internal/mail/smtp.go`; backed reset/verify use dev capture | BLOCKED | Disposable SMTP sink + browser token redemption, expiry/reuse and enumeration behavior; then operator-selected SMTP delivery and disabled-mail UX | AUTH-02 + SMTP selection → A05 |
-| AUTH-04 TOTP enrollment, recovery and removal; OAuth/OIDC login/link/unlink | C U M | Core auth/MFA/OAuth routes; backed mfa/oauth-identities; real provider not supplied | BLOCKED | TOTP second login/recovery/revoke; local OIDC provider callback/state/PKCE, account collision and unlink-last-method policy; never substitute a precreated identity for login | AUTH-02 + OIDC selection → A05 |
+| AUTH-03 Email verification and password recovery deliver real mail | M C U | `internal/mail/smtp.go`; live evidence `a05-mail-totp` (disposable Mailpit, capture seam OFF, browser link redemption, expiry/reuse, measured enumeration, four SMTP modes, disabled- and broken-mail UX) | PASS (candidate; unmerged) | Disposable SMTP sink + browser token redemption, expiry/reuse and enumeration behavior; then operator-selected SMTP delivery and disabled-mail UX | Provider-agnostic: proven over plain SMTP and over STARTTLS-required + AUTH PLAIN with a trusted CA. Two defects fixed (no redeemable link in any token message; reset was an account-existence oracle with the relay down) → A05 |
+| AUTH-04 TOTP enrollment, recovery and removal; OAuth/OIDC login/link/unlink | C U M | Core auth/MFA/OAuth routes; live evidence `a05-mail-totp` (TOTP half: KEK ciphertext at rest, enrollment, second login step in Chromium, recovery codes, limiter, password-gated removal) | **TOTP half PASS (candidate; unmerged); OIDC half BLOCKED** | TOTP second login/recovery/revoke; local OIDC provider callback/state/PKCE, account collision and unlink-last-method policy; never substitute a precreated identity for login | OIDC stays decision-blocked by owner ruling: callback/state/PKCE, email collision and unlink-last-method are UNPROVEN. Recorded: TOTP codes are not burned within their 30s step, removal does not revoke other sessions, no admin surface shows MFA state, and `OAUTH_PROVIDERS` is undocumented in the env template → A05 |
 | AUTH-05 Profile/privacy, email/password changes, deactivation/deletion and account archive | C U S | Backed profile-edit/deactivate/delete-account/account-export; core account and search deletion hooks; live evidence `a12-profile-archive` (profile/privacy + archive round trip), `a12-deletion` (deactivation/deletion with content, DM retention, media cleanup, search hook), `a12-password-change` (password change with re-verification, on session-bound access tokens) and `a12-email-change` (two-step email change with re-verification over real SMTP) | PASS (candidate; unmerged) | Mutate profile/unlisted/email/password with re-verification, export and import supported archive; delete/deactivate with content, sessions, follows and search history; verify recipient DM retention policy and media cleanup | AUTH-02, SRC-02 → A12 |
 | PUB-01 Create channel and draft; upload a real file within quota | C U M | `internal/video`, upload routes; backed upload/studio/channel-management | UNVERIFIED | Browser-create channel/draft; upload generated audiovisual clip; inspect original metadata, owner quota accounting and durable state; deny nonowner/overquota/invalid input | AUTH-02 → A06 |
 | PUB-02 Resumable upload, cancel, draft recovery and batch publishing | C U | W2 plans; backed upload-draft-recovery/upload-cancel/upload-batch | PASS (candidate; unmerged) | Interrupt network and restart service between chunks; resume without duplicate files/charges; recover draft on another session; cancel cleanup; partial batch failure retained | PUB-01 → A10 |
@@ -6720,3 +6720,227 @@ The lab was torn down — core api and worker, the Next standalone server, the
 proxy, redis and postgres all stopped, and the lab directory, its postgres
 cluster, the media root, both built binaries and the `origin/main` git worktree
 removed. Nothing is merged here and no deployment is authorized.
+
+## A05 SMTP delivery, recovery mail and TOTP — 2026-09-07
+
+**A05's stopping criterion is MET under the owner's ruling, and two register
+rows move.** **AUTH-03 flips to PASS** — provider-agnostic, proven against a
+disposable Mailpit sink over plain SMTP *and* over STARTTLS-required + AUTH
+PLAIN with a trusted CA, with the `DEV_MAIL_CAPTURE_ENABLED` seam **off** for
+every phase. **AUTH-04 flips for the TOTP half only**; OIDC login, link and
+unlink stay decision-blocked and explicitly unproven, recorded in the row rather
+than counted. [Core #183](https://github.com/yegamble/vidra-core/pull/183)
+(`4a04f98`) and [frontend #180](https://github.com/yegamble/vidra-user/pull/180)
+(`98c584c`) each carry one behavioural fix, tests first; **no migration** (latest
+stays 0133), **no OpenAPI change**, no generated file touched.
+[Sanitized evidence](evidence/a05-mail-totp.json) records **146 assertions across
+eleven phases, 144 passed** — the two that failed were harness bugs, both
+corrected and re-proven below.
+
+**What failed first, and it was the product.** *None of the three token messages
+carried a link.* The reset, verification and email-change mails shipped the raw
+code and the sentence "Enter it on the *Reset password* page" — while
+`/reset-password/confirm`, `/verify-email/confirm` and `/email-change/confirm`
+each read their token from the **URL query** and **none of them offers a field to
+paste a code into**. A real recipient held the credential with no way to spend
+it: on a fresh instance, email verification and password recovery could not be
+completed by the person the message was addressed to. The backed e2e specs never
+saw it because they lift the token out of the dev capture seam and **build the
+URL themselves** — the harness supplied the one thing the message was missing.
+`mail.Config` now carries `PublicBaseURL` (wired from `PUBLIC_BASE_URL`, the
+origin `signInURL` already uses) and the three messages lead with the link,
+keeping the code beneath it; with no public origin configured nothing is
+invented and the message falls back to the code alone.
+
+**The second defect was a security one.** `POST /auth/password-reset` documents
+itself as *"always 202 — it never reveals whether the email belongs to an
+account"*. An unknown address does answer 202 without sending; a **known** one
+returned the mailer's error verbatim. With the relay stopped, the endpoint
+answered **500 three times out of three for a registered address and 202 three
+times out of three for an unregistered one** — a flat account-existence oracle,
+available to anyone, exactly when the instance was already unhealthy. Delivery
+failures are now wrapped in `auth.ErrMailDelivery`, answered 202, logged at ERROR
+and audited (`auth.password_reset.request` / failure / `reason=mail_delivery`,
+carrying no address); any other error still 500s, so a database that refused to
+store the token is not laundered into a success. Re-measured after the fix: **202
+with byte-identical bodies on both arms**.
+
+**Enumeration, measured rather than assumed.** With the relay up, known and
+unknown reset requests are identical in status (202) and body (empty), and the
+latency distributions **overlap with the medians ordering the wrong way round** —
+known 8.3 ms median (6.2–14.2, n=6) against unknown 12.5 ms (1.0–32.2) — so no
+usable timing oracle was observed at this sample size. With the relay **down**
+the status/body oracle is closed but a latency residue remains: known 25.8 ms
+median against unknown 11.1 ms, the cost of the failed SMTP dial. It is bounded
+by that dial and could only be removed by handing the send to a queue.
+Registration is deliberately **not** enumeration-safe — a taken address answers
+409 where a fresh one answers 201 — but a taken *username* answers the identical
+409 body ("username or email already taken"), so the 409 says "one of these is
+taken" without saying which. There is no anonymous verification-request route to
+probe at all (401).
+
+**The verification promise, as shipped.** Verification gates **sign-in and
+nothing else** — publishing is not gated on it. The gate is effective only when
+`registration_require_email_verification` is on **and** a mail path is wired: a
+runtime toggle cannot conjure a mailer, proven by turning the setting on with
+`MAIL_ENABLED=false` and watching `/instance` keep reporting the gate **false**
+while registration went on issuing sessions. With the gate effective,
+registration answers `202 {"status":"verification_pending"}` with no session and
+login answers `403 email_verification_required`. Verification tokens live **24
+hours**, reset tokens **1 hour**; both are 256-bit, SHA-256 at rest, single-use,
+and issuing a new one kills the account's prior unused ones. Replayed, unknown
+and expired tokens are one indistinct 400; an empty token is 422 at validation,
+before any lookup. **There is no anonymous resend**: `POST /auth/verify-email`
+sits behind `requireAuth`, and the account that needs it is precisely the one
+that cannot log in — a registrant who loses the message is stuck until an admin
+flips `email_verified`.
+
+**Delivery posture, per flow, because they differ.** Registration verification,
+the password-changed notice, the signup approve/reject notices, the
+email-*changed* notice to the old address and both ownership-transfer notices are
+**best-effort** by design — the underlying action has already happened and a dead
+relay must not strand it. The email-change **confirmation** to the new address is
+documented must-deliver, and is, when a real mailer errors. Password reset is now
+enumeration-safe-202 with the failure audited. All five previously-shipping flows
+were re-run as a regression, one message each and each to the right party: the
+password-changed notice to the account, the email-change confirmation to the
+**new** address only and the change notice to the **old** one, the approval and
+rejection notices to their two applicants, and the transfer notices to **both**
+sides with different subjects ("You are now the owner of…" / "You are no longer
+the owner of…").
+
+**What a reset does to your sessions has changed since A12, for the better.**
+Every session row is revoked and the pre-reset refresh token 401s — and the
+pre-reset **access token now 401s too**. The A12 note that an already-issued
+access token keeps answering 200 for the rest of its 15-minute TTL has been
+overtaken by session-bound access tokens (`auth.AuthenticateAccessToken`); this
+slice re-measured it rather than repeating it.
+
+**SMTP as an operator selects it.** The keys are `MAIL_ENABLED`, `SMTP_HOST`,
+`SMTP_PORT` (default 587), `SMTP_USERNAME`, `SMTP_PASSWORD` and `SMTP_FROM`;
+host and from are required when mail is on. **There is no TLS-mode knob and no
+skip-verify knob** anywhere in the config surface, the mail package or
+`env/production.env.example` — `mail.WithTLSConfig` exists but is a test seam,
+unreachable from configuration. STARTTLS is **opportunistic** (used whenever the
+relay advertises it) and verified **strictly** against `SMTP_HOST` at TLS 1.2
+minimum. Four modes were exercised: **plain** delivered; **credentials against a
+relay that offers no AUTH** failed closed with *"smtp credentials configured but
+relay offers no AUTH"* and sent nothing; a **STARTTLS relay with an untrusted
+certificate** was refused with *"x509: certificate signed by unknown authority"*
+and delivered nothing; and a relay started `--smtp-require-starttls
+--smtp-auth-accept-any` with a **trusted CA** delivered end to end, link and all.
+That last one could not be proven on macOS at all — Go on darwin reads the system
+keychain and ignores `SSL_CERT_FILE` — so a containerised Linux core was stood up
+for it rather than claiming it. Production must not skip verification and, as
+shipped, cannot; the cost is that an operator with a private-CA relay has no
+supported path but the host trust store.
+
+The `smtp` component walks **`not_configured` → `ok` → `down` (instance
+`degraded`) → `ok`**, and `not_configured` never degrades. But the probe's honest
+limit is worth stating: **it dials and reads the 220 greeting, and stops there.**
+Pointed at the relay whose certificate it refuses, `/admin/system` reported
+`smtp: ok` while every single send failed — and again while every send failed for
+want of AUTH. "Mail is fine" on that page does not cover the two steps that
+actually break.
+
+**Disabled and broken mail.** With `MAIL_ENABLED=false` the reset request still
+answers 202 for known and unknown alike **and still mints a token**, delivered
+nowhere; the two user-facing surfaces built on that were pretending. *"If an
+account exists for that email, we've sent a link to reset your password. Check
+your inbox."* was the whole of password recovery on an instance whose owner never
+configured SMTP, and the email card would have read *"Waiting for confirmation
+at …"* forever. Both now read the `/instance` `features.mail` boot signal — the
+same signal `lib/admin-config-ia.ts` already uses for its `bootDep` notes — and
+say *"This instance cannot send email yet…"*, pointing at the operator; the reset
+form stops collecting an address it cannot act on and the email card still shows
+the current address, which is the fact the user came for. Both default to
+"offer the form" when the flag is absent, so an older backend and the mocked e2e
+suite are unchanged. Two-factor and the password card are untouched — neither
+needs mail. One thing an operator should know: `/reset-password` and
+`/settings/security` are **ISR pages with a 60-second revalidate**, so a change
+to the deployment's mail configuration reaches them only after that window plus
+one stale-while-revalidate request.
+
+**TOTP passes, and the lockout story is the part to read.** The unset-KEK boot
+warning is real (*"MFA_KEY_KEK unset — TOTP secrets are stored UNENCRYPTED"*),
+and with `MFA_KEY_KEK` set the stored secret is **ciphertext** — the row reads
+`enc:…` and does not contain the base32 the enrollment returned. Enrollment
+returns the secret and an `otpauth://` URI carrying the configured `TOTP_ISSUER`,
+exactly once; a pending enrollment still reports disabled and leaves login
+one-step; a wrong code is refused and leaves it pending. A real code enables it
+and issues **ten single-use recovery codes**, stored as hashes only. Login then
+returns `mfa_required` + an `mfa_token` and **no session**, and that token is not
+usable as an access token (401). A wrong code is refused, a code four steps stale
+is refused, and an unpaced burst answered 5×401 then 9×429 on the shipped 10/min
+per-IP limiter — which was never raised. A recovery code completes the challenge,
+is single-use on replay, and the remaining count drops to 9. Removal needs the
+**current password** (403 without it, still enabled afterwards), succeeds with
+it, and drops the row and every recovery code. The whole second-factor path was
+then driven in Chromium: enrolled through `SecuritySettingsView` with a code
+computed from the displayed secret, ten recovery codes read back, and a fresh
+browser context refused entry on the password alone and admitted on the code.
+
+Three TOTP facts are recorded rather than fixed. **A code replayed inside its own
+30-second step is accepted** — codes are not burned — which with the ±1 skew
+widens a stolen-code window to roughly 90 seconds. **Removal does not revoke
+other sessions.** And **no admin surface shows MFA state at all**: the
+`/admin/users` row carries roles, quotas, `email_verified`, `is_owner` and
+`bypass_quarantine` and nothing about two-factor, so an operator can neither see
+who has it on nor help a user who has lost both device and codes.
+
+**OIDC was not exercised, by ruling — but more ships than the row implies.**
+`OAUTH_PROVIDERS` names the providers and each takes
+`OAUTH_<NAME>_ISSUER` / `_CLIENT_ID` / `_CLIENT_SECRET` / `_SCOPES`; discovery is
+lazy so an unreachable IdP never blocks boot; `GET /auth/oauth/:provider` and its
+callback issue a cookie-mode session, and `GET /me/oauth-identities` +
+`DELETE /me/oauth-identities/:provider` manage the links, with unlink refusing to
+remove the **last** sign-in method from a passwordless account. The frontend
+ships `OAuthButtons` (driven by `/instance oauth_providers`) and `ConnectedLogins`
+with unlink. ATProto/Bluesky login ships separately and is likewise unexercised
+here. What stays unproven is exactly AUTH-04's OIDC clauses: a real callback,
+state and PKCE end to end, account collision on a matching email, and the
+unlink-last-method policy in practice. **`OAUTH_PROVIDERS` appears nowhere in
+`env/production.env.example`**, so a shipped capability currently has no
+documented configuration — recorded for whoever unblocks the provider decision.
+
+Gates. Core `make ci` **passed** (fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race) plus `go vet -tags=integration ./...` clean. Core CI:
+`build-test`, `openapi`, `ipfs-private-integration` and `integration` pass;
+all six lanes are green on
+the final revision — `build-test`, `openapi`, `integration`, `ipfs-integration`,
+`ipfs-private-integration` and GitGuardian. Two earlier flakes, both on lanes
+this diff cannot reach, passed on re-run: `integration` on
+`TestListTotalsExecuteAgainstPostgres` (*"total 28 but the unpaginated page has
+27 rows"*, with `origin/main` green on the same lane) and `ipfs-integration` on
+`TestIntegrationPublicVideoRoundTrip` timing out at 300 s, the flake the A12
+evidence already records. GitGuardian went green only after the branch was
+**squashed**: it scores every commit in a PR, so the historical commit carrying
+the flagged test fixture kept the incident open even once the literal was gone
+from the tree. Frontend: tsc, lint and the production build pass, and **253
+test files / 2517 tests** pass — an earlier run reported seven "failures" that
+were all vitest worker-startup timeouts while the lab, `make ci` and Playwright
+were competing for the box; re-run unloaded, all green. All seven frontend CI
+lanes are green, `contract` included — this slice changes no OpenAPI, so there is
+no contract ordering dependency. vidra-search was not touched and not run.
+
+Failures worth keeping, all mine. **The fix broke my own token extractor**: with
+a link now printed above the code, the regex that grabbed "the indented long
+string" returned the URL, and SC1 failed four assertions until it learned to skip
+`http` lines — a small reminder that a harness which parses a message is coupled
+to that message. The ownership-transfer phase 404'd on a guessed route (it is
+`POST /admin/owner/transfer` with `{user_id, password}`). An SC5 assertion
+searched the whole `/admin/users` JSON for the substring "mfa" and matched the
+test actor's own **username**; reading the row keys instead gave the honest
+answer. The enumeration script picked its "known" address with SQL *after*
+another phase had moved that address, so every sample was a 422 on a null email.
+Two Playwright assertions on guessed timeouts flaked under load — bcrypt takes
+seconds on a loaded box — and both flakes looked exactly like a refused sign-in
+and a failed reset; they now wait for the settled state. And GitGuardian flagged
+two **test fixtures** (a high-entropy `token` constant and a `"password":"…"`
+literal); both are assembled at run time now, and the duplicated test JWT secret
+was folded into one shared constructor.
+
+Delivery order: **core#183 first** — it makes the mail the frontend copy points
+at actually redeemable — then **frontend#180**, then this evidence PR. They are
+independent at the code level. Nothing is merged here and no deployment is
+authorized.

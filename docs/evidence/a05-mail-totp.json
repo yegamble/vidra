@@ -1,0 +1,587 @@
+{
+ "status": "A05's stopping criterion is MET under the owner's ruling (SMTP proven provider-agnostically, TOTP proven, OIDC decision-blocked). AUTH-03 flips to PASS. AUTH-04 flips for the TOTP half only, with OIDC recorded as decision-blocked and UNPROVEN.",
+ "scope": "A05 / backlog item 17. Register rows AUTH-03 (email verification and password recovery deliver real mail) and AUTH-04 (TOTP enrollment, recovery and removal; OAuth/OIDC login/link/unlink).",
+ "core_revision": "a05/mail-totp @ 4a04f98 (one commit on origin/main ebfc768; the branch was squashed to drop a commit whose test fixture GitGuardian flagged)",
+ "frontend_revision": "a05/mail-totp @ 98c584c (one commit on origin/main)",
+ "search_revision": "vidra-search NOT modified and NOT run \u2014 nothing in this slice touches the search boundary",
+ "pull_requests": {
+  "core": "yegamble/vidra-core#183 (READY; all six lanes green including GitGuardian)",
+  "frontend": "yegamble/vidra-user#180 (READY; all seven lanes green including contract)",
+  "meta": "yegamble/vidra#129 (this evidence PR)",
+  "dependency_order": "core#183 first (it makes the mail the frontend copy points at actually redeemable), then frontend#180, then this. They are independent at the code level: core#183 changes NO OpenAPI and adds NO migration, so contract-ci had no ordering dependency and frontend#180's contract lane is green on its own."
+ },
+ "migration": "none \u2014 latest core migration stays 0133",
+ "environment": {
+  "core": "vidra-core built from the branch, run natively on 127.0.0.1:8088, VIDRA_ENV=development, VIDRA_ROLE=all, STORAGE_BACKEND=local + STORAGE_LOCAL_ROOT, TRANSCODING_ENABLED=false, PUBLIC_BASE_URL/CORS scoped to the lab origin. Throwaway PostgreSQL 16 (native, -k /tmp) migrated 0 -> 133 and native Redis.",
+  "mail": "THROWAWAY Mailpit over real SMTP with DEV_MAIL_CAPTURE_ENABLED **off** for every phase. Two sinks: a plain one on 127.0.0.1:1025 (HTTP API 8025) and a STARTTLS-required, auth-accepting one on 1465 (HTTP API 8027) with a self-signed pair.",
+  "starttls_trusted_instance": "The trusted-CA STARTTLS delivery needed a host whose trust store the lab can add to, which macOS is not: Go on darwin reads the system keychain and ignores SSL_CERT_FILE (verified). So a second, containerised Linux core (the same branch, CGO_ENABLED=0 GOOS=linux) ran on a docker network with SSL_CERT_FILE=/certs/mailpit.crt and SMTP_HOST=mailpit-tls matching the certificate SAN, against its own postgres/redis.",
+  "frontend": "vidra-user production build served as `node .next/standalone/server.js` on 3101 behind a pipe-only proxy on 3100 that routes /api/v1 to core \u2014 ONE origin, because vidra_refresh is SameSite=Lax and Path=/api/v1/auth. Node 24.4.1.",
+  "browser": "Chromium via Playwright, headless, 1440x1000, separate contexts.",
+  "rate_limits": "NEVER raised. The shipped 10/min per-IP auth limiter and 120/min general limiter were observed, not disabled; a file-backed pacer spaced the scripted calls."
+ },
+ "shipped_promises_as_shipped": {
+  "verification_requirement": "Verification gates SIGN-IN, nothing else. The gate is EFFECTIVE only when the instance setting registration_require_email_verification is on AND a mail path is wired (mailWired = an SMTP mailer or the dev capture mailer); a runtime toggle can never conjure a mailer. With the gate effective, POST /auth/register answers 202 {\"status\":\"verification_pending\"} and issues NO session, and login answers 403 email_verification_required. With it off (or with no mailer) registration answers 201 with a session and the account is simply email_verified=false. Publishing is NOT gated on verification. Accounts created before the gate carry pending_email_verification=false and are never retroactively locked.",
+  "verification_token": "256-bit, base64url, SHA-256 hashed at rest, single-use, TTL 24h; issuing a new one deletes the account's prior unused tokens.",
+  "reset_token": "256-bit, base64url, SHA-256 hashed at rest, single-use, TTL 1h; issuing a new one deletes the prior unused ones.",
+  "per_flow_delivery_posture": {
+   "registration verification": "BEST-EFFORT: the account is created held and the request still answers 202 if the send fails; the operator recovery path is the admin email_verified override.",
+   "password reset request": "ENUMERATION-SAFE 202 ALWAYS. Before this slice a delivery failure escaped as a 500 for a KNOWN address while an unknown one still got 202 \u2014 an account-existence oracle whenever the relay was down. Now a delivery failure is answered 202 and audited (auth.password_reset.request / failure / reason=mail_delivery, no address); every other error still 500s.",
+   "password changed notice": "BEST-EFFORT \u2014 the password is already changed.",
+   "email change confirmation (to the NEW address)": "Documented MUST-DELIVER: 'a failed send fails the request and leaves the address alone'. True when a real mailer errors. NOT true with MAIL_ENABLED=false, where the no-op mailer returns success: the request is accepted 202 and parked pending forever (recorded, not fixed).",
+   "email changed notice (to the OLD address)": "BEST-EFFORT by design \u2014 the address has already moved.",
+   "signup approve / reject notices": "BEST-EFFORT \u2014 the decision is already recorded and must not be stranded by a dead relay.",
+   "ownership transfer notices": "BEST-EFFORT, one message per side, different text for the new and former owner."
+  },
+  "totp": "RFC 6238 SHA1 / 6 digits / 30s, +/-1 step of skew, via pquerna/otp. Secrets are envelope-encrypted at rest under MFA_KEY_KEK (falling back to FEDERATION_KEY_KEK); with no KEK they are stored RAW and every boot logs a warning. TEN single-use recovery codes are issued once at enrolment (SHA-256 hashed at rest, canonicalised on redemption). DELETE /mfa/totp requires the CURRENT PASSWORD and drops every recovery code. Removal does NOT revoke other sessions. A TOTP code replayed inside its own 30s step is ACCEPTED \u2014 codes are not burned. There is NO admin visibility of MFA state, so an operator cannot see, or unblock, a user who loses both device and codes.",
+  "smtp_env_keys": [
+   "MAIL_ENABLED",
+   "SMTP_HOST (required when MAIL_ENABLED)",
+   "SMTP_PORT (default 587)",
+   "SMTP_USERNAME",
+   "SMTP_PASSWORD",
+   "SMTP_FROM (required when MAIL_ENABLED)"
+  ],
+  "tls_posture": "There is NO TLS-mode knob and NO skip-verify knob anywhere in the config surface, the mail package or env/production.env.example. STARTTLS is OPPORTUNISTIC \u2014 used whenever the relay advertises it \u2014 and verified STRICTLY (ServerName = SMTP_HOST, MinVersion TLS 1.2) against the host trust store. An operator whose relay presents an untrusted certificate has no override: the send fails closed. mail.WithTLSConfig exists but is a test seam, unreachable from configuration. Production must not skip verification and, as shipped, cannot."
+ },
+ "criteria": {
+  "SC1_email_verification": {
+   "result": "PASS",
+   "assertions": {
+    "passed": 19,
+    "failed": 0,
+    "total": 19
+   },
+   "register": {
+    "status": 202,
+    "body": {
+     "status": "verification_pending"
+    }
+   },
+   "login_before_verify": {
+    "status": 403,
+    "code": "email_verification_required"
+   },
+   "verification_mail": {
+    "to": [
+     "regan0ba30e48@a05.test"
+    ],
+    "from": "vidra-lab@a05.test",
+    "subject": "Confirm your email address on A05Lab",
+    "urls": [
+     "http://127.0.0.1:3100/verify-email/confirm?token=<redacted>"
+    ]
+   },
+   "token_ttl_hours": "24.00",
+   "replay_and_unknown_and_expired": "all 400 and byte-identical bar the request id; an empty token is 422 at validation, before any lookup",
+   "resend": "There is NO anonymous resend. POST /auth/verify-email sits behind requireAuth (401 anonymous), and a held account cannot log in to reach it (403). A registrant who loses the message is stuck until an admin flips email_verified."
+  },
+  "SC2_password_recovery": {
+   "result": "PASS",
+   "assertions": {
+    "main": {
+     "passed": 34,
+     "failed": 1,
+     "total": 35
+    },
+    "ownership_transfer": {
+     "passed": 3,
+     "failed": 0,
+     "total": 3
+    }
+   },
+   "reset_mail": {
+    "to": [
+     "recova0555e39@a05.test"
+    ],
+    "from": "vidra-lab@a05.test",
+    "subject": "Reset your password on A05Lab",
+    "urls": [
+     "http://127.0.0.1:3100/reset-password/confirm?token=<redacted>"
+    ]
+   },
+   "token_ttl_hours": "1.00",
+   "sessions": "Every session row is revoked (2 of 2) and the pre-reset REFRESH token 401s. The pre-reset ACCESS token ALSO 401s now \u2014 the A12 slice's 'good for the rest of its 15-minute TTL' gap is CLOSED by session-bound access tokens (auth.AuthenticateAccessToken); that register note has drifted and this slice re-measured it.",
+   "unknown_address": "202 and zero messages in the sink",
+   "limiter": {
+    "burst": [
+     202,
+     202,
+     202,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429,
+     429
+    ],
+    "reading": "3x202 then 13x429 on the shipped 10/min per-IP auth limiter"
+   },
+   "regression_flows": {
+    "password_changed": {
+     "to": [
+      "recova0555e39@a05.test"
+     ],
+     "subject": "Your password on A05Lab was changed"
+    },
+    "email_change_confirmation": {
+     "to": [
+      "movedd0489b62@a05.test"
+     ],
+     "subject": "Confirm your new email address on A05Lab",
+     "urls": [
+      "http://127.0.0.1:3100/email-change/confirm?token=<redacted>"
+     ]
+    },
+    "email_changed_notice": {
+     "to": [
+      "recova0555e39@a05.test"
+     ],
+     "subject": "The email address on your A05Lab account was changed"
+    },
+    "signup_decisions": {
+     "('rej51ddc551@a05.test',)": "Your account request on A05Lab was not approved",
+     "('applbb38a682@a05.test',)": "Your account on A05Lab was approved"
+    },
+    "ownership_transfer": {
+     "recipients": [
+      "applbb38a682@a05.test",
+      "mallory@a05.test"
+     ],
+     "subjects": [
+      "You are no longer the owner of A05Lab",
+      "You are now the owner of A05Lab"
+     ]
+    }
+   }
+  },
+  "SC3_operator_selected_smtp": {
+   "result": "PASS",
+   "assertions": {
+    "modes": {
+     "passed": 6,
+     "failed": 0,
+     "total": 6
+    },
+    "probe": {
+     "passed": 1,
+     "failed": 0,
+     "total": 1
+    }
+   },
+   "plain": {
+    "status": 202,
+    "delivered": 1
+   },
+   "credentials_vs_no_auth_relay": {
+    "status": 202,
+    "delivered": 0,
+    "error": "mail: smtp credentials configured but relay offers no AUTH"
+   },
+   "starttls_untrusted": {
+    "status": 202,
+    "delivered_delta": 0,
+    "error": "mail: starttls: tls: failed to verify certificate: x509: certificate signed by unknown authority"
+   },
+   "starttls_trusted": {
+    "instance": "containerised linux core, SSL_CERT_FILE=/certs/mailpit.crt, SMTP_HOST=mailpit-tls (matches the certificate SAN), relay started with --smtp-require-starttls --smtp-auth-accept-any",
+    "request_status": 202,
+    "messages_in_tls_sink": 1,
+    "subjects": [
+     "Reset your password on A05LabTLS"
+    ]
+   },
+   "component_sequence": [
+    {
+     "state": "configured+up",
+     "smtp": "ok",
+     "instance": "ok"
+    },
+    {
+     "state": "relay stopped",
+     "smtp": "down",
+     "instance": "degraded"
+    },
+    {
+     "state": "relay back",
+     "smtp": "ok",
+     "instance": "ok"
+    },
+    {
+     "state": "MAIL_ENABLED=false",
+     "smtp": "not_configured",
+     "instance": "ok"
+    }
+   ],
+   "probe_blind_spot": "The smtp probe dials and reads the 220 greeting; it never runs STARTTLS or AUTH. Proven: pointed at the relay whose certificate it refuses, /admin/system reported smtp ok while EVERY send failed."
+  },
+  "SC4_disabled_and_broken_mail": {
+   "result": "PASS",
+   "assertions": {
+    "api": {
+     "passed": 14,
+     "failed": 0,
+     "total": 14
+    },
+    "browser": {
+     "passed": 5,
+     "failed": 0,
+     "total": 5
+    }
+   },
+   "mail_off_api": {
+    "smtp_component": {
+     "status": "not_configured"
+    },
+    "instance_status": "ok",
+    "effective_gate_with_no_mailer": false,
+    "register_with_gate_on_no_mailer": 201,
+    "resend_verification": 202,
+    "reset_known": 202,
+    "reset_unknown": 202,
+    "reset_token_rows_minted": "1",
+    "email_change_status": 202,
+    "email_change_pending": true,
+    "password_change": 204,
+    "counts": {
+     "passed": 14,
+     "failed": 0,
+     "total": 14
+    }
+   },
+   "mail_off_browser": {
+    "reset_page": {
+     "name": "BR-OFF2 signed in",
+     "pass": true,
+     "detail": "http://127.0.0.1:3100/"
+    },
+    "email_card_copy": "Email Your address is how you sign in and how you recover the account. Changing it needs your password and a confirmation sent to the new address. Current address: nomailcd2425c9@a05.test (unverified) This instance cannot send email yet, so it cannot confirm a new address. Ask whoever runs it to set up outgoing mail (S"
+   },
+   "broken_relay": "With SMTP configured and the relay stopped the admin sees smtp down and the instance degraded, and both a known and an unknown address get the same 202 with identical bodies (before this slice: known 500 x3, unknown 202 x3).",
+   "isr_note": "/reset-password and /settings/security are ISR with a 60s revalidate, so a change to the deployment's mail configuration takes up to ~60s plus one stale-while-revalidate request to reach these two surfaces."
+  },
+  "SC5_totp": {
+   "result": "PASS",
+   "assertions": {
+    "passed": 34,
+    "failed": 1,
+    "total": 35
+   },
+   "kek_unset_boot_warning": "present in the mail-off boot log: 'MFA_KEY_KEK unset \u2014 TOTP secrets are stored UNENCRYPTED'",
+   "at_rest_with_kek": {
+    "is_plaintext": false,
+    "stored_prefix": "enc:FiNzVzByii"
+   },
+   "enrolment": [
+    "otpauth_uri",
+    "secret"
+   ],
+   "state_after_enroll": {
+    "enabled": true,
+    "recovery_codes_remaining": 10
+   },
+   "login_with_mfa": {
+    "status": 200,
+    "keys": [
+     "mfa_required",
+     "mfa_token"
+    ]
+   },
+   "wrong_code": 401,
+   "stale_code_outside_skew": 401,
+   "replay_inside_step": 200,
+   "recovery_remaining": {
+    "enabled": true,
+    "recovery_codes_remaining": 9
+   },
+   "challenge_limiter": [
+    401,
+    401,
+    401,
+    401,
+    401,
+    429,
+    429,
+    429,
+    429,
+    429,
+    429,
+    429,
+    429,
+    429
+   ],
+   "removal": {
+    "wrong_password": 403,
+    "correct_password": 204,
+    "sessions_revoked": "0"
+   },
+   "admin_visibility": "NONE \u2014 the /admin/users row carries id, username, email, email_verified, role, is_owner, is_active, deleted_at, quotas, bypass_quarantine and display_name, and no MFA field."
+  },
+  "SC6_oidc": {
+   "result": "NOT EXERCISED \u2014 decision-blocked by the owner's ruling",
+   "what_ships": "OIDC login IS built and reachable when configured: OAUTH_PROVIDERS names the providers and each takes OAUTH_<NAME>_ISSUER / _CLIENT_ID / _CLIENT_SECRET / _SCOPES; discovery is lazy so an unreachable IdP never blocks boot; routes GET /auth/oauth/:provider and /callback (cookie-mode session), GET /me/oauth-identities and DELETE /me/oauth-identities/:provider, all mounted only when providers are configured. The frontend ships OAuthButtons (driven by /instance oauth_providers) and ConnectedLogins with unlink. Unlink refuses to remove the LAST sign-in method for a passwordless account (ErrOAuthLastCredential). ATProto/Bluesky login ships separately and is also unexercised here.",
+   "unproven_auth04_clauses": [
+    "local OIDC provider callback",
+    "state and PKCE handling end to end",
+    "account collision on a matching email",
+    "the unlink-last-method policy in practice",
+    "never substituting a precreated identity for a real login"
+   ],
+   "operator_gap": "OAUTH_PROVIDERS and its per-provider keys appear NOWHERE in env/production.env.example, so a shipped capability has no documented configuration."
+  },
+  "SC7_no_regression": {
+   "result": "PASS",
+   "core": "make ci passed on the branch (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race) plus go vet -tags=integration ./... ; the A12/A16 mail-flow tests are in the same packages and pass.",
+   "frontend": "253 test files / 2517 tests pass, up from 252/2513 by exactly this slice's 4 new cases; tsc, lint and the production build pass.",
+   "settled_session": "No new viewer-scoped read was added \u2014 the two changed components consume a prop threaded from a server component, so lib/use-settled-session.ts is untouched and unneeded."
+  }
+ },
+ "enumeration_measurements": {
+  "method": "n=6 per arm over loopback, statuses and raw bodies compared byte for byte, latency medians and ranges reported rather than assumed.",
+  "reset_relay_up": {
+   "known": {
+    "statuses": [
+     202,
+     202,
+     202,
+     202,
+     202,
+     202
+    ],
+    "median_ms": 8.3,
+    "min_ms": 6.2,
+    "max_ms": 14.2,
+    "body": ""
+   },
+   "unknown": {
+    "statuses": [
+     202,
+     202,
+     202,
+     202,
+     202,
+     202
+    ],
+    "median_ms": 12.5,
+    "min_ms": 1.0,
+    "max_ms": 32.2,
+    "body": ""
+   },
+   "timing_delta_ms": -4.1,
+   "known_samples_ms": [
+    14.2,
+    8.8,
+    8.7,
+    8.0,
+    6.2,
+    7.1
+   ],
+   "unknown_samples_ms": [
+    1.0,
+    32.2,
+    15.1,
+    20.2,
+    9.8,
+    4.0
+   ]
+  },
+  "reset_relay_down_after_the_fix": {
+   "known": {
+    "statuses": [
+     202,
+     202,
+     202,
+     202
+    ],
+    "body": "",
+    "median_ms": 25.8
+   },
+   "unknown": {
+    "statuses": [
+     202,
+     202,
+     202,
+     202
+    ],
+    "body": "",
+    "median_ms": 11.1
+   },
+   "timing_delta_ms": 14.7
+  },
+  "reset_relay_down_before_the_fix": {
+   "statuses": [
+    500,
+    500,
+    500
+   ],
+   "body": "{\"error\":{\"code\":\"internal_error\",\"message\":\"an unexpected error occurred\",\"request_id\":\"XIIQmUTNDIwbSHRGqvpYrxBFBjjGsABs\"}}\n",
+   "unknown": {
+    "statuses": [
+     202,
+     202,
+     202
+    ],
+    "body": ""
+   }
+  },
+  "reading": "With the relay UP, status and body are identical and the latency distributions OVERLAP with the medians ordering the wrong way round (known 8.3ms median vs unknown 12.5ms), so no usable timing oracle was observed at this sample size. With the relay DOWN, the status/body oracle is now closed but a latency residue remains \u2014 known median 25.8ms vs unknown 11.1ms, the cost of the failed SMTP dial. It is bounded by the dial and could only be removed by handing the send to a queue.",
+  "registration": {
+   "existing_email": {
+    "status": 409,
+    "body": "{\"error\":{\"code\":\"conflict\",\"message\":\"username or email already taken\",\"request_id\":\"cPuEfrrwThvVjMMwarCwHcZqCRpapQYn\"}}\n"
+   },
+   "fresh": {
+    "status": 201,
+    "body": "{\"token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoidXNlciIsInNpZCI6ImY3YTNiMTE1LTY0YTgtNDJiMy1iMzdjLThmMWQ3NWRkMDVlOCIsImlzcyI6InZpZHJhIiwic3ViIjoiMzZlM"
+   },
+   "existing_username": {
+    "status": 409,
+    "body": "{\"error\":{\"code\":\"conflict\",\"message\":\"username or email already taken\",\"request_id\":\"EtWCXIVINqQsmOeLZbhhjfuuuWqvlzeQ\"}}\n"
+   }
+  },
+  "registration_reading": "Registration is deliberately NOT enumeration-safe: a taken address answers 409 while a fresh one answers 201/202. A taken USERNAME answers the identical 409 body ('username or email already taken'), so the 409 confirms 'one of these is taken' without saying which.",
+  "verification_request": "There is no anonymous verification-request route to probe (401)."
+ },
+ "browser_walkthrough": {
+  "assertions": {
+   "passed": 15,
+   "failed": 0,
+   "total": 15
+  },
+  "flow": "Registered through the real signup form with the gate on (the page says the account is held), opened the verification LINK from the real message, signed in (refused before, accepted after), requested a reset and opened the reset LINK from the real message, set a new password, signed in with it, enrolled TOTP through SecuritySettingsView with a code computed from the displayed secret, read back the ten recovery codes, then signed in from a fresh context and completed the second step.",
+  "mail_off": {
+   "passed": 5,
+   "failed": 0,
+   "total": 5
+  }
+ },
+ "defects_found_and_fixed": {
+  "no_redeemable_link_in_any_token_message": {
+   "found": "The reset, verification and email-change messages carried the raw code and the sentence 'Enter it on the X page'. All three redemption surfaces read their token from the URL query (/reset-password/confirm?token=, /verify-email/confirm?token=, /email-change/confirm?token=) and NONE offers a field to paste a code into \u2014 a real recipient held the credential with no way to spend it.",
+   "why_the_tests_missed_it": "The backed e2e specs lift the token out of the dev capture seam and BUILD the URL themselves, so they exercise the redemption page with a token the message never delivered.",
+   "fix": "mail.Config gains PublicBaseURL, wired from PUBLIC_BASE_URL (the origin signInURL already uses). The three messages lead with the link and keep the code beneath it. With no public origin configured nothing is invented \u2014 the message falls back to the code alone.",
+   "tests": [
+    "TestTokenMailsCarryRedeemableLinks",
+    "TestTokenMailsWithoutPublicBaseURLCarryNoLink",
+    "TestRedemptionLinkEscapesTheToken"
+   ]
+  },
+  "password_reset_was_an_account_existence_oracle": {
+   "found": "The handler's own contract is 'always 202 \u2014 it never reveals whether the email belongs to an account'. An unknown address does answer 202 without sending, but a KNOWN one returned the mailer's error verbatim. With the relay stopped: known 500 x3, unknown 202 x3.",
+   "fix": "Delivery failures are wrapped in auth.ErrMailDelivery; the handler answers 202, logs at ERROR and audits reason=mail_delivery with no address. Any other error still 500s, so a storage failure is not laundered into a success.",
+   "tests": [
+    "TestRequestPasswordResetStaysEnumerationSafeWhenTheRelayIsDown (service and HTTP)",
+    "TestRequestPasswordResetSurfacesNonDeliveryErrors"
+   ]
+  },
+  "mail_dependent_surfaces_pretended_to_work": {
+   "found": "With no mail path the reset page still said 'we've sent a link to reset your password. Check your inbox.' \u2014 the whole of password recovery on such an instance \u2014 and the email card would have read 'Waiting for confirmation at \u2026' forever.",
+   "fix": "Both read /instance features.mail (the signal the admin config page already uses) and explain, pointing at the operator; the reset form stops collecting an address it cannot act on. Defaults to true so an older backend and the mocked e2e suite are unchanged.",
+   "tests": [
+    "components/auth/ResetPasswordForm.test.tsx (3 cases)",
+    "one case in ChangeEmailSection.test.tsx"
+   ]
+  }
+ },
+ "findings_recorded_not_fixed": [
+  "A registrant held pending verification can NEVER resend: the only resend route (POST /auth/verify-email) is behind requireAuth, and login is refused for exactly that account. A lost verification message is unrecoverable without an admin email_verified override.",
+  "With MAIL_ENABLED=false the two-step email change is accepted (202) and parked pending although its own documented rule is that a failed send must fail the request \u2014 the no-op mailer returns success, so the rule never fires. The user is left with a pending change nobody can confirm.",
+  "The /admin/system smtp probe reads the 220 greeting only. It reported ok while every send failed on certificate verification, and again while every send failed for want of AUTH. An operator's 'mail is fine' signal does not cover the two steps that actually break.",
+  "There is no TLS-mode or skip-verify knob. That is the safe default, but an operator with an internal relay presenting a private-CA certificate has no supported path other than installing the CA in the host trust store.",
+  "A TOTP code replayed inside its own 30-second step is accepted on a second challenge \u2014 codes are not burned. Within the shipped +/-1 skew this widens a stolen-code window to roughly 90 seconds.",
+  "Removing TOTP (DELETE /mfa/totp) does not revoke other sessions, and no admin surface shows MFA state, so an operator cannot see who has 2FA on or help a user locked out of both device and recovery codes.",
+  "OAUTH_PROVIDERS and its per-provider keys are absent from env/production.env.example, so a shipped capability has no documented configuration.",
+  "/reset-password and /settings/security are ISR pages with a 60s revalidate, so a change to the deployment's mail configuration reaches them only after that window plus one stale-while-revalidate request."
+ ],
+ "attempts_and_corrections": [
+  "The fix broke my own token extractor: with a link now printed above the code, the regex that grabbed 'the indented long string' returned the URL, and SC1 failed four assertions before the extractor learned to skip http lines.",
+  "The ownership-transfer phase 404'd on a guessed route (/admin/instance/transfer-ownership); the real one is POST /admin/owner/transfer with {user_id, password}. Re-run and proven separately.",
+  "An SC5 assertion searched the whole /admin/users JSON for the substring 'mfa' and matched the test actor's own username. Reading the row keys instead showed the honest answer: no MFA field ships.",
+  "The enumeration script picked its 'known' address with SQL after another phase had MOVED that address, so every sample was a 422 on a null email. It now mints its own actor.",
+  "Playwright assertions on guessed timeouts flaked twice under load (bcrypt takes seconds on a loaded box); they now wait for the settled state. The two flakes looked exactly like a refused sign-in and a failed reset.",
+  "Go on darwin ignores SSL_CERT_FILE, so a trusted-CA STARTTLS delivery could not be proven on the host at all; a containerised Linux core was stood up for that one assertion rather than claiming it.",
+  "GitGuardian flagged two test fixtures (a high-entropy 'token' constant and a \"password\":\"\u2026\" literal). Both are now assembled at run time, and the duplicated test JWT secret was folded into one shared constructor."
+ ],
+ "gates": {
+  "core": "make ci PASSED (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race); go vet -tags=integration ./... clean.",
+  "core_ci": "All six lanes green on the final revision: build-test, openapi, integration, ipfs-integration, ipfs-private-integration and GitGuardian. Earlier revisions saw two flakes on lanes this diff cannot reach \u2014 integration on TestListTotalsExecuteAgainstPostgres ('total 28 but the unpaginated page has 27 rows'; origin/main is green on the same lane) and ipfs-integration on TestIntegrationPublicVideoRoundTrip timing out at 300s, the flake the A12 evidence already records. Both passed on re-run.",
+  "frontend": "npm run ci: tsc, lint and the production build pass; vitest 253 files / 2517 tests pass. An earlier run reported 7 'failures' that were all vitest worker-startup timeouts under lab load \u2014 re-run unloaded, all green.",
+  "frontend_ci": "All seven lanes green, contract included.",
+  "not_run": [
+   "vidra-search gates \u2014 the service is not touched and was not started",
+   "the frontend e2e suites locally (per vidra-user's AGENTS.md); CI ran them and they are green"
+  ]
+ },
+ "counts": {
+  "sc1_verification": {
+   "passed": 19,
+   "failed": 0,
+   "total": 19
+  },
+  "sc2_recovery": {
+   "passed": 34,
+   "failed": 1,
+   "total": 35
+  },
+  "sc2_ownership_transfer": {
+   "passed": 3,
+   "failed": 0,
+   "total": 3
+  },
+  "sc3_smtp_modes": {
+   "passed": 6,
+   "failed": 0,
+   "total": 6
+  },
+  "sc3_probe_blind_spot": {
+   "passed": 1,
+   "failed": 0,
+   "total": 1
+  },
+  "sc4_disabled_mail_api": {
+   "passed": 14,
+   "failed": 0,
+   "total": 14
+  },
+  "sc4_disabled_mail_browser": {
+   "passed": 5,
+   "failed": 0,
+   "total": 5
+  },
+  "sc5_totp": {
+   "passed": 34,
+   "failed": 1,
+   "total": 35
+  },
+  "enumeration": {
+   "passed": 7,
+   "failed": 0,
+   "total": 7
+  },
+  "browser_walkthrough": {
+   "passed": 15,
+   "failed": 0,
+   "total": 15
+  },
+  "before_the_fix": {
+   "passed": 6,
+   "failed": 0,
+   "total": 6
+  },
+  "TOTAL": {
+   "passed": 144,
+   "failed": 2,
+   "total": 146
+  }
+ },
+ "register_rows": {
+  "AUTH-03": "PASS \u2014 provider-agnostic: proven against Mailpit over plain SMTP and over STARTTLS-required + AUTH PLAIN with a trusted CA, capture seam off.",
+  "AUTH-04": "PASS for the TOTP half only; OIDC/OAuth login, link and unlink remain decision-blocked and UNPROVEN. The row text is annotated rather than split."
+ }
+}
