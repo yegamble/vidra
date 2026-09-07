@@ -5794,8 +5794,9 @@ moves the **default** to true while the row still wins the **value**; and
 The sharpest number in that table is the one nobody had counted: **only 20 of
 the 116 keys take their default from parsed config at all.** The other 96 are
 hardcoded in the Go registry, so for them no env var and no compose fallback can
-move anything. And of those 20, the core compose file pins a value for 11 —
-every one of which **matches** its Go static default, except
+move anything. And the core compose file pins a `${VAR:-…}` fallback for
+**17 of those 20** (verified by name, value against value) — every one of which
+**matches** its Go static default, with exactly one exception:
 `FEATURE_LIVE_ENABLED: ${FEATURE_LIVE_ENABLED:-true}`, whose Go default is
 *derived*. That single fallback is the entire shadowing problem the prior audits
 described, and it is why the stock stack advertises live on an instance with no
