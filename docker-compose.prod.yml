@@ -27,7 +27,20 @@
 #      the IPFS libp2p swarm port 4001 (`ipfs` profile): both are protocols
 #      remote peers dial directly, so they stay published and are gated in the
 #      cloud firewall instead.
-#   2. Images are PULLED from GHCR by immutable tag instead of built on the box.
+#   2. Images are PULLED from a registry by immutable tag instead of built on the
+#      box. The reference is ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/<name>:<tag>,
+#      so an unset VIDRA_IMAGE_REGISTRY renders exactly the ghcr.io reference it
+#      always did. THE GAP THE HOST HALF CLOSES: every service here also carries
+#      `pull_policy: always`, and deploy.sh's step 2 is a bare `pull` gated on its
+#      exit code — so an image that is not in GHCR cannot be deployed AT ALL, even
+#      when it is already present on the host. Two real operators hit that: one
+#      mirroring releases into a private/air-gapped registry (the same operator
+#      deploy/make-bundle.sh exists for), and one rehearsing an upgrade/rollback
+#      against a locally built image before a release is cut. Both previously had
+#      to fork this file, which then drifts away from every guard in it. The
+#      registry is a host[:port] prefix only; the owner path and the tag are
+#      unchanged, so `VIDRA_IMAGE_REGISTRY=registry.internal:5000` pulls
+#      registry.internal:5000/yegamble/vidra-core:<tag>.
 #   3. restart: unless-stopped everywhere long-lived, so a reboot returns the
 #      stack unattended. Requires `systemctl enable --now docker` on the host.
 #   4. Capped json-file logging on every service — the daemon default is
@@ -270,7 +283,7 @@ services:
   # VIDRA_MIGRATE_LOCK_TIMEOUT tunes the bound (see env/production.env.example);
   # `0` means "wait forever" and restores the pre-existing behaviour.
   migrate:
-    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    image: ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     build: !reset null
     logging: *logging
@@ -287,7 +300,7 @@ services:
       - "no-new-privileges:true"
 
   search-migrate:
-    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-search:${VIDRA_SEARCH_TAG:?VIDRA_SEARCH_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    image: ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-search:${VIDRA_SEARCH_TAG:?VIDRA_SEARCH_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     build: !reset null
     logging: *logging
@@ -305,7 +318,7 @@ services:
     # still declares `build:` (it is the dev definition); `pull_policy: always`
     # plus `up -d --no-build` guarantees the registry image wins and the droplet
     # never compiles Go or runs `next build`.
-    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    image: ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     # Loopback publish only — Caddy reaches the api over the compose network as
     # `api:8080`, so this mapping exists purely for local curl/probes on the box
@@ -370,7 +383,7 @@ services:
   # the base service declares no ports and no container_name, every queue claims
   # under a lease, and the sweep-only crons are behind one advisory lock.
   worker:
-    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    image: ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${VIDRA_CORE_TAG:?VIDRA_CORE_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     restart: unless-stopped
     logging: *logging
@@ -400,7 +413,7 @@ services:
     # /readyz probe down here.
 
   frontend:
-    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-user:${VIDRA_USER_TAG:?VIDRA_USER_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    image: ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-user:${VIDRA_USER_TAG:?VIDRA_USER_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     # !override — replaces the base 0.0.0.0:3000 publish, see the api note.
     ports: !override
@@ -425,7 +438,7 @@ services:
       start_period: 20s
 
   search:
-    image: ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-search:${VIDRA_SEARCH_TAG:?VIDRA_SEARCH_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
+    image: ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-search:${VIDRA_SEARCH_TAG:?VIDRA_SEARCH_TAG is required (e.g. v0.1.0) so deploys and rollbacks are reproducible}
     pull_policy: always
     # Internal service: HMAC-authenticated, called only by vidra-core, never by
     # a browser. The base file publishes SEARCH_HTTP_PORT for local inspection;
