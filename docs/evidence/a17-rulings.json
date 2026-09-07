@@ -1,0 +1,158 @@
+{
+  "slice": "A17 rulings applied — live capability truth, the compose pin, and instance-name auth screens",
+  "date": "2026-09-07",
+  "register_row": "none — no register row changes; this slice implements the three product rulings recorded under A17 (2026-09-07) and ADM-03 stays PASS, ADM-04 stays OPEN, A17 stays OPEN",
+  "prs": {
+    "core": "https://github.com/yegamble/vidra-core/pull/181",
+    "user": "https://github.com/yegamble/vidra-user/pull/178",
+    "meta": "this evidence + the release-readiness section",
+    "dependency_order": "core FIRST (it changes api/openapi.yaml), then user (lib/api/generated.ts is regenerated from that spec, so contract-ci is red until core merges), then meta",
+    "migration": "none — core stays at schema 132, search at 18"
+  },
+  "lab": {
+    "topology": "one origin — a pipe-only node proxy on 127.0.0.1:8099 in front of `node .next/standalone/server.js` on :3099 and vidra-core on :8088 — because vidra_refresh is SameSite=Lax, Path=/api/v1/auth",
+    "backing_services": "native postgres 16.15 on :55432 (-k /tmp) at schema 132, native redis on :56379, flushed before the run",
+    "core_config": "STORAGE_BACKEND=local, VIDRA_ENV=development, RATE_LIMIT_ENABLED=false, OWNER_CLAIM_TOKEN set, registration open for the synthetic ordinary user",
+    "frontend_build": "NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8099 (an ORIGIN, inlined at build time), INTERNAL_API_BASE_URL=http://127.0.0.1:8088, production standalone server — never `next start`",
+    "browser": "real Chromium against the single origin, hard reloads between capability changes",
+    "requests": "145 core requests logged across the two api boots: 127x200, 4x201, 1x204, 6x304, 3x401, 1x403, 3x503. ZERO 429s, but rate limiting was DISABLED in this lab (RATE_LIMIT_ENABLED=false), so that is not a limits observation",
+    "teardown": "core api, the Next standalone server, the proxy, redis and postgres all stopped; the postgres data directory, the redis directory, the media root and the built binary removed"
+  },
+  "ruling_1_live_capability": {
+    "rule": "features.live = the live_enabled setting AND the boot ingest capability, the shape import_http / channel_sync / transcription / transcoding / messaging / messaging_e2ee / mail already report",
+    "capability_predicate": "liveIngestConfigured() = strings.TrimSpace(cfg.LiveRTMPURL) != \"\" — the same predicate config.Load derives the Go default from (LiveEnabled: p.Bool(\"FEATURE_LIVE_ENABLED\", liveRTMPURL != \"\")). /admin/infrastructure's live row REUSES this helper for the ingest half of its `configured` column; it keeps its stricter reading (RTMP URL AND LIVE_HLS_ROOT) because that column means the whole plane is wired, while the create gate only needs somewhere to publish",
+    "shared_helper": "internal/httpapi/admin_instance_settings.go liveAvailable() / liveIngestConfigured(), consumed by instance.go (features.live), live.go (the create gate) and admin_infra.go (the capability row)",
+    "observations": [
+      {
+        "state": "live_enabled setting ON (PATCH, value=true overridden=true), no LIVE_RTMP_URL",
+        "instance_features_live": false,
+        "create_live_stream": "HTTP 503",
+        "code": "live_not_configured",
+        "message": "live streaming is turned on but this instance has no RTMP ingest to publish to. Set LIVE_RTMP_URL (and LIVE_HLS_ROOT, so the segments the media server writes can be served) and restart the api",
+        "stream_key_minted": false,
+        "admin_infrastructure_live_row": {
+          "enabled": false,
+          "configured": false,
+          "note": "Live streaming is off. Turning it on needs an RTMP media server as well as the toggle: LIVE_RTMP_URL for streamers to publish to and LIVE_HLS_ROOT for the segments it writes."
+        }
+      },
+      {
+        "state": "restarted with LIVE_RTMP_URL=rtmp://ingest.lab.invalid/live (boot-baked)",
+        "live_enabled_row": "value=true default=true overridden=true — the DERIVED default moved with the env, the row still won the value",
+        "instance_features_live": true,
+        "create_live_stream": "HTTP 201",
+        "rtmp_url": "rtmp://ingest.lab.invalid/live",
+        "stream_key_minted": true,
+        "admin_infrastructure_live_row": {
+          "enabled": true,
+          "configured": false,
+          "note": "Live streaming is on but the ingest plane is incomplete: LIVE_RTMP_URL tells streamers where to publish and LIVE_HLS_ROOT is where the media server writes segments. Without both, streams can be created and never started.",
+          "comment": "LIVE_HLS_ROOT was deliberately left unset, to show the admin row's stricter reading is intact and coherent beside the narrower create gate"
+        }
+      },
+      {
+        "state": "live_enabled setting OFF with the ingest still wired",
+        "instance_features_live": false,
+        "create_live_stream": "HTTP 403",
+        "code": "feature_disabled",
+        "note": "the operator's switch keeps its own answer; the deployment 503 is never used for it"
+      },
+      {
+        "state": "PATCH {\"live_enabled\": null} deletes the row",
+        "live_enabled_row": "value=true default=true overridden=false — the derived default handed back"
+      }
+    ],
+    "wrong_actors": {
+      "anonymous_create": "401 (both states)",
+      "ordinary_user_create_on_another_owner's_channel": "503 live_not_configured — the FEATURE GATE runs before the ownership check, which is the shipped house order (the same order the pre-existing 403 feature_disabled already had, and the order that avoids disclosing channel ownership to a caller the gate will refuse anyway). Unchanged by this slice"
+    },
+    "frontend": {
+      "hook": "lib/live/availability.ts useLiveAvailable() — the useMessagingAvailable idiom: closes ONLY on an explicit false, so an undisclosed field and the moment before the shared instance fetch lands both read as available",
+      "surfaces_gated": [
+        "components/Header.tsx — the desktop + Create dropdown's Go live row",
+        "components/CreateSheet.tsx — the phone Create sheet's Go live row",
+        "components/studio/StudioNav.tsx — the Live tab (kept while the reader is standing on it)",
+        "components/studio/DashboardView.tsx — the Go live quick action",
+        "components/LiveStreamsSection.tsx — the Go live button, the ?new=1 deep link, and the empty state"
+      ],
+      "chromium_with_live_off": [
+        "the studio Live streams header showed only Reload — no Go live",
+        "the + Create menu showed only Upload video and New channel",
+        "the studio tab strip on /studio was Dashboard / Content / Analytics / Channel — no Live",
+        "Quick actions showed only Upload video",
+        "the empty state read 'Live streaming is off on this instance — This server has live streaming switched off, or has no RTMP ingest for a stream to publish to. Ask the instance administrator to turn it on.'",
+        "/studio/live?new=1 opened NO dialog"
+      ],
+      "chromium_positive_control": "with the capability restored, Go live returned and /studio/live?new=1 opened the Go live modal and stripped the param",
+      "existing_streams": "an already-created stream stayed listed and manageable (Regenerate key / Delete) with live off — an operator who unwires live must not strand streams their creators already made"
+    }
+  },
+  "ruling_2_compose_pin": {
+    "before": "vidra-core/docker-compose.yml: FEATURE_LIVE_ENABLED: ${FEATURE_LIVE_ENABLED:-true}",
+    "after": "FEATURE_LIVE_ENABLED:   (bare map key — compose pass-through)",
+    "why": "a ${VAR:-x} fallback materialises as ordinary env inside the container, indistinguishable at runtime from an operator's own export, so it OVERRIDES rather than defaults. That is harmless for the other three feature seeds, whose fallback equals their Go default; live's Go default is DERIVED, and the pin shadowed the derivation",
+    "compose_render": {
+      "compose_version": "Docker Compose v5.1.0",
+      "unset": "FEATURE_LIVE_ENABLED: null (not set in the container)",
+      "host_env_set": "FEATURE_LIVE_ENABLED=true renders FEATURE_LIVE_ENABLED: \"true\"",
+      "config_q": "exit 0"
+    },
+    "derived_value_read_from_a_booted_core": "GET /admin/instance-settings with no FEATURE_LIVE_ENABLED and no LIVE_RTMP_URL: {\"key\":\"live_enabled\",\"type\":\"bool\",\"value\":false,\"default\":false,\"overridden\":false,\"page\":\"live\",\"section\":\"streaming\"}",
+    "ci_lanes_reviewed": {
+      "vidra-core backend-ci / ci-guard / backend-integration / openapi / schema-compat / bench-fuzz": "no compose boot of the api and no live coverage — untouched",
+      "vidra-core ipfs-integration / ipfs-private-integration / release-assets": "use compose but bring up kubo / build assets only; no live coverage — untouched",
+      "vidra-user contract-ci / frontend-ci / ci-guard / publish-container": "no backend — untouched",
+      "vidra-user frontend-e2e-backed (main matrix)": "EDITED — LIVE_RTMP_URL=rtmp://127.0.0.1:1935/live added to the docker compose up env, because e2e-backed/live-replay.spec.ts and two e2e-backed/studio.spec.ts specs need a Go live control. Inert against today's main core, correct against the new one",
+      "vidra-user frontend-e2e-backed (channel-sync-backed, ipfs)": "run named specs that do not touch live — untouched",
+      "meta .github/workflows": "NOT TOUCHED (meta AGENTS.md forbids it); none of its jobs sets or depends on FEATURE_LIVE_ENABLED"
+    },
+    "release_note": "instances that relied on the compose fallback to force live ON must now set FEATURE_LIVE_ENABLED=true or an ingest URL"
+  },
+  "ruling_3_instance_name_auth_screens": {
+    "source": "getInstanceConfig() — the same server-side snapshot generateMetadata uses for the tab title; INSTANCE_CONFIG_REVALIDATE_SECONDS = 60",
+    "fallback": "authBrandName() trims and falls back to the product name; a whitespace-only instance name is treated as no name",
+    "screens": [
+      "/login — 'Sign in to <name>' + the wordmark home link",
+      "/signup — 'Create your <name> account' + the wordmark",
+      "/reset-password, /reset-password/confirm, /verify-email/confirm, /email-change/confirm, /setup/claim — the wordmark; their titles do not name the product and were left exact"
+    ],
+    "powered_by": "AuthPage renders one small, NON-LINK 'Powered by Vidra' line under the task — non-link on purpose, because apple-ux.spec pins exactly one main link per standalone auth route (the wordmark → /) and a second exit from a focused task is worse than none",
+    "i18n": "not applicable — this repo has no messages/* mechanism; the strings are inline like their neighbours",
+    "spec_updated": "e2e/apple-ux.spec.ts — standaloneAuthRoutes now derives its headings from the fallback name (that suite has NO backend, and the snapshot is fetched server-side, so it always sees the fallback) and asserts the Powered by line. The instance-name form itself is pinned by components/auth/LoginForm.test.tsx",
+    "chromium": {
+      "login": "tab title 'A17 Lab Tube'; wordmark 'A17 Lab Tube'; heading 'Sign in to A17 Lab Tube'; 'Powered by Vidra' at the foot",
+      "signup": "after a second rename and a hard reload: wordmark 'Second Lab Name'; heading 'Create your Second Lab Name account'; 'Powered by Vidra'",
+      "wordmark_link_per_route": "/login, /signup, /reset-password and /verify-email/confirm all rendered the instance name as the href=\"/\" link"
+    },
+    "prerender_fallback": {
+      "what_the_user_sees": "no client-side flash — the name is server-rendered, so each page load shows ONE consistent name. The only stale window is the instance-config data cache",
+      "build_time_bake": "the build-time prerender of /reset-password (the one auth route that is still static) bakes the fallback into the HTML: wordmark link 'Vidra' and 'Powered by Vidra'. A CI build has no backend to ask, so it bakes the same string via authBrandName's fallback",
+      "measured_after_a_live_rename": "/login (dynamic, ƒ) picked up the new name at +46 s; /reset-password (static + 1m ISR) at +66 s — the 60 s window plus one stale-while-revalidate request",
+      "route_modes_after_this_change": "/login, /signup, /reset-password/confirm, /verify-email/confirm, /email-change/confirm and /setup/claim are ƒ (they read searchParams); /reset-password is the one ○ route, and it moves from immutable-static to 1m ISR because it now reads the instance config"
+    }
+  },
+  "gates": {
+    "core": "make ci — ci: gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race)",
+    "core_red_first": "TestLiveCapabilityIsSettingAndIngest fails on the pre-change source with 'features.live = true with the setting on and no ingest configured' and 'create with no ingest = 201, want 503' carrying a stream_key — the documented defect, reproduced",
+    "user": "Node 24.4.1 — tsc --noEmit clean; npm run lint 0 errors / 2 pre-existing warnings; npm run lint:icons pass; npm test 252 files / 2507 tests passed",
+    "user_node_trap": "the same suite fails 82 tests across 7 files under Node 25.9.0 with 'localStorage.clear is not a function', on origin/main, with no changes — re-confirmed this session",
+    "meta": "docs only; no script or compose change in this repo, so no bash -n / shellcheck / prod render was required",
+    "ci_lanes": "user#178 on GitHub: frontend PASS — and `npm run ci` there is typecheck + lint + lint:icons + vitest + build + `npm run e2e`, so the MOCKED Playwright suite (including the edited e2e/apple-ux.spec.ts) ran and passed in CI. e2e-backed (local) PASS, e2e-backed (s3) PASS, ipfs-backed PASS, channel-sync-backed PASS — so e2e-backed/live-replay.spec.ts and the two live specs in e2e-backed/studio.spec.ts still find their Go live control with the new LIVE_RTMP_URL. contract FAIL is the expected ordering failure ('lib/api/generated.ts is stale vs vidra-core's openapi.yaml'), because it compares against core main. core#181: build-test, integration, openapi, ipfs-private-integration PASS; ipfs-integration failed once on an EXTERNAL flake — 'public gateway did not retrieve fresh CID ... within 5m0s: status 429', a public IPFS gateway rate-limiting the runner, in a package this diff does not touch — and was re-run."
+  },
+  "unverified": [
+    "neither Playwright suite was run on this machine (browser fleet + full backend); BOTH were run by repo CI on user#178 and passed — see gates.ci_lanes",
+    "no real RTMP publisher was involved — LIVE_RTMP_URL was set only to move the boot capability, exactly as in the A17 config-truth slice. INT-01 still owns actual ingest",
+    "the compose pass-through was validated by `docker compose config` and by reading the derived value out of a natively booted core; a full compose stack was NOT brought up locally (Docker Hub pulls hang in this VM) — though the backed CI lanes do bring the stack up on the runner",
+    "no rate-limit observation: the lab ran with RATE_LIMIT_ENABLED=false"
+  ],
+  "findings_recorded_not_fixed": [
+    "POST /live/{id}/key (regenerate) still returns a fresh key with an empty rtmp_url when no ingest is configured. It is only reachable on an instance that was wired and then unwired, and gating it would strand an operator mid-repair, so it is recorded rather than widened",
+    "the imports and auto-caption boot-capability 503s are bare echo.NewHTTPError, so the central 5xx scrubber replaces their operator-facing sentence with 'an unexpected error occurred'. Only live's new one is typed (LiveNotConfiguredError, the mail_not_configured precedent)",
+    "the auth wordmark is text only — it does not use the operator's uploaded header_wide / header_square logos the way Header.tsx does",
+    "the local-storage variable is STORAGE_LOCAL_ROOT, as the ADM-04 section already records; LOCAL_STORAGE_ROOT is silently ignored and the store falls back to ./data/media relative to the process cwd. Re-observed this session (the lab was started with the wrong name and grew a ./data directory)"
+  ],
+  "for_adm04_and_a05": {
+    "adm04": "the single-process lab here is NOT enough for ADM-04 — it needs the two-process topology from the config-truth slice, because the whole open half is worker visibility. What this run adds: GET /admin/instance-settings reports key/type/value/default/overridden/page/section and STILL says nothing about which processes read a key or its refresh tier, and a settings default that is DERIVED from env (live_enabled) is indistinguishable in that payload from a hardcoded one — an operator reading the API cannot tell that live_enabled's default moved because LIVE_RTMP_URL was set. If ADM-04 touches that endpoint, that is a cheap row to add",
+    "a05": "the lab ran with no SMTP at all and never needed one: owner claim, login and the admin PATCH surfaces are all reachable without mail. A05 will need MAIL_ENABLED + a relay (or the DEV_MAIL_CAPTURE_ENABLED seam the backed CI lane uses) before it can see a verification or reset link, and TOTP enrolment needs MFA_KEY_KEK or FEDERATION_KEY_KEK set or secrets are stored raw with a boot warning"
+  }
+}
