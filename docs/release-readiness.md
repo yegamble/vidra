@@ -122,7 +122,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | ADM-01 Users/roles/quotas/suspensions/signup approval with lockout guards | C U | Backed admin-users/registration-approval; `requireRole` and self guards; live evidence `a16-users-roles` (three-role matrix over 43 admin-only + 24 staff routes, role change biting a LIVE session, real over/under-quota uploads, bypass_quarantine proven against the quarantine gate, deactivate/reactivate/delete with the tombstone made irreversible, approval queue and audit rows) | PASS (candidate; unmerged) | Admin vs moderator vs user; quotas, verified/bypass flags, deactivate/reactivate, reject self-demotion; session revocation and audit evidence | AUTH-02 → A16; no last-admin or owner guard ships (recorded) |
 | ADM-02 Reports, video blocks/quarantine, mutes, watched words and appeals/context | C U S | Backed moderation/admin-comments/blocked-videos/watched-word-matches/instance-mutes; live evidence `a16-quarantine-blocks` (236 assertions, per-surface table for quarantine/block/reject with vidra-search readbacks, oEmbed leak and empty DM report fixed), `a16-moderation-hardening` (stale watch-page cache, rejection note persisted, creator told of a block) and `a16-mutes-watched-words` (125 assertions: per-surface mute table with search-service rails, instance mutes proven against real remote rows, watched-word semantics, and a blocked account's repeatable follow notification fixed) | PASS (candidate; unmerged) | Report video/comment/message; staff review and note; owner notifications; ban/block/unblock and affected feeds/search; unauthorized and bulk behavior inventoried explicitly | SRC-02, SOC-02 → A16; remote/federated content is A29-owned; muted accounts still visible on their own channel page and in autosuggest (recorded) |
 | ADM-03 Runtime config, branding/legal documents and feature capability truth | M C U S | Instance registry/config parity W1–W15; core settings poller and search config events; live evidence `a17-config-truth` (116-key registry enumerated and cross-checked against the live API, three-layer precedence proven on one setting, per-process observation on a real `VIDRA_ROLE=worker`, documents/images round trip, missing-dependency notices added for live and transcription, custom CSS/JS confirmation path proven in Chromium for anonymous visitors) | PASS (candidate; unmerged) | Change typed settings/documents/images in admin; observe public/UI/worker/search after refresh and restart; dependencies missing must be explained; test dangerous custom CSS/JS confirmation path | INS-05, SRC-01 → A17; `features.live` reporting the raw setting and the `FEATURE_LIVE_ENABLED:-true` compose fallback are product rulings (recorded) |
-| ADM-04 Health/jobs/audit/infra/storage-GC dashboards reflect real operations | M C U S | Core admin system/jobs/audit/media-GC; backed admin-system/admin-audit; `vidra doctor` | UNVERIFIED | Create failed job and degraded dependency, inspect status/log correlation/retry; doctor identifies drift and backup age; regular users denied; no secrets in responses/logs | PUB-03 → A17 |
+| ADM-04 Health/jobs/audit/infra/storage-GC dashboards reflect real operations | M C U S | Core admin system/jobs/audit/media-GC; backed admin-system/admin-audit; `vidra doctor`; live evidence `a17-dashboards` (seven components mapped to their measurement and each degraded for real with timings, three real worker-side job failures through retry to dead-letter and back to success, 56 audit rows with filters and the three-role matrix, a real media-GC delete with counts and the tripped breaker, a real `deploy/backup.sh` plus doctor's four backup-age wordings and three planted drifts, and a zero-hit secret sweep over 48 admin bodies, both process logs and both doctor reports) | UNVERIFIED | Create failed job and degraded dependency, inspect status/log correlation/retry; doctor identifies drift and backup age; regular users denied; no secrets in responses/logs | PUB-03 → A17. Two named gaps block the flip: (1) `/admin/system` has no worker-process visibility at all — a killed worker still reads `ok` (the api-only `settings_sync` gap, store choice is a ruling); (2) `job_runs`/`job_events` identity columns (`worker_id`/`request_id`/`correlation_id`/`trace_id`/`pipeline_run_id`) are written by NOTHING — measured 0 of 9 runs and 0 of 53 events — and the worker logs no line for a failed job, so the run detail's own "inspect correlated system logs" advice cannot be followed. Live storage-migration facet unverified (one backend). Defects fixed here: a PostgreSQL outage made every authenticated route answer 401 "invalid or expired token" (core#180 → 503 `session_store_unavailable`), and the media-GC panel showed "Automatic daily sweep: Off" beside a purge that still deletes (user#177) |
 | MIG-01 Source/version/storage preflight and truthful dry-run | M C U | Importer Preflight/report/version, admin import UI; F07 | BLOCKED | Obtain sanitized source/schema; read-only DB role and source filesystem/bucket; preview includes conflicts/unsupported/counts and destination probe side effects; unsupported version refused without automated override | INS-04 + source inventory → A18 |
 | MIG-02 Accounts, roles, bcrypt login, channels and actor keys migrate safely | C U | `entities.go`, actor-image passes, sealed keys, integration fixture | BLOCKED | Import sample admin/mod/user/suspended accounts and collisions; login with source password; verify role/claim coexistence; rerun preserves Vidra-owned changes; compare public actor identity without exposing keys | MIG-01, AUTH-02 → A19 |
 | MIG-03 Videos/media/metadata transfer produces independent playable catalogue | C U M | F02; copy/reference/none modes, report `video_no_media`; actor/poster/storyboard copying | FAIL | Sample progressive+HLS-only, split audio, captions, private/password/unlisted/blocked content; compare counts/hashes; source disconnected after copy; decode all selected media and require zero unexplained no-media rows | MIG-01, PUB-03 → A20; source sample still needed |
@@ -5996,3 +5996,302 @@ notices needed a real Chromium against a live backend.
 The lab was torn down — core api and worker, vidra-search, the Next server, the
 proxy, redis and postgres all stopped, the data directory and lab directory
 removed. Nothing is merged here and no deployment is authorized.
+
+## A17 health, jobs, audit and storage dashboards — 2026-09-07
+
+**ADM-04 does NOT flip, so A17 stays OPEN.** Five of the seven criteria pass. Two
+do not, and both are about the same missing thing — the operator cannot see the
+**worker**. The health dashboard has no component, no row and no hint that a
+worker process exists; and every job run, including the ones that failed on that
+worker, carries an empty worker id, request id, correlation id and trace id
+because **nothing in the shipped schema writes them**. Two PRs:
+[core #180](https://github.com/yegamble/vidra-core/pull/180) and
+[user #177](https://github.com/yegamble/vidra-user/pull/177). **No migration**
+(core stays at schema 132, search at 18); **no OpenAPI change** in either, so
+they are independent and there is no `contract-ci` ordering. [Sanitized
+evidence](evidence/a17-dashboards.json). **386 core requests, zero 429s** at
+shipped limits.
+
+Measured on the ADM-03 topology reused verbatim — vidra-core `VIDRA_ROLE=api` on
+:8088, a real second vidra-core `VIDRA_ROLE=worker` with no HTTP listener,
+vidra-search, and a production Next standalone server behind a pipe-only
+single-origin proxy — over native postgres 16 at schema 132 and native redis,
+with a real Chromium against that origin, plus one compose `postgres:18-alpine`
+container brought up for the sole purpose of running a **real** `deploy/backup.sh`.
+
+**Seven components, and what each one actually measures.** `postgres` and
+`redis` are a `Ping` on this process's own pool; `s3` is `BucketExists` (never
+`EnsureBucket` — a diagnostic that creates the bucket it could not find turns a
+typo into a new, empty, silently-wrong store); `smtp` dials the relay and asserts
+a `220` greeting without authenticating or sending; `search` is vidra-search's
+own `/readyz` from inside the network; `ffmpeg` is a PATH lookup and nothing
+more; `settings_sync` is **not a probe at all** but an in-memory read of the
+poller's health record. The four concurrent probes are bounded by
+`systemProbeTimeout` = 3 s. **`postgres` and `redis` are not** — a refused Redis
+dial cost the page 3.4–5.2 s (five dial attempts), and a Redis that accepts a
+connection and then stops talking would hang the page outright. That asymmetry
+is worth closing.
+
+**Degradation is honest and fast.** Stopping Redis moved the page to `degraded`
+on the very next request — there is no cache on this endpoint — with `dial tcp
+127.0.0.1:56379: connect: connection refused`, and back to `ok` on the next
+request after restart. Killing vidra-search at 00:43:51 showed `search: down`
+at 00:43:52. Breaking the settings poller (`ALTER TABLE settings_version RENAME`)
+at 00:44:16 showed `settings_sync: down` by 00:44:20 — inside one 10 s poll
+interval — with the sentence that names the consequence as well as the cause:
+*"the settings-version poll has been failing (last success 11s ago), so this
+replica may be serving stale instance settings/documents/branding: ERROR:
+relation "settings_version" does not exist"*. All three recovered without a
+restart, and all three were re-observed in Chromium after a hard reload: a
+`Degraded` pill, red `DOWN` badges, and the poller's note. That note lives only
+in a `title` attribute, so the *reason* a dependency is down is invisible
+without a mouse.
+
+**What failed first: the dashboard could not survive the outage it exists to
+report.** With PostgreSQL stopped, `GET /admin/system` answered **401 "invalid or
+expired token"**. `requireAuth` re-reads the session row on every authenticated
+request and collapsed *every* error from that read — including "the database is
+unreachable" — into that one 401. Two costs, and the second is worse than the
+first: the admin is told their token is bad by the page whose job is to tell them
+the database is down, and every signed-in client gets the same answer, so a
+database blip reads as a fleet-wide sign-out. core#180 separates `pgx.ErrNoRows`
+— the one answer that means the token no longer authorizes, and the one that
+covers all four revocation sources — from everything else, which becomes
+`ErrSessionLookupUnavailable` and renders as **503 `session_store_unavailable`**.
+A revoked session is still 401; the driver's error never travels with the 503
+(it can carry a DSN, and that text reaches an unauthenticated caller). The first
+commit got this wrong in an instructive way: a bare `echo.NewHTTPError(503, …)`
+was scrubbed by the central 5xx handler to *"an unexpected error occurred"* —
+the same unhelpful answer in a different status code — and only running the
+fixed binary against the lab caught it. The typed `SessionStoreUnavailableError`
+follows the house idiom, and the test now asserts the sentence survives.
+Verified live: 503 with the sentence, the public `GET /instance` still 200
+through the same outage, both recovered with no restart.
+
+**The `settings_sync` gap is now measured rather than inferred, and it is the
+first of the two reasons ADM-04 does not flip.** The worker was killed at
+00:45:23; `/admin/system` at 00:45:25 and again at 00:45:37 reported `status:
+ok` with all seven components healthy. Later, during a second break of the
+counter table, the worker logged **five** `settings version poll failed` lines
+(01:20:29 / :39 / :49 / :59 / 01:21:09) and the API said nothing about the worker
+at any point. It is not fixed here, and the reason is a ruling rather than
+effort. The API edge is genuinely cheap: `SystemStatus.components` is
+`additionalProperties` in the spec and `AdminSystemStatusView` humanises an
+unknown key, so a new component needs **no OpenAPI change and no frontend
+change**. What is not cheap is the *store*. A Redis key needs no migration but
+puts the fleet's knowledge of itself on a dependency that
+`internal/settingsversion`'s own package comment argues against depending on; a
+`process_heartbeats` table is the house idiom but is a schema change for
+observability. Both land at 250–350 lines with tests, over the one-small-PR bar
+on top of the two defects already fixed here. Either one must also be honest
+that a heartbeat can only report a process alive enough to write one: a crashed
+worker still shows as absence, not as failure. Recommended shape and vocabulary
+are in the evidence.
+
+**Real failures, on the worker, in three queues.** A transcode whose source
+object had been deleted retried five times with 1/2/4/8-minute backoff and
+dead-lettered at 01:09:25 (`media: ffprobe "web-videos/….mp4" failed: exit status
+1`). A URL import of an unreachable `.invalid` origin dead-lettered at 01:12:04
+(`the URL could not be imported from this platform`). A channel sync of a dead
+source failed with `could not list the external channel`. All of this is on the
+**api's** dashboard: seven queues with depths and `oldest_pending_age_seconds`
+(which grew 95 → 643 s while the jobs retried — the stuck-work signal),
+`recent_failures` carrying the verbatim queue error and attempt count,
+`/admin/jobs/runs` showing `retry_scheduled` then `dead_lettered` with
+`error_code` and `error_retryable`, an honest eleven-event lifecycle on the run
+detail (enqueued → started → retry_scheduled ×4 → dead_lettered), an SSE stream
+that replays from a cursor and refuses one ahead of the stream with a stable
+`invalid_event_cursor`, and every filter working (`state`, `queue`, `failure`,
+`resource_id`). A deliberate roll-up hides a `transcode_jobs` run that has
+`transcode_steps` children, so the child step represents it. **Retry lives on the
+video, not on the job**: the shipped control is `POST
+/admin/videos/{id}/transcoding` behind the kebab on the admin videos list. It
+creates a genuinely new run, a second call while one is in flight is 409, and
+with the source restored the retried job succeeded on attempt 0 while the
+dead-lettered run stayed visible.
+
+**The second reason ADM-04 does not flip: there is no correlation chain.**
+`job_runs` and `job_events` carry `pipeline_run_id`, `parent_job_id`, `actor_id`,
+`worker_id`, `request_id`, `correlation_id`, `trace_id`, `heartbeat_at` and
+`lease_expires_at` columns, and **nothing writes any of them**. The 0083
+AFTER-trigger projection that maintains the table sets type, queue, source id,
+state, stage, progress, attempt, actor, resource and error — and no identity
+column; 0094, 0107, 0115 and 0120 add queues to the same projection and set none
+either. Over the whole table: **9 job runs — 0 with a worker id, 0 with a request
+id, 0 with a correlation id, 0 with a trace id, 0 with a pipeline run id; 53 job
+events — 0 with a worker id, 0 with a correlation id.** The admin run detail
+rendered exactly that in Chromium: *Pipeline run —, Parent job —, Actor —, Worker
+—, Request ID —, Correlation ID —, Trace ID —, Claimed —, Heartbeat —, Lease
+expires —.* The table's `WORKER` column is `—` on every row and
+`?worker_id=anything` returns zero. The HTTP layer is fine — every request and
+audit line carries `request_id` and `correlation_id`, `X-Request-ID` is echoed as
+both `X-Request-Id` and `X-Correlation-Id`, and the admin retranscode's audit row
+carried the exact id the browser sent — but `audit_log.job_id` is populated on
+**0 of 56** rows, so the audit row does not link forward either. And the **worker
+logged nothing at all**: three real failures across three queues produced zero
+WARN or ERROR lines on that process; its only job lines all run were `transcode
+drain completed jobs count=1` and `upload finalize drain completed jobs count=1`.
+Grepping the admin request's correlation id finds two lines in the api log and
+**zero** in the worker's. Which makes the run detail's own advice —
+*"Execution failed; inspect correlated system logs for diagnostic detail."* —
+impossible to follow: it points at logs that carry no correlation id for the run
+and contain no line about the failure. Closing this means threading request
+context into the queue tables and the trigger: a schema change plus every enqueue
+path, not a surgical one, and arguably a product ruling first (fill the columns,
+or remove them from the contract and the UI and let the audit trail be the
+correlation surface).
+
+**Two more holes in the same wall.** `channel_syncs` is deliberately not
+projected into `job_runs` — the 0083 header lists it among the tables that need
+distinct execution rows first — and it has no queue row on `/admin/jobs`: one
+failed sync, zero job runs, seven queues. It is visible only to the channel owner
+through `GET /channel-syncs`; the operator has no surface for it. And a **corrupt
+upload fails the video and no job**: a truncated mp4 (moov atom not found) left
+`upload_finalize` succeeded, `transcode_jobs` empty, `recent_failures` empty and
+the video row at `failed`. That is documented and deliberate
+(*"A video it decides to FAIL is not a job failure"*), but the consequence is
+that a creator's failed upload leaves nothing on the operator's jobs dashboard.
+
+**The audit dashboard passes.** 56 rows by the end of the run, ten distinct
+action/result pairs including `moderation.watched_word_match.resolve` (success,
+actor dara, reason `moderator_triaged`), `admin.owner.transfer` (**failure**,
+`invalid_password`), `admin.storage.migration.start` (**failure**,
+`no_target_configured`), `auth.owner_claim` in both outcomes, and
+`admin.media.gc` four times including one with actor `—` — the worker's own
+scheduled sweep. The filter works and writes `?action=…` into the URL;
+pagination returns disjoint id sets over a stable total. Every reason is machine
+shaped (`mode=delete scanned=20 orphans=1 orphan_pct=5 …`, `invalid_password`,
+`video=<uuid> type=hls`) — no prose, no body, no address, no credential in any of
+the 56. The tier is admin-only and holds: moderator 403, ordinary user 403,
+anonymous 401 on all seven dashboard routes, read and write, and in Chromium a
+signed-in **moderator** gets *"Administrators only"* on `/admin/audit-log` and
+`/admin/jobs` while `/moderation` renders for the same session. Two things the
+audit trail does not do: there is **no enumerated action registry** anywhere in
+the UI (the filter is free text, so the 63 shipped actions are reachable only by
+typing them exactly), and an **authorization refusal is not audited** — every one
+of those 403s wrote no row, so an operator cannot see from the trail that anyone
+tried.
+
+**Media GC passes, and its gate does not mean what the register assumed.**
+`MEDIA_GC_ENABLED` is boot-baked (it is not an instance-settings key — `PATCH
+media_gc_enabled` is 422 *unknown setting*) and it gates the **daily** sweep
+only. `admin_media.go` says so in as many words: *"The manual POST stays mounted
+either way — an operator asking for a sweep by hand is not the hazard the flag
+exists for."* Proven by experiment: with the flag off, `GET /admin/media/gc`
+reports `enabled: false` and `POST {"dry_run": false}` answered 200, `mode=delete`,
+`deleted=1`, and the planted orphan was gone. So "off → refused" is not the
+shipped contract, and the honest fix is on the page: it rendered *"Automatic
+daily sweep: Off"* beside a fully armed purge button, above a paragraph that only
+describes what happens when GC is **enabled**. user#177 adds one warning line
+when the flag is off and deliberately leaves the button live. The real pass has
+real counts: on a clean 20-object store with one planted orphan, a dry run
+reported `scanned 20, orphans 1, orphan_percent 5, deleted 0` and the destructive
+pass `mode=delete, deleted 1` with the file gone — driven end to end in Chromium
+through *Run dry run* → *Purge 1 orphan* → *Type PURGE to confirm* → deleted, and
+audited with the counts. The breaker was proven separately on the pre-existing
+dev store (221 objects, 203 orphans): a requested delete was **downgraded, not
+failed** — `dry_run: true, orphan_percent: 91, breaker_tripped: true, deleted: 0`
+— with the orphan list still returned so the operator can decide.
+`GET /admin/storage/migrations` is `{"migrations":[]}`, an unknown id is a clean
+404, and `POST` on a single-backend deployment is 503 — but that 503 says *"an
+unexpected error occurred"*, the same 5xx message-scrubbing core#180 fixes for
+sessions; the real reason survives only in the audit row
+(`no_target_configured`). **The live storage-migration facet is UNVERIFIED**: the
+lab has one backend and no object-store credentials.
+
+**`vidra doctor` passes.** 27 checks in four sections; the lab run produced 28
+findings — 17 ✓, 9 ⚠, 2 ✗ — in 1.3 s, with the rule that a check which could not
+run is ⚠ with the reason and never fails the run. **Backup age was proven against
+a real backup**: `deploy/backup.sh` ran for real (*"wrote …/vidra-20260907T050236Z.dump.gz
+(4.0K)"*, a config archive, retention pruning, and the `backups/last_success`
+marker), then the marker was aged. Fresh: *"✓ backups: the last successful backup
+was 11s ago"*. Aged to 50 h: *"✗ … which is more than the 26h0m0s a daily
+schedule allows → run `./deploy/backup.sh` now and read why it stopped …. Every
+hour this stays red is an hour of uploads that cannot be restored"*. Dated in the
+future: *"⚠ … so the backup age could not be judged → check this host's clock"*.
+Absent: *"⚠ backups never succeeded here (or are not configured)"*. On a managed
+database it stands down with the reason. Drift it catches, each planted and
+removed: a **cross-process config mismatch** (*"✗ stray vidra-core/.env: … Compose
+resolves the INCLUDED vidra-core model's `${VAR}` substitutions against it, ahead
+of `--env-file`"* — which also fired against the real dev checkout, which has
+one); **env-vs-template drift** in both directions (*"defines 1 key(s) … does not
+assign: INSTANCE_NAME"* and *"assigns 1 key(s) … does not define:
+A17_UNKNOWN_KEY → … a MISSPELLED one looks exactly the same from here"*); a
+**dirty ledger** (*"✗ … is DIRTY at version 132: a migration failed halfway and
+the schema state is unknown → do not deploy over it"*); and a **missing
+dependency** (*"✗ the database is unreachable: connection refused"*, with the
+dependent checks degrading to ⚠ that name the same cause). One thing it does
+**not** check: **nested-checkout / migration-version drift.** `checkSchemaLedger`
+reports the ledger's version and dirty flag and never compares them to the
+checkout's migration filenames. That assertion is `deploy/deploy.sh`'s — it
+computes `expected_version` from `ls -1 vidra-core/migrations/*.up.sql` (or from
+`vidra-bundle.manifest` in a bundle tree) and dies on *"schema_migrations version
+mismatch: expected N, found M. The stack has NOT been restarted."* AGENTS.md rule
+3's guard is intact and lives where the rule says it does. Worth recording for
+operators: doctor needs the nested checkouts present to render the compose chain
+— without them the same deployment reports 7 ✓ / 17 ⚠ / 8 ✗ instead of 17 ✓ / 9 ⚠
+/ 2 ✗, because 17 findings become *"the compose chain does not render"*.
+
+**No secrets, counted.** 48 captured admin response bodies, both core process
+logs, the vidra-search log and both doctor reports were swept for eight literal
+secret values used by this lab (the JWT secret, the internal HMAC secret, both
+account passwords, both DSNs, the compose Postgres and Redis passwords, the KEK)
+and six patterns (any `postgres://`/`redis://` scheme, the `admin_infra.go`
+never-list names, a JWT, a `password`/`secret`/`token`/`*_key` field with a
+value, a session id, any email address). **Zero** literal values, **zero** DSNs,
+**zero** JWTs, **zero** credential key/value pairs, **zero** session ids, **zero**
+email addresses. The only matches are variable **names** inside operator advice —
+three in the `/admin/infrastructure` body (`JWT_SECRET`, `FEDERATION_KEY_KEK`,
+`ATPROTO_KEY_KEK`, all in sentences telling the operator what to set) and 45 in
+the logs (`MFA_KEY_KEK unset — TOTP secrets are stored UNENCRYPTED`). One
+credential *is* logged, by design: the first-run owner-claim token, printed in
+full at WARN as the documented bootstrap. Recorded rather than filed — but with a
+sharp edge found on the way: **a second core process minting its own first-run
+token invalidates the first process's**. On this two-process lab the api's logged
+token was already dead; the worker's was the live one. An operator following the
+api container's log on a split topology is told the token is invalid, with no
+explanation.
+
+**Gates.** core `make ci` — *"ci: gate passed (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race)"*, run twice. user: `tsc --noEmit` clean,
+`npm run lint` 0 errors (2 pre-existing warnings), `lint:icons` pass, `npm test`
+**251 files / 2498 tests passed** on Node 24.4.1. vidra-search was not touched.
+No script and no compose/env change here, so no `bash -n`, `shellcheck` or prod
+render was required.
+
+**Unverified.** A real storage migration between two backends (one backend, no
+object-store credentials). The SMTP and object-store probes against a real relay
+or bucket — both report `not_configured` here, which is a supported shape rather
+than a fault. A `federation_deliveries`, `caption_jobs` or `account_exports`
+failure: those queues stayed empty, and the projection path they share was
+exercised through `transcode_jobs` and `import_jobs`. `npm run e2e` and the
+backed suite (browser fleet + full backend; repo CI covers them). `vidra doctor
+--write-probe`, which stores an object in a bucket this deployment does not have.
+
+**Also recorded.** `STORAGE_LOCAL_ROOT` is the variable; `LOCAL_STORAGE_ROOT` is
+silently ignored and the store falls back to `./data/media` relative to the
+process's cwd — inside the checkout. `jobstatus`'s package comment claims a
+failure carries *"never … the storage key"*, and `redactDetail` does not remove
+one: the transcode failure's text is `media: ffprobe "web-videos/<uuid>.mp4"
+failed: exit status 1`. Admin-only, so not a leak, but the stated invariant is
+not the behaviour. The audit list view drops `resource_type`/`resource_id`,
+`correlation_id`, `metadata` and `changes` that the API already returns. And
+`AdminSystemStatusView` and `AdminJobsView` flash *"Administrators only"* on
+first paint for a signed-in admin, before the session is restored.
+
+**What remains for ADM-04, exactly.** (1) Worker-process visibility on
+`/admin/system` — a per-process settings-sync heartbeat, once the store is ruled
+on (Redis key vs `process_heartbeats` table). (2) Job-run correlation identity —
+either fill `worker_id`/`request_id`/`correlation_id`/`trace_id` (schema + every
+enqueue path) or rule that the audit trail is the correlation surface and remove
+those columns from the contract and the UI; and, either way, make the worker emit
+a structured line for a failed job, because today it emits none. (3) A real
+storage migration between two backends. Everything else the register's procedure
+asks for — a real failed job with its error, retry, a fixed input succeeding,
+`doctor` finding drift and backup age, regular users denied, and no secrets in
+responses or logs — is proven above.
+
+The lab was torn down — core api and worker, vidra-search, the Next server, the
+proxy, redis, postgres and the compose postgres container all stopped, the lab
+directory and its compose volume removed, and this run's media objects deleted
+from the dev store. Nothing is merged here and no deployment is authorized.
