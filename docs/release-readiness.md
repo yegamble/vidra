@@ -6295,3 +6295,170 @@ The lab was torn down — core api and worker, vidra-search, the Next server, th
 proxy, redis, postgres and the compose postgres container all stopped, the lab
 directory and its compose volume removed, and this run's media objects deleted
 from the dev store. Nothing is merged here and no deployment is authorized.
+
+## A17 rulings applied — live capability, compose pin, instance-name auth screens — 2026-09-07
+
+**No register row changes.** ADM-03 stays PASS, ADM-04 stays OPEN, so **A17 stays
+OPEN**. This slice implements the three product rulings the owner was asked for
+in the config-truth section above. Two PRs:
+[core #181](https://github.com/yegamble/vidra-core/pull/181) and
+[user #178](https://github.com/yegamble/vidra-user/pull/178). **No migration**
+(core stays at schema 132, search at 18). Core **does** change
+`api/openapi.yaml`, so unlike the previous two A17 slices there IS a
+`contract-ci` ordering: **core first, then user, then this**. [Sanitized
+evidence](evidence/a17-rulings.json).
+
+Measured on a one-origin lab — a pipe-only proxy on `127.0.0.1:8099` in front of
+a production Next standalone server and vidra-core on `:8088` — over native
+postgres 16 at schema 132 and native redis, with a real Chromium against that
+origin. 145 core requests; rate limiting was **off** in this lab, so the zero
+429s is not a limits observation.
+
+**Ruling 1: `features.live` now ANDs the boot capability, like every neighbour.**
+`liveAvailable()` = the `live_enabled` setting **AND** `liveIngestConfigured()`,
+and the second is `LIVE_RTMP_URL != ""` — the very predicate `config.Load`
+derives the Go default from, so there is now exactly one statement in the
+codebase of what "live is wired" means. `/admin/infrastructure`'s live row
+**reuses** that helper rather than restating it, and keeps its own stricter
+`configured` (the RTMP URL *and* `LIVE_HLS_ROOT`), because that column means the
+whole plane is wired while the create gate only needs somewhere to publish.
+`POST /channels/{handle}/live` keeps **403 `feature_disabled`** for the
+operator's switch and adds **503 `live_not_configured`** for the missing
+deployment prerequisite — the yt-dlp and Whisper shape — as a *typed* error, for
+the `mail_not_configured` reason: 503 is a 5xx and the central handler scrubs
+every 5xx message it has no stable code for, which would have replaced the one
+sentence naming the variable with "an unexpected error occurred". Neither
+refusal mints a key.
+
+Proven at all three states in one sitting. Setting on (`value=true
+overridden=true`) with no ingest: `features.live` **false**, create **503
+`live_not_configured`**, no `stream_key` in the body, and the admin
+infrastructure row still explaining the dependency in the words it already had.
+Restarted with `LIVE_RTMP_URL` set — it is boot-baked — the row moved to
+`default=true` while still `overridden=true`, `features.live` **true**, create
+**201** carrying `rtmp_url`. `LIVE_HLS_ROOT` was deliberately left unset for that
+step, and the admin row reported `enabled=true configured=false` with *"streams
+can be created and never started"*: the stricter reading intact and coherent
+beside the narrower gate. Setting off with the ingest still wired: **false**
+regardless, and create **403 `feature_disabled`** — the switch never borrows the
+deployment's answer. Deleting the row handed the derived default back. Wrong
+actors unchanged: anonymous 401 in both states; an ordinary user aiming at
+someone else's channel gets the **feature** answer, not the ownership one,
+because the gate runs first — the shipped house order, and the one that does not
+disclose channel ownership to a caller the gate will refuse anyway.
+
+On the client, `useLiveAvailable()` follows `useMessagingAvailable` exactly:
+it closes **only** on an explicit `false`, so an old core that does not disclose
+the field and the moment before the shared instance fetch lands both read as
+available. With live off, Chromium showed the studio Live-streams header down to
+just **Reload**, the "+ Create" menu down to Upload video and New channel, the
+studio tab strip down to Dashboard / Content / Analytics / Channel, Quick actions
+down to Upload video, and an empty state that says *"Live streaming is off on
+this instance"* instead of *"Go live to get a stream key"*. `/studio/live?new=1`
+opened **no** dialog. With the capability restored, all of it came back and the
+deep link opened the modal — the positive control. An already-created stream
+stays listed and manageable throughout: an operator who unwires live must not
+strand the streams their creators already made.
+
+**Ruling 2: the compose pin is dropped, and it needed one CI lane to say what it
+depends on.** `FEATURE_LIVE_ENABLED: ${FEATURE_LIVE_ENABLED:-true}` is now a bare
+pass-through. The reason is the one the audit found: a `${VAR:-x}` fallback
+materialises as ordinary env inside the container, indistinguishable at runtime
+from an operator's own export, so it does not *default* anything — it
+**overrides**. Harmless for the three feature seeds beside it, whose fallback
+equals their Go default; fatal for live, whose Go default is derived. Verified on
+Compose v5.1.0 in both directions (unset → the variable is absent from the
+container; `FEATURE_LIVE_ENABLED=true` on the host → `"true"`; `config -q` exit
+0) and by reading `live_enabled` out of a natively booted core with neither
+variable set: `value=false default=false overridden=false`.
+
+Every consumer of that compose file was reviewed. vidra-core's own lanes never
+boot the api for live (the two IPFS lanes and `release-assets` use compose for
+kubo and for assets); the meta repo's workflows neither set nor depend on the
+variable and were **not touched**; vidra-user's `contract-ci`, `frontend-ci` and
+`ci-guard` have no backend. Exactly one lane genuinely exercises live —
+`frontend-e2e-backed`'s main matrix, which runs `e2e-backed/live-replay.spec.ts`
+and two `e2e-backed/studio.spec.ts` specs that click a "Go live" control — so
+that job now sets `LIVE_RTMP_URL` explicitly in its `docker compose up` env
+rather than inheriting a capability from a fallback. That is a component-repo
+workflow edit, called out here because both AGENTS files discourage them: it is
+inert against today's `main` core and correct against the new one, so it can land
+in either order.
+
+**RELEASE NOTE.** Instances that relied on the compose fallback to force live
+**on** must now set `FEATURE_LIVE_ENABLED=true` or an ingest URL. And live is
+only advertised and creatable when `LIVE_RTMP_URL` is set: with it empty,
+`features.live` is false and create answers 503 `live_not_configured` whatever
+the toggle says.
+
+**Ruling 3: the auth screens wear the instance's name.** The wordmark home link,
+*"Sign in to \<name\>"* and *"Create your \<name\> account"* now read `GET
+/instance` `name` through `getInstanceConfig()` — the same server-side snapshot
+the tab title uses — falling back to the product name when the instance has none
+(a whitespace-only name counts as none). `/reset-password`,
+`/reset-password/confirm`, `/verify-email/confirm`, `/email-change/confirm` and
+`/setup/claim` get the wordmark; their titles do not name the product and were
+left exact. The Vidra mark survives as one small **non-link** *"Powered by
+Vidra"* line under the task — non-link on purpose, because `apple-ux.spec` pins
+exactly one `main` link per standalone auth route and a second exit from a
+focused task is worse than none. There is no `messages/*` mechanism in the repo,
+so the copy is inline like its neighbours. `apple-ux.spec`'s `standaloneAuthRoutes`
+now derives its headings from the fallback name — that suite runs with **no
+backend at all**, and this snapshot is fetched server-side, so it can only ever
+see the fallback; the instance-name form itself is pinned by a unit test.
+
+Verified in Chromium: with the instance renamed, `/login` read *"Sign in to A17
+Lab Tube"* under an *"A17 Lab Tube"* wordmark with *"Powered by Vidra"* at the
+foot, and after a second rename and a hard reload `/signup` read *"Create your
+Second Lab Name account"*.
+
+**What a reader sees before the new name lands, and for how long.** Nothing
+flashes: the name is server-rendered, so one page load shows one consistent name.
+The stale window is the instance-config data cache, and it was measured against a
+live rename — the dynamic `/login` picked the new name up at **+46 s** and the
+static-plus-ISR `/reset-password` at **+66 s**, the documented 60 s window plus
+one stale-while-revalidate request. A build-time prerender bakes the **fallback**
+(the built `/reset-password.html` carries wordmark "Vidra" and "Powered by
+Vidra"), which is what a CI build with no backend to ask will always produce.
+One consequence worth recording: `/reset-password` was previously immutable
+static and is now 1 m ISR, because it reads the instance config; every other auth
+route was already dynamic (they read `searchParams`), which corrects the earlier
+note that `/login` ships prerendered.
+
+**Gates.** core `make ci` — *"ci: gate passed (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race)"*, and the new
+`TestLiveCapabilityIsSettingAndIngest` was proven **RED** against the pre-change
+source, reproducing the defect verbatim (*"create with no ingest = 201, want
+503"*, body carrying a `stream_key`). user on **Node 24.4.1**: `tsc --noEmit`
+clean, `npm run lint` 0 errors (2 pre-existing warnings), `lint:icons` pass,
+`npm test` **252 files / 2507 tests passed** — and the Node 25 trap reproduced
+again on the way there (82 tests across 7 files, `localStorage.clear is not a
+function`, on `origin/main` with no changes). No script or compose change in this
+repo, so no `bash -n` / shellcheck / prod render was required.
+
+**Unverified.** `npm run e2e` and the backed suite were not run (browser fleet +
+full backend; repo CI covers them); the mocked suite's exposure to the live gate
+was reasoned through file by file instead — only `e2e/studio.spec.ts` and
+`e2e/mobile-nav.spec.ts` assert a "Go live" control, neither mocks
+`features.live`, and the one mocked `live: false` in `studio.spec.ts` belongs to
+an upload-form test. No real RTMP publisher was involved; `LIVE_RTMP_URL` was set
+only to move the boot capability, as in the config-truth slice, and INT-01 still
+owns actual ingest. The compose change was validated by `docker compose config`
+and by a natively booted core, not by a full compose stack — Docker Hub pulls
+hang in this VM.
+
+**Also recorded, not fixed.** `POST /live/{id}/key` still hands back a fresh key
+with an empty `rtmp_url` on an instance with no ingest; it is reachable only on
+one that was wired and then unwired, and gating it would strand an operator
+mid-repair. The imports and auto-caption boot-capability 503s remain bare
+`echo.NewHTTPError`, so the scrubber still eats their operator-facing sentences —
+only live's is typed. The auth wordmark is text only and does not use the
+operator's uploaded `header_wide` / `header_square` logos the way the app header
+does. And `STORAGE_LOCAL_ROOT` was re-confirmed the hard way: a lab started with
+`LOCAL_STORAGE_ROOT` grew a `./data` directory in its working directory, exactly
+as the ADM-04 section warned.
+
+The lab was torn down — core api, the Next standalone server, the proxy, redis
+and postgres all stopped, and the postgres data directory, the redis directory,
+the media root and the built binary removed. Nothing is merged here and no
+deployment is authorized.
