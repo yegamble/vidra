@@ -1,0 +1,157 @@
+{
+ "slice": "A16 ruling applied — watched-word queue snapshots and triage; live rail honours mutes",
+ "date": "2026-09-06",
+ "register_row": "ADM-02 (unchanged; this applies rulings recorded under it, it does not re-flip it)",
+ "rulings_applied": {
+  "1_snapshot": "The match excerpt is a SNAPSHOT written at flag time, not a live join. matched_text + matched_term + match_offset/match_length (in RUNES) + snapshot_backfilled. An edit that removes the term keeps the old match and its snapshot; an edit that introduces a NEW term creates a new match with its own snapshot.",
+  "2_triage": "POST /admin/watched-word-matches/{id}/resolve with {status: resolved|dismissed, note}. One verb with an outcome, shaped like POST /admin/reports/{id}/resolve. The queue lists open by default with ?status=open|resolved|dismissed|all.",
+  "3_cascade": "SPLIT DECISION. Deleting a WORD now KEEPS its matches (watched_word_id FK relaxed to ON DELETE SET NULL; term reads back from the snapshot; term_active=false). Deleting the COMMENT or VIDEO still cascades — see cascade_decision below for why that one could not be closed.",
+  "4_live_rail": "GET /live threads an optional viewer and carries the same two NOT EXISTS clauses ListPublicVideosSorted / ListPublicVideosByChannel use."
+ },
+ "cascade_decision": {
+  "kept": "watched_word_id -> ON DELETE SET NULL. Release N-1 INNER JOINs watched_words in ListWatchedWordMatches, so a word-less match is simply invisible to it rather than unscannable — no one-release compat break.",
+  "not_closed": "comment_id / video_id keep ON DELETE CASCADE.",
+  "why": "Release N-1's ListWatchedWordMatches projects COALESCE(m.video_id, c.video_id)::uuid and COALESCE(cu.username, vu.username)::text as NOT-NULL columns (sqlcgen ListWatchedWordMatchesRow.VideoID is uuid.UUID and .AuthorUsername is string). Making either target id nullable means the first deleted target produces a row N-1 cannot scan, and its whole queue endpoint fails — a one-release schema-compat break, which this repo's rollback policy (and scripts/migrate-lint.sh) exists to prevent. Recorded as a gap rather than widened.",
+  "consequence": "target_status has TWO values, present and edited_away. 'deleted' is not representable: the row leaves with its target.",
+  "measured": "In the lab, deleting the flagged comment took its 2 matches with it (2 -> 0). In the store integration test the same assertion is made explicitly, so the cascade is a pinned behaviour rather than an assumption."
+ },
+ "prs": {
+  "vidra-core": {
+   "number": 178,
+   "url": "https://github.com/yegamble/vidra-core/pull/178",
+   "title": "[claude] A16 ruling: watched-word match snapshots and triage; live rail honours mutes",
+   "migration": "0132_watched_word_match_snapshots (.up.sql + .down.sql)",
+   "schema": "131 -> 132",
+   "openapi_change": true,
+   "openapi_delta": "ADDITIVE. New path POST /api/v1/admin/watched-word-matches/{id}/resolve with ResolveWatchedWordMatchRequest; new ?status parameter on listWatchedWordMatches (default open); WatchedWordMatch gains matched_text, match_offset, match_length, snapshot_backfilled, term_active, target_status, status, moderator_note, resolved_at, resolved_by_username. No route removed or reshaped; comment_body/video_title/author_username unchanged."
+  },
+  "vidra-user": {
+   "number": 175,
+   "url": "https://github.com/yegamble/vidra-user/pull/175",
+   "title": "[claude] A16 ruling: watched-word queue shows the flag-time snapshot and can be triaged",
+   "contract_dependency": "core#178 — contract-ci is RED here until core merges, because lib/api/generated.ts is regenerated from core's main, which does not yet carry ResolveWatchedWordMatchRequest, matched_text, target_status or ?status"
+  },
+  "vidra-search": "not modified and not stood up; nothing in this slice reaches it",
+  "delivery_order": "core#178 -> user#175 -> this evidence PR"
+ },
+ "migration_0132": {
+  "columns_added": [
+   "matched_text TEXT NOT NULL DEFAULT ''",
+   "matched_term TEXT NOT NULL DEFAULT ''",
+   "match_offset INTEGER NOT NULL DEFAULT -1",
+   "match_length INTEGER NOT NULL DEFAULT 0",
+   "snapshot_backfilled BOOLEAN NOT NULL DEFAULT false",
+   "status TEXT NOT NULL DEFAULT 'open' (CHECK open|resolved|dismissed)",
+   "moderator_note TEXT NOT NULL DEFAULT ''",
+   "resolved_by UUID REFERENCES users(id) ON DELETE SET NULL",
+   "resolved_at TIMESTAMPTZ"
+  ],
+  "fk_change": "watched_word_matches_watched_word_id_fkey dropped and re-added with ON DELETE SET NULL, and watched_word_id made nullable. migrate-lint allows the drop because the SAME constraint name is re-added in the same file (the widen-a-CHECK idiom); relaxing NOT NULL is explicitly permitted.",
+  "index_added": "watched_word_matches_status_created_idx (status, created_at DESC) — the status filter is part of the predicate now, not a display option",
+  "offset_units": "RUNES (code points), not bytes: the review UI highlights by slicing the string and a byte offset would split a multi-byte character. -1 means 'not located' and is what every backfilled row carries.",
+  "backfill_proved": "Seeded two PRE-0132 match rows (one comment, one video) against a live comment/video on the pre-0132 schema, then applied 0132: matched_text came back as the live comment body and as title||E'\\n'||description respectively, matched_term as the word, match_offset -1, snapshot_backfilled TRUE, status 'open'. One of the seeded rows had already had its term edited away, and its backfilled quote is therefore the CLEAN body — which is exactly why the marker exists.",
+  "down_migration": "applied BY HAND (the api binary ships only migrate up/version/force). After the down, watched_word_matches was back to its 0030/0049 shape — 5 columns (id, watched_word_id, comment_id, video_id, created_at) and all three FKs at confdeltype='c' (CASCADE). The down deletes the matches whose word is already gone, because they are exactly the rows the up made representable."
+ },
+ "verb_shape": {
+  "route": "POST /api/v1/admin/watched-word-matches/{id}/resolve",
+  "body": "{\"status\": \"resolved\" | \"dismissed\", \"note\": \"<= 2000 chars, optional\"}",
+  "precedent": "POST /admin/reports/{id}/resolve — one verb carrying the outcome, note on the domain row",
+  "idempotence": "204 on a repeat, NOT 409. It matches ResolveReport exactly: the UPDATE overwrites the outcome and the note and still reports one row affected, so a retried request is never an error. Measured: first resolve 204, immediate re-triage to dismissed 204, and the second note is what reads back.",
+  "codes": {
+   "moderator_resolve": 204,
+   "repeat_triage": 204,
+   "unknown_id_as_admin": 404,
+   "bogus_outcome": 422,
+   "ordinary_user": 403,
+   "anonymous": 401,
+   "bogus_status_filter_on_list": 400
+  },
+  "note_location": "watched_word_matches.moderator_note. NEVER audit_log: audit.normalizeEvent validates metadata against a closed key allowlist with a 256-byte cap and would invalidate the whole event, deleting the audit row rather than enriching it (the 0130 / video_rejections lesson).",
+  "audit": {
+   "action": "moderation.watched_word_match.resolve",
+   "envelope": "resource_type=watched_word_match, resource_id=<match id>, metadata {outcome, reason_provided}",
+   "measured_rows": "3 — two success (outcome resolved, then dismissed; reason_provided true) and one failure for the unknown id",
+   "prose_sweep": "SELECT count(*) FROM audit_log WHERE audit_log::text ILIKE '%on reflection%' OR '%removed the comment%' => 0 rows"
+  }
+ },
+ "lab": {
+  "topology": "one origin — a pipe-only node proxy on 127.0.0.1:3100 in front of `node .next/standalone/server.js` on :3000 and vidra-core on :8088 — because vidra_refresh is SameSite=Lax with Path=/api/v1/auth",
+  "postgres": "native PostgreSQL 16.15 on a private port (55432), fresh cluster; two databases — one for the tagged integration lane, one (vidralab) created fresh at schema 132 for the walkthrough",
+  "redis": "native redis on a private port (56379)",
+  "frontend": "production `next build` served from .next/standalone with .next/static and public copied in; NEXT_PUBLIC_API_BASE_URL baked to the proxy origin, INTERNAL_API_BASE_URL to core's real port",
+  "browser": "real Chromium against that origin, with a hard reload between states",
+  "rate_limits": "shipped defaults, never raised",
+  "actors": "mona (owner/admin, via the one-time setup token), dana (promoted to moderator), cleo (ordinary user, the comment author), anonymous",
+  "teardown": "core, the Next server, the proxy, redis and postgres all stopped; the data directory and the lab directory removed; the frontend .next build output deleted. No lab artefact is committed."
+ },
+ "sc1_snapshot": {
+  "reproduced_first": "cleo posted 'I want pineapple on it' -> one match, matched_text = the same string, match_offset 7, match_length 9, target_status present, snapshot_backfilled false.",
+  "the_defect_inverted": "cleo edited the comment to 'never mind, anchovy instead'. The pineapple match SURVIVED with matched_text still 'I want pineapple on it' while comment_body (the live join) now reads 'never mind, anchovy instead' and target_status flipped to edited_away. Before this slice the queue rendered the clean body under the pineapple flag.",
+  "new_term_gets_its_own_snapshot": "the same edit raised a SECOND match for 'anchovy' whose matched_text is the edited body and whose target_status is present",
+  "video_arm_identical": "a video created with description 'pure pineapple inside' snapshotted 'my mixtape\\npure pineapple inside' (the flagger's own title + \\n + description join, offset 16); editing the description to 'wholesome cooking' left the snapshot untouched and flipped target_status to edited_away",
+  "word_deletion": "dana deleted the 'pineapple' term. Both of its matches SURVIVED, term_active=false, and 'pineapple' still reads back from matched_term. Before 0132 the FK cascaded and the review history went with the term.",
+  "red_proof": "with ListWatchedWordMatches' matched_text projection reverted to the live COALESCE(c.body, v.title||E'\\n'||v.description) join and sqlc regenerated, both real-PostgreSQL snapshot tests fail on exactly the defect ('the original snapshot moved to \"never mind, anchovy...\"; it must stay \"I want pineapple...\"'). With the watched_word FK put back to ON DELETE CASCADE on the live database, the word-survival assertion fails ('after deleting the word, matches = 1, want still 2')."
+ },
+ "sc2_triage": {
+  "default_filter": "the queue lists OPEN by default, server-side. Measured: with one dismissed and two open rows, the default list returned total 2 and neither was the dismissed one; ?status=dismissed returned total 1 with the note and dana as resolver; ?status=all returned total 2 (of the then-existing rows) and ?status=bogus is 400 — not a silent collapse to 'all'.",
+  "list_and_count_agree": "CountWatchedWordMatches carries the SAME status filter as the list, asserted together in the store test on every read — a total counting rows the page cannot serve would promise a page that does not exist.",
+  "ui": "WatchedWordMatchesView gained Open/Resolved/Dismissed/All chips (Open selected), a per-row note field and Resolve / Dismiss, and renders the snapshot with the term highlighted. A triaged row shows its state badge, the note and 'Resolved by dana', and no action controls.",
+  "browser_triage": "signed in as dana, typed 'hid the comment' into the anchovy row's note and pressed Resolve: the row left the Open queue (2 flagged items -> 1) and appeared under Resolved reading 'Note: hid the comment' / 'Resolved by dana 6s ago'. Core logged the POST as 204.",
+  "lab_artefact": "the browser's network panel reported 503 for that POST while core logged 204 and the client took the success path (the row moved and the note read back on the next GET). That is the throwaway lab proxy mishandling a 204, not the product — recorded rather than hidden.",
+  "fakes_mirrored": "watchwordFakeRepo now STORES the 0132 columns and PROJECTS at read time (live excerpt + target_status from the live comment/video), instead of echoing the snapshot back. A fake that echoed could not tell a snapshot from a live join, which is the whole defect."
+ },
+ "sc3_context": {
+  "row_carries": "the term (from the snapshot, so it survives the term's deletion), the type badge, the target's author/owner, the video link and title, when it was flagged, the snapshot with the hit located, snapshot_backfilled, term_active, target_status, and the triage state with its note and actor",
+  "gap": "once the target is DELETED the row is gone with it (see cascade_decision), so the author of a deleted target is moot. The flagger does not snapshot the author username; while the target exists the live JOIN supplies it."
+ },
+ "sc4_live_rail": {
+  "before": "ListLivePublic(ctx, limit, offset) took no viewer at all, so a muted or blocked account's live stream stayed on the muter's home rail while the feed, search, subscriptions and the channel page had all dropped them (a code-read finding from the mute-scope slice; that lab had no live stream)",
+  "after": "ListLivePublicStreams and CountLivePublicStreams take an optional viewer_id and carry the same two NOT EXISTS clauses on ch.owner_id; the handler is already optionalAuth and passes (uuid.Nil,false) for an anonymous caller, so anonymous is unchanged",
+  "real_pg": "TestLivePublicRailRespectsMutesAndBlocksOnRealPG. A live stream cannot be created without the RTMP publish path, so the row is INSERTed directly at the state ingest would leave it in (state='live', privacy='public', started_at set) — stated rather than implied. Every surface under test is a list predicate over live_streams + channels + the mute tables and never touches media.",
+  "shape_pinned": "each relationship applied and then LIFTED, with an anonymous control read at the same instant, the count asserted with the rows, and being blocked BY the streamer asserted NOT to hide them (the clause is one-directional, keyed on the viewer)",
+  "http": "TestListLivePublicStreamsHonoursMutes drives the real ingest hook and the real mute/block routes: ada's rail 1 -> 0 with a mute, 0 with a block, 1 again after each is lifted, while the anonymous rail and bob's own rail stay at 1 throughout",
+  "red_proof": "with the two NOT EXISTS clauses replaced in the SQL and sqlc regenerated, the real-PostgreSQL test fails on both relationships and on the count. With the fake's mirror removed, the httpapi test fails on both. The fake mirror was in fact missing on the first run, and the test caught it.",
+  "not_done_in_browser": "the lab had no live stream (no RTMP ingest was stood up for the walkthrough), so the rail was not exercised in Chromium. Proven at the SQL and HTTP layers only."
+ },
+ "gates": {
+  "vidra-core": {
+   "make ci": "PASSED, exit 0 (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race) — 79 packages ok, 0 failures",
+   "migrate-lint": "132 up migrations clean",
+   "go vet -tags=integration ./...": "clean",
+   "integration": "go test -tags=integration ./internal/store/... ./internal/federation/... PASSED against native PostgreSQL 16 at schema 132 on a scratch database",
+   "named_regressions": "19 named A12/A16 test functions pass beside the new ones, including TestFollowCreatesNotificationForOwner, TestCommentNotificationRespectsMutesAndBlocks, TestReportVideoAndModerate, TestReportCommentAndUnknown, TestReportAccountAndModerate, TestReportValidationAndAuth, TestAdminUserManagement, TestDeleteAccountFlow, TestClaimOwnerEndpointCreatesAdmin, TestFollowFlowAndFollowerCount, TestFollowNotificationBellEndpoint, TestWatchedWordsFlow, TestWatchedWordsAuth, TestWatchedWordMatchesFlow, TestWatchedWordVideoMatchesFlow, TestListLivePublicStreams, TestListLivePublicStreamsUngatedRead and TestQuarantineRejectNotifiesOwner"
+  },
+  "vidra-user": {
+   "npx tsc --noEmit": "clean",
+   "npm run lint": "0 errors, 2 warnings (both pre-existing on main)",
+   "npm run lint:icons": "pass",
+   "npm run test": "2406 passed / 82 failed — the SAME 82 fail on clean origin/main in this environment (baseline measured by stashing: 82 failed / 2390 passed). Seven files die under local Node 25.9.0 rather than the repo's Node 24. Repo CI is the authority for those.",
+   "next build": "pass (production build, served from .next/standalone for the walkthrough)",
+   "new_tests": "16 (14 in components/WatchedWordMatchesView.test.tsx, 2 in lib/api/endpoints.test.ts). No existing spec was edited.",
+   "red_proof": "with the snapshot rendering reverted to the live body and the divergence notice removed, 6 of the 14 new component tests fail — including the one asserting the queue does NOT render 'never mind, plain cheese' — while the pure splitSnapshot cases and the backfilled / term-removed cases keep passing"
+  },
+  "meta": "compose render NOT re-run — no compose, script or env file changed"
+ },
+ "unverified": [
+  "the frontend e2e and e2e-backed suites — vidra-user's AGENTS.md forbids running them locally",
+  "GET /live in a browser: the lab stood up no RTMP ingest, so the rail was proven at the SQL and HTTP layers only",
+  "the backfilled-snapshot marker in Chromium: the walkthrough database was created fresh at schema 132, so it held no backfilled row. The backfill itself was measured in SQL on the other database, and its rendering by component test.",
+  "an ordinary user's browser view of the queue: the RoleGate was exercised in Chromium for an ANONYMOUS visitor ('Moderators only', nothing fetched); cleo's 403 was measured at the API only",
+  "anything remote or federated — A29 owns it"
+ ],
+ "findings_recorded_not_fixed": [
+  "Deleting a flagged comment or video still destroys its match history (cascade_decision above). The narrower half — deleting the WORD — is closed.",
+  "The flagger does not snapshot the target's AUTHOR, so the author is only resolvable while the target row exists. Moot today because the row cascades with the target, but it is the thing that would have to be added first if the cascade is ever closed.",
+  "match_offset is -1 for every backfilled row, so those rows are highlighted by a case-insensitive fallback search rather than an authoritative position. Where the term has since been edited away, the fallback finds nothing and the row is shown unhighlighted, which is the safe direction.",
+  "There is still no bulk triage: no endpoint accepts an array and the UI has no selection state. An instance with a noisy term triages one row at a time.",
+  "A triaged match cannot be reopened. The verb only moves open -> resolved/dismissed and between the two terminal states; nothing sets it back to open.",
+  "The queue still has no prior-action history per author, the gap slice 2 recorded for the report queue and slice 3 for this one."
+ ],
+ "for_a17": {
+  "audit_dashboard": "moderation.watched_word_match.resolve is a NEW audit action with resource_type watched_word_match. Any audit/health dashboard enumerating actions needs it, and the failure variant (unknown id) is emitted too.",
+  "audit_log_still_cannot_carry_prose": "the closed metadata allowlist with its 256-byte cap is unchanged; every moderator's words in this slice live on the domain row, as 0130 established with video_rejections. A17 must not try to surface moderator prose out of the ledger.",
+  "runtime_config": "no new setting, no feature gate, no registry row — the triage verbs are unconditional staff routes",
+  "schema": "the deployed schema moves 131 -> 132. Deploy ordering is unchanged (migrate as its own exit-code-gated step); 0132 is additive plus one FK relaxation and needs no backfill job — the backfill runs inside the migration and is O(rows in watched_word_matches).",
+  "gc": "nothing in this slice creates or references media objects, so media GC is untouched"
+ }
+}

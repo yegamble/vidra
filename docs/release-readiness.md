@@ -5511,3 +5511,204 @@ core's branch spec and never hand-edited. Nothing is merged here and no
 deployment is authorized. The lab was torn down — postgres, redis, vidra-core,
 vidra-search, the Next server and the proxy all stopped, the data directory
 removed — and no lab artefact is committed.
+
+## A16 ruling applied — watched-word queue snapshots and triage; live rail mutes — 2026-09-06
+
+**No register row changes.** A16 closed this morning. Its last slice recorded
+two defects in the watched-word review queue — **the excerpt was a live join,
+not a snapshot**, and **there was no resolve and no dismiss** — and the
+follow-up slice recorded one more, from a code read it could not measure:
+**`GET /live`, the public "Live now" rail, takes no viewer at all**, so a muted
+or blocked account's stream stays on the muter's rail while every other public
+list has dropped it. The owner ruled all three fixed and this applies the
+rulings. Two PRs: [core #178](https://github.com/yegamble/vidra-core/pull/178)
+and [user #175](https://github.com/yegamble/vidra-user/pull/175). **One
+migration** ([0132](../vidra-core/migrations/0132_watched_word_match_snapshots.up.sql),
+schema 131 → 132, with its `.down.sql`); **one additive OpenAPI change**, which
+sets the delivery order. [Sanitized evidence](evidence/a16-word-matches.json).
+
+**The defect, reproduced before it was closed and then inverted.** cleo posted
+*"I want pineapple on it"* on a lab with `pineapple` watched; the queue flagged
+it. cleo then edited the comment to *"never mind, anchovy instead"*. On the old
+shape that left the queue rendering a row badged `pineapple / Comment / by cleo`
+above a body with no term in it — a moderator could not see what was flagged and
+an author could edit the evidence away while the flag stood. On the new one the
+match keeps `matched_text: "I want pineapple on it"` while `comment_body`, still
+the live join, reads the edited text and **`target_status` flips to
+`edited_away`**. The same edit raised a **second** match for `anchovy` with its
+own snapshot and `target_status: present`, which is the other half of the rule:
+a term already recorded hits the `ON CONFLICT` and keeps its ORIGINAL snapshot;
+a term the edit introduces gets a new row. **The video arm is treated
+identically** and was measured separately — a description carrying the term
+snapshotted `"my mixtape\npure pineapple inside"`, the flagger's own
+`title + "\n" + description` join, and editing the description away left the
+snapshot untouched.
+
+**What the snapshot carries, and one decision inside it.** `matched_text`, plus
+`matched_term` (so the term survives its word being deleted), plus
+`match_offset`/`match_length` — **in runes, not bytes**, because the review UI
+highlights by slicing the string and a byte offset would cut a multi-byte
+character in half. `-1` means *not located* and is the honest answer rather than
+a guess: Postgres `lower()` and Go's `ToLower` need not agree on every
+locale-sensitive rune, and every **backfilled** row carries it. That marker,
+`snapshot_backfilled`, is the point of the backfill: it was proved by seeding two
+pre-0132 rows and running the migration, and one of them had already had its term
+edited away, so its backfilled quote **is** the clean body. A backfilled quote is
+the text as it reads today, which is exactly the thing the defect says cannot be
+trusted, and it must never be mistaken for a flag-time capture.
+
+**The cascade ruling is a split decision, and the half not taken has a
+mechanism.** Deleting a **word** used to delete its whole review history, so a
+moderator pruning the term list silently discarded the record of everything it
+had caught. That is closed: the FK is now `ON DELETE SET NULL`, the match
+survives, the term reads back from the snapshot and the row reports
+`term_active: false` — measured, both matches surviving the deletion of
+`pineapple`. Deleting the **comment or video** still cascades, **deliberately**.
+Making those ids nullable breaks one-release schema compat outright: release
+N-1's `ListWatchedWordMatches` projects `COALESCE(m.video_id, c.video_id)::uuid`
+and `COALESCE(cu.username, vu.username)::text` as NOT-NULL columns —
+`ListWatchedWordMatchesRow.VideoID` is a `uuid.UUID` and `.AuthorUsername` a
+`string` — so the first deleted target would make N-1's whole queue endpoint fail
+to scan, which is precisely what the rollback policy behind `migrate-lint`
+exists to prevent. So `target_status` has **two** values, `present` and
+`edited_away`; `deleted` is not representable, because the row leaves with its
+target. The lab confirms it (deleting the flagged comment took its 2 matches to
+0) and the store test asserts it, so the cascade is a pinned behaviour rather
+than an assumption.
+
+**Triage, shaped like the report queue rather than invented.**
+`POST /admin/watched-word-matches/{id}/resolve` with
+`{"status":"resolved"|"dismissed","note":…}` — **one verb carrying the outcome**,
+exactly `POST /admin/reports/{id}/resolve`'s shape, and **idempotent the same
+way: a repeat is 204, not 409**, because the UPDATE overwrites and still reports
+one row affected, so a retry is never an error. Measured once each: moderator
+resolve **204**, immediate re-triage **204** (and the second note is what reads
+back), unknown id **404**, bogus outcome **422**, ordinary user **403**,
+anonymous **401**, and `?status=bogus` on the list **400** rather than a silent
+collapse to "all". The queue lists **open by default**, server-side, with
+`?status=open|resolved|dismissed|all`; the count carries the same filter as the
+page, asserted together on every read, because a total counting rows the list
+filters out promises a page it cannot serve. **The note lives on the domain
+row**: `audit.normalizeEvent` validates metadata against a closed key allowlist
+with a 256-byte cap and would delete the audit row rather than enrich it — the
+`0130` lesson — so the ledger carries `outcome` and `reason_provided` only. Three
+`moderation.watched_word_match.resolve` rows were written (two success, one
+failure for the unknown id) and a sweep of `audit_log` for the moderator's actual
+words returns **zero**.
+
+**In real Chromium, on the production build behind one origin.** Signed in as
+dana the moderator, `/moderation/watched-word-matches` reads **"2 flagged items"**
+under Open / Resolved / Dismissed / All chips with **Open** selected. The video
+row is badged `pineapple · Video · Term removed · by mona · my mixtape`, quotes
+the snapshot with **pineapple** highlighted, and says *"The live video no longer
+contains this term — it was edited after the flag. Open the video to see it as it
+reads now."* Typing a note into the anchovy row and pressing **Resolve** took the
+queue to "1 flagged item" and the row reappeared under **Resolved** reading
+*"Note: hid the comment"* and *"Resolved by dana"* — core logged the POST as
+**204**. The Dismissed tab is the screenshot worth keeping: `pineapple · Comment
+· Dismissed · Term removed · by cleo`, quoting **"I want pineapple on it"** while
+the live comment reads *"never mind, anchovy instead"*, and it survives a **hard
+reload** unchanged, because the server hid nothing and the snapshot is a column.
+An anonymous visitor gets the shared **"Moderators only"** gate and nothing
+fetches.
+
+**The live rail, closed at the layer that can hold it.**
+`ListLivePublicStreams` and `CountLivePublicStreams` now take an optional
+`viewer_id` and carry the same two `NOT EXISTS` clauses `ListPublicVideosSorted`
+and `ListPublicVideosByChannel` do; the handler was already `optionalAuth`, so an
+anonymous caller passes a NULL viewer and nothing changes for them. **A live
+stream cannot be created without the RTMP publish path**, so the real-PostgreSQL
+test inserts the row at the state ingest would leave it in (`state='live'`,
+`privacy='public'`, `started_at` set) — stated rather than implied; every surface
+under test is a list predicate over `live_streams` + `channels` + the mute tables
+and never touches media. Each relationship is applied and then **lifted**, with an
+anonymous control read at the same instant and the count asserted with the rows,
+and being blocked **by** the streamer is asserted *not* to hide them, which pins
+the clause's shape rather than its presence. The HTTP test drives the real ingest
+hook and the real mute/block routes: ada's rail **1 → 0** with a mute, **0** with
+a block, **1** again after each is lifted, while the anonymous rail and bob's own
+rail stay at 1 throughout.
+
+**Failed first, in five places.** With `matched_text` reverted to the live
+`COALESCE(c.body, v.title || E'\n' || v.description)` join and sqlc regenerated,
+both real-PostgreSQL snapshot tests fail on exactly the defect — *"the original
+snapshot moved to \"never mind, anchovy…\"; it must stay \"I want pineapple…\""*.
+With the `watched_word_id` FK put back to `ON DELETE CASCADE` on the live
+database, the word-survival assertion fails. With the live rail's two `NOT
+EXISTS` clauses removed, the real-PostgreSQL test fails on both relationships
+**and** on the count. With the fake's mirror removed, the httpapi test fails on
+both — and it did, on the first run, because `liveFakeRepo` had not yet been
+wired to the shared mute and block fakes; the test caught it, which is the
+fake-fidelity lesson four A16 slices paid for. And with the frontend's snapshot
+rendering reverted to the live body, **6 of the 14 new component tests fail**
+while the pure `splitSnapshot` cases and the backfilled / term-removed cases keep
+passing. `watchwordFakeRepo` was rewritten to **store** the 0132 columns and
+**project** at read time, because a fake that echoed the snapshot back as the
+live body could not tell a snapshot from a live join.
+
+**Gates.** vidra-core `make ci` **passed**, exit 0 (fmt-check, vet, migrate-lint
+— 132 up migrations clean, openapi-verify, sqlc-verify, test-race; **79 packages
+ok, 0 failures**); `go vet -tags=integration ./...` clean; `go test
+-tags=integration ./internal/store/... ./internal/federation/...` **passed**
+against native PostgreSQL 16 at schema 132 on a scratch database. **19 named
+A12/A16 test functions pass** beside the new ones, including
+`TestWatchedWordMatchesFlow`, `TestWatchedWordVideoMatchesFlow`,
+`TestListLivePublicStreams`, `TestListLivePublicStreamsUngatedRead`,
+`TestCommentNotificationRespectsMutesAndBlocks` and `TestReportVideoAndModerate`.
+The `.down.sql` was applied **by hand** — the api binary ships only
+`migrate up`/`version`/`force` — and left the table back at its 0030/0049 shape,
+five columns with all three FKs at CASCADE. vidra-user: `npx tsc --noEmit` clean,
+`npm run lint` 0 errors (2 warnings, both pre-existing on main), `npm run
+lint:icons` pass, production `next build` pass, `npm run test` **2,406 passed /
+82 failed — and the same 82 fail on clean `origin/main` in this environment**
+(baseline measured by stashing: 82 failed / 2,390 passed), seven files dying
+under local Node 25.9.0 rather than the repo's Node 24; repo CI is the authority
+for those. All 16 new frontend tests live in one new file and two added cases; no
+existing spec was edited. No new viewer-scoped client read was added, so
+`lib/use-settled-session.ts` needed no new caller. The meta compose render was
+not re-run: no compose, script or env file changed. **Unverified:** the frontend
+e2e and e2e-backed suites, which vidra-user's AGENTS.md forbids running locally;
+`GET /live` in a browser, since the lab stood up no RTMP ingest; the backfilled
+marker in Chromium, since the walkthrough database was created fresh at schema
+132 and held no backfilled row (the backfill itself was measured in SQL, its
+rendering by component test); an ordinary user's browser view of the queue, where
+only the anonymous gate was exercised in Chromium and cleo's 403 measured at the
+API; and anything remote or federated, which **A29** owns.
+
+**One lab artefact worth keeping.** The browser's network panel reported **503**
+for the resolve POST while core logged **204** and the client took the success
+path — the row left the Open queue and its note read back on the next GET. That
+is the throwaway one-origin proxy mishandling a body-less 204, not the product,
+and it is recorded rather than quietly dropped.
+
+**Findings recorded, not fixed.** (1) Deleting a flagged **comment or video**
+still destroys its match history, for the compat reason above; the word half is
+closed. (2) The flagger does not snapshot the target's **author**, so the author
+is only resolvable while the target row exists — moot today, and the first thing
+that would have to be added if the cascade is ever closed. (3) `match_offset` is
+`-1` on every backfilled row, so those are highlighted by a case-insensitive
+fallback search; where the term has since been edited away the fallback finds
+nothing and the row renders unhighlighted, which is the safe direction. (4)
+There is still **no bulk triage** — no endpoint takes an array, the UI has no
+selection state. (5) A triaged match **cannot be reopened**: the verb moves
+open → resolved/dismissed and between the two terminal states, and nothing sets
+it back. (6) The queue still carries no prior-action history per author, the gap
+slice 2 recorded for reports and slice 3 for this queue.
+
+**For A17.** `moderation.watched_word_match.resolve` is a **new audit action**
+with `resource_type: watched_word_match`, and its failure variant is emitted too
+— any audit or health dashboard enumerating actions needs both. `audit_log` still
+cannot carry prose, so no dashboard should try to surface a moderator's words out
+of the ledger; they live on the domain row, as `0130` established. No new
+setting, gate or registry row: the triage verbs are unconditional staff routes.
+The deployed schema moves **131 → 132**; `0132` is additive plus one FK
+relaxation, its backfill runs inside the migration, and deploy ordering is
+unchanged.
+
+**Delivery order: core #178 first, then user #175, then this evidence PR.** The
+frontend's client is regenerated from core's spec, so `contract-ci` on the user
+PR is **expected RED until core merges** — `lib/api/generated.ts` is never
+hand-edited. Nothing is merged here and no deployment is authorized. The lab was
+torn down — postgres, redis, vidra-core, the Next server and the proxy all
+stopped, the data directory and the frontend build output removed — and no lab
+artefact is committed.
