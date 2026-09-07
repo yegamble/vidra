@@ -1,0 +1,273 @@
+{
+  "item": "A38",
+  "register_row": "REC-03",
+  "verdict": "UNVERIFIED — the deploy floor holds, the rollback floor does not",
+  "date": "2026-09-07",
+  "lab": {
+    "shape": "disposable compose project `-p a38` on one arm64 macOS host, non-default ports (api 18080, frontend 13000), Caddy on 80/443 (fixed by the overlay), VIDRA_TLS_MODE=plain-http, STORAGE_BACKEND=local, bundled Postgres 18 + Redis 8",
+    "origin": "http://127.0.0.1 through the real Caddy edge (single-origin path routing), so every browser check crossed the deployed reverse proxy",
+    "meta_checkout": "a throwaway clone of this repo with its own nested vidra-core / vidra-search / vidra-user clones, so deploy.sh's checkout pinning (AGENTS.md rule 3) was real and the architect's checkouts were never touched",
+    "previous_release": "ghcr.io/yegamble/vidra-{core,user,search}:v0.6.2 (amd64, run under emulation), core commit b2d12a2, core schema 0125, search schema 0016",
+    "new_release": "built from main (core 5703193, search bf94d30, user 6907d50) and tagged v0.6.3-a38rehearsal; core schema 0135, search schema 0018",
+    "registry": "a local OCI registry on 127.0.0.1:5001 holding all six image refs; every prod service carries pull_policy: always and deploy.sh step 2 is a bare `pull`, so a locally built image is unreachable without a configurable registry host (see the one code change below)",
+    "images_not_release_built": "the rehearsal images were built with a plain `docker build`, so GET /version reports 0.1.0/unknown on them; deploy/release.sh passes the version build args"
+  },
+  "seed": {
+    "users": 4,
+    "roles": ["owner (a38owner, is_owner)", "admin (a38admin)", "TOTP-enrolled (a38totp)", "plain viewer (a38viewer)"],
+    "channels": 3,
+    "videos": 3,
+    "video_privacy": ["public", "public", "private"],
+    "transcode_jobs_done": 3,
+    "video_renditions": 3,
+    "media_files_on_disk": 57,
+    "comments": 2,
+    "playlists": 1,
+    "playlist_items": 2,
+    "follows": 3,
+    "totp_enrollments": 1,
+    "mfa_recovery_codes": 10,
+    "instance_settings_overrides": 2,
+    "search_documents": 3,
+    "fixture_media_sha256": "dfd3614b65432f28c5964b4de96346bf774d78d5022b36e7c75a7d364fafdabe",
+    "fixture_media_bytes": 81478
+  },
+  "fingerprints": {
+    "note": "md5 over ordered content, recaptured at every checkpoint; identical everywhere below unless stated",
+    "users": "fd046b2e8f627be94a8e4a46615c0c82",
+    "videos": "45a6cb0d3823063438ab651e3f5ff064",
+    "comments": "d6b643ec6319f71d829d5a2fd234dc8e",
+    "channels": "dafdd900fbbaeb06dfd83046a5fdf0f2",
+    "media_tree": "0f4618a7696a53dc15767c98fee9dcc7"
+  },
+  "runs": [
+    {
+      "n": 1,
+      "script": "deploy/deploy.sh",
+      "what": "first deploy of v0.6.2 on an empty host",
+      "exit": 0,
+      "seconds": 26,
+      "steps": "0/6 pre-flight, 1/6 no dump (first deploy), 2/6 pull, 3/6 core 0->0125 + search 0->0016, 4/6 up -d, 5/6 caddy reload attempt 1, 6/6 api /readyz + frontend + edge all OK"
+    },
+    {
+      "n": 2,
+      "script": "deploy/deploy.sh",
+      "what": "SC1 upgrade v0.6.2 -> v0.6.3-a38rehearsal with real data",
+      "exit": 0,
+      "seconds": 14,
+      "core_ledger": "125|false -> 135|false",
+      "search_ledger": "16|false -> 18|false",
+      "predeploy_dump": "pre-deploy-2026-09-07T195216.dump.gz (56K, pg_restore -l verified before the deploy continued)",
+      "data_after": "every count and every fingerprint identical to the pre-upgrade census; only the two ledgers moved"
+    },
+    {
+      "n": 3,
+      "script": "deploy/deploy.sh",
+      "what": "SC1 rule-3 guard: git tag re-pointed at v0.6.2's tree while the image stayed the new release",
+      "exit": 1,
+      "seconds": 3,
+      "died_at": "3/6 migrations, after the migrator ran",
+      "message": "schema_migrations version mismatch: expected 125, found 135. The stack has NOT been restarted.",
+      "state_after": "previous release still serving (api/frontend/search up, /version = v0.6.2); the schema HAD already advanced to 135 — the guard blocks the restart onto a mismatched pairing, not the migration"
+    },
+    {
+      "n": 4,
+      "script": "deploy/rollback.sh v0.6.2",
+      "what": "SC3 app-only rollback onto schema 135 / search 18",
+      "exit": 1,
+      "seconds": 5,
+      "died_at": "up -d, on the migrate + search-migrate one-shots",
+      "core_error": "dbmigrate: apply migrations: no migration found for version 135: read down for version 135 .: file does not exist",
+      "search_error": "dbmigrate: apply migrations: no migration found for version 18: read down for version 18 .: file does not exist",
+      "state_after": "SITE DOWN — api, search and frontend gone; only caddy, postgres and redis left running. rollback.sh's own 'THE ROLLBACK TARGET IS ALSO UNHEALTHY' guidance is unreachable: `up -d` is not `|| die`-guarded, so set -e kills the script before the probes and the trailer"
+    },
+    {
+      "n": 5,
+      "script": "docker compose up -d --no-build --no-deps api search frontend",
+      "what": "SC3 isolation: the v0.6.2 BINARIES against schema 135 / search 18, bypassing the one-shots",
+      "exit": 0,
+      "result": "/readyz 200 in <1s; login owner/admin/viewer 200; TOTP login 200 (password alone answers mfa_required + mfa_token, the challenge completes); HLS master 200 (475 B, has variants), variant 200, segment 200 (182130 B); search q=A38 -> 2 hits; admin users/stats/system/instance-settings 200; private video anonymous 404; refresh 200; every count and fingerprint identical. Real Chromium on the v0.6.2 frontend: readyState 4, decoding at 3.95s of 6.01s, 320x240",
+      "conclusion": "the one-release compat contract holds for the CODE. Only the migrator breaks the rollback"
+    },
+    {
+      "n": 6,
+      "script": "deploy/rollback.sh v0.6.3-a38rehearsal",
+      "what": "SC3 roll FORWARD again",
+      "exit": 0,
+      "seconds": 14,
+      "note": "the same script succeeds forward, because the new image's `migrate up` finds the ledger at its own head and is a no-op. The asymmetry is the whole defect"
+    },
+    {
+      "n": 7,
+      "script": "deploy/restore.sh backups/pre-deploy-2026-09-07T195216.dump.gz",
+      "what": "SC2 setup: return to the v0.6.2 baseline (tags pinned back to v0.6.2 first)",
+      "exit": 0,
+      "seconds": 15,
+      "steps": "stop api/search/frontend, decompress, copy in, pg_restore -l validate, dropdb --force, createdb, pg_restore -j4, core migrations, search migrations, verify-blobs (every referenced object present), up -d, /readyz 200",
+      "data_after": "identical to the pre-upgrade baseline in every count, every fingerprint and both ledgers"
+    },
+    {
+      "n": 8,
+      "script": "deploy/deploy.sh",
+      "what": "SC2 injected failing migration (rehearsal-only image v0.6.3-a38badmig: 0136 succeeds, 0137 fails on ADD COLUMN NOT NULL against populated rows)",
+      "exit": 1,
+      "seconds": 3,
+      "died_at": "3/6 migrations, core",
+      "message": "CORE MIGRATION FAILED (exit 1). The stack has NOT been restarted; the previous release is still serving. See 'Migration failed mid-deploy' in deploy/README.md.",
+      "never_reached": "4/6 up -d, 5/6 caddy reload, 6/6 probes",
+      "predeploy_dump_taken_first": true,
+      "ledger_after": "schema_migrations 137 DIRTY; vidra_search_migrations untouched at 16 clean (deploy.sh gates search behind core)",
+      "schema_truth": "0136's table present with its row; 0137 left NOTHING (its table absent, its column absent) — golang-migrate ran the file as one implicit transaction, so 'dirty at 137' means the schema is at 136",
+      "previous_release_still_serving": "api/frontend/search all still on the v0.6.2 images; /readyz 200, edge / 200, /version = v0.6.2"
+    },
+    {
+      "n": 9,
+      "script": "documented recovery (deploy/README.md 'Migration failed mid-deploy')",
+      "what": "SC2 recovery — every step typed by hand, nothing automatic",
+      "steps": [
+        "run --rm migrate migrate version -> version=137 dirty=true",
+        "inspect what 0137 committed -> nothing",
+        "run --rm migrate migrate force 136 --yes-i-know -> before: 137 dirty=true / after: 136 dirty=false",
+        "fix the migration, redeploy (v0.6.3-a38fixedmig) -> deploy.sh exit 0 in 13s, ledger 137 clean"
+      ],
+      "data_after": "every count and fingerprint identical to the pre-upgrade baseline",
+      "force_without_flag": "refused: 'refusing to force schema_migrations to version 100: this rewrites the ledger WITHOUT running any migration SQL...' and the ledger was NOT changed"
+    },
+    {
+      "n": 10,
+      "script": "deploy/deploy.sh",
+      "what": "SC4 deliberately incompatible schema (rehearsal-only v0.6.3-a38destructive, 0138 renames comments.body -> comments.body_text)",
+      "exit": 0,
+      "seconds": 13,
+      "ledger_after": "138 clean",
+      "finding": "deploy.sh exited 0 with the feature broken. /readyz 200, frontend / 200, edge /healthz 200 — while GET /videos/{id}/comments answered 500. The probes are liveness, not function"
+    },
+    {
+      "n": 11,
+      "script": "docker compose up -d --no-deps api (v0.6.2)",
+      "what": "SC4: the previous release's binary against the incompatible schema",
+      "result": "/readyz 200 but GET /videos/{id}/comments 500, api log: 'ERROR: column c.body does not exist (SQLSTATE 42703)'",
+      "conclusion": "an app-only rollback is not enough — proven at the binary, not argued"
+    },
+    {
+      "n": 12,
+      "script": "deploy/rollback.sh v0.6.2",
+      "what": "SC4: rollback against the incompatible schema",
+      "exit": 1,
+      "seconds": 6,
+      "state_after": "site down again, same migrator error at version 138"
+    },
+    {
+      "n": 13,
+      "script": "deploy/restore.sh backups/pre-deploy-2026-09-07T201123.dump.gz",
+      "what": "SC4 recovery attempt A — the incompatible deploy's OWN pre-deploy dump (schema 137) with the tags already rewritten to v0.6.2 by run 12",
+      "exit": 1,
+      "seconds": 2,
+      "died_at": "'running core migrations', AFTER dropdb + createdb + pg_restore had already succeeded",
+      "error": "no migration found for version 137",
+      "state_after": "the DATA was recovered (4 users, ledger 137 clean, the rename undone) but api/search/frontend stayed stopped, verify-blobs and up -d never ran, and nothing in the output says why the site is dark"
+    },
+    {
+      "n": 14,
+      "script": "deploy/restore.sh backups/pre-deploy-2026-09-07T195216.dump.gz",
+      "what": "SC4 recovery attempt B — the SC1 pre-deploy dump (schema 125) matched with tags v0.6.2",
+      "exit": 0,
+      "seconds": 13,
+      "state_after": "ledger 125 clean, search 16 clean, comments.body restored, rehearsal tables gone, /readyz 200, edge 200",
+      "data": "identical to the pre-upgrade baseline in every count, every fingerprint and both ledgers",
+      "lost": "the post-dump write is gone — account a38postdump (registered after the dump was taken) is absent and its login answers 401",
+      "browser": "real Chromium through the Caddy edge: readyState 4, decoding at 3.94s of 6.01s, 320x240, the restored comment rendered on the page"
+    }
+  ],
+  "release_note_facts_v063": {
+    "access_token_across_the_upgrade": "CONFIRMED and one-way. An access token minted on v0.6.2 answers 401 on the new release while its refresh token still answers 200 — 'existing sessions 401 once, then refresh'. In the other direction a new-release token worked unchanged on v0.6.2 (200 on /auth/me and /auth/refresh)",
+    "process_heartbeats": "populated by the new release (one row per process, hostname:pid, role 'all' in the single-process lab). v0.6.2 neither writes nor reads it: its rows simply go stale and v0.6.2's GET /admin/system has no `processes` key at all",
+    "new_env_defaults": "an operator who does not touch env/*.env keeps the old defaults; the lab's env file was copied from env/production.env.example and only the keys named above were set",
+    "search_0017_kept_the_retired_tables": "search.co_watch and search.co_search still exist after 0018 — 0017 comments them RETIRED rather than dropping them, exactly so the previous release can still write them. Verified present on schema 18",
+    "channel_syncs_failure_count": "0135's additive column is present and empty (0 rows) — nothing in v0.6.2 reads it"
+  },
+  "sc_verdicts": {
+    "SC1_upgrade_previous_release_with_data": "PASS — runs 1, 2, 3",
+    "SC2_injected_migration_failure_aborts": "PASS — runs 8, 9",
+    "SC3_supported_app_only_rollback": "FAIL — run 4. The old BINARIES are compatible (run 5) but rollback.sh cannot deliver them: the previous release's migrator refuses a ledger ahead of itself and the site goes down",
+    "SC4_incompatible_schema_uses_backup_restore": "PARTIAL — run 14 works and preserves everything up to the dump; run 13 shows the pairing the scripts do not check, and shows restore.sh dropping and reloading the database and then dying with the site dark",
+    "SC5_no_blind_force_no_automatic_down": "PASS — no `migrate force` and no down-migration verb anywhere in deploy/*.sh; the only `force` tokens are `git fetch --tags --force` (x2) and `dropdb --force --if-exists`. The force path is manual and refuses without --yes-i-know, leaving the ledger untouched",
+    "SC6_gates": "PASS — see gates"
+  },
+  "findings": [
+    {
+      "id": "A38-1",
+      "severity": "blocking for REC-03",
+      "title": "deploy/rollback.sh cannot roll back across any migration, and takes the site down trying",
+      "mechanism": "`up -d` starts the migrate and search-migrate one-shots (the api/search services depend on them with service_completed_successfully). Their `migrate up` runs on the PREVIOUS release's image, whose embedded migrations stop below the ledger. internal/dbmigrate's Up() has no branch for 'the ledger is ahead of the newest embedded migration': golang-migrate returns a not-exist error for the current version, it falls into the default case, and the one-shot exits 1. Every dependent service is then never started.",
+      "blast_radius": "every rollback across any migration — i.e. every rollback anyone would want. Both ledgers, both services (vidra-search carries its own copy of the same logic; the identical error appeared for version 18).",
+      "why_ci_misses_it": "vidra-core's schema-compat workflow runs the previous release tag's TEST SUITE against HEAD's schema. It never runs the previous release's MIGRATOR against that schema, which is what `up -d` does.",
+      "aggravating": "rollback.sh's `up -d` is not `|| die`-guarded, so set -e kills the script before its readiness probes and before the 'THE ROLLBACK TARGET IS ALSO UNHEALTHY / restore the pre-deploy dump' trailer the operator needs. They get a raw compose error and a dark site.",
+      "proposed_fix": "in vidra-core (and the same in vidra-search) internal/dbmigrate.Up(): read the ledger first, and when its version exceeds the newest embedded migration, log loudly ('the database is at N, this binary ships migrations up to M — assuming a deliberate rollback; not migrating') and return nil. That is exactly the state the one-release compat policy calls supported. Needs a ruling: no-op-and-log versus refuse-with-a-better-message.",
+      "not_fixed_here": "a meta-side workaround would have to enumerate services for `up -d --no-deps`, which re-introduces the drift deploy/lib.sh exists to prevent. Left for the architect."
+    },
+    {
+      "id": "A38-2",
+      "severity": "high",
+      "title": "the documented incompatible-schema recovery order re-applies the migration it is escaping",
+      "mechanism": "rollback.sh's header and deploy/README.md say: stop api/frontend, restore.sh <pre-deploy dump>, rollback.sh <previous tag>. restore.sh runs BOTH migrators after reloading the dump, using the tags currently in the env file. Run it with the tags still on the new release and the destructive migration is simply re-applied. Run it after rollback.sh has rewritten the tags and the old migrator refuses the restored ledger (finding A38-1) — proven in run 13, with the database already dropped and reloaded.",
+      "consequence": "exactly one pairing works — a dump whose schema the pinned release's migrator can reach — and neither script checks it. Run 14 is that pairing.",
+      "proposed_fix": "state the pairing rule in deploy/README.md and have restore.sh compare the dump's schema_migrations version against the pinned image's `migrate version` before it drops anything. Fixing A38-1 removes most of the sharp edge."
+    },
+    {
+      "id": "A38-3",
+      "severity": "medium",
+      "title": "`vidra doctor` could never report a dirty ledger",
+      "mechanism": "the schema-ledger check ran `docker compose exec -T api migrate version`. `exec` replaces the container's command and does not prepend the ENTRYPOINT, so it asks for a binary called `migrate`; there is none, and /app is not on PATH. On every bundled-Postgres deployment the check failed with exec-not-found and reported 'the database is unreachable from the api container', pointing the operator at a healthy Postgres.",
+      "proven": "on the run-8 stack, whose ledger really was 137 dirty, the shipped doctor said 'the database is unreachable'; `exec -T api /app/api migrate version` in the same container answered `version=137 dirty=true`. The patched doctor reports 'the core migration ledger (schema_migrations) is DIRTY at version 137' with the force runbook.",
+      "status": "FIXED — vidra-core PR #191. The unit fake matched the broken argv with a loose Contains; it now matches the real command, and a new test asserts both the argv and the Dockerfile ENTRYPOINT it is copied from (verified to fail on the pre-fix argv)."
+    },
+    {
+      "id": "A38-4",
+      "severity": "medium",
+      "title": "the release images could not be deployed from anywhere but ghcr.io",
+      "mechanism": "docker-compose.prod.yml hardcoded `ghcr.io/${VIDRA_IMAGE_OWNER:-yegamble}/...`, every prod service carries `pull_policy: always`, and deploy.sh step 2 is a bare `pull` gated on its exit code — so an image absent from GHCR could not be deployed even when already present on the host. That blocks an air-gapped or private-mirror operator (the same operator deploy/make-bundle.sh exists for) and it blocks this rehearsal.",
+      "status": "FIXED here — `${VIDRA_IMAGE_REGISTRY:-ghcr.io}` on the six image references, documented in env/production.env.example. The full --profile core --profile frontend render of the filled template is byte-identical before and after."
+    },
+    {
+      "id": "A38-5",
+      "severity": "low",
+      "title": "deploy.sh's health probes cannot see a schema/binary mismatch",
+      "detail": "run 10 exited 0 with /readyz, the frontend and the edge all 200 while GET /videos/{id}/comments answered 500. The probes prove the processes are alive, not that the release works. Worth saying so where operators read them."
+    },
+    {
+      "id": "A38-6",
+      "severity": "low",
+      "title": "a rehearsal image must carry a semver-shaped tag",
+      "detail": "deploy.sh's require_embedded_migrate_tag refuses any VIDRA_CORE_TAG / VIDRA_SEARCH_TAG that is not vMAJOR.MINOR.PATCH, so a plain `a38-rehearsal` tag is rejected before anything is touched. A prerelease suffix passes (semver_ge strips it), which is why this lab used v0.6.3-a38rehearsal. Correct behaviour; worth knowing before an operator tries to rehearse."
+    },
+    {
+      "id": "A38-7",
+      "severity": "lab-only",
+      "title": "editing deploy/Caddyfile.local with an atomic rename breaks the mount under Docker Desktop",
+      "detail": "reload_caddy compares the container's copy against the file and force-recreates when the bytes differ — but only when `exec caddy cat` SUCCEEDS. On virtiofs a renamed-over bind-mount source leaves the path dangling, `cat` fails, and the loop treats it as 'caddy is not up yet', sleeps five times and dies. deploy.sh exited 1 while the edge was in fact serving. On Linux the container keeps the old inode and `cat` succeeds, so the existing branch handles it; recreating the caddy container cleared it here."
+    }
+  ],
+  "gates": {
+    "bash_n": "clean on deploy/*.sh, tests/*.sh, install.sh, bootstrap.sh",
+    "shellcheck": "0.11.0, -S warning, clean on deploy/*.sh",
+    "compose_config_q": "exit 0 on the filled env/production.env.example",
+    "prod_render_assertions": "postgres, redis, search, search-migrate and migrate publish no ports; api -> 127.0.0.1:8080 and frontend -> 127.0.0.1:3000 only",
+    "render_unchanged_by_the_code_change": "the --profile core --profile frontend render of the filled template is byte-identical before and after the VIDRA_IMAGE_REGISTRY commit",
+    "vidra_core": "gofmt clean, go vet ./internal/doctor/ clean, go test ./internal/doctor/ ok; the new regression test verified to FAIL on the pre-fix argv",
+    "vidra_doctor": "on the healthy new release: 19 OK / 7 warn / 2 fail — the two fails are the doctor bug above and 4.4 GiB free on the lab host; the warnings are plain-http (deliberate), no backup timer on macOS, no systemctl, and the four lab-only keys in the env file"
+  },
+  "unverified": [
+    "external Postgres / external Redis topologies — the overlays were never exercised; restore.sh refuses external Postgres by design and deploy.sh skips the independent ledger read there, so the second opinion this whole item leans on does not exist in that topology",
+    "the bundle (make-bundle.sh) path, where expected_version comes from vidra-bundle.manifest rather than a checkout",
+    "ACME / internal / external TLS modes — the lab ran plain-http throughout",
+    "multi-replica and split api/worker topologies; the lab ran one process with VIDRA_ROLE unset (heartbeat role 'all')",
+    "a rollback across a release boundary larger than one (v0.6.1 or older)",
+    "S3 storage, so restore.sh's verify-blobs was exercised only against the local media volume",
+    "whether the v0.6.2 TOTP secret survives a restore end to end — the seeder lost the enrollment secret it generated, so the post-restore check proves TOTP is still ENFORCED (password alone answers mfa_required) but not that a specific pre-restore authenticator still verifies"
+  ],
+  "prs": {
+    "meta": "yegamble/vidra#134 — this evidence plus the VIDRA_IMAGE_REGISTRY knob",
+    "core": "yegamble/vidra-core#191 — the doctor schema-ledger fix"
+  }
+}
