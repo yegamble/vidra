@@ -1,0 +1,214 @@
+{
+  "slice": "A17 \u2014 runtime config, branding/legal documents and feature capability truth",
+  "date": "2026-09-07",
+  "register_row": "ADM-03",
+  "prs": {
+    "core": "https://github.com/yegamble/vidra-core/pull/179",
+    "user": "https://github.com/yegamble/vidra-user/pull/176",
+    "meta": "this evidence + the ADM-03 row",
+    "dependency_order": "core and user are independent (no OpenAPI change in either, so no contract-ci ordering); meta lands last",
+    "migration": "none \u2014 core stays at schema 132, search at 18"
+  },
+  "lab": {
+    "topology": "one origin \u2014 a pipe-only node proxy on 127.0.0.1:3100 in front of `node .next/standalone/server.js` on :3000 and vidra-core on :8088 \u2014 because vidra_refresh is SameSite=Lax, Path=/api/v1/auth",
+    "processes_observed_separately": [
+      "vidra-core VIDRA_ROLE=api on :8088",
+      "vidra-core VIDRA_ROLE=worker \u2014 a real second process, no HTTP listener (curl to its HTTP_PORT returns nothing, and it logs 'worker-only process ready; no HTTP listener in this role')",
+      "vidra-search natively on :8090, schema `search`",
+      "Next.js production standalone server, separate process"
+    ],
+    "postgres": "native PostgreSQL 16.15 on a private port (55432), fresh cluster, database vidralab at core schema 132 / search ledger 18",
+    "redis": "native redis on a private port (56379); core on db 0, search on db 1",
+    "frontend": "production `next build` served from .next/standalone with .next/static and public copied in; NEXT_PUBLIC_API_BASE_URL baked to the proxy origin, INTERNAL_API_BASE_URL to core's real port",
+    "browser": "real Chromium against that origin, hard reload between states",
+    "rate_limits": "shipped defaults, never raised \u2014 380 core requests across the slice, ZERO 429s; 391 search requests, all 200",
+    "actors": "mona (owner/admin via the one-time setup token), cleo (ordinary user; briefly promoted to moderator for the role spot-check and demoted back), anonymous",
+    "teardown": "core api + worker, vidra-search, the Next server, the proxy, redis and postgres all stopped; the data directory and lab directory removed. No lab artefact is committed."
+  },
+  "sc1_registry_truth": {
+    "verdict": "PASS",
+    "typed_settings": 116,
+    "cross_check": "the static registry parse of internal/instancesettings/service.go `specs` and the live GET /admin/instance-settings both report 116",
+    "kinds": {
+      "bool": 50,
+      "string": 30,
+      "int": 21,
+      "enum": 11,
+      "list": 4
+    },
+    "pages": {
+      "general": 48,
+      "vod": 29,
+      "advanced": 15,
+      "live": 6,
+      "federation": 6,
+      "homepage": 6,
+      "customization": 6
+    },
+    "default_source": {
+      "config_env_backed": 20,
+      "hardcoded_in_the_go_registry": 96,
+      "note": "only 20 of 116 keys take their default from parsed config, so for the other 96 NO env var and NO compose ${VAR:-\u2026} fallback can move anything \u2014 the registry's hardcoded default is the only fallback",
+      "env_backed_keys": [
+        "instance_name",
+        "instance_description",
+        "terms_url",
+        "privacy_url",
+        "contact_email",
+        "registration_enabled",
+        "registration_require_approval",
+        "quarantine_new_uploads",
+        "uploads_enabled",
+        "imports_enabled",
+        "live_enabled",
+        "comments_enabled",
+        "default_user_quota_bytes",
+        "upload_max_size_bytes",
+        "upload_max_active_sessions_per_user",
+        "import_max_height",
+        "channel_sync_enabled",
+        "channel_sync_max_per_user",
+        "transcription_enabled",
+        "transcoding_enabled"
+      ]
+    },
+    "precedence_rule": "DB overlay row (instance_settings) > the process's env var > the Go default \u2014 some of which are DERIVED from other env \u2014 with compose ${VAR:-\u2026} fallbacks materialising as ordinary env, so at runtime a compose fallback is indistinguishable from an operator's own export.",
+    "three_layer_proof_on_live_enabled": {
+      "L1_go_derived_default": "no env, no DB row: GET /admin/instance-settings reports default=false value=false, and GET /instance features.live=false \u2014 the Go default is `p.Bool(\"FEATURE_LIVE_ENABLED\", liveRTMPURL != \"\")`",
+      "L3_db_beats_L1": "PATCH {\"live_enabled\": true} -> value=true overridden=true, public features.live=true",
+      "L2_env_moves_the_default": "restart with FEATURE_LIVE_ENABLED=true -> default flips to true",
+      "L3_beats_L2": "same process, DB row live_enabled=false -> value=false overridden=true default=true; public features.live=false",
+      "reset": "PATCH {\"live_enabled\": null} deletes the row (0 rows in instance_settings) and the env default returns"
+    },
+    "runtime_refresh_tiers": {
+      "writing_api_process": "immediate \u2014 Apply() persists then reloads its own cache synchronously",
+      "every_other_core_process_incl_workers": "<= 10s \u2014 settingsversion.DefaultInterval, one counter row polled by EVERY role (measured: worker reload 9s after the PATCH)",
+      "frontend_ssr": "<= 60s \u2014 lib/instance-config.server.ts INSTANCE_CONFIG_REVALIDATE_SECONDS, matching the backend's Cache-Control: s-maxage=60 on GET /instance",
+      "vidra_search": "push, not poll \u2014 a change to any of the 7 SearchSettingKeys posts search.config_updated to POST /internal/v1/events (HMAC) at once"
+    },
+    "boot_baked_layer": "NONE of the 116 overlay keys is boot-baked: every consumption site reads through a provider closure (verified by reading every `instancesettings.Key*` reference in cmd/api and internal/httpapi). What IS boot-only is the ENV side beside them \u2014 STORAGE_BACKEND, the KEKs, JWT_SECRET, LIVE_RTMP_URL/LIVE_HLS_ROOT, WHISPER_ENDPOINT, FEDERATION_ENABLED, IPFS_*, DELIVERY_CDN_BASE_URL, MAIL/SMTP, YTDLP_IMPORT_ENABLED \u2014 which is ANDed in at the seam. Effective = setting AND boot capability.",
+    "frontend_origin_precedence": "runtime-injected /runtime-config.js (PUBLIC_API_BASE_URL on the running container) > build-inlined NEXT_PUBLIC_API_BASE_URL > \"\" same-origin in production / http://localhost:8080 in dev \u2014 documented in lib/config.ts and mirrored by the force-dynamic runtime-config route"
+  },
+  "sc2_change_observation": {
+    "verdict": "PASS (one sub-claim unverified, named below)",
+    "branding_string": {
+      "setting": "instance_name: \"Vidra (dev)\" -> \"A17 Lab Tube\"",
+      "api_immediate": "GET /instance name = A17 Lab Tube",
+      "rss": "GET /feeds/videos.xml <title>A17 Lab Tube</title> and 'Latest public videos on A17 Lab Tube' \u2014 immediate",
+      "frontend_title_and_og": "<title>A17 Lab Tube</title>, og:title, og:site_name, twitter:title all follow within the 60s SSR window (measured: picked up on the first poll)",
+      "about_page": "renders the new name"
+    },
+    "runtime_int_limit": {
+      "setting": "live_max_duration_secs 0 -> 60 (validated range: 0 or 60..2592000)",
+      "boundary": "POST /admin/instance-settings/validate refuses 10 with 'must be 0 or an integer between 60 and 2592000'; upload_max_size_bytes -5 refused with its own range; search_mode 'nonsense' refused with the option list",
+      "all_or_nothing": "PATCH {instance_description: <valid>, search_mode: 'nonsense'} -> 422 and instance_description was NOT written (0 rows)"
+    },
+    "worker_read_setting": {
+      "setting": "live_max_duration_secs \u2014 read by the live duration watchdog, which runs ONLY in worker roles (30s ticker)",
+      "method": "a live_streams row flipped to state='live' with started_at 2 hours ago; the PATCH was issued against the API process only",
+      "result": "the worker process (started 23:35:26, never restarted) logged the poller reload at 23:42:04 \u2014 9s after the 23:41:55 PATCH \u2014 and force-closed the session at 23:42:26 with max_duration_secs=60 and next_state=ended. The api process logged no watchdog line at all.",
+      "conclusion": "the role-gated-poller defect prior audits flagged is ALREADY FIXED (core#115) and is now proven end-to-end against a real worker process: settingsversion.Poller runs in every role and is deliberately not leader-gated"
+    },
+    "worker_defect_found_and_fixed": {
+      "what": "the settings reach the worker, but two worker LOOPS were started on a once-at-boot reading of a runtime-dynamic predicate",
+      "repro_on_origin_main": "YTDLP_IMPORT_ENABLED=true, channel_sync_enabled at its default (off) at boot. PATCH channel_sync_enabled=true -> GET /instance features.channel_sync=true; POST /channel-syncs -> 201 state=waiting_first_run; the worker's poller logged the reload; `grep -c 'channel auto-sync worker started'` on the worker = 0. The row moved only after the worker was restarted.",
+      "second_instance": "the same shape gates the auto-caption (Whisper) drain loop on transcription_enabled",
+      "fix": "core#179 \u2014 both services expose BootCapable() (the deployment prerequisite alone) and cmd/api gates the two worker starts on it; Enabled() is unchanged and still gates every request and every tick, so a loop started while the toggle is off is an immediate no-op",
+      "proof_of_fix": "fixed binary, worker booted at 23:59:18 with the toggle OFF -> drain loop started anyway (1 line) and logged no sync work; admin turned the toggle on and created a sync -> the SAME process (still 23:59:18) claimed it, waiting_first_run -> syncing, no restart"
+    },
+    "search_relevant_setting": {
+      "pushed": "PATCH {search_mode: advanced, search_min_query_user_count: 7} -> POST /internal/v1/events on vidra-search answered 200 within the same second",
+      "persisted": "search.service_config rewritten atomically (one updated_at for all 8 rows): search_mode=advanced, minimum_query_user_count=7, plus the derived hide_sensitive_default",
+      "second_push": "PATCH {search_suggestions_enabled:false} -> suggestions_enabled=false in search.service_config",
+      "not_pushed_by_design": "search_service_enabled is core-side routing policy and is deliberately absent from SearchSettingKeys",
+      "unverified": "vidra-search's SERVING behaviour under the new config was not exercised \u2014 the lab index was empty (no videos published), so GET /search/suggestions returned an empty list both with the flag on and with it off. Delivery and persistence are proven; ranking/suggestion behaviour is not."
+    },
+    "restart_round": {
+      "runtime_values_persist": "after restarting core api, core worker and vidra-search: instance_name, live_enabled, live_max_duration_secs and transcription_enabled all survived (they live in instance_settings, not in env); search.service_config survived vidra-search's own restart",
+      "boot_baked_takes_effect_only_on_restart": "adding LIVE_RTMP_URL + LIVE_HLS_ROOT moved the /admin/infrastructure live row from configured=false to configured=true and populated the live block \u2014 a change no runtime toggle can make"
+    }
+  },
+  "sc3_documents_and_images": {
+    "verdict": "PASS",
+    "documents": {
+      "names": "homepage | custom_css | custom_js (a CHECK constraint on instance_documents, migration 0085); an unknown name is 404",
+      "caps": "homepage 100KiB, custom_css/custom_js 200KiB each \u2014 a 200KiB+1 body is refused 422 'must be at most 204800 bytes'",
+      "unset": "GET /instance/homepage, /instance/custom.css, /instance/custom.js all 404 while unset",
+      "round_trip": "PUT homepage -> the public route returns the body verbatim with its sha256; /instance reports homepage.enabled=true and the hash for cache busting",
+      "sanitisation": "NONE server-side, deliberately \u2014 a <script> tag inside the homepage markdown is stored and returned byte-for-byte. The document store is raw; safety lives at the render seam (the homepage is markdown rendered by the frontend) and in the admin-only write gate. Stated, not changed.",
+      "delivery_headers": "custom.css text/css; custom.js application/javascript; both Cache-Control: public, max-age=300, X-Content-Type-Options: nosniff, and consumed hash-busted (?v={hash})"
+    },
+    "images": {
+      "slots": "avatar, banner, and four typed logo slots (favicon, header-wide, header-square, opengraph)",
+      "upload": "multipart field \"file\"; POST returns 201 and GET /instance branding flips is_fallback false with a URL",
+      "public_delivery": "/instance/avatar, /instance/banner, /instance/logo/{type} all 200 image/png",
+      "og_and_favicon": "after uploading the opengraph and favicon slots the public home page serves og:image and twitter:image pointing at /api/v1/instance/logo/opengraph, and <link rel=\"icon\"> switches from the built-in /icon.svg to /api/v1/instance/logo/favicon (within the 60s SSR window)",
+      "validation": "a text/plain body is refused 415 'unsupported media type'",
+      "delete": "DELETE returns 204 and restores the fallback (is_fallback true, public route back to 404); a second DELETE on an unset slot is 404"
+    },
+    "wrong_actors": "anonymous 401 and ordinary user 403 on GET/PATCH /admin/instance-settings, POST /admin/instance-settings/validate, PUT /admin/instance-documents/{name}, POST /admin/instance-avatar and GET /admin/infrastructure|system; a MODERATOR is 403 on every one of them (these are admin-only, not staff routes). The instance name was unchanged after every attempt."
+  },
+  "sc4_capability_truth": {
+    "verdict": "PASS after the fix in user#176; one product ruling recorded",
+    "effective_value_rule": "GET /instance features.* reports setting AND boot capability for import_http, channel_sync, transcription, transcoding, messaging, messaging_e2ee and mail \u2014 and reports the RAW setting for live, the one exception in that struct literal",
+    "live_with_no_ingest": {
+      "observed": "FEATURE_LIVE_ENABLED=true (which is exactly what the compose fallback injects) with no LIVE_RTMP_URL/LIVE_HLS_ROOT: GET /instance features.live=true; POST /channels/{handle}/live answers 201 with a stream key and NO rtmp_url field. A creator gets a key and nowhere to publish it.",
+      "explained_where": "GET /admin/infrastructure carries the live row enabled=true configured=false with a precise note, and the Infrastructure page renders it under 'Optional features' with the framing 'Enabled is your switch; configured is whether this deployment supplies what the feature needs'",
+      "not_explained_where_before_this_slice": "the admin Live settings page \u2014 no page note, no row note, nothing",
+      "fixed": "user#176 declares a `warn` on live_enabled keyed on the /admin/infrastructure snapshot. Verified in Chromium: the note renders in warning ink, the switch stays operable, and it disappears once LIVE_RTMP_URL/LIVE_HLS_ROOT are wired."
+    },
+    "transcription_with_no_whisper": {
+      "observed": "features.transcription=false because it ANDs the boot capability, so the frontend hides the affordance correctly \u2014 but the admin toggle itself said nothing about WHISPER_ENDPOINT beyond static help prose",
+      "fixed": "user#176 declares a `warn` on transcription_enabled keyed on the infra snapshot's captions.configured. Verified in Chromium.",
+      "note": "SettingMeta.bootDep's own doc comment named this exact case as the one a later wave should declare \u2014 it never was"
+    },
+    "mail_dependent_flows": "features.mail=false with no SMTP; the three mail keys (email_subject_prefix, email_body_signature, registration_require_email_verification) already carry a bootDep note that DISABLES the row with an explanation \u2014 rendered and verified in Chromium as the positive control for the mechanism",
+    "delivery_presign_and_cdn": "both already carry a `warn` (never bootDep, so an on-but-inert switch stays flippable) \u2014 rendered and verified in Chromium as the second positive control",
+    "infrastructure_page_coverage": "15 capability rows with enabled/configured/note: object_storage, mail, search, federation, atproto, atproto_login, malware_scan, captions, live, ipfs, cdn, drm, tracing, metrics, vp9_alternates",
+    "infrastructure_reads_boot_config_by_design": "admin_infra.go's header states the rule explicitly and names live as the motivating case: the page must be able to CONTRADICT a toggle that says on. Two rows break it on purpose (cdn's enabled half, object_storage's note). Consequence, verified: with live_enabled turned OFF at runtime the infra live row still reports enabled=true. Recorded as designed, not filed as a defect.",
+    "build_baked_frontend_flags": "CONFIRMED: still no live members. The only NEXT_PUBLIC_* value in the app is NEXT_PUBLIC_API_BASE_URL, documented as the dev/e2e override and superseded at runtime by /runtime-config.js (a force-dynamic route). There are no build-baked feature flags at all.",
+    "four_mechanisms_summary": "build-baked frontend flags (empty), compose ${VAR:-\u2026} fallbacks, env, DB overlay. Of the 20 env-backed registry defaults, the core compose file pins a fallback for 17 (INSTANCE_NAME, INSTANCE_DESCRIPTION, INSTANCE_TERMS_URL, INSTANCE_PRIVACY_URL, INSTANCE_CONTACT_EMAIL, REGISTRATION_ENABLED, REGISTRATION_REQUIRE_APPROVAL, QUARANTINE_NEW_UPLOADS, FEATURE_UPLOADS_ENABLED, FEATURE_IMPORTS_ENABLED, FEATURE_LIVE_ENABLED, FEATURE_COMMENTS_ENABLED, UPLOAD_MAX_ACTIVE_SESSIONS_PER_USER, CHANNEL_SYNC_ENABLED, CHANNEL_SYNC_MAX_PER_USER, WHISPER_ENABLED, TRANSCODING_ENABLED) and every pinned value MATCHES its Go static default \u2014 except FEATURE_LIVE_ENABLED:-true, whose Go default is DERIVED (liveRTMPURL != \"\"). That single fallback is the whole shadowing problem."
+  },
+  "sc5_custom_css_js": {
+    "verdict": "PASS",
+    "confirmation_path": "client-side, in InstanceDocumentEditor with dangerConfirm: a modal headed 'This JavaScript runs in every visitor's browser' \u2014 'Saving injects this script into every page, for every visitor \u2014 signed in or not. A mistake can break the site; malicious code can steal sessions. Only save code you wrote or fully trust.' \u2014 requiring the typed phrase 'run this code' (CUSTOM_JS_CONFIRM_PHRASE). Custom CSS has no typed confirmation; Clear on either has a second inline 'Clear it' confirm.",
+    "unconfirmed_not_applied": "typing 'yes do it' and pressing 'Save and run it' did nothing; the stored body was unchanged in the database",
+    "confirmed_applied": "typing 'run this code' saved; on a public page the new hash-busted <script src=.../instance/custom.js?v={hash}> loaded and ran (window.__A17_SECOND__ === true, data-a17b='ran2') while the previous script's marker was gone",
+    "anonymous": "proven with NO session at all before any login: custom CSS applied (body outline computed rgb(255,0,255) 3px) and custom JS executed on the public home page",
+    "removed_gone": "Clear -> 'Clear it': the script tag is absent from the page, the marker attribute is gone, and the row is deleted; the custom CSS left in place still applied, so the removal was scoped",
+    "server_side": "the confirmation is a CLIENT guard on an admin-only route \u2014 curl PUT /admin/instance-documents/custom_js succeeds with no confirmation. That is the honest shape: the route is requireRole(admin) and audited (admin.instance_document.update with name + content hash, never the body).",
+    "csp": "the frontend ships Content-Security-Policy-REPORT-ONLY (lib/security-headers.ts), script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'. Report-only enforces nothing today, and even enforced, custom.js is same-origin under the single-origin topology, so 'self' would allow it. The external-file delivery (rather than inlining) is what keeps a future enforced script-src 'self' viable \u2014 stated in the OpenAPI description.",
+    "xss_surface_honestly": "custom_js is arbitrary JavaScript on every page for every visitor including anonymous ones, same-origin, with full DOM and same-origin fetch access. Only an admin can set it (moderator 403, ordinary user 403, anonymous 401), every write is audited, and the confirmation modal says so in those words. Not widened into a CSP redesign.",
+    "wrong_actors": "PUT /admin/instance-documents/custom_js: anonymous 401, ordinary user 403, moderator 403"
+  },
+  "sc6_gates": {
+    "core": "make ci \u2014 'ci: gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race)'",
+    "user": "npx tsc --noEmit clean; npm run lint 0 errors (2 pre-existing warnings); npm run lint:icons pass; npm test 251 files / 2496 tests passed \u2014 under Node 24.4.1",
+    "node_version_trap": "under Node 25.9.0 the same suite fails 82 tests across 7 files with 'localStorage.clear is not a function'. That is the environment, not the code: on origin/main with no changes Node 25 fails 82 and Node 24 fails 0. AGENTS' 'Node 24 only' is load-bearing for anyone reading a red suite.",
+    "search": "not touched, no gate run",
+    "meta": "no script or compose change in this slice, so no bash -n / shellcheck / prod render was required"
+  },
+  "unverified": [
+    "vidra-search's serving behaviour under a changed search config \u2014 the lab index was empty, so suggestion/ranking output could not be distinguished from the empty-index case. Delivery of search.config_updated and its persistence in search.service_config ARE proven.",
+    "npm run e2e and the e2e-backed suite (need a browser fleet and a full backend) \u2014 repo CI covers them",
+    "the auto-caption worker half of the core fix was proven by unit test and by code symmetry, not by a live Whisper deployment (no transcription backend in the lab); the channel-sync half was proven end-to-end on two binaries",
+    "a real RTMP publisher \u2014 LIVE_RTMP_URL was set to prove the boot-baked flip only; INT-01 still owns actual ingest"
+  ],
+  "findings_recorded_not_fixed": [
+    "GET /instance features.live is the raw live_enabled setting, unlike every neighbouring row. PRODUCT RULING NEEDED: hide live when the ingest plane is absent (consistent with the struct literal) or keep showing it and rely on the admin-side explanation (consistent with admin_infra.go's documented 'contradict, do not hide' stance, now reinforced by the new settings-page warn).",
+    "The compose fallback FEATURE_LIVE_ENABLED: ${FEATURE_LIVE_ENABLED:-true} in vidra-core/docker-compose.yml shadows the Go DERIVED default (liveRTMPURL != \"\"), so the stock stack advertises live on an instance with no ingest plane. It is the only one of the 11 pinned fallbacks that disagrees with its Go default. Deliberately not changed here \u2014 it is a one-line compose edit with fleet-wide behaviour consequences and belongs to a decision, not a drive-by.",
+    "The auth screens are deliberately pinned to the product wordmark (AuthPage.tsx, asserted by apple-ux.spec), so a renamed instance still reads 'Sign in to Vidra' while the tab title correctly shows the instance name. PRODUCT QUESTION, not a defect.",
+    "Every statically prerendered route (all of /admin/*, /login) ships with the FALLBACK branding baked in, because a CI build has no backend to snapshot; the first ISR revalidation (~1 min) corrects it. Observed live: the header read 'Vidra' on a freshly built admin page and 'A17 Lab Tube' a minute later. Bounded and consistent with the documented 60s window.",
+    "The homepage document is stored and served without server-side sanitisation, including a <script> tag. Safe today because the frontend renders it as markdown, but the store itself offers no guarantee \u2014 worth a note if another renderer is ever added.",
+    "GET /admin/instance-settings reports key/type/value/default/overridden/page/section but NOT which processes read a key, nor its refresh tier. An operator cannot tell from the API that a change reaches a worker within 10s. Enhancement, not a defect."
+  ],
+  "for_adm04": {
+    "admin_system": "GET /admin/system reports 7 components \u2014 ffmpeg, postgres, redis, s3, search, settings_sync, smtp \u2014 plus rate_limits and a pgx pool block. settings_sync is the settings-version poller's health record and is api-only by design (a worker has no HTTP surface to report on), so a worker whose every poll fails is visible in logs and NOWHERE in the API. That is a real gap for ADM-04 to weigh.",
+    "no_secrets": "admin_infra.go maintains an absolute never-list (no DSN, no S3 keys, no SMTP credentials, no JWT_SECRET, no *_KEK, no LIVE_INGEST_SECRET, no SEARCH_INTERNAL_SECRET, no IPFS cluster token) with a test asserting none appears in the body. Spot-checked in the lab: the response carried the local storage root and the RTMP URL, both non-secret by that list's own reasoning, and nothing else.",
+    "degraded_dependency_shape": "the enabled/configured/note triple on /admin/infrastructure is the existing vocabulary for 'wired but off' vs 'on but unwired'; ADM-04's degraded-dependency work should reuse it rather than invent a second one.",
+    "doctor": "not exercised in this slice",
+    "lab_recipe": "the two-process core topology in `lab` above is what ADM-04 needs to see a failed job on a worker while the api reports health \u2014 reuse it verbatim.",
+    "audit": "every instance-settings write and every document write is audited; admin.instance_document.update records the document NAME and CONTENT HASH and never the body."
+  },
+  "caught_by_ci": "nothing in this slice was caught by CI \u2014 both defects needed a two-process lab with a real worker to see at all, and the missing dependency notices needed a real Chromium against a live backend."
+}
