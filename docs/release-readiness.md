@@ -7251,3 +7251,204 @@ phase started with a fresh login.
 
 Delivery order: **core#184 first**, then this evidence PR. Nothing is merged here
 and no deployment is authorized.
+
+## Auth hardening — TOTP replay, admin MFA, mail truth — 2026-09-07
+
+**No register row changes.** AUTH-03 stays PASS; AUTH-04's TOTP half stays PASS
+and its OIDC clauses stay decision-blocked and explicitly unproven. This slice
+implements the four defects and three owner rulings the A05 section above
+recorded and did not fix. Two code PRs:
+[core #188](https://github.com/yegamble/vidra-core/pull/188) (`b37a49d`) and
+[frontend #181](https://github.com/yegamble/vidra-user/pull/181) (`bbeaf77`).
+Core **does** change `api/openapi.yaml`, so there is a `contract-ci` ordering:
+**core first, then user, then this**. **Migration 0134** takes core from schema
+133 to 134. [Sanitized evidence](evidence/auth-hardening.json).
+
+Measured on a one-origin lab — a pipe-only proxy on `127.0.0.1:8099` in front of
+a production Next standalone server and vidra-core on `:8088`, over native
+postgres 16 and redis, with **real SMTP** to Mailpit and the
+`DEV_MAIL_CAPTURE_ENABLED` seam **off** throughout, and a real Chromium against
+that origin. The shipped 10/min per-IP auth limiter was **on** and is part of
+the proof, so the phases were paced. 105 core requests on the final boot; 12
+messages delivered and read back through the Mailpit API.
+
+**A TOTP code is now single-use, and the replay is indistinguishable from a
+typo.** Migration `0134` adds `user_mfa.last_totp_step` — the RFC 6238 step of
+the most recently accepted code, nullable, so nothing is burned retroactively.
+The accept and the replay check are **one statement**: the UPDATE matches only
+when the presented step is strictly newer, so two simultaneous replays cannot
+both read "unused" and both write. Live, the same code answered **200 then
+401**, with a body byte-identical to a wrong code's, and the burn mark advanced
+`59626338 → 59626339`; it stayed refused 29 seconds later, inside the window the
+±1 skew keeps open — the ~90 seconds a stolen code was previously worth. The
+next step's code answered 200, so burning a code cannot lock an account out. An
+unpaced replay burst answered **7×401 then 5×429**: a replay costs the attacker
+a limiter slot exactly like a guess. Recovery codes are untouched — one
+completed the challenge in the same window a replay had just been refused in —
+and the code that CONFIRMS an enrollment is burned too, so it cannot then be
+spent on a login.
+
+**The console can see two-factor now, and an operator can remove it.** A05's
+finding was that `/admin/users` carried roles, quotas, `email_verified`,
+`is_owner` and `bypass_quarantine` and *nothing* about two-factor, so an
+operator could neither see who had it on nor help a user who had lost both their
+authenticator and their recovery codes — self-service removal needs the
+account's own password AND a session, and that account cannot sign in. The
+recovery of last resort was a database edit. `AdminUser` gains `mfa_enabled`
+(an `EXISTS`, so the list stays one query; a pending enrollment reads false like
+the account's own status endpoint), and `DELETE /admin/users/{id}/mfa` removes
+the configuration after re-verifying **the caller's** password — the target
+cannot supply theirs, which is the whole situation.
+
+It removes protection and never grants access, and the response shape is the
+argument: **204 with zero bytes**. The secret and the recovery codes are
+deleted, not disclosed; no admin route anywhere returns them. Live, both tables
+dropped to 0 rows for the target, both of their sessions 401'd, the notice
+reached them naming an administrator, and the ledger carried
+`admin.user.mfa_reset` with `resource_id` = the target and the structured change
+`mfa_enabled true → false` — no prose. Wrong actors, once each: **anonymous 401,
+ordinary user 403, moderator 403, wrong admin password 403** — and after all
+four refusals the target's second factor was still on and no notice had been
+sent. **Self-reset is allowed and audited**, per the ruling: an owner who loses
+their authenticator has nobody above them to ask, and in that one case the
+acting session survives and the notice reads as self-initiated rather than
+telling them an administrator did it.
+
+In Chromium the detail read *"Two-factor = On"* with the control and its
+password field, stating the consequences before asking for the password
+(*"signs out every device"*, *"never see their secret"*); the removal flipped
+the fact to **Off** with *"Removed. bob can sign in with their password…"*; and
+on an account with no second factor the control was **disabled** with *"This
+account has no second factor."* beside it and no password field at all.
+
+**Turning the second factor off now signs the other devices out.** It lowers the
+account's protection, so it does what a password change does: every OTHER
+session is revoked and the account is mailed. The removing session survives.
+Access tokens are session-bound, so the other device lost access within one
+request — proven both at the token level (401) and in a second browser context,
+which went from the signed-in security card to *"Sign in to manage security
+settings"* on its next navigation. Before this, an attacker holding a planted
+session and the password could strip 2FA and leave every session they had alive
+and unmentioned.
+
+**"Mail is fine" on `/admin/system` now means a send would work.** The probe
+dialled and read the 220 greeting and stopped there; A05 pointed it at a relay
+whose certificate this instance refuses and read `smtp: ok` while every single
+send failed, and again while every send failed for want of AUTH. It now performs
+**EHLO → STARTTLS (if offered) → AUTH (if credentials are configured) → QUIT**
+inside the same 3 s budget and **sends no message** — asserted, not assumed: the
+probe issues QUIT and never MAIL, RCPT or DATA. It is a deliberate TWIN of
+`internal/mail/smtp.go` `send()`, because a probe that asks a different question
+from the mailer answers a different question. Six variants were exercised live:
+a plain relay is `ok`; **an untrusted STARTTLS certificate** and **credentials
+against a relay that offers no AUTH** — the two A05 measured as `ok` — are now
+`down`/instance `degraded` with sentences naming the certificate and
+`SMTP_USERNAME` respectively; a dead relay and a non-relay on the port are
+`down` with their own; and `MAIL_ENABLED=false` keeps `not_configured`, which
+still never degrades. The agreement was checked rather than argued: a real
+password-reset send against the STARTTLS relay failed with the *identical* x509
+error the probe reported.
+
+**A registrant who loses the message can now ask for another.** With the gate
+effective, registration answers 202 with no session and login answers 403
+`email_verification_required` — so the account that needs the message is exactly
+the one that cannot authenticate to ask, and the only resend that shipped sat
+behind `requireAuth`. `POST /auth/verify-email/resend` takes the address and
+answers **202 with a zero-byte body** for a known unverified address, an unknown
+one and an already-verified one alike — the three bodies compared byte-identical
+— so it cannot enumerate accounts, and a relay failure is logged, audited and
+still 202, for the reason the password-reset route already had. It sits behind
+the strict per-IP limiter (an unpaced burst gave 7×202 then 7×429) plus a **60 s
+per-address SEND cooldown**: a repeat inside it answers the same 202 and puts
+nothing in the mailbox. Past the cooldown a real message arrived, its token
+confirmed (204) and login went through (200). The audit row carries no actor and
+no address — the address appears nowhere in the ledger.
+
+On the client one control serves both places a person is stuck: the signup
+*"Check your email"* panel and the sign-in form after a held attempt. Its copy
+stays conditional — *"If that address has an unconfirmed account here, a new link
+is on its way"* — because wording that promised delivery would turn the route's
+safe answer into a claim about whether the address has an account. In Chromium a
+held **email** attempt offered it and the click delivered a real message; a held
+**username** attempt showed the same gate copy and **no** control, because the
+route takes an address, the browser does not have one, and resolving a username
+to an address would be the oracle the route avoids.
+
+**An email change that can never be confirmed is refused rather than parked.**
+The confirmation token goes to the new address and nowhere else — it is the
+possession proof, and the old mailbox cannot supply it — so with no relay the
+request minted a token, delivered it nowhere, and left the settings card reading
+*"Waiting for confirmation at …"* forever. Both the request and the resend now
+answer a typed **503 `mail_not_configured`** before the password check, and
+nothing is started: the pending state stayed `{"pending":false}` and the unused
+`email_change_requests` table stayed at 0. The type is the point — 503 is a 5xx
+and the central handler scrubs any 5xx it has no stable code for down to "an
+unexpected error occurred", which would have thrown away the sentence naming the
+variables. While there, the three bare boot-capability 503s A17 and A27 measured
+are typed too: `ytdlp_import_not_configured`, `channel_sync_not_configured` and
+`auto_captions_not_configured`. **Three existing tests actually pinned the
+scrubber's generic `service_unavailable`** — one string for four unrelated
+causes — and now pin the stable code and assert the message names the variable
+to set, with a control proving a bare 503 still loses its message.
+
+**A shipped capability finally has documented configuration.** `OAUTH_PROVIDERS`
+and the per-provider `OAUTH_<NAME>_{ISSUER,CLIENT_ID,CLIENT_SECRET,SCOPES}` are
+in both env templates: the callback URL to register
+(`<PUBLIC_BASE_URL>/api/v1/auth/oauth/<name>/callback`, the same "must match"
+requirement the template already states for the web origin), that
+`PUBLIC_BASE_URL` becomes REQUIRED and https-in-production once the list is
+non-empty, and that an incomplete provider is a **boot failure**, not a degraded
+login. The block is labelled **UNPROVEN** and points at AUTH-04: it documents
+the configuration surface, not evidence that a login through it works. It also
+says the thing an operator would otherwise learn the hard way — **Compose has no
+wildcard env passthrough**, so only `OAUTH_PROVIDERS` itself reaches the api
+from an env file and each provider's four variables must ALSO be named in the
+api service's environment map, or the api sees the provider list, finds it
+incomplete, and refuses to boot.
+
+**Gates.** core `make ci` — *"ci: gate passed (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race)"* — and core CI is green on every lane
+(`build-test`, `integration`, `openapi`, `ipfs-integration`,
+`ipfs-private-integration`, `prev-release-against-new-schema`, GitGuardian).
+Frontend on **Node 24.4.1**: `tsc --noEmit` clean, `npm run lint` 0 errors (2
+pre-existing warnings), `lint:icons` pass, production build passed. `npm test` is
+**2526 of 2527 across 254 files**, and the one failure is worth stating plainly
+rather than rounding off: `components/BatchUploadQueue.test.tsx`, a file this
+slice does not touch. It passes when run alone, and a full-suite run of
+**`origin/main` in a clean worktree on the same box fails THREE specs**
+(BatchUploadQueue, AdminJobRunsView, SecuritySettingsView) with no changes
+present at all — a suite-interaction flake class on this machine, not a
+regression. Repo CI is the authority and is green: the `frontend` lane runs
+`npm run ci`, which includes the whole vitest suite AND the mocked Playwright
+suite, and it passed on `bbeaf77` alongside `e2e-backed (local)`, `e2e-backed
+(s3)`, `ipfs-backed`, `channel-sync-backed` and GitGuardian — with only the
+expected `contract` ordering failure, *"Frontend calls paths that do NOT exist
+in vidra-core's openapi.yaml"*, because it compares against core `main`. Meta CI
+(`bundle`, `validate`, `boot`, GitGuardian) passes, and the prod compose render
+passes `config -q` with a filled `production.env.example`; no script changed, so
+`bash -n`/shellcheck were not required.
+
+**Unverified, and named.** The STARTTLS **success** path (a trusted CA) is proven
+by unit test only — Go on darwin reads the system keychain and ignores
+`SSL_CERT_FILE`, so making a self-signed relay trusted needs a containerised
+Linux core, exactly as the A05 evidence records; the failure path was proven
+live. The stale-ISR path for the email card (a 60-second-old `mailEnabled=true`
+snapshot meeting a server that answers 503) is covered by a component test, not
+a browser observation: reproducing it needs a mail-off restart inside the
+revalidate window, which is a race rather than a measurement. Neither Playwright
+suite was run on this machine; repo CI ran both. And OIDC stays unexercised —
+nothing here changes what AUTH-04 is waiting for.
+
+**Also recorded.** The email-change RESEND was as dead as the request on an
+instance with no relay and was not in the ruling; it is refused with the same
+typed code. `MailNotConfiguredError`'s one sentence was written for the admin
+mail probe ("there is nothing to test") and would have been wrong on a
+user-facing refusal, so it now carries the consequence while the admin probe's
+message stays byte-identical. And the core diff is larger than that repo's
+300-line house rule: it is one architect-directed slice covering seven recorded
+items, and splitting it would have left `contract-ci` red across several PRs.
+
+The lab was torn down — api, proxy, Next server, both Mailpit containers, redis
+and postgres all stopped, and the postgres data directory, the media root, the
+TLS material and the built binary removed. Nothing is merged here and no
+deployment is authorized.
