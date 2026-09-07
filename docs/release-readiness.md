@@ -5666,14 +5666,35 @@ under local Node 25.9.0 rather than the repo's Node 24; repo CI is the authority
 for those. All 16 new frontend tests live in one new file and two added cases; no
 existing spec was edited. No new viewer-scoped client read was added, so
 `lib/use-settled-session.ts` needed no new caller. The meta compose render was
-not re-run: no compose, script or env file changed. **Unverified:** the frontend
-e2e and e2e-backed suites, which vidra-user's AGENTS.md forbids running locally;
+not re-run: no compose, script or env file changed. Repo CI: **core #178 is 7/7 green**, including `integration` and
+`prev-release-against-new-schema` — which is the compat argument above, checked
+by the job that exists to check it — and meta #124 is 4/4 green.
+**Unverified locally:** the frontend
+e2e and e2e-backed suites, which vidra-user's AGENTS.md forbids running locally
+(repo CI is the authority, and it found the spec above);
 `GET /live` in a browser, since the lab stood up no RTMP ingest; the backfilled
 marker in Chromium, since the walkthrough database was created fresh at schema
 132 and held no backfilled row (the backfill itself was measured in SQL, its
 rendering by component test); an ordinary user's browser view of the queue, where
 only the anonymous gate was exercised in Chromium and cleo's 403 measured at the
 API; and anything remote or federated, which **A29** owns.
+
+**What repo CI caught that this lab could not.** vidra-user's AGENTS.md forbids
+running the e2e suites locally, so the first run of `frontend` on user #175 found
+a real breakage: `e2e/watched-word-matches.spec.ts` **mocks** the matches
+endpoint, which makes its fixture the contract, and that fixture predated the
+snapshot and triage fields — so the spec asserted a body the view no longer reads
+from. The fixture now carries the new fields, **every existing assertion is
+kept**, and two cases were added rather than removed: the queue quotes the
+flag-time snapshot and *not* a body edited since, and **Resolve** POSTs
+`{status, note}` to the right path and the row leaves the open queue. The same
+run also exposed a failure mode worth closing on its own terms: `matched_text` is
+contract-required, but a frontend running ahead of a pre-0132 core would hand
+`splitSnapshot` an `undefined` and `Array.from` would throw, taking the **whole
+queue** down through the error boundary rather than blanking one row's quote. It
+now returns empty spans for a non-string snapshot, with a test. `e2e-backed`'s
+own failure is the ordering one and needs no change: it reads a real core, whose
+`main` has no `matched_text` yet.
 
 **One lab artefact worth keeping.** The browser's network panel reported **503**
 for the resolve POST while core logged **204** and the client took the success
