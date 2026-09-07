@@ -7452,3 +7452,203 @@ The lab was torn down — api, proxy, Next server, both Mailpit containers, redi
 and postgres all stopped, and the postgres data directory, the media root, the
 TLS material and the built binary removed. Nothing is merged here and no
 deployment is authorized.
+
+## Import hardening — download budgets and sync backoff — 2026-09-07
+
+**Both limits A27 recorded are closed, and both were reproduced before they were
+fixed.** No register row moves: INT-02 stays PASS.
+[Core #189](https://github.com/yegamble/vidra-core/pull/189) carries the two
+behavioural changes plus migration **0135** (one additive column) and an additive
+OpenAPI change; [user #182](https://github.com/yegamble/vidra-user/pull/182)
+makes a failing sync legible to its owner. Merge order is core → user → this
+evidence PR; user's `contract` lane is red until core lands, which is the
+documented ordering failure and the only one on it.
+
+**What failed first, measured through the product.** *A 40,430-byte file failed
+to import because of the clock alone.* `origin/main` was built into a second
+binary and run as the worker against the same database and the same job, fetching
+a fixture origin that delivers the file in 60 flushed chunks over ~120 s
+(chunked, so there is no `Content-Length` to short-circuit on). Enqueued
+**13:06:16**, claimed **13:06:29**, dead at **13:07:18** — about sixty seconds
+after the fetch began, with bytes still arriving. The worker line names the
+mechanism itself: *"context deadline exceeded (**Client.Timeout** or context
+cancellation while reading body)"*. `videoimport` set `fetchTimeout = 60 *
+time.Second` and handed it to `guard.NewClient`, which is
+`http.Client.Timeout` — the whole-request deadline. The file is far under every
+size cap; only the clock killed it. Worse, the creator was told nothing useful:
+a client-timeout body read falls through to the default branch, so the stored,
+client-visible reason was the generic **"import failed"**.
+
+**The fix separates two questions one deadline was answering badly.**
+`internal/urlsafety` gains `NewBudgetClient` beside `NewClient`, with the
+**identical** SSRF policy — the same `net.Dialer.Control` hook, `Proxy: nil`, the
+same per-redirect `ValidateURL`, the same chain cap of 5 — and download-shaped
+timeouts:
+
+- **`IMPORT_FETCH_IDLE_TIMEOUT`, default `60s`** — the per-read idle timeout. The
+  fetch fails only when *no bytes arrive* for that long. It is enforced on the
+  connection (the returned `net.Conn` resets its read deadline before every
+  `Read`), so it also covers the TLS handshake and the wait for headers, not just
+  the body. It is deliberately the same sixty seconds, now doing the job it was
+  always good at: silence for a minute is a dead source on any link, while the
+  transfer *taking* a minute says nothing about its health. `0` here means "the
+  built-in default", **not** "no idle bound" — an operator may sensibly want no
+  total cap, but nobody wants a download with neither; a negative value is
+  refused at boot.
+- **`IMPORT_FETCH_TIMEOUT`, default `6h`, `0` = no cap** — the total wall clock.
+  It bounds how long one import may hold a worker slot; it does not police speed,
+  which is why the default is generous rather than tight: `UPLOAD_MAX_SIZE`
+  defaults to 2 GiB, and 2 GiB in six hours is about **0.8 Mbit/s** — slower than
+  any link an operator would import over, so the budget fires only on a transfer
+  that is pathological rather than merely slow. It is a per-request context
+  deadline, not `http.Client.Timeout`; that was the point. `Client.Timeout`'s
+  expiry surfaces as an untyped error a caller cannot tell from its own
+  cancellation, so no message could ever name which limit fired.
+
+Both expiries are **typed** (`ErrIdleTimeout`, `ErrBudgetExceeded`) and the
+direct resolver returns the *bare* sentinel, never `http.Client`'s own
+`*url.Error`, which carries the attacker-controlled URL.
+
+**The proof, one measurement per claim.** The *same job*, retried by the new
+worker (idle 20 s, total 6 h), was claimed at ≈**13:08:20** and reached `done` at
+**13:10:28** — a ~120 s transfer, more than twice the old ceiling. Anonymous
+readback: `state published`, `duration_seconds 3`, `320x180`, `has_thumbnail`,
+short code `rRNhWFy4Z6P`, original 40,430 bytes plus thumbnail, storyboard and
+VTT. (The HLS ladder did *not* run: this box had 4.9 GB free against the
+transcode worker's 10 GB scratch floor, which it logged throughout. A lab-disk
+constraint, downstream of everything here, and A27 already proved that path.)
+Then the two limits, told apart:
+
+| origin | idle | total | job's stored reason | worker log |
+| --- | --- | --- | --- | --- |
+| stalls after headers | **20s** | 6h | *the download stopped receiving data from the source* | `limit=IMPORT_FETCH_IDLE_TIMEOUT idle_timeout=20s` |
+| the same 120 s drip | 20s | **30s** | *the download took longer than this instance allows* | `limit=IMPORT_FETCH_TIMEOUT budget=30s` |
+
+The stall's `job_runs` row is stamped `claimed_at 13:11:08` / `updated_at
+13:11:28` — exactly the twenty seconds. The over-budget run failed at
+**13:12:54**, exactly thirty seconds after its claim: same origin, same URL, same
+bytes as the run that succeeded, and the creator is given the *other* sentence.
+That is the difference an operator needs, because one says the source went quiet
+and the other says this instance's own limit ended it.
+
+**Nothing else moved.** `UPLOAD_MAX_SIZE` still refuses oversize in both shapes:
+a 20 K cap rejected the 40,430-byte file up front on its `Content-Length`, and
+rejected the *chunked* drip mid-stream after ~60 s once 20 KiB had trickled in —
+the budget client does not weaken the bounded body reader. With the relax
+removed (and neither log carrying the *"SSRF guard RELAXED"* line, which is how
+the phase is known to have run guarded), all seven literal probes —
+`127.0.0.1`, `10.0.0.5`, `169.254.169.254`, `[::1]`, `100.64.0.1`,
+`file:///etc/passwd`, embedded credentials — answered **422** at enqueue, and
+`http://localtest.me:8199/…` (a public name resolving to loopback) was accepted
+202 and refused **at dial**. That refusal is still the *opaque* "could not fetch
+the URL", not one of the two new reasons: typing the budgets did not hand an
+attacker a way to tell a blocked address from a slow one. Zero stored bytes
+across the phase.
+
+**Which callers got the new semantics, and which did not.** `guard.NewClient` has
+eleven call sites and only one is a download. `videoimport` takes the budget
+client (its HEAD probe gets a *separate* short one — a probe transfers no body,
+so the idle timeout is its whole-request budget; giving it the download's six
+hours would let one unanswered HEAD stall a worker for hours before any bytes
+were in play). Federation's five, atproto's three and link previews are
+unchanged **on purpose**: their responses are small, so a whole-request deadline
+is the correct shape and a response that overruns it really is a failure.
+`peertubeimport/lazystatic.go` is the one genuine download left on whole-request
+semantics — operator-run migration tool, 8 MiB cap, its own source instance —
+recorded here so it is a decision rather than an oversight. **Channel sync makes
+no `guard.NewClient` call at all**: it lists through `ytdlp.Client.Playlist` and
+its media download is the yt-dlp resolver, both subprocesses. **`YTDLP_TIMEOUT`
+(15m) stays** — there is no read to instrument in a child process, and
+`--max-filesize` is what bounds its bytes. The consequence is worth an operator's
+attention and is recorded, not fixed: a very large *platform* download over a
+thin link still dies at fifteen minutes, and raising `YTDLP_TIMEOUT` is the only
+lever.
+
+**The second limit: a dead channel was re-listed forever.** A27 measured it —
+a failed run rescheduled at the plain `CHANNEL_SYNC_INTERVAL`, so a source that
+is permanently gone is asked for again at that rate indefinitely, an unbounded
+self-inflicted load on somebody else's server as much as on yours. Consecutive
+failures now back off `interval × 2^(n-1)`, capped at **`CHANNEL_SYNC_BACKOFF_MAX`
+(default 24h)**, reset by the first success. The counter is a **column**
+(migration `0135`, additive with a default, no backfill), incremented in SQL so a
+stale read cannot clobber it, and returned by the claim — which is what makes a
+restart mid-backoff resume rather than start the doubling over. Measured with
+`CHANNEL_SYNC_INTERVAL=1m` and a 6m cap, against an origin stopped before the
+sync was even created:
+
+| event | at | failures | next attempt | gap |
+| --- | --- | --- | --- | --- |
+| created (`waiting_first_run`) | 13:16:38 | 0 | 13:16:38 | due now |
+| failure 1 | 13:18:12 | 1 | 13:19:12 | **60 s — 1×** |
+| failure 2 | 13:20:12 | 2 | 13:22:12 | **120 s — 2×** |
+| failure 3 | 13:23:12 | 3 | 13:27:12 | **240 s — 4×** |
+| worker **killed** mid-backoff | 13:23:21 | 3 | 13:27:12 | *unchanged* |
+| worker **restarted** | 13:23:26 | 3 | 13:27:12 | *unchanged* |
+| failure 4, run by the restarted worker on the schedule it inherited | 13:27:31 | 4 | 13:33:31 | **360 s — the cap** (8× would have been 480 s) |
+| origin back up; `sync-now` | 13:28:12 | 4 *(untouched)* | 13:28:12 | **backoff bypassed** |
+| that run **succeeded** | 13:28:31 | **0** | 13:29:31 | **60 s — back to 1×** |
+
+`sync-now` bypasses by construction — it sets `next_run_at = now()` — and leaves
+the counter alone on purpose: a manual attempt that also fails continues the
+widening, and only a success resets it. The recovered run did real work, too: it
+listed the fixture channel, claimed its one entry in the seen-ledger, created a
+**private** draft and enqueued its yt-dlp import, which completed. A second sync
+pointed at a dead port reproduced the ladder independently (failure 3 → 240 s,
+failure 4 → 360 s).
+
+**The creator can now see all of it, in a real browser.** `failure_count` and
+`next_run_at` join the `ChannelSync` schema, and the Studio's auto-import section
+renders one line under the safe `last_error`. Signed in as the creator against
+the running API on one origin, Chromium showed the failing row as *"could not
+list the external channel"* then *"**4 failed runs in a row · next attempt in
+6m**"* — the row's own `next_run_at` being exactly 360 s out — while the healthy
+row alongside it showed `IDLE`, *"Last synced 1m ago"*, and no failure line at
+all. The line is suppressed for a healthy sync **and while a run is in
+progress**: during `syncing`, `next_run_at` is the worker's thirty-minute lease
+expiry rather than a scheduled attempt, so rendering it would be a lie. A missing
+or unparseable `next_run_at` degrades to the count alone rather than "in NaN".
+The countdown **rounds** where `relativeTime` floors, and that is deliberate — a
+scheduled moment is always read some time *after* it was scheduled, so flooring
+would render every backoff one unit short and a 4h gap would never once say "4h".
+
+**Gates.** Core `make ci` (fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race) passed, and `go vet -tags=integration ./...` is clean;
+repo CI on core#189 is green across `build-test`, `integration`,
+`ipfs-integration`, `ipfs-private-integration`, `openapi`,
+**`prev-release-against-new-schema`** and GitGuardian. Frontend on Node 24.4.1:
+`tsc --noEmit` clean, `npm run lint` 0 errors (2 pre-existing warnings in
+untouched files), `lint:icons` pass, **2536 tests across 254 files** pass, and
+`next build` is clean; `channel-sync-backed` and `ipfs-backed` pass on the PR.
+The mocked Playwright lane initially failed **one** spec this slice wrote — the
+new retry sentence contains the word "failed", so a substring
+`getByText("Failed")` resolved to two elements and tripped strict mode; pinned to
+an exact match. The prod compose render passes `config -q` with a filled
+`production.env.example`; no script changed, so `bash -n`/shellcheck were not
+required.
+
+**Unverified, and named.** The **default** values are judgements, not
+measurements: the 6 h budget was never allowed to expire on its own (it is proven
+at a scaled-down 30 s) and the 24 h cap likewise (the cap mechanism is proven at
+6 m, on two independent sync rows). `npm run e2e` and the backed suites were not
+run locally — repo CI owns them — and the core `-tags=integration` lane was not
+run locally either (docker is its documented path; `go vet -tags=integration`
+compiles it and CI's lane is green). "Published" in this lab means stored,
+probed, thumbnailed and `state published`, **not** a verified playable ladder.
+Nothing is claimed about the yt-dlp resolver's behaviour under a slow platform
+origin.
+
+**Also found, not fixed.** vidra-user's `frontend-e2e-backed` lane is **red on
+`main`**, and was before this slice: `e2e-backed/mfa.spec.ts:58` fails identically
+on `main@15131d1` (run 34135622955, both the local and s3 lanes, 1 failed / 99
+passed) and on this branch. It arrived with today's auth-hardening merge and
+nothing here touches MFA. Two lab traps are worth the next slice's time: a
+**stale Next.js standalone server from an earlier session** still held `:3101`
+and served a build with the wrong `NEXT_PUBLIC_API_BASE_URL` — the new server's
+bind failed silently into a log while the proxy in front returned a cheerful 200,
+so check the listener's PID and not just the status code; and a pipe-only lab
+proxy **must drop the client's `Accept-Encoding`**, because forwarding it while
+stripping `Content-Encoding` hands the browser gzip labelled as text, the page
+renders as binary noise, and every selector times out with no error anywhere
+(curl does not reproduce it — curl does not ask for gzip). A17's three scrubbed
+503s remain scrubbed. Full evidence:
+`docs/evidence/import-hardening.json`.
