@@ -7411,13 +7411,22 @@ openapi-verify, sqlc-verify, test-race)"* — and core CI is green on every lane
 (`build-test`, `integration`, `openapi`, `ipfs-integration`,
 `ipfs-private-integration`, `prev-release-against-new-schema`, GitGuardian).
 Frontend on **Node 24.4.1**: `tsc --noEmit` clean, `npm run lint` 0 errors (2
-pre-existing warnings), `lint:icons` pass, **254 files / 2527 tests** passed,
-production build passed; repo CI's `frontend` lane (which runs the mocked
-Playwright suite) and all four backed lanes pass, with only the expected
-`contract` ordering failure — *"Frontend calls paths that do NOT exist in
-vidra-core's openapi.yaml"*, because it compares against core `main`. Meta: the
-prod compose render passes `config -q` with a filled `production.env.example`;
-no script changed, so `bash -n`/shellcheck were not required.
+pre-existing warnings), `lint:icons` pass, production build passed. `npm test` is
+**2526 of 2527 across 254 files**, and the one failure is worth stating plainly
+rather than rounding off: `components/BatchUploadQueue.test.tsx`, a file this
+slice does not touch. It passes when run alone, and a full-suite run of
+**`origin/main` in a clean worktree on the same box fails THREE specs**
+(BatchUploadQueue, AdminJobRunsView, SecuritySettingsView) with no changes
+present at all — a suite-interaction flake class on this machine, not a
+regression. Repo CI is the authority and is green: the `frontend` lane runs
+`npm run ci`, which includes the whole vitest suite AND the mocked Playwright
+suite, and it passed on `bbeaf77` alongside `e2e-backed (local)`, `e2e-backed
+(s3)`, `ipfs-backed`, `channel-sync-backed` and GitGuardian — with only the
+expected `contract` ordering failure, *"Frontend calls paths that do NOT exist
+in vidra-core's openapi.yaml"*, because it compares against core `main`. Meta CI
+(`bundle`, `validate`, `boot`, GitGuardian) passes, and the prod compose render
+passes `config -q` with a filled `production.env.example`; no script changed, so
+`bash -n`/shellcheck were not required.
 
 **Unverified, and named.** The STARTTLS **success** path (a trusted CA) is proven
 by unit test only — Go on darwin reads the system keychain and ignores

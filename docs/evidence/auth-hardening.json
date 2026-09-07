@@ -7,7 +7,7 @@
   "pull_requests": {
     "core": "yegamble/vidra-core#188 (READY; build-test, integration, openapi, ipfs-integration, ipfs-private-integration, prev-release-against-new-schema and GitGuardian all pass)",
     "frontend": "yegamble/vidra-user#181 (READY; every lane green except the expected contract ordering failure)",
-    "meta": "yegamble/vidra#131 (this evidence PR)",
+    "meta": "yegamble/vidra#131 (READY; bundle, validate, boot and GitGuardian all pass)",
     "dependency_order": "core#188 first (it adds the routes and the AdminUser.mfa_enabled field), then frontend#181, then this."
   },
   "migration": "core 0134_user_mfa_last_totp_step (+ .down.sql). Latest core migration goes 0133 -> 0134; search stays 18. Additive and nullable: NULL means 'no code accepted yet', the state every existing row starts in, so nothing is burned retroactively.",
@@ -41,7 +41,8 @@
     "Compose has no wildcard env passthrough, so only OAUTH_PROVIDERS itself reaches the api container from an env file; each provider's four variables must ALSO be named in the api service's environment map in vidra-core/docker-compose.yml. Setting them in the env file alone makes the api see the provider list, find it incomplete, and refuse to boot. Documented in both templates rather than changed, because provider names are operator-chosen and no wildcard is expressible.",
     "The stale-ISR path for the email card (mailEnabled true in a 60 s-old snapshot, server answering 503) is covered by a component test, not by a browser observation: reproducing it needs a mail-off restart inside the revalidate window, which is a race rather than a measurement.",
     "The STARTTLS SUCCESS path (a trusted CA) is proven by unit test only. Go on darwin reads the system keychain and ignores SSL_CERT_FILE, so making a self-signed relay trusted needs a containerised Linux core, exactly as the A05 evidence records. The FAILURE path was proven live.",
-    "OIDC remains unexercised. The env-template block is documentation of the configuration surface, not evidence that a login through it works."
+    "OIDC remains unexercised. The env-template block is documentation of the configuration surface, not evidence that a login through it works.",
+    "A full local vitest run on this machine fails specs that pass individually and pass on repo CI \u2014 three of them on ORIGIN/MAIN with no changes present (BatchUploadQueue, AdminJobRunsView, SecuritySettingsView). It is a suite-interaction flake class on this box, worth knowing before anyone reads a local red run as a regression."
   ],
   "attempts_and_corrections": [
     "The first probe rewrite kept smtpGreeter (a server that writes 220 and hangs up) behind TestSystemStatusSMTPProbe, which then failed \u2014 correctly, because a relay that greets and hangs up cannot deliver. That test now asserts `down` and a real mini-relay carries the ok case.",
@@ -50,7 +51,7 @@
   ],
   "gates": {
     "core": "make ci: 'ci: gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race).' Core CI on b37a49d: build-test, integration, openapi, ipfs-integration, ipfs-private-integration, prev-release-against-new-schema and GitGuardian all pass.",
-    "frontend": "Node 24.4.1: tsc --noEmit clean; npm run lint 0 errors / 2 pre-existing warnings; npm run lint:icons pass; npm test 254 files / 2527 tests passed; npm run build passed. Repo CI on bbeaf77: frontend, e2e-backed (local), e2e-backed (s3), ipfs-backed, channel-sync-backed and GitGuardian pass; contract FAILS as expected ('Frontend calls paths that do NOT exist in vidra-core's openapi.yaml') because it compares against core main.",
+    "frontend": "Node 24.4.1: tsc --noEmit clean; npm run lint 0 errors / 2 pre-existing warnings; npm run lint:icons pass; npm run build passed. npm test: 2527 tests across 254 files, of which 2526 pass and ONE fails \u2014 components/BatchUploadQueue.test.tsx, a file this slice does not touch. It is a pre-existing machine-specific flake class, not a regression: the spec passes when run alone, and a full-suite run of ORIGIN/MAIN in a clean worktree on the same box fails THREE specs (BatchUploadQueue, AdminJobRunsView, SecuritySettingsView) with no changes present at all. Repo CI is the authority here and it is green: the frontend lane runs `npm run ci`, which includes the whole vitest suite, and it passed on bbeaf77 along with e2e-backed (local), e2e-backed (s3), ipfs-backed, channel-sync-backed and GitGuardian; only the expected contract ordering failure is red.",
     "meta": "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file <filled production.env.example> config -q exit 0; the --profile render inspected. No script changed, so bash -n and shellcheck were not required.",
     "not_run": "npm run e2e and the e2e-backed suite were not run on this machine (browser fleet + full backend) \u2014 repo CI ran both. vidra-search was neither modified nor run."
   },
@@ -64,7 +65,7 @@
     },
     "admin_user_mfa_reset_audit_rows": 4,
     "schema_version": 134,
-    "frontend_tests": "254 files / 2527 tests",
+    "frontend_tests": "254 files / 2527 tests; 2526 pass locally with one pre-existing flake (3 fail on origin/main on the same box), all green on repo CI",
     "smtp_probe_variants_exercised": 6
   },
   "register_rows": "UNCHANGED. AUTH-03 PASS, AUTH-04 PASS for TOTP with its OIDC clauses still decision-blocked and unproven."
