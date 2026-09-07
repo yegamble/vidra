@@ -5325,3 +5325,189 @@ hand-edited. Nothing is merged here and no deployment is authorized. The lab was
 torn down — postgres, redis, the SMTP sink, the api, the Next server and the
 proxy all stopped, the data directory removed, no listener left on
 3100/3200/8088/52525/55432/56379 — and no lab artefact is committed.
+
+## A16 ruling applied — mute scope and mute/block controls — 2026-09-06
+
+**No register row changes.** A16 closed this morning with ADM-01 and ADM-02 both
+PASS. Its last slice recorded two surfaces that still showed a muted account to
+the muter — the account's **own channel page** and **autosuggest**, which
+together were a complete route back to everything the mute hid — and the fact
+that the UI offered **exactly one place to mute**: a comment's overflow menu,
+`api.muteAccount`'s single call site, so an account that never commented could
+not be muted at all. The owner has ruled on all three and this applies the
+rulings. Two PRs: [core #177](https://github.com/yegamble/vidra-core/pull/177)
+and [user #174](https://github.com/yegamble/vidra-user/pull/174). **No
+migration** (core stays at schema 131); **one additive OpenAPI change**, which
+sets the delivery order. [Sanitized
+evidence](evidence/a16-mute-scope.json). **Zero 429s** across 184 core requests
+at shipped limits.
+
+**The channel page, measured on two binaries over one database.** The gap was
+reproduced live before it was closed: on the `origin/main` binary (8372a57),
+with uma having muted bram, `GET /channels/bramchan/videos` still answered her
+with **both** of his videos — delta 0 — while an anonymous caller saw the same
+two, so the mute did nothing there at all. Swap the binary, same database, same
+fixtures, and the same call answers **0 rows and `total: 0`**, restores to 2 on
+unmute, goes to 0 again on a **block**, and restores again on unblock — with
+cleo, the anonymous caller and **bram's own view of his own channel** all at 2
+throughout, and uma's view of *cleo's* channel untouched, because the clause is
+keyed on the owner rather than on channels in general. `ListPublicVideosByChannel`
+and `CountPublicVideosByChannelVisible` now carry the same two `NOT EXISTS`
+clauses `ListPublicVideosSorted` has, on a nullable `viewer_id`; the list and the
+count were asserted together on every read, because a page returning no rows
+while the total still promised one would promise a page the list cannot serve.
+
+**What the page shows instead, and why the header stays.** The convention the
+block case set is that a mute or a block hides an account's CONTENT and never
+its existence — you can still open the page, and you have to be able to, because
+that is where the control that lifts it lives. So the header is untouched
+(avatar, display name, `@bramchan`, follower count) and only the grid changes.
+It does not say *"No videos yet — this channel has not published anything"*,
+which would be a lie told to the one viewer who can see it; it says **"Videos
+hidden — You muted this account, so its videos are hidden from you. Unmute it
+from the menu above to see them again."**, and the block gives the block's
+wording. A channel that genuinely has no videos still gets the ordinary empty
+state; uma's own channel, in the same session, read *"No videos yet"*.
+
+**Per route, because "the channel page" is four reads and one of them is a
+route that does not exist.** `GET /channels/{handle}` stays **200** and
+unfiltered, deliberately, per the paragraph above. `GET /channels/{handle}/videos`
+is what this slice fixed. `GET /channels/{handle}/stats` answers the muter
+**404** and `GET /channels/{handle}/live` **403** — both are `requireAuth` plus
+an owner/editor check, so neither is reachable by a non-owner and neither can
+leak. `GET /channels/{handle}/donation-addresses` is **200 with no auth
+middleware at all**, so the Support button stays on a muted account's header;
+coherent with the header staying, and recorded rather than widened. A channel's
+playlists are **not a route** — nothing lists them (only `POST /playlists`,
+`/me/playlists` and `/playlists/{id}` exist), which `ChannelView`'s own comment
+already said. One route beyond the ruling's scope is worth naming: **`GET /live`,
+the public "Live now" rail, takes no viewer at all** (`ListLivePublic(ctx, limit,
+offset)`), so a muted account's live stream would still be listed to the muter.
+Read from the code, not measured — the lab had no live stream.
+
+**Autosuggest: the server stayed viewer-agnostic and the client learned to
+filter.** The ruling is exact about why. vidra-search's index stores static
+eligibility and **never** per-viewer state, which is precisely what makes the
+ranked-ids contract visibility-safe, so per-viewer filtering cannot live there.
+Measured, with uma's mute in place: `GET /search/suggestions?q=bram` returns
+**byte-identical** payloads to uma, to cleo and to an anonymous caller — the
+channel `Bram Channel` and both video titles. Unchanged, as ruled.
+
+The client could not act on that alone, and the reason is a data limit rather
+than a decision: a suggestion carries `channel_handle` for a channel and
+`video_id` for a video, while the mute and block lists carried only
+`user_id`/`username`, with nothing joining them. A client could have resolved
+the owner of each suggested handle only with **a request per keystroke**, which
+would be worse than the gap. So both lists now carry the account's
+**`channel_handles`** — one `ARRAY()` subquery, no new route, no new query,
+`[]` and never `null` for an account with no channel, in the SQL, the service
+and the JSON alike, because a client that has to null-check a set it intersects
+against is one missed check away from showing what the mute hides. That is the
+OpenAPI change, and it is what makes the frontend's filter exact instead of a
+name-matching heuristic.
+
+**In real Chromium, on the production build behind one origin.** Signed in as
+uma with nothing muted, typing `bram` gives three suggestions: the two clips and,
+under a **CHANNELS** heading, *"Bram Channel"*. Muting bram **from his channel
+page's own kebab** — the new control — takes the grid to "Videos hidden" with no
+reload, and the header's search box, a different component entirely, drops the
+channel suggestion on the next keystroke with **no reload either**: two
+suggestions, both queries, the CHANNELS group gone. A **hard reload** keeps both:
+the page still reads "Videos hidden" because the SERVER hid the videos, and the
+dropdown still shows two because the client filtered them, with the suggestion
+request going out and answering 200 exactly as before. The control that makes
+those negatives mean something ran at the same instant: an **anonymous** visitor,
+with uma's mute still in place, saw both videos on the channel page and all three
+suggestions including *"Bram Channel"*.
+
+**One read per settled session, not one per keystroke.** On a full load of the
+channel page as uma the network log shows exactly **one** `GET
+/me/mutes/accounts?limit=100` and **one** `GET /me/blocks?limit=100`, both
+**after** the `POST /auth/refresh` that settles the session — the
+`useSettledOptionalSession` guard the frontend-hardening sweep introduced —
+and five more typed characters added neither. The lists are cached at module
+scope and shared, which is why the channel page's mute reached the header's
+search box at all. A failed read leaves the set empty, which keeps every
+suggestion: the degraded direction is showing more, never hiding a stranger's
+channel.
+
+**The control, on both pages that are ABOUT an account.**
+`AccountModerationMenu` is one component rendered by `ChannelView` and
+`UserProfileView`, in the comment menu's overflow-kebab idiom with its labels
+verbatim (Mute / Unmute, Block / Unblock, Block styled danger). It reflects the
+current state on load: with bram muted, the menu on **his profile page** opened
+on **"Unmute"**, and unmuting from there restored his **channel** page to two
+videos on the next load — the two surfaces share one store. It renders **nothing**
+for an anonymous visitor (that header shows only "Sign in to follow") and nothing
+on your own channel, where the whole visitor cluster is already hidden. A failed
+call is silent and the label does not flip, which is the comment menu's
+behaviour exactly — a gap the two now share rather than one this control
+introduces.
+
+**Copy.** The two page headers are **unchanged**, and that is the point: A16
+slice 3 recorded that `/settings/mutes` promised *"Their videos and comments are
+hidden from you"* while the contract did not cover the channel page, and that one
+of them had to move. The contract moved, so the sentence is now true rather than
+aspirational. What did change is the two **empty states**, each of which said
+less than its own page header two lines above it — the mutes one named only
+comments, the blocks one only messaging. Both now name the hiding, the channel
+page included, and both were read back in the browser.
+
+**Failed first, in four places.** The httpapi test fails on the mute row **and**
+the block row without the SQL. With the two `NOT EXISTS` clauses replaced by
+`AND TRUE` and sqlc regenerated, the real-PostgreSQL test fails on both
+relationships — so the clause, not the fixture, is doing the work; it applies and
+then **lifts** each relationship, and asserts that being blocked BY the owner
+changes nothing, which pins the clause's shape rather than its mere presence. The
+`channel_handles` test fails on all four rows before the field exists. And with
+the frontend filter neutered to the identity and the channel page's predicate
+forced false, **4 of the 12 new frontend tests fail** — both suggestion cases and
+both channel-page cases — while the anonymous, degraded-read, once-per-session
+and control-state cases keep passing, which is what makes the four mean
+something. `videoFakeRepo` mirrors the new clause and its Count delegates the
+viewer through; the mute and block fakes mirror the `ARRAY()` subquery. A green
+handler test against a fake that disagrees with the SQL is how this gap survived
+four slices of mute work.
+
+**Gates.** vidra-core `make ci` **passed**, exit 0 (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race); `go vet -tags=integration ./...` clean;
+`go test -tags=integration ./internal/store/... ./internal/federation/...`
+**passed** against native PostgreSQL 16 at schema 131. vidra-user: `npx tsc
+--noEmit` clean, `npm run lint` 0 errors (2 warnings, both pre-existing on main),
+`npm run lint:icons` pass, `npm run test` **250 files / 2,472 tests passed** on
+Node 24.4.1, production `next build` pass. **The 2,460 tests that existed before
+this branch pass unchanged — no existing spec was edited**, and all 12 new ones
+live in one new file. **Unverified:** the frontend e2e and e2e-backed suites,
+which this repo's AGENTS.md forbids running locally; `GET /live` with an actual
+live stream; and anything federated, which A29 owns. The meta compose render was
+not re-run — no compose, script or env file changed.
+
+**One lab note worth keeping.** The four fixture videos are DB-published rows
+with no media bytes: created through `POST /channels/{handle}/videos` (which
+lands them at `draft`) and flipped to `published` with SQL. Every surface under
+test here is a **list predicate** that reads `privacy`/`state` and the mute
+tables and never the bytes, so the missing media cannot flatter the result — the
+"No preview" placeholders in the walkthrough are that and nothing else. Stated
+rather than left for a reader to infer from a screenshot.
+
+**Findings recorded, not fixed.** (1) `GET /live` takes no viewer, above. (2)
+`/channels/{handle}/donation-addresses` is unauthenticated, above. (3) A muted
+account's **video-title** suggestions still appear — not a decision either: a
+video suggestion carries only `video_id`, so no client-side filter can reach it,
+and a mute never hid a direct watch URL (slice 3's table: watch detail 200 for
+every actor). (4) Neither this menu nor the comment menu reports a **failed**
+mute or block. (5) A muted account's profile page still lists its **channels**;
+the cards now link to pages that are empty for the muter, so nothing hidden is
+reachable through them, but the names are on screen — the same shape as the
+FOLLOWING sidebar rail slice 3 recorded. (6) The optimistic handle update is
+additive, so unmuting drops only the handles the calling page knows; a channel
+this session never saw can stay in the hidden set until the next read, which is
+the safe direction.
+
+**Delivery order: core #177 first, then user #174, then this evidence PR.** The
+frontend's filter reads `channel_handles`, so `contract-ci` on the user PR is
+**expected RED until core merges** — `lib/api/generated.ts` is regenerated from
+core's branch spec and never hand-edited. Nothing is merged here and no
+deployment is authorized. The lab was torn down — postgres, redis, vidra-core,
+vidra-search, the Next server and the proxy all stopped, the data directory
+removed — and no lab artefact is committed.
