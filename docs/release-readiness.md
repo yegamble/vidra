@@ -6436,16 +6436,31 @@ again on the way there (82 tests across 7 files, `localStorage.clear is not a
 function`, on `origin/main` with no changes). No script or compose change in this
 repo, so no `bash -n` / shellcheck / prod render was required.
 
-**Unverified.** `npm run e2e` and the backed suite were not run (browser fleet +
-full backend; repo CI covers them); the mocked suite's exposure to the live gate
-was reasoned through file by file instead — only `e2e/studio.spec.ts` and
-`e2e/mobile-nav.spec.ts` assert a "Go live" control, neither mocks
-`features.live`, and the one mocked `live: false` in `studio.spec.ts` belongs to
-an upload-form test. No real RTMP publisher was involved; `LIVE_RTMP_URL` was set
-only to move the boot capability, as in the config-truth slice, and INT-01 still
-owns actual ingest. The compose change was validated by `docker compose config`
-and by a natively booted core, not by a full compose stack — Docker Hub pulls
-hang in this VM.
+**And repo CI covered the two suites this machine cannot run.** user#178 is green
+on every lane but the expected `contract` ordering failure. `frontend` matters
+most: `npm run ci` there is typecheck + lint + `lint:icons` + vitest + build +
+**`npm run e2e`**, so the mocked Playwright suite — including the edited
+`apple-ux.spec` assertions and every mocked spec that clicks a "Go live" control
+— ran and passed. `e2e-backed (local)`, `e2e-backed (s3)`, `ipfs-backed` and
+`channel-sync-backed` all passed too, which is the real proof for the pin drop:
+`e2e-backed/live-replay.spec.ts` and the two live specs in
+`e2e-backed/studio.spec.ts` still find their control with the new
+`LIVE_RTMP_URL` and nothing else moved. `contract` fails with *"lib/api/generated.ts
+is stale vs vidra-core's openapi.yaml"* because it compares against core `main`;
+it goes green when core#181 lands. On core#181, `build-test`, `integration`,
+`openapi` and `ipfs-private-integration` passed, and `ipfs-integration` failed
+once on an external flake in a package this diff does not touch — *"public
+gateway did not retrieve fresh CID … within 5m0s: status 429"*, a public IPFS
+gateway rate-limiting the runner — and was re-run.
+
+**Unverified.** Neither Playwright suite was run on this machine (browser fleet +
+full backend) — repo CI ran both, as above. No real RTMP publisher was involved;
+`LIVE_RTMP_URL` was set only to move the boot capability, as in the config-truth
+slice, and INT-01 still owns actual ingest. Locally the compose change was
+validated by `docker compose config` and a natively booted core rather than a
+full stack, because Docker Hub pulls hang in this VM — the backed CI lanes do
+bring the stack up on the runner. And the lab ran with `RATE_LIMIT_ENABLED=false`,
+so its zero 429s says nothing about the shipped limits.
 
 **Also recorded, not fixed.** `POST /live/{id}/key` still hands back a fresh key
 with an empty `rtmp_url` on an instance with no ingest; it is reachable only on

@@ -136,12 +136,13 @@
     "core_red_first": "TestLiveCapabilityIsSettingAndIngest fails on the pre-change source with 'features.live = true with the setting on and no ingest configured' and 'create with no ingest = 201, want 503' carrying a stream_key — the documented defect, reproduced",
     "user": "Node 24.4.1 — tsc --noEmit clean; npm run lint 0 errors / 2 pre-existing warnings; npm run lint:icons pass; npm test 252 files / 2507 tests passed",
     "user_node_trap": "the same suite fails 82 tests across 7 files under Node 25.9.0 with 'localStorage.clear is not a function', on origin/main, with no changes — re-confirmed this session",
-    "meta": "docs only; no script or compose change in this repo, so no bash -n / shellcheck / prod render was required"
+    "meta": "docs only; no script or compose change in this repo, so no bash -n / shellcheck / prod render was required",
+    "ci_lanes": "user#178 on GitHub: frontend PASS — and `npm run ci` there is typecheck + lint + lint:icons + vitest + build + `npm run e2e`, so the MOCKED Playwright suite (including the edited e2e/apple-ux.spec.ts) ran and passed in CI. e2e-backed (local) PASS, e2e-backed (s3) PASS, ipfs-backed PASS, channel-sync-backed PASS — so e2e-backed/live-replay.spec.ts and the two live specs in e2e-backed/studio.spec.ts still find their Go live control with the new LIVE_RTMP_URL. contract FAIL is the expected ordering failure ('lib/api/generated.ts is stale vs vidra-core's openapi.yaml'), because it compares against core main. core#181: build-test, integration, openapi, ipfs-private-integration PASS; ipfs-integration failed once on an EXTERNAL flake — 'public gateway did not retrieve fresh CID ... within 5m0s: status 429', a public IPFS gateway rate-limiting the runner, in a package this diff does not touch — and was re-run."
   },
   "unverified": [
-    "npm run e2e (mocked) and npm run e2e:backed were NOT run — browser fleet + full backend; repo CI covers them. The mocked suite's exposure was reasoned through file by file instead: only e2e/studio.spec.ts and e2e/mobile-nav.spec.ts assert a Go live control, neither mocks features.live, and the one mocked live:false in e2e/studio.spec.ts belongs to an upload-form test",
+    "neither Playwright suite was run on this machine (browser fleet + full backend); BOTH were run by repo CI on user#178 and passed — see gates.ci_lanes",
     "no real RTMP publisher was involved — LIVE_RTMP_URL was set only to move the boot capability, exactly as in the A17 config-truth slice. INT-01 still owns actual ingest",
-    "the compose pass-through was validated by `docker compose config` and by reading the derived value out of a natively booted core; a full compose stack was NOT brought up (Docker Hub pulls hang in this VM)",
+    "the compose pass-through was validated by `docker compose config` and by reading the derived value out of a natively booted core; a full compose stack was NOT brought up locally (Docker Hub pulls hang in this VM) — though the backed CI lanes do bring the stack up on the runner",
     "no rate-limit observation: the lab ran with RATE_LIMIT_ENABLED=false"
   ],
   "findings_recorded_not_fixed": [
