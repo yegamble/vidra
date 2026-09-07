@@ -8,7 +8,7 @@
     "user": "https://github.com/yegamble/vidra-user/pull/184",
     "search": "https://github.com/yegamble/vidra-search/pull/39",
     "meta": "this evidence PR",
-    "dependency_order": "independent — no OpenAPI change and no migration in any of the three, so contract-ci has no ordering to respect. core schema stays 135, search stays 18.",
+    "dependency_order": "the three code PRs are independent — no OpenAPI change and no migration in any of them, so contract-ci has no ordering to respect (core schema stays 135, search 18). ONE ordering does exist: core#190 also adds three config keys core#189 left out of vidra-core/docker-compose.yml's environment anchor, which has kept the meta repo's `every config key vidra-core reads has a compose consumer` gate RED ON MAIN since that merge — so this evidence PR's validate lane stays red until core#190 lands.",
     "migration": "none"
   },
   "lab": {
@@ -33,23 +33,71 @@
       "trap": "state flips to `published` when the web video and poster are stored; the HLS LADDER is a later step. Waiting on state alone hands the player a document with no hls_url and it plays the progressive /original — measured twice before the walk waited on hls_url instead."
     },
     "hops": [
-      {"hop": "browser fetch (lib/api/client.ts)", "field": "x-correlation-id request header, minted PER FETCH", "count": "128 API requests, 98 carrying an id, 98 DISTINCT ids; 30 element-issued media/img requests carry none"},
-      {"hop": "browser server-render (lib/server-json.ts)", "field": "none before this slice; x-correlation-id + traceparent after, on uncached reads only", "count": "before: 0 of 2 home-page reads carried either. after: /api/v1/videos and /api/v1/videos/{id} carry both, /api/v1/instance (revalidated) carries neither, deliberately"},
-      {"hop": "core api response", "field": "X-Request-Id + X-Correlation-Id echoed", "count": "127 of 128 responses; on 97 the two differ, which is what proves the browser's id was accepted rather than minted"},
-      {"hop": "core api log", "field": "request_id, correlation_id, trace_id, span_id", "count": "one `request` line per request"},
-      {"hop": "audit_log", "field": "request_id, correlation_id, trace_id, job_id", "count": "34 rows — 33 with correlation_id, 31 with trace_id, 1 with job_id. The creator's upload/publish writes NO audit row at all"},
-      {"hop": "job_runs", "field": "request_id, correlation_id, trace_id, worker_id, actor_id, parent_job_id", "count": "the walk's 4 runs (upload_finalize_jobs -> transcode_jobs -> transcode_steps x2) ALL carry request_id OxoySIEq…, correlation_id dbc4e2fe-95d4-44d1-bcd0-1c2ada82b307, trace_id 3bc92fe5940fe90a321b596c9f9c5f27 and one worker_id"},
-      {"hop": "job_events", "field": "same, inherited by the 0133 trigger", "count": "14 events on the walk's correlation id; 42 of 42 events populated overall"},
-      {"hop": "worker log", "field": "queue, job_id, run_id, worker_id, attempt, state, request_id, correlation_id, trace_id, resource_id, error", "count": "ZERO lines for the successful walk — a worker logs only failures, retries and dead-letters. 5 lines for the deliberate failure"},
-      {"hop": "search_outbox -> vidra-search", "field": "NONE — the table has no request/correlation/trace column", "count": "the search-beacon request's id bdc0fd46… appears once in core's log and ZERO times in vidra-search's"},
-      {"hop": "live search query -> vidra-search", "field": "X-Correlation-ID, carried by searchclient from the request context", "count": "50b2db4a-8dcb-44d9-82e9-bcf015d3fc2b: 1 line in core (/api/v1/videos/search) and 1 in vidra-search (/internal/v1/search). Suggestions likewise, 1 + 1"},
-      {"hop": "QoE beacon", "field": "its own per-fetch correlation id; qoe_events has NO correlation column", "count": "the only link from a measurement back to a playback is (video_id, session_id)"}
+      {
+        "hop": "browser fetch (lib/api/client.ts)",
+        "field": "x-correlation-id request header, minted PER FETCH",
+        "count": "128 API requests, 98 carrying an id, 98 DISTINCT ids; 30 element-issued media/img requests carry none"
+      },
+      {
+        "hop": "browser server-render (lib/server-json.ts)",
+        "field": "none before this slice; x-correlation-id + traceparent after, on uncached reads only",
+        "count": "before: 0 of 2 home-page reads carried either. after: /api/v1/videos and /api/v1/videos/{id} carry both, /api/v1/instance (revalidated) carries neither, deliberately"
+      },
+      {
+        "hop": "core api response",
+        "field": "X-Request-Id + X-Correlation-Id echoed",
+        "count": "127 of 128 responses; on 97 the two differ, which is what proves the browser's id was accepted rather than minted"
+      },
+      {
+        "hop": "core api log",
+        "field": "request_id, correlation_id, trace_id, span_id",
+        "count": "one `request` line per request"
+      },
+      {
+        "hop": "audit_log",
+        "field": "request_id, correlation_id, trace_id, job_id",
+        "count": "34 rows — 33 with correlation_id, 31 with trace_id, 1 with job_id. The creator's upload/publish writes NO audit row at all"
+      },
+      {
+        "hop": "job_runs",
+        "field": "request_id, correlation_id, trace_id, worker_id, actor_id, parent_job_id",
+        "count": "the walk's 4 runs (upload_finalize_jobs -> transcode_jobs -> transcode_steps x2) ALL carry request_id OxoySIEq…, correlation_id dbc4e2fe-95d4-44d1-bcd0-1c2ada82b307, trace_id 3bc92fe5940fe90a321b596c9f9c5f27 and one worker_id"
+      },
+      {
+        "hop": "job_events",
+        "field": "same, inherited by the 0133 trigger",
+        "count": "14 events on the walk's correlation id; 42 of 42 events populated overall"
+      },
+      {
+        "hop": "worker log",
+        "field": "queue, job_id, run_id, worker_id, attempt, state, request_id, correlation_id, trace_id, resource_id, error",
+        "count": "ZERO lines for the successful walk — a worker logs only failures, retries and dead-letters. 5 lines for the deliberate failure"
+      },
+      {
+        "hop": "search_outbox -> vidra-search",
+        "field": "NONE — the table has no request/correlation/trace column",
+        "count": "the search-beacon request's id bdc0fd46… appears once in core's log and ZERO times in vidra-search's"
+      },
+      {
+        "hop": "live search query -> vidra-search",
+        "field": "X-Correlation-ID, carried by searchclient from the request context",
+        "count": "50b2db4a-8dcb-44d9-82e9-bcf015d3fc2b: 1 line in core (/api/v1/videos/search) and 1 in vidra-search (/internal/v1/search). Suggestions likewise, 1 + 1"
+      },
+      {
+        "hop": "QoE beacon",
+        "field": "its own per-fetch correlation id; qoe_events has NO correlation column",
+        "count": "the only link from a measurement back to a playback is (video_id, session_id)"
+      }
     ],
     "originating_id": "the browser's `POST /api/v1/uploads/{id}/complete` carried x-correlation-id dbc4e2fe-95d4-44d1-bcd0-1c2ada82b307, and that exact string is on all four job runs and their fourteen events. The upload is not one id: the browser mints a fresh id per fetch, so create/upload-session/chunk/complete/PATCH are five different ids and only the one that ENQUEUES travels.",
     "audit_to_job": "content.video.transcode, result success, request_id a35-fail-01, job_id 56afac05-1a2b-43c0-91f7-989150a9216d — which is the run_id in the worker's five failure lines, whose trace_id 91172e59f7572d06… matches the audit row's",
     "otel": {
       "collector": "ran for real; spans read back from the file exporter",
-      "services_emitting": ["vidra-core-api", "vidra-core-worker", "vidra-user"],
+      "services_emitting": [
+        "vidra-core-api",
+        "vidra-core-worker",
+        "vidra-user"
+      ],
       "inbound_traceparent": "core accepts and continues one: a synthetic `00-1234567890abcdef1234567890abcdef-abcdef1234567890-01` produced a GET /api/v1/instance span in that trace with that parent",
       "before_the_fix": "ZERO traces spanned two services. vidra-user's @vercel/otel fetch span and vidra-core's server span for the same call had different trace ids",
       "after_the_fix": "one trace per server-rendered page carrying both services — e.g. af5dc86fc1010cd8d6f279717d9108d4, 23 spans, with vidra-core-api's `GET /api/v1/videos/:id` parented on vidra-user's `render route (app) /videos/[id]`",
@@ -73,7 +121,10 @@
     },
     "storage_key_fix": "A17 recorded that jobstatus.RedactDetail did not strip a bare storage key and that the same text now reaches the WORKER LOG. Fixed here: the worker's five failure lines read `media: ffprobe \"[redacted-key]\" failed: exit status 1`, the admin failure list shows the same string in Chromium, and `web-videos/<uuid>` appears zero times in any log",
     "log_level_debug": "adds NOTHING on the request path. A boot + login + two reads + a search at LOG_LEVEL=debug produced 20 INFO lines and 0 DEBUG lines; the only DEBUG call sites in the module are in the IPFS mirror (disabled here) and one jobtrace heartbeat-miss line",
-    "levels_observed": {"api": "996 INFO / 182 WARN / 4 ERROR", "worker": "43 INFO / 5 WARN / 1 ERROR"},
+    "levels_observed": {
+      "api": "996 INFO / 182 WARN / 4 ERROR",
+      "worker": "43 INFO / 5 WARN / 1 ERROR"
+    },
     "recorded_not_fixed": "core deliberately logs `object_key` and `storage_key` as structured keys in the media-GC and storage-migration paths, so the platform's posture on a storage key is now inconsistent: jobstatus promises a failure never carries one, and the sweeper logs one on purpose. Worth one ruling, not a unilateral change"
   },
   "sc3_failure_and_metrics": {
@@ -92,31 +143,92 @@
       "probe": "180 requests over 120 distinct URLs (60 random UUIDs, 60 nonsense paths, 60 distinct search queries)",
       "result": "vidra_http_requests_total went from 61 to 63 series — two new status-class combinations. All 60 nonsense paths folded into exactly one route=\"unmatched\" series. Zero UUIDs and zero query strings appear anywhere in either scrape",
       "families": [
-        {"metric": "vidra_http_request_duration_seconds", "series": 780, "labels": "method 4 x route 55 (templates) x status_class 4, x 15 histogram buckets", "bound": "the route table"},
-        {"metric": "vidra_http_requests_total", "series": 60, "labels": "method x route x status_class", "bound": "the route table"},
-        {"metric": "vidra_queue_depth", "series": 29, "labels": "queue 8 x state 5", "bound": "40"},
-        {"metric": "vidra_job_oldest_queued_age_seconds / vidra_job_stale_running", "series": 3, "labels": "queue", "bound": "the queue list"},
-        {"metric": "vidra_search_http_request_duration_seconds", "series": 91, "labels": "method 2 x route 7 x status_class 1", "bound": "search's route table"},
-        {"metric": "vidra_search_events_total", "series": 7, "labels": "type 7 x outcome 2", "bound": "the closed event-type set x 5 outcomes"},
-        {"metric": "vidra_search_rollup_duration_seconds", "series": 104, "labels": "worker 8", "bound": "the fixed worker list"},
-        {"metric": "vidra_search_table_rows", "series": 15, "labels": "table 15", "bound": "the schema"},
-        {"metric": "vidra_search_trending_gate_rejections_total", "series": 2, "labels": "domain 2 x reason", "bound": "fixed vocabularies"}
+        {
+          "metric": "vidra_http_request_duration_seconds",
+          "series": 780,
+          "labels": "method 4 x route 55 (templates) x status_class 4, x 15 histogram buckets",
+          "bound": "the route table"
+        },
+        {
+          "metric": "vidra_http_requests_total",
+          "series": 60,
+          "labels": "method x route x status_class",
+          "bound": "the route table"
+        },
+        {
+          "metric": "vidra_queue_depth",
+          "series": 29,
+          "labels": "queue 8 x state 5",
+          "bound": "40"
+        },
+        {
+          "metric": "vidra_job_oldest_queued_age_seconds / vidra_job_stale_running",
+          "series": 3,
+          "labels": "queue",
+          "bound": "the queue list"
+        },
+        {
+          "metric": "vidra_search_http_request_duration_seconds",
+          "series": 91,
+          "labels": "method 2 x route 7 x status_class 1",
+          "bound": "search's route table"
+        },
+        {
+          "metric": "vidra_search_events_total",
+          "series": 7,
+          "labels": "type 7 x outcome 2",
+          "bound": "the closed event-type set x 5 outcomes"
+        },
+        {
+          "metric": "vidra_search_rollup_duration_seconds",
+          "series": 104,
+          "labels": "worker 8",
+          "bound": "the fixed worker list"
+        },
+        {
+          "metric": "vidra_search_table_rows",
+          "series": 15,
+          "labels": "table 15",
+          "bound": "the schema"
+        },
+        {
+          "metric": "vidra_search_trending_gate_rejections_total",
+          "series": 2,
+          "labels": "domain 2 x reason",
+          "bound": "fixed vocabularies"
+        }
       ],
       "only_unbounded_shape": "vidra_search_loaded_model{kind,version} and vidra_search_shadow_eval{version,metric} carry a MODEL VERSION label. Bounded by how many model artifacts an instance has ever loaded rather than by a vocabulary — no series existed in this lab, so it is recorded rather than measured",
       "no_per_user_labels": "no metric in either service takes a user, video, session or address label. QoE in particular is an event/rollup stream and never becomes a Prometheus label; the one QoE counter (vidra_qoe_events_dropped_total) is labelled by the four-member event type"
     },
-    "search_table_rows_bug": "vidra_search_table_rows reported 0 for ALL FIFTEEN tables while events_inbox held 87 rows, behavior_events 78, query_log 63, query_aggregates 63 and documents 3. Root cause: the source was GREATEST(pg_class.reltuples, 0), and PostgreSQL 14+ writes reltuples = -1 until VACUUM/ANALYZE first touches a relation. last_analyze and last_autoanalyze were null on every one of them. Fixed in search #39"
+    "search_table_rows_bug": "vidra_search_table_rows reported 0 for ALL FIFTEEN tables while events_inbox held 87 rows, behavior_events 78, query_log 63, query_aggregates 63 and documents 3. Root cause: the source was GREATEST(pg_class.reltuples, 0), and PostgreSQL 14+ writes reltuples = -1 until VACUUM/ANALYZE first touches a relation. last_analyze and last_autoanalyze were null on every one of them. Fixed in search #39",
+    "compose_gap": "core#189 added IMPORT_FETCH_IDLE_TIMEOUT, IMPORT_FETCH_TIMEOUT and CHANNEL_SYNC_BACKOFF_MAX without adding them to the shared compose environment anchor, so a stock stack passed none of the three through. Fixed in core#190 as PASS-THROUGHS rather than ${VAR:-x} fallbacks (a fallback is an override, not a default — the anchor spells this out at FEATURE_LIVE_ENABLED); verified present in both the api and worker rendered environment maps."
   },
   "sc4_qoe_source_truth": {
     "verdict": "PASS, with one privacy question that needs a ruling",
     "batching": "lib/playback-qoe.ts holds an in-memory queue: a full batch of 20 flushes at once, a partial batch waits for a 5s interval tick, and visibilitychange->hidden / pagehide flush with fetch keepalive. A failed POST is DROPPED with no retry. The trap: each flush is an ordinary api.postQoEEvents call, so it mints its own correlation id — a beacon is never correlated with the playback it measured; (video_id, session_id) is the only link",
     "classification": "the client never names a source. It reports source_url (query and fragment stripped client-side — that is where a ?pt= token or a presigned signature lives) and the server classifies the ORIGIN against its own configured bases",
     "measured": [
-      {"case": "real HLS playback through this lab's api-proxy delivery", "result": "3 of 3 events delivery_source=api-proxy, engine=hls-js, packaging_format=cmaf"},
-      {"case": "origin-relative source_url", "result": "api-proxy"},
-      {"case": "client claims a CDN host with no DELIVERY_CDN_BASE_URL configured", "result": "other — never cdn"},
-      {"case": "client sends an explicit delivery_source:\"cdn\" FIELD alongside an api-proxy origin", "result": "api-proxy — the field is not even read"},
-      {"case": "a second api process WITH DELIVERY_CDN_BASE_URL=https://cdn.a35.test, same beacon shape", "result": "the configured host -> cdn; an unrelated host -> other; https://cdn.a35.test.attacker.example -> OTHER, which is the boundary check a bare HasPrefix would have failed"}
+      {
+        "case": "real HLS playback through this lab's api-proxy delivery",
+        "result": "3 of 3 events delivery_source=api-proxy, engine=hls-js, packaging_format=cmaf"
+      },
+      {
+        "case": "origin-relative source_url",
+        "result": "api-proxy"
+      },
+      {
+        "case": "client claims a CDN host with no DELIVERY_CDN_BASE_URL configured",
+        "result": "other — never cdn"
+      },
+      {
+        "case": "client sends an explicit delivery_source:\"cdn\" FIELD alongside an api-proxy origin",
+        "result": "api-proxy — the field is not even read"
+      },
+      {
+        "case": "a second api process WITH DELIVERY_CDN_BASE_URL=https://cdn.a35.test, same beacon shape",
+        "result": "the configured host -> cdn; an unrelated host -> other; https://cdn.a35.test.attacker.example -> OTHER, which is the boundary check a bare HasPrefix would have failed"
+      }
     ],
     "cdn_off": "the main api, with presign and CDN unconfigured, took 17 beacon requests and produced ZERO cdn rows",
     "rollup": "the hourly worker rolled the walk's hour at 15:05:37 into exactly one row — api-proxy / hls-js / cmaf, event_count 3, start_count 3, verified_count 0, ttff p50 153 / p95 407 / p99 407 ms from a 112-bucket fixed-boundary histogram carrying exactly three marks (the raw TTFFs were 8, 135 and 361 ms)",
@@ -128,14 +240,54 @@
     "verdict": "PASS, with one family that has no retention at all",
     "method": "every window is a compile-time constant on an hourly or daily leader-gated tick, so each prune was driven through the SAME exported function the loop calls, against the lab database, by moving the `now` argument the function already takes. No row's timestamp was doctored except where noted",
     "windows": [
-      {"family": "qoe_events (raw playback measurements)", "window": "7 days, fixed in code", "knob": "none — deliberate, `an operator-tunable retention is a knob whose wrong setting is discovered months later`", "observed": "3 rows survived qoe.Prune at now and at now+6d23h; all 3 deleted at now+7d1h"},
-      {"family": "qoe_rollups", "window": "90 days, fixed", "knob": "none", "observed": "nothing to delete at now+91d in this window; the batching (10k x 100) and leader gate are unchanged"},
-      {"family": "job_events", "window": "30 days, fixed", "knob": "none", "observed": "53 events survived at now; all 53 deleted at now+31d"},
-      {"family": "job_runs / pipeline_runs (TERMINAL only)", "window": "90 days, fixed", "knob": "none", "observed": "13 terminal runs survived at now+31d; all 13 deleted at now+91d. Active work is never deleted at any age"},
-      {"family": "search_outbox", "window": "search_event_retention_days (default 90, validated 1..365), with a 7-day forensic FLOOR for `dead` rows", "knob": "instance setting", "observed": "days=0 is out of range and backstops to 90 (nothing deleted). days=1 at now+2d deleted 8 delivered rows and HELD the dead row. days=1 at now+8d deleted the dead row. `pending` is never pruned at any age"},
-      {"family": "process_heartbeats", "window": "24h ForgetAfter, swept hourly by the heartbeat writer", "knob": "none", "observed": "a planted row for a decommissioned host last seen 25h ago was swept; both live rows kept"},
-      {"family": "vidra-search query_log / behavior_events / events_inbox / user_watch_projection", "window": "search_event_retention_days via the config_updated overlay", "knob": "the same instance setting", "observed": "PATCH search_event_retention_days=1 in core produced a search.config_updated outbox event, delivered within 8s, and search.service_config carried the new value. The one-shot retention job then deleted exactly the 3 behavior_events past the window and kept the 3 inside it"},
-      {"family": "audit_log", "window": "NONE", "knob": "none", "observed": "there is no DELETE against audit_log anywhere in the tree. 34 rows before every prune above, 34 after. This is the finding"}
+      {
+        "family": "qoe_events (raw playback measurements)",
+        "window": "7 days, fixed in code",
+        "knob": "none — deliberate, `an operator-tunable retention is a knob whose wrong setting is discovered months later`",
+        "observed": "3 rows survived qoe.Prune at now and at now+6d23h; all 3 deleted at now+7d1h"
+      },
+      {
+        "family": "qoe_rollups",
+        "window": "90 days, fixed",
+        "knob": "none",
+        "observed": "nothing to delete at now+91d in this window; the batching (10k x 100) and leader gate are unchanged"
+      },
+      {
+        "family": "job_events",
+        "window": "30 days, fixed",
+        "knob": "none",
+        "observed": "53 events survived at now; all 53 deleted at now+31d"
+      },
+      {
+        "family": "job_runs / pipeline_runs (TERMINAL only)",
+        "window": "90 days, fixed",
+        "knob": "none",
+        "observed": "13 terminal runs survived at now+31d; all 13 deleted at now+91d. Active work is never deleted at any age"
+      },
+      {
+        "family": "search_outbox",
+        "window": "search_event_retention_days (default 90, validated 1..365), with a 7-day forensic FLOOR for `dead` rows",
+        "knob": "instance setting",
+        "observed": "days=0 is out of range and backstops to 90 (nothing deleted). days=1 at now+2d deleted 8 delivered rows and HELD the dead row. days=1 at now+8d deleted the dead row. `pending` is never pruned at any age"
+      },
+      {
+        "family": "process_heartbeats",
+        "window": "24h ForgetAfter, swept hourly by the heartbeat writer",
+        "knob": "none",
+        "observed": "a planted row for a decommissioned host last seen 25h ago was swept; both live rows kept"
+      },
+      {
+        "family": "vidra-search query_log / behavior_events / events_inbox / user_watch_projection",
+        "window": "search_event_retention_days via the config_updated overlay",
+        "knob": "the same instance setting",
+        "observed": "PATCH search_event_retention_days=1 in core produced a search.config_updated outbox event, delivered within 8s, and search.service_config carried the new value. The one-shot retention job then deleted exactly the 3 behavior_events past the window and kept the 3 inside it"
+      },
+      {
+        "family": "audit_log",
+        "window": "NONE",
+        "knob": "none",
+        "observed": "there is no DELETE against audit_log anywhere in the tree. 34 rows before every prune above, 34 after. This is the finding"
+      }
     ],
     "env_shadowing": "EVENT_RETENTION_DAYS=1 on the search process changed NOTHING: worker.retention reads the config_updated OVERLAY first and only falls back to the env. The operator path is the instance setting, and the env var is shadowed the moment core has ever pushed a config",
     "suggestible_reeval": "the one-shot refused to run on an emptied ledger with the guard sentence — `suggestible_reeval: skipped — no query_log rows in the retention window; refusing to un-suggest every aggregate on an empty ledger` — which is the A13 behaviour, still holding"
