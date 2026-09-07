@@ -5696,7 +5696,13 @@ contract-required, but a frontend running ahead of a pre-0132 core would hand
 queue** down through the error boundary rather than blanking one row's quote. It
 now returns empty spans for a non-string snapshot, with a test. `e2e-backed`'s
 own failure is the ordering one and needs no change: it reads a real core, whose
-`main` has no `matched_text` yet.
+`main` has no `matched_text` yet. One more bug was caught by reading the new case
+back rather than by a runner: the spec's `MATCHES` route pattern is anchored at
+`?` or end-of-string, so it never matched `…/{id}/resolve` — the POST would have
+escaped to a backend that is not running under `npm run ci`, and the case would
+have failed as *"the row is still there"* rather than *"the request never
+happened"*. It has its own pattern now, and the list fixture keeps serving the
+row so the assertion proves the **view** drops it on the 204.
 
 **One lab artefact worth keeping.** The browser's network panel reported **503**
 for the resolve POST while core logged **204** and the client took the success

@@ -164,6 +164,7 @@
   "why_not_local": "vidra-user's AGENTS.md forbids running the e2e suites locally, so only repo CI could find it.",
   "fix": "fixture updated to the new contract; every existing assertion kept; two cases ADDED — the queue quotes the flag-time snapshot rather than a body edited since, and Resolve POSTs {status, note} to the right path and the row leaves the open queue. No assertion was weakened or removed.",
   "second_finding": "splitSnapshot threw on a non-string matched_text (Array.from(undefined)), which would take the WHOLE queue down through the error boundary rather than blanking one row's quote. It now returns empty spans, with a test.",
-  "e2e_backed": "its failure is the ordering one and needs no change — it reads a real core, whose main has no matched_text yet."
+  "e2e_backed": "its failure is the ordering one and needs no change — it reads a real core, whose main has no matched_text yet.",
+  "third_finding": "Reviewing the new mocked case before CI ran it caught a bug in the case itself: the MATCHES route pattern is anchored at ? or end-of-string, so it never matched .../{id}/resolve. The POST would have escaped to a backend that is not running under `npm run ci`, and the case would have failed as 'the row is still there' rather than 'the request never happened'. It now has its own RESOLVE pattern, and the list fixture keeps serving the row so the assertion proves the VIEW drops it on the 204."
  }
 }
