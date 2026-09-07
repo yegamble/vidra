@@ -5119,3 +5119,199 @@ mute surfaces above; the watched-word excerpt and its missing triage state; and
 route or a response shape, so vidra-user needs no regenerated client and there
 is no `contract-ci` ordering failure to expect — then this evidence PR. Nothing
 is merged here and no deployment is authorized. The lab was torn down.
+
+## A16 rulings applied — block reasons, unblock notices, ownership transfer — 2026-09-06
+
+**No register row changes.** A16 closed this morning with ADM-01 and ADM-02 both
+PASS and three product rulings recorded and unimplemented. This slice implements
+them: **a creator could not read the reason their video was taken down**,
+**lifting a block notified nobody**, and **`users.is_owner` had exactly one
+writer and no way to move**, so an owner who closed their account left the
+instance permanently unowned with a hand-written `UPDATE` as the only repair.
+**No migration** — core stays at schema 131; `video_blocks.reason` (0021) and
+`users.is_owner` (0131) already existed, and what changes is who may read them.
+Five additive OpenAPI changes and one new route. [Core
+#176](https://github.com/yegamble/vidra-core/pull/176) and [user
+#173](https://github.com/yegamble/vidra-user/pull/173). [Sanitized
+evidence](evidence/a16-rulings.json) records **91 API/DB assertions in one clean
+run on a freshly migrated database**, two real-PostgreSQL concurrency tests, two
+messages over a real SMTP conversation, and a Chromium walkthrough that found
+two defects the unit tests did not.
+
+**The block reason, and exactly how far it travels.** The reason a moderator
+already writes for the staff block-list is now creator-facing on two owner-only
+surfaces: `block_reason` on the owner's channel-management listing, beside the
+`blocked` marker it explains, and `moderation_note` on the `video_blocked`
+notification. Both are correlated on the same row — the listing's is a subselect
+on the same `video_blocks` row as `EXISTS`, the notification's a `LEFT JOIN`
+inside the same `CASE` that already carried the rejection note — so a badge and
+its reason can never come from different reads. Measured: with a block in place
+the Studio row reads *"Blocked by moderation … Reason: Third-party music you do
+not hold the rights to"* while still reading `published`/`public`, and the
+creator's inbox says *"A moderator blocked “Control Clip” — it is no longer
+available to viewers: Third-party music…"*. **The block is unweakened**: the
+owner's own `GET /videos/{id}` is still 404, as it is for a signed-in stranger
+and for an anonymous reader, and the prose appears in **neither** a stranger's
+nor an anonymous read of the same channel listing, nor in a stranger's inbox.
+Lifting the block deletes the row, so an older `video_blocked` notice silently
+loses its reason and renders as the neutral notice it was before this slice —
+measured, and correct: the reason no longer applies.
+
+**And the leak that ruling opened, closed in the same change.** The moderation
+queue's "Block video" sent **the REPORTER's own free text** as the block reason.
+That was harmless while block reasons were staff-only and is not now: it would
+deliver a reporter's prose about a person to that person, on their own video and
+in their inbox. The moderator now writes their own, in a field whose copy says
+*"The creator sees this on their video and in their notification, so write it
+for them"*; empty is allowed and lands the creator on the neutral notice. A
+component test asserts the reporter's words never reach the request.
+
+**`video_unblocked`.** A new type — the constant, `knownType()`, `KnownTypes()`
+and prefs on one side, `TYPE_LABELS` + `TYPE_ORDER` + `describeNotification` on
+the other, the four edits that must move together. It is deliberately its own
+type rather than a second `video_blocked`, which would read as a SECOND takedown
+in an inbox that renders by type. Delivered on `DELETE
+/admin/videos/{id}/block`, best-effort, linking to the restored video. Two
+details are load-bearing and both are measured: the owner is read **after** the
+unblock (the mirror of the block path's read-before, because a blocked video
+404s on every ordinary read), and `UnblockVideo` now reports whether a block was
+actually **lifted**, so a repeated `DELETE` is still 204 and delivers **no
+second notice**. A creator who turns the type off gets nothing.
+
+**Ownership transfer.** `POST /api/v1/admin/owner/transfer` sits under `/admin`
+because that is where the console surface and the `requireRole(admin)` gate
+already are; the OWNER-only rule cannot live in `requireRole` at all, because
+Vidra deliberately has no owner ROLE, so it is a service check and a non-owner
+admin is **403 `owner_only`**. The caller re-enters their password — the same
+confirmation the account-closing routes ask for, and this is the one admin
+action that permanently strips the caller of a capability. The target must be an
+active, non-tombstoned administrator other than the caller: **422
+`owner_target_invalid`**, checked in the service for the readable error and
+re-asserted inside the write for the race. Measured refusals, each with a
+readback proving the marker did not move: a non-owner admin 403, a moderator
+403, an ordinary user 403, anonymous 401, the owner with a wrong password 403,
+and 422 for an ordinary user, a moderator, the caller themselves and a
+deactivated admin, with 404 for an unknown id. **The former owner keeps their
+admin role** — this moves the marker, not the role.
+
+**Why the swap is one statement, and what proves it.**
+`users_single_owner_idx` is a partial UNIQUE index and is not deferrable, so
+splitting the clear and the set opens either a window with no owner (a crash
+between them leaves the instance in the state the route exists to escape) or one
+with two, which the index refuses outright. The clear provably runs first
+because the main `UPDATE` joins an aggregate over it and an aggregate must
+consume its whole input — without that forced ordering PostgreSQL is free to run
+an unreferenced data-modifying CTE **after** the main query, and every transfer
+would raise a unique violation. Against real PostgreSQL: the marker moves,
+exactly one row holds it, the former owner is still `admin`, and every
+ineligible target changes nothing including the clear. The race is **forced,
+not hoped for** — firing two transfers from goroutines proves nothing, because
+they serialize and both legitimately succeed in order. Two transactions are
+interleaved deliberately: the second blocks on the first's uncommitted marker,
+and when the first commits the second is refused by the index with SQLSTATE
+23505, which the route answers **409 `owner_transfer_conflict`** with nothing
+changed. One winner, one marked account.
+
+**Both parties are mailed, over a real SMTP conversation** (a minimal sink that
+speaks the protocol; there is no mailpit on this machine). The new owner's
+message names the former owner, carries the admin console URL and **no
+credential**; the former owner's names the new one, says they remain an
+administrator, states exactly what they gave up, and tells them to change their
+password if it was not them — the notice that matters if the transfer was not
+their idea. Best-effort is proven at the service level: with a failing mailer
+the transfer still commits. **No new notification type**: none of the ten
+existing types means "you now own this instance", and adding an eleventh for one
+event that already sends mail is not worth the four coordinated edits — said
+plainly rather than half-built. One `Mailer` method, four implementations plus
+the doubles. Audited structurally: `is_owner` joins the envelope's change
+allowlist beside `account_enabled` and `email_verified`, the resource is the
+account that **gained** the marker, and `count` records how many held it before
+— 0 on an instance the 0131 backfill could not resolve, which is a fact an
+operator reading the ledger wants. The password reaches neither the log stream
+nor the ledger.
+
+**The owner cannot leave without handing it on.** `DELETE /auth/me` and
+`POST /auth/me/deactivate` by the marker's holder are **422
+`owner_must_transfer`**, checked **after** the last-admin guard so a sole
+owner-admin reads the actionable sentence first ("promote another admin"), then
+this one. Deactivation is gated for the same reason deletion is: a disabled
+account cannot sign in, so it can never call the transfer route again.
+Measured: both refused, the refusal is **not a sign-out** (`/auth/me` still
+200), the row is still `admin`/active/owner afterwards, and after the transfer
+the former owner deletes themselves normally while the instance still has an
+owner. A plain user's own account was never gated by this. Five existing tests
+covered accounts that were the owner; each now hands the instance over first, or
+runs as an ordinary second account where ownership was never the subject.
+
+**One defect the lab found on the way.** The **owner-claim response** said
+`is_owner:false` about the account that had just claimed the instance — the
+claim statement is the one place the marker is written TRUE, but the response's
+user view left the flag at Go's zero value, while the next login said true. That
+payload is exactly what the console draws its owner-only controls from. Fixed,
+with the assertion added to `TestClaimOwnerEndpointCreatesAdmin`.
+
+**The browser walkthrough, and the two things it caught.** Real Chromium against
+the production `.next/standalone` build behind one origin. As the creator: the
+Studio row carries the badge and the reason, and the bell holds all three
+renderings side by side — a block **with** its reason, a restoration, and an
+older block whose reason went with the lift. As the owner: `/admin/users` badges
+mona OWNER, avery's detail offers the transfer with the consequences stated
+before the password is asked for, bob's shows the same control **disabled** with
+*"Ownership can only go to another administrator"* and no password field; after
+the transfer avery carries OWNER, avery's Deactivate and Delete are disabled and
+the role control is a static pill. Her own `/settings` Danger zone answers her
+deactivate with the server's sentence verbatim. **Two defects surfaced only
+here**: `video_unblocked` had no notification icon or chip entry, so the
+restoration rendered with the **follow glyph in a neutral circle** — the
+moderation event dressed as a new follower, this repo's most-repeated frontend
+bug wearing different clothes; and after a transfer the LIST reloaded but the
+**session** did not, so the former owner was still offered a control core
+answers 403. Both fixed, both with a test.
+
+**SC5, the last-admin race: recorded, not built.** The guard has four write
+paths, and they serialize against each other only if they share one lock, which
+means the count and the write must sit in the same transaction. Two are a single
+`UPDATE` and could carry a `SELECT … FOR UPDATE` roster lock in-statement, where
+READ COMMITTED's post-wait re-check is exactly the recheck this needs. The hard
+delete cannot: it is a multi-table erasure that also deletes blobs and fans a
+federation `Delete` out, and holding a roster lock across that is worse than the
+race. A partial fold buys almost nothing, because a mixed race — one admin
+`PATCH`ing while the other self-deletes — stays open unless every path takes the
+lock. The real fix is a transaction seam threaded through `admin`, `auth` and
+`account` together: structural, not surgical. That reasoning now lives on
+`ensureAdminRemains` so the next slice does not re-derive it.
+
+**Gates.** vidra-core `make ci` **passed** (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race) and `go vet -tags=integration ./...` is
+clean; the tagged `internal/store` integration lane was run **locally against
+real PostgreSQL** for the two new concurrency tests. vidra-user: `npx tsc
+--noEmit` clean, `npm run lint` 0 errors (2 warnings, both pre-existing on
+main), `npm run lint:icons` pass, `npm run test` **2,378 passed / 82 failed —
+and the same 82, in the same 7 files, fail on clean `origin/main` in this
+environment** (measured by stashing: 2,367 passed / 82 failed), dying on
+`window.localStorage.clear is not a function` under local Node 25 and this
+jsdom. Net: **+11 passing, zero new failures**; repo CI is the authority.
+**Unverified:** the frontend e2e and e2e-backed suites (this repo's AGENTS.md
+forbids running them locally); anything about **vidra-search**, which was not
+started, so nothing here re-proves that a block suppresses a search document;
+and anything **remote/federated** — the lab holds no remote rows. The meta
+compose render was not re-run: no compose, script or env file changed.
+
+**Findings recorded, not fixed.** (1) The last-admin race, above. (2)
+`AdminVideosView` and the watch-page action menu still block a video with **no
+reason at all**, so the creator gets the neutral notice from those two surfaces;
+only the moderation queue asks for one. (3) `caption_ready` has no notification
+chip entry either — pre-existing, and it falls through to the same neutral
+circle. (4) Remote video blocks still record the reporter's reason, which is
+correct only because `remote_video_blocks` reaches no local creator and sends no
+notification; if that ever changes it becomes the same leak. (5) An instance the
+0131 backfill could not resolve still has no owner and no route that can mint
+one — `vidra doctor` reports it and a hand-written `UPDATE` is still the repair.
+
+**Delivery order: core#176 → user#173 → this evidence PR.** user#173's
+`contract` check is red until core#176 merges, by construction, because
+`lib/api/generated.ts` is regenerated from core's branch spec and never
+hand-edited. Nothing is merged here and no deployment is authorized. The lab was
+torn down — postgres, redis, the SMTP sink, the api, the Next server and the
+proxy all stopped, the data directory removed, no listener left on
+3100/3200/8088/52525/55432/56379 — and no lab artefact is committed.
