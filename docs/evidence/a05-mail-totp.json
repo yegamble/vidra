@@ -1,11 +1,11 @@
 {
  "status": "A05's stopping criterion is MET under the owner's ruling (SMTP proven provider-agnostically, TOTP proven, OIDC decision-blocked). AUTH-03 flips to PASS. AUTH-04 flips for the TOTP half only, with OIDC recorded as decision-blocked and UNPROVEN.",
  "scope": "A05 / backlog item 17. Register rows AUTH-03 (email verification and password recovery deliver real mail) and AUTH-04 (TOTP enrollment, recovery and removal; OAuth/OIDC login/link/unlink).",
- "core_revision": "a05/mail-totp @ e7f91e6 (three commits on origin/main ebfc768)",
+ "core_revision": "a05/mail-totp @ 4a04f98 (one commit on origin/main ebfc768; the branch was squashed to drop a commit whose test fixture GitGuardian flagged)",
  "frontend_revision": "a05/mail-totp @ 98c584c (one commit on origin/main)",
  "search_revision": "vidra-search NOT modified and NOT run \u2014 nothing in this slice touches the search boundary",
  "pull_requests": {
-  "core": "yegamble/vidra-core#183",
+  "core": "yegamble/vidra-core#183 (READY; all six lanes green including GitGuardian)",
   "frontend": "yegamble/vidra-user#180 (READY; all seven lanes green including contract)",
   "meta": "yegamble/vidra#129 (this evidence PR)",
   "dependency_order": "core#183 first (it makes the mail the frontend copy points at actually redeemable), then frontend#180, then this. They are independent at the code level: core#183 changes NO OpenAPI and adds NO migration, so contract-ci had no ordering dependency and frontend#180's contract lane is green on its own."
@@ -510,7 +510,7 @@
  ],
  "gates": {
   "core": "make ci PASSED (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race); go vet -tags=integration ./... clean.",
-  "core_ci": "build-test, openapi, ipfs-private-integration and integration all pass. integration failed once on TestListTotalsExecuteAgainstPostgres ('total 28 but the unpaginated page has 27 rows') and passed on re-run \u2014 a lane this diff cannot reach (it touches internal/mail, internal/auth/reset.go, internal/httpapi/auth.go and cmd/api/main.go, none of them store pagination), and origin/main is green on the same lane. ipfs-integration failed on TestIntegrationPublicVideoRoundTrip timing out at 300s, the known flake recorded in the A12 evidence; re-run in flight at the time of writing.",
+  "core_ci": "All six lanes green on the final revision: build-test, openapi, integration, ipfs-integration, ipfs-private-integration and GitGuardian. Earlier revisions saw two flakes on lanes this diff cannot reach \u2014 integration on TestListTotalsExecuteAgainstPostgres ('total 28 but the unpaginated page has 27 rows'; origin/main is green on the same lane) and ipfs-integration on TestIntegrationPublicVideoRoundTrip timing out at 300s, the flake the A12 evidence already records. Both passed on re-run.",
   "frontend": "npm run ci: tsc, lint and the production build pass; vitest 253 files / 2517 tests pass. An earlier run reported 7 'failures' that were all vitest worker-startup timeouts under lab load \u2014 re-run unloaded, all green.",
   "frontend_ci": "All seven lanes green, contract included.",
   "not_run": [

@@ -6730,7 +6730,7 @@ PLAIN with a trusted CA, with the `DEV_MAIL_CAPTURE_ENABLED` seam **off** for
 every phase. **AUTH-04 flips for the TOTP half only**; OIDC login, link and
 unlink stay decision-blocked and explicitly unproven, recorded in the row rather
 than counted. [Core #183](https://github.com/yegamble/vidra-core/pull/183)
-(`e7f91e6`) and [frontend #180](https://github.com/yegamble/vidra-user/pull/180)
+(`4a04f98`) and [frontend #180](https://github.com/yegamble/vidra-user/pull/180)
 (`98c584c`) each carry one behavioural fix, tests first; **no migration** (latest
 stays 0133), **no OpenAPI change**, no generated file touched.
 [Sanitized evidence](evidence/a05-mail-totp.json) records **146 assertions across
@@ -6906,11 +6906,17 @@ documented configuration — recorded for whoever unblocks the provider decision
 Gates. Core `make ci` **passed** (fmt-check, vet, migrate-lint, openapi-verify,
 sqlc-verify, test-race) plus `go vet -tags=integration ./...` clean. Core CI:
 `build-test`, `openapi`, `ipfs-private-integration` and `integration` pass;
-`integration` failed once on `TestListTotalsExecuteAgainstPostgres` (*"total 28
-but the unpaginated page has 27 rows"*) and passed on re-run — a lane this diff
-cannot reach, and `origin/main` is green on it. `ipfs-integration` failed on
-`TestIntegrationPublicVideoRoundTrip` timing out at 300 s, the same flake the A12
-evidence records. Frontend: tsc, lint and the production build pass, and **253
+all six lanes are green on
+the final revision — `build-test`, `openapi`, `integration`, `ipfs-integration`,
+`ipfs-private-integration` and GitGuardian. Two earlier flakes, both on lanes
+this diff cannot reach, passed on re-run: `integration` on
+`TestListTotalsExecuteAgainstPostgres` (*"total 28 but the unpaginated page has
+27 rows"*, with `origin/main` green on the same lane) and `ipfs-integration` on
+`TestIntegrationPublicVideoRoundTrip` timing out at 300 s, the flake the A12
+evidence already records. GitGuardian went green only after the branch was
+**squashed**: it scores every commit in a PR, so the historical commit carrying
+the flagged test fixture kept the incident open even once the literal was gone
+from the tree. Frontend: tsc, lint and the production build pass, and **253
 test files / 2517 tests** pass — an earlier run reported seven "failures" that
 were all vitest worker-startup timeouts while the lab, `make ci` and Playwright
 were competing for the box; re-run unloaded, all green. All seven frontend CI
