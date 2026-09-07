@@ -6944,3 +6944,8 @@ Delivery order: **core#183 first** — it makes the mail the frontend copy point
 at actually redeemable — then **frontend#180**, then this evidence PR. They are
 independent at the code level. Nothing is merged here and no deployment is
 authorized.
+
+## A27 URL import, yt-dlp import and channel sync — 2026-09-07
+
+*In progress — this section is a placeholder while the A27 lab runs. It will be
+replaced by the measured evidence before this PR leaves draft.*
