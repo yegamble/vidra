@@ -1,0 +1,174 @@
+{
+  "item": "Storage hardening",
+  "title": "Boot write probe, typed storage refusals, api key redaction",
+  "date": "2026-09-08",
+  "kind": "code slice, not an acceptance run — nothing here is lab-observed",
+  "closes": {
+    "a24_finding_1": "no write probe on the boot path: an instance boots green on a credential that cannot store a byte",
+    "a24_finding_2": "a write refusal and a bucket-full refusal are both a bare 500 internal_error",
+    "a24_finding_3": "the api's request logger writes the full storage key where the worker's redacts it (the api half of A35's open object_key/storage_key item)",
+    "a24_finding_4": "docs/evidence/*.sh is linted by nothing in meta CI"
+  },
+  "prs": {
+    "vidra-core": {
+      "number": 196,
+      "branch": "storage/hardening",
+      "url": "https://github.com/yegamble/vidra-core/pull/196",
+      "scope": "the three code defects plus the OpenAPI prose"
+    },
+    "vidra-user": {
+      "number": 194,
+      "branch": "storage/hardening",
+      "url": "https://github.com/yegamble/vidra-user/pull/194",
+      "scope": "regen only — lib/api/generated.ts",
+      "ordering": "MERGE IMMEDIATELY AFTER core#196; the contract lane on main goes red the moment core merges"
+    },
+    "vidra": {
+      "number": 145,
+      "branch": "storage/hardening",
+      "url": "https://github.com/yegamble/vidra/pull/145",
+      "scope": ".github/workflows/meta-ci.yml lint loop; AGENTS.md rule 7 invoked deliberately — the lint gap IS the task"
+    }
+  },
+  "sc1_boot_write_probe": {
+    "seam": "cmd/api boot, synchronous, immediately before resolveBucketOwnership; then storage.WriteHealth.Run on its own ticker",
+    "cadence": "storage.WriteProbeInterval = 5 minutes, its OWN ticker, started in EVERY role",
+    "why_not_the_settings_poller": "the poller is role-gated and is never constructed in worker-role processes, and the worker is the process whose ability to write must not go unwatched (a transcode can run for minutes before its first PUT)",
+    "cost_per_probe": "one PUT and one DELETE of a 60-byte object under .vidra/write-probe/<rand>, outside every swept prefix, removed immediately",
+    "boot_behaviour": "a failed probe does NOT abort boot — an instance that cannot store bytes still serves every video it has and the admin console needed to fix the credential",
+    "component": {
+      "name": "storage",
+      "distinct_from": "the existing s3 component, which is BucketExists (a HeadBucket) — s3 asks whether the bucket is there, storage asks whether this instance can write to it",
+      "states": {
+        "not_configured": "no monitor wired, or wired and not yet probed (never a fault)",
+        "ok": "the last probe stored and removed an object",
+        "degraded": "the store took the write and refused the DELETE — writable, but a half-granted key (B2 grants deleteFiles separately from writeFiles)",
+        "down": "the last probe was refused; Error carries the class sentence and never the provider's text"
+      }
+    },
+    "readiness_semantics": {
+      "convention_followed": "handleReady takes an instance out of rotation for PostgreSQL and NOTHING else; Redis down is degraded-with-200 because every limiter fails open and 503ing on a shared Redis would empty every replica out of rotation at once",
+      "storage_decision": "the same argument applies to a SHARED bucket, so storage down reports the instance `degraded` with HTTP 200, not 503",
+      "component_severity": "down rather than degraded, because a store that will not accept a write is not impaired, it is unable"
+    },
+    "worker_behaviour": {
+      "gate": "transcode.WithStorageWriteGate, checked BEFORE the claim, beside the scratch floor",
+      "log": "transcode: deferring all jobs, the object store is not accepting writes  class=<class>",
+      "why": "a claim against an unwritable store spends a full encode and one of five attempts on a condition the video did not cause; five ticks dead-letter it permanently. Deferring leaves jobs 'pending' so restoring the credential drains them with no operator action",
+      "unprobed_is_writable": "an unprobed or unwired monitor answers writable — no evidence is not evidence of a refusal, and this gate must never be the reason work stops on an instance nobody has asked yet"
+    },
+    "never_logged": [
+      "the probe object key",
+      "the object key of any media",
+      "the provider's own sentence",
+      "the access key id or secret"
+    ],
+    "log_discipline": "a line is emitted only on a CHANGE of verdict — a store refusing for a week does not repeat every five minutes, and a recovery is never silent"
+  },
+  "sc2_typed_refusals": {
+    "classification_site": "internal/storage, at the backend boundary (S3.PutSized/Open/Delete/Exists/ListKeys/DeletePrefix/EnsureBucket, Local.Put/Open/Delete/DeletePrefix)",
+    "http_mapping": "503 storage_unavailable, from the CENTRAL error handler, so every media-writing path answers it — direct upload, resumable finalize, replace, thumbnails, captions, avatars, playlist covers",
+    "classes": {
+      "write_denied": {
+        "s3": ["AccessDenied", "AllAccessDisabled", "UnauthorizedAccess", "InvalidAccessKeyId", "SignatureDoesNotMatch", "AccountProblem", "InvalidObjectState", "NotEntitled", "bare 401/403/405"],
+        "local": ["EACCES / fs.ErrPermission", "EROFS"],
+        "body": "this instance's media store refused to accept the file: the configured credential can read the store but not write to it, so nothing can be uploaded, generated or transcoded until that is fixed. Grant the storage key permission to put and delete objects (on Backblaze B2, writeFiles and deleteFiles are granted separately), or check that the configured bucket is the one the key is scoped to, then retry — nothing was stored and nothing was lost"
+      },
+      "quota_exceeded": {
+        "s3": ["QuotaExceeded", "XMinioAdminBucketQuotaExceeded", "MaxBucketQuotaExceeded", "any answer whose text contains 'quota exceeded'", "507 Insufficient Storage"],
+        "local": ["ENOSPC", "EDQUOT", "EFBIG"],
+        "body": "this instance's media store has no room left — its bucket quota or its disk is full — so the file could not be stored. Free space or raise the quota, then retry: nothing was stored and nothing was lost"
+      },
+      "unreachable": {
+        "s3": ["NoSuchBucket", "InvalidBucketName", "PermanentRedirect", "AuthorizationHeaderMalformed", "SlowDown", "ServiceUnavailable", "InternalError", "RequestTimeout", "404/502/503/504", "dial and DNS failures", "context deadline/cancel"],
+        "local": [],
+        "body": "this instance cannot reach its media store right now, so the file could not be stored. This is usually a network path or an endpoint setting rather than anything about the file; retry shortly — nothing was stored and nothing was lost"
+      }
+    },
+    "response_shape": {
+      "status": 503,
+      "code": "storage_unavailable",
+      "leaks_asserted_absent": ["web-videos", "the video uuid", "s3", "Access Denied", ".mp4"]
+    },
+    "implementation_notes": [
+      "the classifier reaches the SDK's answer with errors.As, NOT minio.ToErrorResponse — that helper is a bare type switch with no unwrapping, so it answers an empty ErrorResponse for every error already wrapped with op/key context, which is every error a caller sees",
+      "the quota pass runs BEFORE the status-code pass: a bucket quota is the least standardised answer in the S3 API and MinIO's arrives as a 4xx that a forbidden-means-denied rule would otherwise swallow, sending an operator to fix permissions on a full bucket",
+      "classification WRAPS rather than replaces: Error() renders the provider's sentence with the class appended, so the operator log keeps everything it had and the worker's bounded-retry line names the class for free",
+      "ErrNotFound and ErrInvalidKey are never classified — a classified ErrNotFound would turn every missing thumbnail into a 503",
+      "an unrecognised provider answer is left UNCLASSIFIED and stays a 500: a class nobody can act on sends an operator to the wrong place"
+    ],
+    "no_half_write_invariant": "pinned by TestAttachOriginalOnARefusedWriteLeavesNoHalfWrittenRow for BOTH causes: video stays state=draft, 0 video_files rows, 0 daily-quota ledger appends"
+  },
+  "sc3_key_redaction": {
+    "seam_reused": "internal/jobstatus.RedactDetail — the same function the worker's job logger and internal/jobtrace already use; not forked, not reimplemented",
+    "api_site_fixed": "internal/httpapi/errors.go httpErrorHandler's 5xx branch: \"error\", err -> \"error\", jobstatus.RedactDetail(err.Error())",
+    "result": "storage: s3: put \"[redacted-key]\": Access Denied. — the cause survives, the key does not; URLs, credential-shaped pairs and email addresses in a driver's error are stripped too",
+    "guard": {
+      "name": "TestObjectKeyLogValuesAreRedacted",
+      "file": "internal/observability/logging_guard_test.go",
+      "mechanism": "AST walk over every non-test file in the module; an object-key-shaped log field whose value is not a Redact* call (or a string literal) fails the build",
+      "keys": ["object_key", "storage_key", "media_key", "source_key", "dest_key", "master_key"],
+      "exempt": "marker_key — its value is the constant .vidra/owner, and redacting a constant only makes the boot line harder to read",
+      "proved_red": "unwrapping internal/mediahash/service.go:115 made it fail with the file:line; restoring the wrap made it pass"
+    },
+    "a35_residue_closed": {
+      "internal/ipfsmirror/service.go": 18,
+      "internal/storagemigration/service.go": 6,
+      "internal/mediahash/service.go": 1,
+      "internal/delivery/resolver.go": 1,
+      "total": 26,
+      "remaining_unredacted_in_internal": "none"
+    }
+  },
+  "sc4_meta_lint": {
+    "change": "docs/evidence/*.sh added to meta-ci.yml's Lint shell scripts loop, with shopt -s nullglob so an empty glob skips rather than handing shellcheck a literal pattern",
+    "scripts_linted": 15,
+    "planter_result": "bash -n and shellcheck -x on docs/evidence/a24-plant-foreign-media.sh both pass — the file A24 had to lint by hand",
+    "agents_rule_7": "invoked deliberately: the lint gap IS the task. No image digest or pinned version is touched."
+  },
+  "contract": {
+    "openapi_changes": "prose only — a documented 503 storage_unavailable on POST /videos/{id}/file, the storage component named beside s3 on /admin/system, ComponentStatus and ReadinessResponse descriptions",
+    "generated_types": "unchanged — ErrorBody.code has no enum, ReadinessResponse.components is a free-form map",
+    "why_a_regen_is_still_needed": "openapi-typescript carries description text into vidra-user/lib/api/generated.ts (the same reason user#193 existed for the degraded component state)",
+    "regen_diff": "lib/api/generated.ts, 12 insertions, 3 deletions"
+  },
+  "gates": {
+    "vidra-core": {
+      "make ci": "exit 0 — fmt-check, go vet ./..., migrate-lint 135 migrations clean, TestOpenAPIContract, go test -race ./...",
+      "go vet -tags=integration ./...": "exit 0",
+      "reruns": "internal/media TestHardwareBootProbeNamesTheCombination failed once with 'signal: killed' on its ffmpeg stub while an npm ci competed for the box, and passed alone on re-run — the known load-flakiness class, in a package this slice does not touch"
+    },
+    "vidra-user": {
+      "npm run typecheck": "exit 0",
+      "npm run lint": "exit 0 (2 pre-existing warnings, 0 errors)",
+      "npm run check:contract": "PASS — 239 backend paths / 313 operations, 210 paths and 267 apiRequest call sites in the frontend client",
+      "not_run": ["npm run test (vitest)", "npm run build", "e2e", "e2e-backed"]
+    },
+    "vidra": {
+      "bash -n + shellcheck -x": "15/15 scripts clean under the new loop",
+      "python3 -m unittest discover -s tests -p '*_test.py'": "42 tests OK",
+      "compose config -q": "PASS with the seven ${VAR:?} keys filled with obviously fake dummies",
+      "profile render": {
+        "postgres": "no ports, postgres_data volume",
+        "redis": "no ports",
+        "search": "no ports, search_models volume",
+        "api": "127.0.0.1:8080 only; media_data, transcode_tmp, live_hls",
+        "frontend": "127.0.0.1:3000 only",
+        "migrate": "no volumes at all"
+      },
+      "note": "the nested checkouts were symlinked into the worktree for the render and removed before committing; the commit used an explicit git add path"
+    }
+  },
+  "not_lab_observed": [
+    "no MinIO, no container and no lab of any kind was started for this slice",
+    "the write-denied and bucket-quota answers are reproduced from A24's recorded measurements, not re-measured against a live store",
+    "the S3 integration lane (S3_TEST_ENDPOINT=... go test -tags=integration ./internal/storage/...) was not executed locally; go vet -tags=integration proves it compiles and CI's lane is the proof it passes",
+    "the class table's S3 signals beyond AccessDenied and XMinioAdminBucketQuotaExceeded/'Bucket quota exceeded' are by construction — neighbouring codes, matched by code AND by message so an unfamiliar provider's spelling of a quota still lands on quota_exceeded rather than on permissions",
+    "no real provider was exercised: Backblaze B2's 'not entitled', its separately granted deleteFiles, and AWS/DigitalOcean quota shapes remain untested",
+    "the degraded-on-leaked-cleanup component state and the worker's deferral log line are unit tested and have never been seen against a real store"
+  ],
+  "still_open_elsewhere": [
+    "B2 bucket-GC destruction and B2 versioning double-billing — untouched by this slice",
+    "A24's selected-provider half (no beta-bucket credentials on this machine)"
+  ]
+}

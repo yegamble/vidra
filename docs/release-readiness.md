@@ -10302,3 +10302,189 @@ Postgres cluster and redis, the four lab accounts and their media, and the
 read-only MinIO user and its policy. The `mirror.gcr.io/minio/minio` and
 `mirror.gcr.io/minio/mc` images are kept. Credentials, raw logs and the media
 fixture stay private under `/tmp/vidra-a24-r1`; nothing from it is committed.
+
+## Storage hardening — boot write probe, typed refusals, key redaction — 2026-09-08
+
+**A24 recorded three defects and fixed none of them. This is all three**, plus
+the meta lint gap it found on the way. It is a code slice, not an acceptance
+run: no lab was stood up, no MinIO was started, and nothing below is
+lab-observed. What is claimed is what the gates prove — unit tests, `make ci`,
+the integration vet, and the meta render — and the failures the code now
+handles are reproduced from A24's own measurements rather than re-measured.
+vidra-core [#196](https://github.com/yegamble/vidra-core/pull/196), vidra-user
+[#194](https://github.com/yegamble/vidra-user/pull/194) (regen only), meta
+[#145](https://github.com/yegamble/vidra/pull/145). Complete result:
+[`storage-hardening.json`](evidence/storage-hardening.json).
+
+**What failed first.** A24 pointed an instance at a MinIO credential holding
+`s3:ListBucket`/`s3:GetBucketLocation` on the bucket and `s3:GetObject` on its
+objects. The api and the worker **booted normally**, served every page, and
+failed the first upload with `HTTP 500 internal_error / "an unexpected error
+occurred"`; the sentence an operator needed — `storage: s3: put
+"web-videos/<id>.mp4": Access Denied.` — reached the server log only, with the
+full object key in it. A bucket quota behaved identically. That is three
+separate faults in one screenshot: a boot path that only ever asks READ
+questions, a refusal with no stable code, and a log line the worker's own
+redaction would have caught.
+
+**1. The boot write probe.** Every storage check on the boot path is a read.
+`EnsureBucket` is a HeadBucket, the ownership-marker read is a GET, the
+emptiness check is a list — and a read-scoped credential passes all three.
+`storage.ProbeWrite` has existed for exactly this since the migration its own
+comment records (three minutes of work, then 1,321 failed avatar uploads on a
+read-only key); it was wired into `vidra doctor` and the storage-migration
+preflight and **never into `main()`**.
+
+It is now, and the shape matters more than the fact:
+
+- **Seam**: `cmd/api` boot, synchronously, immediately before bucket-ownership
+  resolution — the same place that already needs both halves of a storage
+  question answered once per boot.
+- **Cadence**: its **own five-minute ticker** (`storage.WriteProbeInterval`),
+  started in **every role**, not a hook on the settings poll. The poller is
+  role-gated — worker-role processes never construct one — and the worker is
+  precisely the process whose ability to write must not go unwatched: a
+  transcode can run for minutes before its first PUT discovers a key revoked
+  while it worked. The cost is one PUT and one DELETE of a 60-byte object every
+  five minutes per process, under `.vidra/write-probe/`, outside every swept
+  prefix, removed again immediately.
+- **It does not abort boot.** An instance that cannot store bytes still serves
+  every video it already has and still serves the admin console the operator
+  needs in order to fix the credential. Refusing to start would take the fix
+  away along with the fault.
+- **Readiness follows the convention already in the file rather than inventing
+  one.** `handleReady` takes an instance out of rotation for PostgreSQL and
+  nothing else: Redis down is `degraded` with a 200, because every limiter in
+  front of the server fails open and 503ing on a shared Redis would empty every
+  replica out of rotation simultaneously. A shared bucket is the same argument,
+  so **the `storage` component goes `down` and the instance reads `degraded`
+  with a 200**. The component is `down` and not `degraded` on purpose: a store
+  that will not take a write is not impaired, it is unable.
+- **The worker acts on its own verdict** through job admission, the scratch
+  floor's rule applied to the other destination a transcode writes to
+  (`transcode: deferring all jobs, the object store is not accepting writes`).
+  A claim against an unwritable store spends a full encode and one of five
+  attempts on a condition the video did not cause; five ticks dead-letter it
+  permanently. Deferring leaves the jobs `pending`, so restoring the credential
+  drains them with no operator action — the shape A24 watched a raised quota
+  produce.
+- **Neither the component nor the log line carries a key or the provider's
+  sentence.** The class is the whole actionable content, and the log line is
+  emitted only on a CHANGE of verdict, so a store that has been refusing for a
+  week does not repeat itself every five minutes and a recovery is never silent.
+
+**2. Typed refusals.** `internal/storage` classifies at the backend boundary —
+the only place that can see the provider's answer — into three classes, because
+three are the distinct fixes:
+
+| class | what it means | S3 signals | local signals |
+|---|---|---|---|
+| `write_denied` | the store answered and refused the write | `AccessDenied`, `InvalidAccessKeyId`, `SignatureDoesNotMatch`, `NotEntitled`, bare 401/403/405 | `EACCES`, `EROFS` |
+| `quota_exceeded` | accepted, nowhere to put it | `QuotaExceeded`, `XMinioAdminBucketQuotaExceeded`, any answer whose text says "quota exceeded", 507 | `ENOSPC`, `EDQUOT`, `EFBIG` |
+| `unreachable` | could not be asked, or the destination is gone | `NoSuchBucket`, `SlowDown`, 502/503/504, dial/DNS failures, deadlines | — |
+
+Two implementation notes worth keeping. The classifier reaches the SDK's answer
+with `errors.As`, **not `minio.ToErrorResponse`**: that helper is a bare type
+switch with no unwrapping, so it answers an empty `ErrorResponse` for every
+error this package has already wrapped with its own op/key context — which is
+every error a caller ever sees. And the quota pass runs **before** the
+status-code pass, because a bucket quota is the least standardised answer in the
+S3 API and MinIO's arrives as a 4xx that a forbidden-means-denied rule would
+otherwise swallow — sending an operator to fix permissions on a full bucket.
+
+The classification **wraps rather than replaces**, so the operator log keeps the
+provider's sentence and gains the class (`… Access Denied. [write_denied]`) and
+the worker's bounded-retry line names the class for free, through the redaction
+it already applies. An answer this package does not recognise is left
+unclassified and stays a 500: a class nobody can act on sends an operator to the
+wrong place.
+
+The central handler maps a classified failure to **`503 storage_unavailable`**
+with a fixed sentence per class — the A17 idiom, because 503 is a 5xx and the
+scrubber eats every 5xx message without a stable code, which is exactly why A24
+measured a revoked key and a full bucket arriving as the same bare 500. The
+exact body for a write refusal:
+
+```json
+{"error":{"code":"storage_unavailable","message":"this instance's media store refused to accept the file: the configured credential can read the store but not write to it, so nothing can be uploaded, generated or transcoded until that is fixed. Grant the storage key permission to put and delete objects (on Backblaze B2, writeFiles and deleteFiles are granted separately), or check that the configured bucket is the one the key is scoped to, then retry — nothing was stored and nothing was lost","request_id":"…"}}
+```
+
+A test pins that the body carries no `web-videos`, no video id, no `s3` and no
+`Access Denied`. It is at the CENTRAL handler and not in the upload handler, so
+every path that stores media — direct upload, resumable finalize, replace,
+thumbnails, captions, avatars, playlist covers — answers the same way rather
+than only the one endpoint A24 happened to exercise. **The draft/quota
+accounting is unchanged and now pinned**: a refused write leaves the video
+`draft`, zero `video_files`, and nothing appended to the daily-quota ledger,
+for both the write-denied and the bucket-quota cause.
+
+**3. Key redaction, and the guard that keeps it.** The api's request logger
+wrote the full storage key into its error line where the worker's job logger
+writes `[redacted-key]` for the very same failure. It now goes through
+`jobstatus.RedactDetail` — **the same seam, reused, not forked** — which also
+strips URLs, credential-shaped pairs and email addresses, so a DSN or a
+recipient inside a driver's error stops landing there too. The cause survives:
+the line still reads `storage: s3: put "[redacted-key]": Access Denied.`
+
+A redaction only one of two loggers applies is decoration, so the rule is now
+mechanical. `TestObjectKeyLogValuesAreRedacted` in `internal/observability`
+parses every non-test file in the module and fails when an object-key-shaped
+field name (`object_key`, `storage_key`, `media_key`, `source_key`, `dest_key`,
+`master_key`) is given a value that is not a `Redact*` call or a string literal.
+It was proved to fail by unwrapping one site, and adding it required closing the
+**26 sites A35 left open** — ipfsmirror 18, storagemigration 6, mediahash 1,
+delivery 1. `marker_key` is deliberately exempt: its value is the constant
+`.vidra/owner`, and redacting a constant only makes the boot line harder to
+read. **Nothing under `object_key`/`storage_key` remains unredacted in
+`internal/`.**
+
+**4. The meta lint gap.** `docs/evidence/*.sh` was linted by nothing — the loop
+covered `bootstrap.sh`, `install.sh`, `tests/*.sh` and `deploy/*.sh` — so A24
+linted its planter by hand. It is in the loop now (with `shopt -s nullglob`, so
+an empty glob skips rather than handing shellcheck a literal pattern), which
+takes the lint set from 14 scripts to 15. This touches
+`.github/workflows/meta-ci.yml`, which AGENTS.md rule 7 reserves for when it IS
+the task: it is one of the three findings this slice closes, and no image digest
+or pinned version is touched. A39 closed the identical gap one directory over.
+
+**Contract.** `api/openapi.yaml` gains prose only — the `storage_unavailable`
+503 on the upload endpoint, the `storage` component beside `s3` on
+`/admin/system`, and the readiness rule the code has always followed and never
+wrote down. `ErrorBody.code` has no enum and `ReadinessResponse.components` is a
+free-form map, so **no generated type changes**; but openapi-typescript carries
+descriptions into vidra-user's `generated.ts`, so the `contract` lane goes red
+the moment core merges. vidra-user#194 is the regen, prepared and open as a
+draft: **merge it immediately after core#196**.
+
+**Gates.** vidra-core `make ci` exits 0 (fmt-check, `go vet ./...`,
+migrate-lint at 135 migrations, the OpenAPI contract test, `go test -race
+./...`) and `go vet -tags=integration ./...` exits 0. One re-run was needed:
+`internal/media`'s `TestHardwareBootProbeNamesTheCombination` failed once with
+`signal: killed` on its ffmpeg stub while an `npm ci` was competing for the box,
+and passed on its own — the known load-flakiness class, in a package this slice
+does not touch. vidra-user `npm run typecheck`, `npm run lint` and `npm run
+check:contract` all pass on the regen (239 backend paths / 313 operations).
+Meta: `bash -n` + `shellcheck -x` over all **15** scripts the new loop reaches
+including the A24 planter, `python3 -m unittest discover -s tests` is **42 tests
+OK**, prod `config -q` passes with the seven `${VAR:?}` keys filled with
+dummies, and the `--profile core --profile frontend` render still shows
+postgres/redis/search publishing **no ports**, api and frontend on **127.0.0.1
+only**, and `migrate` with **no volumes at all**.
+
+**Unverified, and named rather than skipped.** Nothing here is
+**lab-observed**: no MinIO ran, no container was started, and the write-denied
+and quota answers are reproduced from A24's recorded measurements rather than
+re-measured against a live store. The S3 integration lane
+(`S3_TEST_ENDPOINT=… go test -tags=integration ./internal/storage/...`) was NOT
+executed locally — `go vet -tags=integration ./...` proves it compiles, and CI's
+lane is the proof that it passes. The class table's S3 signal list is therefore
+**partly by construction**: `AccessDenied` and MinIO's
+`XMinioAdminBucketQuotaExceeded`/"Bucket quota exceeded" are the two A24
+actually saw, and the rest are the neighbouring codes, matched by code AND by
+message so an unfamiliar provider's spelling of a quota still lands on
+`quota_exceeded` rather than on permissions. A real provider's answers — B2's
+`not entitled`, its separately-granted `deleteFiles`, DigitalOcean's and AWS's
+quota shapes — remain untested, and **the two open B2 risks (bucket-GC
+destruction, versioning double-billing) are untouched by this**. The
+`degraded`-on-leaked-cleanup state and the worker's deferral log line are unit
+tested and have never been seen on a real store.
