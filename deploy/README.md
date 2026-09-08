@@ -1385,13 +1385,28 @@ to the frontend site block and never to the api routes — edge compression on
 already-compressed media buys nothing and is the classic way to break seeking.
 
 For a shared CDN, use an origin shield and bypass caching whenever
-`Authorization`, cookies, or `pt` are present. Promoting versioned public-video
-HLS from `private` to shared `public` caching is safe only after the deployment
-can purge every old URL on privacy changes and deletion; otherwise an old CDN
-entry can outlive the API authorization decision. Keep live playlists uncached
-and use a short TTL for live segments. Configure vendor-specific shield and
-purge hooks outside the application—the reference stack deliberately does not
-pretend a particular CDN exists.
+`Authorization`, cookies, or `pt` are present. Keep live playlists uncached and
+use a short TTL for live segments. Configure vendor-specific shield and purge
+hooks outside the application—the reference stack deliberately does not pretend
+a particular CDN exists.
+
+**`DELIVERY_CDN_BASE_URL` points at THIS API, not at your bucket** (A33
+remediation, 2026-09-08). Vidra builds the edge URL from the api's own media
+route path and query, so the edge fetches `/api/v1/videos/<id>/…` from the api
+host. Three things the edge has to do: forward `Range`, honour the origin's
+`Cache-Control`, and pass the query string through as part of the cache key —
+`?v=<tag>` is the transcode generation, and an edge that drops it will serve one
+generation's bytes under another's URL. A deployment that configured this key
+against a bucket origin must repoint it; `delivery_cdn_enabled` defaults off, so
+an upgrade alone changes nothing.
+
+That reversal is also what makes the promotion above safe. The table's `private`
+values are what a viewer and any intermediary get; the edge's own origin fetch
+of a publicly servable object gets the same window as `public`, because the api
+re-runs the route's authorization on every miss and revalidation and Vidra can
+purge that particular cache by URL. A bucket origin could do neither: it had to
+be world-readable for the edge to read it, and the next request after a purge
+simply re-cached the object. Full detail in vidra-core `docs/operations.md`.
 
 The frontend's Next.js `assetPrefix` is a separate static-JS/CSS lever. Set it
 only when those assets are actually published at a CDN origin; it does not alter
