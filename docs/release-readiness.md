@@ -10687,7 +10687,8 @@ The regeneration action is `POST /api/v1/admin/videos/{id}/transcoding
 from `media.HLSPrefixForSource`, which reads the **source key's** `.rN` suffix —
 so a rerun from an unchanged source is still version 0 and writes into the
 **same fourteen keys**. No `rN` directory appears. The `?v=` tag *does* move
-(`dl9u7z2ka8zk` → `dl9uk83vtg8w` → `dl9umisk1y54`), but `cdn.EdgeURL` is
+(`dl9u7z2ka8zk` → `dl9uk83vtg8w` → `dl9ul8ub68yo` → `dl9umisk1y54`, once per
+rerun across three), but `cdn.EdgeURL` is
 `base + "/" + key` with no query at all, so **the version tag never reaches the
 edge and cannot version it**. With `transcoding_max_fps` moved 0 → 24 between
 runs so the encoder genuinely produced different bytes:
