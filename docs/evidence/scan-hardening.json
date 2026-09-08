@@ -5,10 +5,10 @@
   "frontend_revision": "scan/hardening @ 21608c0",
   "search_revision": "vidra-search NOT touched and NOT run",
   "pull_requests": {
-    "core": "yegamble/vidra-core#201",
+    "core": "yegamble/vidra-core#201 \u2014 MERGED as 492da35",
     "user": "yegamble/vidra-user#196",
-    "meta": "yegamble/vidra#PENDING",
-    "ordering": "No OpenAPI schema changed (the two new error codes are prose in the ErrorResponse envelope, not an enum), so there is no contract-ci ordering and no client regeneration. The user PR does not have to land after core. The META PR does: its templates set MALWARE_SCAN_MODE=disabled, which vidra-core v0.6.2 rejects as an unknown mode at boot."
+    "meta": "yegamble/vidra#150",
+    "ordering": "No OpenAPI schema changed (the two new error codes are prose in the ErrorResponse envelope, not an enum), so there is no contract-ci ordering and no client regeneration. core#201 is merged. The meta templates are no longer version-gated: they are safe on the currently pinned v0.6.2 (which reads MALWARE_SCAN_ENABLED=false from its own compose default and simply does not scan; clamd runs idle) and turn scanning on by themselves once the pin advances to a release carrying #201."
   },
   "migration": "none",
   "posture_matrix": [
@@ -196,7 +196,7 @@
   "gates": {
     "core": "make ci PASS (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race); go vet -tags=integration ./... clean; go test ./... all packages ok",
     "user": "Node 26.8.1 - tsc --noEmit clean; eslint 0 errors and the 2 pre-existing warnings on main (WatchView no-location-assign, remote-search _dropped); lint:icons pass; vitest run 255 files / 2549 tests pass",
-    "meta": "bash -n and shellcheck: no scripts touched; python3 -m unittest discover -s tests -p '*_test.py' PASS (42 tests); prod compose render config -q exit 0 with the 8 required keys filled with dummies; the --profile core --profile frontend render re-asserted (postgres/redis/search publish no ports, api and frontend publish on 127.0.0.1 only, migrate has no volumes). meta-ci: bundle PASS, boot PASS, GitGuardian PASS, `validate` FAILS BY CONSTRUCTION on MALWARE_SCAN_MODE=disabled against the pinned v0.6.2 core \u2014 see hard_ordering_constraint.",
+    "meta": "bash -n and shellcheck clean on deploy/deploy.sh (only the pre-existing SC1091 about sourcing lib.sh); python3 -m unittest discover -s tests -p '*_test.py' PASS (48 tests, 6 new); prod compose render config -q exit 0 with the 8 required ${VAR:?} keys dummied; the --profile core --profile frontend --profile scan render asserted (clamav present and publishing no ports, api carrying CLAMAV_ADDR=clamav:3310 and MALWARE_SCAN_MODE=fail-closed, postgres/redis/search no ports, api and frontend on 127.0.0.1 only, migrate no volumes); and `vidra setup` built from core main run end to end against the edited template \u2014 no compatibility block, setup --check reports 88 variables and no problems.",
     "red_first": "verified by reverting the change and re-running: uploadfinalize (session settles processing with an empty failure_reason, job stays pending on the ladder); httpapi TestUploadVideoFileScanOutcomes (500 scrubbed instead of 422); vidra-user upload.test.tsx twice (features.uploads read removed; empty state stubbed out)"
   },
   "unverified": [
@@ -204,7 +204,21 @@
     "NOT run: the core integration and ipfs-* tagged lanes locally (CI ran them green on core#201), any frontend e2e or e2e-backed lane, and vidra-search (untouched).",
     "The in-memory scan of the small object classes is proven against a fake FileScanner, not clamd. ClamAV.ScanBytes shares the whole INSTREAM body with the already-exercised Scan; only the reader source differs.",
     "The one-per-boot system.malware_scan.disabled audit row is pinned by reading the boot path, not by observing a boot.",
-    "No measurement of what scanning every avatar and caption costs a busy instance in clamd round-trips."
+    "No measurement of what scanning every avatar and caption costs a busy instance in clamd round-trips.",
+    "The deploy guard is proven against the extracted shell function and the real setup engine's output, NOT against a running deploy: no clamd was started and no stack was brought up in this slice."
   ],
-  "hard_ordering_constraint": "The meta env templates set MALWARE_SCAN_MODE=disabled. vidra-core v0.6.2 (the currently pinned release) validates MALWARE_SCAN_MODE against three values and REFUSES TO BOOT on 'disabled'. meta-ci's `validate` job runs the real loader through `vidra setup --check` against the pinned nested checkout and FAILS on this branch with: MALWARE_SCAN_MODE \"disabled\" must be one of fail-closed, fail-open, quarantine. That is the gate doing its job, not a defect. meta#150 stays DRAFT and is not mergeable until the nested vidra-core checkout is pinned at a release carrying core#201, at which point validate goes green with no edit to the branch. The prod compose render is clean regardless, because Compose does not validate the value."
+  "template_posture": {
+    "ruling": "scan by default, explicit opt-out",
+    "production_and_staging": "CLAMAV_ADDR=clamav:3310 ACTIVE, MALWARE_SCAN_MODE=fail-closed ACTIVE, `scan` added to VIDRA_COMPOSE_PROFILES, and `# MALWARE_SCAN_MODE=disabled` documented as the commented opt-out with its costs (boot WARN, one system.malware_scan.disabled audit row per boot, every user-supplied file stored unscanned, and the boot refusal if it is combined with a set CLAMAV_ADDR).",
+    "dev_templates": "local/dev-remote/qa keep MALWARE_SCAN_MODE=disabled ACTIVE, deliberately and with the reason in the file: the Makefile dev targets hardcode `--profile core --profile frontend` and never start the bundled clamd, so an active CLAMAV_ADDR would make fail-closed refuse every upload on `make dev`. A dev box that ingests unscanned is precisely what the opt-out exists for, and it now says so in a WARN and an audit row.",
+    "corrected_from": "an earlier draft of this branch shipped MALWARE_SCAN_MODE=disabled ACTIVE in production and staging too, which would have opted every fresh install out of the ruled posture.",
+    "ram": "clamd holds ~1.5-2 GiB resident for its signature database; the production template states this beside the address, because a 2 GB droplet is not enough with scanning on."
+  },
+  "deploy_guard": {
+    "finding": "`vidra setup --scan=false` drops `scan` from VIDRA_COMPOSE_PROFILES and LEAVES CLAMAV_ADDR untouched. Verified by building the engine from core main (492da35) and running it with --scan=false and --scan=true against the edited template. Hand-editing either line produces the same pair.",
+    "consequence": "an instance that boots healthy, passes its health probes, and then refuses every upload, URL import, poster, avatar, banner, caption track, playlist cover, instance-branding image and DM attachment \u2014 fail-closed cannot reach a container nothing started, and no log line mentions a profile.",
+    "fix": "deploy/deploy.sh require_scanner_profile(), a 0/6 pre-flight beside the existing checks. It ADDS a check and does not touch the sacred dump -> pull -> migrate -> up -> probe ordering. It fires only for the BUNDLED `clamav` service name: an external clamd is the operator's own host, which this project neither starts nor can verify. The refusal names all three remedies (add the profile, point at an external clamd, or take the documented opt-out) and quotes the MALWARE_SCAN_MODE actually in force.",
+    "tests": "tests/scanner_profile_test.py \u2014 6 tests lifting the function out of the real script (the tests/rollback_floor_test.py idiom), verified RED by neutering the guard.",
+    "still_open_upstream": "core's setup engine remains able to emit the incoherent pair; the deploy guard catches it at deploy time rather than at generation time. A follow-up in vidra-core could make --scan=false clear CLAMAV_ADDR (or set the opt-out) so the engine never writes a configuration it would refuse to run."
+  }
 }

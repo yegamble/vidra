@@ -11747,26 +11747,48 @@ with **no OpenAPI schema change** (the two new error codes are prose in the
 `ErrorResponse` envelope, not an enum), so there is no `contract-ci` ordering
 and no client regeneration. [Evidence](evidence/scan-hardening.json).
 
-**One ordering constraint, and it is a real one — CI proves it.** The env
-templates here now set `MALWARE_SCAN_MODE=disabled`. vidra-core **v0.6.2 — the
-currently pinned release — validates that variable against three values and
-refuses to boot on `disabled`.** The prod compose render is clean (Compose does
-not validate the value), but meta-ci's `validate` job runs the REAL loader
-through `vidra setup --check` against the pinned checkout, and it fails exactly
-as an operator's boot would:
+**The templates ship scanning ON, and that took a deploy-tooling guard to make
+safe.** The owner's ruling is scan-by-default with an explicit opt-out, so
+`env/production.env.example` and `env/staging.env.example` now carry
+`CLAMAV_ADDR=clamav:3310` and `MALWARE_SCAN_MODE=fail-closed` **active**, with
+`scan` added to `VIDRA_COMPOSE_PROFILES` and `# MALWARE_SCAN_MODE=disabled`
+documented as the commented opt-out (with its costs: the boot WARN, the
+per-boot `system.malware_scan.disabled` audit row, and every user-supplied file
+stored unscanned). An earlier draft of this branch shipped the opt-out ACTIVE,
+which would have opted every fresh install out of the posture the ruling
+requires.
 
-```
-setup: refusing to write …/production.env — the configuration it describes would not boot:
-  ✗ MALWARE_SCAN_MODE: config: MALWARE_SCAN_MODE "disabled" must be one of fail-closed, fail-open, quarantine
-```
+The address and the profile are **one decision**, and proving that cost a real
+finding: `vidra setup --scan=false` drops `scan` from `VIDRA_COMPOSE_PROFILES`
+and **leaves `CLAMAV_ADDR` untouched** — verified by building the engine from
+core `main` and running it both ways. That pair is a deployment which boots
+healthy, passes its health probes, and then refuses every upload, import,
+poster, avatar, banner, caption and DM attachment, because fail-closed cannot
+reach a container nothing started, and no log line anywhere says "profile". The
+same pair comes out of hand-editing either line.
 
-That is not a defect in this change, it IS the change, caught by the gate whose
-whole job is to catch it. **[meta #150](https://github.com/yegamble/vidra/pull/150)
-therefore stays a draft and is NOT mergeable until the nested vidra-core checkout
-is pinned at a release carrying [core #201](https://github.com/yegamble/vidra-core/pull/201)**
-— at which point `validate` goes green on its own with no edit to this branch.
-A deploy that picks up the new template against the old image is a boot failure,
-not a degraded mode, which is why the template change cannot ship first.
+`deploy/deploy.sh` now refuses it at pre-flight (`require_scanner_profile`,
+beside the other 0/6 checks — it adds a check, it does not touch the sacred
+ordering of dump → pull → migrate → up → probe). It fires only for the
+**bundled** service name: an external clamd is the operator's own host, which
+this project neither starts nor can verify. Six tests in
+`tests/scanner_profile_test.py` lift the function out of the real script, and
+were verified RED by neutering the guard.
+
+**This also cleared the `validate` blocker without waiting for a release**, and
+the templates are safe on the currently pinned core either way: v0.6.2 reads
+`MALWARE_SCAN_ENABLED=false` from its own compose default and simply does not
+scan (clamd runs, idle), while a pin advanced to any release carrying
+[core #201](https://github.com/yegamble/vidra-core/pull/201) — **merged** as
+`492da35` — turns scanning on with no env edit. Nothing about the template is
+version-gated any more.
+
+**The three dev templates deliberately keep the opt-out ACTIVE**, and that is
+not an inconsistency. The Makefile's dev targets hardcode `--profile core
+--profile frontend` and never start the bundled clamd, so an active
+`CLAMAV_ADDR` there would make fail-closed refuse every upload on `make dev`.
+A dev box that ingests unscanned is exactly what the opt-out is for — and it now
+says so in a boot WARN and an audit row instead of being silent.
 
 ### The ruling, and the posture it replaces
 
@@ -11895,10 +11917,17 @@ package green; core#201's CI ran `build-test`, `integration`, `ipfs-integration`
 pre-existing warnings on `main`, `lint:icons` pass, `vitest run` **255 files /
 2549 tests pass** (up from 254/2541). Meta: no scripts touched so `bash -n` and
 `shellcheck` have nothing to lint, `python3 -m unittest discover -s tests -p
-'*_test.py'` PASS, the prod render `config -q` exits 0 with the **8** required
-`${VAR:?}` keys filled with dummies, and the `--profile core --profile frontend`
-render re-asserted: postgres, redis and search publish **no** ports, api and
-frontend publish on **127.0.0.1** only, and `migrate` still has **no volumes**.
+'*_test.py'` PASS (**48** tests, 6 of them new), `bash -n` and `shellcheck`
+clean on `deploy/deploy.sh` (only the pre-existing SC1091 about sourcing
+`lib.sh`), the prod render `config -q` exits 0 with the **8** required
+`${VAR:?}` keys filled with dummies, and the render re-asserted under `--profile
+core --profile frontend --profile scan`: the **`clamav` service is present and
+publishes no ports**, the api carries `CLAMAV_ADDR=clamav:3310` and
+`MALWARE_SCAN_MODE=fail-closed`, postgres/redis/search publish **no** ports, api
+and frontend publish on **127.0.0.1** only, and `migrate` still has **no
+volumes**. `vidra setup` built from core `main` was run against the edited
+template end to end: no compatibility block, and `setup --check` reports
+**88 variables, no problems**.
 
 RED verified by reverting, not asserted: the upload session settles `processing`
 with an empty `failure_reason` and the job sits `pending` on the ladder; the
