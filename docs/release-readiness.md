@@ -10505,7 +10505,7 @@ The lab is A24's shape with two additions. A vidra-core api on 127.0.0.1:8088
 and a second process at `VIDRA_ROLE=worker`, behind the usual pipe-only
 one-origin proxy on 127.0.0.1:8099 that drops the client's `Accept-Encoding` and
 never follows a redirect, in front of `node .next/standalone/server.js` on
-:3100; native PostgreSQL 16 on 55460 and redis on 56390, both fresh; schema 135;
+:3100; native PostgreSQL 16 on 55460 and redis on 56400, both fresh; schema 135;
 core built from `origin/main` `cb2d2780`, frontend the unmodified `main`
 `2f71336c` standalone build baked at `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8099`;
 Node 26.8.1. The object store is one `mirror.gcr.io/minio/minio` on
