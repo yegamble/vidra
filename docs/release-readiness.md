@@ -11747,13 +11747,26 @@ with **no OpenAPI schema change** (the two new error codes are prose in the
 `ErrorResponse` envelope, not an enum), so there is no `contract-ci` ordering
 and no client regeneration. [Evidence](evidence/scan-hardening.json).
 
-**One ordering constraint, and it is a real one.** The env templates here now
-set `MALWARE_SCAN_MODE=disabled`. vidra-core **v0.6.2 — the currently pinned
-release — validates that variable against three values and refuses to boot on
-`disabled`.** Merging this PR is safe (templates are examples, and the prod
-render is clean because Compose does not validate the value). Using them is
-gated on a core release carrying #201. A deploy that picks up the new template
-against the old image is a boot failure, not a degraded mode.
+**One ordering constraint, and it is a real one — CI proves it.** The env
+templates here now set `MALWARE_SCAN_MODE=disabled`. vidra-core **v0.6.2 — the
+currently pinned release — validates that variable against three values and
+refuses to boot on `disabled`.** The prod compose render is clean (Compose does
+not validate the value), but meta-ci's `validate` job runs the REAL loader
+through `vidra setup --check` against the pinned checkout, and it fails exactly
+as an operator's boot would:
+
+```
+setup: refusing to write …/production.env — the configuration it describes would not boot:
+  ✗ MALWARE_SCAN_MODE: config: MALWARE_SCAN_MODE "disabled" must be one of fail-closed, fail-open, quarantine
+```
+
+That is not a defect in this change, it IS the change, caught by the gate whose
+whole job is to catch it. **[meta #150](https://github.com/yegamble/vidra/pull/150)
+therefore stays a draft and is NOT mergeable until the nested vidra-core checkout
+is pinned at a release carrying [core #201](https://github.com/yegamble/vidra-core/pull/201)**
+— at which point `validate` goes green on its own with no edit to this branch.
+A deploy that picks up the new template against the old image is a boot failure,
+not a degraded mode, which is why the template change cannot ship first.
 
 ### The ruling, and the posture it replaces
 
