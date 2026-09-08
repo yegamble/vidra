@@ -283,8 +283,35 @@ vidra_compose_chain
 log "pulling"
 "${COMPOSE[@]}" pull || die "pull failed — does that tag exist in GHCR? ($ENV_FILE restored from ${ENV_FILE}.bak if you need to undo)"
 
+# THE TRAILER, and it is a function so that EVERY path that leaves the site down
+# reaches it (A38 rehearsal, 2026-09-07, run 4). It used to be inline at the very
+# bottom, reachable only from the readiness probes — so when `up -d` itself
+# failed, `set -e` killed the script first and the operator got a raw compose
+# error, a dark site, and no sentence telling them what to do next. `up -d` is
+# now `|| rollback_target_unhealthy`, and the probes call the same function.
+rollback_target_unhealthy() {
+  cat >&2 <<EOF
+
+[rollback] THE ROLLBACK TARGET IS ALSO UNHEALTHY.
+  $1
+
+  If the newer release ran an incompatible migration, the old code cannot read
+  the new schema — restore the pre-deploy dump before rolling back again:
+      ./deploy/restore.sh backups/pre-deploy-<ts>.dump.gz
+EOF
+  exit 1
+}
+
 log "restarting"
-"${COMPOSE[@]}" up -d --no-build
+# WHY THIS IS GUARDED. `up -d` starts the 'migrate' and 'search-migrate'
+# one-shots too — api and search depend on them with
+# service_completed_successfully — and they run 'migrate up' on the release
+# being rolled BACK to. A release whose migrator predates the "ledger is ahead
+# of this binary" no-op (vidra-core / vidra-search, A38) exits 1 there against a
+# newer schema, and every service waiting on it is never started. Unguarded,
+# that took the whole site down with nothing but a compose error to show for it.
+"${COMPOSE[@]}" up -d --no-build || rollback_target_unhealthy \
+  "compose up -d exited non-zero; its output is above. Check the migration one-shots FIRST: '${COMPOSE[*]} logs migrate search-migrate'. A message like 'no migration found for version N' means this release's migrator is older than the schema in front of it — the app itself is fine on that schema, but the one-shot has to exit 0 before api, search and frontend are allowed to start."
 
 probe() {
   local name="$1" url="$2" deadline
@@ -306,14 +333,7 @@ probe "api /readyz" "http://127.0.0.1:${HTTP_PORT}/readyz" || rc=1
 probe "frontend"    "http://127.0.0.1:${FRONTEND_PORT}/"   || rc=1
 
 if [ "$rc" -ne 0 ]; then
-  cat >&2 <<EOF
-
-[rollback] THE ROLLBACK TARGET IS ALSO UNHEALTHY.
-  If the newer release ran an incompatible migration, the old code cannot read
-  the new schema — restore the pre-deploy dump before rolling back again:
-      ./deploy/restore.sh backups/pre-deploy-<ts>.dump.gz
-EOF
-  exit 1
+  rollback_target_unhealthy "The containers started, but a readiness probe never passed; recent logs are above."
 fi
 
 log "rolled back to core=${CORE_TAG:-unchanged} user=${USER_TAG:-unchanged} search=${SEARCH_TAG:-unchanged}"

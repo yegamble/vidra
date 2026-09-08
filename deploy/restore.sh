@@ -5,6 +5,15 @@
 #   RESTORE_CONFIRM=vidra ./deploy/restore.sh backups/vidra-20260728T030000Z.dump.gz
 #   ./deploy/restore.sh --yes backups/pre-deploy-2026-07-28T031500.dump.gz
 #
+# Options:
+#   --yes, -y                 skip the confirmation prompt (see CONFIRMATION)
+#   --allow-schema-mismatch   proceed even when the SCHEMA PREFLIGHT says the
+#                             pinned images cannot reach the dump's schema. Only
+#                             do this if you know why: the default refusal exists
+#                             because the migrators run AFTER the database has
+#                             been dropped and reloaded, so the failure it
+#                             prevents is unrecoverable from the script's output.
+#
 # Accepts either a .dump or a .dump.gz produced by deploy/backup.sh or
 # deploy/deploy.sh (both write custom-format archives).
 #
@@ -25,6 +34,13 @@
 # images have no embedded `migrate` subcommand, so the two migrators run after the
 # drop would boot API servers that never exit, hanging the restore with the
 # database already replaced.
+#
+# SCHEMA PREFLIGHT. It also refuses, BEFORE the drop, a dump whose schema the
+# PINNED images cannot reach — a dump at 137 under VIDRA_CORE_TAG=v0.6.2, whose
+# migrator embeds up to 125. Exactly one pairing works and nothing used to check
+# it (A38, 2026-09-07): the script dropped the database, reloaded it, and then
+# died at "running core migrations" with the site dark and nothing in the output
+# saying why. --allow-schema-mismatch overrides.
 
 set -euo pipefail
 
@@ -53,11 +69,13 @@ log() { printf '[restore] %s\n' "$*"; }
 die() { printf '[restore] ERROR: %s\n' "$*" >&2; exit 1; }
 
 FORCE=0
+ALLOW_SCHEMA_MISMATCH=0
 DUMP=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --yes|-y) FORCE=1 ;;
-    -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
+    --allow-schema-mismatch) ALLOW_SCHEMA_MISMATCH=1 ;;
+    -h|--help) sed -n '2,43p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *)  DUMP="$1" ;;
   esac
@@ -250,6 +268,106 @@ docker cp "$HOST_TMP" "${PG_CID}:${CONTAINER_TMP}"
 # leaves the instance with no database at all.
 docker exec -i "$PG_CID" pg_restore -l "$CONTAINER_TMP" > /dev/null \
   || die "archive is not a readable custom-format dump — nothing was dropped"
+
+# --- schema preflight: can the PINNED images reach this dump's schema? ---------
+# THE FAILURE THIS CLOSES (A38 rehearsal, 2026-09-07, run 13). Everything below
+# this point is irreversible: the database is dropped, the archive is reloaded,
+# and only THEN are the two migrators run — from the images pinned in $ENV_FILE.
+# Exactly one pairing works, a dump whose schema the pinned migrator can reach,
+# and nothing checked it. With the tags already rewritten to the previous
+# release (which rollback.sh does before it fails), this script dropped the
+# database, reloaded it successfully, and died at "running core migrations" —
+# leaving the site dark, `verify-blobs` and `up -d` never run, and nothing in
+# the output explaining any of it.
+#
+# The dump's ledger is read OUT OF THE ARCHIVE, with no temporary database:
+# `pg_restore --data-only -t <ledger>` prints that table's COPY block straight
+# from the custom-format dump. The IMAGE is asked what it embeds rather than a
+# checkout being read, because migrations are compiled into the release binaries
+# and what matters is what the container that runs after the drop can do.
+#
+# It runs after the archive has been validated and copied in (both needed) and
+# before the drop, so a refusal here means NOTHING happened.
+
+# dump_ledger_row <table> — prints "<version> <dirty>" for the first row of that
+# ledger in the archive, or nothing at all when the dump does not carry it (a
+# database the service has never migrated). Never fails the script: an
+# unreadable ledger is reported as "not checked", never as "checked and fine".
+dump_ledger_row() {
+  local table="$1"
+  docker exec -i "$PG_CID" pg_restore --data-only -t "$table" -f - "$CONTAINER_TMP" 2>/dev/null \
+    | awk -v t="$table" 'index($0, "COPY ") == 1 && index($0, t) > 0 { getline; print $1, $2; exit }' \
+    || true
+}
+
+# image_embedded_max <service> — the newest migration compiled into that
+# service's PINNED image, or nothing when the image cannot answer. `run --rm
+# --no-deps` starts no database: `migrate embedded-max` reads the embedded
+# migrations and never opens a connection. The image is pulled here if it is not
+# on the host yet, which is the same pull `run --rm migrate` does after the drop
+# — better to discover an unreachable registry now than then.
+image_embedded_max() {
+  local svc="$1"
+  "${COMPOSE[@]}" run --rm --no-deps "$svc" migrate embedded-max 2>/dev/null \
+    | tr -d '\r' | grep -xE '[0-9]+' | tail -1 || true
+}
+
+# preflight_schema <label> <compose service> <ledger table> <tag key>
+preflight_schema() {
+  local what="$1" svc="$2" table="$3" tagkey="$4"
+  local tag row version dirty embedded
+  tag="$(env_get "$tagkey" '(unset)')"
+
+  row="$(dump_ledger_row "$table")"
+  if [ -z "$row" ]; then
+    log "${what}: the dump carries no ${table} ledger, so there is nothing to compare (a database this service has never migrated)."
+    return 0
+  fi
+  version="${row%% *}"
+  dirty="${row##* }"
+  case "$version" in
+    ''|*[!0-9]*)
+      log "${what}: could not read a version out of the dump's ${table} ledger (got '${row}'). NOT CHECKED — this is not a statement that the pairing is fine."
+      return 0
+      ;;
+  esac
+  version="$((10#$version))"
+
+  # A dirty ledger in the dump fails in the same place and the same way as an
+  # unreachable version: both migrators refuse it, AFTER the drop. Same gate,
+  # same override.
+  if [ "$dirty" = "t" ] || [ "$dirty" = "true" ]; then
+    if [ "$ALLOW_SCHEMA_MISMATCH" -ne 1 ]; then
+      die "${what}: the dump's ${table} ledger is DIRTY at version ${version} — a migration was half-applied when it was taken, and both migrators refuse a dirty ledger. They run AFTER this script has dropped and reloaded the database, so restoring would leave you with the site down and a database whose schema nobody can vouch for. Restore an earlier, clean dump instead; or, if you have already worked out what that migration did, restore with --allow-schema-mismatch and repair the ledger by hand afterwards (see 'Migration failed mid-deploy' in deploy/README.md). Nothing was changed."
+    fi
+    log "${what}: WARNING — the dump's ${table} ledger is DIRTY at version ${version}; continuing because --allow-schema-mismatch was passed. Expect the migrator step below to refuse it."
+  fi
+
+  embedded="$(image_embedded_max "$svc")"
+  if [ -z "$embedded" ]; then
+    log "${what}: the pinned image (${tagkey}=${tag}) does not answer 'migrate embedded-max', so the dump's schema ${version} could NOT be checked against it. Every release cut before that subcommand existed lands here. Continuing — but if the migrator step below refuses the restored database, this pairing is the first thing to look at."
+    return 0
+  fi
+  embedded="$((10#$embedded))"
+
+  if [ "$version" -gt "$embedded" ]; then
+    if [ "$ALLOW_SCHEMA_MISMATCH" -ne 1 ]; then
+      die "${what}: the dump is at ${version}; pinned ${tagkey}=${tag} carries up to ${embedded}. The migrator runs AFTER the drop and the reload, and it cannot walk a ledger that is ahead of it, so this restore would end with the database replaced, the site down, and no way back from this script's output — this is exactly A38 run 13. Set ${tagkey} in ${ENV_FILE} to the release that carries schema ${version} (the release this dump was taken on), or pass --allow-schema-mismatch if you know better. Nothing was changed."
+    fi
+    log "${what}: WARNING — the dump is at ${version} and pinned ${tagkey}=${tag} carries up to ${embedded}; continuing because --allow-schema-mismatch was passed."
+    return 0
+  fi
+
+  if [ "$version" -lt "$embedded" ]; then
+    log "${what}: dump schema ${version}, pinned ${tagkey}=${tag} carries up to ${embedded} — the migrator step below will apply the difference. This is the documented forward path."
+    return 0
+  fi
+  log "${what}: dump schema ${version} matches what ${tagkey}=${tag} carries — nothing to apply."
+}
+
+log "checking that the pinned images can reach this dump's schema"
+preflight_schema "core"   migrate        schema_migrations       VIDRA_CORE_TAG
+preflight_schema "search" search-migrate vidra_search_migrations VIDRA_SEARCH_TAG
 
 # --- drop + create -------------------------------------------------------------
 # --force (PG13+) terminates remaining backends; there should be none left after
