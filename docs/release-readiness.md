@@ -14450,12 +14450,12 @@ The 410 Tombstone carries no ETag through the edge, and
 **INT-01 does not move.** It is already PASS, and nothing here re-measures it —
 that takes the publisher, the ingest container and the browser back. What this
 slice does is take four of the five findings the A26 rehearsal recorded as
-"needing a ruling rather than a patch" and build the rulings. Two PRs
+"needing a ruling rather than a patch" and build the rulings. Two code PRs
 ([core #212](https://github.com/yegamble/vidra-core/pull/212),
-[user #203](https://github.com/yegamble/vidra-user/pull/203)); no migration
-(core stays at schema 141), one `api/openapi.yaml` **description** change, so
-user #203 carries the contract regen and stays a draft until core merges.
-Everything below is **not lab-observed**.
+[user #203](https://github.com/yegamble/vidra-user/pull/203)) and this one; no
+migration (core stays at schema 141), one `api/openapi.yaml` **description**
+change, so user #203 carries the contract regen and stays a draft until core
+merges. Everything below is **not lab-observed**.
 [Sanitized evidence](evidence/live-follow-ups.json).
 
 **A drop that dropped nothing said it had.** nginx-rtmp answers
