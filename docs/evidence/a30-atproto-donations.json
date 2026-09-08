@@ -66,7 +66,7 @@
     "oauth_issuer_bound": "http://localhost:2583",
     "plc_directory_contacted": "http://127.0.0.1:2582 (local stub)",
     "bsky_social_or_app": "never contacted; the single appearance of https://bsky.social was a deliberately forged callback iss, rejected before any outbound hop",
-    "caveat": "alice.localtest.me is a PUBLIC domain that resolves to 127.0.0.1, so one public DNS lookup for a loopback name occurred; no data left the machine"
+    "caveat": "no ATProto protocol traffic left loopback at any point. What did reach the network: the npm install of @atproto/pds, the mirror.gcr.io container pull, and DNS lookups for alice.localtest.me \u2014 a public domain that answers 127.0.0.1, which is what removes the need for an /etc/hosts edit"
   },
   "sc1_login": {
     "verdict": "PASS for the dev loopback client; the production hosted-client path is UNVERIFIED",

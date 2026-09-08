@@ -14603,13 +14603,15 @@ a signed `did:plc` genesis operation to `PDS_DID_PLC_URL`, whose default is the
 produces. Third piece: a handle carries no port, so `handle → DID` can only ever
 hit port 80/443 on the handle's own host — and port 80 is privileged on a
 machine with no root. Docker Desktop can publish it without root, so an
-`nginx:alpine` container (pulled from `mirror.gcr.io`, the Docker Hub proxy
-still hangs) holds `127.0.0.1:80` and proxies to the PDS preserving `Host`; the
+`nginx:alpine` container (pulled from `mirror.gcr.io`, the standing workaround
+for Docker Hub pulls hanging behind Desktop's proxy) holds `127.0.0.1:80` and
+proxies to the PDS preserving `Host`; the
 DID that comes back is the **PDS's own** `/.well-known/atproto-did` answer, not
 a fixture's. The handle domain is `localtest.me`, a public domain that resolves
 to `127.0.0.1`, which is what makes the whole chain work with no `/etc/hosts`
-edit — the one public thing that happened all session is a DNS lookup for a
-loopback name. Two accounts: `alice.test` (`did:plc:axcs65…`) for the
+edit. Stated precisely: no ATProto protocol traffic left loopback at any point;
+what did reach the network was the npm install of the PDS, the container pull,
+and DNS lookups for a name that answers `127.0.0.1`. Two accounts: `alice.test` (`did:plc:axcs65…`) for the
 app-password cross-posting link, `alice.localtest.me` (`did:plc:nmrfcs…`) for
 identity login. Core runs two processes (`VIDRA_ROLE=api` on `:8088` and a
 separate worker) over its own native postgres 16 cluster on `:55433` and redis
