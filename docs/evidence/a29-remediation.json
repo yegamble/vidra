@@ -4,7 +4,7 @@
   "verdict": "NOT FLIPPED \u2014 code remediation only; the two-instance re-run is a later slice",
   "date": "2026-09-08",
   "section": "A29 remediation \u2014 federated playback, dereferenceable ids, social parity \u2014 2026-09-08",
-  "headline": "The three failing clauses of INT-05 and four of the section's non-blocking findings now have code behind them, proved by unit and integration tests on a real PostgreSQL 16.15. Nothing here was measured against a second live instance, a browser, a caching edge or a running Caddy.",
+  "headline": "The three failing clauses of INT-05, the four findings the row recorded without letting them decide it, and the three the evidence file carried beyond the row now have code behind them, proved by unit and integration tests with the migrations APPLIED to a real PostgreSQL 16.15. What did not run is the part the verdict turns on: no second instance, no caching edge, no running Caddy, no browser pointed at a live backend.",
   "prs": {
     "vidra-core": 203,
     "vidra-user": 198,

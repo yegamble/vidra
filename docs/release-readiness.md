@@ -12409,10 +12409,15 @@ Credentials, stream keys, the recordings and the raw logs stay outside the repo.
 
 **INT-05 is NOT flipped, and this section is not the evidence that would flip
 it.** Every clause of that row's verdict was measured against two live
-instances; this slice ran no lab, no container and no browser. It is the code
-for the three failing clauses plus the four findings A29 recorded without
-letting them decide the verdict, proved by unit and integration tests, and the
-two-instance re-run that re-measures them is a later slice. Complete result:
+instances, and this slice ran neither: no second instance, no caching edge, no
+running Caddy, and no browser pointed at a live backend. (A real PostgreSQL
+16.15 and a real Chromium DID run — the migrations were applied rather than
+linted, and the mocked Playwright suite drove the frontend against route mocks;
+neither is a federation lab.) What it is: the code for the three failing clauses
+of that verdict, for the four findings the row recorded without letting them
+decide it, and for the three the evidence file carried beyond the row — proved
+by unit and integration tests. The two-instance re-run that re-measures them is
+a later slice. Complete result:
 [`a29-remediation.json`](evidence/a29-remediation.json). The code is
 [vidra-core #203](https://github.com/yegamble/vidra-core/pull/203),
 [vidra-user #198](https://github.com/yegamble/vidra-user/pull/198) and this
