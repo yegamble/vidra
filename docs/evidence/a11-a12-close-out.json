@@ -1,0 +1,678 @@
+{
+ "slice": "A11/A12 close-out - physical stored-byte deletion after a Studio delete, and the delete half of playlist CRUD",
+ "date": "2026-09-08",
+ "register_rows": [
+  "CRT-01",
+  "SOC-01"
+ ],
+ "verdict": "CRT-01 and SOC-01 both flip to PASS. A Studio delete in real Chromium removed video 1's database rows and left all 20 of its stored objects on disk; the shipped media-GC collector, run destructively from the admin UI with the typed PURGE confirmation, deleted exactly those 20 and nothing else - the second video's 19 objects are byte-identical by sha256 before and after, and still serve. Playlist CRUD's delete half exists in both the API and the UI and was exercised three-actor in real Chromium and again over the API with readback: one item removed (order preserved), then the whole playlist deleted, 404 for C, U and anonymous after a hard reload, the three videos untouched. No code change was needed in any repo.",
+ "lab": {
+  "topology": "one origin - a pipe-only node proxy on 127.0.0.1:8099 that drops the client's Accept-Encoding, in front of `node .next/standalone/server.js` on :3100 and vidra-core api on :8088; a second vidra-core process with VIDRA_ROLE=worker and no listener",
+  "postgres": "native PostgreSQL 16.15 on 55446 (-k /tmp/a11lab), fresh cluster, core schema 135",
+  "redis": "native redis on 56380 (db 0), flushed at start",
+  "storage": "STORAGE_BACKEND=local with STORAGE_LOCAL_ROOT under the scratch tree - never a bucket. The owner's 2026-09-08 approval is for exactly this shape",
+  "search": "vidra-search was NOT run: playlists are not a search entity at all (zero 'playlist' hits across vidra-search internal/, migrations/ and api/), so there is no index for a playlist delete to drop out of",
+  "browser": "real Chromium (Playwright 1.62.1, playwright-core driven directly), separate browser contexts for creator C, other user U and anonymous, hard reload between states",
+  "fixtures": "four real ffmpeg clips (testsrc2/testsrc/smptebars plus a sine tone, H.264/AAC) and a generated 64x64 PNG playlist cover; video 1 = 626,130 bytes sha256 f2888ea549ec613b3c0ec09e4ee8427f3f3e69ff305c4610f9dd06080c3216db",
+  "rate_limits": "RATE_LIMIT_ENABLED=false, so this lab says nothing about the shipped limits",
+  "transcode_floor": "TRANSCODING_MIN_FREE_SCRATCH_MB=256 - this box had about 4 GiB free against the shipped 10 GiB floor, which would otherwise refuse every claim",
+  "registration": "REGISTRATION_ENABLED=true from boot in a throwaway cluster, for the owner plus two synthetic actors; nothing pre-existing was changed, so there was no closed setting to restore",
+  "teardown": "api, worker, the Next standalone server, the proxy, redis and postgres are all stopped and the cluster, storage root and fixtures deleted"
+ },
+ "collector": {
+  "how_it_is_run": {
+   "scheduled": "cmd/api/main.go runMediaGCWorker - started only when VIDRA_ROLE runs workers AND MEDIA_GC_ENABLED is true, leader-elected (a follower skips the tick and does not spend the dry run). Boot timer at +5 minutes, then a 24h ticker. Neither is configurable: the interval and first-sweep delay are Go constants, not env keys",
+   "on_demand": "POST /api/v1/admin/media/gc with body {\"dry_run\": false}, behind requireAuth + requireRole(admin); the endpoint is mounted whatever MEDIA_GC_ENABLED says. The UI is /admin/media (AdminMediaView): Run dry run, then Purge N orphans, then type PURGE, then Confirm permanent purge",
+   "cli": "none - the binary's subcommands are migrate up/version/force only"
+  },
+  "knobs": {
+   "MEDIA_GC_ENABLED": "true (boot-baked; governs the daily unattended sweep only, not the admin POST)",
+   "MEDIA_GC_MAX_ORPHAN_PERCENT": "25 (shipped default, unchanged)",
+   "breaker_floor": "100 orphans - a hard-coded absolute floor below which the ratio breaker never fires. The lab sweep was 51 percent orphans, well over 25, and correctly did NOT trip because 20 is under 100",
+   "interval": "24h, hard-coded",
+   "first_sweep_delay": "5m, hard-coded",
+   "grace_period": "there is none - no age or mtime threshold anywhere in internal/mediagc. An object is deletable the moment its last database reference disappears"
+  },
+  "safety_rails_observed": {
+   "bucket_ownership": "not-applicable - the local-disk backend is exempt BY DESIGN (mediagc.OwnershipNotApplicable.AllowsDelete() is true); no adoption was needed or performed",
+   "storage_migration_interlock": "wired and silent (no campaign); a failing check would have forced a dry run",
+   "reference_mode_import_interlock": "guards AdoptBucket only, and is irrelevant here on two counts - no import ran, and local disk never asks the ownership question. Stated rather than skipped",
+   "swept_prefixes": [
+    "web-videos",
+    "thumbnails",
+    "storyboards",
+    "captions",
+    "streaming-playlists",
+    "playlist-thumbnails"
+   ]
+  }
+ },
+ "sc1_physical_deletion": {
+  "video1": {
+   "id": "ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f",
+   "title": "A11 lab video 1",
+   "objects_before": 20,
+   "objects": [
+    {
+     "key": "captions/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/en.vtt",
+     "size_bytes": 101,
+     "sha256": "4d829cb1281ea4d66f9e036ddcca9f56011c86338d521aeb54f9b786c4c376bf"
+    },
+    {
+     "key": "storyboards/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f.jpg",
+     "size_bytes": 17108,
+     "sha256": "9752eea13d52aedb3f5a3fe2bd6b00d722d1a8be1505f7865fa7d0cc7c27cd46"
+    },
+    {
+     "key": "storyboards/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f.vtt",
+     "size_bytes": 390,
+     "sha256": "1d1c0acdfcfac34be92d88fddceb27341886ced961b62cae42f5d0646e45c5fa"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/360p/video-only.mp4",
+     "size_bytes": 652277,
+     "sha256": "ee6abfce91d9da78c7de5f16e9b476d492f3ae6adb1d4c8a576b6bc697382400"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/360p/video.mp4",
+     "size_bytes": 726405,
+     "sha256": "35af78890993a0ec77ba4921745185dbd0d5d98d9ab84136605e7b2ac2dd0b2c"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/audio.m4a",
+     "size_bytes": 72206,
+     "sha256": "7f2090323178e69bdf8620677bfb33f0132b78e70f3cbd5b9dd137bb16f9992c"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/cmaf/chunk-0-00001.m4s",
+     "size_bytes": 651033,
+     "sha256": "9ce7e4d6ffa1a2597c608754e2a9931b1aa2237aaa57ad385d01b2e33ee7d2b3"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/cmaf/chunk-1-00001.m4s",
+     "size_bytes": 71291,
+     "sha256": "0fa4f20634bb8b3a6b5392cba1e86a670994bb8c08f6bd5bfd8baf46a69d89dc"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/cmaf/chunk-1-00002.m4s",
+     "size_bytes": 488,
+     "sha256": "e0e6624039968b049ae41717b3cfb1fd8d86086a3055f536ccf480a0d985d9b1"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/cmaf/iframe-0.m3u8",
+     "size_bytes": 538,
+     "sha256": "4862e35f789f665d9dea6cb8ea6cb5968fa8aaa07937437374af97d23040e136"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/cmaf/iframe-0.mp4",
+     "size_bytes": 70980,
+     "sha256": "783df79799f44d6c3417f0d234c3b64d632068247d5fd40efe07a093b71bba73"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/cmaf/init-0.mp4",
+     "size_bytes": 828,
+     "sha256": "a77a90279b49a23a537f8e4553313a128a423551b90a01891aa84125e71c32b4"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/cmaf/init-1.mp4",
+     "size_bytes": 765,
+     "sha256": "a12289d17b3038d2339392f94d0af452e5bce0afbf9452a96c56c8e0524b1736"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/cmaf/media_0.m3u8",
+     "size_bytes": 177,
+     "sha256": "d9a2eac046640574216dc971bf062e53b13c958aa53998c0b18ed42f6996b51f"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/cmaf/media_1.m3u8",
+     "size_bytes": 213,
+     "sha256": "36ffeec05807c1f3cccc3b2d36ba0fdd702559ceb2138a0236650a5bbf55ae31"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/cmaf/stream.mpd",
+     "size_bytes": 1870,
+     "sha256": "efcc01c9862a4513ccede54c1477dcbe54541013e3e815ba215d38beef37e67a"
+    },
+    {
+     "key": "streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/master.m3u8",
+     "size_bytes": 431,
+     "sha256": "db6b67fa05885cda26fc59e52bd29c5524643998e7e4d0561f0c317664210314"
+    },
+    {
+     "key": "thumbnails/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f.jpg",
+     "size_bytes": 19374,
+     "sha256": "ed5acff71bf9b9093805e2e2f8f9fedc9b89c39c65b90301001caf461d9c0f24"
+    },
+    {
+     "key": "web-videos/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f.mp4",
+     "size_bytes": 626130,
+     "sha256": "f2888ea549ec613b3c0ec09e4ee8427f3f3e69ff305c4610f9dd06080c3216db"
+    },
+    {
+     "key": "web-videos/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/360p.mp4",
+     "size_bytes": 726405,
+     "sha256": "35af78890993a0ec77ba4921745185dbd0d5d98d9ab84136605e7b2ac2dd0b2c"
+    }
+   ]
+  },
+  "video2": {
+   "id": "82311ddc-b8e3-4feb-9259-7464d9643261",
+   "title": "A11 lab video 2",
+   "objects_before": 19,
+   "objects_after": 19,
+   "byte_identical": true,
+   "objects": [
+    {
+     "key": "captions/82311ddc-b8e3-4feb-9259-7464d9643261/en.vtt",
+     "size_bytes": 101,
+     "sha256": "4d829cb1281ea4d66f9e036ddcca9f56011c86338d521aeb54f9b786c4c376bf"
+    },
+    {
+     "key": "storyboards/82311ddc-b8e3-4feb-9259-7464d9643261.jpg",
+     "size_bytes": 14384,
+     "sha256": "63c845a9763e8bf4a8fa583c7ad145f033f7fcb553e3a2253ceab13f35c613ff"
+    },
+    {
+     "key": "storyboards/82311ddc-b8e3-4feb-9259-7464d9643261.vtt",
+     "size_bytes": 326,
+     "sha256": "1ba1a1966417aba9ea3d83d40da161472549265fbae793aa7776df6b5ec479c5"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/360p/video-only.mp4",
+     "size_bytes": 214072,
+     "sha256": "476c2b0121c74f67460da640690459da76db79a61ffcc8f534d15fc2d4dd7b07"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/360p/video.mp4",
+     "size_bytes": 277186,
+     "sha256": "feadd4059e6182ce27a93543202ab0e71cc3f9585e6bcc3f909ec3bc6bf5f787"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/audio.m4a",
+     "size_bytes": 61560,
+     "sha256": "97f61ed9ae3bb751a794a768b7ca6fcbcc10c93273d866b6857268638972b490"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/cmaf/chunk-0-00001.m4s",
+     "size_bytes": 212896,
+     "sha256": "4ed59ab66e27ad69a0b151301f9d3eed8dcd7d5b87055f060e0ff7592a9ddefd"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/cmaf/chunk-1-00001.m4s",
+     "size_bytes": 60949,
+     "sha256": "43f5db126232a89853613f7130080ec95e0978ac62c26bf4687c3101fb030275"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/cmaf/iframe-0.m3u8",
+     "size_bytes": 474,
+     "sha256": "6eb7dc7028ef2b879ec8b75e742a97ee08b38bf2df6ab68e193b89d7537829b9"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/cmaf/iframe-0.mp4",
+     "size_bytes": 28061,
+     "sha256": "a4c1f4d3b2301cf51aaf11b00b9413d9d11e4f8ed8e15c2039601c474e7abe2d"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/cmaf/init-0.mp4",
+     "size_bytes": 828,
+     "sha256": "a77a90279b49a23a537f8e4553313a128a423551b90a01891aa84125e71c32b4"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/cmaf/init-1.mp4",
+     "size_bytes": 765,
+     "sha256": "a12289d17b3038d2339392f94d0af452e5bce0afbf9452a96c56c8e0524b1736"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/cmaf/media_0.m3u8",
+     "size_bytes": 177,
+     "sha256": "c08c70684ce9471f2fa11fac7862e87418edec53a6ce2956a140d304ea9d53a1"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/cmaf/media_1.m3u8",
+     "size_bytes": 177,
+     "sha256": "f64850a980face90f1ad145d658f9b6bb591d2edb89ae3dbaaf90afdba4b2013"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/cmaf/stream.mpd",
+     "size_bytes": 1849,
+     "sha256": "fe21aced07871f8c897647c40443d8d047fdc8f9cfa6419cfbdde13e8b06997c"
+    },
+    {
+     "key": "streaming-playlists/82311ddc-b8e3-4feb-9259-7464d9643261/master.m3u8",
+     "size_bytes": 430,
+     "sha256": "c01f8815149bd4a5aa557cf173c5c1034573184d058291dc7491d3ffd01b3235"
+    },
+    {
+     "key": "thumbnails/82311ddc-b8e3-4feb-9259-7464d9643261.jpg",
+     "size_bytes": 11427,
+     "sha256": "cc98bd9d622a315e10c5b75eb13d0353f193a8de07b2763fd48760d30473a1db"
+    },
+    {
+     "key": "web-videos/82311ddc-b8e3-4feb-9259-7464d9643261.mp4",
+     "size_bytes": 80803,
+     "sha256": "b0397c65629d7ad3c67ab6a75bf717f278cd2dbe5fe44f985d048b37e34f1ba5"
+    },
+    {
+     "key": "web-videos/82311ddc-b8e3-4feb-9259-7464d9643261/360p.mp4",
+     "size_bytes": 277186,
+     "sha256": "feadd4059e6182ce27a93543202ab0e71cc3f9585e6bcc3f909ec3bc6bf5f787"
+    }
+   ]
+  },
+  "store_before": {
+   "total_objects": 39,
+   "video1": 20,
+   "video2": 19,
+   "unattributed": 0
+  },
+  "studio_delete": {
+   "origin": "http://127.0.0.1:8099",
+   "video1": "ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f",
+   "steps": [
+    {
+     "step": "signed in as creatorc",
+     "url": "http://127.0.0.1:8099/"
+    },
+    {
+     "step": "studio content listed",
+     "rows": 2
+    },
+    {
+     "step": "two-step confirmation shown",
+     "prompt": "Delete?"
+    },
+    {
+     "step": "DELETE issued from the browser",
+     "status": 204
+    },
+    {
+     "step": "list after confirm",
+     "titles": [
+      "A11 lab video 2"
+     ]
+    },
+    {
+     "step": "list after hard reload",
+     "titles": [
+      "A11 lab video 2"
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "POST",
+     "url": "/api/v1/auth/login",
+     "status": 200
+    },
+    {
+     "method": "GET",
+     "url": "/api/v1/videos/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/thumbnail",
+     "status": 200
+    },
+    {
+     "method": "DELETE",
+     "url": "/api/v1/videos/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f",
+     "status": 204
+    }
+   ]
+  },
+  "database_after_delete": {
+   "videos": 0,
+   "video_files": 0,
+   "captions": 0,
+   "streaming_playlists": 0,
+   "semantics": "hard delete, no tombstone row"
+  },
+  "grace_window": {
+   "objects_still_on_disk_immediately_after_delete": 20,
+   "api_reads_during_the_window": {
+    "GET /videos/{id}": 404,
+    "GET /videos/{id}/thumbnail": 404,
+    "GET /videos/{id}/storyboard.jpg": 404,
+    "GET /videos/{id}/storyboard.vtt": 404,
+    "GET /videos/{id}/captions/en": 404,
+    "GET /videos/{id}/hls/master.m3u8": 404,
+    "GET /videos/{id}/hls/cmaf/media_0.m3u8": 404,
+    "GET /videos/{id}/hls/cmaf/chunk-0-00001.m4s": 404,
+    "owner GET /videos/{id}/download": 404
+   },
+   "answer": "an in-flight playback or segment request during the grace window 404s; it does not serve. The bytes are on disk but unreachable - every delivery route resolves through the database rows the delete removed",
+   "unattended_duration": "no age grace; the delay is purely the sweep schedule. The first sweep after each boot is always a dry run, so the earliest unattended DELETE is about 24h after the worker process starts, and a worker restarted more often than every 24h never deletes on its own. An admin can collect immediately from /admin/media"
+  },
+  "sweeps": [
+   {
+    "when": "02:56:36",
+    "actor": "worker (scheduled boot dry run)",
+    "mode": "dry-run",
+    "scanned": 39,
+    "orphans": 0,
+    "deleted": 0,
+    "note": "ran BEFORE the Studio delete - the clean baseline"
+   },
+   {
+    "when": "02:58:04",
+    "actor": "admin (POST dry_run=true)",
+    "mode": "dry-run",
+    "scanned": 39,
+    "orphans": 20,
+    "orphan_percent": 51,
+    "deleted": 0,
+    "note": "the orphan list is exactly video 1's 20 keys and nothing else"
+   },
+   {
+    "when": "03:03:21",
+    "actor": "worker (scheduled boot dry run, after a restart)",
+    "mode": "dry-run",
+    "scanned": 39,
+    "orphans": 20,
+    "orphan_percent": 51,
+    "deleted": 0,
+    "note": "the worker's own log line names the counts"
+   },
+   {
+    "when": "03:03:34",
+    "actor": "admin via /admin/media in Chromium (typed PURGE)",
+    "mode": "delete",
+    "scanned": 39,
+    "orphans": 20,
+    "orphan_percent": 51,
+    "deleted": 20,
+    "breaker_tripped": false
+   },
+   {
+    "when": "03:07",
+    "actor": "admin (POST dry_run=true) after the playlist delete",
+    "mode": "dry-run",
+    "scanned": 56,
+    "orphans": 1,
+    "note": "the deleted playlist's cover, and only that"
+   },
+   {
+    "when": "03:09:21",
+    "actor": "admin (POST dry_run=false)",
+    "mode": "delete",
+    "scanned": 57,
+    "orphans": 2,
+    "deleted": 2,
+    "note": "both deleted playlists' covers"
+   }
+  ],
+  "store_after": {
+   "total_objects": 19,
+   "video1": 0,
+   "video2": 19,
+   "all_20_video1_keys_rechecked_on_disk": "0 exist"
+  },
+  "admin_ui": {
+   "origin": "http://127.0.0.1:8099",
+   "steps": [
+    {
+     "step": "GC boot facts panel",
+     "text": "Automatic daily sweep | On \u2014 set at boot via MEDIA_GC_ENABLED | Orphan-ratio breaker | 25% | Storage ownership | local disk"
+    },
+    {
+     "step": "dry run rendered",
+     "text": "Dry run | Scanned 39 stored objects \u2014 | 20 orphans to delete | Storage: local disk | captions/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/en.vtt | storyboards/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f.jpg | storyboards/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f.vtt | streaming-playlists/ebb01b8e-5f93-41b8-94f8-ff3e5df9c76f/360p/video-only.mp4"
+    },
+    {
+     "step": "arm button",
+     "label": "Purge 20 orphans"
+    },
+    {
+     "step": "purge POST",
+     "status": 200,
+     "body": {
+      "dry_run": false,
+      "mode": "delete",
+      "scanned": 39,
+      "orphans": 20,
+      "deleted": 20,
+      "orphan_percent": 51,
+      "breaker_tripped": false,
+      "bucket_ownership": "not-applicable",
+      "forced_dry_run": false
+     }
+    },
+    {
+     "step": "result panel after purge",
+     "text": "Garbage collection sweeps stored media objects (originals, thumbnails, storyboards, captions, the HLS tree, playlist covers) and finds those with no database reference. This panel sweeps by hand: start with a dry run \u2014 a manual purge deletes nothing until you confirm it. When media GC is enabled, a daily automatic sweep also deletes orphans on its own; the first sweep after each boot is always a dry run. Every sweep, manual or automatic, is audited. | Purge complete | Deleted 20 objects. | Scanned 39 stored objects."
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "body": null,
+     "status": 200
+    },
+    {
+     "method": "POST",
+     "body": "{\"dry_run\":true}",
+     "status": 200
+    },
+    {
+     "method": "POST",
+     "body": "{\"dry_run\":false}",
+     "status": 200
+    }
+   ]
+  },
+  "admin_ui_after": {
+   "steps": [
+    {
+     "step": "boot facts after purge",
+     "text": "Automatic daily sweep | On \u2014 set at boot via MEDIA_GC_ENABLED | Orphan-ratio breaker | 25% | Storage ownership | local disk"
+    },
+    {
+     "step": "dry run after purge",
+     "text": "Dry run | Scanned 19 stored objects \u2014 | 0 orphans to delete | Storage: local disk | No orphaned objects \u2014 storage is clean, nothing to purge."
+    },
+    {
+     "step": "/admin/system headings",
+     "text": "System status | Healthy | Refresh | Software | vidra 0.1.0 | Commit | unknown | Build date | unknown | Go version | go1.26.2 | Environment | development | Uptime | 13m | Dependencies | Media tooling (ffmpeg) | OK | PostgreSQL | OK | Redis | OK | Object storage | NOT CONFIGURED | Search"
+    }
+   ]
+  },
+  "audit_rows": "five audit_log rows with action=admin.media.gc; the two worker sweeps carry actor_kind=system, the three admin sweeps actor_kind=user with actor_role=admin, and every reason string names mode/scanned/orphans/orphan_pct/deleted/breaker/ownership",
+  "wrong_actors": {
+   "U DELETE C's video": 404,
+   "anonymous DELETE the video": 401,
+   "U POST /admin/media/gc": 403,
+   "anonymous POST /admin/media/gc": 401
+  }
+ },
+ "sc2_playlist_delete": {
+  "routes": {
+   "playlist": "DELETE /api/v1/playlists/{id} (requireAuth, owner)",
+   "item": "DELETE /api/v1/playlists/{id}/videos/{videoId} - addressed by VIDEO id, not an item id, and idempotent"
+  },
+  "ui_controls": {
+   "playlist": "PlaylistDetailView: a red 'Delete playlist' button, owner-only, NO confirmation step; on 204 it router.push('/playlists')",
+   "item": "PlaylistDetailView: a per-row 'Remove' button, aria-label 'Remove {title} from playlist', owner-only, optimistic with restore-on-failure, NO confirmation step",
+   "note": "by contrast the Studio row delete IS two-step (Delete, then 'Delete?' with Confirm/Cancel) and the admin GC purge requires typing PURGE. The asymmetry is recorded, not judged"
+  },
+  "browser_timeline": {
+   "playlist": "0a3f4491-4eb1-4c66-9289-831b90a61515",
+   "steps": [
+    {
+     "step": "initial view as C",
+     "titles": [
+      "A11 lab video 2",
+      "A11 lab video 3",
+      "A11 lab video 4"
+     ],
+     "hasDeleteButton": 1
+    },
+    {
+     "step": "initial view as U",
+     "titles": [
+      "A11 lab video 2",
+      "A11 lab video 3",
+      "A11 lab video 4"
+     ],
+     "hasDeleteButton": 0
+    },
+    {
+     "step": "initial view as anonymous",
+     "titles": [
+      "A11 lab video 2",
+      "A11 lab video 3",
+      "A11 lab video 4"
+     ],
+     "hasDeleteButton": 0
+    },
+    {
+     "step": "C sees a per-item Remove control",
+     "label": "Remove A11 lab video 3 from playlist",
+     "count": 1
+    },
+    {
+     "step": "item DELETE from the browser",
+     "status": 204,
+     "url": "/api/v1/playlists/0a3f4491-4eb1-4c66-9289-831b90a61515/videos/789d4596-f46e-47ed-ab5a-1f23ed52975c"
+    },
+    {
+     "step": "C list right after removal",
+     "titles": [
+      "A11 lab video 2",
+      "A11 lab video 4"
+     ]
+    },
+    {
+     "step": "C list after hard reload",
+     "titles": [
+      "A11 lab video 2",
+      "A11 lab video 4"
+     ]
+    },
+    {
+     "step": "U after hard reload (item removed)",
+     "titles": [
+      "A11 lab video 2",
+      "A11 lab video 4"
+     ]
+    },
+    {
+     "step": "anonymous after hard reload (item removed)",
+     "titles": [
+      "A11 lab video 2",
+      "A11 lab video 4"
+     ]
+    },
+    {
+     "step": "playlist DELETE from the browser",
+     "status": 204
+    },
+    {
+     "step": "C redirected to",
+     "url": "/playlists",
+     "listText": "Playlists | New playlist | Visibility | Private | Unlisted | Public"
+    },
+    {
+     "step": "C re-reads the deleted playlist",
+     "notFound": true,
+     "text": "Playlist not found | This playlist does not exist, or it is private."
+    },
+    {
+     "step": "U re-reads the deleted playlist",
+     "notFound": true,
+     "text": "Playlist not found | This playlist does not exist, or it is private."
+    },
+    {
+     "step": "anonymous re-reads the deleted playlist",
+     "notFound": true,
+     "text": "Playlist not found | This playlist does not exist, or it is private."
+    },
+    {
+     "step": "C's playlist list after deletion",
+     "text": "Playlists | New playlist | Visibility | Private | Unlisted | Public"
+    }
+   ],
+   "requests": [
+    {
+     "actor": "C",
+     "method": "GET",
+     "url": "/api/v1/playlists/0a3f4491-4eb1-4c66-9289-831b90a61515",
+     "status": 200
+    },
+    {
+     "actor": "C",
+     "method": "GET",
+     "url": "/api/v1/playlists/0a3f4491-4eb1-4c66-9289-831b90a61515/thumbnail",
+     "status": 200
+    },
+    {
+     "actor": "C",
+     "method": "DELETE",
+     "url": "/api/v1/playlists/0a3f4491-4eb1-4c66-9289-831b90a61515/videos/789d4596-f46e-47ed-ab5a-1f23ed52975c",
+     "status": 204
+    },
+    {
+     "actor": "C",
+     "method": "GET",
+     "url": "/api/v1/playlists/0a3f4491-4eb1-4c66-9289-831b90a61515",
+     "status": 200
+    },
+    {
+     "actor": "C",
+     "method": "GET",
+     "url": "/api/v1/playlists/0a3f4491-4eb1-4c66-9289-831b90a61515/thumbnail",
+     "status": 200
+    },
+    {
+     "actor": "C",
+     "method": "DELETE",
+     "url": "/api/v1/playlists/0a3f4491-4eb1-4c66-9289-831b90a61515",
+     "status": 204
+    },
+    {
+     "actor": "C",
+     "method": "GET",
+     "url": "/api/v1/playlists/0a3f4491-4eb1-4c66-9289-831b90a61515",
+     "status": 404
+    }
+   ]
+  },
+  "api_half": {
+   "created": "a second public playlist with the same three videos and a cover",
+   "DELETE item": 204,
+   "readback": "2 items, order preserved (video 2, video 4)",
+   "DELETE same item again": 204,
+   "DELETE playlist": 204,
+   "readback GET": 404,
+   "DELETE playlist again": 404,
+   "GET /me/playlists": "playlists [] total 0"
+  },
+  "database_after": {
+   "playlists": 0,
+   "playlist_items": 0
+  },
+  "videos_untouched": "all three videos return 200 on GET /videos/{id} and 200 on their HLS master after both playlist deletions; 19/18/18 objects on disk",
+  "search_index": "not applicable - vidra-search has no playlist entity, document type, table or event. Established by grep, not assumed",
+  "orphaned_cover": "deleting a playlist leaves exactly one orphan, playlist-thumbnails/{id}.png, which the next GC dry run named and the next destructive sweep deleted (2 covers, 2 deleted)",
+  "wrong_actors": {
+   "U DELETE playlist": 404,
+   "U DELETE item": 404,
+   "anonymous DELETE playlist": 401,
+   "anonymous DELETE item": 401,
+   "after the refusals": "the playlist still had its 3 items in order"
+  }
+ },
+ "findings": [
+  "Local-disk purge leaves EMPTY DIRECTORIES behind: after the 20 objects went, four empty directories remained under the deleted video's id (captions/{id}, web-videos/{id}, streaming-playlists/{id}/360p, streaming-playlists/{id}/cmaf). No bytes and nothing reachable, and the concept does not exist on S3, where a key delete leaves nothing. Recorded, not fixed - the storage interface is key/value and adding directory pruning would put an rmdir race into the delete path for no user-visible gain",
+  "A media-GC sweep writes NO job_runs row. It is audited (audit_log action=admin.media.gc) and logged, but it is deliberately not a jobloop.Loop, so it cannot appear on the admin job surfaces. The success criterion's 'audit/job-run rows' is satisfied by the audit half only",
+  "The storage/GC dashboard is /admin/media, not /admin/system. /admin/system carries an 'Object storage' dependency row (NOT CONFIGURED on local disk) and no GC panel at all",
+  "There is no purge-ledger TABLE. internal/httpapi/media_purge.go is the CDN-edge invalidation seam plus a prose ledger of known-unpurged cases; with no CDN configured it is inert. Physical deletion is the collector's job alone, and nothing else in the product deletes a stored object on a video delete",
+  "The first sweep after each boot is always a dry run - a deliberate design (the code comment says so and the admin UI copy tells the operator). Its consequence is worth stating plainly: an install whose worker restarts more often than daily never collects unattended",
+  "Neither delete control in PlaylistDetailView has a confirmation step, while the Studio video delete and the GC purge both do"
+ ],
+ "what_failed_first": "The first browser run of the playlist timeline died on page.reload with waitUntil networkidle - the playlist page never reaches network idle (the video cards keep fetching). It had already issued the item DELETE, so the fixture was left at two items; it was restored (re-add plus PUT reorder back to video 2/3/4) and the whole timeline re-run end to end on domcontentloaded with explicit waits. Both C's and U's access tokens had also expired mid-lab (15-minute access JWTs) and were re-minted. An earlier caption upload used PUT /videos/{id}/captions/{lang} and got 405; the shipped route is POST /videos/{id}/captions with language and label form fields",
+ "gates": {
+  "code_change": "none in vidra-core, vidra-user or vidra-search - both capabilities were already shipped, so there was nothing to build and no repo but meta to gate",
+  "meta": "bash -n and shellcheck over every tracked script (no script is touched by this PR); the compose base plus prod render with a filled env template, config -q and the full --profile core --profile frontend read"
+ },
+ "unverified": [
+  "The 24h unattended DESTRUCTIVE sweep. The scheduled path was observed twice, both times as the always-dry-run first sweep of a process; a real unattended delete needs a worker alive for 24h and was not run",
+  "S3/bucket behaviour of the collector, including bucket ownership, adoption and the reference-mode interlock. The owner's approval is local-disk only and this lab honours that",
+  "Multi-replica leader election of the GC worker (one worker process ran)"
+ ]
+}
