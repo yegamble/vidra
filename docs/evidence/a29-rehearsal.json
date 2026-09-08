@@ -1,0 +1,342 @@
+{
+  "item": "A29 rehearsal",
+  "register_row": "INT-05",
+  "verdict": "FAIL (measured, second time) \u2014 INT-05 does NOT flip. Nine of the remediation's ten clauses pass on two live instances through a real Caddy; the tenth (a private or unlisted video produces ZERO activities) is a REGRESSION introduced by the remediation itself, fixed on vidra-core #209 and unmerged at the time of writing. One further clause of the row's own procedure \u2014 a blocked remote account's EXISTING content hidden for the blocking scope \u2014 is unmet, and a handle/actor namespace collision makes the per-remote-account block silently address the wrong actor for a common naming pattern.",
+  "date": "2026-09-08",
+  "section": "A29 rehearsal \u2014 two instances against the merged remediation \u2014 2026-09-08",
+  "headline": "Two isolated Vidra instances at schema 140 on the merged A29 remediation, with a real Caddy reproducing deploy/Caddyfile \u00a73a in front of both: Chromium decoded 143 frames of A's HLS on B's remote watch page with Access-Control-Allow-Origin: * on all 8 media responses and no CORS error, the Create-then-Update ordering was read off the two payloads, /videos/{uuid} and /comments/{uuid} content-negotiated through the edge (200 AS / 406 at the api / 404 private / 410 Tombstone), the remote URL deduped with zero outbound fetches, the mirrored thread appeared and was edited and retracted from the origin, blocks and unblocks were separated with the F4 answer measured, and the 30-60-120-240 ladder delivered exactly once on recovery.",
+  "lab": {
+    "scheme": "plain HTTP; no TLS anywhere. Caddy runs with `auto_https off` on two http:// site addresses, so the \u00a73a routing is exercised without an internal CA and nothing had to be trusted in Chromium or curl.",
+    "edge": "REAL Caddy v2.11.4 (brew, `caddy run --config`), ONE config with two site blocks that mirror deploy/Caddyfile sections 1, 2, 3, 3a and 4 verbatim in structure \u2014 the /metrics and /api/v1/dev/* 404s, the @api path list, the @ap_object / @ap_object_ld Accept matchers above the frontend fallthrough, and `encode zstd gzip` scoped to the frontend block only. Only the site addresses and upstreams differ (loopback ports instead of a domain and compose service names). `caddy validate` passed before every run. THIS IS THE THING A29's REMEDIATION LEFT UNEXERCISED.",
+    "hostnames": "NONE ADDED \u2014 same as A29. /etc/hosts needs root; the two instances are distinguished by PORT and their fediverse domains are literally `127.0.0.1:18080` and `127.0.0.1:28080`.",
+    "instance_a": {
+      "origin": "http://127.0.0.1:18080 (Caddy)",
+      "core_api": "127.0.0.1:18081 (VIDRA_ROLE=api)",
+      "core_worker": "separate process, VIDRA_ROLE=worker",
+      "frontend": "127.0.0.1:18082, node .next/standalone/server.js",
+      "database": "vidra_a",
+      "redis_db": 1,
+      "storage": "STORAGE_BACKEND=local, own STORAGE_LOCAL_ROOT"
+    },
+    "instance_b": {
+      "origin": "http://127.0.0.1:28080 (Caddy)",
+      "core_api": "127.0.0.1:28081 (VIDRA_ROLE=api)",
+      "core_worker": "separate process, VIDRA_ROLE=worker",
+      "frontend": "127.0.0.1:28082, node .next/standalone/server.js",
+      "database": "vidra_b",
+      "redis_db": 2,
+      "storage": "STORAGE_BACKEND=local, own STORAGE_LOCAL_ROOT"
+    },
+    "third_party_peers": "two instances of docs/evidence/a29-ap-peer.go: `commenter` on :48080 (the remote commenter and the source of every unsigned/tampered/stolen-keyId/spoofed-actor probe) and `rotator` on :58080 (started, its key cached by A, then restarted with a fresh keypair for the key-rotation clause). Throwaway keys under /tmp, never committed.",
+    "one_build_two_origins": "ONE `next build` of vidra-user origin/main eb99808 (which carries #198). Both frontends run the same standalone bundle with different INTERNAL_API_BASE_URL and PUBLIC_API_BASE_URL; NEXT_PUBLIC_API_BASE_URL was never baked.",
+    "infrastructure": "PostgreSQL 16.15 in its own cluster on 127.0.0.1:55471 (socket -k /tmp), Redis 8.6.2 on 127.0.0.1:56411, ffmpeg 8.1, six-second 640x360 fixtures, Node 26.8.1 for both frontends (the api and worker are Go 1.26.2 binaries), Playwright 1.62.1's real Chromium.",
+    "code_under_test": {
+      "vidra-core": "origin/main 59d7f51 (A29 remediation #203) for every measurement up to the private/unlisted clause; then 48374d8 on branch a29/rehearsal (vidra-core #209) for the re-measurement of that clause and everything after it \u2014 the section says which reading is which",
+      "vidra-user": "origin/main eb99808, unmodified",
+      "meta": "deploy/Caddyfile unmodified \u2014 the lab config reproduces \u00a73a rather than editing it"
+    },
+    "schema": "140 on both instances, dirty=false, migrated from empty by the api binary's embedded `migrate up`",
+    "deviations_recorded_not_hidden": [
+      "MALWARE_SCAN_MODE=disabled EXPLICITLY on both: there is no clamd on this machine and vidra-core #201 makes every ingestion refuse without one. /admin/system reports it as `clamav: not_configured` with the full consequence spelled out, which is the honest shape.",
+      "RATE_LIMIT_ENABLED=false on both.",
+      "HTTP_IMPORT_ALLOW_PRIVATE_URLS=true on both \u2014 the only knob that lets urlsafety.Guard reach a loopback origin.",
+      "VIDRA_ENV=development, because VIDRA_ENV=production refuses HTTP_IMPORT_ALLOW_PRIVATE_URLS and OWNER_CLAIM_TOKEN outright and requires an https PUBLIC_BASE_URL.",
+      "MEDIA_GC_ENABLED=false, TRANSCODING_MIN_FREE_SCRATCH_MB=256 against the shipped floor on a box with 9.2 GiB free.",
+      "REGISTRATION_ENABLED=true for the whole run, for four synthetic actors.",
+      "FEDERATION_KEY_KEK / MFA_KEY_KEK / ATPROTO_KEY_KEK are base64 of 32 identical bytes; JWT_SECRET and OWNER_CLAIM_TOKEN are obviously fake lab strings. None committed."
+    ]
+  },
+  "sc1_remote_playback": {
+    "verdict": "PASS for playback and ordering; the private/unlisted clause FAILED on merged main and passes on vidra-core #209",
+    "browser": "Playwright 1.62.1 Chromium, anonymous, http://127.0.0.1:28080/remote/{id}",
+    "decoded_frames": {
+      "video": "Lab clip one (Create before the ladder existed)",
+      "readyState": 4,
+      "currentTime": 5.783424,
+      "duration": 6.013967,
+      "videoWidth": 640,
+      "videoHeight": 360,
+      "totalVideoFrames": 143,
+      "droppedVideoFrames": 0,
+      "webkitDecodedFrameCount": 143,
+      "buffered": [
+        0,
+        6.013967
+      ],
+      "error": null
+    },
+    "decoded_frames_publish_after_transcode": {
+      "video": "Lab clip two (publish_after_transcode=true)",
+      "readyState": 4,
+      "currentTime": 5.787031,
+      "totalVideoFrames": 143,
+      "droppedVideoFrames": 0,
+      "error": null
+    },
+    "network": "8 responses from A's origin per playback: hls/master.m3u8, cmaf/media_0.m3u8, cmaf/media_1.m3u8, cmaf/init-0.mp4, cmaf/init-1.mp4 and three chunk-*.m4s. ALL 200, ALL Access-Control-Allow-Origin: *. Zero requestfailed events, zero CORS console errors, zero page errors. The only console error in the whole walk is an anonymous POST /api/v1/auth/refresh answering 422 \u2014 B's own session probe, unrelated to federation.",
+    "cache_control_seen": {
+      "master.m3u8": "private, max-age=0, must-revalidate",
+      "cmaf variants and segments": "private, max-age=31536000, immutable",
+      "thumbnail": "private, max-age=300, must-revalidate"
+    },
+    "preflight": "OPTIONS on A's master.m3u8 with Origin: B, Access-Control-Request-Method: GET and Access-Control-Request-Headers: range answered 204 with Access-Control-Allow-Origin: *, Access-Control-Allow-Methods: GET, HEAD, Access-Control-Allow-Headers: Range, Access-Control-Max-Age: 600 \u2014 through Caddy.",
+    "page": "renders a real <video>, poster from B's own /api/v1/remote-videos/{id}/thumbnail (B mirrors the origin's icon into remote-thumbnails/*.jpg rather than hotlinking it), duration '0:06', an origin badge 'From 127.0.0.1:18080 \u00b7 ActivityPub', and the 'Watch on 127.0.0.1:18080' link.",
+    "create_then_update": "One video published BEFORE its ladder existed: the Create carried url=[{text/html /v/{code}}] only; the Update fired by the transcode-completion hook carried url=[{application/x-mpegURL master.m3u8},{text/html}]. B's row gained stream_url from the Update with no re-Announce. Both activities also carried duration PT6S and an icon, because ffprobe and the poster both precede the ladder.",
+    "publish_after_transcode_ordering": "publish_after_transcode=true: the Create ALREADY carried the HLS link (releaseHold publishes first, so AnnounceVideo reads a video that is already public+published with a ready ladder), followed by the Update. composeTranscodeCompletion's [release, mirror, federate] order is what makes this true.",
+    "private_and_unlisted": {
+      "on merged main 59d7f51": "FAIL. A PRIVATE upload and an UNLISTED upload each fanned a Delete naming their uuid to BOTH remote follower inboxes when their transcode completed, and a PATCH of a private video's title fanned two more. A29 measured ZERO activities for exactly this.",
+      "mechanism": "the transcode-completion hook added by the remediation calls federation.UpdateVideo unconditionally, and UpdateVideo's else-branch retracts anything that is not public+published. The metadata-edit half runs through video.WithUpdateHook and is older than the remediation.",
+      "harm": "neither Delete retracts anything \u2014 the video was never public, so no peer ever held it \u2014 but it discloses a hidden video's uuid and its upload time to every follower instance.",
+      "on vidra-core #209 (48374d8)": "PASS. A private upload, an unlisted upload and a metadata edit on a private video produced ZERO deliveries (ledger unchanged at 16) with all six transcode jobs state=done, so the completion hook really ran. A public video's edit still fanned out an Update that reached B, and flipping a public video to private still fanned out a Delete that removed B's row."
+    }
+  },
+  "sc2_dereference_and_remote_url": {
+    "verdict": "PASS \u2014 every row measured THROUGH CADDY",
+    "negotiation_table": [
+      {
+        "url": "A /videos/{uuid}",
+        "accept": "application/activity+json",
+        "through": "Caddy",
+        "status": 200,
+        "content_type": "application/activity+json; charset=utf-8",
+        "cache_control": "public, max-age=300",
+        "etag": "\"fe6e6da5b886954d86d00c5623ddab35\""
+      },
+      {
+        "url": "A /videos/{uuid}",
+        "accept": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\"",
+        "through": "Caddy",
+        "status": 200,
+        "note": "same body, same ETag \u2014 Mastodon's form matches @ap_object_ld"
+      },
+      {
+        "url": "A /videos/{uuid}",
+        "accept": "same + If-None-Match",
+        "through": "Caddy",
+        "status": 304
+      },
+      {
+        "url": "A /videos/{uuid}",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "through": "Caddy",
+        "status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "note": "a browser never matches \u00a73a and gets the watch page"
+      },
+      {
+        "url": "A /videos/{uuid}",
+        "accept": "*/*",
+        "through": "Caddy",
+        "status": 200,
+        "content_type": "text/html",
+        "note": "*/* also falls through to the frontend \u2014 the api's 406 is only reachable by addressing the api directly, because Caddy's matcher needs the literal media type in Accept"
+      },
+      {
+        "url": "A /videos/{uuid}",
+        "accept": "*/* and text/html",
+        "through": "the api directly (:18081)",
+        "status": 406
+      },
+      {
+        "url": "A /videos/{uuid} of a PRIVATE video",
+        "accept": "application/activity+json",
+        "through": "Caddy",
+        "status": 404
+      },
+      {
+        "url": "A /videos/{uuid} of an UNLISTED video",
+        "accept": "application/activity+json",
+        "through": "Caddy",
+        "status": 404
+      },
+      {
+        "url": "A /videos/{uuid} of a uuid that was never a video",
+        "accept": "application/activity+json",
+        "through": "Caddy",
+        "status": 404,
+        "note": "identical answer, so the endpoint cannot be walked"
+      },
+      {
+        "url": "A /videos/{uuid} of a DELETED video",
+        "accept": "application/activity+json",
+        "through": "Caddy",
+        "status": 410,
+        "cache_control": "no-store",
+        "body": "{\"@context\":\u2026,\"id\":\u2026,\"type\":\"Tombstone\",\"formerType\":\"Video\",\"deleted\":\"2026-09-08T17:16:07Z\"} \u2014 the id, the formerType, the time, and nothing else"
+      },
+      {
+        "url": "A /comments/{uuid} of a LOCAL comment on a public video",
+        "accept": "application/activity+json",
+        "through": "Caddy",
+        "status": 200,
+        "cache_control": "public, max-age=300",
+        "body": "AS Note with attributedTo the account actor and inReplyTo the video's object id"
+      },
+      {
+        "url": "A /comments/{uuid} of a FEDERATED comment",
+        "accept": "application/activity+json",
+        "through": "Caddy",
+        "status": 404
+      },
+      {
+        "url": "A /comments/{uuid}",
+        "accept": "text/html",
+        "through": "Caddy",
+        "status": 404,
+        "note": "falls through to the frontend, which has no such route"
+      }
+    ],
+    "footnote_on_the_410": "the Tombstone still carries an ETag. `Cache-Control: no-store` dominates, so nothing caches it, but the header is meaningless on a 410 and is worth removing the next time that handler is opened.",
+    "remote_url_lookup": "B's GET /api/v1/videos/search?q=<A's AP object id> and ?q=<A's /v/{code} watch url> BOTH resolved to the SAME already-stored remote_videos row (fe9a6694\u2026), B's remote_videos count stayed at 2, and A's request log recorded NO request at all in the window \u2014 the store is consulted before the network, and a paste creates no duplicate."
+  },
+  "sc3_social_parity": {
+    "verdict": "PARTIAL \u2014 the instance-block matrix and the ghost-follower, follower-count and delivery-identity clauses all pass; two sub-clauses of the row's own procedure do not",
+    "per_remote_account_block": {
+      "surface": "GET/POST/DELETE /api/v1/me/blocks/remote; the request field is `actor` (a handle or an actor URL), not `handle` \u2014 a POST with {\"handle\":\u2026} is 422 \"actor is required\"",
+      "handle_that_does_not_collide": "PASS. viewerb blocked films@127.0.0.1:18080; WebFinger resolved it to /video-channels/films; that channel's video left the blocker's scope=all feed (2 -> 1) while every other A actor stayed. otherb's feed and the anonymous feed both still showed all 4.",
+      "handle_that_DOES_collide": "FAIL, and this is the finding. On A the user `studioa` and the channel `studioa` share a name. federation.WebFinger resolves a name to the USER first and only then to a channel, so blocking studioa@127.0.0.1:18080 stored /accounts/studioa \u2014 while remote_videos.remote_actor_url is /video-channels/studioa. The blocker's feed still showed all three of that creator's videos. Blocking the CHANNEL actor URL explicitly worked (3 -> 1), but the settings page's input is placeholdered '@name@instance.example' and the remote card shows no actor URL to copy, so the block a viewer can actually make is the one that does nothing.",
+      "inbound_Create_Note_from_a_blocked_actor": "dropped, not stored \u2014 202, and A's comment count stayed at 2 (the pre-block note plus the local reply)",
+      "inbound_Follow_from_a_blocked_actor": "records nothing, sends nothing \u2014 202, and A's remote_follows stayed at the two B rows",
+      "existing_content": "NOT hidden. The comment the blocked actor posted BEFORE the block stayed visible on the blocker's own video, to the blocker, with remote:true. The remediation's own table only ever promised that the actor's remote VIDEOS leave six viewer-facing queries; the row's procedure asks for their existing content to be hidden for the blocking scope, and it is not.",
+      "audit": "no audit row is written for a Note or Follow dropped by a per-account block \u2014 a recorded decision (the instance block writes one; a per-viewer control writing an audit row per dropped activity would be a spam amplifier), but the row's procedure asks for one",
+      "direct_read": "GET /api/v1/remote-videos/{id} by the blocker still answers 200. The block is scoped to the six listing queries and the mirrored thread, not to a by-id read of a URL the viewer already holds \u2014 the same shape as an unlisted video.",
+      "other_viewers": "unaffected, measured: anonymous and otherb both saw the full feed throughout"
+    },
+    "instance_block_matrix": [
+      {
+        "case": "inbound Follow from B while B is blocked",
+        "result": "refused \u2014 A's remote_follows unchanged, and an audit row `federation.inbox.rejected` written (domain=federation, actor_kind=anonymous, reason=domain=127.0.0.1:28080, carrying request_id and correlation_id). A29-F4's recording half, confirmed live."
+      },
+      {
+        "case": "outbound to B while B is blocked",
+        "result": "cancelled \u2014 both fan-out rows went to state=failed, attempts=1, last_error 'cancelled: destination instance is blocked'"
+      },
+      {
+        "case": "unblock, then a NEW activity",
+        "result": "delivered normally; the post-unblock comment appeared in B's mirrored thread"
+      },
+      {
+        "case": "F4's OPEN half \u2014 redelivery after the unblock",
+        "result": "NOT redelivered, and it is worse than that. The two cancelled deliveries stayed state=failed attempts=1 forever. The inbound Follow refused during the block was never re-applied either: A still holds two followers, and B's own remote_channel_follows row for that channel stays `pending` with no retry from B's side. Neither end re-attempts, so a block taken and lifted leaves the follower's UI showing a follow request that will never resolve."
+      },
+      {
+        "case": "unblock by percent-encoded domain",
+        "result": "DELETE /api/v1/admin/instances/blocked/127.0.0.1%3A28080 answers 422 'invalid domain'; the raw colon answers 204. An operator tool that URL-encodes path segments cannot unblock."
+      }
+    ],
+    "ghost_follower": "otherb DELETEd its remote-follow of A's studioa channel -> Undo delivered -> A's remote_follows row GONE within 15 s, follower_count 2 -> 1, and the NEXT fan-out went to viewerb's inbox only (otherb's delivery count frozen at 19 while viewerb's advanced to 20). A29-F5 fixed.",
+    "rest_follower_count": "A's GET /api/v1/channels/studioa reported follower_count 2 with channel_follows empty and two accepted remote_follows \u2014 identical to the AP followers collection's totalItems 2. A29 measured 3 vs 0 here. A29-F6 fixed.",
+    "delivery_identity": "federation_deliveries carries request_id and correlation_id, and 0139's sibling trigger projects BOTH onto the job_runs row: 24 federation_deliveries job_runs rows joined to their delivery agreed on the id in every case. The rows that are empty are empty on BOTH sides \u2014 they are the deliveries queued from the WORKER process (the transcode-completion Update and the poster fan-out), where there is no HTTP request in scope. So the projection is faithful, but /admin/jobs still shows an empty request id for every worker-queued federation delivery, which is A17's complaint about the other six queues arriving here by a different road.",
+    "admin_system_federation_component": "present, `degraded`, overall status stays `ok`: '2 outbound deliveries exhausted their retries and were dead-lettered. The instance is serving; one or more peers did not accept what it sent.' \u2014 those two are the block-window cancellations. The pending backlog is appended when non-zero. FederationHealth.LastDeliveredAt is computed in cmd/api and never rendered into any response, so the number the remediation added it for is not visible to an operator."
+  },
+  "sc4_comments": {
+    "verdict": "PASS for the clause A29 named; the mirror is FLAT and that is newly measured",
+    "timeline": [
+      "12:52:58 signed Create{Note} from commenter@127.0.0.1:48080, inReplyTo A's video object url -> 202 -> stored on A as remote:true, author_username 'commenter', author_domain '127.0.0.1:48080', author_id null",
+      "12:53:56 A's creator posted a top-level comment -> Create{Note} to both follower inboxes, both delivered -> B MIRRORED it into remote_video_comments and rendered it on /remote/{id} as 'Comments from the origin \u00b7 studioa \u00b7 From 127.0.0.1:18080'. THIS IS THE EXACT DELIVERY A29 WATCHED SUCCEED INTO A DROP.",
+      "12:53:56 A's creator also replied to the remote commenter's note -> Create{Note} with inReplyTo the commenter's note url, both deliveries succeeded, B stored NOTHING",
+      "12:55 A's creator replied to its own top-level comment -> Create{Note} with inReplyTo http://A/comments/{uuid}, both deliveries succeeded, B stored NOTHING",
+      "12:56 A edited the top-level comment -> B's mirrored row updated in place and rendered '\u00b7 edited'",
+      "12:57 a Delete{Note} for A's comment signed by the UNRELATED commenter peer -> 202, B's row survived (a stranger's retraction is refused)",
+      "12:58 A deleted the comment -> B's mirrored row gone, GET /api/v1/remote-videos/{id}/comments total 0",
+      "13:16 A deleted the video -> B's remote_videos row gone AND its three mirrored comments went with it"
+    ],
+    "the_mirror_is_flat": "measured, and not stated anywhere in the remediation: storeRemoteVideoNote resolves the thread by GetRemoteVideoByURL(inReplyTo), so ONLY a Note whose inReplyTo is the video's object url is mirrored. Every reply \u2014 to a local comment or to a remote one \u2014 is delivered successfully and dropped silently, which is the same shape as the drop A29 found, one level down. In vidra's model 'replying to a video' IS a top-level comment, so the clause the row names is met; a thread with any depth is not.",
+    "authoring": "still deferred, and the page says so in its own words: 'Ratings and saving live on the origin instance, and so does replying \u2014 the comments below are a copy of the origin's thread, sent here.' There is no comment box on /remote/{id} and no POST behind it."
+  },
+  "sc5_signatures_outage_retry": {
+    "verdict": "PASS",
+    "signature_refusals": [
+      {
+        "probe": "unsigned -> A's /inbox",
+        "result": "401 signature verification failed"
+      },
+      {
+        "probe": "tampered signature -> A's /inbox",
+        "result": "401"
+      },
+      {
+        "probe": "stolen keyId (signed by the peer, keyId claims B's viewerb) -> A's /inbox",
+        "result": "401"
+      },
+      {
+        "probe": "spoofed actor (signed by the peer, activity actor claims B's viewerb) -> A's /inbox",
+        "result": "400 invalid activity"
+      },
+      {
+        "probe": "unsigned and tampered -> B's /inbox",
+        "result": "401 both"
+      },
+      {
+        "probe": "A's comment count after all five",
+        "result": "unchanged"
+      }
+    ],
+    "retry_ladder": {
+      "queued": "13:06:39, with B's Caddy site removed so port 28080 refuses connections (a real outage, not a 503)",
+      "observed": "attempts=3 with next_attempt_at 13:10:37 at 13:10:06; attempts=4 with next_attempt_at 13:14:47 at 13:11:19 \u2014 attempt 4 ran at 13:10:47 and scheduled +240s. The 30 -> 60 -> 120 -> 240 doubling is unchanged since A29.",
+      "recovery": "B restored 13:11:32; the delivery went state=delivered at 13:14:57 with attempts=4; B holds exactly ONE copy of the queued comment (three distinct mirrored comments, no duplicate)"
+    },
+    "key_rotation": "the `rotator` peer's key was cached by A (md5 84e8b557\u2026). The peer was restarted with a fresh keypair (md5 1be52bd3\u2026) and sent an activity signed with the new key: A answered 202, refreshed the cached public_key_pem to 1be52bd3\u2026, and APPLIED the activity (the Undo removed the follow). One bounded re-fetch on a verification failure \u2014 A29-F12 fixed."
+  },
+  "sc6_mig06_and_regression": {
+    "mig06_identity_clause": "STILL UNVERIFIED, unchanged and deliberately not faked. Source identity after a migration needs actor-`id` continuity, key continuity or a `Move`, and dispatchActivity still has no arm for `Move`. It is MIG-06-dependent and out of this rehearsal's scope.",
+    "regression": "vidra-core `make ci` PASS (fmt-check, vet, migrate-lint at 140, openapi-verify, sqlc-verify, test-race); `go vet -tags=integration ./...` clean; `go test -tags=integration -count=1 -p 1 ./internal/federation/... ./internal/video/... ./internal/httpapi/... ./cmd/api/...` all ok against a fresh PostgreSQL 16.15 migrated to 140. No OpenAPI change and no migration, so no contract regen was needed and vidra-user was not modified."
+  },
+  "defects_found": [
+    {
+      "id": "R1",
+      "severity": "blocking for INT-05",
+      "what": "a private or unlisted video fans a Delete naming its uuid to every remote follower \u2014 on transcode completion (a regression from the A29 remediation) and on a metadata edit (older)",
+      "fix": "vidra-core #209, merged? no \u2014 open at the time of writing"
+    },
+    {
+      "id": "R2",
+      "severity": "clause-relevant",
+      "what": "WebFinger resolves a colliding name@domain to the Person actor, so on an instance where a user and a channel share a handle every channel-scoped federation feature keyed on the handle addresses the wrong actor: POST /me/remote-follows sits `pending` forever (the Follow of a Person is dropped by handleFollow with no record and no Reject), and POST /me/blocks/remote stores the account actor while videos are attributed to the Group actor, so the block hides nothing. Channel creation does not guard the collision \u2014 creating a channel with handle `ownera` when a user `ownera` exists answers 201.",
+      "fix": "none \u2014 needs a product ruling"
+    },
+    {
+      "id": "R3",
+      "severity": "clause-relevant",
+      "what": "a per-remote-account block does not hide the blocked actor's ALREADY-STORED comments, so a reply that landed before the block stays on the blocker's own video",
+      "fix": "none"
+    },
+    {
+      "id": "R4",
+      "severity": "low",
+      "what": "the mirrored thread is flat: only Notes whose inReplyTo is the video object are mirrored; every reply is delivered and dropped silently",
+      "fix": "none \u2014 remote_video_comments has no parent column"
+    },
+    {
+      "id": "R5",
+      "severity": "low",
+      "what": "FederationHealth.LastDeliveredAt is computed and never rendered, so /admin/system cannot distinguish a drained queue from one nothing is draining",
+      "fix": "none"
+    },
+    {
+      "id": "R6",
+      "severity": "cosmetic",
+      "what": "the 410 Tombstone carries an ETag; no-store dominates so nothing caches it",
+      "fix": "none"
+    },
+    {
+      "id": "R7",
+      "severity": "cosmetic",
+      "what": "DELETE /api/v1/admin/instances/blocked/{domain} rejects a percent-encoded colon with 422",
+      "fix": "none"
+    }
+  ],
+  "gates": {
+    "vidra-core": "make ci PASS; go vet -tags=integration clean; integration suites ok on a fresh PostgreSQL 16.15 at schema 140",
+    "vidra-user": "not modified; not re-gated. The standalone bundle was built from origin/main eb99808 with Node 26.8.1 and served unmodified.",
+    "meta": "caddy validate PASS on the lab config; deploy/Caddyfile itself unmodified; no script touched"
+  },
+  "not_run": [
+    "TLS anywhere, real hostnames, and any interoperability with PeerTube or Mastodon \u2014 all still UNVERIFIED, unchanged from A29",
+    "signed fetch on the object routes \u2014 still not implemented",
+    "MIG-06's identity/Move clause",
+    "the vidra-user backed Playwright suites"
+  ],
+  "teardown": "The lab was torn down: both core api and worker processes, both frontends, Caddy, the two AP peers, the throwaway PostgreSQL cluster and redis, and every lab account, video and media file. Credentials, raw logs, fixtures and browser traces stay private under /tmp/a29lab; nothing from it is committed."
+}
