@@ -457,6 +457,37 @@ case "$TLS_MODE" in
     require_dns_points_here
     ;;
 esac
+# The malware scanner and the profile that STARTS it are one decision, and
+# nothing else checks that they agree.
+#
+# Since scanning became derived from CLAMAV_ADDR (vidra-core #201), an address
+# pointing at the bundled `clamav` service with the `scan` profile NOT selected
+# is a deployment that boots fine and then refuses every upload, URL import,
+# poster, avatar, banner, caption and DM attachment with 503 / a safety-scan
+# rejection — because MALWARE_SCAN_MODE=fail-closed cannot reach a container
+# that was never started. Health probes pass. Nothing in the logs says "profile".
+#
+# `vidra setup --scan=false` produces exactly this pair: it drops `scan` from
+# VIDRA_COMPOSE_PROFILES and leaves CLAMAV_ADDR alone (verified against the
+# engine). So does hand-editing either line. This refuses at pre-flight instead,
+# where it costs a message rather than a silent outage.
+#
+# Only the BUNDLED service name is checked: an external clamd is the operator's
+# own host and this project neither starts nor can verify it.
+require_scanner_profile() {
+  local addr host profiles
+  addr="$(env_get CLAMAV_ADDR '')"
+  [ -n "$addr" ] || return 0
+  host="${addr%%:*}"
+  [ "$host" = "clamav" ] || return 0   # external clamd — not ours to check
+  profiles=" $(env_get VIDRA_COMPOSE_PROFILES 'core frontend') $(env_get EXTRA_COMPOSE_PROFILES '') "
+  case "$profiles" in
+    *" scan "*) return 0 ;;
+  esac
+  die "CLAMAV_ADDR=$addr names the BUNDLED clamav service, but 'scan' is in neither VIDRA_COMPOSE_PROFILES nor EXTRA_COMPOSE_PROFILES, so nothing will start that container. With MALWARE_SCAN_MODE=$(env_get MALWARE_SCAN_MODE 'fail-closed') the api would come up healthy and then refuse every upload and import it cannot scan. Fix ONE of: add 'scan' to VIDRA_COMPOSE_PROFILES in $ENV_FILE; point CLAMAV_ADDR at an external clamd; or unset CLAMAV_ADDR and set MALWARE_SCAN_MODE=disabled to run unscanned on purpose."
+}
+require_scanner_profile
+
 # Before the checkout loop below moves anything: a tag that predates the embedded
 # migrator would hang step 3/6 instead of failing it.
 require_embedded_migrate_tag VIDRA_CORE_TAG   "$(env_get VIDRA_CORE_TAG '')"

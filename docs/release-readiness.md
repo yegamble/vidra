@@ -11733,3 +11733,213 @@ were started by this session in a scratch directory; the instance-settings
 override made during the lab was reset to its default and both instance
 blocklists were emptied first. `/etc/hosts` was never touched. Credentials, the
 lab KEK, the media fixtures and the raw logs stay outside the repo.
+## Scan hardening — default posture, creator copy, full ingestion scope — 2026-09-08
+
+**Code-only, and nothing here is lab-observed.** No clamd was started, no EICAR
+body was scanned, no container was built and no stack was run — another executor
+holds the machine's lab and Docker. INT-04 keeps the PASS its A28 lane earned
+against a real ClamAV 1.5.4; this slice applies the three rulings that lane's
+findings asked for and closes the ingestion-scope gap it recorded as unprobed.
+Every claim below is read out of the code and pinned by a test verified RED
+first. Three PRs — [core #201](https://github.com/yegamble/vidra-core/pull/201),
+[user #196](https://github.com/yegamble/vidra-user/pull/196) and this one —
+with **no OpenAPI schema change** (the two new error codes are prose in the
+`ErrorResponse` envelope, not an enum), so there is no `contract-ci` ordering
+and no client regeneration. [Evidence](evidence/scan-hardening.json).
+
+**The templates ship scanning ON, and that took a deploy-tooling guard to make
+safe.** The owner's ruling is scan-by-default with an explicit opt-out, so
+`env/production.env.example` and `env/staging.env.example` now carry
+`CLAMAV_ADDR=clamav:3310` and `MALWARE_SCAN_MODE=fail-closed` **active**, with
+`scan` added to `VIDRA_COMPOSE_PROFILES` and `# MALWARE_SCAN_MODE=disabled`
+documented as the commented opt-out (with its costs: the boot WARN, the
+per-boot `system.malware_scan.disabled` audit row, and every user-supplied file
+stored unscanned). An earlier draft of this branch shipped the opt-out ACTIVE,
+which would have opted every fresh install out of the posture the ruling
+requires.
+
+The address and the profile are **one decision**, and proving that cost a real
+finding: `vidra setup --scan=false` drops `scan` from `VIDRA_COMPOSE_PROFILES`
+and **leaves `CLAMAV_ADDR` untouched** — verified by building the engine from
+core `main` and running it both ways. That pair is a deployment which boots
+healthy, passes its health probes, and then refuses every upload, import,
+poster, avatar, banner, caption and DM attachment, because fail-closed cannot
+reach a container nothing started, and no log line anywhere says "profile". The
+same pair comes out of hand-editing either line.
+
+`deploy/deploy.sh` now refuses it at pre-flight (`require_scanner_profile`,
+beside the other 0/6 checks — it adds a check, it does not touch the sacred
+ordering of dump → pull → migrate → up → probe). It fires only for the
+**bundled** service name: an external clamd is the operator's own host, which
+this project neither starts nor can verify. Six tests in
+`tests/scanner_profile_test.py` lift the function out of the real script, and
+were verified RED by neutering the guard.
+
+**This also cleared the `validate` blocker without waiting for a release**, and
+the templates are safe on the currently pinned core either way: v0.6.2 reads
+`MALWARE_SCAN_ENABLED=false` from its own compose default and simply does not
+scan (clamd runs, idle), while a pin advanced to any release carrying
+[core #201](https://github.com/yegamble/vidra-core/pull/201) — **merged** as
+`492da35` — turns scanning on with no env edit. Nothing about the template is
+version-gated any more.
+
+**The three dev templates deliberately keep the opt-out ACTIVE**, and that is
+not an inconsistency. The Makefile's dev targets hardcode `--profile core
+--profile frontend` and never start the bundled clamd, so an active
+`CLAMAV_ADDR` there would make fail-closed refuse every upload on `make dev`.
+A dev box that ingests unscanned is exactly what the opt-out is for — and it now
+says so in a boot WARN and an audit row instead of being silent.
+
+### The ruling, and the posture it replaces
+
+A28 measured the shipped default and it gated nothing: with `CLAMAV_ADDR` unset,
+a real mp4 with EICAR appended uploaded and **published, publicly readable**,
+with no scan, no boot warning and no log line of any kind — discoverable only by
+an operator who happened to open `/admin/infrastructure`. Scanning is now
+**derived from `CLAMAV_ADDR`**, and the absence of a scanner is a decision
+somebody has to make out loud.
+
+| `CLAMAV_ADDR` | `MALWARE_SCAN_MODE` | ingestion | `/instance` | `clamav` component | boot |
+| --- | --- | --- | --- | --- | --- |
+| set | `fail-closed` / `fail-open` / `quarantine` | scanned | uploads + imports `true` | `ok`, or `down` when the daemon is unreachable | info line naming the mode and timeout |
+| **unset** | **anything but `disabled`** | **every user-supplied route refuses `503 scanner_not_configured`** | uploads, imports, `import_http`, `channel_sync`, `user_import`, `video_replace` **all `false`** | **`degraded`**, sentence naming both levers; instance status degrades | WARN naming both levers |
+| unset | `disabled` | accepted **unscanned** | uploads + imports `true` | `not_configured` with an honest sentence; instance `ok` | WARN + **one `system.malware_scan.disabled` audit row per boot** (`actor_kind=system`) |
+| set | `disabled` | — | — | — | **REFUSED**: contradictory, and the refusal names both variables |
+| unset | — with the deprecated `MALWARE_SCAN_ENABLED=true` | — | — | — | **REFUSED**, kept deliberately |
+
+That last row is the one deliberate piece of the deprecated variable left
+standing. An operator who explicitly asked for scanning and gave no daemon is
+stopped at boot; handing them a running instance that refuses every upload
+instead would be strictly harder to diagnose.
+
+`MALWARE_SCAN_ENABLED` is otherwise **deprecated and no longer read**. It is
+still noticed for one release so boot can WARN about it, and the compose anchor
+passes it through with **no default** — a `:-false` pin there would fire the
+deprecation warning on every boot of every instance, which is the same shadowing
+trap the beta flag posture already catalogued. The migration is in every env
+template: `=true` → delete it; `=false` → delete it **and** set
+`MALWARE_SCAN_MODE=disabled`, or the instance will refuse every upload. That is
+the one upgrade that changes behaviour if the operator does nothing, and it is
+deliberate.
+
+`fail-open` also stopped being silent. It published unscanned media leaving only
+`malware scan failed; publishing anyway` in the worker log, so an instance that
+ran a week through a scanner outage had no durable record of what went out
+unchecked. It now writes one **`content.upload.malware_scan_skipped`** row per
+unscanned file — reason class `scanner_unavailable`, the policy, the safe id,
+and never the scanner's error string, which embeds `CLAMAV_ADDR`.
+
+### The creator finally learns something
+
+A28: the upload session settled `state: completed, failure_reason: ""`, the
+import job settled `state: done` with no error, and the Studio showed a bare
+`FAILED` badge — directly beside a `quarantined` video that gets the full "Held
+for review…" sentence. The vocabulary existed; the malware path had nothing in
+it. One sentence now, everywhere, with one code:
+
+> **This file was rejected by the instance's safety scan and was not stored.**
+> `safety_scan_rejected`
+
+| surface | before | after |
+| --- | --- | --- |
+| `POST /videos/{id}/file` | 201 carrying `state:"failed"` | **422** `safety_scan_rejected` |
+| `GET /uploads/{id}` | `completed`, `failure_reason: ""` | **`failed`**, the sentence in `failure_reason` |
+| import job | `done`, no error | **`failed`**, the sentence in `error` |
+| `POST /videos/{id}/replace` | "the file failed the malware scan" / "the file could not be scanned" | the same one sentence |
+| Studio | bare `FAILED` badge | the sentence, mapped from the code — and recognised when it arrives out of band on a session or job, which otherwise fell through to "Couldn't fetch that URL" on an import |
+
+It names neither malware nor the scanner nor the signature: telling a creator
+"malware" is telling an attacker their probe worked, and the signature name is an
+oracle for tuning a payload against the engine. The verdict stays in
+`content.upload.malware_rejected` and, under quarantine, on the moderation-queue
+entry. The sentence is a constant in **both** repos and pinned byte-for-byte on
+both sides, because the async paths write the string itself onto a session and a
+job — keying on the code and re-wording it in the client would have produced two
+sentences for one outcome.
+
+The rejection is also **terminal**. `video.Process` returns a typed
+`MalwareRejectedError` alongside the already-persisted `failed` row, and both
+queue workers dead-letter on attempt 1 rather than walking the 1/2/4/8-minute
+ladder. Attempt five gets the same answer as attempt one, and in the meantime the
+session sits in `processing` while the creator watches a spinner.
+
+### Coverage — every user-supplied file, enumerated
+
+A28 recorded thumbnails, avatars, channel banners and account-import archives as
+"ingested unscanned" and not probed. They were. So were playlist covers, caption
+tracks and instance branding. The gate is now route middleware on **21** POSTs,
+and the small in-memory classes are scanned **before** they are stored, so a
+refused avatar never reaches the object store at all.
+
+| route | scanned? | policy | test |
+| --- | --- | --- | --- |
+| `POST /videos/{id}/file` | yes (pre-existing) | all three modes | `TestUploadVideoFileScanOutcomes` |
+| `POST /videos/{id}/upload-session` → `POST /uploads/{id}/complete` | yes | all three | `TestMalwareRejectionFailsTheSessionWithTheNeutralSentence` |
+| `POST /videos/{id}/replace`, `/replace-session` | yes | all three (quarantine rejects) | coverage table + copy unified |
+| `POST /videos/{id}/import` | yes | all three | `TestImportMalwareRejectionDeadLetters…` |
+| `POST /channel-syncs`, `/{id}/sync-now` | yes (same pipeline) | all three | coverage table |
+| `POST /videos/{id}/thumbnail` (multipart) | **NEW** | fail-closed; quarantine→fail-closed; fail-open stores + audits | `TestNonVideoFilesAreScannedBeforeTheyAreStored` |
+| `POST /videos/{id}/captions` | **NEW** | as above | same |
+| `POST /playlists/{id}/thumbnail` | **NEW** | as above | coverage table |
+| `POST /me/avatar`, `/me/banner` | **NEW** | as above | + `TestQuarantineFallsBackToFailClosed…`, `TestFailOpenStores…` |
+| `POST /channels/{handle}/avatar`, `/banner` | **NEW** | as above | `TestNonVideoFilesAreScanned…` |
+| `POST /admin/instance-avatar`, `/instance-banner`, `/instance-logo/{type}` | **NEW** | as above | coverage table |
+| `POST /me/import` (account archive) | **NEW** | as above | `TestNonVideoFilesAreScanned…` |
+| `POST /conversations/{id}/attachments` | yes (pre-existing, fail-closed) | unchanged | coverage table |
+| `POST /admin/peertube-import` | gated | gate only | coverage table |
+| `POST /videos/{id}/thumbnail` (JSON `at_seconds`), storyboards, renditions, Whisper transcripts | **exempt — derived** | n/a | n/a |
+
+**Quarantine on a class with no queue is a ruling, not an oversight.** An avatar
+cannot be "held for review", so the four image classes plus captions and archives
+fall back to **fail-closed and refuse**. Silently storing them instead would be
+the mode not working; the fallback is stated in `docs/operations.md`, in the env
+templates and in a test.
+
+The gate is registered **after** `requireAuth`, so an anonymous caller still gets
+401 and never learns this instance's scan posture from a request. It is
+deliberately not folded into `uploadsEnabled()`: that answers 403
+`feature_disabled` ("the operator turned uploads off"), which is a different fact
+with a different remedy, and a client cannot act on the two the same way.
+
+`/admin/system` also had to change to make this visible: it rolled only `down`
+components into its top line, so a `degraded` scanner would have left the page
+reading `"status":"ok"` while every upload was being refused — the same reading
+A28 caught it giving for a dead clamd. It now rolls up `degraded` as `/readyz`
+already did.
+
+### Gates
+
+core `make ci` **PASS** (fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race), `go vet -tags=integration ./...` clean, and every
+package green; core#201's CI ran `build-test`, `integration`, `ipfs-integration`,
+`ipfs-private-integration`, `openapi` and GitGuardian **all pass**. vidra-user on
+**Node 26.8.1**: `tsc --noEmit` clean, `npm run lint` 0 errors and the 2
+pre-existing warnings on `main`, `lint:icons` pass, `vitest run` **255 files /
+2549 tests pass** (up from 254/2541). Meta: no scripts touched so `bash -n` and
+`shellcheck` have nothing to lint, `python3 -m unittest discover -s tests -p
+'*_test.py'` PASS (**48** tests, 6 of them new), `bash -n` and `shellcheck`
+clean on `deploy/deploy.sh` (only the pre-existing SC1091 about sourcing
+`lib.sh`), the prod render `config -q` exits 0 with the **8** required
+`${VAR:?}` keys filled with dummies, and the render re-asserted under `--profile
+core --profile frontend --profile scan`: the **`clamav` service is present and
+publishes no ports**, the api carries `CLAMAV_ADDR=clamav:3310` and
+`MALWARE_SCAN_MODE=fail-closed`, postgres/redis/search publish **no** ports, api
+and frontend publish on **127.0.0.1** only, and `migrate` still has **no
+volumes**. `vidra setup` built from core `main` was run against the edited
+template end to end: no compatibility block, and `setup --check` reports
+**88 variables, no problems**.
+
+RED verified by reverting, not asserted: the upload session settles `processing`
+with an empty `failure_reason` and the job sits `pending` on the ladder; the
+synchronous route returns a scrubbed 500 instead of 422; and the Studio renders
+the dropzone twice over — once with the `features.uploads` read removed, once
+with the empty state stubbed out.
+
+**Not run, and therefore not claimed:** no clamd, no EICAR, no container build,
+no running stack. The in-memory scan of the small classes is proven against a
+fake scanner — `ClamAV.ScanBytes` shares the entire INSTREAM body with the
+already-exercised `Scan` and differs only in where the bytes come from. The
+one-per-boot audit row is read out of the boot path, not observed. Nobody has
+measured what scanning every avatar and caption costs a busy instance in clamd
+round-trips. The core `integration` / `ipfs-*` lanes and every frontend e2e lane
+ran in CI, not locally; vidra-search is untouched.
