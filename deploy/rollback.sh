@@ -222,9 +222,10 @@ log "current: core=$(env_get VIDRA_CORE_TAG '(unset)') user=$(env_get VIDRA_USER
 #   backups/env-history/<basename>.<UTC stamp>   ten generations (lib.sh)
 #   ${ENV_FILE}.bak                              the newest one, twice
 #
-# The .bak stays because the `config -q` failure path below restores from it by
-# name and because that filename is quoted in this script's own error messages
-# and in deploy/README.md — but it is now only the newest generation's twin. The
+# The .bak stays because every refusal path below restores from it by name
+# (restore_env_and_die) and because that filename is quoted in this script's own
+# error messages and in deploy/README.md — but it is now only the newest
+# generation's twin. The
 # history is what survives a SECOND rollback: the .bak after `rollback.sh v0.2.1;
 # rollback.sh v0.2.0` holds v0.2.1, which is the release you were running for
 # ninety seconds and never want back, while the tags you served before the
@@ -249,6 +250,29 @@ set_key() {
   log "set ${key}=${val}"
 }
 
+# EVERY refusal between here and `up -d` puts the env file back (A38 rehearsal,
+# 2026-09-08, finding A38R-2). Above this line the file still holds the tags you
+# were serving; below it, it holds the rollback target — and the failures that
+# can happen in between (a checkout that will not sync, a compose model that no
+# longer renders, a tag that is not in the registry) all leave the RUNNING STACK
+# untouched. Leaving the file rewritten after one of those is the worst of both:
+# nothing rolled back, and the next `deploy.sh`, `compose ps` or `restore.sh` the
+# operator types reads tags that were never deployed.
+#
+# It used to be uneven. `config -q` restored the .bak; `pull` did not, and its
+# message — "($ENV_FILE restored from ${ENV_FILE}.bak if you need to undo)" —
+# reads mid-incident like a statement that it HAD been, which is exactly the
+# sentence an operator should not have to parse twice. One helper now, so the
+# paths cannot drift apart again.
+restore_env_and_die() {
+  if [ -f "${ENV_FILE}.bak" ] && cat "${ENV_FILE}.bak" > "$ENV_FILE"; then
+    log "restored ${ENV_FILE} from ${ENV_FILE}.bak — the tags in it are the ones you were serving before this run"
+  else
+    log "WARNING: could not restore ${ENV_FILE} from ${ENV_FILE}.bak; ${ENV_FILE} still pins the ROLLBACK TARGET tags and the ten-generation history is under backups/env-history/"
+  fi
+  die "$*"
+}
+
 set_key VIDRA_CORE_TAG   "$CORE_TAG"
 set_key VIDRA_USER_TAG   "$USER_TAG"
 set_key VIDRA_SEARCH_TAG "$SEARCH_TAG"
@@ -265,7 +289,7 @@ if is_bundle_tree "$REPO_ROOT"; then
 else
   for repo in vidra-core vidra-search vidra-user; do
     [ -e "$repo" ] || continue
-    [ -d "$repo/.git" ] || die "$repo exists but is not a git checkout"
+    [ -d "$repo/.git" ] || restore_env_and_die "$repo exists but is not a git checkout"
     case "$repo" in
       vidra-core)   tag="$(env_get VIDRA_CORE_TAG '?')" ;;
       vidra-search) tag="$(env_get VIDRA_SEARCH_TAG '?')" ;;
@@ -275,22 +299,28 @@ else
     log "syncing $repo to $tag"
     # --force: a tag re-pointed upstream is otherwise refused and the checkout
     # pins the stale object. Kept identical in deploy.sh.
-    git -C "$repo" fetch --tags --force --quiet || die "git fetch failed in $repo"
-    git -C "$repo" checkout --detach --quiet "$tag" || die "failed to checkout tag $tag in $repo"
+    # A repo that already moved is NOT moved back: the next run re-syncs every
+    # checkout from the env file, and unwinding a partial sweep here would be a
+    # second, quieter thing that can fail mid-incident. What is restored is the
+    # env file, which is what the next command reads.
+    git -C "$repo" fetch --tags --force --quiet || restore_env_and_die "git fetch failed in $repo — nothing was changed on the running stack. Any checkout already synced by this run stays where it is; the next deploy or rollback re-syncs them all from ${ENV_FILE}"
+    git -C "$repo" checkout --detach --quiet "$tag" || restore_env_and_die "failed to checkout tag $tag in $repo — nothing was changed on the running stack. Any checkout already synced by this run stays where it is; the next deploy or rollback re-syncs them all from ${ENV_FILE}"
   done
 fi
 
 # Sets COMPOSE, EXTERNAL_POSTGRES and EXTERNAL_REDIS.
 vidra_compose_chain
 
-"${COMPOSE[@]}" config -q || {
-  log "compose config invalid after rewrite — restoring ${ENV_FILE} from .bak"
-  cat "${ENV_FILE}.bak" > "$ENV_FILE"
-  die "aborted; nothing was changed on the running stack"
-}
+"${COMPOSE[@]}" config -q \
+  || restore_env_and_die "the compose model does not render with the rollback tags — aborted; nothing was changed on the running stack"
 
 log "pulling"
-"${COMPOSE[@]}" pull || die "pull failed — does that tag exist in GHCR? ($ENV_FILE restored from ${ENV_FILE}.bak if you need to undo)"
+# `pull` runs BEFORE anything is stopped on purpose, so a tag that is not in the
+# registry costs an operator nothing but this message — including the released
+# images that exist for only one architecture, which is how the A38 rehearsal met
+# this path (`no matching manifest for linux/arm64/v8`).
+"${COMPOSE[@]}" pull \
+  || restore_env_and_die "pull failed — does that tag exist in the registry, for this architecture? Nothing was changed on the running stack"
 
 # THE TRAILER, and it is a function so that EVERY path that leaves the site down
 # reaches it (A38 rehearsal, 2026-09-07, run 4). It used to be inline at the very

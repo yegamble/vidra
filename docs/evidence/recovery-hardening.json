@@ -2,7 +2,16 @@
   "item": "Recovery hardening — undecryptable MFA secrets, restore ordering",
   "date": "2026-09-08",
   "scope": "code only; no lab, no stack started, no image built, no restore run",
-  "closes": ["A37-1", "A37-2", "A37-3", "A37-4", "A11 media-GC audit surface"],
+  "closes": [
+    "A37-1",
+    "A37-2",
+    "A37-3",
+    "A37-4",
+    "A38R-1",
+    "A38R-2",
+    "A38R-3 (by the A37-3 fix)",
+    "A11 media-GC audit surface"
+  ],
   "register_rows_changed": "none — REC-02 was already PASS; these were 'recorded, not fixed' findings",
   "repos": {
     "vidra-core": {
@@ -33,9 +42,21 @@
     "log_line": {
       "level": "ERROR",
       "count": "exactly one, asserted",
-      "attributes": ["failure=mfa_secret_undecryptable", "user_id=<uuid>", "cause=<cipher's own message>"],
-      "never_carries": ["the enc: ciphertext", "the KEK", "the plaintext TOTP secret"],
-      "asserted_absent_in_test": ["the stored ciphertext", "the base32 secret", "base64(KEK)"]
+      "attributes": [
+        "failure=mfa_secret_undecryptable",
+        "user_id=<uuid>",
+        "cause=<cipher's own message>"
+      ],
+      "never_carries": [
+        "the enc: ciphertext",
+        "the KEK",
+        "the plaintext TOTP secret"
+      ],
+      "asserted_absent_in_test": [
+        "the stored ciphertext",
+        "the base32 secret",
+        "base64(KEK)"
+      ]
     },
     "audit": "ActionMFAChallenge / failure / reason=secret_undecryptable; the enrollment-verify half uses ActionMFAEnable with the same reason and its own wrong-code 400",
     "mechanism": "openTOTPSecret returned a bare error, which reaches echo's handler unclassified so the only status left is 500; it now returns *auth.MFASecretUndecryptableError, unwrapping to auth.ErrMFASecretUndecryptable",
@@ -64,12 +85,20 @@
     "boot_warn": {
       "level": "WARN",
       "once": true,
-      "attributes": ["check=mfa_kek_mismatch", "sampled", "sealed", "undecryptable"],
+      "attributes": [
+        "check=mfa_kek_mismatch",
+        "sampled",
+        "sealed",
+        "undecryptable"
+      ],
       "counts_only": true
     },
     "component": {
       "name": "mfa_kek",
-      "surfaces": ["GET /readyz", "GET /api/v1/admin/system"],
+      "surfaces": [
+        "GET /readyz",
+        "GET /api/v1/admin/system"
+      ],
       "states": {
         "ok": "every sampled sealed secret opens, or nobody has ever enrolled",
         "degraded": "at least one sampled sealed secret cannot be opened; the message names the count and MFA_KEY_KEK",
@@ -123,8 +152,14 @@
     "not_done": "giving scheduled work a queue table is a design change, not a hardening slice",
     "done_instead": {
       "helper": "mediagc.Result.AuditFields()",
-      "fields": ["dry_run", "breaker_tripped"],
-      "call_sites": ["cmd/api runMediaGCWorker", "POST /api/v1/admin/media/gc"],
+      "fields": [
+        "dry_run",
+        "breaker_tripped"
+      ],
+      "call_sites": [
+        "cmd/api runMediaGCWorker",
+        "POST /api/v1/admin/media/gc"
+      ],
       "why_one_helper": "an admin's sweep and the scheduled one must be filterable the same way",
       "vocabulary": "breaker_tripped added to internal/audit allowedMetadataKeys — that allowlist refuses the WHOLE event on an unknown key, so the acceptance is pinned by its own test in internal/audit"
     }
@@ -140,19 +175,61 @@
     "meta": {
       "bash -n": "clean on every deploy/*.sh, bootstrap.sh, install.sh, tests/*.sh",
       "shellcheck": "0.11.0 -x clean on the same set",
-      "python": "38/38 (was 34) — rollback_floor_test.py 12 -> 16",
+      "python": "42/42 (was 34) — rollback_floor_test.py 12 -> 20",
       "compose config -q": "exit 0 on the filled env/production.env.example",
       "profile render": "postgres, redis, search, migrate, search-migrate and prep-volumes publish NO ports; api 127.0.0.1:8080, frontend 127.0.0.1:3000"
     }
   },
   "red_first": {
     "core": "TestMFAChallengeWithAnUndecryptableSecretIsIndistinguishableFromAWrongCode failed with 'undecryptable-secret status = 500, want 401' before the fix",
-    "meta": "the three new restore tests were run against origin/main's restore.sh and all three failed: \"'[restore] ERROR:' not found in '[restore] decompressing vidra-corrupt.dump.gz\\ngzip: invalid compressed data--crc error…'\" and '6382 not less than 6081 : the archive must be decompressed before the site is stopped'"
+    "meta": "the three new restore tests were run against origin/main's restore.sh and all three failed: \"'[restore] ERROR:' not found in '[restore] decompressing vidra-corrupt.dump.gz\\ngzip: invalid compressed data--crc error…'\" and '6382 not less than 6081 : the archive must be decompressed before the site is stopped'",
+    "meta_rollback": "the four new rollback.sh tests were run against origin/main's script: three assertions failed and one errored, because restore_env_and_die did not exist to extract",
+    "core_doctor": "TestSchemaLedgerAheadOfTheBinary failed against origin/main's checks_state.go with 'status = ok, want warn (detail: the core migration ledger (schema_migrations) is at version 136 and clean)'"
   },
   "not_lab_observed": [
     "the 500 was reproduced as a unit RED, not against a live wrong-KEK instance",
     "the boot WARN and the mfa_kek component are exercised through fake repositories, not a real user_mfa table",
     "the new restore.sh ordering is asserted over the script's own text and its extracted decompression block, not by watching a real archive fail on a real host",
-    "no stack was started, no image was built, no restore was run"
-  ]
+    "no stack was started, no image was built, no restore was run",
+    "restore_env_and_die is driven as an extracted shell function over a temporary env file, not by a rollback that really failed to pull",
+    "doctor's ledger-ahead warning comes from a fake host scripted to answer 136 and 135, not from a rolled-back stack"
+  ],
+  "a38r_1_doctor_ledger_ahead": {
+    "before": "on the rolled-back stack (v0.6.3-a37 binaries, ledger 136) vidra doctor printed a green '✓ schema ledger: the core migration ledger (schema_migrations) is at version 136 and clean' — true about the ledger, silent about the one fact that distinguishes it from a matched deployment",
+    "red": "status = ok, want warn (detail: the core migration ledger (schema_migrations) is at version 136 and clean)",
+    "after_detail": "schema ledger 136 is ahead of this binary's newest migration 135 — this release can run on it, but a newer release was deployed; roll forward or expect no new migrations to apply",
+    "status": "WARN, never FAIL",
+    "why_warn": "the state is SUPPORTED — one release of backward compatibility is the release policy, the migrator no-ops rather than failing, and an operator who has just completed a successful app-only rollback is looking at exactly this; a ✗ would tell them to undo what they meant to do",
+    "embedded_max_source": {
+      "bundled_postgres": "docker compose exec -T api /app/api migrate embedded-max — the RUNNING IMAGE, over the same exec that read 'migrate version', because the container is what serves and the operator's vidra binary may be built from a different checkout than VIDRA_CORE_TAG",
+      "managed_database": "dbmigrate.EmbeddedMax() in process — the same embedded-FS walk the migrator itself reads"
+    },
+    "fix_text_quotes": "dbmigrate.LedgerAheadMessage, so an operator grepping the deploy output and an operator reading doctor see the same sentence",
+    "states_pinned_by_test": {
+      "ledger ahead of the binary": "warn",
+      "matched": "ok",
+      "ledger behind the binary": "ok (the ordinary 'there are migrations to apply' state)",
+      "dirty AND ahead": "still the dirty FAIL — a half-applied migration is the more urgent fact and has the runbook behind it",
+      "image cannot answer embedded-max": "silent (ok) — 'I could not check' must never render as 'checked and fine'"
+    },
+    "search_ledger": "deliberately NOT compared: vidra-search's migrations are compiled into ITS binary and the only number available from here is core's, which would be a confident lie rather than a silence",
+    "files": [
+      "vidra-core/internal/doctor/checks_state.go",
+      "vidra-core/internal/doctor/doctor_test.go",
+      "vidra-core/internal/doctor/fake_test.go"
+    ]
+  },
+  "a38r_2_rollback_env_restore": {
+    "before": "every refusal between the set_key rewrite and `up -d` leaves the RUNNING STACK untouched, but two of them left env/production.env pinned to the ROLLBACK TARGET; the pull message read '($ENV_FILE restored from ${ENV_FILE}.bak if you need to undo)', which mid-incident reads as a statement that it HAD been restored",
+    "uneven_before": {
+      "config -q": "restored the .bak",
+      "checkout sync x3": "did not",
+      "pull": "did not, and said something that reads as if it had"
+    },
+    "after": "one restore_env_and_die helper on all five paths (three checkout failures, config -q, pull); a test counts its uses over the CODE so a sixth path cannot be added without it",
+    "missing_bak": "the helper says 'could not restore' and names backups/env-history/ instead of claiming a restore — the one thing worse than not restoring is saying you did",
+    "partial_checkout_sweep": "a repo that already moved is NOT moved back, and the message says so: the next deploy or rollback re-syncs every checkout from the env file, and unwinding a partial sweep would be a second thing that can fail mid-incident",
+    "file": "deploy/rollback.sh"
+  },
+  "a38r_3": "closed by the A37-3 change above — it re-logged A37-3 against the two new restore.sh refusals (dirty dump, pinned image below the dump's schema), and all three now happen with the site still serving"
 }

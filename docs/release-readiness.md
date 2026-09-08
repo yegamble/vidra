@@ -9779,11 +9779,12 @@ abort, a supported app-only rollback, an incompatible/unreachable schema going
 through the tested restore path, and no blind force or automatic down migration
 anywhere. **A38 is closed.**
 
-## Recovery hardening — undecryptable MFA secrets, restore ordering — 2026-09-08
+## Recovery hardening — undecryptable MFA secrets, restore and rollback ordering — 2026-09-08
 
-**Four defects that two close-outs recorded and did not fix.** A37 shipped with
-findings A37-1 through A37-4 written down as "recorded, not fixed", and A11's
-close-out carried the same shape for the media collector's operator surface.
+**Six defects that three close-outs recorded and did not fix.** A37 shipped with
+findings A37-1 through A37-4 written down as "recorded, not fixed", A11's
+close-out carried the same shape for the media collector's operator surface, and
+the A38 rehearsal added A38R-1 and A38R-2 on the same day.
 None of them was a reason to hold a register row open — every one of them is the
 kind of defect that only costs you something during an incident, which is the
 worst time to discover it. This slice closes them in code, and it is code only:
@@ -9931,23 +9932,95 @@ the Studio video delete is two-step and the GC purge demands a typed `PURGE`.
 This slice is code-only and deliberately did not touch vidra-user; the
 inconsistency is recorded here for a UI slice, not fixed.
 
+### Two more from the A38 rehearsal
+
+The rehearsal that merged the same day added two findings of the same shape —
+a truth told in a way an operator cannot act on — and they are closed here
+rather than left for a third slice.
+
+**A38R-1 — `vidra doctor` can now say "your binary is behind the schema".** On
+the rolled-back stack it printed *✓ schema ledger: the core migration ledger
+(schema_migrations) is at version 136 and clean*, which is true and is also
+exactly what a matched deployment prints. The one fact that distinguishes the
+two — the binary in front of that ledger embeds up to 135 — was never
+compared, even though both numbers were available. It is compared now, against
+the same source the migrator reads: on a bundled-Postgres deployment doctor asks
+the **running api image** `migrate embedded-max` over the same `docker compose
+exec` that just read `migrate version`, because the container is what serves and
+an operator's `vidra` binary may be built from a different checkout than the tag
+in the env file; on a managed database it uses `dbmigrate.EmbeddedMax()` in
+process. Reproduced as a RED first — `status = ok, want warn` — and the finding
+now reads:
+
+```
+⚠ schema ledger: schema ledger 136 is ahead of this binary's newest migration 135
+  — this release can run on it, but a newer release was deployed; roll forward or
+  expect no new migrations to apply
+  fix: if this is where you meant to be (an app-only rollback), nothing needs
+  doing — the migration one-shot logs "schema version 136 is newer than this
+  binary's newest migration 135; nothing to apply" and exits 0. …
+```
+
+**WARN and not FAIL**, deliberately: the state is supported. One release of
+backward compatibility is the release policy, the migrator no-ops rather than
+failing, and an operator who has just completed a successful app-only rollback is
+looking at precisely this. A ✗ would tell them to undo the thing they meant to
+do. Four states are pinned by test — ahead (warn), matched and behind (both ok),
+and dirty-and-ahead (still the dirty ✗, because a half-applied migration is the
+more urgent fact and has the runbook behind it) — plus the honest degradation: an
+image that answers *unknown migrate subcommand* leaves the check silent, because
+"I could not check" must never render as "checked and fine". The **search**
+ledger is deliberately not compared: vidra-search's migrations are compiled into
+*its* binary and the only number available from here is core's, which would be a
+confident lie rather than a silence.
+
+**A38R-2 — a `rollback.sh` refusal now puts the env file back.** Every refusal
+between the `set_key` rewrite and `up -d` leaves the RUNNING STACK untouched —
+that ordering is the script's own design — but two of them left
+`env/production.env` pinned to the rollback target anyway, so the next command an
+operator typed read tags that were never deployed. It was uneven rather than
+absent: `config -q` restored the `.bak`; the checkout-sync trio did not; and
+`pull`'s message —
+
+```
+pull failed — does that tag exist in GHCR? ($ENV_FILE restored from ${ENV_FILE}.bak if you need to undo)
+```
+
+— reads mid-incident like a statement that it *had* been restored. It had not.
+One `restore_env_and_die` helper now serves all five paths (the three checkout
+failures, `config -q`, `pull`), and a test counts its uses over the CODE so a
+sixth path cannot be added without it. When the `.bak` is missing the helper says
+so and names `backups/env-history/` instead of claiming a restore — the one thing
+worse than not restoring is saying you did. A checkout that already moved is
+**not** moved back, and the message says that too: the next deploy or rollback
+re-syncs every checkout from the env file, and unwinding a partial sweep would be
+a second thing that can fail mid-incident.
+
+**A38R-3 is closed by the `restore.sh` change above.** It re-logged A37-3 against
+two more paths — the dirty-dump and pinned-image-too-old refusals, which the same
+rehearsal proved fire — and all three now happen with the site still serving.
+
 ### Gates
 
 vidra-core: `make ci` **exit 0** (fmt-check, vet, migrate-lint, openapi-verify,
 sqlc-verify, test-race across every package) plus
 `go vet -tags=integration ./...` clean. meta: `bash -n` and **shellcheck
 0.11.0** `-x` clean on every `deploy/*.sh`, `bootstrap.sh`, `install.sh` and
-`tests/*.sh`; the Python suites **38/38** (was 34 — `rollback_floor_test.py`
-goes 12 → 16); `config -q` exit 0 on the filled `env/production.env.example`;
+`tests/*.sh`; the Python suites **42/42** (was 34 — `rollback_floor_test.py`
+goes 12 → 20); `config -q` exit 0 on the filled `env/production.env.example`;
 and the `--profile core --profile frontend` render still shows postgres, redis,
 search, `migrate`, `search-migrate` and `prep-volumes` publishing **no** ports
 with api on `127.0.0.1:8080` and frontend on `127.0.0.1:3000`.
 
-The three new script tests were run against `origin/main`'s `restore.sh` first
-and all three failed there — `'[restore] ERROR:' not found in '[restore]
-decompressing vidra-corrupt.dump.gz\ngzip: invalid compressed data--crc
-error…'`, and `6382 not less than 6081 : the archive must be decompressed
-before the site is stopped`. They are regression tests, not decoration.
+Every new test was run against `origin/main` first and failed there. The three
+`restore.sh` ones: `'[restore] ERROR:' not found in '[restore] decompressing
+vidra-corrupt.dump.gz\ngzip: invalid compressed data--crc error…'`, and `6382
+not less than 6081 : the archive must be decompressed before the site is
+stopped`. The four `rollback.sh` ones failed too — three assertions plus one
+error, because `restore_env_and_die` did not exist to extract. The doctor one
+failed with `status = ok, want warn (detail:
+the core migration ledger (schema_migrations) is at version 136 and clean)` —
+the finding's own sentence. They are regression tests, not decoration.
 
 ### Not lab-observed
 
@@ -9956,7 +10029,11 @@ the 500 was reproduced as a unit RED rather than against a live wrong-KEK
 instance, the boot WARN and the `mfa_kek` component are exercised through fakes
 rather than a real `user_mfa` table, and the new `restore.sh` ordering is
 asserted over the script's own text and its extracted decompression block rather
-than by watching a real archive fail on a real host. A37's own negative controls
+than by watching a real archive fail on a real host. The same holds for the two
+A38R fixes: `restore_env_and_die` is driven as an extracted shell function over
+a temporary env file, not by a rollback that really failed to pull, and doctor's
+ledger-ahead warning comes from a fake host scripted to answer `136` and `135`
+rather than from a rolled-back stack. A37's own negative controls
 remain the only observed evidence for the behaviour these changes alter. The
 next real restore rehearsal is what would confirm that the site keeps serving
 through a refusal.

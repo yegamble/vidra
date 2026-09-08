@@ -247,6 +247,82 @@ class RestoreArchiveDecompressionTests(unittest.TestCase):
         self.assertIn('decompressing', out)
 
 
+class RollbackEnvRestoreTests(unittest.TestCase):
+    """A38R-2: a refusal AFTER the env rewrite used to leave env/production.env
+    pinned to the ROLLBACK TARGET while the pull message read
+    "($ENV_FILE restored from ${ENV_FILE}.bak if you need to undo)" — which an
+    operator mid-incident can read as a statement that it was. It was not. The
+    running stack is untouched on every one of these paths, so the next command
+    they type is the only casualty, and it reads tags that were never deployed."""
+
+    HARNESS = (
+        'set -euo pipefail\n'
+        'ENV_FILE="$1"\n'
+        "log() { printf '[rollback] %s\\n' \"$*\"; }\n"
+        "die() { printf '[rollback] ERROR: %s\\n' \"$*\" >&2; exit 1; }\n"
+    )
+
+    BEFORE = 'VIDRA_CORE_TAG=v0.6.3\nVIDRA_USER_TAG=v0.6.3\n'
+    AFTER = 'VIDRA_CORE_TAG=v0.6.2\nVIDRA_USER_TAG=v0.6.2\n'
+
+    def run_helper(self, with_bak=True):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = Path(tmp) / 'production.env'
+            env.write_text(self.AFTER)          # already rewritten to the target
+            if with_bak:
+                Path(str(env) + '.bak').write_text(self.BEFORE)
+            script = (self.HARNESS
+                      + extract('rollback.sh', 'restore_env_and_die')
+                      + '\nrestore_env_and_die "pull failed"\n')
+            p = subprocess.run(['bash', '-c', script, 'rollback', str(env)],
+                               capture_output=True, text=True,
+                               env={'PATH': '/usr/bin:/bin'})
+            return p.returncode, p.stdout + p.stderr, env.read_text()
+
+    def test_a_refusal_puts_the_env_file_back(self):
+        code, out, content = self.run_helper()
+        self.assertNotEqual(code, 0, out)
+        self.assertEqual(content, self.BEFORE,
+                         'the env file must hold the tags that were being served')
+        self.assertIn('restored', out)
+        self.assertIn('[rollback] ERROR: pull failed', out)
+
+    def test_a_missing_bak_says_so_instead_of_claiming_a_restore(self):
+        """The one thing worse than not restoring is saying you did."""
+        code, out, content = self.run_helper(with_bak=False)
+        self.assertNotEqual(code, 0, out)
+        self.assertEqual(content, self.AFTER)
+        self.assertIn('could not restore', out)
+        self.assertIn('backups/env-history/', out)
+
+    def test_every_refusal_after_the_rewrite_goes_through_the_helper(self):
+        """Counted over the CODE so the explanatory comments do not inflate it:
+        the definition plus the checkout-sync trio, `config -q` and `pull`."""
+        source = (DEPLOY / 'rollback.sh').read_text()
+        code = [l for l in source.splitlines()
+                if l.strip() and not l.lstrip().startswith('#')]
+        uses = sum(1 for l in code if 'restore_env_and_die' in l)
+        self.assertEqual(uses, 6, 'expected the definition plus the five refusal '
+                                  'paths between the env rewrite and `up -d` '
+                                  f'(checkout sync x3, config -q, pull), found {uses}')
+        self.assertNotIn('restored from ${ENV_FILE}.bak if you need to undo',
+                         '\n'.join(code),
+                         'the message that reads as if the .bak had been restored '
+                         'must not survive the fix (the comment above the helper '
+                         'quotes it deliberately, which is why this reads the code)')
+
+    def test_the_helper_sits_between_the_rewrite_and_up_d(self):
+        source = (DEPLOY / 'rollback.sh').read_text()
+        code = '\n'.join(l for l in source.splitlines()
+                         if l.strip() and not l.lstrip().startswith('#'))
+        self.assertLess(code.index('cp "$ENV_FILE" "${ENV_FILE}.bak"'),
+                        code.index('restore_env_and_die() {'),
+                        'the .bak must exist before anything can restore from it')
+        self.assertLess(code.index('restore_env_and_die "pull failed'),
+                        code.index('log "restarting"'),
+                        'every path the helper guards must come before `up -d`')
+
+
 # --- rollback.sh: the trailer survives a failing `up -d` ----------------------
 
 class RollbackTrailerTests(unittest.TestCase):
