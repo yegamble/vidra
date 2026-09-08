@@ -10783,7 +10783,11 @@ pulls from the bucket at the object's own key, and Vidra writes no cache
 metadata on stored objects at all. Every edge response in this lab carried
 **no `Cache-Control` whatsoever**, plus `Content-Type: application/octet-stream`
 for every class and **no `Content-Disposition`**, so a `/download/original`
-redirected to an edge loses the creator's filename outright. The practical
+redirected to an edge loses the creator's filename outright. Core #197 closes
+the content-type half at the only place that reaches a third party — the stored
+object itself — so an edge fed by a bucket written after that fix answers with
+honest types; the cache policy and the disposition have no such lever, because
+the resolver hands the provider a bare URL and nothing else. The practical
 reading is worse than "the header is still private": an operator who sets
 `DELIVERY_CDN_BASE_URL` gets edge caching governed entirely by the CDN's own
 default TTL, with no Vidra input — and with three purge families unwired, that
