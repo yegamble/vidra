@@ -10516,9 +10516,10 @@ that slice's only delivery-path change is a log redaction in
 `internal/delivery/resolver.go`, so every redirect, header, CORS, expiry and
 purge measurement below is unaffected — but it *does* rewrite what a storage
 refusal looks like, so the outage paragraph was re-run against `cb2d2780` plus
-this session's own fix and reports those numbers, not the pre-slice ones. The object store is one `mirror.gcr.io/minio/minio` on
-**127.0.0.1:9210** — its own origin, which is the whole point — path-style, no
-TLS, bucket `vidra-a32`. The two additions are `MINIO_API_CORS_ALLOW_ORIGIN`,
+this session's own fix and reports those numbers, not the pre-slice ones.
+
+The object store is one `mirror.gcr.io/minio/minio` on **127.0.0.1:9210** — its
+own origin, which is the whole point — path-style, no TLS, bucket `vidra-a32`. The two additions are `MINIO_API_CORS_ALLOW_ORIGIN`,
 set and unset across runs, and the **edge simulator** on 127.0.0.1:9310: a
 caching reverse proxy in front of `http://127.0.0.1:9210/vidra-a32` that speaks
 exactly the invalidation contract `internal/cdn` sends. Browsers are Playwright
