@@ -8769,3 +8769,225 @@ isolation (per-test schema or serialised packages), not in a CI gate.
 **Next action:** review and merge the four PRs, then configure the single
 required status check `ci-required` on `main` in all four repos. No merge or
 deployment was performed here.
+||||||| parent of 96a6e58 (acceptance: observability rulings — playback opt-out and audit-log retention)
+## Observability rulings — playback opt-out and audit-log retention — 2026-09-08
+
+**Both of A35's open questions are now answered in code, and both were watched
+in a lab rather than reasoned about.** An opted-out viewer's playback
+measurements no longer carry a pseudonym for them — proven by a real Chromium
+MSE playback, not a unit test — and the security-audit trail, which had no
+retention of any kind since migration 0029 created it, now has a configurable
+one that prunes in bounded batches and records its own run in the trail it just
+pruned. Three PRs: [core
+#192](https://github.com/yegamble/vidra-core/pull/192), [user
+#185](https://github.com/yegamble/vidra-user/pull/185) and [meta
+#137](https://github.com/yegamble/vidra/pull/137), in that order — core carries
+both behaviours and the compose consumer, user carries the sentence that makes
+the promise reachable, meta carries the templates and this evidence. **No
+migration and no OpenAPI change in any of them** (core stays at schema 135), so
+there is no `contract-ci` ordering to respect. OPS-02 stays PASS and is not
+re-scored. [Sanitized evidence](evidence/observability-rulings.json).
+
+**The lab.** Native and single-origin: a pipe-only Node proxy on
+`127.0.0.1:8080` routing `/api/*` to core and everything else to the frontend,
+dropping the client's `Accept-Encoding` — one origin is mandatory here because
+`vidra_refresh` is `SameSite=Lax` with `Path=/api/v1/auth`. Behind it, two
+processes from one binary built off the branch (`VIDRA_ROLE=api` on `:8088` and
+a real `VIDRA_ROLE=worker` with no listener, which is the process that holds the
+`singleton-crons` leader lock and runs both retention passes), a production Next
+standalone on `:3009`, native PostgreSQL 16.15 on a private socket, native
+redis, `STORAGE_BACKEND=local`, and a real Chromium. The fixture is a real four
+second 320x240 H.264/AAC clip made with ffmpeg, uploaded through the resumable
+API and **actually transcoded** to CMAF. Rate limiting was **off**, so this lab
+says nothing about the shipped limits, and
+`TRANSCODING_MIN_FREE_SCRATCH_MB=512` against the shipped 10 GiB floor because
+the worker itself reported only 6,369,402,880 free bytes against a
+10,737,418,240 floor and correctly refused every job until it was lowered.
+
+### Ruling 1 — the opt-out reaches playback telemetry
+
+A35 found that the QoE beacon consulted **no** user preference: a viewer who had
+switched everything off had their very next playback written with the same
+`viewer_digest` as before. The fix is not a new rule, it is the **same** rule:
+`internal/httpapi/qoe.go` now resolves the stored digest through a new
+`qoeViewerDigest` that asks A13's own decision point —
+`searchConsent(prefs, authed)` in `search_attribution.go`, unchanged — and
+returns the empty digest when neither `allow_history` nor
+`allow_personalization` survives. Writing a second predicate was the tempting
+shortcut and the wrong one: the settings page makes one promise, and a second
+definition of "opted out" is how that promise quietly stops being true on one
+surface. `viewer_digest` has been `TEXT NOT NULL DEFAULT ''` since 0109, so
+"unattributed" is the empty string and there is no migration.
+
+The decision is taken **server-side at ingest**, once per batch, from the
+viewer's stored row. A client can neither opt in by sending a field nor opt out
+by withholding one, and this was tested the aggressive way: from the real
+browser, signed in as the opted-out viewer, a beacon carrying that viewer's
+genuine `user_id` and `"viewer_digest": "client-chosen-digest"` was accepted
+`202` and stored `(EMPTY)`. Zero rows in `qoe_events` contain that string.
+
+| actor | how | `viewer_digest` |
+| --- | --- | --- |
+| V, three discovery controls off **through the settings UI** | real Chromium, `blob:` MSE, `currentTime 3.957959` of a 4.017051 s clip | **(EMPTY)**, `ttff_ms 355` |
+| W, untouched defaults | real Chromium, `blob:` MSE, `currentTime 4.017051` | `fc199ba19837a98e`, `ttff_ms 3` |
+| anonymous | curl beacon | `0d888a6e60ba6259` (IP-derived, unchanged) |
+| V, before opting out | curl beacon | `bb50399b108e0cb8` |
+| V, after re-enabling **one** control | curl beacon | `bb50399b108e0cb8` again |
+
+W's digest is byte-identical in the curl beacon and in the browser playback,
+which is what proves it is account-derived and untouched by this change. The
+re-enable line is what proves the rule is **forward-only**: the decision is per
+request, so nothing already written changes and nothing needs backfilling.
+
+Three things deliberately do not change, and each was checked rather than
+assumed. The **row still lands**, with its session id — dropping the measurement
+would make every percentile an admin reads a sample of the consenting half of
+the audience, which is a worse answer to "is playback healthy" than no answer.
+The **classification** is `api-proxy` on every row, opted out or not, because a
+delivery source describes the network and not the person. And the **anonymous**
+viewer keeps their IP-derived digest, because the ruling is about a signed-in
+viewer's stored preference and an anonymous visitor has none. Wrong actors are
+unchanged: `GET /admin/qoe/playback-health` answers 200 to the owner, **403** to
+viewer V and **401** to anonymous, while the ingest endpoint stays
+`optionalAuth` and answers 202 to everybody.
+
+**Two inherited edges worth stating out loud**, because a reader of the settings
+page could get either wrong. First, the **fourth** control is not in the
+predicate: `history_enabled` is watch history, not one of A13's three discovery
+controls, so `searchConsent` does not read it — measured, viewer W with
+`history_enabled=false` and the discovery controls on still wrote
+`fc199ba19837a98e`. Second, on the **shipped `simple` search mode**
+`allow_personalization` is structurally false (`searchConsent` ANDs in
+`searchAdvanced()`), so the history control alone decides — measured, V with
+`search_history_enabled=false` and *both* personalization controls on wrote
+`(EMPTY)`. Both are A13's semantics reaching playback telemetry verbatim, and
+the second errs toward collecting less.
+
+user#185 states it in the copy that has been load-bearing on that page since
+A13, and the sentence is tested (verified RED against the unmodified component
+first). Read back out of the real browser: *"That covers how your video played,
+too: the quality measurements this site takes while you watch — start time,
+stalls, errors — stop carrying any pseudonym for you, while still counting
+toward the anonymous playback totals the administrator reads."* It deliberately
+does not say "we stop measuring", which would be the easier sentence and the
+false one.
+
+### Ruling 2 — the audit trail has a window
+
+`audit_log` was append-only in practice: 0029 created it, 0084 gave it a typed
+envelope, and no `DELETE` against it existed anywhere in the tree. Every login,
+every failed MFA challenge, every moderation decision and every admin config
+change an instance had ever made was kept forever — defensible on a week-old
+instance and indefensible on a five-year-old one, for disk and, more to the
+point, because a trail that keeps a user's authentication history for the life
+of the install is data retained past any purpose it was collected for.
+
+`AUDIT_LOG_RETENTION` is a Go duration, default **400 days**, and the default is
+deliberately just over a year: a trail that cannot answer "what changed at this
+point last year" cannot serve the annual review that asks, and five weeks of
+slack stop a 365-day window from deleting last year's evidence the week before
+somebody goes looking. **`0` keeps the trail forever** and does no database work
+at all, which is the house convention every other unlimited window here already
+uses. A **negative** value refuses to boot, attributed to the variable: it would
+compute a cutoff in the *future* and delete the whole trail on the next tick,
+which is the one mistake here that cannot be undone. Both refusals were watched
+rather than asserted — `AUDIT_LOG_RETENTION=-24h` exits 1 with *"config:
+AUDIT_LOG_RETENTION must not be negative (0 = keep the audit trail forever), got
+-24h0m0s"*, `400days` exits with *"must be a duration (e.g. 30s, 5m, 12h): time:
+unknown unit \"days\""*, and `9600h` boots. The 0-does-no-work half is
+unit-proven rather than lab-observed: `TestPruneZeroRetentionKeepsForever`
+asserts the repository was never called, and a second live observation would
+have cost another hour of tick.
+
+The sweep is a second `jobloop` **Pass** on the existing hourly, leader-elected
+QoE retention loop (now `runTelemetryRetentionWorker`, since it covers both
+tables core keeps about its own operation). Two passes rather than one function
+doing both, because `jobloop` runs each pass independently — a QoE prune that
+fails still leaves the audit prune to run, and logs its own failure. Batches are
+**2000 rows**, oldest first, capped at **100 batches** — 200,000 rows — per
+sweep, so the first run on an install that has never pruned spreads over several
+ticks instead of becoming one unbounded `DELETE` against the table every
+security-sensitive write appends to. `EXPLAIN ANALYZE` at 210,020 rows confirms
+the batch subselect is an `Index Scan Backward using audit_log_occurred_idx`
+with an index condition on `occurred_at` — 2000 rows in 0.454 ms, no sequential
+scan, no full-table lock. The DESC index scanned backwards is exactly what gives
+the ascending oldest-first order, which matters: without the `ORDER BY`, a sweep
+that hits the cap deletes an arbitrary slice and can leave the very oldest rows
+alive forever.
+
+**Watched, not asserted.** With `AUDIT_LOG_RETENTION=1h` and 210,023 rows —
+210,012 of them past the window, each seeded row carrying its ordinal so the
+order of deletion would be checkable afterwards — the leader-elected worker's
+**first** tick, one hour and two seconds after it started, logged `audit log
+retention pruned rows count=200000 retention=1h0m0s`. That 200,000 is exactly
+the per-sweep cap, and the seed was sized to overrun it on purpose: the cap is
+observed rather than assumed. 210,023 − 200,000 + 1 for the sweep's own row =
+**10,024** rows left, which is what the table holds. The order was checked
+against a boundary recorded *before* the sweep — the 200,000th-oldest row was
+seed ordinal `0199988`, and the survivors are exactly ordinals `0199989`
+through `0210000`, 10,012 of them. The sweep deleted precisely the oldest
+200,000 and stopped; the rest wait for the next tick. Afterwards
+`GET /admin/audit-log` still pages at offsets 0, 5000 and 10020, and
+`?action=admin.audit.retention_prune` returns the single run — `domain admin`,
+`actor_kind system`, `actor_id` null, `reason` empty,
+`metadata {"count": "200000"}`. Wrong actors, with fresh tokens: **403** for a
+viewer and **401** for anonymous, on this endpoint and on
+`/admin/qoe/playback-health` alike. The sibling QoE pass on the same tick found
+nothing to do and said nothing, which is the intended quiet no-op.
+
+The run **records itself**, once, as `admin.audit.retention_prune` — domain
+`admin`, `actor_kind` `system`, with the row count in the envelope's `count`
+metadata field. It has to be structured: `audit_log` cannot carry prose, its
+`reason` is bounded and its metadata vocabulary is an allowlist (`count` was
+already in it), so a number written into a reason string is a number nothing can
+read back. A run that deleted **nothing** writes no row at all — on a quiet
+instance the trail's own bookkeeping would otherwise become the bulk of the
+trail, and those rows would in their turn need pruning.
+
+Unlike `searchevents.Pruner` this is **not** state-aware and exempts nothing. An
+audit row is terminal the moment it is written: the table is append-only and
+nothing reads a row back to decide whether work is still in flight. A per-action
+exemption list was considered and rejected — it would be the one place where the
+retention an operator configured is not the retention they get, and an operator
+who needs a longer trail for one action needs a longer window, not a hidden
+exception.
+
+Both env templates document the knob, **commented out on purpose**. The compose
+consumer is `${AUDIT_LOG_RETENTION:-}` and the binary owns the default, so a
+number written in either file would make that file the source of truth for it —
+and a value written in two places is a value that can disagree with itself,
+which is the shape A17 found with `FEATURE_LIVE_ENABLED`. The meta-ci "every
+config key vidra-core reads has a compose consumer" assert was run locally
+against the branch: the key is present in **both** the api and worker
+environment maps and the two key sets are equal.
+
+### Gates, and what this does not cover
+
+core `make ci` passes (fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race) and `go vet -tags=integration ./...` is clean; core#192
+is green on all six CI lanes, after one `ipfs-integration` run timed out at 301 s
+on a real IPFS round trip and passed in 1m13s on rerun — a flake, and the lane is
+green on `main`. vidra-user `npm run ci` passes on **Node v24.4.1**: typecheck,
+lint, lint:icons, **2540** vitest tests across 254 files, a production build and
+**625** Playwright specs; user#185 is green on all seven lanes. The meta compose
+gate passes both forms — `config -q`, and the `--profile core --profile
+frontend` render asserting that postgres, redis and search publish no ports
+while api and frontend publish on `127.0.0.1` only. No scripts were touched, so
+no shellcheck was owed. A35's named guards, `TestNoForbiddenLogging` and
+`TestNoSensitiveLogKeys`, both still pass, and so does the A13 opt-out suite —
+which is the guard that reusing `searchConsent` did not alter the search half of
+it. That half was **not** re-observed in this lab: no vidra-search was
+configured, so core enqueued nothing and `search_outbox` stayed empty
+(`POST /search/events` answered 202 for both viewers and wrote no row). Its
+coverage here is the unit suite, not a lab observation.
+
+Four things are recorded rather than fixed. `qoe_events` still has **no
+correlation column**, so a beacon joins back to its request only through
+`(video_id, session_id)`; A35 recorded this and nothing here changes it. The
+opt-out is **forward-only by construction** — rows written before a viewer opted
+out keep their digest until the seven-day raw window ages them out, and there is
+no erase-my-telemetry control. The beacon now costs **one extra `users` read per
+batch** for signed-in callers (the same read the search beacon already pays;
+anonymous callers pay nothing, because `searchUserPrefs` returns early), and
+that was not measured under load, in a lab with rate limiting off. And
+`audit_log` has **no per-action retention and no export-before-delete**.

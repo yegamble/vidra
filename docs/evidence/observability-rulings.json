@@ -1,0 +1,123 @@
+{
+  "slice": "Observability rulings — playback opt-out and audit-log retention",
+  "date": "2026-09-08",
+  "register_row": "OPS-02 stays PASS and is not re-scored. These are the two questions A35 recorded as open and the owner has now ruled on.",
+  "verdict": "BOTH RULINGS IMPLEMENTED AND OBSERVED. Ruling 1: an opted-out viewer's playback measurements carry no viewer pseudonym — proven in a real Chromium MSE playback, in the database, and against a beacon that tried to claim one. Ruling 2: AUDIT_LOG_RETENTION prunes the security trail in bounded batches, oldest first, and records its own run in the trail it just pruned.",
+  "prs": {
+    "core": "https://github.com/yegamble/vidra-core/pull/192",
+    "user": "https://github.com/yegamble/vidra-user/pull/185",
+    "meta": "https://github.com/yegamble/vidra/pull/137",
+    "search": "none — neither ruling touches vidra-search",
+    "dependency_order": "core#192 (both behaviours plus the compose consumer) → user#185 (settings copy) → meta#137 (env templates + this evidence). No contract-ci ordering to respect: no OpenAPI change in any of them.",
+    "migration": "NONE. qoe_events.viewer_digest has been TEXT NOT NULL DEFAULT '' since 0109, so an unattributed row needed no schema change; audit_log already carries audit_log_occurred_idx (occurred_at DESC), which the prune rides. core stays at schema 135."
+  },
+  "lab": {
+    "topology": "Native, single-origin. A pipe-only Node proxy on 127.0.0.1:8080 routes /api/* to core and everything else to the frontend, and DROPS the client's Accept-Encoding. One origin is mandatory: vidra_refresh is SameSite=Lax with Path=/api/v1/auth, so a cross-origin frontend never restores a session.",
+    "core": "Two processes from one binary built from the branch: VIDRA_ROLE=api on 127.0.0.1:8088 and a real VIDRA_ROLE=worker with no listener, which is the process that holds the singleton-crons leader lock and runs both retention passes.",
+    "frontend": "Production Next standalone (node .next/standalone/server.js, never next start) on 127.0.0.1:3009 with INTERNAL_API_BASE_URL=http://127.0.0.1:8088 and the build-inlined NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 — the proxy origin, which is what makes it single-origin without a rebuild.",
+    "postgres": "native PostgreSQL 16.15 on a private socket (/tmp/a35lab, port 55445), schema 135",
+    "redis": "native redis on 127.0.0.1:56379",
+    "storage": "STORAGE_BACKEND=local with STORAGE_LOCAL_ROOT under the scratchpad",
+    "browser": "real Chromium via Playwright, against the proxy origin",
+    "fixture": "a real 4s 320x240 H.264/AAC clip made with ffmpeg (a synthetic mp4 fails ffprobe), uploaded through the resumable API and actually transcoded to CMAF — played back as a blob: MSE source off real chunk-0-00001.m4s / chunk-1-00001.m4s",
+    "rate_limits": "RATE_LIMIT_ENABLED=false. This lab therefore says NOTHING about the shipped limits.",
+    "transcode_floor": "TRANSCODING_MIN_FREE_SCRATCH_MB=512 against the shipped 10 GiB floor, because this box reported only 6,369,402,880 free bytes against a 10,737,418,240 floor and correctly deferred every job until it was lowered ('transcode: deferring all jobs, scratch space below the floor').",
+    "audit_window": "AUDIT_LOG_RETENTION=1h, so the hourly sweep had something to do on its first tick.",
+    "teardown": "every lab process stopped and the scratchpad postgres/redis/proxy shut down; no repo state touched."
+  },
+  "ruling_1_playback_optout": {
+    "verdict": "PASS",
+    "predicate_reused": "internal/httpapi/search_attribution.go's searchConsent(prefs, authed) — the A13 decision point, unchanged. The beacon calls it through a new Server.qoeViewerDigest and returns the empty digest when neither allow_history nor allow_personalization survives. No second definition of 'opted out' was written.",
+    "decision_site": "server-side at ingest, once per BATCH (not per event), from the viewer's stored prefs. The body has never carried identity, so a client can neither opt in by sending a field nor opt out by withholding one.",
+    "storage": "empty string, not NULL — viewer_digest is NOT NULL DEFAULT '' (0109). No migration.",
+    "browser_playbacks": [
+      {
+        "actor": "viewer V — all three discovery controls switched off THROUGH THE SETTINGS UI",
+        "playback": "real Chromium, blob: MSE source, currentTime 3.957959 of a 4.017051s clip, readyState 4",
+        "row": "playback.start | api-proxy | hls-js | cmaf | session 5f7c9609-… | viewer_digest = (EMPTY) | ttff_ms 355"
+      },
+      {
+        "actor": "viewer W — untouched defaults",
+        "playback": "real Chromium, blob: MSE source, currentTime 4.017051",
+        "row": "playback.start | api-proxy | hls-js | cmaf | session 5b7f1fc5-… | viewer_digest = fc199ba19837a98e | ttff_ms 3"
+      }
+    ],
+    "digest_table": "Across curl-driven and browser-driven beacons on the same UTC day, with JWT_SECRET unchanged: V-attributed bb50399b108e0cb8, W-attributed fc199ba19837a98e (identical in the curl beacon and in the browser playback, which is what proves it is account-derived and untouched by this change), anonymous 0d888a6e60ba6259 (IP-derived, also unchanged), V-opted-out (EMPTY).",
+    "forward_only": "V re-enabled search_history_enabled alone and the very next beacon carried bb50399b108e0cb8 again — V's original digest. The decision is per request, so nothing already written changes and nothing needs backfilling.",
+    "client_cannot_forge": "From the real browser, signed in as opted-out V, a beacon carrying \"user_id\": \"<V's real id>\" and \"viewer_digest\": \"client-chosen-digest\" was accepted 202 and stored with (EMPTY). Zero rows in qoe_events match '%client-chosen%'.",
+    "unchanged": {
+      "row_still_lands": "yes, with its session id — the measurement is not dropped",
+      "classification": "api-proxy on every row, opted-out and not; the delivery source describes the network, not the person",
+      "anonymous": "unchanged IP-derived digest — an anonymous visitor has no stored preference to consult",
+      "rollups": "the anonymous rollups still count the opted-out playback. The worker's own 10-minute tick closed the hour ('qoe rollup wrote hourly buckets hours=1') over 3 raw rows of which 2 carried an empty digest, and GET /admin/qoe/playback-health reports start_count 3 for api-proxy / hls-js / cmaf with ttff p50 407 ms and p95 1084 ms. Nothing in the rollup or the read path reads viewer_digest at all, which is why the total is the same number it would have been before the ruling."
+    },
+    "inherited_scope_worth_stating": [
+      "The FOURTH control is not in the predicate, by inheritance. history_enabled (watch history) is not one of A13's three discovery controls, so searchConsent does not read it. Measured: viewer W with history_enabled=false and the three discovery controls on still wrote fc199ba19837a98e. That is the correct reuse — the alternative was inventing a second definition of 'opted out' — but it is a fact a reader of the settings page could get wrong, so it is recorded rather than left to be discovered.",
+      "On the SHIPPED simple search mode, allow_personalization is structurally false (searchConsent ANDs in searchAdvanced()), so the history control alone decides attribution. Measured: V with search_history_enabled=false and BOTH personalization controls on wrote (EMPTY). This is A13's semantics reaching playback telemetry verbatim, and it errs toward collecting less."
+    ],
+    "wrong_actors": "GET /admin/qoe/playback-health: owner 200, viewer V 403, anonymous 401. The ingest endpoint stays optionalAuth and answers 202 to everyone, unchanged.",
+    "settings_copy": "vidra-user#185 states it in the existing voice and the sentence is tested (SearchSettingsView.test.tsx, verified RED against the unmodified component). Rendered and read back out of the real browser: \"That covers how your video played, too: the quality measurements this site takes while you watch — start time, stalls, errors — stop carrying any pseudonym for you, while still counting toward the anonymous playback totals the administrator reads.\" It deliberately does not say \"we stop measuring\", which would be the easier sentence and the false one."
+  },
+  "ruling_2_audit_retention": {
+    "verdict": "PASS",
+    "before": "audit_log was append-only in practice: 0029 created it, 0084 gave it a typed envelope, and no DELETE against it existed anywhere in the tree.",
+    "knob": {
+      "name": "AUDIT_LOG_RETENTION",
+      "type": "Go duration (time.ParseDuration)",
+      "default": "400 days (9600h) — just over a year, so the trail can answer 'what changed at this point last year', with five weeks of slack",
+      "zero": "keep forever, and does NO database work at all — the house convention every other unlimited window here uses (0 = unlimited)",
+      "negative": "refused at boot, attributed to AUDIT_LOG_RETENTION. A negative window computes a cutoff in the FUTURE and would delete the whole trail on the next tick.",
+      "single_definition": "config.DefaultAuditLogRetention is the shipped value; internal/audit re-states it as audit.DefaultRetention for readers of that package, and a config test asserts the two agree. internal/config imports no internal package, which is why the copy exists at all."
+    },
+    "worker": {
+      "where": "a second jobloop Pass on the existing hourly, leader-elected QoE retention loop (renamed runTelemetryRetentionWorker)",
+      "cadence": "hourly, same tick as the QoE prune",
+      "isolation": "two passes, not one function: jobloop runs each independently, so a failing QoE prune still leaves the audit prune to run",
+      "boot_line": "\"qoe rollup + telemetry retention workers started\" with audit_log_retention=1h0m0s"
+    },
+    "batching": {
+      "batch_size": 2000,
+      "max_batches_per_sweep": 100,
+      "cap_per_sweep": 200000,
+      "plan": "EXPLAIN ANALYZE at 210,020 rows: 'Index Scan Backward using audit_log_occurred_idx' with Index Cond on occurred_at, 2000 rows in 0.454 ms. No sequential scan and no full-table lock — the DESC index scanned backwards is what gives the ascending oldest-first order the query asks for."
+    },
+    "observed": {
+      "window_used": "AUDIT_LOG_RETENTION=1h, so the first hourly tick had work to do",
+      "before": "210,023 rows — 210,012 past the window (12 hand-seeded at now-3h plus 210,000 seeded across now-10h..now-2h, each carrying its ordinal in resource_id) and 11 inside it",
+      "log_line": "{\"level\":\"INFO\",\"msg\":\"audit log retention pruned rows\",\"count\":200000,\"retention\":\"1h0m0s\"} at 02:32:22, one hour and two seconds after the leader-elected worker started — the loop's first tick",
+      "deleted": 200000,
+      "cap_hit_on_purpose": "200,000 is EXACTLY the per-sweep cap (100 batches x 2000). The seed was sized to overrun it deliberately, so the cap is observed rather than assumed: an install that has never pruned spreads its first sweep over several ticks instead of one unbounded statement.",
+      "after": "10,024 rows — 10,012 seed survivors, the rest recent, plus the sweep's own row",
+      "arithmetic": "210,023 - 200,000 + 1 (the sweep's own row) = 10,024. Exact.",
+      "oldest_first_proof": "the pre-sweep boundary was recorded first: the 200,000th-oldest row was seed ordinal 0199988. After the sweep the surviving seed ordinals are exactly min 0199989, max 0210000, count 10,012 — the sweep deleted precisely the oldest 200,000 rows and stopped. Without the ORDER BY, a capped sweep deletes an arbitrary slice and can leave the very oldest rows alive forever.",
+      "self_audit_row": "domain admin | action admin.audit.retention_prune | result success | actor_kind system | actor_id NULL | reason '' | metadata {\"count\": \"200000\"} | changes []",
+      "admin_surface_after": "GET /admin/audit-log pages correctly at offsets 0, 5000 and 10020 (total 10,025 after the read's own login row), and ?action=admin.audit.retention_prune returns the single run. Wrong actors with FRESH tokens: viewer 403, anonymous 401 — on both /admin/audit-log and /admin/qoe/playback-health.",
+      "qoe_pass_unaffected": "the sibling QoE pass on the same tick found nothing to prune (the raw rows were 2h old against a 7-day window) and logged nothing, which is the intended quiet no-op."
+    },
+    "self_audit": {
+      "action": "admin.audit.retention_prune",
+      "shape": "domain admin, result success, actor_kind system, metadata {\"count\": \"<rows>\"}, reason empty",
+      "why_structured": "audit_log cannot carry prose — reason is bounded and the metadata vocabulary is an allowlist, in which `count` already existed. A number in a reason string is a number nothing can read back.",
+      "quiet_runs": "a run that deleted nothing writes NO row. On a quiet instance the trail's own bookkeeping would otherwise become the bulk of the trail, and those rows would in their turn need pruning."
+    },
+    "admin_surface": "GET /api/v1/admin/audit-log still pages correctly after the sweep, and the wrong actors are still refused: viewer 403, anonymous 401.",
+    "not_state_aware": "Unlike searchevents.Pruner this exempts nothing. An audit row is terminal the moment it is written — the table is append-only and nothing reads a row back to decide whether work is in flight. A per-action exemption list was considered and rejected: it would be the one place where the retention an operator configured is not the retention they get."
+  },
+  "sc3_no_regression": {
+    "core": "make ci PASS (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race); go vet -tags=integration ./... clean. CI on core#192 green on all six lanes (the first ipfs-integration run timed out at 301s on a real IPFS round trip and passed in 1m13s on rerun — a flake, and the lane is green on main).",
+    "user": "npm run ci PASS on Node v24.4.1 — typecheck, lint, lint:icons, 2540 vitest tests across 254 files, production build, 625 Playwright specs. CI on user#185 green on all seven lanes.",
+    "meta": "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file /tmp/check.env config -q PASS; the --profile core --profile frontend render asserts postgres/redis/search publish NO ports and api/frontend publish on 127.0.0.1 only. No scripts touched, so no shellcheck was owed.",
+    "a35_named_tests": "TestNoForbiddenLogging and TestNoSensitiveLogKeys both pass inside make ci; the A13 opt-out suite (search_optout_test.go) passes unchanged, which is the guard that reusing searchConsent did not alter the search half.",
+    "search_half_not_re_observed": "The search half was NOT re-observed in this lab: no vidra-search was configured, so core enqueued nothing and search_outbox stayed empty (POST /search/events answered 202 for both viewers and wrote no row). Its coverage here is the unit suite inside make ci, not a lab observation.",
+    "boot_refusals_observed": "AUDIT_LOG_RETENTION=-24h exits 1 with 'config: AUDIT_LOG_RETENTION must not be negative (0 = keep the audit trail forever), got -24h0m0s'; AUDIT_LOG_RETENTION=400days exits with 'must be a duration (e.g. 30s, 5m, 12h): time: unknown unit \"days\"'; AUDIT_LOG_RETENTION=9600h boots. The 0-does-no-work claim is unit-proven (TestPruneZeroRetentionKeepsForever asserts the repository was never called), not lab-observed — the loop is hourly and a second observation would have cost another hour.",
+    "compose_consumer": "the meta-ci 'every config key vidra-core reads has a compose consumer' assert was run locally against the branch and passes, with AUDIT_LOG_RETENTION present in BOTH the api and worker environment maps and the two key sets equal. It renders as \"\" on purpose: a pinned default in compose would SHADOW the Go default and the two could drift, which is the shape A17 found with FEATURE_LIVE_ENABLED.",
+    "settled_session": "no new viewer-scoped read was added in vidra-user — the change is one paragraph of copy — so lib/use-settled-session.ts has nothing to cover here.",
+    "fakes_mirrored": "audit.Repository gained PruneAuditLog and BOTH in-memory fakes implement it. The internal/audit fake mirrors the SQL rather than deleting an arbitrary slice — it sorts by occurred_at and takes the oldest batch — and records call count and batch size, because 'did it batch' is only provable from the call shape."
+  },
+  "gaps_recorded_not_widened": [
+    "qoe_events still has no correlation_id column, so a beacon cannot be joined to the request that caused it except by (video_id, session_id). A35 recorded this; nothing here changes it.",
+    "The opt-out is forward-only by construction. Rows written before a viewer opted out keep their digest until the 7-day raw window ages them out; there is no erase-my-telemetry control and none was asked for.",
+    "The QoE beacon now costs one extra users read per BATCH for signed-in callers (the same read the search beacon already pays). Anonymous callers pay nothing — searchUserPrefs returns early. Not measured under load; this lab ran with rate limiting off.",
+    "audit_log has no per-action retention and no export-before-delete. An operator who needs a longer trail for one action needs a longer window."
+  ]
+}
