@@ -1,9 +1,11 @@
 {
   "item": "A33 remediation 1 of 3",
-  "rows": ["INT-10"],
+  "rows": [
+    "INT-10"
+  ],
   "date": "2026-09-08",
   "verdict": {
-    "INT-10": "NOT FLIPPED — remains FAIL. This slice removes the mechanism behind four of the six failing clauses; the edge-simulator re-run that would flip the row is slice 3."
+    "INT-10": "NOT FLIPPED \u2014 remains FAIL. This slice removes the mechanism behind four of the six failing clauses; the edge-simulator re-run that would flip the row is slice 3."
   },
   "scope": {
     "in": [
@@ -31,7 +33,7 @@
     ],
     "unchanged": [
       "presign (A32) remains the direct-to-bucket path when no CDN is configured",
-      "HLS playlists and storyboard.vtt are still never redirected — they are the generation switch",
+      "HLS playlists and storyboard.vtt are still never redirected \u2014 they are the generation switch",
       "credentialed reads (?pt=, Authorization) stay on the proxy at private, no-store and are never rewritten to the edge"
     ]
   },
@@ -40,22 +42,54 @@
     "constant": "delivery.EdgeOriginParam = \"__vidra_edge\", value \"1\"",
     "why_not_a_trusted_header": "it works, but forgetting to configure it at the CDN IS the redirect loop, and it makes the feature unusable on any edge that cannot add an origin header",
     "why_not_the_host_header": "some CDNs preserve the edge Host to the origin and some send the origin's own, so it is a signal that silently is not there on half the providers",
-    "why_this": "the api puts the marker in the URL it mints, so the edge carries it to the origin as part of the request it was asked for — no operator configuration, nothing to forget, and it cannot loop",
-    "not_a_credential": "anyone may send it; all it can do is decline the redirect and take the authoritative path, through the same authorization every media route already runs — which an unauthenticated caller can already force today with any Authorization header",
+    "why_this": "the api puts the marker in the URL it mints, so the edge carries it to the origin as part of the request it was asked for \u2014 no operator configuration, nothing to forget, and it cannot loop",
+    "not_a_credential": "anyone may send it; all it can do is decline the redirect and take the authoritative path, through the same authorization every media route already runs \u2014 which an unauthenticated caller can already force today with any Authorization header",
     "second_property": "because the marker is part of the URL, the edge's origin request and a viewer's request are DIFFERENT URLs, so the shared cache policy attaches to a URL only the edge ever asks for, with no Vary",
     "operator_requirement": "the CDN must forward the query string to the origin, which it must do anyway for ?v="
   },
   "cache_headers": {
     "rule": "shared = FromEdge AND Eligible AND NOT Credentialed",
     "table": [
-      {"class": "versioned HLS child (?v=)", "viewer_or_intermediary": "private, max-age=31536000, immutable", "edge_origin_fetch": "public, max-age=31536000, immutable"},
-      {"class": "unversioned HLS child", "viewer_or_intermediary": "private, max-age=0, must-revalidate", "edge_origin_fetch": "public, max-age=0, must-revalidate"},
-      {"class": "original / webm / audio / download", "viewer_or_intermediary": "private, max-age=3600, must-revalidate", "edge_origin_fetch": "public, max-age=3600, must-revalidate"},
-      {"class": "thumbnail / storyboard / avatar / banner / playlist cover", "viewer_or_intermediary": "private, max-age=300, must-revalidate", "edge_origin_fetch": "public, max-age=300, must-revalidate"},
-      {"class": "HLS playlist, storyboard.vtt", "viewer_or_intermediary": "private (never redirected)", "edge_origin_fetch": "never reaches the edge"},
-      {"class": "credentialed (?pt= or Authorization)", "viewer_or_intermediary": "private, no-store", "edge_origin_fetch": "never reaches the edge"},
-      {"class": "CDN redirect itself (the 307)", "viewer_or_intermediary": "private, max-age=300, must-revalidate", "edge_origin_fetch": "n/a"},
-      {"class": "stale ?v= refusal (404)", "viewer_or_intermediary": "private, no-store (was: no directive at all)", "edge_origin_fetch": "private, no-store"}
+      {
+        "class": "versioned HLS child (?v=)",
+        "viewer_or_intermediary": "private, max-age=31536000, immutable",
+        "edge_origin_fetch": "public, max-age=31536000, immutable"
+      },
+      {
+        "class": "unversioned HLS child",
+        "viewer_or_intermediary": "private, max-age=0, must-revalidate",
+        "edge_origin_fetch": "public, max-age=0, must-revalidate"
+      },
+      {
+        "class": "original / webm / audio / download",
+        "viewer_or_intermediary": "private, max-age=3600, must-revalidate",
+        "edge_origin_fetch": "public, max-age=3600, must-revalidate"
+      },
+      {
+        "class": "thumbnail / storyboard / avatar / banner / playlist cover",
+        "viewer_or_intermediary": "private, max-age=300, must-revalidate",
+        "edge_origin_fetch": "public, max-age=300, must-revalidate"
+      },
+      {
+        "class": "HLS playlist, storyboard.vtt",
+        "viewer_or_intermediary": "private (never redirected)",
+        "edge_origin_fetch": "never reaches the edge"
+      },
+      {
+        "class": "credentialed (?pt= or Authorization)",
+        "viewer_or_intermediary": "private, no-store",
+        "edge_origin_fetch": "never reaches the edge"
+      },
+      {
+        "class": "CDN redirect itself (the 307)",
+        "viewer_or_intermediary": "private, max-age=300, must-revalidate",
+        "edge_origin_fetch": "n/a"
+      },
+      {
+        "class": "stale ?v= refusal (404)",
+        "viewer_or_intermediary": "private, no-store (was: no directive at all)",
+        "edge_origin_fetch": "private, no-store"
+      }
     ],
     "content_type_and_disposition": "set by the api on the proxy path, so they reach the edge by construction; core #197's stored-object content type remains the presign-path fix"
   },
@@ -67,16 +101,16 @@
       "hls": "media.HLSPrefixForGeneration(videoID, n) -> streaming-playlists/<id> for 0, streaming-playlists/<id>/rN for N",
       "web_video": "media.WebVideoPrefixForGeneration(videoID, n) -> web-videos/<id> for 0, web-videos/<id>/rN for N"
     },
-    "one_scheme": "rN keeps meaning generation directory — the shape source replacement already used and mediagc already parses. What changed is what advances N; a replacement still gets a fresh directory because it enqueues a transcode.",
+    "one_scheme": "rN keeps meaning generation directory \u2014 the shape source replacement already used and mediagc already parses. What changed is what advances N; a replacement still gets a fresh directory because it enqueues a transcode.",
     "backfill": "existing rows are set to their current source version, so the counter never re-issues a directory name a previous replacement used",
-    "url_effect": "a new generation moves the master key, so hlsCacheVersion (updated_at derived) moves too — the new generation is a new KEY and a new ?v=, and therefore a new edge URL"
+    "url_effect": "a new generation moves the master key, so hlsCacheVersion (updated_at derived) moves too \u2014 the new generation is a new KEY and a new ?v=, and therefore a new edge URL"
   },
   "old_generation_lifecycle": {
     "at_promotion": "nothing is deleted; in-flight viewers keep working off the URLs they already hold",
     "collector": "internal/mediagc, the orphan rule (A24). The HLS tree is collected at the generation level: the promoted generation (from streaming_playlists.master_key) and the TARGET generation are kept, everything else under streaming-playlists/<id>/ is orphan",
-    "target_generation_source": "videos.transcode_generation, not the source key's version — since 0136 those are different numbers, and the old inference would read \"\" for an in-flight same-source rerun and sweep a half-written tree",
+    "target_generation_source": "videos.transcode_generation, not the source key's version \u2014 since 0136 those are different numbers, and the old inference would read \"\" for an in-flight same-source rerun and sweep a half-written tree",
     "web_videos": "the same in-flight rule was added for web-videos/<id>/rN/, which had none: a generation's progressive MP4s are unreferenced between the first PUT and the promotion",
-    "purge": "none needed for a re-transcode — the new generation is a new URL, so no edge entry can answer for it"
+    "purge": "none needed for a re-transcode \u2014 the new generation is a new URL, so no edge entry can answer for it"
   },
   "purge": {
     "unit": "media route path with query (delivery.Resolver.Purge(ctx, mediaPath))",
@@ -87,16 +121,16 @@
     "known_gap_carried": "a channel handle rename leaves the old /api/v1/channels/<old>/avatar at the edge under a name nothing can reconstruct"
   },
   "gates": {
-    "core_make_ci": "PASS — fmt-check, vet, migrate-lint (136 up migrations clean), openapi-verify, sqlc-verify, test-race",
-    "go_vet_integration": "PASS — go vet -tags=integration ./... clean",
+    "core_make_ci": "PASS \u2014 fmt-check, vet, migrate-lint (136 up migrations clean), openapi-verify, sqlc-verify, test-race",
+    "go_vet_integration": "PASS \u2014 go vet -tags=integration ./... clean",
     "s3_integration_lane": "compiles and self-skips with no S3_TEST_ENDPOINT configured; the real MinIO run is CI's integration lane (no container runtime was used in this slice)",
     "named_delivery_tests": "the A08 credentialed-read rule, the A24 mediagc generation rules and the A32 presign tests all still pass; the A08 rule gained its negative (an edge origin fetch is never answered with a presigned URL)",
-    "openapi": "unchanged — no contract change, so no vidra-user regen is required",
+    "openapi": "unchanged \u2014 no contract change, so no vidra-user regen is required",
     "vidra_user": "no file changed"
   },
   "unverified": {
     "edge_simulator": "edge simulator re-run pending (slice 3). Every claim here is a unit/integration assertion; no live edge, no container runtime and no browser were used in this slice.",
-    "selected_edge": "still deferred — no CDN zone or credential on this machine",
+    "selected_edge": "still deferred \u2014 no CDN zone or credential on this machine",
     "migration_applied": "0136 was linted and generated against, not applied to a live database in this slice"
   },
   "seams_left_for_slice_2": [
@@ -110,5 +144,15 @@
   "prs": {
     "vidra-core": "#199 (a33/cdn-origin)",
     "vidra": "a33/cdn-origin (this evidence + runbook)"
+  },
+  "retranscode_triggers": {
+    "established": "every path that produces transcode output goes through transcode.Service.EnqueueTarget (Enqueue delegates to it), so the generation bump covers all of them by construction rather than by enumeration",
+    "sites": [
+      "internal/httpapi/admin_videos.go \u2014 POST /api/v1/admin/videos/{id}/transcoding, the admin/Studio re-process (401 anonymous, 403 for an ordinary user)",
+      "internal/httpapi/replace.go \u2014 the direct multipart source replacement",
+      "cmd/api/main.go video.WithTranscodeHook \u2014 the publish/upload-finalize hook",
+      "cmd/api/main.go uploadfinalize.WithReplaceHook \u2014 the resumable-upload replacement"
+    ],
+    "transcoding_max_fps": "NOT a trigger. It is a runtime encode knob resolved once per job in media.encodeSettings and applied to the NEXT job; changing it enqueues nothing. It was the setting the A32/A33 lab moved between reruns to make the encoder produce different bytes, which is why it looked like one."
   }
 }

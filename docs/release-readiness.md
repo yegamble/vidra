@@ -11278,9 +11278,20 @@ adds `videos.transcode_generation`: incremented once per **enqueue**, read once
 per **run**, and used as the `rN` directory for both the HLS tree and the
 progressive web-videos.
 
-Those are two moments rather than one deliberately. A **retry** of a failed job
-must write the prefix it was already half-way through, and it does, because a
-retry does not enqueue — asserted over three attempts. The counter lives on the
+**Every re-transcode trigger is covered by construction rather than by
+enumeration**, which is the reason the bump sits where it does. All four paths
+that produce transcode output go through `transcode.Service.EnqueueTarget`: the
+admin/Studio re-process (`POST /admin/videos/{id}/transcoding`), the direct
+multipart source replacement, the publish hook, and the resumable-upload
+replacement hook. `transcoding_max_fps` is **not** among them and never was — it
+is a runtime encode knob resolved once per job and applied to the next one, so
+changing it enqueues nothing. It looked like a trigger only because it is the
+setting the A32/A33 lab moved between reruns to make the encoder produce
+different bytes.
+
+The bump and the read are two moments rather than one deliberately. A **retry**
+of a failed job must write the prefix it was already half-way through, and it
+does, because a retry does not enqueue — asserted over three attempts. The counter lives on the
 video rather than on the job for the same reason: one number that is never
 reused, and no second column to keep in step with the first. The migration
 backfills existing rows to their **current source version**, so the counter
