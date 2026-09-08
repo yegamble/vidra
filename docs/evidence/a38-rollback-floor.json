@@ -1,0 +1,95 @@
+{
+  "item": "A38 follow-up — the rollback floor",
+  "register_row": "REC-03 (NOT flipped here; the rehearsal slice flips it)",
+  "verdict": "CODE COMPLETE, REHEARSAL PENDING — the two failures A38 found are closed in code and covered by tests and a CI lane, but no stack rehearsal was run against the merged fix",
+  "date": "2026-09-08",
+  "what_failed_first": {
+    "rollback_run_4": "deploy/rollback.sh's `up -d` starts the `migrate` and `search-migrate` one-shots (api and search depend on them with service_completed_successfully). Their `migrate up` runs on the PREVIOUS release's image, whose embedded migrations stop below the ledger, so golang-migrate returned `no migration found for version 135: read down for version 135 .: file does not exist`, the one-shot exited 1, and nothing that depended on it started. `up -d` was also unguarded, so `set -e` killed the script before the readiness probes AND before the trailer that names the recovery.",
+    "restore_run_13": "deploy/restore.sh runs both migrators AFTER dropping and reloading the database, from the images pinned in the env file. Exactly one pairing works — a dump whose schema the pinned migrator can reach — and nothing checked it. With the tags already rewritten to the previous release, restore.sh dropped the database, reloaded it successfully, and died at 'running core migrations'; verify-blobs and `up -d` never ran and nothing in the output explained the dark site."
+  },
+  "ruling_a_migrator_no_op": {
+    "condition": "before.Applied && !before.Dirty && before.Version > EmbeddedMax()",
+    "evaluated": "BEFORE golang-migrate's m.Up() is called — the old error came from Up() resolving the CURRENT version against the source, so the branch has to read Version() first",
+    "log_line": "schema version 135 is newer than this binary's newest migration 125; nothing to apply",
+    "fields": "ledger_version, embedded_max, dirty=false",
+    "core_shape": "slog Warn on the logger cmd/api passes (slog.Default()); returns nil, exit 0",
+    "search_shape": "one key=value line on the io.Writer `migrate up` passes (os.Stdout); returns the unchanged Status, and dirtyLedgerErr still gates the exit code",
+    "unchanged": [
+      "a DIRTY ledger fails exactly as before, whatever its version — dirty means the schema state is unknown",
+      "a clean ledger at or below the embedded max behaves exactly as before (applies pending; ErrNoChange handled as before)",
+      "`migrate version` still reports the true ledger and still exits non-zero on dirty"
+    ],
+    "new_subcommand": "`migrate embedded-max` prints the newest embedded migration as a BARE integer and opens no database (core answers with DATABASE_URL pointing at a closed port; search answers with DATABASE_URL unset, which LoadDatabaseURL otherwise refuses). core prints 135, search prints 18.",
+    "red_then_green": {
+      "core": "with the Up() branch removed, the new integration test fails with `dbmigrate: apply migrations: no migration found for version 145: read down for version 145 .: file does not exist` — the rehearsal's exact error; with the branch, exit 0 and the ledger untouched at 145",
+      "search": "same, `no migration found for version 28: read down for version 28 .: file does not exist`"
+    }
+  },
+  "ruling_a_ci_lane": {
+    "file": ".github/workflows/rollback-floor.yml in BOTH repos (TWIN)",
+    "why_separate_from_schema_compat": "schema-compat.yml runs N-1's TEST SUITE (the code half, already true and proved true by A38 run 5). This lane runs N-1's MIGRATOR, which is the process `up -d` actually starts. It is also cheap — one Postgres, no Redis/clamav/ffmpeg, no test suite — so it can be path-filtered onto internal/dbmigrate/ and cmd/api/migrate.go without dragging schema-compat's 45-minute job onto every migrator change. vidra-search has no schema-compat lane, so this is its minimal equivalent.",
+    "mechanism": "apply HEAD's migrations with HEAD's migrator; record the ledger; resolve the previous release tag the same way schema-compat does (git tag -l 'v*' | sort -V | tail -1); check that tree out into a worktree; run ITS `go run ./cmd/api migrate up` against the schema HEAD left behind; then assert from HEAD that the ledger did not move or go dirty.",
+    "capability_probe": "which outcome is asserted is decided by `grep -q LedgerAheadMessage ../n-1/internal/dbmigrate/dbmigrate.go`, NOT a hardcoded version, so the lane flips itself the moment a release carries the fix. N-1 carries it -> MUST exit 0 and print the no-op line. N-1 predates it -> MUST fail with 'no migration found for version', recorded as a ::notice::; a DIFFERENT failure is still a hard failure, and the ledger must survive either way.",
+    "guard": "when HEAD's ledger <= N-1's embedded max (no new migrations since the release) the lane says so with a ::notice:: and passes — there is nothing AHEAD to test and a bare ErrNoChange would prove nothing.",
+    "verified_locally": "against the real v0.6.2 worktree: prev_max=125, HEAD ledger=135, v0.6.2's migrator exits 1 with the rehearsal's exact message, ledger still `version=135 dirty=false`. The positive branch was verified by stamping the ledger to 145 and running HEAD's own migrator: exit 0 with the WARN line.",
+    "verified_in_ci": "prev-migrator-against-new-schema PASS on both PRs (core 57s, search 27s)"
+  },
+  "ruling_b_restore_preflight": {
+    "where": "deploy/restore.sh, between `pg_restore -l` (validate the archive) and `dropdb` — a refusal means nothing happened",
+    "ordering_unchanged": "verify dump -> PREFLIGHT -> drop -> reload -> migrate -> verify-blobs -> up -> probes (AGENTS.md rule 2 untouched)",
+    "how_the_dump_is_read": "`pg_restore --data-only -t <ledger> -f - <archive>` prints that table's COPY block straight out of the custom-format dump (backup.sh writes `pg_dump -Fc`). No temp database. Both ledgers: schema_migrations (core) and vidra_search_migrations (search). An absent ledger prints nothing and is reported as 'nothing to compare'.",
+    "how_the_image_is_asked": "`compose run --rm --no-deps <migrate|search-migrate> migrate embedded-max`. The IMAGE is asked rather than a checkout read because migrations are compiled into the release binaries — what matters is what the container that runs after the drop can do. `--no-deps` starts no database; embedded-max opens none.",
+    "branches": {
+      "dump ahead of image": "die — 'the dump is at 137; pinned VIDRA_CORE_TAG=v0.6.2 carries up to 125 … set the tag that carries 137, or pass --allow-schema-mismatch. Nothing was changed.'",
+      "dump ledger dirty": "die — both migrators refuse a dirty ledger and they run after the drop, so it is the same unrecoverable failure. SAME override.",
+      "dump behind image": "allowed — the migrator applies the difference; this is the documented forward path",
+      "dump equal": "allowed",
+      "image cannot answer embedded-max": "reported NOT CHECKED and allowed — every release cut so far predates the subcommand, so refusing would break every restore today. It never reports 'checked and fine' when it did not check."
+    },
+    "override": "--allow-schema-mismatch, documented in the header and therefore in `restore.sh --help`",
+    "images_not_yet_pulled": "compose `pull_policy: always` on the prod overlay means `run` pulls the image here if the host does not have it — the same pull the real migrator step does after the drop. No regression: an unreachable registry already failed that later step; now it fails BEFORE the drop.",
+    "scope_note": "the dirty-ledger refusal is one branch beyond the literal ruling, which named only the AHEAD case. It is included because it is the identical failure (the migrator refuses, after the drop) under the identical override, and it is one contiguous block if the architect wants it out."
+  },
+  "ruling_b_rollback_guard": {
+    "change": "`up -d --no-build` is now `|| rollback_target_unhealthy \"…\"`, and the 'THE ROLLBACK TARGET IS ALSO UNHEALTHY … restore the pre-deploy dump' trailer moved out of the bottom of the script into a function both failure paths reach",
+    "message": "the up -d failure names the migration one-shots FIRST ('logs migrate search-migrate', and what 'no migration found for version N' means), because that is where the failure actually was",
+    "other_compose_calls": "config -q, pull and the logs tail were already guarded; `up -d` was the only unguarded one"
+  },
+  "tests": {
+    "core_unit": "TestEmbeddedMaxIsTheNewestMigrationOnDisk, TestLedgerAheadMessageWording, TestMigrateEmbeddedMaxNeedsNoDatabase, TestMigrateEmbeddedMaxPrintsABareInteger (4 PASS)",
+    "core_integration": "TestUpWhenTheLedgerIsAheadAndCleanIsALoggedNoOp, TestUpWhenTheLedgerIsAheadAndDirtyStillFails, TestUpBelowTheEmbeddedMaxStillApplies (3 PASS against a real Postgres 16 on a throwaway database)",
+    "search_unit": "TestEmbeddedMaxIsTheNewestMigrationOnDisk, TestLedgerAheadMessageWording, TestRunMigrateEmbeddedMaxNeedsNoDatabase, plus parseMigrateArgs cases",
+    "search_integration": "TestUpWhenTheLedgerIsAheadAndCleanIsALoggedNoOp, TestUpWhenTheLedgerIsAheadAndDirtyStillFails (2 PASS; each restores the real ledger in Cleanup)",
+    "meta": "tests/rollback_floor_test.py — 12 tests, all PASS. Lifts dump_ledger_row / image_embedded_max / preflight_schema out of restore.sh and rollback_target_unhealthy plus the `up -d` block out of rollback.sh, the way tests/caddy_reload_test.py does, so the tests break if the guards are removed.",
+    "red_proven": "core and search integration tests fail with the rehearsal's exact golang-migrate error when the Up() branch is removed; the meta trailer tests fail (2 failures) when `up -d` is un-guarded, and the ordering test errors when the preflight call is removed"
+  },
+  "gates": {
+    "vidra_core": "make ci PASS (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race); go vet -tags=integration ./... clean; integration lane of internal/dbmigrate green against local Postgres 16",
+    "vidra_search": "make ci PASS (same six); go vet -tags=integration ./... clean; integration lane of internal/dbmigrate green against local Postgres 16",
+    "meta_bash_n": "clean on bootstrap.sh, install.sh, tests/install_test.sh and every deploy/*.sh",
+    "meta_shellcheck": "shellcheck 0.11.0 -x clean on the same set",
+    "meta_script_tests": "python3 tests/rollback_floor_test.py — 12/12",
+    "meta_compose_config_q": "exit 0 on env/production.env.example with the seven ${VAR:?} keys filled with obvious dummies",
+    "meta_prod_render_assertions": "--profile core --profile frontend: postgres, redis, search, migrate and search-migrate publish NO ports; api and frontend publish on host_ip 127.0.0.1 only",
+    "ci": "core — build-test, integration, openapi, guard, ipfs-private-integration, prev-release-against-new-schema and the new prev-migrator-against-new-schema all PASS; search — build-test, integration, openapi, guard and prev-migrator-against-new-schema all PASS; meta — validate, boot, bundle PASS; GitGuardian clean on all three"
+  },
+  "unverified": [
+    "REHEARSAL PENDING — nothing here has been exercised against a running stack. The A38 rehearsal that found these two failures has NOT been re-run against the merged fix, so 'rollback.sh now completes across an additive migration' is a claim about code and tests, not about a deploy. That is the next slice's job and it is what flips REC-03.",
+    "The CI lane's POSITIVE branch has never run in CI, because no released tag carries the fix yet. It was verified locally by stamping the ledger ahead of HEAD's own migrator. Until a release ships, the lane records the known break instead.",
+    "The restore preflight has never refused a REAL restore: every pinned image today predates `migrate embedded-max`, so against current releases it takes the NOT CHECKED branch. Its logic was exercised only through the extracted-function tests, with a fake docker and a fake compose.",
+    "`compose run --rm --no-deps migrate migrate embedded-max` was never executed against a real image — no container images were built in this slice.",
+    "No external-Postgres path: restore.sh already refuses there, so the preflight is unreachable in that topology and untested in it.",
+    "A rollback across more than one release is still out of scope: the no-op branch makes any older CLEAN ledger a no-op, but nothing tested a two-release gap end to end."
+  ],
+  "gaps_recorded_not_fixed": [
+    "tests/*.py in this repo are not wired into meta-ci.yml — only tests/install_test.sh runs there. That predates this change and affects six existing files (caddy_reload_test.py, backup_test.py, release_preflight_test.py, runtime_smoke_test.py, blank_server_smoke_test.py, owner_claim_race.py). Wiring them in means editing .github/workflows, which AGENTS.md rule 7 puts out of scope for this task.",
+    "MIN_EMBEDDED_MIGRATE_TAG is still v0.2.0 in all three scripts. A second floor — the first release whose image answers `migrate embedded-max` — would let the preflight refuse instead of degrading, but it cannot be set until that release is cut.",
+    "deploy.sh has no equivalent preflight. It does not need one for this failure (it never drops the database), but a deploy whose pinned image is BEHIND the checkout's migrations is still only caught by the post-migration ledger assertion."
+  ],
+  "prs": {
+    "core": "yegamble/vidra-core#193 — Up() no-op, `migrate embedded-max`, rollback-floor.yml",
+    "search": "yegamble/vidra-search#40 — the TWIN of the above",
+    "meta": "yegamble/vidra#136 — restore preflight, guarded rollback, tests/rollback_floor_test.py, docs and this evidence",
+    "dependency_order": "core and search are independent of each other and of meta. meta's preflight CALLS `migrate embedded-max`, so it can only assert once core and search ship in a release; until then it reports NOT CHECKED, which makes meta safe to merge in any order."
+  }
+}
