@@ -259,7 +259,7 @@
    "segment_bytes": 182069
   },
   "private_video": "404 anonymous, 200 to its owner",
-  "search": "200 with its hit, served by the search service",
+  "search": "200 with its hit; the search service was up and healthy, but this run did not read its log to prove it served the query rather than the api's local SQL fallback",
   "admin_surfaces": "users, videos, instance-settings, system all 200",
   "reads": "comment, playlist item and subscription all read back",
   "census": "byte-identical to the post-upgrade census; ledger 136 clean, search 18 clean"

@@ -9536,7 +9536,9 @@ answered: owner/admin/viewer login 200; the TOTP account's password alone
 returned `mfa_required` + `mfa_token` and the challenge completed 200 with
 `/auth/me` naming the account; the HLS master (**475 B**, with variants), a
 variant playlist and a real **182 069-byte** segment all 200; `?q=A38` returned
-its hit through the search service; all four admin surfaces 200; the private
+its hit (the search service was up and healthy throughout; this run did not read
+its log to prove it served the query rather than the api's local SQL fallback);
+all four admin surfaces 200; the private
 video 404 to an anonymous caller and 200 to its owner; the comment, the playlist
 item and the subscription all read back. The census was **byte-identical** to
 the post-upgrade one, ledger included: **136 clean**, search **18 clean**.
