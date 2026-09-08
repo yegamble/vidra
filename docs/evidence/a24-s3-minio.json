@@ -1,0 +1,187 @@
+{
+  "item": "A24",
+  "title": "S3 canonical storage on MinIO and reference-mode GC protection",
+  "date": "2026-09-08",
+  "rows": {
+    "STO-01": "PASS (local half: A07/A08; S3 half: this slice on MinIO; selected-provider run deferred)",
+    "STO-02": "PASS (this slice)"
+  },
+  "lab": {
+    "shape": "one origin: pipe-only proxy 127.0.0.1:8099 (drops the client's Accept-Encoding) in front of `node .next/standalone/server.js` on :3100 and a vidra-core api on :8088, plus a second vidra-core process at VIDRA_ROLE=worker",
+    "core_revision": "vidra-core main 0f223b4, built locally with CGO_ENABLED=0 go build ./cmd/api (go1.26.2 darwin/arm64)",
+    "core_schema": 135,
+    "frontend": "vidra-user main, NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8099, next build --output standalone on Node 26.8.1",
+    "postgres": "native PostgreSQL 16.15 on 127.0.0.1:55450, fresh cluster",
+    "redis": "native redis on 127.0.0.1:56390, fresh",
+    "object_store": {
+      "image": "mirror.gcr.io/minio/minio:latest",
+      "image_digest": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+      "container": "vidra-a24-minio, single container, named volume vidra-a24-minio-data",
+      "endpoint": "127.0.0.1:9110",
+      "client": "mirror.gcr.io/minio/mc RELEASE.2025-08-13T08-35-41Z, run inside the server container's network namespace"
+    },
+    "browser": "real Chromium driven by Playwright",
+    "storage_config": {
+      "STORAGE_BACKEND": "s3",
+      "STORAGE_S3_ENDPOINT": "127.0.0.1:9110 (host[:port], never a URL - config rejects a scheme)",
+      "STORAGE_S3_BUCKET": "vidra-a24",
+      "STORAGE_S3_REGION": "us-east-1",
+      "STORAGE_S3_USE_SSL": false,
+      "STORAGE_S3_FORCE_PATH_STYLE": true,
+      "MEDIA_GC_ENABLED": true,
+      "MEDIA_GC_MAX_ORPHAN_PERCENT": 25,
+      "TRANSCODING_PACKAGER": "cmaf",
+      "TRANSCODING_MIN_FREE_SCRATCH_MB": 256,
+      "presign": "OFF (delivery_presign_enabled untouched) - this is the api-proxy delivery path"
+    },
+    "lab_only_settings": [
+      "RATE_LIMIT_ENABLED=false",
+      "VIDRA_ALLOW_PLAIN_HTTP=true + VIDRA_TLS_MODE=plain-http (the api refuses a plain-http PUBLIC_BASE_URL in production without them)",
+      "TRANSCODING_MIN_FREE_SCRATCH_MB=256 against the shipped 10 GiB default - this box had 12.4 GiB free"
+    ]
+  },
+  "sc1_publish_and_play": {
+    "bucket_creation": "the app created the bucket itself at boot (storage.S3.EnsureBucket) and, finding it empty, claimed it: 'media gc: claimed the object store with an ownership marker' marker_key=.vidra/owner",
+    "upload": "Studio /studio/content?upload=1 in Chromium, real ffmpeg clip (320x240, 6 s, h264+aac, 80414 bytes, sha256 84b1b06057182be6bf2a76eb0a449978725d7f15f6b56fad9c70d0a413e576f7); the resumable session staged a chunk at uploads/<upload_id>/0 and removed it on finalize",
+    "objects_per_video": 19,
+    "key_layout": {
+      "web-videos/<video_id>.mp4": "original",
+      "web-videos/<video_id>/240p.mp4": "progressive rendition",
+      "thumbnails/<video_id>.jpg": "poster",
+      "storyboards/<video_id>.jpg + .vtt": "storyboard sprite + cues",
+      "captions/<video_id>/<lang>.vtt": "caption track",
+      "streaming-playlists/<video_id>/master.m3u8": "HLS master",
+      "streaming-playlists/<video_id>/cmaf/{init-0.mp4,init-1.mp4,chunk-0-00001.m4s,chunk-1-00001.m4s,chunk-1-00002.m4s,media_0.m3u8,media_1.m3u8,iframe-0.m3u8,iframe-0.mp4,stream.mpd}": "CMAF tree",
+      "streaming-playlists/<video_id>/240p/{video.mp4,video-only.mp4}": "rung sources",
+      "streaming-playlists/<video_id>/audio.m4a": "extracted audio",
+      "playlist-thumbnails/<playlist_id>.<ext>": "playlist cover (not exercised here)",
+      ".vidra/owner": "ownership marker, deliberately OUTSIDE every swept prefix",
+      "uploads/<upload_id>/<n>": "resumable chunk, transient, outside every swept prefix"
+    },
+    "playback": {
+      "engine": "MSE (blob: source), HLS master + both media playlists + both init segments + three CMAF chunks fetched over the api-proxy path",
+      "decoded": "unmuted, currentTime 5.963 of 6.014 s, readyState 4, 320x240, 90 video frames, 0 dropped"
+    },
+    "range_and_content_type": [
+      {"path": "/original", "content_type": "video/mp4", "accept_ranges": "bytes", "plain": "200 (80414)", "range_0_99": "206, content-range bytes 0-99/80414"},
+      {"path": "/hls/master.m3u8", "content_type": "application/vnd.apple.mpegurl", "accept_ranges": "(absent)", "plain": "200 (475)", "range_0_99": "200 - the playlist is REWRITTEN in memory (?v= cache tag) so it is not a stored object and ServeContent never sees it"},
+      {"path": "/hls/cmaf/media_0.m3u8", "content_type": "application/vnd.apple.mpegurl", "accept_ranges": "(absent)", "plain": "200 (207)", "range_0_99": "200, same reason"},
+      {"path": "/hls/cmaf/init-0.mp4", "content_type": "video/mp4", "accept_ranges": "bytes", "plain": "200 (828)", "range_0_99": "206, content-range bytes 0-99/828"},
+      {"path": "/hls/cmaf/chunk-0-00001.m4s", "content_type": "video/mp4", "accept_ranges": "bytes", "plain": "200 (162691)", "range_0_99": "206, content-range bytes 0-99/162691"},
+      {"path": "/thumbnail", "content_type": "image/jpeg", "accept_ranges": "bytes", "plain": "200 (21204)", "range_0_99": "206"},
+      {"path": "/storyboard.jpg", "content_type": "image/jpeg", "accept_ranges": "bytes", "plain": "200 (18551)", "range_0_99": "206"},
+      {"path": "/storyboard.vtt", "content_type": "text/vtt", "accept_ranges": "bytes", "plain": "200 (390)", "range_0_99": "206"},
+      {"path": "/captions/en", "content_type": "text/vtt; charset=utf-8", "plain": "200 (48)"},
+      {"path": "/download/original", "content_type": "video/mp4", "content_disposition": "attachment; filename=a24-clip.mp4", "plain": "200 (80414)", "range_0_99": "206"}
+    ],
+    "cmaf_segment_content_type": "video/mp4 - NOT video/iso.segment; the .m4s segments and the .mp4 init segments both ship as video/mp4",
+    "byte_identity": "the byte stream served over the proxy, the object read back with mc, and the ffmpeg fixture all sha256 to 84b1b06057182be6bf2a76eb0a449978725d7f15f6b56fad9c70d0a413e576f7",
+    "write_refusal": {
+      "setup": "a MinIO user holding only s3:ListBucket/s3:GetBucketLocation on the bucket and s3:GetObject on its objects",
+      "boot": "the api and worker BOOT NORMALLY on that credential - there is no write probe on the boot path (storage.ProbeWrite is wired into vidra doctor and the storage-migration preflight, not into main)",
+      "note": "MinIO's canned `readonly` policy is narrower still and DOES abort boot: 'storage: s3: check bucket \"vidra-a24\": Access Denied.' - that is EnsureBucket failing, a different failure from a write refusal",
+      "upload": "POST /videos/{id}/file -> HTTP 500 {\"code\":\"internal_error\",\"message\":\"an unexpected error occurred\"}; the operator sentence 'storage: s3: put \"web-videos/<id>.mp4\": Access Denied.' reaches the server log only",
+      "no_half_write": "the video stayed state=draft with 0 video_files, 0 streaming_playlists, 0 objects under its id, and the instance's counted bytes were unchanged"
+    },
+    "space_exhaustion": {
+      "setup": "mc quota set lab/vidra-a24 --size 1100k with 1.0 MiB already stored",
+      "upload": "POST /videos/{id}/file -> HTTP 500 internal_error; log: 'storage: s3: put \"web-videos/<id>.mp4\": Bucket quota exceeded'",
+      "no_half_write": "state=draft, 0 video_files, 0 streaming_playlists, 0 objects",
+      "mid_transcode": "with the quota raised to 1180k the original landed and the TRANSCODE hit the wall; the worker logged 'job attempt failed; a bounded retry was scheduled' queue=transcode_jobs attempts 1,2,3 with error 'storage: s3: put \"[redacted-key]\": Bucket quota exceeded' - the cause survives the key redaction",
+      "recovery": "clearing the quota let the next bounded retry finish the whole CMAF tree with no operator action"
+    }
+  },
+  "sc2_persistence": {
+    "before": "39 objects (2 videos x 19 + the marker), each read back through mc and sha256'd",
+    "action": "docker rm -f vidra-a24-minio (242a6ad4db0d) then docker run the same image on the same named volume (dd5060d2f8ac)",
+    "after": "all 39 checksums identical, zero diff",
+    "process_recreation": "api and worker killed and restarted from a BRAND-NEW EMPTY working directory; that directory was still empty after boot - no ./data, no local media root",
+    "playback_after": "the same watch page decoded 92 frames, 0 dropped, unmuted, readyState 4, and a seek to 3.5 s resumed and advanced to 4.92 s",
+    "reads_after": "original 200/80414, master 200/475, chunk 200/162691, thumbnail 200/21204, storyboard.jpg 200/18551, storyboard.vtt 200/390, and the served original still sha256 84b1b060...",
+    "ops01_precondition": "nothing in the S3 path depends on host-local media; a fresh api with an empty disk served the whole catalogue from the bucket"
+  },
+  "sc3_filesystem_ownership": {
+    "paths_still_needed_locally": "the transcode scratch only. cmd/api wires the scratch guard to os.TempDir(); the prod compose sets TMPDIR=/scratch for BOTH api and worker and backs it with the transcode_tmp volume (nine MkdirTemp/CreateTemp sites: HLS ladder, VP9 second encode, Whisper wav, trick-play I-frames)",
+    "storage_local_root": "STORAGE_LOCAL_ROOT renders as /app/data/media even with STORAGE_BACKEND=s3 and media_data:/app/data is still mounted, but it is unused: the lab's empty working directory stayed empty",
+    "expected_owner": "both application images run as non-root uid 10001 (vidra-core/Dockerfile:39,56). The prod render's prep-volumes one-shot runs as user 0:0 and does `mkdir -p /app/data/media /scratch /var/lib/vidra-search/models; chown 10001:10001 ...; chmod 0750 ...` - Docker would otherwise create each named-volume mount point root:root 0755 and the first os.MkdirTemp in /scratch would fail",
+    "rendered_worker": "profile `worker`: VIDRA_ROLE=worker, TMPDIR=/scratch, STORAGE_BACKEND=s3, volumes media_data:/app/data + transcode_tmp:/scratch + live_hls:/live-hls",
+    "rendered_migrate": "no volumes at all (AGENTS.md rule 3 holds)",
+    "scratch_floor_proof": "worker restarted with TRANSCODING_MIN_FREE_SCRATCH_MB=64000; on the next upload it logged 'transcode: deferring all jobs, scratch space below the floor' free_bytes=13331509248 min_free_bytes=67108864000, claimed nothing, and no streaming_playlists row appeared. Restoring the 256 MiB floor drained the job to a ready CMAF tree"
+  },
+  "sc4_reference_mode": {
+    "ownership_rule": "three layers, in this order. (1) PREFIX SCOPING: the sweep lists only web-videos, thumbnails, storyboards, captions, streaming-playlists, playlist-thumbnails; anything else - videos/, foreign/, avatars/, uploads/, .vidra/ - is never enumerated. (2) MINTED-KEY SHAPE (mediagc.isMintedKey): inside a swept prefix the segment below the prefix, cut at its FIRST dot, must parse as a UUID; if it does not, the object was laid out by another system and is KEPT, and this test runs BEFORE every per-prefix question. (3) BUCKET OWNERSHIP (.vidra/owner holding this install's identity) gates destructive sweeps only - a dry run is always allowed, because reporting what would be deleted from a store that is not ours is how an operator finds out it is not ours",
+    "adoption_interlock": "sqlcgen.CountForeignLayoutMediaRefs counts video_files whose storage_key is under web-videos/ but not under web-videos/<its own video_id>, plus streaming_playlists whose master_key is not under streaming-playlists/<its own video_id>/. Non-zero (or unanswerable) refuses AdoptBucket",
+    "planted_dataset": {
+      "script": "docs/evidence/a24-plant-foreign-media.sh",
+      "referenced_foreign": [
+        "web-videos/deadbeef-0000-4000-8000-00000000c0de-720.mp4 (video_files.storage_key)",
+        "captions/deadbeef-0000-4000-8000-00000000c0de-en.vtt (captions.storage_key)",
+        "streaming-playlists/hls/aaaaaaaa-0000-4000-8000-00000000f001/master.m3u8 (streaming_playlists.master_key)",
+        "streaming-playlists/hls/aaaaaaaa-0000-4000-8000-00000000f001/0.m3u8",
+        "streaming-playlists/hls/aaaaaaaa-0000-4000-8000-00000000f001/seg-0.ts"
+      ],
+      "unreferenced_foreign_inside_swept_prefixes": [
+        "web-videos/bbbbbbbb-0000-4000-8000-00000000f002-1080.mp4",
+        "captions/bbbbbbbb-0000-4000-8000-00000000f002-fr.vtt",
+        "streaming-playlists/hls/bbbbbbbb-0000-4000-8000-00000000f002/master.m3u8"
+      ],
+      "foreign_outside_every_swept_prefix": [
+        "videos/bbbbbbbb-0000-4000-8000-00000000f002/source.mp4",
+        "foreign/site-backup/archive.tar",
+        "avatars/users/bbbbbbbb-0000-4000-8000-00000000f002.png"
+      ],
+      "rows": "one videos row (peertube_uuid stamped) + one video_files original + one captions row + one streaming_playlists row, all pointing at keys no byte of which this install wrote"
+    },
+    "timeline": [
+      {"step": "baseline dry run, 3 real videos", "result": "scanned 57, orphans 0, ownership owned"},
+      {"step": "plant the foreign dataset (11 objects, 8 of them inside swept prefixes)", "result": "foreign-layout refs 0 -> 2"},
+      {"step": "dry run", "result": "scanned 65 (57 + the 8 inside swept prefixes), orphans 0 - not one foreign key in the list, including the four no row references"},
+      {"step": "delete .vidra/owner, restart api+worker", "result": "boot logged 'this bucket holds objects but carries no ownership marker ... destructive sweeps are disabled until an admin adopts it'; GET /admin/media/gc reports bucket_ownership unowned"},
+      {"step": "POST /admin/media/gc {dry_run:false} on the unowned bucket", "result": "mode dry-run, forced_dry_run true, forced_dry_run_reason bucket_ownership, deleted 0"},
+      {"step": "POST /admin/media/gc/adopt-bucket {}", "result": "HTTP 409 foreign_media_layout; audit admin.media.gc.adopt_bucket failure reason=foreign_layout_media"},
+      {"step": "POST /admin/media/gc/adopt-bucket {force:true} (the shipped operator override)", "result": "200 {bucket_ownership:owned, marker_key:.vidra/owner}; audit success reason='ownership=owned forced=foreign_layout_media'"},
+      {"step": "plant 150 Vidra-MINTED orphans (web-videos/<fresh uuid>.mp4, no rows) and run a destructive sweep", "result": "scanned 215, orphans 150, orphan_percent 69, breaker_tripped true, deleted 0, and zero foreign keys in the orphan list"},
+      {"step": "remove 100 of the planted orphans by hand, run a destructive sweep", "result": "scanned 115, orphans 50, orphan_percent 43, breaker_tripped false, deleted 50 - the deleted set was EXACTLY the 50 remaining planted keys"},
+      {"step": "DELETE /videos/{imported} (the reference-mode record)", "result": "204; videos/video_files/captions/streaming_playlists all 0 for that id; foreign-layout refs 2 -> 0"},
+      {"step": "destructive sweep with the imported record gone", "result": "scanned 65, orphans 0, deleted 0 - the objects that had just lost their only references were still not orphans"},
+      {"step": "worker restart, scheduled boot sweep", "result": "mode dry-run scanned 65 orphans 0 ownership owned - the scheduled path agrees with the on-demand one"},
+      {"step": "add a real caption to a Vidra video", "result": "captions/<video_id>/en.vtt, scanned 66, orphans 0"}
+    ],
+    "byte_identity": "all 11 foreign objects sha256-identical at three points: before any sweep, after the destructive 50-object sweep, and after the imported record was deleted and a destructive sweep ran",
+    "breaker_constants": "MEDIA_GC_MAX_ORPHAN_PERCENT=25 with an absolute floor of 100 orphans below which the ratio never fires (mediagc.breakerFloor)",
+    "audit": "13 admin.media.gc / admin.media.gc.adopt_bucket rows; the two worker sweeps as actor_kind=system, the eleven admin actions as actor_kind=user actor_role=admin. A breaker-tripped delete audits as mode=dry-run with breaker=true, because the reported mode is the mode that actually ran",
+    "wrong_actors": {
+      "POST /admin/media/gc": {"anonymous": 401, "regular user U": 403, "creator C": 403},
+      "POST /admin/media/gc/adopt-bucket": {"anonymous": 401, "regular user U": 403, "creator C": 403},
+      "GET /admin/media/gc": {"anonymous": 401, "regular user U": 403}
+    },
+    "ui": "/admin/media rendered 'Automatic daily sweep: On - set at boot via MEDIA_GC_ENABLED', 'Orphan-ratio breaker 25%', 'Storage ownership: owned', and a dry run showing 'Scanned 65 stored objects - 0 orphans to delete - Storage: owned'"
+  },
+  "sc5_gates": {
+    "repos_changed": ["vidra (meta) only - vidra-core, vidra-user and vidra-search are untouched and clean on main"],
+    "bash -n + shellcheck docs/evidence/a24-plant-foreign-media.sh": "pass",
+    "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file <filled> config -q": "pass",
+    "python3 -m unittest discover -s tests -p '*_test.py'": "34 tests, OK, 0 skipped",
+    "vidra-core go test ./internal/mediagc/... ./internal/storage/...": "ok",
+    "vidra-core S3 integration lane": "S3_TEST_ENDPOINT=127.0.0.1:9110 go test -tags=integration ./internal/storage/... -> ok, 53 PASS including the 13 S3 tests (round trip, overwrite, exists/delete, not-found, ServeContent Range, temp-download fallback, DeletePrefix, ListKeys, presign response headers, key validation, not-a-PathProvider, reader size, reader stays seekable) against this MinIO"
+  },
+  "not_run": [
+    "the selected-provider half of A24: no credentials for the beta bucket are on this machine, so B2/S3-proper bucket creation, its versioning/retention behaviour and its CORS are unverified here",
+    "vidra-user's `e2e-backed (s3)` lane (needs Docker Compose) - no vidra-user file changed, so it is unaffected but was not executed",
+    "playlist-thumbnails/<playlist_id>.<ext> - no playlist cover was uploaded, so that swept prefix held no object",
+    "a real PeerTube reference-mode import: the foreign dataset is synthetic (MIG-01/A18 is blocked on a source database)",
+    "MinIO stands in for the recorded B2 hazards; it has no equivalent of B2's separate deleteFiles entitlement and no object-lock/versioning was configured, so the 'B2 bucket-GC destruction' and 'B2 versioning double-billing' risks are NOT retired by this run"
+  ],
+  "findings": [
+    "A bucket write refusal and a bucket-full refusal are both a bare 500 internal_error / 'an unexpected error occurred'. The actionable sentence exists and reaches the server log; the operator sees nothing. Same class as A17/A27's bare echo.NewHTTPError 503s that the 5xx scrubber eats.",
+    "There is no write probe on the boot path. storage.ProbeWrite exists and its own doc comment cites a real migration that ran three minutes on a read-only key, but main() only calls EnsureBucket (a HeadBucket) - so an instance boots green on a credential that cannot store a byte.",
+    "The api's request logger writes the full storage key into the error line ('storage: s3: put \"web-videos/<uuid>.mp4\"'). The worker's job logger redacts it ([redacted-key], core#190). This is the api-side half of A35's open 'core still logs object_key/storage_key' finding.",
+    "HLS/DASH playlists are rewritten in memory and therefore carry no Accept-Ranges and answer a Range request with 200. Correct, but it means a Range probe over the advertised tree is only meaningful on segments and the original.",
+    "docs/evidence/*.sh is linted by nothing in meta CI - the shell lint loop covers bootstrap.sh, install.sh, tests/*.sh and deploy/*.sh only. This planter was linted by hand. A39 closed exactly this gap for tests/."
+  ],
+  "for_other_items": {
+    "A32 (INT-09 presign)": "the api logged 'direct object delivery available backend=s3://... note: enable with the delivery_presign_enabled instance setting', so the presign seam is live and OFF by default. TestS3PresignGetAsPinsResponseHeaders passes against MinIO, so the response-header pinning works on a path-style endpoint; what is untested is a real cross-origin bucket's CORS, which is what A32 needs.",
+    "A33 (INT-10 CDN)": "every media response here carries `cache-control: private, ...` (max-age 3600 on the original, 300 on images, 0 on the HLS tree), so nothing in the api-proxy path is cacheable by a shared edge as shipped. The playlist rewrite adds a ?v=<tag> to every child URI, which is the versioning handle an edge purge would key on.",
+    "A34 (OPS-01 multi-host)": "the 'no host-local media assumption' precondition is met on S3: an api process started in an empty working directory served the entire catalogue and created nothing on local disk. The only local path left is the transcode scratch (TMPDIR), which is per-worker and disposable - so an api/worker split across hosts has no shared-volume requirement in s3 mode."
+  }
+}

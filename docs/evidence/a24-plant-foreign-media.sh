@@ -28,6 +28,10 @@
 #   MC=/path/to/mc ALIAS=lab BUCKET=vidra-a24 CHANNEL_ID=<uuid> \
 #   ./a24-plant-foreign-media.sh
 #
+# WORK_ROOT names where the staging files are written before they are uploaded.
+# It matters when MC is a containerised client: the staging directory has to be
+# one the client can see, and the system temp dir usually is not.
+#
 set -euo pipefail
 
 : "${PGURL:?PGURL is required (a libpq URL for the lab database)}"
@@ -36,7 +40,7 @@ set -euo pipefail
 : "${BUCKET:?BUCKET is required (the shared lab bucket)}"
 : "${CHANNEL_ID:?CHANNEL_ID is required (an existing channel to hang the imported video off)}"
 
-WORK="$(mktemp -d)"
+WORK="$(mktemp -d "${WORK_ROOT:-${TMPDIR:-/tmp}}/a24-plant-XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 # Fake, obviously-not-real source identifiers. The UUIDs are the SOURCE
