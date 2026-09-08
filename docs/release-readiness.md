@@ -136,7 +136,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | INT-02 Direct URL import, yt-dlp platform import and channel auto-sync | M C U | Videoimport/channelsync; W2; released image yt-dlp build arg; dedicated channel-sync CI; live evidence `a27-import-sync` (a local fixture origin and an html5 extractor fixture on a two-process core: direct import stored, probed, transcoded and published with a stamped correlation id; sandboxed `resolver=ytdlp` published with h264+aac and prefilled the empty draft field; one scheduled channel sync discovered exactly one item, imported nothing on two `sync-now` runs and two scheduled runs, discovered exactly one new item after the source published one, recorded a real outage as `failed` with a safe reason and recovered with no re-import; a SIGKILLed worker was requeued by the lease sweep and retried to success with no duplicate and the correlation id preserved across processes; seven SSRF probes refused with zero stored bytes, including a public redirector to a private address that imported before this slice; and every disabled/boot gate refused once) | PASS | Local fixture origin/file and extractor fixture; scheduled channel discovers new item once; restart/retry/SSRF/disabled gates; verify released image actually contains executable | PUB-03 → A27. Released-image proof is `ghcr.io/yegamble/vidra-core:v0.6.2` (amd64) carrying `/usr/local/bin/yt-dlp` 2026.07.04 + Python 3.14.7 + ffmpeg 8.1.2 from the `YTDLP_VERSION` build arg — that image PREDATES the fixes in core#184, so the released image is proven to contain the executable but not to run this behaviour. Follow-ups, none blocking: the three boot-capability 503s (`resolver=ytdlp`, sync create, sync-now) are bare `echo.NewHTTPError` so the 5xx scrubber replaces their sentences with "an unexpected error occurred" (A17's open item, measured here on two more routes); URL import has a hard 60-second budget for the WHOLE download (`videoimport.fetchTimeout` is the `http.Client.Timeout`), so `UPLOAD_MAX_SIZE` is not the real ceiling; a failed sync reschedules at the plain `CHANNEL_SYNC_INTERVAL` with no backoff; `channel_syncs` is still unprojected into `job_runs` and has no admin surface (this slice added only a WARN line); a runtime limit change binds the worker only after its settings-poll interval; the channel-sync dedupe key falls back to the entry URL when the extractor reports no id; and the explicit `resolver=ytdlp` path is still not dial-pinned by design. The `channel-sync-backed` lane was NOT run against this branch (it needs Docker Compose); S3 was not exercised |
 | INT-03 Manual captions and Whisper generation/review | M C U | Caption routes/CaptionsManager; backed captions/whisper-captions opt-in; live evidence `a28-captions-scan` (section "A28 captions, Whisper and ClamAV lanes — 2026-09-08") on a two-process core with real Chromium: manual VTT create/edit-by-re-upload/list/delete with the object sha changing over the same key, a second language, typed 422s for a non-WebVTT body and a malformed tag, `PUT`/`PATCH` still 405, and an owner-only matrix in which even the admin gets 404 while anonymous reads of a public video's track are 200; both tracks render on the watch page as same-origin `blob:` `<track>` with the right `srclang`/`label` and three real cues; and a REAL local whisper.cpp 1.9.2 `/inference` endpoint drove audio→job→an editable `Auto-generated` caption (12 s end to end from the Studio button), with a measured 1-then-2-minute retry ladder, a dead-letter at attempt 5 that wrote no caption, the compile-time 10-minute timeout firing exactly on time against a stalling endpoint and recovering on the next attempt, and the disabled split proved on both halves (403 `feature_disabled` with the control hidden, 503 `auto_captions_not_configured` when the admin toggle is on without an endpoint) | PASS | Manual VTT CRUD, watch track and language; configured Whisper audio→job→editable caption; outage/timeout and unsupported language; owner-only access | PUB-03 → A28. Evidence is **whisper.cpp 1.9.2 with `ggml-tiny.bin` — a real implementation of the contract core speaks, but the SELECTED endpoint, model size and capacity are DEFERRED**, so nothing here bounds transcription latency or cost at production scale. Findings, none blocking: there is no caption *editor* — the shipped edit path is re-uploading the language, and `UpsertCaption` keeps the original `created_at` with no `updated_at`, so nothing distinguishes an edited track from an untouched one; one click on Studio's "Generate automatically" silently replaced a creator's hand-written `en` track with the machine transcript, no warning and no undo; the Whisper round-trip bound is a compile-time 10 minutes with no knob; `caption_generate` rows reach `job_runs` through migration 0083's trigger but carry empty `correlation_id`/`request_id`/`actor_id` on 4 of 4 rows where `upload_finalize` and `video_transcode` are stamped on 2 of 2; a well-formed unknown tag (`zz`) passes Vidra's validator and **aborts whisper.cpp**, so any creator can kill a shared transcription service; and the client ignores the response's own `language`, so an English transcript is stored under whatever tag was asked for. A17's note that this 503 is a bare `echo.NewHTTPError` is **stale** — it is typed and its sentence survives the scrubber |
 | INT-04 ClamAV scanning actually gates all ingestion | M C U | Scanner service; scan profile; uploads/imports/DM hooks and config policy; live evidence `a28-captions-scan` (section "A28 captions, Whisper and ClamAV lanes — 2026-09-08") against a REAL clamd 1.5.4 with a real 3.6 M-signature database: a benign upload published while a standard EICAR body was refused on the resumable-upload path, the URL-import path and the DM path (the DM half re-cited from A14 and re-run here for one request — 422 `attachment failed the malware scan`, zero rows, zero blobs); all three fail policies measured with the daemon actually stopped (`fail-closed` fails both ingestion paths, `quarantine` parks the upload in the moderation queue, `fail-open` publishes unscanned); boot refuses `MALWARE_SCAN_ENABLED=true` with an empty `CLAMAV_ADDR`; and `/admin/system` now carries a `clamav` component that reads `ok`, then `down` with the instance `degraded` and a sentence naming both the consequence and the policy in force | PASS | Disposable scanner: benign file, standard EICAR fixture, unavailable scanner, approved fail policy; never publish/link rejected bytes; test URL and DM paths as well as upload | PUB-01 → A28. Two defects fixed on the way (vidra-core #198): an INFECTED verdict failed the video but **kept its `video_files` row and its bytes**, so `GET /videos/{id}/download` advertised the rejected original and `/download/original` served it 200 `video/mp4` to the owner AND to an admin on both ingestion paths — the "never link rejected bytes" clause, with the link live; and `/admin/system` had **no scanner component at all**, so a dead clamd left it reporting `"status":"ok"` across nine healthy components while every upload and import was landing in `failed`. Rejected bytes now live **nowhere** — no quarantine store, no retention, the audit row is the whole record. Findings that need a ruling, none blocking: a malware rejection is **invisible to the creator** (the upload session settles `completed` with an empty `failure_reason`, the import job settles `done` with no error, Studio shows a bare `FAILED` badge beside a `quarantined` video that gets a full sentence); `fail-open` publishing unscanned media leaves **no audit row**, only a WARN log line; and **`MALWARE_SCAN_ENABLED` defaults to false**, so out of the box nothing is scanned, with no boot warning and no log line — the only honest surface is `/admin/infrastructure`'s prose. EICAR is a whole-file signature (a real mp4 with it appended scans clean), so this lane proves the gate, not clamd's detection depth. The SELECTED scanner deployment is DEFERRED (a throwaway host daemon, not the packaged one), S3 was not exercised, and thumbnails/storyboards/avatars/account-import archives were not probed for a scan seam |
-| INT-05 ActivityPub remote discover/follow/accept/video/comment/delete/moderation | M C U | Federation service/integration tests; user federation queues; live evidence `a29-federation` (section "A29 ActivityPub — two isolated instances — 2026-09-08"): two isolated instances, each a two-process core with its own database, Redis index, storage root and origin, federating over plain HTTP with `FEDERATION_ENABLED=true` and a sealed actor KEK on both — signed `Follow` accepted and rejected through the admin queue with the wrong-actor matrix, `Create`/`Update`/`Delete{Video}` fanned out and applied, an inbound federated comment created, edited and retracted, instance mute and instance block separated on a per-surface matrix, the full 30 s→60→120→240→480 ladder to a dead letter at attempt 6 with no duplicate ingestion on recovery, and a real Chromium walk of the follower's feed and remote watch page | **FAIL (no longer blocked — the AP selection is ruled and the lab has run; three clauses of this row's own procedure are now measured as unmet)** | Two isolated instances: signed inbox/outbox, approved/rejected follow, new/update/delete videos, reply, block server/account, remote URL; source identity after migration | INS-05, ADM-02 → A29. What PASSES: discovery (WebFinger + actor documents), signed inbox with unsigned/tampered/spoofed-actor/stolen-keyId all refused and logged, approved AND rejected follow with `Accept`/`Reject` delivered both ways, new/update/delete videos with private and unlisted producing ZERO activities, an inbound reply with its edit and its `Delete`, server block vs mute, the retry ladder and dead letter. What FAILS, each clause: (1) **playback and posters do not federate** — the outbound AS `Video` emits no `icon`, no `duration` and only a watch-page `url`, while the ingest parses all three, so a follower stores a title, a description and a link and its remote watch page renders no `<video>` at all; emitting a stream link additionally needs a CORS ruling, since the origin's media carries no `Access-Control-Allow-Origin`. (2) **`block account` does not exist** — `/me/blocks/{id}` and `/me/mutes/accounts/{id}` take a LOCAL user UUID and `muted_accounts.muted_id` is a `users` FK, so the finest control against a remote person is blocking their whole instance. (3) **`remote URL` resolves an actor but never a video** — the AP object id is not dereferenceable as ActivityPub (`/videos/{uuid}` with `Accept: application/activity+json` answers 200 with frontend HTML), and `ResolveSearchTarget` never consults the already-stored `remote_videos` row by `object_url` before fetching. Also measured, not blocking the verdict: a follower instance stores NO federated comments (it receives `Create{Note}` and drops every one, since `inReplyTo` must resolve to a LOCAL video); a blocked instance's refused activity is answered 202 and never redelivered after the unblock; a cancelled `Undo` leaves the remote with a ghost follower; and the REST channel follower count excludes remote followers, so a creator with three federated followers reads zero. **Source identity after migration is UNVERIFIED and MIG-06-dependent** — it needs actor-`id` continuity, key continuity (a cached `publicKeyPem` is never refreshed) or a `Move`, which `dispatchActivity` has no arm for; it was deliberately not faked. Defect fixed on the way (vidra-core #200): the watched-word queue named the LOCAL VIDEO OWNER as the author of a federated comment. **Remediation merged: vidra-core #203 / vidra-user #198 / meta #152 (section "A29 remediation — federated playback, dereferenceable ids, social parity — 2026-09-08") — the code for clauses (1), (2) and (3) plus the four non-blocking findings; the row still reads FAIL because only the two-instance re-run can flip it.** TLS, real hostnames (`/etc/hosts` needs root, refused — the domains are `host:port` literals) and interoperability with PeerTube/Mastodon are all UNVERIFIED |
+| INT-05 ActivityPub remote discover/follow/accept/video/comment/delete/moderation | M C U | Federation service/integration tests; user federation queues; live evidence `a29-federation` (section "A29 ActivityPub — two isolated instances — 2026-09-08"): two isolated instances, each a two-process core with its own database, Redis index, storage root and origin, federating over plain HTTP with `FEDERATION_ENABLED=true` and a sealed actor KEK on both — signed `Follow` accepted and rejected through the admin queue with the wrong-actor matrix, `Create`/`Update`/`Delete{Video}` fanned out and applied, an inbound federated comment created, edited and retracted, instance mute and instance block separated on a per-surface matrix, the full 30 s→60→120→240→480 ladder to a dead letter at attempt 6 with no duplicate ingestion on recovery, and a real Chromium walk of the follower's feed and remote watch page; RE-RUN live evidence `a29-rehearsal` (section "A29 rehearsal — two instances against the merged remediation — 2026-09-08"): the same two-instance topology at schema 140 on the merged remediation, this time behind a REAL Caddy reproducing `deploy/Caddyfile` §3a, with Chromium decoding 143 frames of the origin's HLS on the follower's remote watch page (`Access-Control-Allow-Origin: *` on all eight media responses, zero CORS errors), the `Create`-then-`Update` ordering read off the two payloads, the AP negotiation table measured through the edge (200 AS / 304 / 406 at the api / 404 private / 410 + Tombstone), a remote URL deduped with zero outbound fetches, the mirrored thread created, edited and retracted from the origin, the block/unblock matrix with an `federation.inbox.rejected` audit row, and the 30→60→120→240 ladder delivering exactly once on recovery | **FAIL (measured a second time — nine of the remediation's ten re-run clauses pass; the tenth is a REGRESSION the remediation introduced, fixed on vidra-core #209 and unmerged; two sub-clauses of this row's own procedure remain unmet)** | Two isolated instances: signed inbox/outbox, approved/rejected follow, new/update/delete videos, reply, block server/account, remote URL; source identity after migration | INS-05, ADM-02 → A29. What PASSES: discovery (WebFinger + actor documents), signed inbox with unsigned/tampered/spoofed-actor/stolen-keyId all refused and logged, approved AND rejected follow with `Accept`/`Reject` delivered both ways, new/update/delete videos with private and unlisted producing ZERO activities, an inbound reply with its edit and its `Delete`, server block vs mute, the retry ladder and dead letter. What FAILS, each clause: (1) **playback and posters do not federate** — the outbound AS `Video` emits no `icon`, no `duration` and only a watch-page `url`, while the ingest parses all three, so a follower stores a title, a description and a link and its remote watch page renders no `<video>` at all; emitting a stream link additionally needs a CORS ruling, since the origin's media carries no `Access-Control-Allow-Origin`. (2) **`block account` does not exist** — `/me/blocks/{id}` and `/me/mutes/accounts/{id}` take a LOCAL user UUID and `muted_accounts.muted_id` is a `users` FK, so the finest control against a remote person is blocking their whole instance. (3) **`remote URL` resolves an actor but never a video** — the AP object id is not dereferenceable as ActivityPub (`/videos/{uuid}` with `Accept: application/activity+json` answers 200 with frontend HTML), and `ResolveSearchTarget` never consults the already-stored `remote_videos` row by `object_url` before fetching. Also measured, not blocking the verdict: a follower instance stores NO federated comments (it receives `Create{Note}` and drops every one, since `inReplyTo` must resolve to a LOCAL video); a blocked instance's refused activity is answered 202 and never redelivered after the unblock; a cancelled `Undo` leaves the remote with a ghost follower; and the REST channel follower count excludes remote followers, so a creator with three federated followers reads zero. **Source identity after migration is UNVERIFIED and MIG-06-dependent** — it needs actor-`id` continuity, key continuity (a cached `publicKeyPem` is never refreshed) or a `Move`, which `dispatchActivity` has no arm for; it was deliberately not faked. Defect fixed on the way (vidra-core #200): the watched-word queue named the LOCAL VIDEO OWNER as the author of a federated comment. **Remediation merged: vidra-core #203 / vidra-user #198 / meta #152 (section "A29 remediation — federated playback, dereferenceable ids, social parity — 2026-09-08") — the code for clauses (1), (2) and (3) plus the four non-blocking findings; the row still reads FAIL because only the two-instance re-run can flip it.** TLS, real hostnames (`/etc/hosts` needs root, refused — the domains are `host:port` literals) and interoperability with PeerTube/Mastodon are all UNVERIFIED | **Re-run done 2026-09-08 (section "A29 rehearsal — two instances against the merged remediation", evidence `a29-rehearsal.json`) and the row still does not flip, for named reasons rather than for want of a lab.** Clauses (1) and (3) of the original verdict are CLOSED and measured: a remote video plays in a real browser with 143 decoded frames and zero CORS errors through a real Caddy, and a pasted remote URL resolves to the stored row with no outbound fetch. The dereference half is closed too — `/videos/{uuid}` and `/comments/{uuid}` content-negotiate through the edge, a private video answers 404 exactly as a never-existent uuid does, and a deleted one answers 410 + Tombstone. What now FAILS: **(a) a private or unlisted video no longer produces ZERO activities** — the transcode-completion `UpdateVideo` the remediation added makes every private and unlisted upload broadcast a `Delete` naming its uuid to every remote follower, and a metadata edit on a private video does the same through the older `WithUpdateHook` path; fixed and re-measured to zero on [vidra-core #209](https://github.com/yegamble/vidra-core/pull/209), unmerged. **(b) clause (2)'s per-remote-account block addresses the wrong actor for a common naming pattern** — `WebFinger` resolves a colliding `name@domain` to the Person actor while videos are attributed to the Group actor, nothing prevents a channel taking an existing username, and the settings page's only affordance is the handle, so the block a viewer can make hides nothing (blocking the channel actor URL explicitly works). **(c) a blocked remote account's ALREADY-STORED comments are not hidden**, and no audit row is written for a `Note` or `Follow` a per-account block drops. Also newly measured, not blocking: A29-F4's redelivery half is not merely absent — neither side re-attempts, so a block taken and lifted strands the follower's request at `pending` forever; the mirrored thread is FLAT (only Notes replying to the video object are mirrored, every deeper reply is delivered and dropped silently); and `FederationHealth.LastDeliveredAt` is computed and never rendered. A29-F5, F6, F9, F10 and F12 are all confirmed live. **Flipping this row needs vidra-core #209 merged plus a ruling on (b) and (c).**
 | INT-06 ATProto/Bluesky login, linking and outbound cross-post | M C U | Auth/ATProto service, connection UI; backed atproto opt-in; old extension “no login” claim stale | BLOCKED | Test PDS/account: login callback/state, link/unlink, private exclusion, public post contains working watch URL; restart sealed credential and outage/retry; no public rehearsal posts | AUTH-02, PLAY-02 + provider/test account → A30 |
 | INT-07 Public IPFS mirror and viewer fallback preserve disclosure boundary | M C U | Mirror eligibility; dedicated backed IPFS job and privacy fence | BLOCKED | Private test network: publish eligible object→real CID→master+segments playback; gateway failure→canonical fallback; unlist/delete unpin, no private/quarantine/DM ledger row; record irreversibility of real public publication | PLAY-01 + IPFS selection → A31 |
 | INT-08 Private IPFS is isolated replication, never public delivery | M C U | Product decision §5.P; private-swarm CI; no private gateway knob; DM excluded | BLOCKED | Two keyed nodes and outsider: replication works only inside, outsider cannot fetch; private CID absent from APIs; quorum/outage recovery; no DM attachment pins | STO-01 + private topology selection → A31 |
@@ -13653,3 +13653,300 @@ topology** — "THE CDN'S ORIGIN MUST BE KEY-ADDRESSED … pointing this at the
 Vidra API origin 404s every request" — which #199 inverted three sections ago.
 Corrected in passing, since the same struct block was being edited for the
 retry knobs.
+
+## A29 rehearsal — two instances against the merged remediation — 2026-09-08
+
+**INT-05 does NOT flip.** Nine of the ten clauses the remediation section listed
+for this re-run pass on two live instances, through a real Caddy, in a real
+Chromium — including the one that was the whole point: a remote video plays,
+with decoded frames counted. The tenth fails, and it fails because the
+remediation broke it. INT-05's own procedure says a private or unlisted video
+produces ZERO federation activities and A29 measured exactly that; the
+transcode-completion hook the remediation added now makes every private and
+unlisted upload broadcast a `Delete` naming its uuid to every remote follower.
+That is fixed on [vidra-core #209](https://github.com/yegamble/vidra-core/pull/209)
+and unmerged as this is written, so the row stays FAIL and names the clause.
+Two further sub-clauses of the row's own procedure are unmet and named below.
+Complete result: [`a29-rehearsal.json`](evidence/a29-rehearsal.json).
+
+The lab is A29's shape with the edge added. Two isolated instances at schema
+**140**, each an api plus a `VIDRA_ROLE=worker` process with its own database,
+Redis index, `STORAGE_LOCAL_ROOT` and origin, federating over plain HTTP with
+`FEDERATION_ENABLED=true` and a sealed actor KEK on both. `vidra-core`
+origin/main **59d7f51** (#203) for everything up to the private/unlisted clause,
+then **48374d8** (#209) for that clause's re-measurement and everything after
+it — the text says which reading is which. `vidra-user` origin/main **eb99808**
+(#198), one `next build`, both frontends the same standalone bundle on Node
+26.8.1 with different `INTERNAL_API_BASE_URL`/`PUBLIC_API_BASE_URL`. PostgreSQL
+16.15 and Redis 8.6.2 in throwaway instances; ffmpeg 8.1 six-second 640×360
+fixtures; Playwright 1.62.1's real Chromium. Two `a29-ap-peer.go` instances —
+`commenter` on `:48080` for every input a Vidra instance cannot produce, and
+`rotator` on `:58080` for the key-rotation clause.
+
+**The edge is the point of this run, so it is a real one.** Caddy v2.11.4 from
+brew, one config with two site blocks that mirror `deploy/Caddyfile` sections 1,
+2, 3, **3a** and 4 verbatim in structure: the `/metrics` and `/api/v1/dev/*`
+404s, the `@api` path list, the `@ap_object` / `@ap_object_ld` `Accept` matchers
+sitting **above** the frontend fallthrough, and `encode zstd gzip` scoped to the
+frontend block alone. Only the site addresses and upstreams differ — loopback
+ports instead of a domain and compose service names — and `auto_https off` keeps
+it plain HTTP, so no internal CA had to be minted or trusted anywhere.
+`caddy validate` passed before every start. Section 3a was written by the
+remediation and never executed; it is executed now, and it is correct.
+
+Lab deviations, recorded rather than hidden: **`MALWARE_SCAN_MODE=disabled`
+explicitly**, because there is no clamd on this machine and vidra-core #201
+makes every ingestion refuse without one — `/admin/system` reports it as
+`clamav: not_configured` with the whole consequence spelled out, which is the
+honest shape; `RATE_LIMIT_ENABLED=false`; `HTTP_IMPORT_ALLOW_PRIVATE_URLS=true`,
+the only knob that lets `urlsafety.Guard` reach a loopback origin;
+**`VIDRA_ENV=development`**, because production refuses both of those variables
+outright and requires an https `PUBLIC_BASE_URL`; `MEDIA_GC_ENABLED=false` and
+`TRANSCODING_MIN_FREE_SCRATCH_MB=256` on a box with 9.2 GiB free;
+`REGISTRATION_ENABLED=true` throughout, for four synthetic actors. Every KEK is
+base64 of 32 identical bytes and every secret is an obviously fake lab string;
+none is committed.
+
+### SC1 — the video plays, and the numbers say so
+
+B's `/remote/{id}` renders a real `<video>` and Chromium decodes A's HLS:
+
+| | Create-before-ladder video | publish-after-transcode video |
+|---|---|---|
+| `readyState` | 4 | 4 |
+| `currentTime` / `duration` | 5.783 / 6.014 | 5.787 / 6.014 |
+| `videoWidth` × `videoHeight` | 640 × 360 | 640 × 360 |
+| `totalVideoFrames` | **143** | **143** |
+| `droppedVideoFrames` | 0 | 0 |
+| `video.error` | null | null |
+
+Eight responses from A's origin per playback — `hls/master.m3u8`, two CMAF
+variant playlists, two `init-*.mp4`, three `chunk-*.m4s` — **all 200, all
+`Access-Control-Allow-Origin: *`**, zero `requestfailed` events, zero CORS
+console errors, zero page errors. The one console error in the whole walk is an
+anonymous `POST /api/v1/auth/refresh` answering 422, which is B's own session
+probe. The `OPTIONS` preflight hls.js needs for its `Range` fetches answers 204
+through Caddy with `Allow-Methods: GET, HEAD`, `Allow-Headers: Range` and
+`Max-Age: 600`. The page shows the poster (from B's own
+`/api/v1/remote-videos/{id}/thumbnail` — B mirrors the origin's `icon` into
+`remote-thumbnails/*.jpg` rather than hotlinking it), the duration as `0:06`,
+the `From 127.0.0.1:18080 · ActivityPub` badge, and the
+`Watch on 127.0.0.1:18080` link.
+
+**Both orderings were run and they differ exactly as designed.** A video
+published before its ladder existed emitted a `Create` carrying only the
+`text/html` `/v/{code}` link, then an `Update` carrying
+`[application/x-mpegURL master.m3u8, text/html]`; B's row gained `stream_url`
+from the `Update` with no re-Announce. A `publish_after_transcode` video's
+`Create` ALREADY carried the HLS link, because `releaseHold` publishes first and
+`AnnounceVideo` then reads a video that is already public with a ready ladder —
+`composeTranscodeCompletion`'s `[release, mirror, federate]` order is what makes
+that true, and this is the first time it has been observed rather than asserted.
+Both `Create`s also carried `duration: PT6S` and an `icon`, because ffprobe and
+the poster both precede the ladder.
+
+**And then the clause that fails.** A PRIVATE upload and an UNLISTED upload,
+both reaching `published` with a real HLS ladder, each fanned a
+`Delete{http://A/videos/<uuid>}` to **both** remote follower inboxes when their
+transcode completed; a `PATCH` of a private video's title fanned two more. A29
+measured ZERO activities for precisely this. The cause is two-layered and only
+the first layer is new: the transcode-completion hook calls
+`federation.UpdateVideo` unconditionally, and `UpdateVideo`'s else-branch
+retracts anything that is not public+published — which is also what
+`video.WithUpdateHook` has always done, so the metadata-edit half is older than
+the remediation and was simply never measured. Neither `Delete` retracts
+anything, because the video was never public and no peer ever held it. What it
+does do is tell every follower instance the uuid of a hidden video and the
+moment it was uploaded.
+
+vidra-core #209 separates the two facts that were being conflated: "not
+public+published" and "was WITHDRAWN from public+published". `WithUpdateHook`
+now passes whether the video was public+published before the change — the same
+shape `WithDeleteHook` already uses for `wasPublic` — and `UpdateVideo` takes
+the retraction arm only when it is true; the transcode path passes `false`,
+because finishing a transcode never withdraws a video from public. Re-measured
+on that binary: a private upload, an unlisted upload and a metadata edit on a
+private video produce **zero** deliveries, with all six transcode jobs
+`state=done` so the hook really ran; a public video's edit still fans out an
+`Update` that lands on B; and flipping a public video to private still fans out
+a `Delete` that removes B's row.
+
+### SC2 — the negotiation table, measured through Caddy
+
+| request | Accept | through | answer |
+|---|---|---|---|
+| `/videos/{uuid}` | `application/activity+json` | Caddy | 200 AS `Video`, `public, max-age=300`, ETag |
+| `/videos/{uuid}` | `application/ld+json; profile="…activitystreams"` | Caddy | 200, byte-identical, same ETag |
+| `/videos/{uuid}` | same + `If-None-Match` | Caddy | **304** |
+| `/videos/{uuid}` | a real browser's `text/html,…,*/*;q=0.8` | Caddy | 200 the watch page |
+| `/videos/{uuid}` | `*/*` | Caddy | 200 the watch page |
+| `/videos/{uuid}` | `*/*` or `text/html` | the api directly | **406** |
+| `/videos/{uuid}` private / unlisted / never-existed | AP | Caddy | **404**, all three identical |
+| `/videos/{uuid}` deleted | AP | Caddy | **410 + Tombstone**, `no-store` |
+| `/comments/{uuid}` local, on a public video | AP | Caddy | 200 AS `Note`, `public, max-age=300` |
+| `/comments/{uuid}` federated | AP | Caddy | **404** |
+| `/comments/{uuid}` | `text/html` | Caddy | 404 (frontend has no such route) |
+
+Two things are worth saying out loud. **`*/*` falls through to the frontend**,
+so the api's 406 is reachable only by addressing the api directly — Caddy's
+matcher needs the literal media type in `Accept`, which is exactly the behaviour
+that keeps browsers on the page, but it means the 406 the remediation documents
+is an origin-level answer and not an edge-level one. And the Tombstone is
+minimal as promised — `id`, `formerType`, `deleted`, nothing else — though it
+still carries an ETag, which is meaningless on a 410 and worth deleting the next
+time that handler is opened.
+
+**Remote-URL lookup.** B's search resolved A's AP object id and A's `/v/{code}`
+watch URL to the SAME already-stored row, B's `remote_videos` count stayed at 2,
+and A's request log recorded **no request at all** in that window. The store is
+consulted before the network and a pasted URL creates no duplicate.
+
+### SC3 — the block matrix, and the F4 answer
+
+| case | measured |
+|---|---|
+| inbound `Follow` from B while B's instance is blocked | refused; `remote_follows` unchanged; **audit row `federation.inbox.rejected`** written with `domain=federation`, `reason=domain=127.0.0.1:28080` and the request/correlation ids |
+| outbound to B while blocked | cancelled — `state=failed`, `attempts=1`, `last_error: cancelled: destination instance is blocked` |
+| unblock, then a NEW activity | delivered; the post-unblock comment reached B's mirrored thread |
+| **F4's open half — redelivery after the unblock** | **not redelivered, and worse.** The cancelled rows stay `failed attempts=1` forever, and the inbound `Follow` refused during the block is never re-applied either: A still holds two followers and **B's own row stays `pending` with no retry from B's side**. Neither end re-attempts, so a block taken and lifted leaves the follower's UI showing a follow request that will never resolve. |
+| unblock with a percent-encoded domain | `…/blocked/127.0.0.1%3A28080` → **422 invalid domain**; the raw colon → 204 |
+| per-account block, handle that does NOT collide | **works** — `films@127.0.0.1:18080` resolved to `/video-channels/films`, that channel's video left the blocker's `scope=all` feed (2 → 1), every other A actor stayed, and anonymous and `otherb` both still saw all four |
+| per-account block, handle that DOES collide | **hides nothing** — see below |
+| blocked actor's inbound `Create{Note}` | dropped, not stored (202); A's comment count unchanged |
+| blocked actor's inbound `Follow` | records nothing, sends nothing (202) |
+| blocked actor's EXISTING comment | **still visible** on the blocker's own video, to the blocker |
+| `GET /remote-videos/{id}` by the blocker | 200 — the block is scoped to the six listing queries and the mirrored thread, not to a by-id read of a URL the viewer already holds |
+| other viewers and anonymous | unaffected throughout |
+
+**The collision, which is the finding.** `federation.WebFinger` resolves a
+`name@domain` to the USER first and only then to a channel. On an instance where
+a creator's account and their channel share a handle — which nothing prevents;
+creating a channel with handle `ownera` while a user `ownera` exists answers
+**201** — every channel-scoped federation feature keyed on that handle addresses
+the wrong actor, silently. `POST /me/remote-follows` with the handle queues a
+`Follow` of a `Person`, which `handleFollow` drops with no record and no
+`Reject`, so the follower's row sits `pending` forever. `POST /me/blocks/remote`
+with the handle stores `/accounts/<name>` while `remote_videos.remote_actor_url`
+is `/video-channels/<name>`, so the blocker's feed does not change. Blocking the
+channel actor URL explicitly works (3 → 1) — but the settings page is
+placeholdered `@name@instance.example`, and the `RemoteVideo` view the watch page
+renders carries `domain`, `object_url` and `watch_url` and **no actor URL and no
+channel handle at all**, so there is nowhere for a viewer to copy the identity
+that would work. The block a viewer can actually make is the one that does
+nothing. This
+needs a ruling, not a patch: either the handle namespaces are unified at channel
+creation, or WebFinger answers with both links, or the block resolves an
+account's channels as well.
+
+**Two more sub-clauses of the row's procedure are unmet.** A blocked remote
+account's already-stored comments are not hidden — the remediation's own table
+only ever promised that the actor's remote VIDEOS leave six viewer-facing
+queries — and no audit row is written for a `Note` or `Follow` dropped by a
+per-account block. The second is a defensible recorded decision (a per-viewer
+control writing an audit row per dropped activity would be a spam amplifier);
+the first is a gap against the settings page's own promise that "their replies
+stay off your videos".
+
+**The rest of SC3 passes cleanly.** `otherb`'s unfollow delivered its `Undo`,
+A's row was gone within 15 s, `follower_count` went 2 → 1, and the next fan-out
+went to `viewerb`'s inbox only — `otherb`'s delivery count frozen at 19 while
+`viewerb`'s advanced to 20 (A29-F5). A's REST `follower_count` read **2** with
+`channel_follows` empty, identical to the AP collection's `totalItems` — A29
+measured 3 vs 0 (A29-F6). The 24 `federation_deliveries` `job_runs` rows
+inspected all agreed with their delivery row on `request_id`/`correlation_id`;
+the rows that are empty are empty on BOTH sides, because they are the deliveries
+queued from the WORKER process where no HTTP request is in scope — the
+projection is faithful, but `/admin/jobs` still shows an empty request id for
+every worker-queued federation delivery, which is A17's complaint about six
+other queues arriving here by a different road. `/admin/system` carries the
+`federation` component, reading `degraded` on the two block-window dead letters
+while the overall verdict stays `ok` — exactly the separation the remediation
+designed. Its
+`LastDeliveredAt` is computed in `cmd/api` and never rendered into any response,
+so the number that was added to tell a drained queue from an abandoned one is
+not actually visible to an operator.
+
+### SC4 — the comment timeline
+
+| time | event | result |
+|---|---|---|
+| 12:52:58 | signed `Create{Note}` from `commenter@:48080`, `inReplyTo` A's video object url | 202 → stored on A, `remote:true`, `author_username commenter`, `author_id null` |
+| 12:53:56 | A's creator posts a top-level comment | `Create{Note}` to both inboxes, both delivered → **B mirrors it** and renders "Comments from the origin · studioa · From 127.0.0.1:18080" |
+| 12:53:56 | A's creator replies to the remote commenter's note | both deliveries succeed, **B stores nothing** |
+| 12:55 | A's creator replies to its own top-level comment | both deliveries succeed, **B stores nothing** |
+| 12:56 | A edits the top-level comment | B's row updated in place, rendered "· edited" |
+| 12:57 | `Delete{Note}` for A's comment signed by the unrelated peer | 202, B's row survives — a stranger's retraction is refused |
+| 12:58 | A deletes the comment | B's row gone, `GET /remote-videos/{id}/comments` total 0 |
+| 13:16 | A deletes the video | B's `remote_videos` row gone and its three mirrored comments with it |
+
+The second row is the clause: **the exact delivery A29 watched succeed into a
+drop now lands, and a browser sees it.** The two "stores nothing" rows are new
+information the remediation did not state: `storeRemoteVideoNote` resolves the
+thread with `GetRemoteVideoByURL(inReplyTo)`, so **only** a Note whose
+`inReplyTo` is the video's object url is mirrored. Every reply — to a local
+comment or to a remote one — is delivered successfully and dropped silently,
+which is the same failure shape A29 found, one level down. In vidra's model
+"replying to a video" IS a top-level comment, so the clause the row names is
+met and a thread with any depth is not. `remote_video_comments` has no parent
+column, so threading is a design change rather than a patch.
+
+Authoring stays deferred, and the page now says so in its own words: "Ratings
+and saving live on the origin instance, and so does replying — the comments
+below are a copy of the origin's thread, sent here."
+
+### SC5 — signatures, outage, retry
+
+Unsigned, tampered and stolen-`keyId` activities are all **401 signature
+verification failed** on both inboxes; a spoofed actor (correctly signed by the
+peer, `actor` claiming one of B's accounts) is **400 invalid activity**; A's
+comment count was unchanged after all five.
+
+The ladder is unchanged since A29. With B's Caddy site removed so port 28080
+refuses connections — a real outage, not a 503 — a comment queued at 13:06:39
+was at `attempts=3, next_attempt_at 13:10:37` when read at 13:10:06 and at
+`attempts=4, next 13:14:47` when read at 13:11:19: attempt 4 ran at 13:10:47 and
+scheduled **+240 s**, the fourth rung of 30 → 60 → 120 → 240. B was restored at
+13:11:32 and the delivery went `delivered` at 13:14:57 with `attempts=4`. B
+holds exactly **one** copy of it.
+
+**Key rotation (clause 9).** The `rotator` peer's key was cached by A
+(`md5 84e8b557…`); the peer restarted with a fresh keypair (`md5 1be52bd3…`) and
+sent an activity signed with the new key. A answered 202, refreshed the cached
+`public_key_pem` to the new fingerprint, and APPLIED the activity — the `Undo`
+removed the follow. One bounded re-fetch on a verification failure, A29-F12
+confirmed live.
+
+### Gates
+
+`vidra-core`: `make ci` **PASS** (fmt-check, vet, migrate-lint — 140 up
+migrations clean, openapi-verify, sqlc-verify, test-race). `go vet
+-tags=integration ./...` clean. `go test -tags=integration -count=1 -p 1
+./internal/federation/... ./internal/video/... ./internal/httpapi/...
+./cmd/api/...` all **ok** against a fresh PostgreSQL 16.15 migrated to 140. No
+OpenAPI change and no migration, so no contract regen was needed and
+`vidra-user` was not modified or re-gated.
+
+This repo: `caddy validate` on the lab config; `deploy/Caddyfile` itself is
+unchanged — the run reproduced §3a rather than editing it, which is the point.
+
+### Unverified, and named rather than skipped
+
+**MIG-06's identity clause stays unverified**, unchanged and deliberately not
+faked: source identity after a migration needs actor-`id` continuity, key
+continuity or a `Move`, and `dispatchActivity` still has no arm for `Move`.
+**Interoperability** with PeerTube or Mastodon is still unverified — no
+third-party server has seen the `url` array, the `icon` Image or the `PT…S`
+duration. **TLS and real hostnames** are still unverified: the fediverse domains
+here are `host:port` literals, and `/etc/hosts` needs root. **Signed fetch** on
+the object routes is still not implemented. The `vidra-user` backed Playwright
+suites were not run.
+
+### What would flip INT-05
+
+Merging vidra-core #209 closes the private/unlisted clause, which is the only
+one of the ten that fails. The two remaining sub-clauses of the row's own
+procedure — a blocked remote account's existing content hidden for the blocking
+scope, and the handle/actor collision that makes the block address the wrong
+actor — need a ruling or a fix before the row can honestly read PASS, because
+they are the same clause (2) the original verdict named. Everything else in
+INT-05's procedure has now been measured twice and holds.
