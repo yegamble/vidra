@@ -109,12 +109,12 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | PLAY-01 Watch, seek, quality, speed, resume, PiP/theater and mobile/native playback | C U | `components/player`, HLS hook, backed hls-playback/player-settings/history | UNVERIFIED | Browser actual currentTime advance and audible track, seek, quality change and saved preferences; Chromium plus native-HLS Safari on representative ladder; original fallback when appropriate | PUB-03 → A07 |
 | PLAY-02 Canonical/legacy links, sharing, embeds, oEmbed/feed/sitemap | C U M | F01 resolved at final snapshot; resolver and imported UUID mapping now present; canonical/legacy/short/source-UUID links, timestamps, share/embed, oEmbed/feed/sitemap all proven in a real browser (A08 evidence L729–734, L901–929) | PASS | Run path guard first; follow canonical and old PeerTube/UUID/short links through edge with timestamps; verify privacy/password unlock and embed origin rules, metadata and downloadable file | REL-01, PLAY-01 → A01 then A08 |
 | PLAY-03 Private, unlisted, password, embed and download revocation | C U S | Backed video-password/embed; HTTP media auth and purge helpers; 15 copied media paths, token expiry, download-policy switch and unlisted/account-unlisted transitions proven live (A08 evidence L968–981, L917–921); native Safari, CDN-edge revocation and cached-metadata immediacy remain uncertified (L996–998) | PASS | Copy all manifest/segment/original/caption/storyboard URLs to unauthorized session; enforce token expiry, unlisted discovery exclusion and changed download policy; test account-unlisted transition | PLAY-01, SRC-02 → A08 |
-| CRT-01 Studio edit/delete/taxonomy/tags/thumbnails/chapters/storyboards | C U S | Studio/channel/taxonomy/tag/upload-thumbnail backed specs; core chapters and storyboard handlers | UNVERIFIED | Edit every supported field and reorder chapters; real frame extraction and hover sprite; fresh detail/UI fetch; delete and verify bytes/discovery vanish; source replacement retains identity | PUB-03, SRC-02 → A11 |
+| CRT-01 Studio edit/delete/taxonomy/tags/thumbnails/chapters/storyboards | C U S | Studio/channel/taxonomy/tag/upload-thumbnail backed specs; core chapters and storyboard handlers; live evidence `a11-a12-close-out` closes the physical-deletion clause (Studio delete in Chromium, then the shipped media-GC collector deleted all 20 of the deleted video's stored objects and none of the other video's 19, byte-identical by sha256) | PASS | Edit every supported field and reorder chapters; real frame extraction and hover sprite; fresh detail/UI fetch; delete and verify bytes/discovery vanish; source replacement retains identity | PUB-03, SRC-02 → A11 |
 | CRT-02 Creator/channel/video statistics are accurate and scoped | C U | Core stats/view-day rollups; user HEAD fixes previous-channel totals; two-creator dedupe/scoping/channel-switch proof (A11 evidence L1287–1295) | PASS | Two creators/channels; known views/ratings/comments; dedupe; switch channels during requests; unauthorized stats refusal; imported totals distinct from absent daily history | PLAY-01 → A11 |
 | SRC-01 Real outbox→search indexing→visible search result | M C S U | Core `searchevents`, search client/drainers; S `/internal/v1/events`; F04; one uploaded ID walked outbox→index→clicked UI result against the mandatory real service (A09 evidence L682–684) | PASS | Finish real upload/transcode, inspect outbox acknowledgement + indexed ID, issue UI query and click result; prove service used rather than SQL fallback; no seeded index substitution | PUB-03, REL-01 → A09 |
 | SRC-02 Search privacy, retries, deletion and degraded fallback | C S U | Core search hydration predicate; S idempotent events/privacy/retention; health probe; privacy/delete transitions, search-outage fallback and restart reconcile proven live (A09 evidence L685–688), opt-out clause closed by A13 (L3726–3731) | PASS | Duplicate/reorder/retry events; private/quarantine/unlisted/delete/block transitions; stop search and retain safe SQL fallback; restart/reconcile and verify history/personalization opt-out | SRC-01 → A09 |
 | SRC-03 Discovery, suggestions, trending, recommendations and history controls | C S U | S APIs/worker jobs; the three user search-discovery controls are opt-OUT (all three default true); ranked IDs rehydrated in core; live evidence `a13-suggest-trending`, `a13-recommendations-history`, `a13-optout-attribution` | PASS | Seed synthetic multi-user engagement above privacy thresholds; check filters/paging/ranking, related/home cards and suggestion bans; history delete survives reload/reconcile; opting out stops attributed collection, not only personalized serving | SRC-02 → A13 |
-| SOC-01 Follow/subscriptions, saves, playlists and watch history | C U S | Backed subscribe/subscriptions/save/playlists/history/continue-watching | UNVERIFIED | Two accounts; follow then publish notification/feed; unfollow; playlist CRUD/privacy/order/cover and playback continuation; history disable/clear and watch-later persistence | PUB-03, AUTH-02 → A12 |
+| SOC-01 Follow/subscriptions, saves, playlists and watch history | C U S | Backed subscribe/subscriptions/save/playlists/history/continue-watching; A12 library/continuation/history evidence plus live evidence `a11-a12-close-out` for the delete half of playlist CRUD (item removal with order preserved, then playlist deletion — 404 for owner, other user and anonymous, videos untouched, in the UI and over the API) | PASS | Two accounts; follow then publish notification/feed; unfollow; playlist CRUD/privacy/order/cover and playback continuation; history disable/clear and watch-later persistence | PUB-03, AUTH-02 → A12 |
 | SOC-02 Comments/replies/ratings, mentions, reports and notification preferences | C U | Backed comments/comment-replies/rating/report/notifications/notification-prefs; live three-actor evidence `a12-social-notifications`, `a12-mute-block`, `a12-ratings-reports-prefs` (mentions are not a shipped capability — recorded, not accepted) | PASS | Three actors: reply attribution, intended recipient notification, deleted/tombstoned parent, blocked/muted content; refresh unread counts/preferences and resolve report | SOC-01 → A12 |
 | MSG-01 Plaintext DM timeline, retry/read receipts/delete/report and attachments | C U | `internal/messaging`; backed messaging/message-compose; frontend P-MSG2 unfinished boxes; two-browser history/retry/receipts/delete/report and recipient attachment download proven live (A14 evidence L1477–1480, L1508–1519, L1435–1438) | PASS | Two browser contexts send/poll/read, prepend history without jumps/duplicates, retry once, receipts opt-out, delete/report; recipient downloads attachment, third party denied | AUTH-02 → A14 |
 | MSG-02 Approved 100 MiB / 30-file and office-document attachment behavior | C U | F03 closed: Composer adopted the shipped 30-file / 100 MiB / six-Office-type contract, refuses one-over selections, and real ClamAV 1.5.4 fail-closed passed EICAR and clamd-down (A14 evidence L1420–1438, L1501–1529; merged L1669) | PASS | Boundary values, 31st file and oversize refusal; document kind renders; multi-file recipient API/UI readback; configured scanner failure semantics | MSG-01, INT-04 → A14 |
@@ -189,6 +189,11 @@ dependencies unchanged (A31 and A32 still need A24); their statuses stay as
 recorded until their own evidence lands. Still unruled: the PeerTube source
 snapshot/inventory (MIG-01), source-data retention (MIG-05), the domain plan
 (MIG-06) and recovery objectives.
+
+*Later the same day:* the two rows this note left UNVERIFIED on a single clause
+each — CRT-01's physical deletion and SOC-01's playlist-delete half — were both
+proved and flipped to PASS; see §A11/A12 close-out. A11's physical-deletion
+clause leaves the open set with it.
 
 ## Deferred and decision-dependent scope — not silently removed
 
@@ -1263,7 +1268,9 @@ review these candidates; continue the next dependency-ready item separately.
 
 ## A11 Studio and statistics checkpoint — 2026-09-05
 
-**A11 OPEN — stored-byte deletion awaits collector approval.** Dependency-ready
+**A11 OPEN — stored-byte deletion awaits collector approval.** *Superseded
+later the same campaign: the approval landed and the collector was run — see
+§A11/A12 close-out, which closes CRT-01.* Dependency-ready
 from A07/A09. Observable success requires persisted Studio field/media edits,
 chapter order and real frame/sprite behavior, deletion removing media/discovery,
 and correctly attributed owner-scoped video/channel/account analytics, including
@@ -8769,7 +8776,7 @@ isolation (per-test schema or serialised packages), not in a CI gate.
 **Next action:** review and merge the four PRs, then configure the single
 required status check `ci-required` on `main` in all four repos. No merge or
 deployment was performed here.
-||||||| parent of 96a6e58 (acceptance: observability rulings — playback opt-out and audit-log retention)
+
 ## Observability rulings — playback opt-out and audit-log retention — 2026-09-08
 
 **Both of A35's open questions are now answered in code, and both were watched
@@ -8991,3 +8998,174 @@ batch** for signed-in callers (the same read the search beacon already pays;
 anonymous callers pay nothing, because `searchUserPrefs` returns early), and
 that was not measured under load, in a lab with rate limiting off. And
 `audit_log` has **no per-action retention and no export-before-delete**.
+
+## A11/A12 close-out — physical deletion and playlist delete — 2026-09-08
+
+**CRT-01 and SOC-01 both flip to PASS; A11's stopping criterion is met.** Each
+row was held open on exactly one clause. A11's was physical stored-byte deletion
+after a Studio delete, which needed the owner's approval to run the collector;
+that approval landed on 2026-09-08 for a disposable lab against
+`STORAGE_BACKEND=local` only, and this is that run. SOC-01's was the delete half
+of playlist CRUD, which nothing in this record had ever exercised. Neither
+needed a code change: both capabilities are shipped, in the API and in the UI,
+and the work here is proof, not construction. No vidra-core, vidra-user or
+vidra-search commit belongs to this slice.
+
+The lab is the usual disposable one-origin shape — a pipe-only proxy on
+127.0.0.1:8099 that drops the client's `Accept-Encoding`, in front of `node
+.next/standalone/server.js` on :3100 and a vidra-core api on :8088, with a
+second vidra-core process at `VIDRA_ROLE=worker`; native PostgreSQL 16.15 on
+55446 and redis on 56380, both fresh; core schema 135; `STORAGE_BACKEND=local`
+with `STORAGE_LOCAL_ROOT` under the scratch tree, never a bucket.
+`RATE_LIMIT_ENABLED=false` and `TRANSCODING_MIN_FREE_SCRATCH_MB=256` (this box
+had about 4 GiB free against the shipped 10 GiB floor), so this lab says nothing
+about the shipped limits or the shipped disk floor. Four real ffmpeg clips and a
+generated PNG cover; real Chromium with a separate context for creator C, other
+user U and anonymous. vidra-search was deliberately not started: playlists are
+not a search entity at all — zero `playlist` hits across its `internal/`,
+`migrations/` and `api/` — so a deleted playlist has no index to drop out of.
+That is established by grep, not assumed.
+
+**How the collector is actually run.** Two paths, and they are not equivalent.
+The scheduled one is `runMediaGCWorker`: started only in a worker-role process
+and only when `MEDIA_GC_ENABLED` is true, leader-elected so a follower skips the
+tick rather than spending the dry run, with a boot timer at five minutes and
+then a 24h ticker — both Go constants, neither an env key. There is no CLI; the
+binary's subcommands are `migrate up|version|force`. The on-demand path is
+`POST /api/v1/admin/media/gc` with `{"dry_run": false}` behind
+`requireRole(admin)`, mounted whatever `MEDIA_GC_ENABLED` says, and surfaced at
+**`/admin/media`** — not `/admin/system`, which carries an "Object storage"
+dependency row and no GC panel — as Run dry run → Purge N orphans → type
+`PURGE` → Confirm permanent purge. Knobs at their shipped defaults:
+`MEDIA_GC_ENABLED=true`, `MEDIA_GC_MAX_ORPHAN_PERCENT=25`. **There is no grace
+period**: nothing in `internal/mediagc` looks at an object's age or mtime, so a
+blob is deletable the moment its last database reference disappears. What looks
+like a grace window is only the schedule.
+
+**Object table.** Creator C uploaded two real clips into one channel; both
+transcoded to CMAF with a poster, a storyboard sprite and VTT, and a WebVTT
+caption track. Before the delete the store held **39 objects — 20 for video 1,
+19 for video 2, none unattributed**, each recorded from `video_files`,
+`captions` and `streaming_playlists` and confirmed on disk with size and sha256.
+Video 1's twenty span every family the sweep knows: the original
+(`web-videos/{id}.mp4`, 626,130 bytes,
+sha256 `f2888ea549ec613b3c0ec09e4ee8427f3f3e69ff305c4610f9dd06080c3216db`), the
+progressive rendition (`web-videos/{id}/360p.mp4`), the poster
+(`thumbnails/{id}.jpg`), the storyboard pair (`storyboards/{id}.jpg`, `.vtt`),
+the caption (`captions/{id}/en.vtt`) and thirteen under
+`streaming-playlists/{id}/` — master, the CMAF init/media/iframe playlists and
+segments, `stream.mpd`, `audio.m4a` and the 360p pair.
+
+The delete itself was the Studio's, in Chromium: sign in as C, `/studio/content`,
+the row's **Delete → "Delete?" → Confirm** two-step, `DELETE
+/api/v1/videos/{id}` **204**, the list showing only video 2 both immediately and
+after a hard reload. Readback: `videos`, `video_files`, `captions` and
+`streaming_playlists` all **0** rows for that id — a hard delete, no tombstone —
+while **all 20 objects were still on disk**. Every read for the deleted video
+404s in that window: detail, thumbnail, `storyboard.jpg`, `storyboard.vtt`,
+`captions/en`, the HLS master, a variant playlist, a CMAF segment, and the
+owner's own original download. **So an in-flight playback or segment request
+during the grace window 404s; it does not serve** — the bytes exist but every
+delivery route resolves through rows the delete removed.
+
+**The sweeps, in order.** The worker's boot dry run at 02:56:36 (before the
+delete) — `scanned 39, orphans 0`, the clean baseline. An admin dry run at
+02:58:04 — `scanned 39, orphans 20, orphan_pct 51`, and the orphan list is
+exactly video 1's twenty keys and nothing else. The worker restarted, and its
+own boot sweep at 03:03:21 logged the same counts from the scheduled path:
+`mode=dry-run scanned=39 orphans=20 orphan_percent=51 deleted=0
+breaker_tripped=false bucket_ownership=not-applicable`. Then the destructive
+sweep, driven from `/admin/media` in Chromium with `PURGE` typed into the
+confirmation: `mode=delete scanned=39 orphans=20 deleted=20
+breaker_tripped=false`, and the panel rendering "Purge complete · Deleted 20
+objects · Scanned 39 stored objects". Note that 51% is well over the 25%
+breaker and it correctly did **not** trip: `breakerFloor` is an absolute 100
+orphans, below which a ratio alone is not evidence of a wrong reference set.
+
+**After.** The store holds **19 objects: 0 for video 1, 19 for video 2.** Each
+of the twenty video-1 keys was re-checked individually on disk — none exists.
+Video 2's nineteen are **byte-identical**, size and sha256, before and after,
+and still serve: detail, thumbnail, both storyboard assets, the caption, the HLS
+master and a CMAF segment all 200. A fresh admin dry run afterwards reports
+"Scanned 19 stored objects — 0 orphans … storage is clean". Five `audit_log`
+rows carry `action=admin.media.gc`; the two worker sweeps as `actor_kind=system`
+and the three admin sweeps as `actor_kind=user` with `actor_role=admin`, every
+`reason` naming mode, scanned, orphans, percent, deleted, breaker and ownership.
+Wrong actors, throughout: U deleting C's video **404**, anonymous **401**, U on
+the GC endpoint **403**, anonymous **401**.
+
+Three of the sweep's four rails are inert here and are stated rather than
+skipped. Bucket ownership resolved to `not-applicable` because local disk is
+exempt **by design** (`OwnershipNotApplicable.AllowsDelete()` is true) — no
+adoption was needed or performed. The storage-migration interlock was wired and
+silent. The reference-mode import rail guards `AdoptBucket` only and is doubly
+irrelevant: no import ran, and local disk never asks the ownership question at
+all. Only the orphan-ratio breaker was live, and it behaved as designed.
+
+**Playlist delete.** The routes are `DELETE /playlists/{id}` and `DELETE
+/playlists/{id}/videos/{videoId}` — the item is addressed by **video** id, not
+an item id, and both are idempotent. The controls exist: `PlaylistDetailView`
+renders an owner-only "Delete playlist" button and a per-row "Remove" with
+`aria-label="Remove {title} from playlist"`. C created a public playlist of
+three videos with an uploaded cover; C, U and anonymous all saw the same three
+in order, and only C saw the delete control. C removed the **middle** item in
+the browser — `DELETE …/videos/{video 3}` **204** — leaving two in preserved
+order (video 2, video 4) immediately, after C's hard reload, and after U's and
+anonymous's hard reloads. C then pressed "Delete playlist": **204**, redirected
+to `/playlists`, and a re-read of the playlist URL gives "Playlist not found"
+for **C, U and anonymous** alike. C's own playlist list is empty, `playlists`
+and `playlist_items` hold 0 rows, and all three videos still return 200 on
+detail and on their HLS master. The same sequence repeated purely over the API
+on a second playlist: item DELETE 204 → readback 2 in order → the same item
+again 204 (idempotent) → playlist DELETE 204 → GET 404 → DELETE again 404 →
+`/me/playlists` empty. Wrong actors: U deleting C's playlist **404** and C's
+item **404**, anonymous **401** on both, with the playlist still intact at three
+ordered items after the refusals.
+
+The two halves meet at one object. Deleting a playlist leaves exactly one
+orphan — its cover at `playlist-thumbnails/{id}.png` — which the next dry run
+named on its own and the following destructive sweep deleted (two covers, two
+deleted, `scanned 57`).
+
+Recorded, not fixed:
+
+- **A local-disk purge leaves empty directories.** After the twenty objects
+  went, four empty directories remained under the deleted video's id
+  (`captions/{id}`, `web-videos/{id}`, `streaming-playlists/{id}/360p`,
+  `streaming-playlists/{id}/cmaf`). No bytes, nothing reachable, and no
+  equivalent on S3 where a key delete leaves nothing behind. Pruning them would
+  put an rmdir race into the delete path of a key/value interface for no
+  user-visible gain.
+- **A GC sweep writes no `job_runs` row.** It is audited and logged but is
+  deliberately not a `jobloop.Loop`, so it cannot appear on the admin job
+  surfaces. This slice's "audit/job-run rows" is satisfied by the audit half
+  only.
+- **There is no purge-ledger table.** `internal/httpapi/media_purge.go` is the
+  CDN-edge invalidation seam plus a prose ledger of known-unpurged cases; with
+  no CDN configured it is inert. Physical deletion is the collector's job alone.
+- **The first sweep after every boot is a dry run** — deliberate, and the admin
+  UI says so. The consequence is worth stating plainly: an install whose worker
+  restarts more often than daily never collects unattended, and only an admin
+  pressing Purge ever frees the bytes.
+- Neither delete control in `PlaylistDetailView` has a confirmation step, while
+  the Studio video delete is two-step and the GC purge demands a typed `PURGE`.
+
+What failed first: the initial browser run of the playlist timeline died on
+`page.reload({ waitUntil: "networkidle" })` — the playlist page never reaches
+network idle because the video cards keep fetching — after it had already issued
+the item DELETE, leaving the fixture at two items. The fixture was restored
+(re-add plus a `PUT` reorder back to video 2/3/4) and the whole timeline re-run
+on `domcontentloaded` with explicit waits. C's and U's 15-minute access tokens
+expired mid-lab and were re-minted. An earlier caption upload used `PUT
+/videos/{id}/captions/{lang}` and got 405; the shipped route is `POST
+/videos/{id}/captions` with `language`/`label` form fields.
+
+Still unverified, and not claimed: the **24h unattended destructive sweep** (the
+scheduled path was observed twice, both times as a process's always-dry-run
+first sweep; a real unattended delete needs a worker alive for a day), the
+collector's **S3/bucket behaviour** including ownership, adoption and the
+reference-mode interlock (the owner's approval is local-disk only and this lab
+honours it), and **multi-replica leader election** of the GC worker. Gates: no
+repo but meta was touched, so no core/user/search gate applies; meta's script
+and compose gates are unaffected by a docs-and-evidence diff and were run
+anyway. Evidence: [A11/A12 close-out](evidence/a11-a12-close-out.json).
