@@ -129,8 +129,8 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | MIG-04 Comments/playlists/tags/follows/ratings/chapters/views/taxonomy reconcile | C U S | `entities_pervideo.go`, taxonomy ledger, original dates/view-delta passes | BLOCKED | Rehearse parent-first import, restart and repeat: no doubles; compare source/local expected counts, thread/order/privacy, lifetime deltas vs no invented daily history; imported items searchable | MIG-02, MIG-03, SRC-02 → A21 |
 | MIG-05 Omitted safety/user data and instance identity have explicit disposition | M C U | Deferred families; blacklist/suspensions implemented; other moderation/history/preferences absent | BLOCKED | Inventory actual source reports/blocklists/history/preferences/provenance/settings; port each required family or retain approved archive/manual conversion; reconcile name/terms/categories and role/quota policy | MIG-01 + retention decisions → A22 |
 | MIG-06 Repeatable cutover, old links and federation continuity | M C S U | Source-authoritative mode; legacy frontend routes; source readonly design | BLOCKED | Rehearsal timed full+delta; stop source writes for final snapshot, reconcile media/data, old links and two-instance actors/follows; documented rollback while source retained; no dual-writer or public federation rehearsal | MIG-02–05, PLAY-02, REC-02 + domain plan → A23 |
-| STO-01 Local/S3 canonical storage persists and serves valid media | M C U | Storage interface, local/S3 adapters; current MinIO CI lanes | UNVERIFIED | Run PUB/PLAY on both backends; bucket creation/write/Range/content-type/space exhaustion; recreate containers and verify bytes; deployment filesystem ownership | PUB-01 → A07 local, A24 S3 |
-| STO-02 Reference-mode foreign media is protected from garbage collection | C M | `internal/mediagc` ownership marker, foreign-layout adoption refusal and keep rules | UNVERIFIED | Disposable shared bucket with foreign and Vidra keys; dry-run/adoption refusal/orphan breaker; delete imported record then sweep; foreign objects remain byte-identical | MIG-01, STO-01 → A24 |
+| STO-01 Local/S3 canonical storage persists and serves valid media | M C U | Storage interface, local/S3 adapters; current MinIO CI lanes; local half proved by A07/A08; S3 half proved by this slice on MinIO (section "A24 S3 storage on MinIO and reference-mode GC protection — 2026-09-08", evidence `a24-s3-minio.json`): app-created bucket, 19-object key layout, real Chromium CMAF playback (90 frames, 0 dropped), Range/content-type table, byte-identical objects across container recreation, a fresh api on an empty disk, and the scratch floor honoured — write refusal and bucket-quota exhaustion both surface as a bare 500 with the sentence in the log only | PASS | Run PUB/PLAY on both backends; bucket creation/write/Range/content-type/space exhaustion; recreate containers and verify bytes; deployment filesystem ownership | PUB-01 → A07 local, A24 S3. Provider run DEFERRED: no credentials for the beta bucket are on the lab machine, so a real provider's bucket creation, versioning/retention and CORS are untested and the B2 bucket-GC / versioning-billing risks stay open |
+| STO-02 Reference-mode foreign media is protected from garbage collection | C M | `internal/mediagc` ownership marker, foreign-layout adoption refusal and keep rules; proved by this slice (section "A24 S3 storage on MinIO and reference-mode GC protection — 2026-09-08", evidence `a24-s3-minio.json`): a shared MinIO bucket carrying eleven foreign objects beside three real videos, dry runs listing zero foreign keys, the 409 `foreign_media_layout` adoption refusal and its audit row, a tripped orphan breaker (150 orphans, 69 %, deleted 0) then an exact 50-object delete, and — after the imported record was deleted on a force-adopted bucket — a destructive sweep that deleted nothing, with all 11 foreign objects sha256-identical throughout | PASS | Disposable shared bucket with foreign and Vidra keys; dry-run/adoption refusal/orphan breaker; delete imported record then sweep; foreign objects remain byte-identical | MIG-01, STO-01 → A24. The foreign dataset is SYNTHETIC (planted by `docs/evidence/a24-plant-foreign-media.sh` in the importer's own key shapes); no PeerTube import ran, because MIG-01/A18 is blocked on a source database |
 | STO-03 Storage migration/copy/verification/abort and GC interlocks | C U M | `internal/storagemigration`; phase-2 plan and integration tests | UNVERIFIED | Local→MinIO copy with checksums, failures/resume and final authority switch; prove reads during movement and old-store retention; GC cannot race migration | STO-01, REC-01 → A25 |
 | INT-01 Live RTMP ingest→HLS watch→replay with moderation | M C U | `media` profile, live service/hooks/replay; backed tests simulate hook transitions | BLOCKED | Actual RTMP publisher with audio; live watch advances, authorization and stream-key rotation; terminate/max-duration/disconnect→replay; verify selected ladder/latency; hooks alone insufficient | PUB-03 + live selection/ingest plane → A26 |
 | INT-02 Direct URL import, yt-dlp platform import and channel auto-sync | M C U | Videoimport/channelsync; W2; released image yt-dlp build arg; dedicated channel-sync CI; live evidence `a27-import-sync` (a local fixture origin and an html5 extractor fixture on a two-process core: direct import stored, probed, transcoded and published with a stamped correlation id; sandboxed `resolver=ytdlp` published with h264+aac and prefilled the empty draft field; one scheduled channel sync discovered exactly one item, imported nothing on two `sync-now` runs and two scheduled runs, discovered exactly one new item after the source published one, recorded a real outage as `failed` with a safe reason and recovered with no re-import; a SIGKILLed worker was requeued by the lease sweep and retried to success with no duplicate and the correlation id preserved across processes; seven SSRF probes refused with zero stored bytes, including a public redirector to a private address that imported before this slice; and every disabled/boot gate refused once) | PASS | Local fixture origin/file and extractor fixture; scheduled channel discovers new item once; restart/retry/SSRF/disabled gates; verify released image actually contains executable | PUB-03 → A27. Released-image proof is `ghcr.io/yegamble/vidra-core:v0.6.2` (amd64) carrying `/usr/local/bin/yt-dlp` 2026.07.04 + Python 3.14.7 + ffmpeg 8.1.2 from the `YTDLP_VERSION` build arg — that image PREDATES the fixes in core#184, so the released image is proven to contain the executable but not to run this behaviour. Follow-ups, none blocking: the three boot-capability 503s (`resolver=ytdlp`, sync create, sync-now) are bare `echo.NewHTTPError` so the 5xx scrubber replaces their sentences with "an unexpected error occurred" (A17's open item, measured here on two more routes); URL import has a hard 60-second budget for the WHOLE download (`videoimport.fetchTimeout` is the `http.Client.Timeout`), so `UPLOAD_MAX_SIZE` is not the real ceiling; a failed sync reschedules at the plain `CHANNEL_SYNC_INTERVAL` with no backoff; `channel_syncs` is still unprojected into `job_runs` and has no admin surface (this slice added only a WARN line); a runtime limit change binds the worker only after its settings-poll interval; the channel-sync dedupe key falls back to the entry URL when the extractor reports no id; and the explicit `resolver=ytdlp` path is still not dial-pinned by design. The `channel-sync-backed` lane was NOT run against this branch (it needs Docker Compose); S3 was not exercised |
@@ -10039,3 +10039,266 @@ next real restore rehearsal is what would confirm that the site keeps serving
 through a refusal.
 
 [Sanitized evidence](evidence/recovery-hardening.json).
+## A24 S3 storage on MinIO and reference-mode GC protection — 2026-09-08
+
+**STO-01 and STO-02 both flip to PASS.** STO-01's local half was proved by A07
+and A08; this is its S3 half, run against a real MinIO with `STORAGE_BACKEND=s3`
+and presign deliberately OFF, so what is exercised is the api-proxy delivery
+path and nothing else. STO-02 had never been exercised at all: its procedure
+needs a bucket holding both Vidra media and another system's, which only a
+reference-mode PeerTube import produces, and that needs a live source database
+(MIG-01/A18 is blocked on exactly that). The foreign half of the dataset is
+therefore **synthetic** — objects and rows written in the key shapes taken from
+`internal/peertubeimport/sourcestorage.go` by
+[the planter](evidence/a24-plant-foreign-media.sh) — and the record says so
+rather than implying an import ran. The backlog item's "selected provider" half
+is **deferred**: no credentials for the beta bucket are on this machine. No
+vidra-core, vidra-user or vidra-search commit belongs to this slice; both
+capabilities are shipped and the work here is proof, not construction. Complete
+result: [`a24-s3-minio.json`](evidence/a24-s3-minio.json).
+
+The lab is the usual disposable one-origin shape — a pipe-only proxy on
+127.0.0.1:8099 that drops the client's `Accept-Encoding`, in front of `node
+.next/standalone/server.js` on :3100 and a vidra-core api on :8088, with a
+second vidra-core process at `VIDRA_ROLE=worker`; native PostgreSQL 16.15 on
+55450 and redis on 56390, both fresh; core built from `main` `0f223b4`, schema
+135; frontend built on Node 26.8.1; real Chromium. The object store is one
+`mirror.gcr.io/minio/minio` container
+(`sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e`) on a
+named volume at 127.0.0.1:9110, read back with `mc`
+RELEASE.2025-08-13T08-35-41Z run inside that container's network namespace.
+`STORAGE_S3_FORCE_PATH_STYLE=true`, `STORAGE_S3_USE_SSL=false`, region
+`us-east-1`, bucket `vidra-a24`. Lab deviations, recorded rather than hidden:
+`RATE_LIMIT_ENABLED=false`; `VIDRA_ALLOW_PLAIN_HTTP=true` +
+`VIDRA_TLS_MODE=plain-http`, without which the api refuses a plain-http
+`PUBLIC_BASE_URL` in production; and `TRANSCODING_MIN_FREE_SCRATCH_MB=256`
+against the shipped 10 GiB floor on a box with 12.4 GiB free, so this lab says
+nothing about the shipped floor's sizing. **MinIO stands in for the recorded B2
+hazards but does not retire them**: it has no equivalent of B2's separately
+granted `deleteFiles` entitlement, and no versioning or object lock was
+configured, so "B2 bucket-GC destruction" and "B2 versioning double-billing"
+remain open against a real provider.
+
+**The bucket was created by the app.** `storage.S3.EnsureBucket` made it at
+boot; finding it empty, boot claimed it — `media gc: claimed the object store
+with an ownership marker` `marker_key=.vidra/owner`. No `mc mb` was needed.
+
+**Key layout.** One real ffmpeg clip (320×240, 6 s, h264+aac, 80,414 bytes,
+sha256 `84b1b060…e576f7`) uploaded through the Studio in Chromium produced
+**nineteen objects**. The resumable session staged a chunk at
+`uploads/<upload_id>/0` and removed it on finalize.
+
+| family | key | count |
+|---|---|---|
+| original | `web-videos/<video_id>.mp4` | 1 |
+| progressive rendition | `web-videos/<video_id>/240p.mp4` | 1 |
+| poster | `thumbnails/<video_id>.jpg` | 1 |
+| storyboard | `storyboards/<video_id>.jpg`, `.vtt` | 2 |
+| caption | `captions/<video_id>/<lang>.vtt` | 1 (added separately) |
+| HLS master | `streaming-playlists/<video_id>/master.m3u8` | 1 |
+| CMAF tree | `streaming-playlists/<video_id>/cmaf/{init-0,init-1}.mp4`, `chunk-{0,1}-*.m4s`, `media_{0,1}.m3u8`, `iframe-0.m3u8`, `iframe-0.mp4`, `stream.mpd` | 10 |
+| rung sources + audio | `streaming-playlists/<video_id>/240p/{video,video-only}.mp4`, `audio.m4a` | 3 |
+| ownership marker | `.vidra/owner` — **outside every swept prefix** | 1 per bucket |
+
+Playback in Chromium is real MSE off that tree: the master, both media
+playlists, both init segments and three CMAF chunks fetched over the api-proxy
+path, then **unmuted decode to 5.963 s of 6.014 s, readyState 4, 320×240, 90
+video frames, 0 dropped**. The byte stream served over the proxy, the object
+read back with `mc` and the ffmpeg fixture all sha256 to the same value.
+
+**Range and content types.** Everything that is a stored object honours Range;
+the two playlist families do not, and that is not a defect:
+
+| path | content-type | Accept-Ranges | `Range: bytes=0-99` |
+|---|---|---|---|
+| `/original` | `video/mp4` | bytes | 206, `content-range: bytes 0-99/80414` |
+| `/hls/master.m3u8` | `application/vnd.apple.mpegurl` | — | **200** |
+| `/hls/cmaf/media_0.m3u8` | `application/vnd.apple.mpegurl` | — | **200** |
+| `/hls/cmaf/init-0.mp4` | `video/mp4` | bytes | 206, `bytes 0-99/828` |
+| `/hls/cmaf/chunk-0-00001.m4s` | `video/mp4` | bytes | 206, `bytes 0-99/162691` |
+| `/thumbnail`, `/storyboard.jpg` | `image/jpeg` | bytes | 206 |
+| `/storyboard.vtt` | `text/vtt` | bytes | 206 |
+| `/captions/en` | `text/vtt; charset=utf-8` | bytes | 206 |
+| `/download/original` | `video/mp4` + `content-disposition: attachment; filename=a24-clip.mp4` | bytes | 206 |
+
+The playlists answer 200 because they are **rewritten in memory** — the served
+master carries a `?v=dl9t7leynydc` cache tag on every child URI that the stored
+object does not — so they never reach `http.ServeContent`. **CMAF segments ship
+as `video/mp4`, not `video/iso.segment`**, init segments included. Range works
+on S3 at all because `storage.S3.Open` returns a seekable reader whose seeks
+become ranged GETs, which `serveStoredObjectNamed` hands to `ServeContent`.
+
+**Two refusals, and both are a bare 500.** A MinIO user holding only
+`s3:ListBucket`/`s3:GetBucketLocation` on the bucket and `s3:GetObject` on its
+objects **boots the api and the worker normally** — there is no write probe on
+the boot path. `storage.ProbeWrite` exists, and its own comment cites a real
+migration that ran three minutes on such a key before failing 1,321 uploads, but
+`main()` only calls `EnsureBucket`, which is a HeadBucket. (MinIO's canned
+`readonly` policy is narrower still and *does* abort boot, with `storage: s3:
+check bucket "vidra-a24": Access Denied.` — that is `EnsureBucket` failing, a
+different failure from a write refusal.) The upload then returns **HTTP 500
+`internal_error` / "an unexpected error occurred"**; the operator sentence
+`storage: s3: put "web-videos/<id>.mp4": Access Denied.` reaches the server log
+only. Space exhaustion behaves identically: with `mc quota set … --size 1100k`
+against 1.0 MiB already stored, the upload is another bare 500 whose log line
+says `Bucket quota exceeded`. **Neither leaves a half-written row**: the video
+stayed `draft` with 0 `video_files`, 0 `streaming_playlists`, 0 objects under
+its id, and the instance's counted bytes were unchanged. Raising the quota just
+enough for the original to land moved the wall into the worker, which is where
+the operator can actually see it: `job attempt failed; a bounded retry was
+scheduled` `queue=transcode_jobs`, attempts 1–3, `error="storage: s3: put
+\"[redacted-key]\": Bucket quota exceeded"` — the key is redacted (core#190) and
+the cause survives. Clearing the quota let the next bounded retry finish the
+whole CMAF tree with no operator action.
+
+**Persistence.** With 39 objects stored (two videos plus the marker), every one
+was read back and sha256'd, the container was `docker rm -f`'d and re-run from
+the same image on the same named volume, and all 39 checksums came back
+**identical, zero diff**. The api and worker were then killed and restarted from
+a **brand-new empty working directory** — which was still empty after boot: no
+`./data`, no local media root. That api served the whole catalogue (original
+200/80,414, master 200/475, chunk 200/162,691, thumbnail, both storyboard
+assets), the served original still hashed to `84b1b060…`, and the watch page
+decoded 92 frames with a completed seek to 3.5 s. **This is OPS-01's "no
+host-local media assumption" precondition, met on S3, and A34 should treat it as
+established.**
+
+**Filesystem ownership.** In S3 mode the only local path that stays load-bearing
+is the **transcode scratch**: `cmd/api` points the scratch guard at
+`os.TempDir()`, and the prod overlay sets `TMPDIR=/scratch` for *both* `api` and
+`worker`, backed by the `transcode_tmp` volume (nine `MkdirTemp`/`CreateTemp`
+sites). `STORAGE_LOCAL_ROOT` still renders as `/app/data/media` and
+`media_data:/app/data` is still mounted, but nothing writes there — the empty
+working directory is the proof. Expected owner: both application images run as
+non-root **uid 10001** (`vidra-core/Dockerfile:39,56`), and the rendered
+`prep-volumes` one-shot runs as `user: "0:0"` to `mkdir -p /app/data/media
+/scratch …; chown 10001:10001 …; chmod 0750 …`, because Docker would otherwise
+create each named-volume mount point `root:root 0755` and the first
+`os.MkdirTemp` in `/scratch` would fail. The rendered `worker` (profile
+`worker`) carries `VIDRA_ROLE=worker`, `TMPDIR=/scratch`, `STORAGE_BACKEND=s3`
+and the same two volumes; the rendered `migrate` still has **no volumes at
+all**. The floor is honoured for real: a worker restarted with
+`TRANSCODING_MIN_FREE_SCRATCH_MB=64000` logged `transcode: deferring all jobs,
+scratch space below the floor` `free_bytes=13331509248
+min_free_bytes=67108864000`, claimed nothing, and produced no
+`streaming_playlists` row; restoring 256 MiB drained the same job to a ready tree.
+
+**The collector's ownership rule, in three layers.** (1) **Prefix scoping** —
+the sweep lists only `web-videos`, `thumbnails`, `storyboards`, `captions`,
+`streaming-playlists`, `playlist-thumbnails`; `videos/`, `foreign/`, `avatars/`,
+`uploads/` and `.vidra/` are never enumerated, which is why a bucket of 70
+objects scans as 66. (2) **Minted-key shape** (`mediagc.isMintedKey`) — inside a
+swept prefix the segment below the prefix, cut at its **first** dot, must parse
+as a UUID; if it does not, the object was laid out by another system and is
+**kept**, and this test runs *before* every per-prefix question, each of which
+would otherwise answer "orphan". (3) **Bucket ownership** — `.vidra/owner`
+holding this install's identity gates **destructive** sweeps only; a dry run is
+always allowed, because reporting what would be deleted from a store that is not
+ours is how an operator finds out it is not ours. Adoption has its own interlock:
+`CountForeignLayoutMediaRefs` counts `video_files` under `web-videos/` that are
+not under `web-videos/<their own video_id>`, plus `streaming_playlists` whose
+`master_key` is not under `streaming-playlists/<their own video_id>/`.
+
+**The sweep timeline.** The planted dataset is eleven objects — five referenced
+by the synthetic import's rows (`web-videos/deadbeef-…-720.mp4`,
+`captions/deadbeef-…-en.vtt`, and three under
+`streaming-playlists/hls/aaaaaaaa-…/`), three inside swept prefixes that **no
+row references at all** (`…bbbbbbbb-…-1080.mp4`, `…-fr.vtt`,
+`streaming-playlists/hls/bbbbbbbb-…/master.m3u8`), and three outside every swept
+prefix (`videos/…/source.mp4`, `foreign/site-backup/archive.tar`,
+`avatars/users/….png`). The split is deliberate: a single fixture would prove
+whichever rail happened to fire first.
+
+| # | action | result |
+|---|---|---|
+| 1 | baseline dry run, three real videos | scanned 57, orphans 0, ownership `owned` |
+| 2 | plant the foreign dataset | foreign-layout refs 0 → **2** |
+| 3 | dry run | scanned **65** (57 + the 8 inside swept prefixes), **orphans 0** — not one foreign key, including the four nothing references |
+| 4 | delete `.vidra/owner`, restart both processes | boot: *"this bucket holds objects but carries no ownership marker … destructive sweeps are disabled until an admin adopts it"*; `GET /admin/media/gc` → `bucket_ownership: unowned` |
+| 5 | destructive sweep on the unowned bucket | `mode: dry-run`, `forced_dry_run: true`, `forced_dry_run_reason: bucket_ownership`, deleted 0 |
+| 6 | `POST /admin/media/gc/adopt-bucket {}` | **409 `foreign_media_layout`**; audit `admin.media.gc.adopt_bucket` **failure** `reason=foreign_layout_media` |
+| 7 | `…/adopt-bucket {"force":true}` (the shipped override) | 200 `{bucket_ownership:"owned", marker_key:".vidra/owner"}`; audit **success** `reason="ownership=owned forced=foreign_layout_media"` |
+| 8 | plant 150 Vidra-**minted** orphans, destructive sweep | scanned 215, orphans 150, **69 %**, `breaker_tripped: true`, **deleted 0**, zero foreign keys in the list |
+| 9 | remove 100 planted orphans by hand, destructive sweep | scanned 115, orphans 50, 43 %, breaker false, **deleted 50** — the deleted set was *exactly* the 50 remaining planted keys |
+| 10 | `DELETE /videos/{imported}` | 204; `videos`/`video_files`/`captions`/`streaming_playlists` all 0 for that id; foreign-layout refs 2 → **0** |
+| 11 | destructive sweep with the imported record gone | scanned 65, **orphans 0, deleted 0** |
+| 12 | worker restart, scheduled boot sweep | `mode=dry-run scanned=65 orphans=0 ownership=owned` — the scheduled path agrees with the on-demand one |
+| 13 | add a real caption to a Vidra video | `captions/<video_id>/en.vtt`; scanned 66, orphans 0 |
+
+Step 11 is the row's central promise and it is the one worth stating plainly:
+deleting the imported record removed the **only** rows that referenced those
+five foreign objects, and the very next destructive sweep — on a bucket this
+install had been **force-adopted** into owning, with the reference-mode
+interlock deliberately overridden — found nothing to delete. All **11 of 11**
+foreign objects are sha256-identical at three separate points: before any sweep,
+after the destructive 50-object sweep, and after step 11.
+
+The exact refusal texts, since they are the operator-facing artefact: the
+adoption 409 reads *"this instance references media stored under another
+system's key layout, so the object store may still belong to a live instance (a
+reference-mode import points at the source's own bucket). Adopting it would let
+media garbage collection delete that instance's files. Re-send with force=true
+only once the source instance is retired or its media has been copied across"*;
+the unowned-boot warning names both `.vidra/owner` and `POST
+/api/v1/admin/media/gc/adopt-bucket`.
+
+Thirteen `admin.media.gc*` audit rows: the two worker sweeps as
+`actor_kind=system`, the eleven admin actions as `actor_kind=user
+actor_role=admin`, each `reason` naming mode, scanned, orphans, percent, deleted,
+breaker and ownership. Note that a breaker-tripped delete audits as
+`mode=dry-run … breaker=true`, because the reported mode is the mode that
+actually ran. Wrong actors throughout: `POST /admin/media/gc` and
+`…/adopt-bucket` are **401** anonymous and **403** for both the regular user U
+and creator C; `GET /admin/media/gc` likewise. `/admin/media` in Chromium
+rendered "Automatic daily sweep: On — set at boot via `MEDIA_GC_ENABLED`",
+"Orphan-ratio breaker 25%", "Storage ownership: owned", and a dry run reporting
+"Scanned 65 stored objects — 0 orphans to delete · Storage: owned".
+
+**Gates.** Only this repo changed. `bash -n` and `shellcheck` on the planter
+pass; `docker compose -f docker-compose.yml -f docker-compose.prod.yml
+--env-file <filled> config -q` passes; `python3 -m unittest discover -s tests -p
+'*_test.py'` is 34 tests OK with zero skips. In vidra-core (unmodified, clean on
+`main`) `go test ./internal/mediagc/... ./internal/storage/...` is ok, and the
+S3 integration lane run against this MinIO —
+`S3_TEST_ENDPOINT=127.0.0.1:9110 go test -tags=integration
+./internal/storage/...` — is **53 PASS**, including the thirteen S3 cases
+(round-trip, overwrite, exists/delete, not-found, ServeContent Range,
+temp-download fallback, `DeletePrefix`, `ListKeys`, presign response-header
+pinning, key validation, not-a-`PathProvider`, reader size, reader stays
+seekable).
+
+**Unverified, and named rather than skipped.** The **selected-provider half of
+A24** — no beta-bucket credentials are on this machine, so a real provider's
+bucket creation, versioning/retention and CORS are untested, and the two B2
+risks stay open. vidra-user's `e2e-backed (s3)` lane was not executed (it needs
+Docker Compose); no vidra-user file changed, so it is unaffected but unrun.
+`playlist-thumbnails/<playlist_id>.<ext>` held no object here, so that swept
+prefix is covered by code reading only. And the foreign dataset is synthetic: no
+PeerTube import ran.
+
+**Findings, none blocking.** A bucket write refusal and a bucket-full refusal are
+both a bare 500 `internal_error` — the same class as A17/A27's bare
+`echo.NewHTTPError` 503s the 5xx scrubber eats, now measured on the upload path.
+There is **no write probe on the boot path**, so an instance boots green on a
+credential that cannot store a byte. The api's request logger writes the full
+storage key into its error line (`storage: s3: put "web-videos/<uuid>.mp4"`)
+where the worker's job logger redacts it — the api-side half of A35's open
+"core still logs `object_key`/`storage_key`" item. `docs/evidence/*.sh` is
+linted by nothing in meta CI (the lint loop covers `bootstrap.sh`, `install.sh`,
+`tests/*.sh`, `deploy/*.sh`), so this planter was linted by hand; A39 closed
+exactly that gap for `tests/`. For the items downstream: **A32** should know the
+presign seam is live and off (`direct object delivery available … enable with
+the delivery_presign_enabled instance setting`) and that response-header pinning
+already passes against a path-style endpoint — what it still needs is a real
+cross-origin bucket's CORS. **A33** should know every media response here
+carries `cache-control: private` (3600 s original, 300 s images, 0 on the HLS
+tree), so nothing in the api-proxy path is shared-edge cacheable as shipped, and
+that the playlist rewrite stamps a `?v=<tag>` on every child URI — the handle a
+purge would key on. **A34** should take the no-host-local-media precondition as
+established above.
+
+The lab was torn down: the MinIO container and its volume, the throwaway
+Postgres cluster and redis, the four lab accounts and their media, and the
+read-only MinIO user and its policy. The `mirror.gcr.io/minio/minio` and
+`mirror.gcr.io/minio/mc` images are kept. Credentials, raw logs and the media
+fixture stay private under `/tmp/vidra-a24-r1`; nothing from it is committed.
