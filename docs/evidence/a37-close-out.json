@@ -1,0 +1,662 @@
+{
+  "item": "A37",
+  "register_row": "REC-02",
+  "verdict": "PASS \u2014 a sealed fixture restored on a replacement host decrypts and authenticates",
+  "date": "2026-09-08",
+  "held_open_clause": "decryption of a restored sealed fixture (A37 checkpoint, 2026-09-05) \u2014 now proven",
+  "lab": {
+    "shape": "two disposable compose projects on one arm64 macOS host: -p a37src (the host that dies) and -p a37dst (the replacement), non-default ports api 19080 / frontend 13100, Caddy on 80/443 (fixed by the overlay), VIDRA_TLS_MODE=plain-http, STORAGE_BACKEND=local, bundled Postgres 18 + Redis 8",
+    "meta_checkouts": "two throwaway clones of this repo, each with its own nested vidra-core / vidra-search / vidra-user clones from scratch-dir bare mirrors, so deploy.sh's checkout pinning (AGENTS.md rule 3) was real; the architect's nested checkouts were never touched",
+    "images": "built from current main with `docker build --pull=false` and tagged v0.6.3-a37; served to both stacks from a local OCI registry on 127.0.0.1:5001 via VIDRA_IMAGE_REGISTRY (every prod service carries pull_policy: always)",
+    "sources": {
+      "vidra-core": "0f223b4b287e24cc0b932cb9e50bdb9306dc27c1",
+      "vidra-search": "1f8b85425e7d4dbb039edca56850282df9b93c6d",
+      "vidra-user": "721190f4d3c6a4a69eb173583b93423eeacf7bfc",
+      "meta": "5fbf09e"
+    },
+    "image_digests": {
+      "vidra-core:v0.6.3-a37": "sha256:c3e7cb0b878716715474fa591835b40f63edd1c53186f4d0018a26658d641710",
+      "vidra-search:v0.6.3-a37": "sha256:9f7b4762c4cc325640413257864e50830d10c68c992779183639b2708a10f406",
+      "vidra-user:v0.6.3-a37": "sha256:1bf0f806a5338d2ddc19f61521f5a79b798384f7ee36f401b1ecdbb7f04fd973",
+      "vidra-core:v0.6.3-a37lowmig": "sha256:2dd8ae3b5b00fa1168c8d89d286d300b63bde09a9e5c35b99ef68a71af5037a4"
+    },
+    "scripts_unmodified": {
+      "deploy/backup.sh": "52b832686ac604dfbfb61230338352ec2c639c389a15eac06005fd704e32d702",
+      "deploy/restore.sh": "c7ad2af774cacfd6e0be728f708f7f54737850d0fb60d1aa51747b7f1ea9ac2e",
+      "note": "identical in the repo, the source tree and the replacement tree"
+    },
+    "ledgers": {
+      "core": "135|false",
+      "search": "18|false"
+    }
+  },
+  "sealed_fixture": {
+    "kek": "MFA_KEY_KEK set on the source stack (base64 of 32 bytes); the stored TOTP secret is enc: ciphertext, 84 chars",
+    "stored_prefix": "enc:",
+    "ciphertext_md5_source": "6dd9bb5b4265d6aa03ba305c537cad3e",
+    "ciphertext_md5_replacement": "6dd9bb5b4265d6aa03ba305c537cad3e",
+    "identical": true,
+    "kek_travelled_in": "the config archive (env/production.env), md5 of the value identical on both hosts",
+    "source_baseline": {
+      "password_only": {
+        "handed_out_session": false,
+        "http": 200,
+        "keys": [
+          "mfa_required",
+          "mfa_token"
+        ]
+      },
+      "challenge": {
+        "body": null,
+        "has_token": true,
+        "http": 200
+      }
+    },
+    "replacement_proof": {
+      "password_only": {
+        "handed_out_session": false,
+        "http": 200,
+        "keys": [
+          "mfa_required",
+          "mfa_token"
+        ]
+      },
+      "challenge": {
+        "body": null,
+        "has_token": true,
+        "http": 200
+      },
+      "session": {
+        "http": 200,
+        "username": "a37totp"
+      }
+    }
+  },
+  "capture": {
+    "quiesced": "api, search and frontend stopped before the dump and the media snapshot",
+    "stamp": "20260908T074556Z",
+    "backup_sh_exit": 0,
+    "backup_sh_seconds": 0.93,
+    "media_snapshot_seconds": 0.49,
+    "archives": {
+      "media_data-20260908T074556Z.tar.gz": {
+        "bytes": 3257833,
+        "sha256": "c158eb97a3b474106c785e4ce7a9af30a32cd06cb50552e381994b42b9da7baf",
+        "mode": "0o600"
+      },
+      "vidra-20260908T074556Z.dump.gz": {
+        "bytes": 63029,
+        "sha256": "02e9b4b47f6829bd420a315772cd6b517273acfb714a537fb0eb444be72b05fe",
+        "mode": "0o600"
+      },
+      "vidra-config-20260908T074556Z.tar.gz": {
+        "bytes": 32740,
+        "sha256": "5d3377e343838eceffc830bf2c095aa9ef16c47ae642ac450313d4b9d99689b0",
+        "mode": "0o600"
+      }
+    }
+  },
+  "offsite": {
+    "bucket": "vidra-acceptance-20260905-a36",
+    "prefix": "a37-close-out/",
+    "transport_up": "b2 CLI (native B2 protocol) over the machine's existing account authorization",
+    "client_encryption": "rclone crypt (RCLONE\\x00\\x00 header verified, obfuscated object names)",
+    "upload_path": "deploy/backup.sh's own BACKUP_RCLONE_REMOTE branch, unmodified, writing to the crypt remote; the media tar rode the same remote",
+    "upload_seconds": 3.49,
+    "server_side_encryption": "SSE-B2 / AES256, bucket allPrivate",
+    "objects": [
+      {
+        "object_key": "a37-close-out/efnvdhv9boi2fgupj9ib1gil5k/a9d32il4g1vh3r4d043ubp36h3o96ur3emc11g78a5m5q6r59jiovlub3c35m23h2rd7v2d0se854",
+        "remote_size": 3258665,
+        "remote_content_sha1": "15e05e46fc611f6bd77f495942e3585519a24d9b",
+        "remote_sse": {
+          "algorithm": "AES256",
+          "mode": "SSE-B2"
+        },
+        "local_size": 3258665,
+        "local_sha1": "15e05e46fc611f6bd77f495942e3585519a24d9b",
+        "matches": true
+      },
+      {
+        "object_key": "a37-close-out/efnvdhv9boi2fgupj9ib1gil5k/hccduipjm4qd5nasgfekht0h1ika7j3g2k4ml8jskp907b6kb6og65dq1d0togjvaisphkkvsmf9u",
+        "remote_size": 32788,
+        "remote_content_sha1": "cd7e93c089f33a6fb5c0686eab0f74fb1c6991e2",
+        "remote_sse": {
+          "algorithm": "AES256",
+          "mode": "SSE-B2"
+        },
+        "local_size": 32788,
+        "local_sha1": "cd7e93c089f33a6fb5c0686eab0f74fb1c6991e2",
+        "matches": true
+      },
+      {
+        "object_key": "a37-close-out/efnvdhv9boi2fgupj9ib1gil5k/p0i3ma15otmo15609uukc03j30d1u4gs98cskhefmb2p92dij0n0",
+        "remote_size": 63077,
+        "remote_content_sha1": "c341b297be14600830b3381780cd91182c738392",
+        "remote_sse": {
+          "algorithm": "AES256",
+          "mode": "SSE-B2"
+        },
+        "local_size": 63077,
+        "local_sha1": "c341b297be14600830b3381780cd91182c738392",
+        "matches": true
+      }
+    ],
+    "object_key_map": [
+      {
+        "object_key": "a37-close-out/efnvdhv9boi2fgupj9ib1gil5k/a9d32il4g1vh3r4d043ubp36h3o96ur3emc11g78a5m5q6r59jiovlub3c35m23h2rd7v2d0se854",
+        "ciphertext_bytes": 3258665,
+        "plaintext_name": "media_data-20260908T074556Z.tar.gz",
+        "plaintext_bytes": 3257833
+      },
+      {
+        "object_key": "a37-close-out/efnvdhv9boi2fgupj9ib1gil5k/hccduipjm4qd5nasgfekht0h1ika7j3g2k4ml8jskp907b6kb6og65dq1d0togjvaisphkkvsmf9u",
+        "ciphertext_bytes": 32788,
+        "plaintext_name": "vidra-config-20260908T074556Z.tar.gz",
+        "plaintext_bytes": 32740
+      },
+      {
+        "object_key": "a37-close-out/efnvdhv9boi2fgupj9ib1gil5k/p0i3ma15otmo15609uukc03j30d1u4gs98cskhefmb2p92dij0n0",
+        "ciphertext_bytes": 63077,
+        "plaintext_name": "vidra-20260908T074556Z.dump.gz",
+        "plaintext_bytes": 63029
+      }
+    ],
+    "integrity": "B2's own contentSha1 for each of the three objects matches the local ciphertext SHA-1 byte for byte",
+    "retrieval": {
+      "status": "BLOCKED",
+      "mechanism": "B2 hands out downloadUrl https://f005.backblazeb2.com for this account's cluster and that name is NXDOMAIN from this host (f000/f001/f004 resolve; s3.us-east-005.backblazeb2.com resolves). Every b2 CLI download therefore fails with UnknownHost. The A36 recipe avoided this by using the S3 endpoint.",
+      "why_the_s3_path_was_unavailable": "the A36 run's private credentials are gone from this machine (/tmp/vidra-a36-b2 was cleaned) and minting a replacement bucket-scoped key was denied by the environment's permission classifier",
+      "missing_variables": [
+        "AWS_ACCESS_KEY_ID (the B2 bucket-scoped application key id \u2014 'id' in A36's private-key.json)",
+        "AWS_SECRET_ACCESS_KEY (its secret \u2014 'key' in A36's private-key.json)",
+        "rclone [b2s3] access_key_id / secret_access_key (same pair, in A36's private-rclone.conf)",
+        "rclone [encrypted] password / password2 (A36's crypt key material; a fresh pair was generated for THIS lab archive)"
+      ],
+      "substitute": "the restore input was produced by decrypting the very ciphertext whose bytes B2 attests it holds (contentSha1 match above), into a fresh directory with a second crypt remote"
+    },
+    "decrypt_seconds": 0.21,
+    "recovered_archives": {
+      "media_data-20260908T074556Z.tar.gz": {
+        "bytes": 3257833,
+        "sha256": "c158eb97a3b474106c785e4ce7a9af30a32cd06cb50552e381994b42b9da7baf",
+        "matches": true
+      },
+      "vidra-20260908T074556Z.dump.gz": {
+        "bytes": 63029,
+        "sha256": "02e9b4b47f6829bd420a315772cd6b517273acfb714a537fb0eb444be72b05fe",
+        "matches": true
+      },
+      "vidra-config-20260908T074556Z.tar.gz": {
+        "bytes": 32740,
+        "sha256": "5d3377e343838eceffc830bf2c095aa9ef16c47ae642ac450313d4b9d99689b0",
+        "matches": true
+      }
+    },
+    "restore_list": {
+      "pg_restore_l_exit": 0,
+      "toc_lines": 760,
+      "table_data_entries": 115,
+      "carries": [
+        "public.users",
+        "public.videos",
+        "public.user_mfa",
+        "public.comments",
+        "public.instance_settings",
+        "public.schema_migrations",
+        "public.vidra_search_migrations",
+        "search.documents"
+      ]
+    },
+    "config_archive_members": [
+      "env/production.env",
+      "deploy/Caddyfile.local"
+    ],
+    "media_archive_files": 36,
+    "cleanup": {
+      "command": "b2 rm --recursive --versions b2://vidra-acceptance-20260905-a36/a37-close-out",
+      "readback_objects_including_versions": 0,
+      "a36_set_untouched_objects": 9
+    }
+  },
+  "recovery": {
+    "carried_onto_the_replacement_host": [
+      "the three offsite archives",
+      "the rclone crypt key material the runbook says an operator keeps off the host"
+    ],
+    "timeline_seconds": {
+      "tree_clone": 9.284,
+      "config_extract": 0.034,
+      "datastores_up": 0.712,
+      "media_extract": 0.74,
+      "postgres_ready": 2.253,
+      "restore_sh": 15.028,
+      "first_login": 0.332
+    },
+    "total_seconds": 28.383,
+    "earlier_measurement_seconds": 970.73,
+    "restore_sh_exit": 0,
+    "preflight": [
+      "core: dump schema 135 matches what VIDRA_CORE_TAG=v0.6.3-a37 carries \u2014 nothing to apply.",
+      "search: dump schema 18 matches what VIDRA_SEARCH_TAG=v0.6.3-a37 carries \u2014 nothing to apply."
+    ],
+    "verify_blobs": "media consistency: every object the restored database references is present",
+    "census_source": {
+      "label": "source-seeded",
+      "captured_at": "2026-09-08T07:41:44Z",
+      "project": "a37src",
+      "readyz_http": 200,
+      "ledgers": {
+        "core": "135|false",
+        "search": "18|false"
+      },
+      "counts": {
+        "users": 4,
+        "channels": 1,
+        "videos": 2,
+        "comments": 1,
+        "playlists": 1,
+        "playlist_items": 1,
+        "follows": 1,
+        "video_renditions": 2,
+        "transcode_jobs_done": 2,
+        "instance_settings": 2,
+        "totp_enrollments_enabled": 1,
+        "mfa_recovery_codes": 10,
+        "search_documents": 2,
+        "media_files": 36
+      },
+      "fingerprints": {
+        "users": "00974d12a5970a2edf55eca9f329c2df",
+        "videos": "9e6d3c517ad38b88615ec6d64a88e886",
+        "comments": "dff1efd8a973f471c9acfa2d46b3c721",
+        "channels": "277a336bb67bf7308358596c8d83ce3a",
+        "media_tree": "70253f2c73ab28db751ca66316725c77",
+        "sealed_totp_ciphertext": "6dd9bb5b4265d6aa03ba305c537cad3e",
+        "sealed_prefix": "enc:",
+        "instance_settings": "d15ac5718738612befd26306d615a147"
+      }
+    },
+    "census_replacement": {
+      "label": "replacement-final",
+      "captured_at": "2026-09-08T07:58:03Z",
+      "project": "a37dst",
+      "readyz_http": 200,
+      "ledgers": {
+        "core": "135|false",
+        "search": "18|false"
+      },
+      "counts": {
+        "users": 4,
+        "channels": 1,
+        "videos": 2,
+        "comments": 1,
+        "playlists": 1,
+        "playlist_items": 1,
+        "follows": 1,
+        "video_renditions": 2,
+        "transcode_jobs_done": 2,
+        "instance_settings": 2,
+        "totp_enrollments_enabled": 1,
+        "mfa_recovery_codes": 10,
+        "search_documents": 2,
+        "media_files": 36
+      },
+      "fingerprints": {
+        "users": "00974d12a5970a2edf55eca9f329c2df",
+        "videos": "9e6d3c517ad38b88615ec6d64a88e886",
+        "comments": "dff1efd8a973f471c9acfa2d46b3c721",
+        "channels": "277a336bb67bf7308358596c8d83ce3a",
+        "media_tree": "70253f2c73ab28db751ca66316725c77",
+        "sealed_totp_ciphertext": "6dd9bb5b4265d6aa03ba305c537cad3e",
+        "sealed_prefix": "enc:",
+        "instance_settings": "d15ac5718738612befd26306d615a147"
+      }
+    },
+    "counts_identical": true,
+    "fingerprints_identical": true,
+    "functional": {
+      "admin_stats": {
+        "http": 200
+      },
+      "admin_system": {
+        "http": 200
+      },
+      "admin_users": {
+        "http": 200
+      },
+      "comments": {
+        "body_matches": true,
+        "count": 1,
+        "http": 200
+      },
+      "edge_feed": {
+        "http": 200,
+        "titles": [
+          "A37 Public Recovery"
+        ],
+        "videos": 1
+      },
+      "follow_as_viewer": {
+        "count": 1,
+        "follower_count": 1,
+        "handles": [
+          "a37_owner_ch"
+        ],
+        "http": 200
+      },
+      "hls_master": {
+        "bytes": 475,
+        "has_variant": true,
+        "http": 200
+      },
+      "hls_segment": {
+        "bytes": 325283,
+        "http": 200,
+        "name": "chunk-0-00001.m4s?v=dl9rjozp9xfk",
+        "sha256": "ea966aa1c99b9225454d68506f7c8f40645f21ab9e97212a6b6977a0a4773e00"
+      },
+      "hls_variant": {
+        "bytes": 207,
+        "http": 200,
+        "name": "cmaf/media_0.m3u8?v=dl9rjozp9xfk"
+      },
+      "instance_settings": {
+        "default_video_privacy": "unlisted",
+        "http": 200,
+        "instance_description": "A37 close-out instance description",
+        "keys": 116,
+        "overridden": [
+          "default_video_privacy",
+          "instance_description"
+        ]
+      },
+      "login_a37admin": {
+        "has_token": true,
+        "http": 200
+      },
+      "login_a37owner": {
+        "has_token": true,
+        "http": 200
+      },
+      "login_a37viewer": {
+        "has_token": true,
+        "http": 200
+      },
+      "original_bytes": {
+        "bytes": 86752,
+        "http": 200,
+        "matches_fixture": true,
+        "sha256": "ccf766c719b60eb04a1ef8a4528151d48f0489a3f27668d7039d4992452996a3"
+      },
+      "playlist": {
+        "http": 200,
+        "title": "A37 Recovery Playlist",
+        "video_count": 1,
+        "video_ids": [
+          "664f10cd-4433-4670-91af-d04abd4425f1"
+        ]
+      },
+      "private_anonymous": {
+        "http": 404
+      },
+      "private_as_owner": {
+        "has_hls": true,
+        "http": 200
+      },
+      "private_hls_master_as_owner": {
+        "bytes": 475,
+        "has_variant": true,
+        "http": 200
+      },
+      "refresh": {
+        "http": 200
+      },
+      "search_A37": {
+        "hits": 1,
+        "http": 200,
+        "source": null,
+        "titles": [
+          "A37 Public Recovery"
+        ]
+      },
+      "search_Recovery_as_owner": {
+        "hits": 1,
+        "http": 200,
+        "source": null
+      },
+      "totp_challenge_computed_code": {
+        "body": null,
+        "has_token": true,
+        "http": 200
+      },
+      "totp_password_only": {
+        "handed_out_session": false,
+        "http": 200,
+        "keys": [
+          "mfa_required",
+          "mfa_token"
+        ]
+      },
+      "totp_session_me": {
+        "http": 200,
+        "username": "a37totp"
+      }
+    }
+  },
+  "search": {
+    "reindex_trigger": "NEITHER the restore nor the runbook: vidra-search shares the core database and lives in its own `search` schema, so search.documents comes back inside the same pg_dump. No reindex step ran and none was needed.",
+    "documents_restored": 2,
+    "served_by": "the vidra-search service (2 GET /internal/v1/search hits in its log for the two queries) \u2014 not the api's local SQL fallback",
+    "eligibility": "the private video is indexed with eligible=false, so it is not returned; making it public returns 2 hits and making it private again returns 1 \u2014 the restored index carries both videos and is live",
+    "liveness_probe": {
+      "before": {
+        "http": 200,
+        "hits": 1,
+        "titles": [
+          "A37 Public Recovery"
+        ]
+      },
+      "flip_to_public_http": 200,
+      "after_flip": {
+        "http": 200,
+        "hits": 2,
+        "titles": [
+          "A37 Private Recovery",
+          "A37 Public Recovery"
+        ]
+      },
+      "flip_back_http": 200,
+      "restored_state": {
+        "http": 200,
+        "hits": 1,
+        "titles": [
+          "A37 Public Recovery"
+        ]
+      }
+    }
+  },
+  "negative_controls": {
+    "wrong_kek": {
+      "setup": "MFA_KEY_KEK replaced with a DIFFERENT valid base64-32 value on the replacement host, api restarted",
+      "api_boot": "/readyz 200 \u2014 nothing validates the KEK against stored ciphertext at boot",
+      "challenge": {
+        "body": "{'error': {'code': 'internal_error', 'message': 'an unexpected error occurred', 'request_id': 'sWyTKGHRhYMhcjtwOKVOxekJehNyImfO'}}",
+        "has_token": false,
+        "http": 500
+      },
+      "fails_closed": true,
+      "server_log": "level=ERROR msg='request failed' error='cipher: message authentication failed' status=500",
+      "secret_leak_check": "the plaintext TOTP secret, the enc: ciphertext and the KEK are all absent from the api's logs",
+      "app_otherwise_runs": {
+        "login_a37owner": {
+          "has_token": true,
+          "http": 200
+        },
+        "login_a37admin": {
+          "has_token": true,
+          "http": 200
+        },
+        "login_a37viewer": {
+          "has_token": true,
+          "http": 200
+        },
+        "hls_master": {
+          "bytes": 475,
+          "has_variant": true,
+          "http": 200
+        },
+        "hls_segment": {
+          "bytes": 325283,
+          "http": 200,
+          "name": "chunk-0-00001.m4s?v=dl9rjozp9xfk",
+          "sha256": "ea966aa1c99b9225454d68506f7c8f40645f21ab9e97212a6b6977a0a4773e00"
+        },
+        "search_A37": {
+          "hits": 1,
+          "http": 200,
+          "source": null,
+          "titles": [
+            "A37 Public Recovery"
+          ]
+        },
+        "edge_feed": {
+          "http": 200,
+          "titles": [
+            "A37 Public Recovery"
+          ],
+          "videos": 1
+        },
+        "comments": {
+          "body_matches": true,
+          "count": 1,
+          "http": 200
+        },
+        "instance_settings": {
+          "default_video_privacy": "unlisted",
+          "http": 200,
+          "instance_description": "A37 close-out instance description",
+          "keys": 116,
+          "overridden": [
+            "default_video_privacy",
+            "instance_description"
+          ]
+        },
+        "private_anonymous": {
+          "http": 404
+        }
+      },
+      "finding": "it answers 500 internal_error, not a 401-class refusal \u2014 see findings"
+    },
+    "tampered_archive": {
+      "gz_one_byte_flipped": {
+        "exit": 1,
+        "died_at": "decompressing",
+        "message": "gzip: invalid compressed data--crc error",
+        "dropdb_ran": false,
+        "users_after": 4
+      },
+      "custom_format_one_byte_flipped": {
+        "exit": 1,
+        "died_at": "pg_restore -l validation",
+        "message": "[restore] ERROR: archive is not a readable custom-format dump \u2014 nothing was dropped",
+        "dropdb_ran": false,
+        "users_after": 4,
+        "ledger_after": "135|false"
+      }
+    },
+    "preflight_not_checked": {
+      "setup": "VIDRA_{CORE,SEARCH,USER}_TAG pinned back to v0.6.2 (amd64-only release images mirrored into the lab registry)",
+      "verdict": "NOT CHECKED, allowed \u2014 exactly the documented current behaviour",
+      "core_line": "core: the pinned image (VIDRA_CORE_TAG=v0.6.2) does not answer 'migrate embedded-max', so the dump's schema 135 could NOT be checked against it. Every release cut before that subcommand existed lands here. Continuing \u2014 \u2026",
+      "search_line": "search: the pinned image (VIDRA_SEARCH_TAG=v0.6.2) does not answer 'migrate embedded-max', so the dump's schema 18 could NOT be checked against it. \u2026",
+      "what_happened_next": "the restore continued, dropped and reloaded the database, and then died at 'running core migrations' \u2014 site dark, exactly A38 run 13",
+      "exit": 1,
+      "on_this_host_the_reason_is_architecture": "the v0.6.2 images are amd64-only, so `compose run --rm --no-deps migrate migrate embedded-max` failed with 'no matching manifest for linux/arm64/v8' rather than on a missing subcommand; the preflight cannot tell the two apart and reports the same NOT CHECKED",
+      "recovery": {
+        "script": "deploy/restore.sh with the matched tags",
+        "exit": 0,
+        "seconds": 14.27,
+        "state": "counts, fingerprints and both ledgers back to the restored baseline"
+      }
+    },
+    "preflight_refusal": {
+      "setup": "vidra-core:v0.6.3-a37lowmig \u2014 the same tree with migrations 0131-0135 removed, so `migrate embedded-max` prints 130 against the release image's 135",
+      "exit": 1,
+      "message": "[restore] ERROR: core: the dump is at 135; pinned VIDRA_CORE_TAG=v0.6.3-a37lowmig carries up to 130. \u2026 Nothing was changed.",
+      "dropdb_ran": false,
+      "users_after": 4,
+      "ledger_after": "135|false",
+      "not_exercised": "--allow-schema-mismatch at runtime; all six preflight branches are covered by tests/rollback_floor_test.py (12/12 green)"
+    }
+  },
+  "gates": {
+    "bash_n": "PASS on every deploy/*.sh, bootstrap.sh, install.sh, tests/*.sh",
+    "shellcheck": "0.11.0, -x, exit 0 on every deploy/*.sh, bootstrap.sh, install.sh and tests/*.sh",
+    "compose_config_q": "exit 0 on the filled env/production.env.example",
+    "profile_render": "postgres, redis, search, migrate, search-migrate and prep-volumes publish NO ports; api and frontend publish on 127.0.0.1 only",
+    "meta_tests": "34 tests green \u2014 backup_test.py 2, rollback_floor_test.py 12, caddy_reload_test.py 3, release_preflight_test.py 8, runtime_smoke_test.py 3, blank_server_smoke_test.py 6",
+    "scripts_touched": "none"
+  },
+  "unverified": [
+    "Retrieval of the offsite archive OVER THE WIRE. The upload, the bucket listing and B2's own per-object contentSha1 are real; the download is not, because B2's native download host for this cluster does not resolve from here and the S3-compatible credentials are missing (named above).",
+    "Playback was proven at the API level \u2014 HLS master, variant playlist and a real 325,283-byte segment, plus the original bytes byte-identical to the seeded fixture \u2014 not through a real browser player on this run. The A37 checkpoint of 2026-09-05 carries the Chromium proof.",
+    "No new upload/transcode was performed on the replacement host this run (the A37 checkpoint covers that); this run proves the RESTORED media plays.",
+    "restore.sh --allow-schema-mismatch was not exercised against a live stack."
+  ],
+  "findings": [
+    {
+      "id": "A37-1",
+      "severity": "medium",
+      "title": "An undecryptable sealed TOTP secret answers 500 internal_error, not a 401-class refusal",
+      "mechanism": "POST /api/v1/auth/mfa/challenge propagates secretbox's 'cipher: message authentication failed' as an unhandled error. It fails CLOSED (no session, nothing leaked) and the server log names the cause, but the operator-facing signal after a restore with the wrong or missing MFA_KEY_KEK is 'an unexpected error occurred'.",
+      "blast_radius": "every second-factor login on a host restored with the wrong KEK; also the exact symptom an operator meets when the config archive was not restored alongside the dump"
+    },
+    {
+      "id": "A37-2",
+      "severity": "low",
+      "title": "The api boots and reports /readyz 200 on a KEK that cannot decrypt anything it stores",
+      "mechanism": "MFA_KEY_KEK is validated for SHAPE at boot (base64 of 32 bytes) and never against a stored ciphertext, so a wrong-KEK restore looks healthy until the first MFA login."
+    },
+    {
+      "id": "A37-3",
+      "severity": "low",
+      "title": "restore.sh stops api, search and frontend BEFORE it validates the archive",
+      "mechanism": "a tampered or unreadable dump takes the site down and then refuses, changing nothing. The refusal is correct; the outage before it is avoidable \u2014 the archive is validated a few lines later."
+    },
+    {
+      "id": "A37-4",
+      "severity": "low",
+      "title": "A corrupt .gz dies on gzip's own message with no [restore] ERROR line",
+      "mechanism": "the `*.gz)` branch is `gzip -dc \u2026 > $HOST_TMP` with no `|| die`; set -e kills the script, so the operator reads 'gzip: invalid compressed data--crc error' and nothing that says the restore refused or that nothing was dropped."
+    },
+    {
+      "id": "A37-5",
+      "severity": "informational",
+      "title": "B2's native download host for this account's cluster is NXDOMAIN",
+      "mechanism": "b2_authorize_account returns downloadUrl https://f005.backblazeb2.com, which does not resolve (f000/f001/f004 do). Any native-protocol retrieval \u2014 b2 CLI, rclone's b2 backend \u2014 fails with UnknownHost. The S3 endpoint s3.us-east-005.backblazeb2.com resolves, which is why A36's rclone recipe uses `type = s3`. An operator following a native-B2 recipe would discover this only during a recovery."
+    },
+    {
+      "id": "A37-6",
+      "severity": "informational",
+      "title": "Search returns the public video only; the private one is indexed but ineligible",
+      "mechanism": "search.documents carries both restored videos, the private one with eligible=false. 'Search returns both videos' is only true once the second is eligible \u2014 verified by flipping it public (2 hits) and back (1 hit)."
+    }
+  ],
+  "helpers": {
+    "seed.py": "04271ca488e08c8ec9b8d0d4e27b385a203288a6803e386f156f12f0ce704f50",
+    "verify.py": "31016dfc7d1bf26d8dc0669c03d42c8b85c19fb74e2e0575d4b872849a802a24",
+    "census.sh": "ecf139605738e80ae1d8b2bee47dc7f878f592b3f69c644f30eb2108e56c3117",
+    "recover.sh": "82d60ae7ca848a8dd1a6dde6f3afc05cc54b3922b9df76df0cef3c7f19492cfd",
+    "mkenv.py": "46d67e3c071485718bf2cba558dfdee11f6593d6f852c54b61c645b335ba9471",
+    "build.sh": "5e8fce62162a128d1baed116be1deae35394a365aec8fdb878359d7f1422099c"
+  },
+  "images_kept_for_the_a38_rehearsal": [
+    "vidra-core:v0.6.3-a37",
+    "vidra-search:v0.6.3-a37",
+    "vidra-user:v0.6.3-a37",
+    "vidra-core:v0.6.3-a37lowmig",
+    "and the same four under 127.0.0.1:5001/yegamble/\u2026 (the lab registry container itself was removed; re-create it with `docker run -d --name a37-registry -p 127.0.0.1:5001:5000 registry:3` and re-push)"
+  ],
+  "teardown": "both compose projects down -v (all volumes removed), the lab registry container removed, no a37 containers or volumes remain; the four images above are kept"
+}
