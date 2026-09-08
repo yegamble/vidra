@@ -13593,7 +13593,13 @@ nothing to do with the destination's health.
 The work is capped at 500 rows and detached from the request, for the same
 reason the edge-purge fan-out is: an admin's DELETE must not become an unbounded
 scan-and-update, and a resumption that did not happen leaves rows exactly where
-they already were. The cancel marker is now one constant used by both the drain
+they already were. The query prefilters on the domain so that cap is spent on
+**this** domain's rows — found in review, and silent without it: an instance
+with several blocked domains and more than the cap of cancellations in the
+window would unblock one and resume none of its deliveries, because the page
+came back full of the ones still blocked. The prefilter is not the answer
+(`hostOf` still decides, so the two cannot disagree about what host an inbox URL
+has); it can only widen the candidate set, never narrow it. The cancel marker is now one constant used by both the drain
 that writes it and the query that matches it, and the test drives the
 cancellation through the real drain — a test that spelled the string twice would
 pass while the two drifted apart.
