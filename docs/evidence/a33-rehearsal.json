@@ -1,0 +1,509 @@
+{
+  "item": "A33 rehearsal (slice 3 of 3)",
+  "rows": [
+    "INT-10"
+  ],
+  "date": "2026-09-08",
+  "verdict": {
+    "INT-10": "PASS (edge simulator; selected edge deferred; clause 4 residual: no proxy fallback after an edge 5xx)"
+  },
+  "lab": {
+    "core": "built from origin/main 59d7f51 (#203). The run was stood up on 85e4a91; #203 landed mid-run, so the binary was rebuilt and EVERY number below was re-measured on 59d7f51 - the pre-#203 CORS reading is reported as such and nothing else was carried over.",
+    "vidra_user": "main 766bb59 (unmodified); .next/standalone rebuilt with NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8099",
+    "vidra_search": "not used",
+    "schema_version": 140,
+    "processes": {
+      "api": "VIDRA_ROLE=api on 127.0.0.1:8088",
+      "worker": "VIDRA_ROLE=worker, separate process, TMPDIR=/tmp/vidra-a33-r3/scratch",
+      "one_origin_proxy": "127.0.0.1:8099, pipe-only, drops the client's Accept-Encoding, never follows a redirect",
+      "frontend": "node .next/standalone/server.js on 127.0.0.1:3100, Node 26.8.1",
+      "object_store": "mirror.gcr.io/minio/minio on 127.0.0.1:9210, bucket vidra-a33, path-style, no TLS, NO BUCKET POLICY AT ALL",
+      "edge_simulator": "docs/evidence/a32-a33-edge-simulator.go on 127.0.0.1:9310, -origin http://127.0.0.1:8088 (the API, not the bucket)",
+      "postgres": "native 16.15 on 55461 (fresh, -k /tmp/vidra-a33-r3)",
+      "redis": "native on 56401 (fresh)"
+    },
+    "browser": "Playwright 1.62.1 Chromium (headless)",
+    "cdn_config": {
+      "DELIVERY_CDN_BASE_URL": "http://127.0.0.1:9310",
+      "DELIVERY_CDN_PURGE_URL": "{url}",
+      "DELIVERY_CDN_PURGE_METHOD": "PURGE",
+      "DELIVERY_CDN_PURGE_HEADER": "X-Edge-Purge-Token",
+      "DELIVERY_CDN_PURGE_TOKEN": "a throwaway lab value, never committed",
+      "delivery_cdn_enabled": true,
+      "delivery_presign_enabled": false
+    },
+    "deviations": [
+      "RATE_LIMIT_ENABLED=false",
+      "MALWARE_SCAN_MODE=disabled explicitly - no clamd on this machine and core #201 makes every ingestion refuse otherwise",
+      "VIDRA_ALLOW_PLAIN_HTTP=true + VIDRA_TLS_MODE=plain-http",
+      "TRANSCODING_MIN_FREE_SCRATCH_MB=256 against the shipped 10 GiB floor (9.8 GiB free on this box); fixtures are 6 s 640x360",
+      "MEDIA_GC_ENABLED=false so a superseded generation stays observable; the sweep was then run by hand through POST /admin/media/gc",
+      "REGISTRATION_ENABLED=true for the whole run, for two synthetic actors (labviewer, labcreator)",
+      "the catalogue was padded to 252 public downloadable rows by direct SQL (250 media-less rows sorting after the real ones) so the downloads-revocation walk pages more than once against DefaultWalkPage=100",
+      "the dead-letter transition was forced by writing attempts=7 on the queue row rather than waiting the ladder's 123 minutes; every earlier rung was measured in real time"
+    ],
+    "simulator_change": "The committed fixture was written for the key-addressed origin and keyed its cache on the request PATH. Against #199's API-as-origin model that fails silently twice - every generation of a segment collapses onto one entry (?v= is in the query) and the origin fetch drops __vidra_edge=1, so the API answers the edge with a redirect back to the edge. Cache key and origin fetch now both carry the whole request URI, which is also what cdn.Provider.Purge names."
+  },
+  "sc1_origin_model": {
+    "edge_url_shape": "http://127.0.0.1:9310/api/v1/videos/<id>/hls/cmaf/chunk-0-00001.m4s?v=<tag>&__vidra_edge=1 - the operator's base plus this API's own media route path and query plus the marker",
+    "routes": [
+      {
+        "route": "/hls/master.m3u8?v=",
+        "viewer": "200 private, max-age=31536000, immutable",
+        "edge_origin_fetch": "never reaches the edge (not Redirectable)"
+      },
+      {
+        "route": "/hls/cmaf/media_0.m3u8?v=",
+        "viewer": "200 private, max-age=31536000, immutable",
+        "edge_origin_fetch": "never reaches the edge"
+      },
+      {
+        "route": "/hls/cmaf/media_0.m3u8 (no ?v=)",
+        "viewer": "200 private, max-age=0, must-revalidate",
+        "edge_origin_fetch": "never reaches the edge"
+      },
+      {
+        "route": "/storyboard.vtt",
+        "viewer": "200 private, max-age=300, must-revalidate",
+        "edge_origin_fetch": "never reaches the edge"
+      },
+      {
+        "route": "/hls/cmaf/init-0.mp4?v=",
+        "viewer": "307 -> edge, 307 itself private, max-age=300, must-revalidate",
+        "edge_origin_fetch": "200 public, max-age=31536000, immutable; Content-Type video/mp4"
+      },
+      {
+        "route": "/hls/cmaf/chunk-0-00001.m4s?v=",
+        "viewer": "307 -> edge",
+        "edge_origin_fetch": "200 public, max-age=31536000, immutable; Content-Type video/mp4"
+      },
+      {
+        "route": "/hls/cmaf/chunk-0-00001.m4s (no ?v=)",
+        "viewer": "307 -> edge",
+        "edge_origin_fetch": "200 public, max-age=0, must-revalidate"
+      },
+      {
+        "route": "/original",
+        "viewer": "307 -> edge",
+        "edge_origin_fetch": "200 public, max-age=3600, must-revalidate; Content-Type video/mp4"
+      },
+      {
+        "route": "/download/original",
+        "viewer": "307 -> edge",
+        "edge_origin_fetch": "200 public, max-age=3600, must-revalidate; Content-Type video/mp4; Content-Disposition attachment; filename=fixture.mp4"
+      },
+      {
+        "route": "/thumbnail",
+        "viewer": "307 -> edge",
+        "edge_origin_fetch": "200 public, max-age=300, must-revalidate; Content-Type image/jpeg"
+      },
+      {
+        "route": "/storyboard.jpg",
+        "viewer": "307 -> edge",
+        "edge_origin_fetch": "200 public, max-age=300, must-revalidate; Content-Type image/jpeg"
+      },
+      {
+        "route": "a superseded ?v= tag",
+        "viewer": "404 private, no-store",
+        "edge_origin_fetch": "404 private, no-store - the edge passes it through and does NOT cache it (MISS on two consecutive tries)"
+      }
+    ],
+    "no_redirect_to_the_edge": "Location headers on the 8 edge-marked probes: 0. An edge origin fetch is never answered with a redirect of any kind.",
+    "credentialed": "Authorization header -> 200, private, no-store, no Location, no CORS header. A08's rule holds.",
+    "private_video_anonymous": {
+      "/thumbnail": 404,
+      "/original": 404,
+      "/download/original": 404,
+      "/hls/cmaf/chunk-0-00001.m4s": 404,
+      "location_header": "never present",
+      "through_the_edge": 404
+    },
+    "unlisted_video_anonymous": {
+      "served_by_the_origin": 200,
+      "cache_control": "private",
+      "redirected_to_the_edge": false
+    },
+    "bucket_privacy": {
+      "GET http://127.0.0.1:9210/vidra-a33/thumbnails/<id>.jpg": "403 AccessDenied",
+      "GET http://127.0.0.1:9210/vidra-a33/web-videos/<id>.mp4": "403 AccessDenied",
+      "bucket_policy_applied": "none - the api-as-origin model needs no public read"
+    },
+    "browser": {
+      "origin_counts": {
+        "http://127.0.0.1:8099": 76,
+        "http://127.0.0.1:9310": 7
+      },
+      "decode": {
+        "currentTime": 6.013967,
+        "duration": 6.013967,
+        "readyState": 4,
+        "frames": 150,
+        "dropped": 3,
+        "error": null
+      },
+      "second_run": "every one of the 7 edge responses X-Edge-Cache: HIT"
+    },
+    "vary_origin": {
+      "api_answer_varies": true,
+      "no_origin_header": "Access-Control-Allow-Origin: *, Vary: Origin",
+      "configured_origin": "Access-Control-Allow-Origin: http://127.0.0.1:8099 + Access-Control-Allow-Credentials: true, Vary: Origin",
+      "foreign_origin": "Access-Control-Allow-Origin: *, Vary: Origin",
+      "simulator_cache_key_honours_vary": false,
+      "note": "Deliberate and documented: media_cors.go's setMediaCORS never overwrites a header Echo's CORS middleware already set, because replacing the allow-listed answer with a wildcard would break credentialed media reads from the instance's own frontend, and Echo's middleware supplies the Vary: Origin that makes it correct for a compliant cache. The gap is the operator sentence: docs/operations.md tells the operator to forward the query string AND key on it, then says of the shared entry that 'there is no Vary to get wrong' - true of the __vidra_edge=1 marker it is written about, not true of Origin. A CDN that forwards Origin and does not key on it would hand one origin's credentialed echo to every other origin's player, which is exactly the federated playback core #203 added the header for. The simulator cannot exhibit it: its cache key is the URL alone and it forwards no Origin upstream."
+    }
+  },
+  "sc2_retranscode": {
+    "trigger": "POST /api/v1/admin/videos/{id}/transcoding {\"type\":\"hls\"} -> 202 (anonymous 401, ordinary user 403)",
+    "transcode_generation": {
+      "before": 1,
+      "after_enqueue": 2,
+      "after_a_source_replacement": "3 (counter readback only - the bucket was not re-listed after that replacement)"
+    },
+    "keys": {
+      "before": "streaming-playlists/<id>/r1/...",
+      "after": "streaming-playlists/<id>/r2/... (r1 untouched on disk)"
+    },
+    "version_tag": {
+      "before": "dla1t3y805q0",
+      "after": "dla1yo2vujsw"
+    },
+    "chunk_0_00001_m4s": {
+      "origin_before": {
+        "sha256_16": "a63607893342ca33",
+        "bytes": 657994
+      },
+      "origin_after": {
+        "sha256_16": "60393685106885db",
+        "bytes": 650072
+      },
+      "edge_on_the_new_url": {
+        "sha256_16": "60393685106885db",
+        "bytes": 650072,
+        "x_edge_cache": "MISS"
+      },
+      "edge_on_the_old_url": {
+        "sha256_16": "a63607893342ca33",
+        "bytes": 657994,
+        "x_edge_cache": "HIT",
+        "note": "a different URL, so nothing was overwritten; no player asks for it because the playlist names only the new tag"
+      }
+    },
+    "encoder_knob": "transcoding_max_fps 0 -> 24 between runs, so the encoder genuinely produced different bytes",
+    "purge_requests": 0,
+    "same_generation_warning_lines": 0,
+    "player_after_reload": {
+      "requests_carrying_the_old_tag": 0,
+      "requests_carrying_the_new_tag": 13,
+      "currentTime": 6.013967,
+      "frames": 144,
+      "dropped": 2,
+      "error": null,
+      "note": "144 frames is exactly 24 fps x 6 s against 150 before, so the decoder consumed the NEW generation"
+    },
+    "mid_playback": "Not observed as a race: the fixture is 6 s and fully buffered within the first second, so a promotion could not be made to land between two segment fetches. What was measured instead is the mechanism, and it is decisive in both directions - the old generation's objects stay readable at their old URLs (edge HIT, origin 200) until media GC collects them, so a session that already holds those URLs finishes; but a segment of the old generation that the edge does NOT hold is refused at the origin with 404 private, no-store the moment the new generation is promoted, and the edge passes that 404 through uncached. So the honest answer is: it finishes off what it already has and otherwise errors, and a RELOAD is clean (0 old-tag requests).",
+    "gc": {
+      "dry_run": "scanned 71, named exactly the 14 superseded r1 objects and nothing else",
+      "delete_run": "scanned 71, deleted 14, orphan_percent 19, breaker not tripped",
+      "old_url_at_the_origin": "404 private, no-store - and it answered 404 from the moment of promotion, before any sweep"
+    }
+  },
+  "sc3_purge_families": [
+    {
+      "family": "poster replacement (multipart)",
+      "trigger": "POST /videos/{id}/thumbnail -> 201",
+      "purge_requests": 1,
+      "statuses": {
+        "200": 1
+      },
+      "token_accepted": true,
+      "edge_before": {
+        "x_edge_cache": "HIT",
+        "sha256_16": "ace182d944f37b22",
+        "bytes": 18954
+      },
+      "edge_after": {
+        "x_edge_cache": "MISS",
+        "sha256_16": "5a46d2dcf4cf3751",
+        "bytes": 1604
+      },
+      "record": "immediate pass; the in-process cdn_purge counters"
+    },
+    {
+      "family": "poster replacement (frame pick)",
+      "trigger": "POST /videos/{id}/thumbnail {\"at_seconds\":3} -> 201",
+      "purge_requests": 1,
+      "statuses": {
+        "200": 1
+      },
+      "edge_after": "evicted",
+      "record": "immediate pass"
+    },
+    {
+      "family": "storyboard regeneration",
+      "trigger": "POST /videos/{id}/replace -> 200 (the ReplaceSource path)",
+      "purge_requests": 1,
+      "statuses": {
+        "200": 1
+      },
+      "edge_before": {
+        "x_edge_cache": "HIT",
+        "sha256_16": "24d31a9747f9b3e3",
+        "bytes": 17087
+      },
+      "edge_after": {
+        "x_edge_cache": "MISS",
+        "sha256_16": "c037a57f893a9104",
+        "bytes": 9270
+      },
+      "record": "immediate pass; the purge named /storyboard.jpg and nothing else"
+    },
+    {
+      "family": "privacy flip public->private (control)",
+      "trigger": "PATCH /videos/{id} {\"privacy\":\"private\"} -> 200",
+      "purge_requests": 13,
+      "statuses": {
+        "200": 6,
+        "404": 7
+      },
+      "edge_after": "6 of that video's entries evicted; the other video's 6 entries untouched",
+      "record": "immediate pass"
+    },
+    {
+      "family": "deletion (control)",
+      "trigger": "DELETE /videos/{id} -> 204",
+      "purge_requests": 13,
+      "statuses": {
+        "200": 6,
+        "404": 7
+      },
+      "edge_after": "emptied",
+      "record": "immediate pass; content.video.delete audit row"
+    },
+    {
+      "family": "account deletion",
+      "trigger": "DELETE /auth/me -> 204",
+      "purge_requests": 13,
+      "statuses": {
+        "200": 6,
+        "404": 7
+      },
+      "edge_after": "emptied",
+      "record": "one QUEUED job kind=urls reason=account_delete with 13 urls and url_set_complete=t, enqueued after the cascade commits and drained on the worker's next 10 s tick -> state=done, urls emptied"
+    },
+    {
+      "family": "instance-wide download revocation",
+      "trigger": "PATCH /admin/instance-settings {\"downloads_enabled\": false} -> 200",
+      "purge_requests": 8,
+      "statuses": {
+        "200": 6,
+        "404": 2
+      },
+      "edge_after": "the 4 download URLs of each of the two real videos evicted; /original and /thumbnail deliberately LEFT IN PLACE - the URL set is the download routes only",
+      "record": "one LEASED walk job kind=downloads_revoked, cursor_video_id persisted per page -> state=done, purged=8, url_set_complete=t"
+    }
+  ],
+  "sc3_urls_purged_by_a_takedown": [
+    "/original",
+    "/download/original",
+    "/thumbnail",
+    "/storyboard.jpg",
+    "/download/audio",
+    "/download/hls/360",
+    "/download/hls/360?audio=false",
+    "/hls/cmaf/chunk-0-00001.m4s?v=<tag>",
+    "/hls/cmaf/chunk-1-00001.m4s?v=<tag>",
+    "/hls/cmaf/chunk-1-00002.m4s?v=<tag>",
+    "/hls/cmaf/iframe-0.mp4?v=<tag>",
+    "/hls/cmaf/init-0.mp4?v=<tag>",
+    "/hls/cmaf/init-1.mp4?v=<tag>"
+  ],
+  "sc3_resumability": {
+    "catalogue": "252 public downloadable rows (2 real + 250 SQL padding sorting after them); DefaultWalkPage=100, so three pages plus an empty one",
+    "page_1": {
+      "cursor_video_id": "f60ad924-...",
+      "purged": 8,
+      "edge_purge_requests": 8
+    },
+    "worker_killed": "after page 1; 25 s with no worker moved nothing - cursor, purged and the edge's purge count all frozen",
+    "after_restart": {
+      "cursor_video_id": "fff8a7b5-...",
+      "purged": 8,
+      "edge_purge_requests": 8,
+      "duplicate_purge_keys": "NONE"
+    },
+    "completion": {
+      "state": "done",
+      "purged": 8,
+      "url_set_complete": true,
+      "log": "cdn purge walk finished revoking downloads at the edge"
+    },
+    "second_flip_while_live": "ON CONFLICT DO NOTHING - still exactly one downloads_revoked row",
+    "downloads_after": "GET /videos/{id}/download/original anonymous -> 403"
+  },
+  "sc3_wrong_actors": {
+    "POST /admin/videos/{id}/transcoding": {
+      "anonymous": 401,
+      "ordinary user": 403
+    },
+    "PATCH /admin/instance-settings": {
+      "anonymous": 401,
+      "ordinary user": 403
+    },
+    "PATCH /videos/{id}": {
+      "anonymous": 401,
+      "non-owner": 404
+    },
+    "POST /videos/{id}/thumbnail": {
+      "anonymous": 401,
+      "non-owner": 404
+    },
+    "DELETE /videos/{id}": {
+      "anonymous": 401,
+      "non-owner": 404
+    },
+    "DELETE /auth/me": {
+      "anonymous": 401,
+      "wrong password": 403
+    }
+  },
+  "sc4_retry": {
+    "injection": "the edge's purge endpoint answers 500 (POST /__edge/fail?purge=500)",
+    "queued_row": {
+      "kind": "urls",
+      "reason": "retry",
+      "urls": [
+        "/api/v1/videos/<id>/thumbnail"
+      ],
+      "note": "this API's own route path - no purge endpoint, no edge URL, no token"
+    },
+    "ladder": [
+      {
+        "attempt": 1,
+        "kind": "the immediate pass",
+        "at": "12:01:29",
+        "outcome": 500,
+        "next_attempt_at": "12:02:29",
+        "interval": "+60 s"
+      },
+      {
+        "attempt": 2,
+        "at": "12:02:29",
+        "outcome": 500,
+        "next_attempt_at": "12:04:30",
+        "interval": "+2 min"
+      },
+      {
+        "attempt": 3,
+        "at": "12:04:40",
+        "outcome": 500,
+        "next_attempt_at": "12:08:40",
+        "interval": "+4 min"
+      },
+      {
+        "attempt": 4,
+        "at": "12:08:40",
+        "outcome": 200,
+        "result": "state=done, purged=1, urls emptied",
+        "note": "the injection was cleared at 12:06:02"
+      }
+    ],
+    "code_cap": "internal/cdnpurge DefaultRetryBase=1m, DefaultRetryMax=1h, DefaultMaxAttempts=8 - seven persisted retries, 1+2+4+8+16+32+60 = 123 minutes",
+    "no_configuration_knob": "cdnpurge.WithRetry exists but cmd/api wires no env var to it, so an operator cannot shorten or lengthen the ladder and a lab cannot force the cap by configuration",
+    "operator_surface_at_attempt_3": {
+      "admin_system_cdn_purge": {
+        "runs": 6,
+        "keys_purged": 29,
+        "keys_failed": 1,
+        "pending_retries": 1,
+        "oldest_pending_seconds": 273,
+        "dead_letters": 0
+      },
+      "vidra_doctor": "OK cdn purge backlog: 1 CDN invalidation(s) in flight, none older than 3h0m0s - the queue is working through them"
+    },
+    "dead_letter": {
+      "how": "FORCED: attempts set to 7 on the queue row by hand so the next claim was attempt 8. Every earlier rung was measured in real time; only the final transition was forced, because the ladder is 123 minutes of wall clock and there is no --max-attempts knob.",
+      "row": {
+        "state": "failed",
+        "attempts": 8,
+        "purged": 0,
+        "urls": [
+          "/api/v1/videos/<id>/thumbnail"
+        ],
+        "last_error": "1 urls were not invalidated: cdn: purge rejected with status 500"
+      },
+      "urls_kept": true,
+      "admin_system_cdn_purge": {
+        "runs": 7,
+        "keys_purged": 29,
+        "keys_failed": 2,
+        "pending_retries": 0,
+        "oldest_pending_seconds": 0,
+        "dead_letters": 1
+      },
+      "admin_jobs_page": {
+        "queue": "cdn_purge_jobs",
+        "pending": 0,
+        "running": 0,
+        "done": 3,
+        "failed": 1,
+        "oldest_pending_age_seconds": 0
+      },
+      "vidra_doctor": "WARN cdn purge backlog: 1 CDN invalidation(s) GAVE UP after the retry cap ... nothing will try again -> invalidate them by hand at the CDN's own console, then check DELIVERY_CDN_PURGE_URL/_METHOD/_TOKEN",
+      "log": "ERROR cdn purge gave up after the attempt cap; the edge is still serving these objects and must be invalidated by hand (job_id, reason, attempts=8, purged=0, unpurged=1)"
+    },
+    "no_audit_row": "There is no audit_log action for a CDN purge at all - the record is the cdn_purge_jobs row, the structured log line and the cdn_purge counters. The TRIGGERS are audited (content.video.delete, auth.account.delete, admin.instance.update, content.video.transcode)."
+  },
+  "sc5_failure_after_redirect": {
+    "injection": "the edge answers 502 for GETs",
+    "edge_requests": 27,
+    "statuses": {
+      "502": 27
+    },
+    "distinct_segment_urls": 4,
+    "player": {
+      "readyState": 0,
+      "currentTime": 0,
+      "error": {
+        "code": 4,
+        "message": "MEDIA_ELEMENT_ERROR: Format error"
+      },
+      "final_src": "the progressive <video src> on /original - which 307s to the same broken edge"
+    },
+    "fallback_to_the_api_proxy": false,
+    "grep": "no fallback for a viewer's post-redirect fetch failure exists anywhere in internal/delivery on origin/main; the resolver's fail-open discipline covers BUILDING a source, not a fetch failing afterwards",
+    "kill_switch": {
+      "action": "PATCH /admin/instance-settings {\"delivery_cdn_enabled\": false}",
+      "result": "0 requests to the edge origin, playback recovers - 5.0 s, 120 frames, 0 dropped, error null",
+      "needs": "an admin"
+    }
+  },
+  "gates": {
+    "code_changed": "No vidra-core, vidra-user or vidra-search file changed. Only this repo's docs and the committed lab fixture docs/evidence/a32-a33-edge-simulator.go.",
+    "simulator": "gofmt clean, go build clean",
+    "meta_scripts": "bash -n and shellcheck clean on every tracked .sh",
+    "compose": "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file <filled> config -q passes",
+    "meta_tests": "python3 -m unittest discover -s tests -p '*_test.py' - 48 tests OK, zero skips",
+    "s3_integration_lane": "S3_TEST_ENDPOINT=127.0.0.1:9210 go test -tags=integration ./internal/storage/... - 69 PASS, 0 FAIL, 0 SKIP against the lab MinIO",
+    "make_ci": "NOT re-run: no vidra-core file changed in this slice. #199's and #202's own sections carry their green make ci."
+  },
+  "unverified": [
+    "The SELECTED EDGE stays deferred - no CDN zone or credential is on this machine, so every number here is the simulator's. What a real CDN adds is its own TTL policy, its purge API's rate limits, whether it forwards the query string and Origin, and whether its cache key honours Vary.",
+    "The SELECTED BUCKET stays deferred - MinIO only. A32/A33's two B2 risks are unchanged, though this topology no longer needs a public-read bucket at all, which retires the origin-exposure finding rather than restating it.",
+    "Safari/WebKit was not driven in this slice; A32/A33 measured WebKit taking the same MSE path and nothing in #199/#202 changes the client.",
+    "vidra-user's e2e-backed (s3) lane was not executed (it needs Docker Compose); no vidra-user file changed.",
+    "The dead-letter transition was forced by writing attempts=7 rather than waiting 123 minutes; the ladder's first three rungs were measured in real time and the cap is read from the code.",
+    "Mid-playback continuation across a promotion was not observed as a race - see sc2_retranscode.mid_playback for what was measured instead.",
+    "The downloads-revocation walk's paging was measured against a catalogue padded with 250 media-less rows inserted by SQL. The cursor, the claim, the kill/restart and the purge calls are all the real code; only the row count is synthetic."
+  ],
+  "findings": [
+    "INT-10's four unwired families are wired and measured: poster replacement (both forms), storyboard regeneration, account deletion (queued) and the instance-wide download revocation (leased, resumable walk). Every one evicted the edge's copy and the next fetch served new bytes.",
+    "A same-source re-transcode no longer overwrites anything: generation 2 landed under r2/ with a new ?v=, the edge served the new bytes on a MISS, and the browser fetched zero old-tag URLs. The stale-segment clause INT-10 turns on is closed.",
+    "The stale ?v= refusal is 404 with private, no-store and the edge does not cache it - so a superseded generation cannot be resurrected through the edge even before GC runs.",
+    "The bucket needs no public policy: an unauthenticated GET straight at MinIO is 403 for every media prefix. A32/A33's origin-exposure finding is retired by construction rather than documented around.",
+    "Content-Type and Content-Disposition reach the edge intact (video/mp4, image/jpeg, attachment; filename=fixture.mp4), because the edge now fetches the route that sets them.",
+    "The shared edge entry's CORS header varies by request Origin (* for absent/unknown, an echoed origin plus Allow-Credentials for one in CORS_ALLOWED_ORIGINS). The behaviour is deliberate and Vary: Origin is present, so a compliant cache is safe; what is missing is the operator sentence. docs/operations.md's 'there is no Vary to get wrong' is written about the __vidra_edge=1 marker and reads as absolute, and it does not tell an operator to include Origin in the cache key or to stop forwarding it.",
+    "There is no audit_log action for a CDN purge. The record is the cdn_purge_jobs row plus a structured log line plus the in-process counters; the triggers are audited.",
+    "cdnpurge.WithRetry is not wired to any environment variable, so an operator cannot tune the ladder and a lab cannot force the dead letter by configuration.",
+    "Clause 4 is unchanged and stays the row's named residual: an edge 5xx after the 307 has no fallback to the api proxy. hls.js retried 4 segment URLs 27 times, the player fell through to /original which 307s to the same broken edge, and it ended on MEDIA_ELEMENT_ERROR code 4 with readyState 0. The only remedy is the delivery_cdn_enabled kill switch, which does work: flipping it off restored playback with zero edge requests."
+  ]
+}

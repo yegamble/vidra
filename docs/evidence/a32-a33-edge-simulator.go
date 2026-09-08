@@ -1,8 +1,24 @@
 // Command a32-a33-edge-simulator is a disposable CDN edge for acceptance
-// testing. It is a caching reverse proxy in front of a key-addressed media
-// origin (an object-store bucket), plus the single-URL invalidation endpoint
-// internal/cdn actually speaks — so a lab can prove the shipped purge contract
-// end to end without a commercial CDN account.
+// testing. It is a caching reverse proxy in front of a media origin, plus the
+// single-URL invalidation endpoint internal/cdn actually speaks — so a lab can
+// prove the shipped purge contract end to end without a commercial CDN account.
+//
+// # The origin is the API, and the cache key is the whole request URI
+//
+// The first revision of this fixture sat in front of an object-store bucket and
+// keyed its cache on the request PATH, because that is what a key-addressed
+// edge URL is: `base + "/" + <object key>`, with no query anywhere. vidra-core
+// #199 reversed that model — the CDN's origin is now the Vidra API itself and
+// an edge URL is `base + <this API's own media route path and query> +
+// &__vidra_edge=1` — so a path-keyed cache would be wrong in two ways that both
+// silently pass: it would collapse every generation of a segment onto one entry
+// (the `?v=` tag is in the query, and versioning the edge is the whole point of
+// putting it there), and it would drop the `__vidra_edge=1` marker on the
+// origin fetch, so the API would answer the edge with a redirect back to the
+// edge instead of the bytes. The cache key and the origin fetch therefore both
+// carry the full request URI — path AND query — which is also exactly what
+// internal/cdn purges: cdn.Provider.Purge rebuilds the same URL EdgeURL handed
+// the viewer, marker and all.
 //
 // It exists because INT-10's procedure says "edge simulator first, then
 // selected edge", and because the two claims that row makes — "stale segments
@@ -32,7 +48,7 @@
 //
 //	go run a32-a33-edge-simulator.go \
 //	  -listen 127.0.0.1:9310 \
-//	  -origin http://127.0.0.1:9210/vidra-a32 \
+//	  -origin http://127.0.0.1:8088 \
 //	  -purge-method PURGE \
 //	  -purge-header X-Edge-Purge-Token \
 //	  -purge-token <a throwaway value, never a real credential> \
@@ -115,7 +131,7 @@ type purgeRecord struct {
 
 func main() {
 	listen := flag.String("listen", "127.0.0.1:9310", "listen address")
-	origin := flag.String("origin", "", "key-addressed media origin base, e.g. http://127.0.0.1:9210/bucket")
+	origin := flag.String("origin", "", "media origin base — the Vidra API, e.g. http://127.0.0.1:8088")
 	allowOrigin := flag.String("allow-origin", "", "value for Access-Control-Allow-Origin on proxied responses")
 	purgeMethod := flag.String("purge-method", "PURGE", "method the purge endpoint accepts")
 	purgeHeader := flag.String("purge-header", "X-Edge-Purge-Token", "header carrying the purge token")
@@ -142,10 +158,17 @@ func main() {
 }
 
 func (e *edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	key := strings.TrimPrefix(r.URL.EscapedPath(), "/")
-	if strings.HasPrefix(key, "__edge/") || key == "__edge" {
+	path := strings.TrimPrefix(r.URL.EscapedPath(), "/")
+	if strings.HasPrefix(path, "__edge/") || path == "__edge" {
 		e.control(w, r)
 		return
+	}
+	// The cache key is the whole request URI, query included. See the package
+	// comment: with the API as origin the ?v= generation tag and the
+	// __vidra_edge=1 marker both live in the query, and both are load-bearing.
+	key := path
+	if r.URL.RawQuery != "" {
+		key += "?" + r.URL.RawQuery
 	}
 	switch {
 	case r.Method == e.purgeMethod:
@@ -290,9 +313,11 @@ func (e *edge) serve(w http.ResponseWriter, r *http.Request, key string) {
 	}
 }
 
-// fetch pulls one object from the key-addressed origin, whole. Range is never
-// forwarded: the cache holds complete bodies so it can answer any later Range
-// itself.
+// fetch pulls one object from the origin, whole, at the same request URI the
+// edge was asked for — including the query, which carries the ?v= generation
+// tag and the __vidra_edge=1 marker the API reads to recognise its own edge.
+// Range is never forwarded: the cache holds complete bodies so it can answer
+// any later Range itself.
 func (e *edge) fetch(key string) (*entry, error) {
 	target := e.origin.String() + "/" + key
 	resp, err := http.Get(target) //nolint:gosec // lab fixture, operator-supplied origin
