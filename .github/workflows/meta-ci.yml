@@ -74,9 +74,19 @@ jobs:
       # committed, referenced by the acceptance record, and linted by NOTHING —
       # a syntax error in either would have been found by an operator running an
       # acceptance rehearsal, not by CI.
+      #
+      # `docs/evidence/*.sh` is the same gap one directory over, and A24 found it
+      # the same way: docs/evidence/a24-plant-foreign-media.sh writes objects and
+      # rows into a lab's object store and database, was committed as the record
+      # of how that dataset was made, and had to be linted BY HAND because
+      # nothing here reached it. An evidence script is re-run — by the next
+      # acceptance rehearsal, or by anyone reproducing the finding — so a syntax
+      # error in one is discovered mid-lab, against a live store, which is the
+      # worst possible moment. The glob is nullglob-safe below.
       - name: Lint shell scripts
         run: |
-          for f in bootstrap.sh install.sh tests/*.sh deploy/*.sh; do
+          shopt -s nullglob
+          for f in bootstrap.sh install.sh tests/*.sh deploy/*.sh docs/evidence/*.sh; do
             bash -n "$f"
             shellcheck -x "$f"
           done
