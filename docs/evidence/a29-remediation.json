@@ -8,7 +8,7 @@
   "prs": {
     "vidra-core": 203,
     "vidra-user": 198,
-    "meta": 150,
+    "meta": 152,
     "ordering": "core first; vidra-user regenerates lib/api/generated.ts from core's openapi.yaml and stays a DRAFT until core#203 merges, because contract-ci compares against core main"
   },
   "migrations": {
