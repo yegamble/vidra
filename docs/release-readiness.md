@@ -14444,3 +14444,137 @@ still produce ZERO activities (core #209's clause, merged and untouched here).
 `/admin/jobs` shows a request id on a delivery queued by a transcode completion.
 The 410 Tombstone carries no ETag through the edge, and
 `DELETE /admin/instances/blocked/<host%3Aport>` answers 204.
+
+## Live follow-ups — verified drop, watchdog disconnect, audited ends, polling watch view — 2026-09-08
+
+**INT-01 does not move.** It is already PASS, and nothing here re-measures it —
+that takes the publisher, the ingest container and the browser back. What this
+slice does is take four of the five findings the A26 rehearsal recorded as
+"needing a ruling rather than a patch" and build the rulings. Two PRs
+([core #212](https://github.com/yegamble/vidra-core/pull/212),
+[user #203](https://github.com/yegamble/vidra-user/pull/203)); no migration
+(core stays at schema 141), one `api/openapi.yaml` **description** change, so
+user #203 carries the contract regen and stays a draft until core merges.
+Everything below is **not lab-observed**.
+[Sanitized evidence](evidence/live-follow-ups.json).
+
+**A drop that dropped nothing said it had.** nginx-rtmp answers
+`/control/drop/publisher` with **200 and a decimal count**, including `0` when
+the name matches nothing — not the `404` the shipped contract was written
+against. `DropPublisher` read the status and discarded the body, so every 2xx
+became a confirmed disconnect. That is what made A26's headline defect
+invisible: twelve consecutive drops that were reaching a different nginx worker
+than the one holding the socket all answered `0`, all read as success, and the
+streamer kept uploading for the full sixty seconds the lab watched. The body is
+now the answer. The count is parsed; `0` is `ErrIngestNoPublisher`, which was
+unreachable before and is now the ordinary outcome it describes; a `2xx` whose
+body is **not** a count — a captive portal, an error page, a misrouted proxy —
+is "unavailable" rather than a success, because none of them dropped anybody.
+
+`publisher_disconnected` is now true only when the ingest reports closing **at
+least one** connection, and the honest false has its own sentence: *the media
+server reported that NO publisher was connected under this stream*. That is the
+hook-only phantom case — a session flipped `live` by a valid hook with no RTMP
+publish behind it, which A26 also measured — and it is what a drop aimed at the
+wrong worker looks like. The number itself rides the audit row's `count`
+metadata, one of `internal/audit`'s allow-listed keys, because "the drop
+returned 0" is the difference between a termination that reached the publisher
+and one that did not, and nothing else in the trail can tell them apart a week
+later.
+
+**The watchdog now does all four steps.** A26 measured
+`live_max_duration_secs` force-closing a session at 81 s, flipping the state and
+404ing the playlist while the publisher **kept ingesting** — step one of a
+four-step termination, called a force-close. `SweepOverdueLive` no longer writes
+the state itself: it calls the same `Terminate` a moderator's End stream calls,
+with source `system`. State, key rotation, drop, and the ordinary stop path
+publishes the replay.
+
+The rotation is the part worth stating, because it changes what a creator
+experiences. Without it the encoder reconnects on the key it is holding within
+seconds, the stream goes back on air, and the next sweep cuts it again — an
+over-limit publisher would bounce every thirty seconds rather than stop. With
+it, a creator cut by the instance's limit copies a fresh key from the Studio
+before going live again. What the system close deliberately does **not** write
+is the row's termination columns. A duration cut is not a person's decision, and
+the creator-facing copy for a stamped `terminated_at` with no reason code is
+*"You ended this stream"* — the instance would be lying in the creator's own
+voice. Telling the creator honestly needs a new code in migration 0141's `CHECK`
+constraint and is a separate slice; what they get today is what they got before,
+plus an audit row that names the stream.
+
+**Every deliberate end is now in the trail, with the fields a filter reads.**
+A26 found `POST /live/{id}/end` writing **no audit row at all** — the one
+deliberate end of a broadcast performed by a person that left no trace — so it
+is now `content.live.ended`, a separate action from `content.live.terminate`
+because a creator stopping their own stream is not a moderation event and must
+not read as one. `content.live.terminate` carries `actor_role`, which A26
+measured empty, so the trail can answer "was this staff?" without a second query
+against a users table that may have changed since. `content.live.force_close`
+and `content.live.replay` carry `resource_type`/`resource_id` instead of burying
+the stream id in free text the audit filter cannot select on. An unknown role is
+**dropped** rather than passed through: the envelope rejects a whole event on an
+invalid role, and losing a field is much better than losing the row — which is
+exactly how the terminate row vanished in the first place.
+
+**The signed-in viewer digest, and what it is honest to do about it.** A26
+measured an anonymous viewer and a signed-in viewer on one address producing
+**one** Redis member: hls.js sends no session credential with a public stream's
+playlist. It sets an `Authorization` header only when a playback token exists —
+private streams — never `withCredentials`, and the session is a bearer access
+token rather than a cookie, so even a same-origin fetch carries nothing. The fix
+that would make the signed-in branch reachable is a per-viewer credential on the
+playlist, which A08 ruled out for the delivery path; a rounder number is not
+worth a new tracking surface. So the anonymous principal — which is what nearly
+every live viewer is counted by — is now the address **and** the User-Agent,
+separated and bounded, HMAC'd into the same keyed day-scoped digest. A phone and
+a laptop behind one household NAT are two viewers where they were one. Two
+identical phones on one Wi-Fi are still one, a signed-in viewer of a public
+stream is still counted as anonymous, and the UA half is client-chosen so the
+count is not inflation-proof — but neither was the address alone on an IPv6
+client with a /64 to spend, and this number is a creator-facing estimate, never
+an input to billing, ranking or moderation.
+
+**The watch page moves during a broadcast.** It polled only while `offline`, so
+A26 measured `0 viewers` at load that never changed while the API's own count
+reached 3 and decayed back to 2 at 90.2 s exactly as designed — and a
+moderator's termination did not reach the viewer at all: the live badge stayed
+up over a player that had stopped until somebody reloaded. It now polls the
+stream read every **10 seconds** while live too, which is core's own read cache
+on the count, so a faster cadence could not return a different answer. Bounded
+the way a poll on a hot page has to be: one request in flight at a time (a
+thirty-second response on a ten-second cadence otherwise has three outstanding
+before the first returns), nothing while the tab is backgrounded with an
+immediate read on return, and it **stops** once the stream has ended, because an
+ended stream cannot move without a new session and an abandoned tab would
+otherwise pay a request every ten seconds forever. The first read still waits
+for `useSettledOptionalSession`, because a private stream is 404 to an anonymous
+one.
+
+**Gates.** vidra-core `make ci` — fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race — **exit 0**, plus `go vet -tags=integration ./...` exit
+0; new tests in `internal/live` (the drop contract against a fake control
+server: `0`, `1`, `3`, empty, HTML, 404, 401, the request shape and a bounded
+body; the two watchdog paths; the count in the audit row) and in
+`internal/httpapi` (a termination driven through the REAL HTTP controller
+against a fake ingest answering `0` and `1`, the owner's end, and six on the
+viewer principal). vidra-user `npm run ci` on Node 26 — **exit 0**: 258 test
+files / 2586 unit tests and 627 e2e, with six added in `LiveWatchView.test.tsx`.
+Five assertions were verified to bite by breaking the code under them: ignoring
+the drop count, giving the watchdog back its bare state flip, dropping the
+`count` metadata, reverting the view to offline-only polling, and removing the
+in-flight guard. vidra-search was not touched; meta changes here are evidence
+only.
+
+**Not lab-observed — and the A26 re-run is still what turns any of it into a
+measurement.** No RTMP publisher, no ingest container, no nginx, no Redis, no
+browser. The `200`/`0` drop shape is reproduced from A26's own wire reading
+rather than re-read off the module; the watchdog's rotation has never been
+observed against a real encoder's reconnect; the ip+ua digest has never been
+measured against real devices behind a real NAT; and the watch view's
+flip-to-ended has never been seen in a browser against a real termination. The
+re-run should watch, in order: that an over-limit publisher's ffmpeg actually
+exits when the watchdog fires, that a termination against a phantom session
+reports `publisher_disconnected: false`, that a rendered viewer count moves and
+a terminated page flips without a reload, and that two devices on one NAT count
+as two.
