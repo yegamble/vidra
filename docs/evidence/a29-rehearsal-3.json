@@ -1,0 +1,14 @@
+{
+  "item": "A29 rehearsal 3",
+  "register_row": "INT-05",
+  "verdict": "IN PROGRESS — the lab is up; clauses are being measured",
+  "date": "2026-09-08",
+  "section": "A29 rehearsal 3 — two instances against the merged parity — 2026-09-08",
+  "lab": {
+    "scheme": "plain HTTP; no TLS anywhere. Caddy runs with auto_https off on two http:// site addresses.",
+    "edge": "REAL Caddy v2.11.4 (brew), one config with two site blocks reproducing deploy/Caddyfile sections 1, 2, 3, 3a and 4 in structure; only the site addresses and upstreams differ.",
+    "instance_a": {"origin": "http://127.0.0.1:18080", "core_api": "127.0.0.1:18081", "core_worker": "separate VIDRA_ROLE=worker process", "frontend": "127.0.0.1:18082", "database": "vidra_a", "redis_db": 1},
+    "instance_b": {"origin": "http://127.0.0.1:28080", "core_api": "127.0.0.1:28081", "core_worker": "separate VIDRA_ROLE=worker process", "frontend": "127.0.0.1:28082", "database": "vidra_b", "redis_db": 2},
+    "schema": "142 on both instances, dirty=false"
+  }
+}
