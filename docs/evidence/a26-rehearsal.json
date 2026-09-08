@@ -2,5 +2,236 @@
   "slice": "A26 rehearsal — live termination against the merged hardening",
   "date": "2026-09-08",
   "register_row": "INT-01",
-  "status": "IN PROGRESS"
+  "verdict": "PASS (bundled ingest; passthrough ladder; chat/DVR/tips remain SCP-05) — after two defects found and fixed here",
+  "lab": {
+    "core": "two processes built from the working tree (VIDRA_ROLE=api on 127.0.0.1:8088 and VIDRA_ROLE=worker), native postgres 16 at schema 141 (migration 0141 live_termination applied), native redis on :6399, STORAGE_BACKEND=local",
+    "origin": "one origin on 127.0.0.1:8099 — a pipe-only proxy that drops the client's Accept-Encoding, /api/* to core and everything else to `node .next/standalone/server.js` on :3100 (never `next start`; the listener PID was checked)",
+    "ingest": "the compose `media` service's image run for real: alfg/nginx-rtmp pinned by digest, RepoDigests read back as alfg/nginx-rtmp@sha256:780831ae1c4116d22a287ce43f9e1befb84ccaad0b6933de041bb29b6427b513, linux/amd64 under emulation, serving the SHIPPED deploy/media/nginx.conf.template with exactly two lines changed (the shim's api upstream port 8080 -> 8088)",
+    "ingest_deviations_from_compose": [
+      "the shim/control port 8082 is published to the host because core runs on the host rather than on the compose network; the compose service deliberately publishes only 1935",
+      "`--add-host api:host-gateway`, which also resolves to an IPv6 address the container cannot reach; nginx logs one failed IPv6 upstream attempt before falling back. A lab artefact of the host-gateway alias, not of the shipped compose"
+    ],
+    "publisher": "ffmpeg 8.1, `-re -f lavfi -i testsrc2 -f lavfi -i sine -c:v libx264 -c:a aac -f flv rtmp://127.0.0.1:1935/live/<key>`, 1280x720@30 + 48 kHz AAC for the main runs, 640x360/320x180 for the short re-verifications",
+    "browser": "real Chromium via Playwright 1.62.1, launched with --autoplay-policy=no-user-gesture-required",
+    "malware_scan_mode": "disabled (explicit, core#201)",
+    "rate_limiting": "off (RATE_LIMIT_ENABLED=false), so no 429 observation is claimed",
+    "node": "26.8.1"
+  },
+  "sc1_module_truth": {
+    "verdict": "PASS",
+    "nginx_version": "nginx/1.23.1",
+    "configure_args_module": "--add-module=/tmp/nginx-rtmp-module-1.2.2",
+    "nginx_t_on_the_shipped_template": "syntax is ok / test is successful",
+    "stat": {
+      "http": 200,
+      "body": "<rtmp> ... <nginx_rtmp_version>1.1.4</nginx_rtmp_version> <built>Sep  4 2022</built>",
+      "conclusion": "rtmp_stat is compiled in; /control and /stat parse, so rtmp_control is too"
+    },
+    "control_drop_nonexistent_name": {
+      "http": 200,
+      "body": "0",
+      "note": "NOT 404 on this build — the module answers 200 with the number dropped. HTTPIngestController treats any 2xx as success, so ErrIngestNoPublisher is unreachable here and publisher_disconnected can be true when nothing was dropped"
+    },
+    "auth_gate": {
+      "stat_no_secret": 401,
+      "stat_wrong_secret": 401,
+      "control_no_secret": 401,
+      "control_wrong_secret": 401,
+      "publisher_after_two_unauthenticated_drops": "still connected, stream still live"
+    }
+  },
+  "defect_1_control_never_reached_the_publisher": {
+    "severity": "blocking — the headline promise of the hardening",
+    "mechanism": "nginx-rtmp's rtmp_control and rtmp_stat are PER WORKER. Under the shipped `worker_processes auto` the streamer's RTMP session lives on one worker and the api's control request is accepted by another, where it matches nothing; the module answers 200 with a body of \"0\", which DropPublisher reads as success.",
+    "measured_before": {
+      "drops_issued_against_a_live_publisher": 12,
+      "bodies": "0 every time",
+      "publisher": "still connected through all 12",
+      "after_a_real_moderator_termination": "publisher kept writing for the full 60 s watched: 17 new .ts segments appeared and the .flv grew 25.8 MB -> 38.3 MB",
+      "response_to_the_moderator": "publisher_disconnected: true",
+      "stat_split": "consecutive fresh connections answered from different workers: pid 11 reported the packaging stream, pid 13 reported an empty server, and the worker holding the streamer's own socket answered neither"
+    },
+    "measured_after": {
+      "config": "worker_processes 1",
+      "stat": "both sessions on every read, one pid",
+      "drop_body": "1",
+      "drop_to_ffmpeg_exit_s": 0.25
+    },
+    "fix": "vidra-core #211 — deploy/media/nginx.conf.template `worker_processes 1;` + a test that reads the shipped template"
+  },
+  "defect_2_terminate_audit_row_was_never_written": {
+    "severity": "the moderation trail for the new control",
+    "mechanism": "internal/audit's envelope refuses an event carrying a resource id with no resource type, and internal/live discards Record's error on purpose. content.live.terminate set ResourceID and no ResourceType, so normalizeEvent rejected it and the row vanished with no log line.",
+    "measured_before": "a real termination landed every other effect (state, key rotation, publisher drop, creator-visible reason) and audit_log held only content.live.replay",
+    "measured_after": "content.live.terminate | success | user | live_stream | <stream-id> | harassment",
+    "why_the_unit_tests_passed": "the package's fakeAuditor appended to a slice and never ran the envelope; it now pushes every event through a real audit.Service",
+    "fix": "vidra-core #211 — ResourceType: \"live_stream\" + validating fakeAuditor"
+  },
+  "defect_3_the_moderator_dialog_could_not_terminate_at_all": {
+    "severity": "blocking — the control was unreachable from the UI",
+    "mechanism": "lib/api/client.ts JSON-encodes every non-FormData body; endpoints.ts terminateLiveStream stringified its body first, so the payload was a JSON string containing JSON and echo's Bind refused it before Validate ran",
+    "measured_before": "POST /api/v1/admin/live/{id}/terminate -> 400 malformed or invalid request body, body on the wire: \"{\\\"reason_code\\\":\\\"policy_violation\\\",\\\"reason\\\":\\\"...\\\"}\"",
+    "measured_after": "200 {\"state\":\"ended\",\"publisher_disconnected\":true,\"stream_key_rotated\":true}",
+    "scope": "the only endpoint in endpoints.ts that double-encoded",
+    "fix": "vidra-user #201"
+  },
+  "sc2_termination": {
+    "verdict": "PASS (after the three fixes)",
+    "path": "a real moderator signed in to Chromium, opened the live watch page, clicked End stream, picked a reason and submitted",
+    "response": {
+      "http": 200,
+      "state": "ended",
+      "publisher_disconnected": true,
+      "stream_key_rotated": true
+    },
+    "timeline": {
+      "publish_started": "18:16:17.9Z",
+      "playlist_serving_after_s": 6,
+      "terminate_response": "18:18:25.0Z",
+      "N_ffmpeg_exit_after_the_terminate_response_s": 0.08,
+      "ffmpeg_exit_code": 187,
+      "ffmpeg_stderr": [
+        "Error submitting a packet to the muxer: End of file",
+        "[out#0/flv] Error writing trailer: End of file",
+        "[out#0/flv] Error closing file: End of file",
+        "Conversion failed!"
+      ],
+      "ingest_log_chain_all_on_the_one_worker": [
+        "*23 disconnect, client: 172.17.0.1 (the streamer's socket)",
+        "*27 disconnect, client: 127.0.0.1:1935/hls, server: ngx-relay (the loopback packaging push)",
+        "*28 disconnect + deleteStream (the hls session)",
+        "*28 notify: publish_done '127.0.0.1:8082/ingest/stop'"
+      ]
+    },
+    "bytes_under_LIVE_HLS_ROOT": {
+      "click_to_ffmpeg_exit": "one in-progress segment grew 290 272 -> 296 664 and the .flv grew 6 807 bytes — the last flush",
+      "twelve_seconds_after_the_drop": "grew: none, appeared: none. The only change is the .flv disappearing, which is LIVE_RECORDING_RETENTION=0 deleting it once the replay published"
+    },
+    "old_key_on_re_publish": {
+      "hook": 404,
+      "hook_message": "no live stream for that key",
+      "ingest": "connection dropped",
+      "ffmpeg": "Error opening output ... Input/output error",
+      "effect_on_the_running_publisher": "none"
+    },
+    "watch_pages": {
+      "anonymous_without_a_reload": "the page never flips: LIVE badge, a stale viewer count and \"Can't play this live stream\" — the view polls only while the stream is `offline`",
+      "anonymous_after_a_reload": "Stream ended / \"This live stream has ended. Its replay will appear as a normal video on the channel shortly.\" — no reason leaked to the public",
+      "creator_stream_page": "Stream ended / \"This stream was ended by a moderator: Breaks the instance rules. A26 rehearsal: synthetic termination, no real content.\"",
+      "creator_studio": "the same sentence on the Live-streams list beside an ENDED badge",
+      "moderator_page": "the same sentence"
+    },
+    "audit": {
+      "action": "content.live.terminate",
+      "result": "success",
+      "actor_kind": "user",
+      "actor_role": "(empty)",
+      "resource_type": "live_stream",
+      "resource_id": "<stream-id>",
+      "reason": "harassment"
+    },
+    "replay_after_the_termination": {
+      "streamed_seconds": 127.1,
+      "replay_duration_seconds": 127,
+      "state": "published",
+      "renditions": [[1280, 720], [854, 480], [640, 360]],
+      "hls_master": 200,
+      "segment_probe": "init-0.mp4 (829 B) + chunk-0-00001.m4s (2 331 724 B) probes as h264 1280x720 30/1, duration 6.000"
+    },
+    "owner_end": {
+      "route": "POST /live/{id}/end",
+      "response": {"state": "ended", "publisher_disconnected": true, "stream_key_rotated": true},
+      "N_ffmpeg_exit_s": 0.27,
+      "replay": "40 s replay for a 39 s broadcast, published, 1280x720",
+      "audit": "NONE — no content.live.terminate row for an owner end; only the later content.live.replay"
+    },
+    "authorization": {
+      "anonymous_admin_terminate": 401,
+      "plain_user_admin_terminate": 403,
+      "creator_admin_terminate": 403,
+      "moderator_admin_terminate": 200,
+      "anonymous_owner_end": 401,
+      "other_user_owner_end": "404 live stream not found (owner-scoped)",
+      "state_after_the_refusals": "live"
+    }
+  },
+  "sc3_viewer_count": {
+    "verdict": "PASS on the API read; the rendered number is a load-time snapshot",
+    "principals": "three Chromium contexts on distinct client addresses (203.0.113.11 anonymous, .12 signed in with default consent, .13 signed in and opted out of history + personalization). The pipe proxy is loopback and therefore trusted, so core's ExtractIPFromXFFHeader returns each context's own X-Forwarded-For",
+    "readings": [1, 1, 1, 1, 3],
+    "reached_three_after_polls": 4,
+    "decay_after_closing_one_viewer": "3 at 0 s through 85.2 s, 2 at 90.2 s",
+    "window_s": 90,
+    "read_cache_s": 10,
+    "opted_out_viewer": "counted",
+    "anonymous_viewer": "counted",
+    "field_when_not_live": "omitted",
+    "rendered_page": {
+      "at_load": "0 viewers",
+      "after_a_reload_with_three_watching": "3 viewers",
+      "cause": "LiveWatchView polls only while state === 'offline' (OFFLINE_POLL_MS), so a live page's stream object — and its viewer count — is fetched once and never again"
+    },
+    "signed_in_branch_is_unreachable": "on a public stream the playlist is fetched by hls.js with no session credential (the only Authorization it carries is a private stream's playback token), so liveViewerDigest always falls to ip:<RealIP>. Measured directly: an anonymous viewer and a signed-in viewer on ONE address produced ONE Redis set member and a count of 1"
+  },
+  "sc4_recording_retention": {
+    "verdict": "PASS",
+    "retention_0": "the .flv is gone from <LIVE_HLS_ROOT>/rec once the replay VOD publishes; measured four times, and once as the only file change in the 12 s after a drop. rec/ keeps only .keep",
+    "retention_1h_kept": "same broadcast shape with LIVE_RECORDING_RETENTION=1h: the replay published and b49b313c-...-1788892293.flv (338 836 B) was still on the volume",
+    "retention_1h_swept": {
+      "how": "the worker's sweep is hourly with no cadence knob, so the SHIPPED selection (live.DirRecordingStore.PruneRecordings) was run directly against the lab volume from a throwaway harness inside the module, deleted afterwards",
+      "fresh_file_cutoff_1h": "removed=0",
+      "same_file_backdated_2h_cutoff_1h": "removed=1, the .flv is gone and rec/.keep is untouched"
+    }
+  },
+  "sc5_live_ingest_component": {
+    "verdict": "PASS",
+    "ingest_up": {"readyz": 200, "status": "ok", "live_ingest": "ok", "admin_system": "ok"},
+    "ingest_stopped": {
+      "readyz": 200,
+      "status": "degraded",
+      "healthz": 200,
+      "live_ingest": "down — \"the RTMP ingest did not answer its control surface; publishes will be refused and live viewers will see a dead player\""
+    },
+    "live_rtmp_url_unset": {"readyz": 200, "status": "ok", "live_ingest": "not_configured"},
+    "control_url_unset_with_live_configured": {
+      "readyz": 200,
+      "status": "ok",
+      "live_ingest": "not_configured — \"live is configured but LIVE_INGEST_CONTROL_URL is not, so the RTMP ingest is never probed and a moderator cannot disconnect a publisher\""
+    },
+    "control_url_with_no_secret": "the process refuses to boot: exit 1, \"config: LIVE_INGEST_SECRET is required when LIVE_INGEST_CONTROL_URL is set\"",
+    "components_now": ["clamav", "ffmpeg", "live_ingest", "mfa_kek", "postgres", "redis", "s3", "search", "settings_sync", "smtp", "storage"]
+  },
+  "sc6_re_verified": {
+    "key_rotation_mid_broadcast": "POST /live/{id}/key returns 200 with a new key; the current publisher is NOT disconnected and keeps writing (state stays live, segments keep appearing); the old key's next publish is refused at the hook (404 no live stream for that key), the ingest drops the connection and the running publisher is unaffected",
+    "watchdog_max_duration": "live_max_duration_secs = 60 (its floor): force-closed at 81 s, state ended, live playlist 404, audit content.live.force_close / success / system with resource_id EMPTY, and the publisher was NOT disconnected — still ingesting after the cut",
+    "hooks_alone_insufficient": "wrong secret 401, no secret 401, no state change. A valid hook with no RTMP publish returns 302, flips the row live, advertises hls_url and lists the stream on the public rail — and the playlist answers 404",
+    "disconnect_to_replay": "SIGKILL at ~57 s -> state ended, live playlist 404, a 56 s replay published; SIGKILL at 14 s in the earlier hardening lab shape reproduced the same way"
+  },
+  "sc7_no_regression": {
+    "vidra-core": "make ci (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race) and PR #211 ci-required — pass. No migration; api/openapi.yaml unchanged, so no contract ordering with vidra-user",
+    "vidra-user": "npm run ci on Node 26 and PR #201 ci-required, frontend, contract, both e2e-backed lanes, channel-sync-backed, ipfs-backed — pass",
+    "vidra-search": "not touched",
+    "meta": "docs only; the prod compose render was re-run unchanged"
+  },
+  "findings_open": [
+    "DropPublisher cannot distinguish a real disconnect from 'nothing matched': this module build answers both with 200, differing only in a body count that is discarded. With one worker the honest cases coincide, but a termination of a hook-only phantom session (no publisher at all) still reports publisher_disconnected: true. Whether termination should verify the drop is a ruling",
+    "the live watch page polls only while the stream is `offline`, so during a broadcast the viewer count is a single load-time snapshot and a terminated stream does not flip to its ended state without a reload",
+    "liveViewerDigest's signed-in branch is unreachable on a public stream — hls.js sends no session credential with the playlist, so every viewer is digested by IP and viewers sharing an address count once",
+    "an owner's POST /live/{id}/end writes no audit row of any kind",
+    "content.live.replay and content.live.force_close still leave resource_id empty (deliberate, per the hardening slice)",
+    "the duration watchdog still does not use the control surface: an over-limit publisher stays connected and keeps writing segments and a recording after the cut",
+    "content.live.terminate records actor_kind=user but leaves actor_role empty",
+    "a hook-only flip still advertises a byte-less stream on the public Live-now rail",
+    "no live ABR ladder and nothing resyncs a drifted player to the live edge (SCP-05)"
+  ],
+  "not_run": [
+    "OBS or any real streaming client (ffmpeg was the publisher)",
+    "the compose `media` profile brought up as a profile — the service's image, command and shipped template were reproduced by hand",
+    "the hourly recording-retention ticker itself (its selection was run directly)",
+    "TLS, real hostnames, an ingest reachable from another machine",
+    "S3 for the replays (local storage)",
+    "the simultaneous-live caps (live_max_instance_lives, live_max_user_lives)",
+    "more than three concurrent viewers, and any viewer on a real remote network"
+  ],
+  "teardown": "every process, the postgres cluster, the Redis server and the ingest container were started by this session in a scratch directory and stopped at the end; the one instance-settings override made during the lab (live_max_duration_secs) was removed so instance_settings is empty again; credentials, stream keys, recordings, replays and raw logs stay outside the repo"
 }

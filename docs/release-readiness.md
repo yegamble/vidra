@@ -132,7 +132,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | STO-01 Local/S3 canonical storage persists and serves valid media | M C U | Storage interface, local/S3 adapters; current MinIO CI lanes; local half proved by A07/A08; S3 half proved by this slice on MinIO (section "A24 S3 storage on MinIO and reference-mode GC protection — 2026-09-08", evidence `a24-s3-minio.json`): app-created bucket, 19-object key layout, real Chromium CMAF playback (90 frames, 0 dropped), Range/content-type table, byte-identical objects across container recreation, a fresh api on an empty disk, and the scratch floor honoured — write refusal and bucket-quota exhaustion both surface as a bare 500 with the sentence in the log only | PASS | Run PUB/PLAY on both backends; bucket creation/write/Range/content-type/space exhaustion; recreate containers and verify bytes; deployment filesystem ownership | PUB-01 → A07 local, A24 S3. Provider run DEFERRED: no credentials for the beta bucket are on the lab machine, so a real provider's bucket creation, versioning/retention and CORS are untested and the B2 bucket-GC / versioning-billing risks stay open |
 | STO-02 Reference-mode foreign media is protected from garbage collection | C M | `internal/mediagc` ownership marker, foreign-layout adoption refusal and keep rules; proved by this slice (section "A24 S3 storage on MinIO and reference-mode GC protection — 2026-09-08", evidence `a24-s3-minio.json`): a shared MinIO bucket carrying eleven foreign objects beside three real videos, dry runs listing zero foreign keys, the 409 `foreign_media_layout` adoption refusal and its audit row, a tripped orphan breaker (150 orphans, 69 %, deleted 0) then an exact 50-object delete, and — after the imported record was deleted on a force-adopted bucket — a destructive sweep that deleted nothing, with all 11 foreign objects sha256-identical throughout | PASS | Disposable shared bucket with foreign and Vidra keys; dry-run/adoption refusal/orphan breaker; delete imported record then sweep; foreign objects remain byte-identical | MIG-01, STO-01 → A24. The foreign dataset is SYNTHETIC (planted by `docs/evidence/a24-plant-foreign-media.sh` in the importer's own key shapes); no PeerTube import ran, because MIG-01/A18 is blocked on a source database |
 | STO-03 Storage migration/copy/verification/abort and GC interlocks | C U M | `internal/storagemigration`; phase-2 plan and integration tests | UNVERIFIED | Local→MinIO copy with checksums, failures/resume and final authority switch; prove reads during movement and old-store retention; GC cannot race migration | STO-01, REC-01 → A25 |
-| INT-01 Live RTMP ingest→HLS watch→replay with moderation | M C U | `media` profile, live service/hooks/replay; backed tests simulate hook transitions; live evidence `a26-live` (section "A26 live RTMP — ingest, watch, moderation, replay — 2026-09-08"): the BUNDLED nginx-rtmp ingest actually run against a two-process core with a real `ffmpeg` publisher (720p30 h264 + 48 kHz AAC) and real Chromium — the hook contract read verbatim off the wire, a wrong key refused at the hook with zero bytes written, an anonymous viewer's `currentTime` advancing 29.0 s with non-silent decoded audio (analyser RMS 0.125), a mid-broadcast key rotation, the `live_max_duration_secs` watchdog cutting a session with its typed audit row, a SIGKILLed publisher producing a watchable CMAF replay, and the hook-alone and capability-truth matrices | **FAIL (no longer blocked — the ingest plane is ruled and the lab has run; the moderation clause of this row's own procedure is measured as unmet)** | Actual RTMP publisher with audio; live watch advances, authorization and stream-key rotation; terminate/max-duration/disconnect→replay; verify selected ladder/latency; hooks alone insufficient | PUB-03 + live selection/ingest plane → A26. **The bundled plane did not work at all before this slice** and five defects were fixed to make the rest measurable ([vidra-core #205](https://github.com/yegamble/vidra-core/pull/205)): the on-publish redirect answered an `rtmp://` Location, which nginx-rtmp reads as a PUSH RELAY target rather than a rename, so every segment and playlist was written under the RAW STREAM KEY and the api — serving `<id>.m3u8` — 404d the whole broadcast; the rename can never reach the HLS module (reverse handler order), so packaging moved to a loopback-only second application fed by a push; the recorder directory was never created and, when empty, was deleted by the HLS cleanup 12 s after start, so replay-to-VOD had NEVER run on any deployment; a mid-broadcast key rotation orphaned the session (the stop hook carries the pre-rename name) and left the stream `live` for twenty minutes with no replay; and two paths bypassed the stream key entirely — the PUBLIC stream id was accepted as a publish identity, and a deactivated owner kept publishing to the public "Live now" rail. What now PASSES: authorization and key handling (wrong key refused at the hook, key absent from every list body, viewer 404/403 and anonymous 401, admin 404 on the owner-scoped routes), live watch (29.0 s of advance, unmuted non-silent audio, a real moving live playlist), disconnect→replay (SIGKILL at 14 s → `ended`, HLS 404, a 15 s replay published on the right channel and played from a three-variant CMAF ladder with 0 dropped frames, `job_runs` stamped with correlation and request ids), hooks-alone (401 on a bad secret with no state change; a valid hook with no publish flips the row but the watch page renders no `<video>` and says so), and the capability gates (`features.live` true with the ingest, 403 `feature_disabled` on the derived default, typed 503 `live_not_configured` with the setting on and no ingest, Studio create control hidden). What FAILS: **there is no control that terminates a live stream** — core registers no `/admin/live*` route, the admin surface is settings only, and an admin gets 404 on the owner's `DELETE`/`PATCH`; the only lever is the global `live_max_duration_secs`, which has a 60 s floor, cuts up to one 30 s sweep late, and is server-side only — the publisher stays connected and keeps writing segments and a recording. Also measured, not blocking the verdict: there is **no live ABR ladder** (zero `EXT-X-STREAM-INF`; the ingest transcodes nothing, so every viewer gets the streamer's single bitrate) and no viewer count; glass-to-glass latency is 9.1 s at join and nothing resyncs a drifted player to the edge; live audit rows leave `resource_id` empty; session recordings are never deleted after their replay publishes; a hook-only flip advertises a byte-less stream on the public rail; `/admin/system` carries **no ingest component**, so a dead RTMP plane leaves it reading `ok`; and the ingest image is the unpinned `alfg/nginx-rtmp:latest`, a 2022 build. Not run: OBS or any real streaming client, the compose `media` profile as a profile, a second concurrent viewer, the simultaneous-live caps, TLS/real hostnames, and S3 (the replay landed on local storage). **Hardening merged: moderator + owner termination that disconnects the publisher and rotates the key, a concurrent-viewer count, `LIVE_RECORDING_RETENTION`, the ingest image pinned by digest and a `live_ingest` health component** — section "Live hardening — termination, viewer count, recording retention, pinned ingest — 2026-09-08", core #206 / user #200, migration 0141. None of it is lab-observed; the re-run of THIS row's procedure is what decides the verdict |
+| INT-01 Live RTMP ingest→HLS watch→replay with moderation | M C U | `media` profile, live service/hooks/replay; backed tests simulate hook transitions; live evidence `a26-live` (section "A26 live RTMP — ingest, watch, moderation, replay — 2026-09-08"): the BUNDLED nginx-rtmp ingest actually run against a two-process core with a real `ffmpeg` publisher (720p30 h264 + 48 kHz AAC) and real Chromium — the hook contract read verbatim off the wire, a wrong key refused at the hook with zero bytes written, an anonymous viewer's `currentTime` advancing 29.0 s with non-silent decoded audio (analyser RMS 0.125), a mid-broadcast key rotation, the `live_max_duration_secs` watchdog cutting a session with its typed audit row, a SIGKILLed publisher producing a watchable CMAF replay, and the hook-alone and capability-truth matrices | **PASS (bundled ingest; passthrough ladder; chat/DVR/tips remain SCP-05)** | Actual RTMP publisher with audio; live watch advances, authorization and stream-key rotation; terminate/max-duration/disconnect→replay; verify selected ladder/latency; hooks alone insufficient | PUB-03 + live selection/ingest plane → A26. **The bundled plane did not work at all before this slice** and five defects were fixed to make the rest measurable ([vidra-core #205](https://github.com/yegamble/vidra-core/pull/205)): the on-publish redirect answered an `rtmp://` Location, which nginx-rtmp reads as a PUSH RELAY target rather than a rename, so every segment and playlist was written under the RAW STREAM KEY and the api — serving `<id>.m3u8` — 404d the whole broadcast; the rename can never reach the HLS module (reverse handler order), so packaging moved to a loopback-only second application fed by a push; the recorder directory was never created and, when empty, was deleted by the HLS cleanup 12 s after start, so replay-to-VOD had NEVER run on any deployment; a mid-broadcast key rotation orphaned the session (the stop hook carries the pre-rename name) and left the stream `live` for twenty minutes with no replay; and two paths bypassed the stream key entirely — the PUBLIC stream id was accepted as a publish identity, and a deactivated owner kept publishing to the public "Live now" rail. What now PASSES: authorization and key handling (wrong key refused at the hook, key absent from every list body, viewer 404/403 and anonymous 401, admin 404 on the owner-scoped routes), live watch (29.0 s of advance, unmuted non-silent audio, a real moving live playlist), disconnect→replay (SIGKILL at 14 s → `ended`, HLS 404, a 15 s replay published on the right channel and played from a three-variant CMAF ladder with 0 dropped frames, `job_runs` stamped with correlation and request ids), hooks-alone (401 on a bad secret with no state change; a valid hook with no publish flips the row but the watch page renders no `<video>` and says so), and the capability gates (`features.live` true with the ingest, 403 `feature_disabled` on the derived default, typed 503 `live_not_configured` with the setting on and no ingest, Studio create control hidden). What FAILED THEN, and is closed by the hardening plus the rehearsal recorded at the end of this cell: **there was no control that terminates a live stream** — core registers no `/admin/live*` route, the admin surface is settings only, and an admin gets 404 on the owner's `DELETE`/`PATCH`; the only lever is the global `live_max_duration_secs`, which has a 60 s floor, cuts up to one 30 s sweep late, and is server-side only — the publisher stays connected and keeps writing segments and a recording. Also measured, not blocking the verdict: there is **no live ABR ladder** (zero `EXT-X-STREAM-INF`; the ingest transcodes nothing, so every viewer gets the streamer's single bitrate) and no viewer count; glass-to-glass latency is 9.1 s at join and nothing resyncs a drifted player to the edge; live audit rows leave `resource_id` empty; session recordings are never deleted after their replay publishes; a hook-only flip advertises a byte-less stream on the public rail; `/admin/system` carries **no ingest component**, so a dead RTMP plane leaves it reading `ok`; and the ingest image is the unpinned `alfg/nginx-rtmp:latest`, a 2022 build. Not run: OBS or any real streaming client, the compose `media` profile as a profile, a second concurrent viewer, the simultaneous-live caps, TLS/real hostnames, and S3 (the replay landed on local storage). **Hardening merged** (moderator + owner termination, a concurrent-viewer count, `LIVE_RECORDING_RETENTION`, the ingest pinned by digest, a `live_ingest` health component — core #206 / user #200, migration 0141), and the re-run of this row's own procedure has now measured it: section "A26 rehearsal — live termination against the merged hardening — 2026-09-08" ([evidence](evidence/a26-rehearsal.json)), which found the termination broken in **three** independent places and fixed all three ([core #211](https://github.com/yegamble/vidra-core/pull/211), [user #201](https://github.com/yegamble/vidra-user/pull/201)): nginx-rtmp's control module is PER WORKER, so under the shipped `worker_processes auto` twelve consecutive drops against a live publisher all answered `0`, the streamer kept writing seventeen more segments and 12.5 MB of recording, and the moderator was told `publisher_disconnected: true` every time; `content.live.terminate` set a `resource_id` with no `resource_type`, which the audit envelope refuses, so the row was never written at all; and the frontend double-encoded the request body, so every click of **End stream** answered `400`. With those fixed the whole clause passes on the wire — a moderator's dialog returns `200 {"state":"ended","publisher_disconnected":true,"stream_key_rotated":true}`, **ffmpeg exits 0.08 s later**, **zero further bytes** reach `LIVE_HLS_ROOT` in the next twelve seconds, the old key is refused at the hook, the creator (and only the creator and staff) is told which rule and in whose words on both surfaces, the audit row carries the stream in `resource_id`, and terminate → drop → `on_publish_done` publishes a **127 s replay for a 127 s broadcast** that plays from a three-variant CMAF ladder. Also measured: `viewer_count` 3 with three viewers and a decay to 2 at **90.2 s**, `LIVE_RECORDING_RETENTION` in both modes, and `live_ingest` `ok`/`down`/`not_configured` with `/readyz` staying 200. Open, none blocking: the count is unreachable for signed-in viewers and its rendered value never refreshes during a broadcast, the duration watchdog still does not disconnect the publisher, `DropPublisher` cannot tell a real disconnect from "nothing matched", and an owner's own end writes no audit row |
 | INT-02 Direct URL import, yt-dlp platform import and channel auto-sync | M C U | Videoimport/channelsync; W2; released image yt-dlp build arg; dedicated channel-sync CI; live evidence `a27-import-sync` (a local fixture origin and an html5 extractor fixture on a two-process core: direct import stored, probed, transcoded and published with a stamped correlation id; sandboxed `resolver=ytdlp` published with h264+aac and prefilled the empty draft field; one scheduled channel sync discovered exactly one item, imported nothing on two `sync-now` runs and two scheduled runs, discovered exactly one new item after the source published one, recorded a real outage as `failed` with a safe reason and recovered with no re-import; a SIGKILLed worker was requeued by the lease sweep and retried to success with no duplicate and the correlation id preserved across processes; seven SSRF probes refused with zero stored bytes, including a public redirector to a private address that imported before this slice; and every disabled/boot gate refused once) | PASS | Local fixture origin/file and extractor fixture; scheduled channel discovers new item once; restart/retry/SSRF/disabled gates; verify released image actually contains executable | PUB-03 → A27. Released-image proof is `ghcr.io/yegamble/vidra-core:v0.6.2` (amd64) carrying `/usr/local/bin/yt-dlp` 2026.07.04 + Python 3.14.7 + ffmpeg 8.1.2 from the `YTDLP_VERSION` build arg — that image PREDATES the fixes in core#184, so the released image is proven to contain the executable but not to run this behaviour. Follow-ups, none blocking: the three boot-capability 503s (`resolver=ytdlp`, sync create, sync-now) are bare `echo.NewHTTPError` so the 5xx scrubber replaces their sentences with "an unexpected error occurred" (A17's open item, measured here on two more routes); URL import has a hard 60-second budget for the WHOLE download (`videoimport.fetchTimeout` is the `http.Client.Timeout`), so `UPLOAD_MAX_SIZE` is not the real ceiling; a failed sync reschedules at the plain `CHANNEL_SYNC_INTERVAL` with no backoff; `channel_syncs` is still unprojected into `job_runs` and has no admin surface (this slice added only a WARN line); a runtime limit change binds the worker only after its settings-poll interval; the channel-sync dedupe key falls back to the entry URL when the extractor reports no id; and the explicit `resolver=ytdlp` path is still not dial-pinned by design. The `channel-sync-backed` lane was NOT run against this branch (it needs Docker Compose); S3 was not exercised |
 | INT-03 Manual captions and Whisper generation/review | M C U | Caption routes/CaptionsManager; backed captions/whisper-captions opt-in; live evidence `a28-captions-scan` (section "A28 captions, Whisper and ClamAV lanes — 2026-09-08") on a two-process core with real Chromium: manual VTT create/edit-by-re-upload/list/delete with the object sha changing over the same key, a second language, typed 422s for a non-WebVTT body and a malformed tag, `PUT`/`PATCH` still 405, and an owner-only matrix in which even the admin gets 404 while anonymous reads of a public video's track are 200; both tracks render on the watch page as same-origin `blob:` `<track>` with the right `srclang`/`label` and three real cues; and a REAL local whisper.cpp 1.9.2 `/inference` endpoint drove audio→job→an editable `Auto-generated` caption (12 s end to end from the Studio button), with a measured 1-then-2-minute retry ladder, a dead-letter at attempt 5 that wrote no caption, the compile-time 10-minute timeout firing exactly on time against a stalling endpoint and recovering on the next attempt, and the disabled split proved on both halves (403 `feature_disabled` with the control hidden, 503 `auto_captions_not_configured` when the admin toggle is on without an endpoint) | PASS | Manual VTT CRUD, watch track and language; configured Whisper audio→job→editable caption; outage/timeout and unsupported language; owner-only access | PUB-03 → A28. Evidence is **whisper.cpp 1.9.2 with `ggml-tiny.bin` — a real implementation of the contract core speaks, but the SELECTED endpoint, model size and capacity are DEFERRED**, so nothing here bounds transcription latency or cost at production scale. Findings, none blocking: there is no caption *editor* — the shipped edit path is re-uploading the language, and `UpsertCaption` keeps the original `created_at` with no `updated_at`, so nothing distinguishes an edited track from an untouched one; one click on Studio's "Generate automatically" silently replaced a creator's hand-written `en` track with the machine transcript, no warning and no undo; the Whisper round-trip bound is a compile-time 10 minutes with no knob; `caption_generate` rows reach `job_runs` through migration 0083's trigger but carry empty `correlation_id`/`request_id`/`actor_id` on 4 of 4 rows where `upload_finalize` and `video_transcode` are stamped on 2 of 2; a well-formed unknown tag (`zz`) passes Vidra's validator and **aborts whisper.cpp**, so any creator can kill a shared transcription service; and the client ignores the response's own `language`, so an English transcript is stored under whatever tag was asked for. A17's note that this 503 is a bare `echo.NewHTTPError` is **stale** — it is typed and its sentence survives the scrubber |
 | INT-04 ClamAV scanning actually gates all ingestion | M C U | Scanner service; scan profile; uploads/imports/DM hooks and config policy; live evidence `a28-captions-scan` (section "A28 captions, Whisper and ClamAV lanes — 2026-09-08") against a REAL clamd 1.5.4 with a real 3.6 M-signature database: a benign upload published while a standard EICAR body was refused on the resumable-upload path, the URL-import path and the DM path (the DM half re-cited from A14 and re-run here for one request — 422 `attachment failed the malware scan`, zero rows, zero blobs); all three fail policies measured with the daemon actually stopped (`fail-closed` fails both ingestion paths, `quarantine` parks the upload in the moderation queue, `fail-open` publishes unscanned); boot refuses `MALWARE_SCAN_ENABLED=true` with an empty `CLAMAV_ADDR`; and `/admin/system` now carries a `clamav` component that reads `ok`, then `down` with the instance `degraded` and a sentence naming both the consequence and the policy in force | PASS | Disposable scanner: benign file, standard EICAR fixture, unavailable scanner, approved fail policy; never publish/link rejected bytes; test URL and DM paths as well as upload | PUB-01 → A28. Two defects fixed on the way (vidra-core #198): an INFECTED verdict failed the video but **kept its `video_files` row and its bytes**, so `GET /videos/{id}/download` advertised the rejected original and `/download/original` served it 200 `video/mp4` to the owner AND to an admin on both ingestion paths — the "never link rejected bytes" clause, with the link live; and `/admin/system` had **no scanner component at all**, so a dead clamd left it reporting `"status":"ok"` across nine healthy components while every upload and import was landing in `failed`. Rejected bytes now live **nowhere** — no quarantine store, no retention, the audit row is the whole record. Findings that need a ruling, none blocking: a malware rejection is **invisible to the creator** (the upload session settles `completed` with an empty `failure_reason`, the import job settles `done` with no error, Studio shows a bare `FAILED` badge beside a `quarantined` video that gets a full sentence); `fail-open` publishing unscanned media leaves **no audit row**, only a WARN log line; and **`MALWARE_SCAN_ENABLED` defaults to false**, so out of the box nothing is scanned, with no boot warning and no log line — the only honest surface is `/admin/infrastructure`'s prose. EICAR is a whole-file signature (a real mp4 with it appended scans clean), so this lane proves the gate, not clamd's detection depth. The SELECTED scanner deployment is DEFERRED (a throwaway host daemon, not the packaged one), S3 was not exercised, and thumbnails/storyboards/avatars/account-import archives were not probed for a scan seam |
@@ -13950,3 +13950,217 @@ scope, and the handle/actor collision that makes the block address the wrong
 actor — need a ruling or a fix before the row can honestly read PASS, because
 they are the same clause (2) the original verdict named. Everything else in
 INT-05's procedure has now been measured twice and holds.
+
+## A26 rehearsal — live termination against the merged hardening — 2026-09-08
+
+**INT-01 moves from FAIL to PASS**, and it takes three defects with it. The
+hardening slice ("Live hardening — termination, viewer count, recording
+retention, pinned ingest") built the moderator's End-stream control and said in
+its own words that none of it was lab-observed. This re-run put the pinned
+ingest, a real `ffmpeg` publisher and a real moderator in Chromium back in front
+of it and found that **the control did not work at all — in three independent
+places at once**. Two PRs fix them
+([core #211](https://github.com/yegamble/vidra-core/pull/211),
+[user #201](https://github.com/yegamble/vidra-user/pull/201)); no migration
+(core stays at schema 141), `api/openapi.yaml` unchanged, so there is no
+`contract-ci` ordering between them. SCP-05 (chat, slow mode, tips, DVR, live
+ABR) stays deferred. [Sanitized evidence](evidence/a26-rehearsal.json).
+
+Same lab shape as A26: a pipe-only proxy on `127.0.0.1:8099` in front of a
+production Next standalone server on `:3100` and a two-process vidra-core
+(`VIDRA_ROLE=api` on `:8088`, a separate `VIDRA_ROLE=worker`) over native
+postgres 16 at schema 141 and native redis, `STORAGE_BACKEND=local`,
+`MALWARE_SCAN_MODE=disabled`, `RATE_LIMIT_ENABLED=false`. The ingest is the
+compose `media` service's image, pinned:
+`docker image inspect` reads its `RepoDigests` back as
+`alfg/nginx-rtmp@sha256:780831ae…6427b513`, the digest in
+`docker-compose.yml`. It runs the **shipped**
+`deploy/media/nginx.conf.template` with exactly two lines changed — the shim's
+api upstream port — plus two deviations stated once here: the control port
+`8082` is published to the host (core is on the host, not the compose network,
+and the compose service deliberately publishes only 1935), and `--add-host
+api:host-gateway` also resolves to an unreachable IPv6 address, so nginx logs
+one failed upstream attempt before falling back.
+
+**SC1, module truth — passes, and it is the one thing that was never in doubt.**
+`nginx -V` on the pinned image reports `nginx/1.23.1` built
+`--add-module=/tmp/nginx-rtmp-module-1.2.2`; `nginx -t` against the shipped
+template with only the secret substituted is *syntax is ok / test is
+successful*, which by itself proves `rtmp_control` and `rtmp_stat` are compiled
+in — nginx refuses an unknown directive. `/stat` answers **200** with
+`<nginx_rtmp_version>1.1.4</nginx_rtmp_version>`. A missing or wrong
+`X-Ingest-Secret` is **401** on both `/stat` and `/control`, and two
+unauthenticated drop attempts against a live publisher left it connected and the
+stream `live`. One thing the contract got wrong: a drop that matches nothing
+answers **200 with a body of `0`**, not 404, so `ErrIngestNoPublisher` is
+unreachable on this build and any 2xx reads as a successful disconnect. That
+detail is what made the next defect invisible.
+
+**Defect 1 — the drop never reached the publisher, and the response said it
+did.** nginx-rtmp's control and stat modules are **per worker**: each worker
+keeps its own stream index, and a control request can only act on publishers
+held by whichever worker accepted that HTTP connection. Under the shipped
+`worker_processes auto` the streamer's RTMP session lands on one worker and the
+api's drop on another. Measured: **twelve consecutive drops** against a live
+publisher all answered `0` and the publisher survived every one; consecutive
+`/stat` reads on fresh connections came back from **different workers** — pid 11
+reported the packaging stream, pid 13 reported an empty server, and the worker
+holding the streamer's own socket answered neither. A real moderator termination
+returned `publisher_disconnected: true` while the streamer kept going for the
+full 60 s the lab watched: **seventeen** new `.ts` segments appeared and the
+recording grew **25.8 MB → 38.3 MB**. With `worker_processes 1` the same lab
+reads both sessions on every `/stat`, the drop answers `1`, and ffmpeg exits
+**0.25 s** later. The ingest transcodes nothing, so one worker is not the
+throughput limit an operator meets first.
+
+**Defect 2 — the termination audit row was never written.**
+`internal/audit`'s envelope refuses an event that carries a resource id with no
+resource type, and `internal/live` discards `Record`'s error on purpose — a
+moderation action must never fail because the trail did. `content.live.terminate`
+set `ResourceID` and no `ResourceType`, so it was rejected in `normalizeEvent`
+and disappeared: no row, no log line. A real termination landed every other
+effect — state, key rotation, publisher drop, the creator-visible reason — and
+`audit_log` held only `content.live.replay`. **The one thing the hardening said
+it fixed about live auditing, putting the stream id in `resource_id` instead of
+free text, is exactly what made the row unstorable.** The package's `fakeAuditor`
+appended to a slice and never ran the envelope; it now pushes every event
+through a real `audit.Service`, and that test change is the durable part.
+
+**Defect 3 — the moderator's dialog could not terminate anything.**
+`lib/api/client.ts` JSON-encodes every non-FormData body; `endpoints.ts`'s
+`terminateLiveStream` stringified its body first, so what went on the wire was a
+JSON **string** whose contents happened to be JSON, and echo's `Bind` refused it
+before `Validate` ran — a bare `400 malformed or invalid request body`, not a 422
+naming a field. Every click of **End stream** failed. It is the only endpoint in
+that file that double-encoded.
+
+**SC2, termination end to end — passes with all three fixed.** A moderator
+signed in to Chromium, opened the live watch page, clicked **End stream**, picked
+*Breaks the instance rules* and wrote a note. The response is
+`200 {"state":"ended","publisher_disconnected":true,"stream_key_rotated":true}`.
+**ffmpeg exits 0.08 s after that response** with code 187 and
+`Error submitting a packet to the muxer: End of file` → `Error writing trailer` →
+`Error closing file` → `Conversion failed!`. The ingest log carries the whole
+chain on the one worker: the streamer's socket disconnects, the loopback
+packaging push tears down, the `hls` session closes, and
+`notify: publish_done '127.0.0.1:8082/ingest/stop'` fires the ordinary stop hook.
+Between the click and the exit one in-progress segment grew 6 392 bytes and the
+recording 6 807 — the last flush. In the **twelve seconds after the drop nothing
+grew and nothing appeared**; the only change under `LIVE_HLS_ROOT` is the `.flv`
+disappearing, which is retention 0 deleting it once the replay published. The old
+key's next publish is refused at the hook (`404 no live stream for that key`),
+the ingest drops the connection, ffmpeg reports `Input/output error`, and the
+running publisher is untouched.
+
+The replay is **complete**: 127 s of broadcast produced a **127 s** replay,
+`published`, public, on the stream's own channel, with a three-variant CMAF
+master answering 200 — `init-0.mp4` plus `chunk-0-00001.m4s` probes as h264
+1280×720 30/1, duration 6.000. The audit row now reads
+`content.live.terminate / success / user / **live_stream** / <stream-id> /
+harassment`.
+
+The creator's stream page and the Studio both say *"This stream was ended by a
+moderator: Breaks the instance rules. A26 rehearsal: synthetic termination, no
+real content."* from the one copy module; an anonymous visitor reloading the
+same page gets only *"This live stream has ended."* — the reason does not leak.
+Wrong actors: anonymous **401**, plain user **403**, the stream's own creator
+**403** on the admin route, moderator **200**; anonymous **401** and another user
+**404** on the owner route, with the state still `live` after every refusal. The
+owner's `POST /live/{id}/end` does the same — `publisher_disconnected` and
+`stream_key_rotated` true, **0.27 s** to ffmpeg's exit, a 40 s replay for a 39 s
+broadcast — and writes **no audit row at all**.
+
+**SC3, viewer count — passes on the API, and the rendered number does not
+move.** Three Chromium contexts on distinct client addresses (the pipe proxy is
+loopback and therefore trusted, so `ExtractIPFromXFFHeader` returns each
+context's own `X-Forwarded-For`): anonymous, signed in with default consent, and
+signed in **opted out** of history and personalization. `viewer_count` read
+`1, 1, 1, 1, 3` and reached **3** about twelve seconds after the third joined —
+the 10 s read cache. Closing one viewer held 3 through 85.2 s and dropped to **2
+at 90.2 s**, the documented 90 s window almost exactly. Anonymous and opted-out
+viewers are both counted; the field is omitted when the stream is not live.
+
+Two things the count is not. The rendered page shows **`0 viewers` at load and
+never updates** — `LiveWatchView` polls only while the state is `offline`, so a
+live page fetches the stream once; a reload with three watching shows `3
+viewers`. And the signed-in branch of `liveViewerDigest` is **unreachable on a
+public stream**: hls.js sends no session credential with the playlist (the only
+`Authorization` it carries is a private stream's playback token), so every viewer
+digests as `ip:<RealIP>`. Measured directly — an anonymous viewer and a signed-in
+viewer on **one** address produced **one** Redis set member and a count of 1.
+Viewers behind one NAT count once, and the privacy note's distinction between a
+signed-in and an anonymous digest never happens.
+
+**SC4, recording retention — passes in both modes.** At `0`, the `.flv` is gone
+from `<LIVE_HLS_ROOT>/rec` as soon as the replay VOD publishes; measured four
+times, once as the *only* file change in the twelve seconds after a drop, leaving
+`rec/` holding just `.keep`. At `1h` the same broadcast shape published its
+replay and left `b49b313c-…-1788892293.flv` (338 836 B) on the volume. The
+sweep's selection was exercised against that real file: the worker's loop is
+hourly with no cadence knob, so `live.DirRecordingStore.PruneRecordings` was run
+directly from a throwaway harness inside the module (deleted afterwards, the
+checkout is clean) — a fresh file against a 1 h cutoff selects **0**; the same
+file backdated two hours selects and deletes **1**, and `rec/.keep` is untouched.
+
+**SC5, the `live_ingest` component — passes.** With the ingest up, `/readyz` and
+`/admin/system` both read `ok` and the component list is now eleven. With the
+container **stopped**, both read `live_ingest: down` — *"the RTMP ingest did not
+answer its control surface; publishes will be refused and live viewers will see a
+dead player"* — the overall status is `degraded`, and **`/readyz` still answers
+200** (as does `/healthz`), so one shared ingest cannot empty every replica out.
+With `LIVE_RTMP_URL` unset it is `not_configured` and the instance reads `ok`.
+With live configured and `LIVE_INGEST_CONTROL_URL` unset it is `not_configured`
+*with the explanation* — *"…so the RTMP ingest is never probed and a moderator
+cannot disconnect a publisher"*. And a control URL with **no secret** refuses to
+boot: exit 1, `config: LIVE_INGEST_SECRET is required when
+LIVE_INGEST_CONTROL_URL is set`.
+
+**SC6, re-verified clauses.** A **mid-broadcast key rotation** returns 200 with a
+new key, does not disconnect the current publisher (state stays `live`, segments
+keep appearing), and the old key's next publish is refused at the hook. The
+**duration watchdog** with `live_max_duration_secs = 60` (its floor) force-closed
+at **81 s** — the limit plus up to one 30 s sweep — flipped the state, 404d the
+playlist and wrote `content.live.force_close / success / system` with
+`resource_id` still **empty**; the publisher was **not** disconnected and was
+still ingesting after the cut, so the watchdog does not use the control surface
+that now exists. **Hooks alone** are still insufficient: a wrong secret and a
+missing secret are both 401 with no state change, and a valid hook with no RTMP
+publish flips the row `live`, advertises `hls_url` and lists the stream on the
+public rail while the playlist answers **404**. **Disconnect → replay** holds: a
+SIGKILLed publisher at ~57 s produced `ended`, a 404 live playlist and a 56 s
+published replay.
+
+**Gates.** vidra-core `make ci` and PR #211's `ci-required` — pass (no migration;
+`api/openapi.yaml` unchanged). vidra-user `npm run ci` on Node 26 and PR #201's
+`ci-required`, `frontend`, `contract`, both `e2e-backed` lanes,
+`channel-sync-backed` and `ipfs-backed` — pass. vidra-search was not touched.
+Meta changes here are documentation only.
+
+**Findings that need a ruling rather than a patch, none blocking the verdict.**
+`DropPublisher` cannot tell a real disconnect from "nothing matched" — this
+module answers both with 200 and differs only in a body count that is discarded —
+so terminating a hook-only phantom session with no publisher at all still reports
+`publisher_disconnected: true`; whether a termination should *verify* the drop is
+a decision, not a bug fix. The live watch page polls only while `offline`, so a
+broadcast's viewer count is a load-time snapshot and a terminated stream does not
+flip to its ended state without a reload. The signed-in viewer digest is
+unreachable on public streams. An owner's own end writes no audit row of any
+kind, and `content.live.terminate` records `actor_kind=user` but leaves
+`actor_role` empty. `content.live.replay` and `content.live.force_close` still
+carry an empty `resource_id`. A hook-only flip still advertises a byte-less
+stream on the public rail; there is still no live ABR ladder and nothing resyncs
+a drifted player to the edge.
+
+**Unverified.** No OBS or other real streaming client. The compose `media`
+profile was not brought up as a profile — its image, command and shipped template
+were reproduced by hand. The hourly retention ticker itself was not waited out
+(its selection was run directly). No TLS, no real hostnames, no ingest reachable
+from another machine. Replays landed on **local** storage; S3 was not exercised.
+The simultaneous-live caps were not exercised, and no run had more than three
+concurrent viewers or a viewer on a real remote network.
+
+The lab was torn down: every process, the postgres cluster, the Redis server and
+the ingest container were started by this session in a scratch directory and
+stopped at the end; the one instance-settings override made during the lab
+(`live_max_duration_secs`) was removed, so `instance_settings` is empty again.
+Credentials, stream keys, recordings, replays and raw logs stay outside the repo.
