@@ -12607,22 +12607,54 @@ vidra sends no signature on its own outbound object fetches either.
 | **A29-F5** | a cancelled `Undo` leaves a ghost follower | **fixed** — an `Undo` or `Reject` bound for a blocked destination is delivered, not cancelled |
 | **A29-F6** | the REST follower count excludes remote followers | **fixed** — one definition, local + accepted remote, shared with the AP collection |
 | **A29-F7** | no per-remote-account block exists | **fixed** — `remote_actor_blocks` + `/me/blocks/remote` + a settings tab |
-| **A29-F8** | a follower instance stores no federated comments | **NOT BUILT** — see below |
+| **A29-F8** | a follower instance stores no federated comments | **fixed for the direction A29 measured** — the thread the origin sends is mirrored and shown; AUTHORING against a remote video stays deferred, see below |
 | **A29-F9** | a deleted video's AP id answers 200 | **fixed** — 410 + Tombstone |
 | **A29-F10** | deliveries carry no correlation id; `/admin/system` has no federation component | **fixed** — identity on the queue row and onto `job_runs`; a `federation` component |
 | **A29-F11** | account actor collections are hard-coded empty | **deferred** — a documented decision in `collections.go`, unchanged |
 | **A29-F12** | the SSRF guard skips the cached actor; a rotated key is unrecoverable | **fixed** — the guard runs on every resolution; one bounded re-fetch on a verification failure |
 
-**A29-F8 is the one criterion this slice did not meet, and it is stated rather
-than shaded.** Comments on remote videos are a feature, not a patch: `comments`
-has `video_id UUID NOT NULL REFERENCES videos`, so a follower storing a reply to
-a video it does not host needs either a nullable FK on the most-joined table in
-the schema or a new table, plus a read surface, a composer, an outbound
-`Create{Note}` addressed to the ORIGIN's inbox rather than to channel followers,
-and a ruling on who moderates a comment an instance hosts about a video it does
-not own. None of that is a line of code away, and half of it would be worse than
-none. The follower's remote watch page still says so honestly ("Comments,
-ratings, and saving live on the origin instance").
+### The mirrored thread, and the half of A29-F8 that stays deferred
+
+A29 measured the drop end to end and it was silent on both sides: A's creator
+replied to their own video, the reply fanned out as `Create{Note}` to all three
+follower inboxes, all three deliveries succeeded — and B stored **zero**
+comments. `resolveNoteTarget` requires `inReplyTo` to resolve to a LOCAL video,
+so a follower receives every federated comment for the videos it follows and
+drops every one, while the sender's ledger records a success.
+
+Migration **0140** gives them somewhere to live: `remote_video_comments`, a
+SEPARATE table rather than a nullable `comments.video_id`. `comments` is the
+most-joined table in the schema and every moderation, notification,
+watched-word and listing query reads that NOT NULL column, so admitting rows
+about a video this instance does not host would put a NULL check into all of
+them. These rows are also a different KIND of thing — a mirror of somebody
+else's thread, with no local author, that only the origin may write.
+
+**The authority rule has three checks and the third is specific to this path.**
+The activity's actor is the signer; the Note lives on the signer's origin and is
+attributed to it; and **the Note's origin is the VIDEO's origin**. Without the
+third, any instance in our follow graph could write onto any mirrored video from
+any other instance — the thread would be writable by every peer we follow rather
+than by the server that hosts it. Edit and retraction are honoured under the
+origin's authority, and a stranger's retraction is refused; a redelivery does not
+double the thread.
+
+`GET /api/v1/remote-videos/{id}/comments` is the read, gated on the VIDEO's own
+visibility first so the thread cannot be used to probe for a hidden video, and
+filtered by the same three controls the card uses (admin instance block for
+everyone; the viewer's instance mute and per-remote-account block when signed
+in), so a thread can never show what the card would have hidden.
+
+**What stays deferred, and why it is a ruling rather than work: AUTHORING.**
+There is no `user_id` column and no POST, deliberately. Writing a comment here
+about a video hosted elsewhere reverses a shipped product decision ("comments,
+ratings and saving live on the origin instance") and raises a question mirroring
+does not — who answers for a comment an instance hosts about a video it does not
+own. It would also need an outbound `Create{Note}` addressed to the ORIGIN's
+inbox rather than to channel followers, and A29-F11 means an account has no
+follower collection to fan out to either. The follower's page now says exactly
+this: replying lives on the origin, and the comments shown are a copy of the
+origin's thread.
 
 ### The per-remote-account block, and what it can honestly promise
 
@@ -12668,11 +12700,13 @@ Row triggers fire in alphabetical order by trigger name, and
 `federation_deliveries_operational_projection` sorts before
 `federation_deliveries_run_identity`.
 
+**0140** `remote_video_comments` — the mirrored thread (above).
+
 0137 belongs to the A33 purge-jobs slice, which merged during this one; the
 branch was rebased onto it and the numbering is contiguous.
 
 Both migrations were **applied to a real PostgreSQL 16.15**, not merely linted:
-`migrate up` from an empty database reached version 139 clean, and the
+`migrate up` from an empty database reached version 140 clean, and the
 integration suites then ran against that schema.
 
 ### The federation component on /admin/system
@@ -12696,7 +12730,7 @@ because a drained queue and a queue nothing is draining look identical by depth.
 
 ### Gates
 
-`vidra-core`: `make ci` **PASS** (fmt-check, vet, migrate-lint — **139** up
+`vidra-core`: `make ci` **PASS** (fmt-check, vet, migrate-lint — **140** up
 migrations clean, openapi-verify, sqlc-verify, test-race). `go vet
 -tags=integration ./...` clean. `go test -tags=integration -count=1 -p 1
 ./internal/federation/... ./internal/store/... ./internal/httpapi/...` **ok** on
@@ -12706,7 +12740,7 @@ owner-claim test needs an empty `users` table and fails after the federation
 suite has seeded one, on this branch and on clean `main` alike.
 
 `vidra-user`: `typecheck`, `lint` (2 pre-existing warnings, 0 errors),
-`lint:icons`, `test` (**256 files, 2552 tests, all passing**) and the production
+`lint:icons`, `test` (**256 files, 2555 tests, all passing**) and the production
 `build` all pass — **on Node 22, not the Node 26 CI uses**, which is what this
 machine has. The Playwright suites were not run (this repo's AGENTS.md forbids
 them locally).
@@ -12738,6 +12772,9 @@ a caching edge or a running Caddy. What the re-run has to prove, in order:
    `job_runs` row carries the correlation id of the request that queued it.
 8. An unfollow issued while the destination is blocked delivers its `Undo`.
 9. A peer that rotates its keypair is verifiable again on the next activity.
+10. A's creator's reply now APPEARS on B's remote watch page — the exact
+    delivery A29 watched succeed into a drop — and A's edit and retraction of it
+    follow through.
 
 **Interoperability is still unverified.** The outbound `url` array, the `icon`
 Image and the `PT…S` duration follow PeerTube's convention and are read by
@@ -12752,5 +12789,6 @@ can produce, and a dead vocabulary member is exactly the kind of thing that
 later reads as coverage. Whether a viewer's own instance SHOULD measure playback
 it did not serve is a product question this slice was not given.
 
-**A29-F4's redelivery half and A29-F8 stay open**, both named above.
+**A29-F4's redelivery half stays open, and so does A29-F8's AUTHORING half** —
+both named above, both for reasons stated rather than shaded.
 MIG-06's identity/`Move` clause stays deferred, unchanged.
