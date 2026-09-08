@@ -1,0 +1,212 @@
+{
+  "slice": "A29 parity — one handle namespace, account-scoped retroactive blocks, threaded mirror",
+  "date": "2026-09-08",
+  "register_row": "INT-05 is NOT re-scored and NOT flipped. This slice is the owner's ruling on the two sub-clauses of INT-05's own procedure that the 2026-09-08 rehearsal left open — the handle/actor collision that made a per-remote-account block address the wrong actor, and a blocked account's already-stored content staying visible — plus the six smaller findings that rehearsal recorded without fixing. Only the third two-instance run can flip the row.",
+  "verdict": "IMPLEMENTED AND UNIT/INTEGRATION-PROVEN, NOT LAB-OBSERVED. Code-only by instruction: another executor holds the machine's lab and Docker. Every claim below is a test, a migration applied to a real PostgreSQL, or an explicit statement that something was not measured. Nothing here has been seen federating between two live instances.",
+  "prs": {
+    "vidra-core": "https://github.com/yegamble/vidra-core/pull/210 — draft; the migration, the reservation, WebFinger, the block model, the threaded mirror and the (a)-(f) findings",
+    "vidra-user": "https://github.com/yegamble/vidra-user/pull/202 — draft, and it STAYS draft until core merges: lib/api/generated.ts is regenerated from core's branch spec, so contract-ci cannot go green first",
+    "meta": "this section and this file",
+    "ordering": "core #210 → regen already committed on user #202 → user #202. No merge was performed by this slice."
+  },
+  "sc1_one_handle_namespace": {
+    "verdict": "PASS (tests)",
+    "rule": "An account username and a channel handle reserve each other, case-insensitively under lower() — the same normalisation users_username_lower_idx and channels_handle_lower_idx have always used, so the reservation cannot disagree with the per-table uniqueness that predates it.",
+    "enforcement": "actor_handles: one row per live handle, handle_lower PRIMARY KEY, with cascading user_id/channel_id FKs (exactly one set) so a deletion releases the name with no application code. Two AFTER triggers on users(username) and channels(handle) upsert the row, arbitrating on the SUBJECT index so a rename MOVES the reservation while a cross-kind collision raises on actor_handles_pkey.",
+    "why_after_triggers": "A same-kind duplicate must keep raising on users_username_lower_idx / channels_handle_lower_idx, which are checked at INSERT time before any AFTER trigger runs. Every 409 message that shipped before 0142 is byte-identical after it; only the CROSS-kind collision is the new refusal.",
+    "surfaces": {
+      "registration": "409 handle_reserved",
+      "oauth_and_atproto_username_derivation": "UsernameExists now probes actor_handles rather than users, so a derived username that dodged every account and landed on a CHANNEL handle is skipped by the dedupe loop instead of being refused at INSERT — a first sign-in must not become a conflict the person cannot act on",
+      "registration_approval": "409 handle_reserved (the pending-request insert itself does not fire the trigger; a username taken by a user was ALREADY caught at approval time, and this follows that shipped behaviour)",
+      "channel_creation": "409 handle_reserved",
+      "username_change": "no endpoint exists; the trigger fires on UPDATE OF username, so the guard is in place before the endpoint that would need it",
+      "channel_handle_change": "no endpoint exists (the handle is immutable); the trigger fires on UPDATE OF handle for the same reason"
+    },
+    "conflict_code": {
+      "code": "handle_reserved",
+      "status": 409,
+      "message_identical_both_directions": true,
+      "why": "Naming the holding kind would make each form an oracle for the other namespace — a registration form reporting 'that belongs to a channel' enumerates channels — and neither caller can act on the distinction: the remedy is the same word."
+    },
+    "backfill": {
+      "function": "backfill_actor_handles() — a FUNCTION rather than an inline DO block so the rule can be exercised on a seeded collision by a test instead of only by the one run that ever executes it. Idempotent (every insert ON CONFLICT DO NOTHING; the rename loop only sees channels that still collide); a re-run on an already-migrated database returns 0.",
+      "rule": "The ACCOUNT wins every collision, because a username is a SIGN-IN identifier: renaming it locks a person out, while renaming a channel handle changes a URL this migration also keeps alive.",
+      "rename": "<handle>-channel, then -channel-2, -channel-3, … until the name is free of the account namespace, the channel namespace AND the aliases already written.",
+      "audit": "content.channel.handle_renamed, domain=content, actor_kind=system, resource_type=channel, resource_id=<uuid>, reason='from=<old> to=<new>', metadata {from,to,cause=handle_namespace_backfill}. audit_log carries no prose, so the names are structured on both sides.",
+      "measured": "Seeded on a real PostgreSQL 16.15 at schema 141: user 'OwnerA' + channels 'ownera' and 'ownera-channel' → 'ownera' renamed to 'ownera-channel-2' (the first candidate was taken), the account kept 'ownera', the alias row carries is_actor_id=true, one audit row names both sides, and a second call renamed 0."
+    },
+    "alias_semantics": {
+      "table": "channel_handle_aliases (handle_lower PK, channel_id, is_actor_id, expires_at)",
+      "for_humans": "/channels/<old> and GET /api/v1/channels/{old} answer 301 to the new handle until expires_at — one year from the rename. After that the alias stops resolving and the name is free for a future channel; nothing else could claim it in the meantime, because the account that caused the rename holds the reservation.",
+      "for_peers": "is_actor_id marks the one alias the ActivityPub actor id is built from, and expires_at does NOT apply to it. The actor id, inbox, outbox, followers, following and publicKey.id all stay at the OLD handle; only preferredUsername follows the rename. An alias is a courtesy to humans and expires; a federated id is a promise to other servers and does not.",
+      "why_not_a_channels_column": "Adding actor_handle to `channels` turned every channel query whose SELECT lists the table's columns into a bespoke sqlc row type, rippling one federation concept through the whole channel service. Measured, then reverted.",
+      "not_a_reservation": "The account holds handle_lower in actor_handles; /accounts/<name> and /video-channels/<name> are different URL namespaces, so both answer at once without ambiguity."
+    },
+    "tests": [
+      "internal/store/actor_handles_integration_test.go — 6 tests: the channel direction, the account direction, both rename directions plus a legal rename that MOVES the reservation and releases the old name, same-kind duplicates still raising on their own constraint, a delete releasing the handle to the other kind, and the backfill on a seeded collision",
+      "internal/channel/service_test.go — a channel named after an account is ErrHandleReserved while a duplicate handle stays ErrConflict",
+      "internal/auth/service_test.go — a username held by a channel is ErrHandleReserved while a duplicate username stays ErrConflict",
+      "internal/httpapi/errors_test.go — 409 handle_reserved, byte-identical message in both directions",
+      "internal/pgconv/pgconv_test.go — the constraint-name classifier that keeps the two 23505s apart"
+    ]
+  },
+  "sc2_webfinger_both_links": {
+    "verdict": "PASS (tests)",
+    "shape": "acct:name@domain answers with the Person as rel=self and the Group as rel=alternate, both type application/activity+json. A name held by only one kind answers with exactly one link at rel=self, so a peer that understands only `self` is unaffected and the shipped single-link shape is unchanged.",
+    "why_self_is_the_person": "rel=self is singular by RFC 7033 and a bare acct: most often means an account. A peer picking BY TYPE gets the right actor either way, which is what the rel/type pair is for.",
+    "aliases_resolve": "A renamed channel's OLD name still resolves to its Group — through the alias, at the FROZEN actor id — because that is the address every existing follower holds.",
+    "tests": [
+      "internal/federation/handle_namespace_test.go — both links for a colliding name; the single-link shape for account-only and channel-only names; a renamed channel's id/inbox/outbox/followers/publicKey.id frozen while preferredUsername follows the rename; attributedTo still naming the owning account; an unknown handle still ErrNotFound",
+      "internal/federation/actor_test.go and contract_fixture_test.go — the pre-existing WebFinger and PeerTube/Mastodon contract tests still pass unchanged"
+    ]
+  },
+  "sc3_block_resolves_the_account": {
+    "verdict": "PASS (tests)",
+    "model": {
+      "what_a_block_names": "the ACCOUNT. A handle resolves through WebFinger and then UP through the Group's attributedTo; a supplied URL climbs the same edge through the actor CACHE.",
+      "reach": "remote_actor_block_reach, a view that expands each block along remote_actors.attributed_to to every channel actor the account owns, and unions the admin's instance-wide per-actor blocks in as rows with a NULL blocker_id. One predicate answers both scopes: (rab.blocker_id = <viewer> OR rab.blocker_id IS NULL).",
+      "why_the_account": "One block covers every channel the person owns INCLUDING the ones they have not created yet, which a per-channel row could never do.",
+      "attributed_to_is_same_host_only": "attributedTo is text a remote server controls; a Group claiming an owner on another server would let a stranger redirect a block, or attach its actors to a well-behaved instance's account. Enforced at ingest and re-checked at resolution.",
+      "url_is_never_dereferenced": "A handle has already cost a WebFinger fetch, so one actor fetch on that path changes nothing about what a caller can make this server do. A URL has cost nothing, and dereferencing it would turn 'block this actor' into 'make my server fetch this address' — so the URL path climbs only through the actor cache, which holds every actor whose content this instance actually has.",
+      "best_effort": "An unresolvable or unowned actor keeps the URL it was given. A block must work against an actor that is offline, gone or refusing us — the actor most likely to be blocked — and the worst case is exactly the block that was already possible."
+    },
+    "admin_surface": {
+      "routes": "GET/POST/DELETE /api/v1/admin/federation/blocked-actors, requireRole(admin, moderator)",
+      "table": "blocked_remote_actors (remote_actor_url PK, blocked_by, reason, created_at)",
+      "why_not_beside_the_instance_blocklist": "An instance block is a judgement about a SERVER and takes every creator on it; this is a judgement about one PERSON. It mounts with the federation service because it resolves its identity through the same WebFinger + SSRF-guarded machinery the viewer surface does.",
+      "audit": "moderation.remote_actor.block / .unblock, resource_type=remote_actor, resource_id=<actor url>. The moderator's note stays on the row and out of the trail — audit_log carries no prose.",
+      "idempotency": "A re-block with an empty reason keeps the first note."
+    },
+    "contract": "RemoteVideo gains actor_url (the channel actor), account_actor_url (the owner — what a block should name) and channel_handle (preferredUsername@domain, the identity a viewer recognises). Before them the remote watch view carried domain, object_url and watch_url and no actor identity at all.",
+    "frontend": "The remote watch page's control row gains 'Block account', beside Report and Mute instance. It sends account_actor_url when the origin named an owner and actor_url otherwise, unblocks with the SAME url verbatim, and is hidden for anonymous viewers and for rows that carry no actor.",
+    "tests": [
+      "internal/federation/a29_parity_test.go — a channel actor resolves to its owning account; an uncached actor is neither fetched nor failed",
+      "internal/httpapi/admin_remote_blocks_test.go — 3 tests: moderator-only (401/403/200), the block→list→unblock flow with the first reason kept, and 422 for empty/plaintext/local identities and a missing actor on the DELETE",
+      "components/RemoteWatchView.test.tsx — 4 tests against the contract's own RemoteVideo type: it blocks the OWNING ACCOUNT, falls back to the channel actor when the origin named no owner, undoes with the same url, and offers nothing to an anonymous viewer or for a row with no actor"
+    ]
+  },
+  "sc4_retroactive_hiding": {
+    "verdict": "PASS (tests) for both scopes. The search half is a RECORDED FOLLOW-UP, not a claim.",
+    "per_scope": [
+      {
+        "scope": "viewer block",
+        "existing_comments_on_local_videos": "hidden for that viewer (ListCommentsByVideo + CountCommentsByVideo)",
+        "mirrored_thread_on_remote_videos": "already hidden before this slice; now also for the account's channels",
+        "remote_videos_in_feeds": "hidden for that viewer, and now for the account's channels too",
+        "other_viewers_and_anonymous": "unaffected",
+        "reversible": "yes — a read filter, so an unblock restores every row exactly"
+      },
+      {
+        "scope": "admin / instance-wide per-actor block",
+        "existing_comments_on_local_videos": "hidden for everyone, anonymous readers included",
+        "mirrored_thread_on_remote_videos": "hidden for everyone",
+        "remote_videos_in_feeds": "hidden for everyone",
+        "inbound": "an inbound Note or Follow from the blocked account OR any of its channels is refused",
+        "reversible": "yes — same read filter"
+      },
+      {
+        "scope": "admin instance block (pre-existing, unchanged)",
+        "note": "blocked_instances already hid the whole domain's videos and comments for everyone, reversibly. This slice did not touch it; the per-actor block exists so removing one person no longer requires it."
+      }
+    ],
+    "notifications_and_mentions": "Local block→remove (A12, core#170) already governs notifications and mentions for LOCAL accounts and is unchanged. A remote actor cannot be a notification subject here: notifications key on users.id and a remote commenter has author_id NULL, so there is no remote notification row to filter. Stated rather than tested.",
+    "search_follow_up": "Hiding a blocked remote account's videos from vidra-search results needs vidra-search: remote videos are not in the search index's document model, and the k-anon/opt-out seam from A13 lives on the search side. RECORDED, not widened into this slice. Core's own SearchPublicVideos feed query does carry the reach predicate.",
+    "tests": [
+      "internal/store/remote_block_reach_integration_test.go — 2 tests on a real PostgreSQL: a viewer's block of an ACCOUNT hides its own comment, the comment from the CHANNEL it owns and the channel's video, with readback before AND after, other viewers and anonymous unaffected, and every row restored on the unblock; then the admin block doing the same for the blocker's neighbour, an anonymous reader and any signed-in viewer, with the inbound gate refusing the CHANNEL of an instance-blocked account"
+    ]
+  },
+  "sc5_smaller_rehearsal_findings": {
+    "a_threaded_mirror": {
+      "verdict": "FIXED (tests)",
+      "was": "storeRemoteVideoNote resolved the thread with GetRemoteVideoByURL(inReplyTo), so ONLY a Note replying to the video object was mirrored. Every deeper reply was delivered successfully and dropped silently — the rehearsal watched it happen twice in one run.",
+      "now": "remote_video_comments.parent_object_url carries the ORIGIN's object id of the parent, because replies arrive in any order and a self-referencing FK would refuse a reply whose parent has not arrived. The origin-authority check still runs against the VIDEO's origin, so a third instance cannot answer into a thread it does not host. RemoteVideoComment.parent_object_url is on the contract; a client that cannot find the parent renders the reply at the top level."
+    },
+    "b_pending_follow_forever": {
+      "verdict": "FIXED (tests)",
+      "was": "A Reject DELETED the sender's row, making a refusal indistinguishable from a follow that was never made — and a Follow refused during an instance block gets no Reject at all, so the row sat 'pending' forever with neither side re-attempting.",
+      "now": "remote_channel_follows.state gains 'rejected' — terminal and creator-visible. Re-following the same actor re-arms the row to 'pending' with a NEW Follow activity id: one deliberate retry by the person whose follow it is, and the only path back for the blocked case. The shipped states are pending | accepted | rejected."
+    },
+    "c_last_delivered_at": {
+      "verdict": "FIXED (tests)",
+      "was": "computed in cmd/api on every probe and rendered into nothing",
+      "now": "ComponentStatus gains an optional `detail` map; the federation component sets pending, dead_lettered and — only when something has been delivered — last_delivered_at as RFC 3339. Absent rather than zero on an instance that has never delivered anything. Rendered on the AdminSystemStatusView card under the row, on healthy AND failing cards, with 'never' when absent. /admin/system's components now share ComponentStatus with /readyz; the inline copy had drifted."
+    },
+    "d_worker_queued_request_ids": {
+      "verdict": "FIXED (tests)",
+      "was": "a worker's context is a background one and carries no request, so every federation delivery the transcode-completion hook queued recorded an empty request_id and correlation_id on BOTH the queue row and its projected run",
+      "now": "jobtrace.Recorder.RunContext reads the originating ids back off the run the worker is executing and puts them on the context, alongside the parent-job marking uploadfinalize already did. Wired into the transcode completion hook (which is what queues the deliveries) and into uploadfinalize. A live request on the context wins; an unknown run invents nothing."
+    },
+    "e_tombstone_etag": {
+      "verdict": "FIXED (test)",
+      "why_it_matters_more_than_meaninglessness": "An ETag invites If-None-Match, and a 304 on a 410 would tell the peer that what it already holds — the video — is current."
+    },
+    "f_percent_encoded_domain": {
+      "verdict": "FIXED (test)",
+      "was": "DELETE /admin/instances/blocked/127.0.0.1%3A28080 → 422 invalid domain, while the raw colon worked. Echo hands back the RAW path segment.",
+      "now": "domainParam() percent-decodes the segment on the mute, unmute and unblock routes; both spellings are the same request. An undecodable segment passes through unchanged so the validator still refuses it with the message it already has."
+    }
+  },
+  "migration": {
+    "number": "0142_one_handle_namespace",
+    "down_sql": "present; the rename is reversed for every channel that holds a frozen federated identity, then the aliases, reservations, triggers, view, admin-block table, attributed_to column and parent column are dropped and the follow-state CHECK is narrowed back",
+    "verified": "up and down applied against a real PostgreSQL 16.15, in both directions, on an empty database and on one seeded with a collision; migrate-lint passes (142 up migrations, no destructive DDL — the backfill contains no DELETE, by design)"
+  },
+  "gates": {
+    "vidra-core": {
+      "make ci": "PASS (fmt-check, vet, migrate-lint — 142 up migrations clean, openapi-verify, sqlc-verify, test-race)",
+      "go vet -tags=integration ./...": "clean",
+      "go test -tags=integration -count=1 -p 1 ./internal/federation/... ./internal/store/...": "ok — against a FRESH PostgreSQL 16.15 (Homebrew, native, no Docker) migrated 0→142 and a native Redis 8.x",
+      "also run": "go test -tags=integration -p 1 ./internal/httpapi/... ./cmd/api/... ./internal/video/... — all ok",
+      "fixtures corrected": "two pre-existing integration seeds gave a channel its owner's EXACT username — the collision the namespace now refuses, and precisely the shape the backfill renames on a real instance. They derive a handle instead.",
+      "ci-required": "**RED**, for one named reason: `prev-release-against-new-schema`. See schema_compat_collision below. Every other required lane is green — build-test, integration, openapi, ipfs-integration, ipfs-private-integration, prev-migrator-against-new-schema, GitGuardian."
+    },
+    "vidra-user": {
+      "npm run ci": "PASS on Node 26.8.1 / npm 11.19.0 — typecheck, lint (2 pre-existing warnings, 0 errors), lint:icons, 2587 vitest tests in 258 files, next build, 627 Playwright e2e",
+      "codegen": "lib/api/generated.ts regenerated from vidra-core a29/parity's api/openapi.yaml and committed"
+    },
+    "meta": {
+      "python3 -m unittest discover -s tests -p '*_test.py'": "OK — 48 tests",
+      "changes": "evidence only"
+    }
+  },
+  "unverified": [
+    "NOTHING HERE HAS FEDERATED. No two-instance run, no browser, no Caddy: this slice is code-only by instruction because another executor holds the lab and Docker.",
+    "The 301 alias redirect is implemented in the data model and its resolution is tested, but no HTTP client has followed one.",
+    "Interoperability: no PeerTube or Mastodon has seen a two-link WebFinger answer. Both accept a single rel=self link, which is what a name held by one kind still returns.",
+    "The backfill has run only against seeded fixtures, never against beta's real data.",
+    "MIG-06's identity clause, signed fetch on the object routes and F8 authoring all stay deferred, unchanged."
+  ],
+  "what_the_third_two_instance_run_must_prove": [
+    "A viewer on B blocks @name@A from the remote watch page's own control, and A's channel videos AND its already-stored comments leave that viewer's surfaces — while another viewer on B still sees both.",
+    "The same block, taken by B's admin at /admin/federation/blocked-actors, hides them for an anonymous reader too, and the unblock restores every row.",
+    "A's WebFinger answers a colliding name with both links, and B follows the GROUP from it — the request the rehearsal watched sit 'pending' forever.",
+    "A reply to a mirrored comment lands on B and renders under its parent, not at the top level.",
+    "A Reject leaves B's row 'rejected' rather than gone, and re-following sends a fresh Follow.",
+    "A private and an unlisted upload still produce ZERO activities (core #209's clause, merged and unchanged here).",
+    "/admin/system's federation card shows a real last_delivered_at, and /admin/jobs shows a request id on a delivery queued by a transcode completion.",
+    "The 410 Tombstone carries no ETag through the edge, and DELETE /admin/instances/blocked/<host%3Aport> answers 204."
+  ],
+  "unrelated_findings": [
+    "SystemStatus.components described its rows inline in api/openapi.yaml rather than $ref-ing ComponentStatus, and the two had already drifted — the inline copy knew only status and error. Fixed here because the generated client could not otherwise see the new field.",
+    "UsernameExists probed only `users`, so OAuth/ATProto username derivation could land on a channel handle. It probes the shared namespace now.",
+    "A pending registration REQUEST is still only checked against the channel namespace at APPROVAL time, not at submission — the same behaviour a username already taken by a user has always had there. Left as it is, and stated.",
+    "Local blocks and mutes of remote actors: muted_accounts.muted_id is still a users FK, so there is no per-remote-account MUTE, only a block. Not in scope and not changed."
+  ],
+  "schema_compat_collision": {
+    "verdict": "RULED 2026-09-08: ACCEPT the tightening. Not staged over two releases, not weakened, and not silenced.",
+    "what_was_red": "vidra-core's `prev-release-against-new-schema` lane (schema-compat.yml, part of `ci-required`). It applies HEAD's migrations to a fresh database and runs the PREVIOUS RELEASE TAG's own integration suite against it. v0.6.2's `internal/store/search_filters_integration_test.go` seeds a channel whose handle EQUALS its owner's username — the exact collision 0142 refuses — and dies at `actor_handles_pkey` while seeding. It is the ONLY such fixture in that tree; every other one derives a distinct handle.",
+    "why_it_could_not_be_green": "The one-release schema-compat policy is additive-only (`migrate-lint`: add tables/columns/indexes, WIDEN CHECKs, RELAX NOT NULL). Unifying two namespaces is a TIGHTENING by construction — you cannot promise the old code may keep creating collisions in a namespace whose entire purpose is that collisions are invalid.",
+    "the_ruling_and_its_rationale": "Accept it. Under the A38 ruling app-only rollback is supported from v0.6.3 onward and a v0.6.2 target uses the RESTORE path, so 'v0.6.2 running on the new schema' is already outside the supported rollback floor. And the measured consequence is the boundary behaving rather than breaking: v0.6.2 maps 23505 through pgconv.IsUniqueViolation at both write sites, so it answers 409 'channel handle already taken' where it answered 201, and 409 on the account side. No crash, no 500, no data loss. Staging it over two releases was rejected because that shape leaves exactly the hole the rehearsal found: for a whole release the database would not guarantee the namespace, and creating a channel named after an existing account would keep answering 201.",
+    "how_it_is_implemented_in_the_lane": {
+      "shape": "The same one rollback-floor.yml already uses for its own known break: a capability probe, an asserted expectation, and automatic self-clearing.",
+      "probe": "`ls migrations/*actor_handles*` / `grep -rqs actor_handles migrations/` in the N-1 WORKTREE. Absent ⇒ the expectation applies; present ⇒ the suite must pass clean with no expectations at all. It probes the MIGRATION, not a version string: a tag comparison would need editing every release and would lie on a backport.",
+      "register": "scripts/ci/expected-prev-release-failures.txt — a checked-in file, not a silent code path. One top-level test name per line, each with the accepted break written out in full above it. Today it holds exactly one line: TestEntitySearchVisibilityAgainstPostgres.",
+      "assertion": "scripts/ci/assert-prev-release-failures.sh, and it is TWO-SIDED so it cannot become a mute: an UNREGISTERED failure fails the job; a REGISTERED test that PASSED fails the job as a stale expectation; a log with no passing package or test fails the job on the same doctrine as the skip audit. All four branches were exercised locally before the push.",
+      "self_clearing": "The moment N-1 carries 0142 the probe takes the other arm, the register is never consulted, and the suite must pass clean — at which point the entry itself becomes the stale-expectation error.",
+      "artifact": "The N-1 integration log is uploaded (14 days) so a tolerated break is re-readable months later.",
+      "scope_note": "Editing .github/workflows is normally out of bounds (vidra-core AGENTS.md rule 7); it is in scope here because the CI gate IS the task."
+    },
+    "release_note": "deploy/README.md gains a 'Release notes: accepted compat breaks' subsection under the release policy, with the v0.6.3 bullet: v0.6.2 binaries on a v0.6.3+ schema answer 409 handle_reserved when creating a channel whose handle equals an existing username; rolling back to v0.6.2 uses the restore path (A38).",
+    "consequence_for_the_flake": "TestSearchSortAndFilterBehaviourAgainstPostgres/sorts_order failed on one of seven runs of this lane against the same tree and passed on the others — a relevance tie-break flake in v0.6.2's suite. It is NOT registered, so if it recurs the lane fails hard. That is the intended behaviour: the register admits one named break, not a quieter lane."
+  }
+}
