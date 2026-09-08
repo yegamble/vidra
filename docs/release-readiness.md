@@ -190,6 +190,11 @@ recorded until their own evidence lands. Still unruled: the PeerTube source
 snapshot/inventory (MIG-01), source-data retention (MIG-05), the domain plan
 (MIG-06) and recovery objectives.
 
+*Later the same day:* the two rows this note left UNVERIFIED on a single clause
+each — CRT-01's physical deletion and SOC-01's playlist-delete half — were both
+proved and flipped to PASS; see §A11/A12 close-out. A11's physical-deletion
+clause leaves the open set with it.
+
 ## Deferred and decision-dependent scope — not silently removed
 
 These items are **BLOCKED on scope/acceptance**, not PASS. Existing explicit decisions stand until changed; this campaign does not authorize implementing a contrary feature. Their implementation gaps remain tracked even if the operator keeps them outside launch. No “everything complete” claim is valid while required members remain undecided.
@@ -1263,7 +1268,9 @@ review these candidates; continue the next dependency-ready item separately.
 
 ## A11 Studio and statistics checkpoint — 2026-09-05
 
-**A11 OPEN — stored-byte deletion awaits collector approval.** Dependency-ready
+**A11 OPEN — stored-byte deletion awaits collector approval.** *Superseded
+later the same campaign: the approval landed and the collector was run — see
+§A11/A12 close-out, which closes CRT-01.* Dependency-ready
 from A07/A09. Observable success requires persisted Studio field/media edits,
 chapter order and real frame/sprite behavior, deletion removing media/discovery,
 and correctly attributed owner-scoped video/channel/account analytics, including
