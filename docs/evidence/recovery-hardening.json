@@ -13,7 +13,7 @@
     "vidra-search": "untouched",
     "meta": {
       "branch": "recovery/hardening",
-      "pr": "yegamble/vidra#141"
+      "pr": "yegamble/vidra#142"
     }
   },
   "a37_1_undecryptable_mfa_secret": {
