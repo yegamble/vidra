@@ -10877,3 +10877,11 @@ the throwaway Postgres cluster and redis, the frontend and proxy processes, and
 the lab accounts and their media. The `mirror.gcr.io/minio/*` images are kept.
 Credentials, raw logs, the media fixtures and the browser traces stay private
 under `/tmp/vidra-a32-r1`; nothing from it is committed.
+
+## A28 captions, Whisper and ClamAV lanes — 2026-09-08
+
+**IN PROGRESS.** INT-03 (manual VTT CRUD + a real Whisper-compatible endpoint)
+and INT-04 (real clamd gating the upload and URL-import paths, re-citing A14 for
+the DM path) are being run on a two-process core with real Chromium. This
+section is a placeholder while the lab runs; it is replaced with the evidence
+before the PR is marked ready.
