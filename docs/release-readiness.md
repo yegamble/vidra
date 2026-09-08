@@ -13852,15 +13852,16 @@ A's row was gone within 15 s, `follower_count` went 2 → 1, and the next fan-ou
 went to `viewerb`'s inbox only — `otherb`'s delivery count frozen at 19 while
 `viewerb`'s advanced to 20 (A29-F5). A's REST `follower_count` read **2** with
 `channel_follows` empty, identical to the AP collection's `totalItems` — A29
-measured 3 vs 0 (A29-F6). All 24 `federation_deliveries` `job_runs` rows agreed
-with their delivery row on `request_id`/`correlation_id`; the rows that are
-empty are empty on BOTH sides, because they are the deliveries queued from the
-WORKER process where no HTTP request is in scope — the projection is faithful,
-but `/admin/jobs` still shows an empty request id for every worker-queued
-federation delivery, which is A17's complaint about six other queues arriving
-here by a different road. `/admin/system` carries the `federation` component,
-reading `degraded` on the two block-window dead letters while the overall
-verdict stays `ok` — exactly the separation the remediation designed. Its
+measured 3 vs 0 (A29-F6). The 24 `federation_deliveries` `job_runs` rows
+inspected all agreed with their delivery row on `request_id`/`correlation_id`;
+the rows that are empty are empty on BOTH sides, because they are the deliveries
+queued from the WORKER process where no HTTP request is in scope — the
+projection is faithful, but `/admin/jobs` still shows an empty request id for
+every worker-queued federation delivery, which is A17's complaint about six
+other queues arriving here by a different road. `/admin/system` carries the
+`federation` component, reading `degraded` on the two block-window dead letters
+while the overall verdict stays `ok` — exactly the separation the remediation
+designed. Its
 `LastDeliveredAt` is computed in `cmd/api` and never rendered into any response,
 so the number that was added to tell a drained queue from an abandoned one is
 not actually visible to an operator.
