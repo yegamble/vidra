@@ -1,0 +1,96 @@
+{
+  "slice": "Live follow-ups — verified drop, watchdog disconnect, audited ends, polling watch view",
+  "date": "2026-09-08",
+  "register_row": "INT-01 (unchanged: PASS)",
+  "verdict": "code complete, NOT lab-observed — four of the five findings the A26 rehearsal recorded as needing a ruling rather than a patch",
+  "prs": {
+    "core": "https://github.com/yegamble/vidra-core/pull/212",
+    "user": "https://github.com/yegamble/vidra-user/pull/203 (draft until core merges — it carries the contract regen)",
+    "meta": "this evidence"
+  },
+  "migration": "none — vidra-core stays at schema 141",
+  "openapi": "one description change: LiveTerminationResult.publisher_disconnected. That is why the user PR carries lib/api/generated.ts and stays a draft until core is on main.",
+  "finding_1_verified_drop": {
+    "a26_finding": "DropPublisher cannot tell a real disconnect from \"nothing matched\": the module answers both with 200 and differs only in a body count that was discarded, so terminating a hook-only phantom session reported publisher_disconnected: true.",
+    "ruling_applied": "the count IS the outcome",
+    "change": "internal/live/control.go — IngestController.DropPublisher returns (int, error); the body is parsed, 0 becomes ErrIngestNoPublisher, a 404 stays ErrIngestNoPublisher, and a 2xx whose body is not a count is ErrIngestControlUnavailable rather than a success.",
+    "semantics": {
+      "publisher_disconnected_true": "the ingest reported closing at least one publisher connection, and nothing weaker",
+      "no_publisher": "false, with a detail sentence naming what did not happen — the hook-only phantom case, and what every drop looked like during A26 when they were reaching the wrong nginx worker",
+      "unreachable": "false, with the pre-existing detail sentence",
+      "audit": "the returned count rides audit_log.metadata.count (an internal/audit allow-listed key), so a row read a week later distinguishes a real disconnect from a no-op"
+    },
+    "tests": "internal/live/control_test.go against an httptest fake control server: bodies 0, 1, 3, an empty body, HTML, 404 and 401, plus the request shape (app=live, name=<stream id>, X-Ingest-Secret) and a bounded body; internal/httpapi/admin_live_test.go drives POST /admin/live/{id}/terminate through the REAL HTTP controller pointed at a fake ingest answering 0 and 1",
+    "not_verified": "no nginx and no RTMP publisher. The 200/`0` shape is A26's wire reading, reproduced by a fake; this slice did not re-read it off the module."
+  },
+  "finding_2_watchdog_disconnect": {
+    "a26_finding": "the live_max_duration_secs watchdog force-closed at 81 s, flipped the state and 404'd the playlist, and the publisher was NOT disconnected and was still ingesting after the cut; the audit row carried an empty resource_id.",
+    "change": "internal/live/service.go — SweepOverdueLive calls Service.Terminate with source `system` instead of writing the state itself: state flip, key rotation, publisher drop, viewer-set reset, and the ordinary stop path still publishes the replay.",
+    "key_rotation": "deliberate. Without it the encoder reconnects on the key it holds within seconds and the next sweep cuts it again — an over-limit publisher would bounce every 30 s instead of stopping. The cost is that a creator cut by the limit copies a fresh key from the Studio before going live again; documented in vidra-core docs/operations.md.",
+    "row_columns": "NOT written for a system close. A duration cut is not a person's decision, and the creator-facing copy for a stamped terminated_at with no reason code is \"You ended this stream\". Giving the watchdog a creator-visible reason would need a new code in migration 0141's CHECK constraint and is a separate slice.",
+    "audit": "content.live.force_close, actor system, resource_type live_stream, resource_id the stream, reason `max_duration`, metadata.count the drop count",
+    "tests": "internal/live/terminate_test.go TestWatchdogDisconnectsThePublisher (fake control) and TestWatchdogWithoutControlStillCloses; internal/httpapi/live_test.go TestLiveDurationWatchdogHTTP now asserts the pre-cut key no longer starts a session and that the id-named stop hook still lands 204"
+  },
+  "finding_3_audited_ends": {
+    "a26_finding": "an owner's own end wrote no audit row of any kind; content.live.terminate recorded actor_kind=user with an EMPTY actor_role; content.live.replay and content.live.force_close carried an empty resource_id.",
+    "changes": [
+      "new action content.live.ended for POST /live/{id}/end — a creator stopping their own stream is not a moderation event and must not appear in the trail as one",
+      "TerminateInput carries ActorRole; both handlers pass the principal's role; auditActorRole drops anything outside the envelope's stable set rather than letting an unknown role reject the whole row",
+      "content.live.replay and content.live.force_close carry resource_type=live_stream + resource_id; the replay reason keeps only the stage/video token"
+    ],
+    "test_shape": "the package's fakeAuditor already runs every event through a real audit.Service (the A26 fix), so a missing resource_type or an invalid role fails the test instead of being appended to a slice and forgotten. findAudit now also surfaces resource_type, actor role and metadata."
+  },
+  "finding_4_viewer_digest": {
+    "a26_finding": "the signed-in branch of liveViewerDigest is unreachable on a public stream — measured directly: an anonymous viewer and a signed-in viewer on ONE address produced ONE Redis set member and a count of 1.",
+    "why": "hls.js sends no session credential with a public stream's playlist. It sets an Authorization header only when a playback token exists (private streams), never withCredentials, and the session is a bearer access token rather than a cookie, so a same-origin fetch carries nothing either. Checked in vidra-user lib/use-playback-engine.ts.",
+    "rejected": "a client-minted per-viewer token on the playlist — A08 ruled per-viewer tokens out of the delivery path, and it would be a new tracking surface bought for a rounder number",
+    "change": "the anonymous principal is now ip + User-Agent, NUL-separated and bounded at 256 bytes, HMAC'd into the same keyed day-scoped digest. It splits the common NAT cases (a phone and a laptop, Safari and Chrome).",
+    "limitation_recorded": "a signed-in viewer of a PUBLIC stream is still counted as an anonymous one, and two identical devices on one Wi-Fi still count once. The UA half is client-chosen, so the count is not inflation-proof — but neither was the address alone on an IPv6 client with a /64 to spend, and the number is a creator-facing estimate rather than an input to billing, ranking or moderation.",
+    "tests": "internal/httpapi/live_viewers_test.go — two devices on one address differ, the same device is stable across refreshes, two networks differ, the separator defeats the ip/ua boundary shuffle, no key means no digest, and an oversized agent is truncated"
+  },
+  "finding_5_polling_watch_view": {
+    "a26_finding": "the rendered page shows `0 viewers` at load and never updates — LiveWatchView polls only while offline, so a live page fetches the stream once; a terminated stream does not flip to its ended state without a reload.",
+    "change": "vidra-user components/LiveWatchView.tsx polls the stream read every 10 s while live as well as every 15 s while offline",
+    "cadence_rationale": "10 s is core's own read cache on the viewer count (internal/live's viewerCountRefresh); a faster cadence cannot return a different answer",
+    "bounds": "one request in flight at a time, no polling while document.visibilityState is hidden with an immediate read on return, polling stops once the stream is ended, and the initial read still waits for useSettledOptionalSession",
+    "tests": "six in components/LiveWatchView.test.tsx with fake timers"
+  },
+  "gates": {
+    "vidra_core": {
+      "make ci": "exit 0 (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race)",
+      "go vet -tags=integration ./...": "exit 0",
+      "new_tests": "16 — 9 in internal/live (control_test.go x4, terminate_test.go x5) and 7 in internal/httpapi (live_viewers_test.go x4, admin_live_test.go x3); TestOwnerEndStoresNoReason and TestLiveDurationWatchdogHTTP were extended rather than added"
+    },
+    "vidra_user": {
+      "npm run ci": "exit 0 on Node 26.8.1 — typecheck, lint, lint:icons, vitest, production build, e2e",
+      "unit": "258 test files / 2586 tests",
+      "e2e": "627 passed",
+      "new_tests": "6 in components/LiveWatchView.test.tsx"
+    },
+    "meta": {
+      "python3 -m unittest discover -s tests -p '*_test.py'": "run for this slice",
+      "scripts_changed": "none"
+    },
+    "vidra_search": "not touched"
+  },
+  "assertions_verified_to_bite": [
+    "ignoring the drop count (case derr == nil) — TestTerminateZeroCountWithoutAnErrorIsStillNotADisconnect fails",
+    "giving the watchdog back its bare SetLiveStreamState — TestWatchdogDisconnectsThePublisher fails on the drop, the rotation and the missing audit row",
+    "dropping the count metadata — TestTerminateCountedDropIsAudited fails",
+    "reverting LiveWatchView to offline-only polling — 5 of the 6 new tests fail",
+    "removing the in-flight guard — the overlapping-request test fails"
+  ],
+  "not_lab_observed": [
+    "no RTMP publisher, no ingest container, no nginx, no Redis and no browser: every claim here is a unit or integration assertion",
+    "the 200/`0` drop shape is reproduced from A26's wire reading, not re-read off the module",
+    "the watchdog's key rotation has never been observed against a real encoder's reconnect attempt",
+    "the ip+ua digest has never been measured against real devices behind a real NAT",
+    "the watch view's flip-to-ended has never been observed in a browser against a real termination"
+  ],
+  "open_after_this_slice": [
+    "the duration watchdog still tells the CREATOR nothing — it writes no row-level reason, and giving it one needs a new code in migration 0141's CHECK constraint plus frontend copy",
+    "a hook-only flip still advertises a byte-less stream on the public rail",
+    "no live ABR ladder, and nothing resyncs a drifted player to the edge (SCP-05)",
+    "signed-in viewers of public streams are counted as anonymous, by design"
+  ]
+}
