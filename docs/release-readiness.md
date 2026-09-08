@@ -12939,19 +12939,28 @@ dropped, `error: null`. A second walk answered every one of those seven with
 `X-Edge-Cache: HIT`, which is the precondition SC2 needs and the property a
 plain reverse proxy could never demonstrate.
 
-**`Vary: Origin`, recorded because the row's neighbour asked for it.** The api's
-public-media CORS answer genuinely varies: `Access-Control-Allow-Origin: *` with
-no credentials for an absent or unknown `Origin`, and `Access-Control-Allow-
-Origin: http://127.0.0.1:8099` **plus `Access-Control-Allow-Credentials: true`**
-for an origin in `CORS_ALLOWED_ORIGINS` — so the `Vary: Origin` core #203 stamps
-is load-bearing rather than decorative. The simulator stamps `Vary: Origin` on
-what it serves but **its cache key is the URL alone, and it forwards no `Origin`
-upstream at all**, so it can only ever hold the `*` variant; the failure it
-cannot show is a real CDN that forwards `Origin` and ignores `Vary`, where one
-same-origin fetch would populate the entry with the credentialed echo and every
-other origin's player would then be refused by its own browser. Nothing in the
-api can enforce a third party's cache key, and `docs/operations.md` does not
-name it — recorded as a finding rather than fixed here.
+**`Vary: Origin`, recorded because the row's neighbour asked for it.** The
+shared entry's CORS header **does** vary by the request's `Origin`, measured:
+`Access-Control-Allow-Origin: *` for an absent or unknown one, and
+`Access-Control-Allow-Origin: http://127.0.0.1:8099` **plus
+`Access-Control-Allow-Credentials: true`** for an origin in
+`CORS_ALLOWED_ORIGINS`. That is deliberate and written down — `media_cors.go`
+says `setMediaCORS` never overwrites a header Echo's CORS middleware already
+set, because replacing the allow-listed answer with a wildcard would break every
+credentialed media read from the instance's own frontend — and Echo's middleware
+supplies the `Vary: Origin` that makes it correct for a compliant cache. The gap
+is one level out. `docs/operations.md` tells the operator to forward the query
+string *and put it in the cache key*, and then says of the shared entry that
+"there is no `Vary` to get wrong": true of the `__vidra_edge=1` marker it is
+written about, and **not** true of `Origin`. A CDN that forwards `Origin` and
+does not key on it would populate the entry with the allow-listed credentialed
+echo on one fetch and hand it to every other origin's player afterwards — which
+is precisely the federated playback core #203 exists to enable. The simulator
+cannot exhibit it (its cache key is the URL alone and it forwards no `Origin`
+upstream at all, so it can only ever hold the `*` variant), and nothing in the
+api can enforce a third party's cache key: it is an operator obligation of the
+same class as forwarding the query string, and it is the one the operator page
+does not state.
 
 ### SC2 — a same-source re-transcode, and where the old bytes go
 
@@ -13154,13 +13163,18 @@ synthetic.
    store are 403 for every media prefix, with no policy applied. A32/A33's
    origin-exposure finding is retired by construction rather than documented
    around.
-5. **The api's public-media CORS answer varies by request `Origin`** (`*` for
-   absent/unknown, an echoed origin **plus** `Allow-Credentials` for a configured
-   one), so `Vary: Origin` is load-bearing. A shared cache that forwards `Origin`
-   and ignores `Vary` would serve one origin's echo to another; the simulator
-   cannot show it because it forwards no `Origin` at all. `docs/operations.md`
-   does not tell an operator to include `Origin` in the cache key or to stop
-   forwarding it. Bounded follow-up, adjacent to A29.
+5. **The shared edge entry's CORS header varies by request `Origin`** — `*` for
+   an absent or unknown one, an echoed origin **plus** `Allow-Credentials` for
+   one in `CORS_ALLOWED_ORIGINS`. The behaviour is deliberate (`media_cors.go`
+   refuses to overwrite Echo's allow-listed answer) and `Vary: Origin` is
+   present, so a compliant cache is safe. What is missing is the operator
+   sentence: `docs/operations.md`'s "there is no `Vary` to get wrong" is written
+   about the `__vidra_edge=1` marker and reads as absolute, and it does not tell
+   an operator to include `Origin` in the cache key or to stop forwarding it. A
+   CDN that forwards `Origin` and ignores `Vary` would hand one origin's
+   credentialed echo to every other origin's player — breaking exactly the
+   federated playback core #203 added the header for. Bounded follow-up for
+   vidra-core's operator docs, adjacent to A29.
 6. **No `audit_log` action exists for a CDN purge.** The record is the
    `cdn_purge_jobs` row, one structured log line and the `cdn_purge` counters.
    Defensible, and worth knowing before an incident.
