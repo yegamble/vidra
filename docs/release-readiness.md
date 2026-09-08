@@ -146,7 +146,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | OPS-01 API/worker split updates settings and recovers leased jobs | M C S | All-role settings poller now fixed; job leases/sweeps; worker Compose profile | UNVERIFIED | API-only + two workers; edit config, observe both; kill one mid-transcode/import, recover once; Redis/DB outage and leader failover; no local-volume split across hosts | PUB-03, ADM-03, STO-01 → A34 |
 | OPS-02 Health, logs/trace correlation, metrics/QoE and retention are useful | M C S U | Observability/OTel/QoE packages; search metrics and privacy retention; live evidence `a35-observability` (one browser walk — ffmpeg upload → transcode → CMAF playback over MSE → search — followed on named id fields across eleven hops, with all four job runs and fourteen events carrying the enqueueing request's correlation, request and TRACE ids and the audit row's `job_id` naming the run in the worker's failure lines; a real OpenTelemetry collector showing one trace per server-rendered page spanning vidra-user and vidra-core; a fifteen-check secret sweep over twenty-two artefacts returning zero; a dead-lettered worker job on the admin surfaces with the queue gauge moving 0→1; label cardinality held under 180 requests over 120 distinct URLs with 60 nonsense paths folding into one `route="unmatched"`; a real playback classified `api-proxy` while four client-claimed sources were refused, rolled up with real percentiles and rendered in Chromium; and every retention window run through the shipped prune functions) | PASS | Follow one browser upload/play/search via correlation; inspect safe structured logs, failed worker status and bounded metrics; run retention; distinguish native-HLS/proxy/CDN source truth | SRC-01 → A35. Defects fixed on the way: `jobstatus.RedactDetail` let a bare storage key through into the worker log (core#190), every server-rendered read reached vidra-core with no correlation id and no traceparent (user#184), `vidra_search_table_rows` reported every table empty because PostgreSQL 14+ writes `reltuples = -1` until first analyze (search#39), and three config keys core#189 added never reached the compose environment anchor, which had kept the meta config gate red on `main` (core#190). Findings that need a ruling rather than a patch, none blocking: the QoE beacon ignores the discovery opt-out, so an opted-out viewer's playback still carries their day-scoped pseudonym; `audit_log` has no retention of any kind; `search_outbox` and `qoe_events` carry no correlation column, so both asynchronous hops start a fresh id; a SUCCESSFUL job writes no correlated worker log line; a creator's upload and publish write no audit row at all; the worker role builds a Prometheus registry it can never serve, which is the only place `vidra_search_dead_letters_total` can increment; core has no monotonic job-failure counter; core still logs `object_key`/`storage_key` in the media-GC and storage-migration paths; and vidra-search ships neither logging guard despite handling raw query text |
 | REC-01 Backup includes DB, settings/sealing keys and required media | M C S | `backup.sh`, config archive, deploy runbook local/S3 snapshots; search schema in same DB; matched DB/config/media capture, failed-dump probe and encrypted offsite retrieval verified byte-for-byte (A36 evidence L1561–1594; merged L1664); S3 version-retention documentation still open | PASS | Disposable data: backup/check restore-list; failed dump never finalizes; encrypted offsite config/media retrieval with same timestamp; search models/rebuild plan and S3 version retention documented | INS-04, STO-01 → A36 |
-| REC-02 Restore on replacement host yields usable accounts/media/search | M C S U | `restore.sh`, disaster-recovery order; no audit rehearsal | UNVERIFIED | Destroy only disposable host; restore config before DB/media, apply known migrations, login and decrypt saved integrations, play old+new uploads, reindex search; measure RPO/RTO | REC-01, SRC-01 → A37 |
+| REC-02 Restore on replacement host yields usable accounts/media/search | M C S U | `restore.sh`, disaster-recovery order; no audit rehearsal; sealed restore on a replacement host closed the held-open decryption clause (A37 close-out evidence `a37-close-out.json`, section "A37 close-out — sealed restore on a replacement host — 2026-09-08") | PASS | Destroy only disposable host; restore config before DB/media, apply known migrations, login and decrypt saved integrations, play old+new uploads, reindex search; measure RPO/RTO | REC-01, SRC-01 → A37 |
 | REC-03 Upgrade/rollback and dirty-schema recovery preserve data | M C S U | Deploy/rollback floor, separate ledger guards, schema-compat workflow | UNVERIFIED | Upgrade previous compatible release with data; injected migration failure abort; supported app-only rollback; incompatible schema uses tested backup restoration; no blind force/automatic down migrations | REL-01, REC-02 → A38 |
 | QLT-01 Contract/codegen/sqlc/tests remain reproducible and maintainable | M C S U | Live evidence `a39-ci-gates`: supported-toolchain pins (core/search Go 1.27 = the release image; user Node 24 = the stated policy), `go mod verify` + `tidy -diff` + `npm ci` + `uv --locked` as gates, one named required check `ci-required` per repo over a checked-in manifest, and skip audits that make a missing dependency FAIL (core integration 6 registered skips / 4703 passed; search 0 / 316; user backed 11 registered / 100 passed; single-purpose lanes 0). All four PRs' CI green. Open: `search-discovery` still has no stack to run in (F04) and is registered, not proved | PASS | Same release manifest under supported Node/Go; contract/codegen/sqlc diff, unit/race/tagged integration and selected backed suites; required missing services fail; preserve small additive contract changes | REL-01 → A01 then A39 |
 | QLT-02 All required screens handle keyboard/mobile/themes/errors and real persistence | U C | Design system; mocked axe suite vs backed persistence; unfinished P-MSG2 and admin notes | UNVERIFIED | Inventory every required control by role; 390px and desktop, light/dark, keyboard/axe, loading/empty/error/retry; mutation readback after full reload; no dead controls | All selected workflows → A40 |
@@ -9169,3 +9169,247 @@ honours it), and **multi-replica leader election** of the GC worker. Gates: no
 repo but meta was touched, so no core/user/search gate applies; meta's script
 and compose gates are unaffected by a docs-and-evidence diff and were run
 anyway. Evidence: [A11/A12 close-out](evidence/a11-a12-close-out.json).
+
+## A37 close-out — sealed restore on a replacement host — 2026-09-08
+
+**REC-02 flips to PASS.** A37 has been held open on one clause since the
+2026-09-05 checkpoint: *decryption of a restored sealed fixture is unverified*.
+Everything else — accounts, media, search, a measured recovery — was already
+proven; what was missing was the one thing a restore can silently get wrong
+forever, because the failure only appears the first time somebody with a second
+factor tries to sign in. The owner has now approved a lab-only archive
+(synthetic accounts, throwaway secrets) offsite, and that is what closes it.
+
+The shape: two disposable compose projects on one arm64 host, `-p a37src` (the
+host that dies) and `-p a37dst` (the replacement), on non-default ports (api
+19080, frontend 13100), each from its own throwaway clone of this repo with its
+own nested `vidra-core` / `vidra-search` / `vidra-user` clones — so `deploy.sh`'s
+checkout pinning is real and the architect's checkouts were never touched.
+Images built from current `main` (`docker build --pull=false`) and tagged
+`v0.6.3-a37`, served to both stacks from a local OCI registry through
+`VIDRA_IMAGE_REGISTRY`, because every prod service carries `pull_policy: always`.
+`deploy/backup.sh` and `deploy/restore.sh` ran with their committed bytes —
+SHA-256 identical in the repo, the source tree and the replacement tree.
+
+### The clause
+
+On the source stack, `a37totp` enrolled TOTP under a set `MFA_KEY_KEK`. The
+stored secret is `enc:`-prefixed ciphertext, 84 characters, md5
+`6dd9bb5b…`; the same account then signed in once with a computed code, so the
+proof has a known-good baseline rather than a first-ever attempt on a restored
+host. `backup.sh` put `env/production.env` — which is where `MFA_KEY_KEK` lives —
+into the config archive beside the dump, on the same UTC stamp.
+
+On the replacement host, built from a fresh clone plus **nothing but the three
+offsite archives and the crypt key material an operator keeps off the box**, the
+restored ciphertext has the identical md5, and:
+
+```
+POST /api/v1/auth/login          -> 200 {"mfa_required", "mfa_token"}   (no session)
+POST /api/v1/auth/mfa/challenge  -> 200, session token issued
+GET  /api/v1/auth/me             -> 200 a37totp
+```
+
+The code was computed from the enrollment secret the authenticator holds. The
+KEK that decrypted the restored `enc:` blob came out of the restored config
+archive. That is the clause, and it is closed.
+
+### The steps
+
+| # | step | exit | seconds |
+|---|---|---|---|
+| 1 | build core/search/user from `main`, tag `v0.6.3-a37`, push to the lab registry | 0 | — |
+| 2 | `deploy/deploy.sh` — first deploy of the source stack (6/6, edge OK) | 0 | — |
+| 3 | seed: owner, admin, TOTP user, viewer, channel, 2 transcoded videos (1 private), comment, playlist, follow, 2 settings overrides, 2 search documents | 0 | — |
+| 4 | source sealed-secret baseline: password-only 200 + challenge 200 | 0 | — |
+| 5 | quiesce api/search/frontend, `deploy/backup.sh` (unmodified) + offsite upload via its own `BACKUP_RCLONE_REMOTE` branch | 0 | 0.93 |
+| 6 | matched `media_data` snapshot on the same stamp, uploaded to the same crypt remote | 0 | 0.49 |
+| 7 | push the ciphertext to the approved B2 bucket (3 objects, SSE-B2/AES256, allPrivate) | 0 | 3.49 |
+| 8 | offsite integrity: B2's own `contentSha1` == local ciphertext SHA-1, 3/3 | 0 | — |
+| 9 | **retrieve the ciphertext back over the wire** | **1** | — |
+| 10 | decrypt into a fresh directory; 3/3 archives byte-identical to the capture | 0 | 0.21 |
+| 11 | `pg_restore -l` on the recovered dump — 760 TOC lines, 115 TABLE DATA, both ledgers and `search.documents` present | 0 | — |
+| 12 | replacement host: clone → extract config → datastores → media → `deploy/restore.sh` → first login | 0 | **28.38** |
+| 13 | replacement verification (logins, sealed challenge, HLS, private video, comment, playlist, follow, settings, search, edge) | 0 | — |
+| 14 | negative control (a): wrong KEK | — | — |
+| 15 | negative control (b): tampered `.gz`, then tampered custom-format archive | 1, 1 | — |
+| 16 | negative control (c1): `v0.6.2` pinned — preflight NOT CHECKED, allowed, then dark | 1 | 2.02 |
+| 17 | recover from c1 with the matched pairing | 0 | 14.27 |
+| 18 | negative control (c2): image embedding 130 against a dump at 135 — preflight **refuses** | 1 | — |
+| 19 | final restore state: every count and every fingerprint identical to the source census | 0 | — |
+| 20 | delete the lab archive offsite; readback 0 objects including versions | 0 | — |
+| 21 | tear down both projects with `down -v`; remove the lab registry | 0 | — |
+
+**Recovery time: 28.38 s**, staging start to first successful login — tree clone
+9.28, config extract 0.03, datastores up 0.71, media extract 0.74, Postgres ready
+2.25, `restore.sh` 15.03, first login 0.33. The 2026-09-05 figure was **970.73 s**
+and is not the same measurement: it carried a Multipass VM that had to be stopped
+by hand and a docker image import that stalled it. What is comparable is the
+work: both intervals cover staging a blank host, putting configuration and media
+in place, running `restore.sh` and reaching a serving stack.
+
+The preflight compared equal and allowed, which is the branch a matched pairing
+should take:
+
+```
+[restore] core: dump schema 135 matches what VIDRA_CORE_TAG=v0.6.3-a37 carries — nothing to apply.
+[restore] search: dump schema 18 matches what VIDRA_SEARCH_TAG=v0.6.3-a37 carries — nothing to apply.
+```
+
+`verify-blobs` reported every referenced object present. Every count (4 users, 1
+channel, 2 videos, 1 comment, 1 playlist with 1 item, 1 follow, 2 renditions, 2
+finished transcodes, 2 settings overrides, 1 TOTP enrollment, 10 recovery codes,
+2 search documents, 36 media files) and every fingerprint — users, videos,
+comments, channels, the media tree, the settings overlay and the sealed
+ciphertext — is identical on the replacement host. The public video's HLS master
+(475 B, with variants), its variant playlist and a real 325,283-byte segment all
+answered 200, and `GET /videos/{id}/original` returned bytes whose SHA-256 is the
+seeded fixture's. The private video 404s anonymously and plays for its owner.
+
+**Search needs no reindex, and that is a fact about the architecture rather than
+a step somebody remembered**: `vidra-search` shares the core database in its own
+`search` schema, so `search.documents` comes back inside the same `pg_dump`. Both
+videos are there; the private one carries `eligible=false` and is therefore not
+returned, so "search returns both videos" is only true once the second is
+eligible — flipping it public returns 2 hits and flipping it back returns 1. The
+queries were served by the search **service** (`GET /internal/v1/search` in its
+log), not by the api's local SQL fallback.
+
+### Negative controls
+
+**(a) The wrong KEK fails closed — with the wrong status code.** With
+`MFA_KEY_KEK` replaced by a different valid base64-32 value, the api still booted
+and `/readyz` still answered 200; every password login, HLS read, search, comment
+and admin surface behaved exactly as before; and the TOTP challenge handed out no
+session. But it answered **500 `internal_error`**, not a 401-class refusal, over
+a server log line that does name the cause (`cipher: message authentication
+failed`). The plaintext secret, the `enc:` ciphertext and the KEK are all absent
+from the logs. Two findings below.
+
+**(b) A tampered archive is refused before the drop, twice over.** One flipped
+byte in the `.gz` dies at decompression (`gzip: invalid compressed data--crc
+error`); one flipped byte in the custom-format archive dies at the validation
+with `[restore] ERROR: archive is not a readable custom-format dump — nothing was
+dropped`. In both runs `dropping and recreating` never printed and the database
+was untouched at 4 users, ledger `135|false`.
+
+**(c) Both preflight branches, honestly.** Pinning the previous release lands in
+the NOT CHECKED branch and is **allowed** — the documented current behaviour,
+because every release cut so far predates `migrate embedded-max`:
+
+```
+[restore] core: the pinned image (VIDRA_CORE_TAG=v0.6.2) does not answer 'migrate
+embedded-max', so the dump's schema 135 could NOT be checked against it. …
+```
+
+and the restore then dropped, reloaded and died at *running core migrations* with
+the site dark — A38 run 13, now with a warning in front of it. Worth recording
+precisely: on this arm64 host the image could not answer because it is amd64-only
+and `compose run` failed with `no matching manifest for linux/arm64/v8`, not
+because the subcommand is missing. **The preflight cannot tell those apart**, and
+both land on the same "I could not check". Recovery was `restore.sh` with the
+matched tags: exit 0 in 14.27 s, back to the baseline in every count and
+fingerprint.
+
+The refusal branch was cheap to prove after all, so it is proven rather than
+deferred: a `v0.6.3-a37lowmig` image, the same tree with migrations 0131–0135
+removed, answers `migrate embedded-max` with `130`, and against the dump at 135
+`restore.sh` exits 1 before touching anything —
+
+```
+[restore] ERROR: core: the dump is at 135; pinned VIDRA_CORE_TAG=v0.6.3-a37lowmig
+carries up to 130. … Nothing was changed.
+```
+
+— with `dropping and recreating` absent from the log and the database still at 4
+users, ledger `135|false`.
+
+### The offsite leg, and what could not be done
+
+The capture is real: `backup.sh`'s own `BACKUP_RCLONE_REMOTE` branch wrote the
+dump and the config archive through an rclone **crypt** remote, the media tar
+rode the same remote, and the three resulting objects went into the approved
+`vidra-acceptance-20260905-a36` bucket under `a37-close-out/` — opaque names, the
+`RCLONE\0\0` ciphertext header, `allPrivate`, SSE-B2/AES256. Their integrity
+offsite is attested by B2 itself: the `contentSha1` it stores for each object
+equals the local ciphertext's SHA-1, all three.
+
+**Retrieval over the wire failed and is not claimed.** B2 hands this account's
+cluster out as `downloadUrl https://f005.backblazeb2.com`, and that name is
+NXDOMAIN from this host (`f000`, `f001` and `f004` resolve; so does
+`s3.us-east-005.backblazeb2.com`), so every native-protocol download exits
+`UnknownHost`. A36 never hit this because its recipe uses rclone's **s3** backend
+against the S3 endpoint — and that path needs an S3-compatible bucket key this
+machine no longer has: `/tmp/vidra-a36-b2/` was cleaned, and minting a
+replacement key was refused by the environment's permission classifier. The
+variables that are missing, exactly: `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` (the bucket-scoped B2 application key — `id` and `key` in
+A36's `private-key.json`), the same pair as rclone's `[b2s3] access_key_id` /
+`secret_access_key`, and A36's `[encrypted] password` / `password2` (a fresh
+crypt pair was generated for this lab archive, so only the bucket credentials are
+load-bearing). The restore input was therefore produced by decrypting the very
+ciphertext whose bytes B2 attests it holds, into a fresh directory through a
+second crypt remote — a real encrypt/decrypt round trip and a real remote
+integrity check, but not a real download.
+
+The lab archive is gone: `b2 rm --recursive --versions
+b2://vidra-acceptance-20260905-a36/a37-close-out` and the readback lists **0**
+objects including versions under that prefix, with the A36 set's 9 objects
+untouched. Both compose projects were removed with `down -v`, no `a37` container
+or volume remains, and the four built images are kept for the A38 rehearsal:
+`vidra-core:v0.6.3-a37`, `vidra-search:v0.6.3-a37`, `vidra-user:v0.6.3-a37` and
+`vidra-core:v0.6.3-a37lowmig`.
+
+### Findings
+
+- **A37-1 (medium)** — an undecryptable sealed TOTP secret answers **500
+  `internal_error`**, not a 401-class refusal. It fails closed and leaks nothing,
+  but the operator-facing signal after restoring with the wrong or missing
+  `MFA_KEY_KEK` is "an unexpected error occurred". This is the exact symptom of
+  restoring a dump without its config archive.
+- **A37-2 (low)** — the api boots and reports `/readyz` 200 on a KEK that cannot
+  decrypt anything it stores. The key is validated for shape, never against a
+  stored ciphertext, so a wrong-KEK restore looks healthy until the first MFA
+  login.
+- **A37-3 (low)** — `restore.sh` stops api, search and frontend **before** it
+  validates the archive, so a corrupt dump takes the site down and then correctly
+  refuses to change anything. The refusal is right; the outage in front of it is
+  avoidable.
+- **A37-4 (low)** — a corrupt `.gz` dies on gzip's own message with no
+  `[restore] ERROR:` line, because the `*.gz)` branch is not `|| die`-guarded.
+  The operator reads a CRC error and nothing that says the restore refused.
+- **A37-5 (informational)** — B2's native download host for this account's
+  cluster does not resolve, so any native-protocol recovery (`b2` CLI, rclone's
+  `b2` backend) fails; only the S3 endpoint works. An operator following a
+  native-B2 runbook would discover that during an incident.
+- **A37-6 (informational)** — a private video is indexed with `eligible=false`,
+  so search returns the public one only. Recorded because "search returns both
+  videos" is a claim that needs the qualifier.
+
+### Gates
+
+`bash -n` and **shellcheck 0.11.0** `-x` clean on every `deploy/*.sh`,
+`bootstrap.sh`, `install.sh` and `tests/*.sh`; `config -q` exit 0 on the filled
+`env/production.env.example`; the `--profile core --profile frontend` render
+still asserts postgres, redis, search, `migrate`, `search-migrate` and
+`prep-volumes` publish **no** ports with api and frontend on `127.0.0.1` only;
+and the meta Python suites are 34/34 green (`backup_test.py` 2,
+`rollback_floor_test.py` 12, `caddy_reload_test.py` 3,
+`release_preflight_test.py` 8, `runtime_smoke_test.py` 3,
+`blank_server_smoke_test.py` 6). **No script was touched** — this slice is
+evidence and a register flip.
+
+### Still unverified
+
+The offsite **download** (above). Playback was proven at the API level — HLS
+master, variant and a real segment, plus original bytes byte-identical to the
+fixture — not through a browser player on this run; the 2026-09-05 checkpoint
+carries the Chromium proof, and it is not re-claimed here. No new upload or
+transcode was performed on the replacement host this run; this run proves the
+**restored** media plays. `restore.sh --allow-schema-mismatch` was not exercised
+against a live stack — all six preflight branches are covered by
+`tests/rollback_floor_test.py`, 12/12.
+
+[Sanitized evidence](evidence/a37-close-out.json). A37's stopping criterion is
+met and REC-02 is PASS; REC-03 stays open on the A38 rehearsal, which reuses the
+images this slice kept.
