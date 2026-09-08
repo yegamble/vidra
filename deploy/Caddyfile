@@ -116,6 +116,10 @@ example.com {
 	#   /services/oembed        oEmbed provider           (server.go:845)
 	#   /sitemap.xml            XML sitemap               (server.go:846)
 	#
+	# TWO MORE are routed by Accept rather than by path — see 3a below:
+	#   /videos/{uuid}          AP Video object id
+	#   /comments/{uuid}        AP Note object id
+	#
 	# NOTE on /.well-known: only the two paths the api actually serves are
 	# listed, NOT the whole namespace — /.well-known/acme-challenge/* must stay
 	# with Caddy for the HTTP-01 certificate challenge.
@@ -183,6 +187,55 @@ example.com {
 			# the CPU). Each attempt is itself bounded by the transport's
 			# 3s default dial_timeout, but a refused connection fails
 			# immediately, so the interval is what paces the loop.
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
+	}
+
+	# ---------------------------------------------------------------------
+	# 3a. ActivityPub OBJECT ids -> vidra-core, by CONTENT NEGOTIATION.
+	#
+	# This is the one place the single-origin layout costs something, and the
+	# A29 acceptance run measured the bill: an ActivityPub object id is a
+	# PROMISE — GET it with an AP Accept and the object comes back — and vidra
+	# mints two of them, /videos/{uuid} for a video and /comments/{uuid} for a
+	# reply, on paths section 4 hands to the frontend. A peer dereferencing
+	# either got 200 and a page of HTML. Two things broke as a result: a remote
+	# server could never ingest a vidra video from an Announce, and pasting a
+	# vidra video URL into another instance's search resolved to nothing.
+	#
+	# The fix cannot be a path rule, because the path is the same for both
+	# audiences. It is the Accept header — which is exactly what content
+	# negotiation is for, and what the ActivityPub spec (§3.2) says a server
+	# must honour on an object id. The two media types below are the two the
+	# spec names; Mastodon sends the profiled ld+json form, PeerTube and most
+	# others send application/activity+json.
+	#
+	# A BROWSER NEVER MATCHES. Chrome and Safari send
+	# `text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8` — no
+	# activity+json, no ld+json — so every human request falls through to the
+	# frontend block unchanged. The api answers 406 for a non-AP Accept anyway,
+	# so a mis-fire is a visible refusal rather than a silently wrong page.
+	#
+	# Ordering is load-bearing: `handle` blocks are evaluated in the order
+	# written, so this must sit ABOVE the frontend fallthrough (section 4) and
+	# it does not interfere with section 3 (/api/*) which shares no path.
+	@ap_object {
+		path /videos/* /comments/*
+		header Accept *application/activity+json*
+	}
+	@ap_object_ld {
+		path /videos/* /comments/*
+		header Accept *application/ld+json*
+	}
+	handle @ap_object {
+		reverse_proxy api:8080 {
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
+	}
+	handle @ap_object_ld {
+		reverse_proxy api:8080 {
 			lb_try_duration 30s
 			lb_try_interval 250ms
 		}
