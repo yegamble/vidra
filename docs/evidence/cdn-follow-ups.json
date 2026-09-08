@@ -1,0 +1,111 @@
+{
+  "slice": "CDN follow-ups — constant edge CORS, retry knobs, purge audit, redelivery after unblock",
+  "date": "2026-09-08",
+  "register_row": "No row is re-scored. INT-10 stays PASS with its named residual (no proxy fallback after an edge 5xx) and FED-02 stays as A29 left it. These are four defects two acceptance re-runs of the same day RECORDED and did not fix — A33 rehearsal findings 5, 6 and 7, and A29-F4's open outbound half.",
+  "verdict": "ALL FOUR IMPLEMENTED AND UNIT/INTEGRATION-PROVEN. NONE LAB-OBSERVED: this slice is code-only, deliberately (another executor holds the lab). Every claim below is a test or a rendered config, and where a claim would need a caching edge or a second instance to demonstrate, it says so instead of implying otherwise.",
+  "prs": {
+    "core": "https://github.com/yegamble/vidra-core/pull/207",
+    "meta": "https://github.com/yegamble/vidra/pull/156",
+    "user": "none — no contract change and no frontend surface",
+    "search": "none",
+    "dependency_order": "core#207 (behaviour + compose consumer + operator docs) → meta#155 (env template + this evidence). No contract-ci ordering to respect: OpenAPI is unchanged, which `make ci`'s openapi-verify asserts.",
+    "migration": "NONE. The A29-F4 half needed no schema change because the cancelled rows were already retained — federation_deliveries keeps state='failed' with the payload and inbox_url intact; the only SQL change is UnblockInstance becoming DELETE ... RETURNING created_at. core stays at schema 140."
+  },
+  "sc1_constant_edge_cors": {
+    "finding": "A33 rehearsal finding 5. The shared edge cache entry carried `Access-Control-Allow-Origin: *` for an absent or unknown Origin and `http://127.0.0.1:8099` plus `Access-Control-Allow-Credentials: true` for one in CORS_ALLOWED_ORIGINS. Echo's `Vary: Origin` makes that correct for a compliant cache; a CDN that forwards Origin upstream and does not key on it would fill ONE entry with the operator frontend's credentialed echo and serve it to every other origin's player — breaking exactly the federated playback core#203 added the header for.",
+    "header_set_now": "On any request carrying the edge marker (delivery.EdgeOriginParam, `__vidra_edge=1`) to a public media route, with a CDN configured: `Access-Control-Allow-Origin: *`, NO `Access-Control-Allow-Credentials`, NO `Vary: Origin` — whatever Origin the request carried.",
+    "mechanism": "middleware.CORSConfig.Skipper = Server.edgeMediaRequest (isPublicMediaRoute(c.Path()) AND edgeOriginRequest(c)). Echo's CORS middleware never runs on that request, so it sets no origin echo, no Allow-Credentials and no Vary; the wildcard is the one setMediaCORS writes from delivery.AllowOrigin, unchanged.",
+    "why_not_strip_after": "A strip would have to run in every handler that answers a media route and would silently do nothing in the one that forgot to call it. Skipping is a property of the ROUTE plus the marker, so it holds for every response on that request — including error responses and any media handler added later.",
+    "preflight": "mediaPreflight is now a method and TERMINATES an edge-marked OPTIONS itself (204 + the same constant), because the middleware that used to terminate it is the one being skipped and a GET-only route would otherwise answer 405 — which a browser reads as a refused cross-origin fetch. A CDN with the api as origin forwards a browser's preflight upstream with the marker on it, so this is a real path and not a hypothetical.",
+    "blast_radius_guarded": "TestViewerRequestKeepsTheCredentialedAnswer asserts that the same media route WITHOUT the marker, and a JSON route WITH it, still get the allow-listed origin, Allow-Credentials: true and Vary: Origin. Without it a green suite would be equally consistent with 'CORS was turned off'.",
+    "tests": [
+      "internal/httpapi/media_cors_test.go TestEdgeOriginFetchCORSIsConstantWhateverTheOrigin — three origins (none, unknown, allow-listed) x {ACAO, ACAC, Vary}, plus the shared cache policy on the same response",
+      "internal/httpapi/media_cors_test.go TestEdgeMarkedPreflightIsConstant — 204 and the same constant from both an unknown and an allow-listed origin",
+      "internal/httpapi/media_cors_test.go TestViewerRequestKeepsTheCredentialedAnswer"
+    ],
+    "red_verified": "With the Skipper commented out, TestEdgeOriginFetchCORSIsConstantWhateverTheOrigin fails on five assertions: Vary: [Origin] for all three origins, and ACAO = http://localhost:3000 plus ACAC = true for the allow-listed one. That failure is the A33 measurement reproduced in a unit test.",
+    "operator_docs": "vidra-core docs/operations.md: the CDN expectations list gains 'Do not key on Origin' (forwarding is harmless, keying only fragments), and the paragraph that said of the shared entry 'there is no Vary to get wrong' — true of the marker it was written about, absolute as it read — is replaced by a 'Cross-origin reads: what the edge stores is a constant' section stating the guarantee, why the api makes it itself rather than asking the operator to configure a cache key, and that a viewer's own request is unchanged.",
+    "not_lab_observed": "No caching edge was run. The header set is asserted in-process against the real echo stack (srv.Handler().ServeHTTP), not through a CDN. What a real CDN does with a constant answer — whether it still fragments on a forwarded Origin, for instance — is unchanged by this and remains the selected-edge deferral INT-10 has always carried."
+  },
+  "sc2_retry_knobs": {
+    "finding": "A33 rehearsal finding 7. cdnpurge.WithRetry was wired to no environment variable, so an operator could not tune the ladder and the acceptance run could only reach the dead-letter cap by writing attempts=7 into a queue row by hand — 123 minutes was the only unassisted route.",
+    "knobs": [
+      {"name": "CDN_PURGE_RETRY_BASE", "type": "duration", "default": "1m", "meaning": "delay before the first persisted retry; doubled per attempt already spent"},
+      {"name": "CDN_PURGE_RETRY_MAX", "type": "duration", "default": "1h", "meaning": "cap on the doubling"},
+      {"name": "CDN_PURGE_MAX_ATTEMPTS", "type": "int", "default": "8", "meaning": "attempt 1 IS the immediate pass, so 8 is seven persisted retries over about two hours"}
+    ],
+    "validation": "base > 0; max > 0; max >= base (a cap below the base clamps every retry to the cap and removes the backoff entirely, which is a ladder with no rungs rather than a slower one); attempts >= 1 (1 is legal and means 'the immediate pass only'; 0 would dead-letter work never attempted). A non-duration value is refused by the parser. All four are checked on EVERY config, CDN configured or not, and BEFORE the 'is a CDN configured at all' early return: unlike a purge URL or token these have working defaults, so an inert value is not the 'configured the half you thought mattered' bug — but a nonsense value is still a lie about what the instance does in an incident.",
+    "defaults_single_source": "config's three constants equal cdnpurge.DefaultRetryBase/DefaultRetryMax/DefaultMaxAttempts, asserted by TestCDNPurgeRetryDefaultsAgree (a test-only import; internal/config imports no internal package in production code — the same shape as TestCDNPurgeTimeoutDefaultsAgree).",
+    "consumers": "vidra-core/docker-compose.yml shared anchor, so both api and worker carry them. The meta-ci assert 'every config key vidra-core reads has a compose consumer' was RUN LOCALLY against the branch: OK, 173 config keys, 174 entries in each of the api and worker maps, the two key sets equal, and the three new keys present in both. Values are pinned to the shipped defaults (1m / 1h / 8) rather than left empty because the ladder is documented as a number an operator can read back — see the note below on shadowing.",
+    "shadowing_note": "These pins DO shadow the Go defaults in the sense A17 warned about (FEATURE_LIVE_ENABLED). They are safe to pin because they are equal to the Go defaults by construction and a test keeps them equal; the alternative — an empty value — would leave the ladder invisible in the rendered model, which is the surface an operator inspects. If the Go defaults ever move, TestCDNPurgeRetryDefaultsAgree fails and the compose pin has to move with them.",
+    "documented": "vidra-core .env.example (with the lab recipe: CDN_PURGE_RETRY_BASE=1s CDN_PURGE_MAX_ATTEMPTS=2 dead-letters in seconds) and meta env/production.env.example (commented out, in the template's voice, stating what a dead letter MEANS — the edge keeps serving until its own TTL and you must invalidate by hand).",
+    "tests": [
+      "internal/config/config_test.go TestLoadCDNPurgeRetryKnobs — one accepted ladder, six refusals, and the legal boundary (1 attempt)",
+      "internal/config/config_test.go TestLoadCDNDeliveryDefaults — the shipped ladder is what an install with no CDN gets",
+      "internal/config/config_test.go TestCDNPurgeRetryDefaultsAgree"
+    ],
+    "not_lab_observed": "The ladder itself was measured in real time by the A33 rehearsal (60s, 2m, 4m persisted rungs) and is not re-measured here. What is new and NOT observed against a real edge is that a CONFIGURED ladder is the one the queue uses — that is unit-proven (WithRetry is the same option the tests already drive) and rendered-config-proven, not lab-proven."
+  },
+  "sc3_purge_audit": {
+    "finding": "A33 rehearsal finding 6: 'there is no audit_log action for a CDN purge at all'. The whole durable record of a takedown reaching, or failing to reach, the edge was a cdn_purge_jobs row that a retention sweep eventually deletes, one structured log line, and a process-local counter that a restart resets.",
+    "actions": {
+      "cdn.purge.completed": "result=success, written when a queued job's URL set is fully invalidated (or a catalogue walk finishes)",
+      "cdn.purge.dead_lettered": "result=failure, written when the attempt cap is spent — the one an operator must be able to find afterwards, because the edge is still serving objects this instance has stopped serving and nothing will try again"
+    },
+    "envelope": "actor_kind=system with no actor id (a ticker, not a person); job_id = the cdn_purge_jobs row id, so the trail points at the queue row and its URL list while that row still exists; reason EMPTY.",
+    "metadata_keys": ["reason_code", "url_count", "purged", "failed", "attempts"],
+    "metadata_notes": "reason_code carries cdnpurge's closed job-reason vocabulary (retry | account_delete | downloads_revoked), never text from a request. attempts, url_count, purged and failed are new members of internal/audit's metadata allowlist. They are COUNTS OF URLs, never URLs: a purge path is built from an operator-supplied template that can carry a credential, which is why media_purge.go refuses to log one either. url_count is what THIS outcome was handed — a catalogue walk names no fixed set, so its url_count is 0 and `purged` is the number that matters there.",
+    "scope_and_silence": "Outcomes only, queue jobs only. A scheduled retry writes NOTHING — seven rungs per job would make one flapping edge the bulk of a quiet instance's security trail, and attempts/next_attempt_at/last_error are already on the queue row the admin jobs page renders. The IMMEDIATE in-request pass writes nothing either: it is reported by its own audited act (content.video.delete, auth.account.delete, admin.instance.update, content.video.transcode). What had no durable record at all is the half that finishes later, in another process, after that act returned 204 — and, for a dead letter, the fact that it never finished.",
+    "seam": "cdnpurge.Auditor takes the audit ENVELOPE rather than a bag of scalars, so the test drives a REAL audit.Service over a fake repository: an unallowed metadata key or a malformed action name is refused by audit.normalizeEvent, and that refusal is a test failure rather than a row that silently never appears in production. A nil auditor writes nothing and is not an error. Wired in cmd/api in every role, because the drain that reaches the outcome runs in the worker process.",
+    "tests": [
+      "internal/cdnpurge/cdnpurge_test.go TestPurgeJobOutcomeIsAudited/a_completed_job — one row, action, result, system actor, job_id, and all five metadata values",
+      "internal/cdnpurge/cdnpurge_test.go TestPurgeJobOutcomeIsAudited/a_dead_letter,_and_silence_on_the_way_there — zero rows after the intermediate retry, one row at the cap, failed=1",
+      "internal/cdnpurge/cdnpurge_test.go TestPurgeJobOutcomeIsAudited/no_auditor_wired_is_not_an_error",
+      "the assertion helper also fails any metadata value containing '/' — a path must never reach this table"
+    ],
+    "not_lab_observed": "No row was written against a real PostgreSQL audit_log and no admin audit-log page was read in this slice. The insert path is the shipped audit.Service over a fake repository; the envelope it produces is validated by the real validator."
+  },
+  "sc4_redelivery_after_unblock": {
+    "finding": "A29-F4's open half: 'redelivery after an unblock is still not attempted'.",
+    "mechanism_of_cancellation": "internal/federation/deliver.go DrainDeliveries: a due delivery whose destination host is on the admin blocklist, and whose payload is not a severing activity, is passed to FailDelivery with last_error = 'cancelled: destination instance is blocked'. The row is DEAD-LETTERED, not deleted — state='failed' with inbox_url, payload, signing actor and updated_at intact. So the rows ARE retained and the residual A29 would otherwise have recorded does not apply.",
+    "what_is_repairable": "Only the outbound half. Inbound activities from the blocked instance were answered 202 and dropped, so the remote considers them delivered and will never resend; nothing can bring those back and this slice does not pretend to. The outbound rows are still here with their payloads.",
+    "window": "UnblockInstance is now DELETE ... RETURNING created_at, so the admin who lifts the block gets the moment it began, and only deliveries cancelled at or after that moment are resumed. Returning it from the DELETE rather than reading it first is what makes two simultaneous unblocks produce one window belonging to one of them. instancemod.Service.UnblockInstance returns (blockedAt, wasBlocked, error) and stays idempotent: an unblock of a domain that was not blocked is a success with no window.",
+    "resumed": {
+      "Delete": "always — it can only reduce what the remote holds, and a Delete that never arrived leaves the remote serving something this instance removed",
+      "Accept": "always — it carries no content and its absence strands the remote in a pending follow this instance already granted",
+      "Create/Update": "only if the activity's object is one of THIS instance's videos (id prefix <baseURL>/videos/<uuid>, not a suffix match) AND that video still exists AND is privacy=public AND state=published AND its channel still has ActivityPub enabled. The payload is a snapshot taken when the activity was queued; a video that went private must not be published to a remote server by a message the block happened to delay.",
+      "everything else": "left cancelled. Undo and Reject were never cancelled in the first place (severingActivity, A29-F5), and an unrecognised or unparseable type is not something to replay on a guess."
+    },
+    "requeue": "state='pending', next_attempt_at=now(), attempts=0, last_error='' — attempts reset because a cancellation was never an attempt on the remote side, and carrying the count forward would dead-letter the row early for reasons that have nothing to do with the destination's health. The UPDATE carries a state='failed' guard, which makes a second unblock a no-op rather than a second fan-out.",
+    "bounding": "capped at 500 rows per unblock and DETACHED from the request (context.WithoutCancel + goroutine), for the same reason the edge-purge fan-out is: an admin's DELETE must not become an unbounded scan-and-update. A resumption that does not happen leaves rows exactly where they already were.",
+    "drift_guard": "the cancel marker is now one constant used by both the drain that writes it and the query that matches it, and the test drives the CANCELLATION through the real DrainDeliveries rather than writing the marker by hand — a test that spelled it twice would pass while the two drifted apart.",
+    "tests": [
+      "internal/federation/deliver_test.go TestRedeliverAfterUnblock — eight payload shapes (Create still-public, Update still-public, Create of a now-private video, Create of a deleted video, Delete, Accept, Announce, unparseable), a delivery to a still-blocked OTHER host, a row cancelled before the window, attempts/last_error reset on the resumed rows, and idempotency on a second call",
+      "internal/instancemod/service_test.go — UnblockInstance returns the block start and reports wasBlocked=false on a second lift",
+      "internal/instancemod/service_integration_test.go — the same against a real planner (DELETE ... RETURNING)"
+    ],
+    "red_verified": "Replacing the window bound with the zero time makes the test fail on 'a delivery cancelled BEFORE this block began was resumed; the window is not bounded'.",
+    "residual": "federation_deliveries has no index for (state='failed', last_error, updated_at) and NO retention sweep at all — nothing ever deletes a delivered row. On a long-lived instance the redelivery scan is therefore sequential. It is bounded by a LIMIT, detached, and runs once per unblock (a rare admin action), so it is not a request-latency risk; an index or a retention sweep is a separate change and is recorded here rather than folded in.",
+    "not_lab_observed": "No two-instance federation lab was stood up. The block, the cancellation and the resumption are exercised in-process against the fake repository (with the real drain doing the cancelling); no activity was actually POSTed to a second instance, so 'the remote receives the resumed Create' is NOT claimed."
+  },
+  "gates": {
+    "core_make_ci": "PASS — fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race, whole tree.",
+    "core_openapi": "UNCHANGED, asserted by openapi-verify inside make ci. No vidra-user regeneration is owed.",
+    "core_sqlc": "sqlc v1.31.1 (the pinned version) regenerated for the three query changes; sqlc-verify clean.",
+    "core_vet_integration": "go vet -tags=integration ./... clean.",
+    "meta_python": "python3 -m unittest discover -s tests -p '*_test.py' — 48 tests OK, zero skips.",
+    "meta_compose_render": "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file <filled> config -q PASS (Compose v5.1.0), with the eight ${VAR:?} keys filled with obvious dummies. The --profile core --profile frontend render shows CDN_PURGE_RETRY_BASE=1m, CDN_PURGE_RETRY_MAX=1h and CDN_PURGE_MAX_ATTEMPTS=8 on the api service.",
+    "meta_compose_consumer": "the meta-ci 'every config key vidra-core reads has a compose consumer' step re-run locally: OK, 173 keys, api and worker maps equal.",
+    "shellcheck": "not owed — no script in either repo was touched.",
+    "not_run": [
+      "vidra-user: no file changed, so npm run ci was not run",
+      "vidra-search: untouched",
+      "core integration lanes needing a database (they were vetted, not executed — no PostgreSQL was started in this slice)",
+      "any browser, any CDN, any second federated instance"
+    ]
+  },
+  "unrelated_findings": [
+    "internal/config's DeliveryCDNBaseURL comment still said 'THE CDN'S ORIGIN MUST BE KEY-ADDRESSED ... Pointing this at the Vidra API origin 404s every request', which A33 remediation 1 (#199) inverted — the api IS the origin now. Corrected in passing, since the same struct block was being edited.",
+    "federation_deliveries has no retention sweep of any kind. Every delivered row from every publish since the instance was installed is still in the table. That is not this slice's to fix and is recorded so it is not rediscovered as a redelivery-performance problem."
+  ]
+}
