@@ -1,0 +1,285 @@
+{
+  "item": "A39",
+  "register_row": "QLT-01",
+  "title": "CI gates \u2014 supported toolchain, exact manifest, explicit required test selection, zero silent skips, artifacts",
+  "date": "2026-09-08",
+  "agent_merged_anything": false,
+  "branch_protection_changed": false,
+  "branch_protection_observed": {
+    "yegamble/vidra": "404 Branch not protected",
+    "yegamble/vidra-core": "404 Branch not protected",
+    "yegamble/vidra-user": "404 Branch not protected",
+    "yegamble/vidra-search": "404 Branch not protected"
+  },
+  "required_check_name_for_owner_to_configure": "ci-required",
+  "pull_requests": [
+    {
+      "repo": "yegamble/vidra-core",
+      "number": 194,
+      "url": "https://github.com/yegamble/vidra-core/pull/194",
+      "base": "main",
+      "head": "a39/ci-gates"
+    },
+    {
+      "repo": "yegamble/vidra-search",
+      "number": 41,
+      "url": "https://github.com/yegamble/vidra-search/pull/41",
+      "base": "main",
+      "head": "a39/ci-gates"
+    },
+    {
+      "repo": "yegamble/vidra-user",
+      "number": 186,
+      "url": "https://github.com/yegamble/vidra-user/pull/186",
+      "base": "main",
+      "head": "a39/ci-gates"
+    },
+    {
+      "repo": "yegamble/vidra",
+      "number": 138,
+      "url": "https://github.com/yegamble/vidra/pull/138",
+      "base": "main",
+      "head": "a39/ci-gates"
+    }
+  ],
+  "toolchain": {
+    "vidra-core": {
+      "ci_before": "go 1.26",
+      "ci_after": "go 1.27",
+      "go_mod": "go 1.26.2",
+      "release_image": "golang:1.27-alpine",
+      "verdict": "aligned to the release image"
+    },
+    "vidra-search": {
+      "ci_before": "go 1.26",
+      "ci_after": "go 1.27",
+      "go_mod": "go 1.26.2",
+      "release_image": "golang:1.27-alpine",
+      "verdict": "aligned to the release image"
+    },
+    "vidra-user": {
+      "ci_before": "node 24",
+      "ci_after": "node 24",
+      "engines": ">=24",
+      "nvmrc": "24",
+      "release_image": "node:26-alpine",
+      "verdict": "CI follows the stated policy; the image disagrees \u2014 owner ruling needed (finding F09)"
+    },
+    "vidra-search/training": {
+      "python": "3.11",
+      "uv": "0.11.28",
+      "install": "uv sync --locked / uv run --locked"
+    }
+  },
+  "exact_manifest": {
+    "go": [
+      "go mod verify",
+      "go mod tidy -diff",
+      "GOFLAGS=-mod=readonly"
+    ],
+    "node": [
+      "npm ci only; ci-guard now fails a workflow that uses npm install"
+    ],
+    "python": [
+      "uv sync --locked",
+      "uv run --locked"
+    ],
+    "actions": "every uses: in all 27 workflows already pinned to a 40-char commit SHA; each repo's guard enforces it"
+  },
+  "guards_added": [
+    {
+      "path": "scripts/ci/assert-no-silent-skips.sh",
+      "repos": [
+        "vidra-core",
+        "vidra-search"
+      ],
+      "what": "audits a `go test -v` log; fails on any skip whose reason is not in the lane's allowlist, and on a log with zero passing tests"
+    },
+    {
+      "path": "scripts/ci/assert-no-untagged-skips.sh",
+      "repos": [
+        "vidra-core",
+        "vidra-search"
+      ],
+      "what": "static: refuses a t.Skip/testing.Short in a test file outside the integration build tags unless registered"
+    },
+    {
+      "path": "scripts/ci/assert-no-skipped-tests.mjs",
+      "repos": [
+        "vidra-user"
+      ],
+      "what": "audits the Playwright JSON report; fails on unregistered skips, an empty report, or a missing report; warns on flaky"
+    },
+    {
+      "path": "scripts/ci/require-checks.sh",
+      "repos": [
+        "vidra-core",
+        "vidra-search",
+        "vidra-user",
+        "vidra"
+      ],
+      "what": "the ci-required fan-in: fails when a required lane fails, is cancelled, times out, or never ran"
+    },
+    {
+      "path": "scripts/ci/check-required-manifest.sh",
+      "repos": [
+        "vidra-core",
+        "vidra-search",
+        "vidra-user",
+        "vidra"
+      ],
+      "what": "fails when required-checks.txt names a job no workflow defines"
+    }
+  ],
+  "required_lanes": {
+    "vidra-core": [
+      "build-test",
+      "integration",
+      "openapi",
+      "ipfs-integration",
+      "ipfs-private-integration",
+      "?guard",
+      "?prev-migrator-against-new-schema",
+      "?prev-release-against-new-schema"
+    ],
+    "vidra-search": [
+      "build-test",
+      "integration",
+      "openapi",
+      "?guard",
+      "?prev-migrator-against-new-schema",
+      "?smoke"
+    ],
+    "vidra-user": [
+      "frontend",
+      "contract",
+      "e2e-backed (local)",
+      "e2e-backed (s3)",
+      "channel-sync-backed",
+      "ipfs-backed",
+      "?guard"
+    ],
+    "vidra": [
+      "validate",
+      "bundle",
+      "boot"
+    ]
+  },
+  "explicitly_optional_lanes": [
+    {
+      "repo": "vidra-core",
+      "lane": "ipfs-public-gateway",
+      "why": "TestIntegrationPublicVideoRoundTrip depends on ipfs.io's availability and DHT propagation with a 5-minute budget; a third party must not decide whether a PR merges. Runs with IPFS_PUBLIC_PROOFS_REQUIRED=1 so it cannot be falsely green."
+    },
+    {
+      "repo": "vidra-core",
+      "lane": "bench / fuzz",
+      "why": "scheduled exploratory signal, stated in-file"
+    },
+    {
+      "repo": "vidra-user",
+      "lane": "quarantine-backed (frontend-e2e-optional.yml)",
+      "why": "QUARANTINE_NEW_UPLOADS contradicts the main matrix's immediately-public seeded uploads"
+    }
+  ],
+  "skip_allowlists": {
+    "vidra-core/allowed-skips-unit.txt": [
+      "the stub is a shell script (GOOS==windows)",
+      "sh not available"
+    ],
+    "vidra-core/allowed-skips-integration.txt": [
+      "LIVE_RTMP_TEST!=1",
+      "5 ffmpeg/hardware capability probes"
+    ],
+    "vidra-core/allowed-skips-none.txt": [],
+    "vidra-search/allowed-skips-unit.txt": [],
+    "vidra-search/allowed-skips-integration.txt": [],
+    "vidra-user/allowed-skips-none.txt": [],
+    "vidra-user/allowed-skips-backed.txt": [
+      "atproto (real Bluesky credentials)",
+      "peertube-import (a real source instance)",
+      "registration-approval (flag gates the setup admin)",
+      "whisper-captions (model download)",
+      "search-discovery (NO search service in core's compose \u2014 finding F04, still open)",
+      "quarantine (own optional lane)",
+      "channel-sync in the main matrix (own required lane, where it may not skip)",
+      "owner-claim first-run branch (claimed by backed-setup)"
+    ]
+  },
+  "artifacts": [
+    "core-make-ci-log",
+    "core-integration-log",
+    "core-ipfs-local-log",
+    "core-ipfs-private-log",
+    "core-ipfs-public-gateway-log",
+    "search-make-ci-log",
+    "search-integration-log",
+    "search-training-junit",
+    "frontend-ci-reports",
+    "playwright-backed-report-local",
+    "playwright-backed-report-s3",
+    "playwright-channel-sync-report",
+    "playwright-ipfs-report",
+    "playwright-quarantine-report",
+    "meta-validate-python-unit",
+    "meta-boot-compose-log"
+  ],
+  "artifact_downloaded_as_proof": [
+    {
+      "run": "https://github.com/yegamble/vidra-core/actions/runs/34192222541",
+      "name": "core-integration-log",
+      "bytes": 2097152,
+      "pass": 4703,
+      "skip": 6,
+      "fail": 0,
+      "audit_line": "OK: skip audit \u2014 6 registered skips, 4703 passed, 0 unregistered in integration.log."
+    },
+    {
+      "run": "https://github.com/yegamble/vidra/actions/runs/34193066614",
+      "name": "meta-validate-python-unit",
+      "content": "Ran 34 tests in 0.430s / OK"
+    }
+  ],
+  "local_gates": {
+    "vidra-core": "make ci exit 0 (Go 1.26.2 locally); go mod verify OK; go mod tidy -diff exit 0; untagged-skip guard 4 registered sites",
+    "vidra-search": "make ci exit 0; go mod verify OK; go mod tidy -diff exit 0; untagged-skip guard 0 sites",
+    "vidra-user": "tsc --noEmit 0; lint 0 errors / 2 pre-existing warnings; lint:icons 0; vitest 254 files / 2539 tests passed, 0 failed, 0 skipped (Node 24.4.1)",
+    "vidra": "unittest discover 34 tests OK zero skips; bash -n + shellcheck -x on newly covered scripts exit 0; node --check on 12 tests/*.mjs exit 0; prod compose config -q exit 0; --profile core config -q exit 0"
+  },
+  "unverified": [
+    "ci-required's NEVER-RAN branch is proved by a local dry run only; its FAILED branch is proved in CI (core run 34194101356)",
+    "ipfs-public-gateway and quarantine-backed are declared but have not executed (dispatch/schedule only)",
+    "schema-compat runs the PREVIOUS release's test-integration, whose tree has no audit hook; it becomes self-auditing one release after core#194 merges",
+    "Go 1.27 is proved by remote CI only; this workstation has Go 1.26.2",
+    "No published release image was built or pulled; every lane builds from source"
+  ],
+  "findings": [
+    {
+      "id": "F09",
+      "text": "vidra-user's stated Node policy (engines >=24, .nvmrc 24) and its published image (node:26-alpine) disagree. CI follows the stated policy. OWNER RULING NEEDED; nothing changed either way."
+    },
+    {
+      "id": "F04",
+      "text": "Half closed. search-discovery.spec.ts still cannot run \u2014 vidra-core's docker-compose.yml has NO search service, so no stack in vidra-user can satisfy E2E_SEARCH_SERVICE. It is now registered in allowed-skips-backed.txt so it cannot be counted as coverage by a green required check, but it is still not proved. A09's enforcement lives in the meta-repo lab harness, not in this workflow."
+    },
+    {
+      "id": "F04b",
+      "text": "meta's boot lane still runs with transcoding disabled and search integration unset, so a green meta CI cannot certify upload -> transcode -> browser decode -> search indexing. Unchanged."
+    },
+    {
+      "id": "minor",
+      "text": "npm ci warns EBADENGINE for jsdom@30.0.1 on Node 24.4.1; CI's node-version 24 resolves to a current 24.x and is unaffected."
+    },
+    {
+      "id": "F10",
+      "text": "schema-compat (prev-release-against-new-schema) is flaky and it predates A39. Two N-1-tree store tests failed on a branch that changes no migration, query or store code, on a schema the same lane had passed an hour earlier: 'total 25 but the unpaginated page has 24 rows \u2014 the Count and List predicates disagree', and a relevance tie ordering differently. The lane runs `go test -tags=integration -race ./...` with packages in parallel against ONE Postgres, so cross-package writes are mutually visible; backend-integration shares the exposure. Fix belongs in store-test isolation, not in a CI gate."
+    }
+  ],
+  "remote_ci": {
+    "all_four_branches_green_at_head": true,
+    "fan_in_failed_for_real": {
+      "run": "https://github.com/yegamble/vidra-core/actions/runs/34194101356",
+      "what": "prev-release-against-new-schema failed on the head-commit re-run and ci-required failed with it (step 'Every required lane succeeded'), rather than reporting success over a red required lane. Both green on re-run."
+    }
+  }
+}

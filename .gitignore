@@ -114,3 +114,6 @@ Thumbs.db
 .claude/hooks/.state/
 .claude/scheduled_tasks.lock
 .claude/worktrees/
+
+# A39: CI evidence bundles (uploaded as artifacts, never committed)
+/ci-report/

@@ -1,0 +1,34 @@
+# The definition of "required for merge" for the vidra meta repo.
+#
+# scripts/ci/require-checks.sh reads this file in the `ci-required` job and
+# fails unless every entry is satisfied for the commit under test. Configure
+# ONE required status check in branch protection — `ci-required` — and this
+# file becomes the single place the required set is declared and reviewed.
+# TWIN: vidra-core, vidra-search and vidra-user carry the same file and job.
+#
+# Syntax (one check-run name per line, as GitHub reports it):
+#   name    must EXIST for this commit and must conclude `success`
+#   ?name   required only IF it ran (path-filtered lanes)
+#
+# Nothing but `success` passes: `cancelled`, `timed_out`, `neutral` and
+# `skipped` all fail.
+
+# meta-ci.yml — action pins, ignored env files, shell lint over every root,
+# tests/ and deploy/ script, `node --check` over the smoke drivers, the
+# install.sh unit tests, the deploy-script Python unit suites (with a skip
+# failing the job), the Caddy pin, the migrator floor, and every compose render
+# (full stack, hot-reload overlay, production overlay, port closure, image pins,
+# config-key coverage, `vidra setup` answer coverage, bootstrap idempotency).
+validate
+
+# meta-ci.yml — the release bundle built twice and compared byte for byte, its
+# schema version matched against migrations on disk, its contents checked, and
+# the production matrix rendered from inside the extracted tree with no
+# checkouts present.
+bundle
+
+# meta-ci.yml — the full stack booted in PRODUCTION mode from source, readiness
+# probed, and BOTH migration one-shots run from the service images themselves.
+boot
+
+# NOT required — nothing else here runs on pull_request today.
