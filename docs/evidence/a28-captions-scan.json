@@ -1,0 +1,109 @@
+{
+ "status": "A28's stopping criterion is MET. INT-03 flips to PASS (manual VTT CRUD plus a real local whisper.cpp /inference endpoint through success, outage, timeout, unsupported-language and disabled lanes). INT-04 flips to PASS after two code fixes: an INFECTED upload/import kept its file row and its bytes, so the owner's download listing advertised the rejected original and /videos/{id}/download/original served it 200 video/mp4 to the owner and to an admin; and /admin/system had no scanner component, so a dead clamd left the page reporting a healthy instance while every upload and every URL import was failing.",
+ "scope": "A28 / backlog item 30. Register rows INT-03 (manual captions and Whisper generation/review) and INT-04 (ClamAV scanning gates all ingestion). The DM attachment path is re-cited from A14 and re-run here.",
+ "core_revision": "a28/captions-scan @ 48e9c42 (two commits on origin/main)",
+ "frontend_revision": "a28/captions-scan @ one commit on origin/main (COMPONENT_LABEL entries + regression)",
+ "search_revision": "vidra-search NOT touched and NOT run",
+ "pull_requests": {
+  "core": "yegamble/vidra-core#198",
+  "user": "yegamble/vidra-user#195",
+  "meta": "yegamble/vidra#146 (this evidence PR)",
+  "dependency_order": "core#198 and user#195 are INDEPENDENT: core#198 changes no OpenAPI (SystemStatus.components is additionalProperties) and adds no migration, so there is no contract-ci ordering and no client regeneration. The frontend label is inert until core ships the probe, so either merge order is safe. This evidence PR last."
+ },
+ "migration": "none - latest core migration stays 0135; lab schema 135, dirty=false",
+ "environment": {
+  "core": "built from the branch, run natively as TWO processes: VIDRA_ROLE=api on 127.0.0.1:8088 and a separate VIDRA_ROLE=worker with no listener. VIDRA_ENV=development, STORAGE_BACKEND=local + STORAGE_LOCAL_ROOT, TRANSCODING_ENABLED=true, TRANSCODING_MIN_FREE_SCRATCH_MB=512, RATE_LIMIT_ENABLED=false, HTTP_IMPORT_ALLOW_PRIVATE_URLS=true (dev-only relax, so the loopback fixture origin is reachable), UPLOAD_MAX_SIZE=200M.",
+  "database": "throwaway PostgreSQL 16.15 (native, -k /tmp, port 5443) migrated 0 -> 135; native Redis on 6391, flushed at start.",
+  "frontend": "vidra-user production build served as `node .next/standalone/server.js` on 3111 behind a pipe-only proxy on 3110 that routes /api/v1, /healthz, /readyz, /metrics and /.well-known to core - ONE origin, because vidra_refresh is SameSite=Lax and Path=/api/v1/auth. The proxy drops the client's Accept-Encoding. Node 26.8.1.",
+  "browser": "Chromium via Playwright 1.62.1, headless, 1440x1000 and 1440x1400.",
+  "clamav": "REAL ClamAV 1.5.4 (brew), its own clamd.conf, freshclam database signature set 28117 (daily 355647 + main 3287027 + bytecode 80 signatures), TCP 127.0.0.1:3310, LogClean yes. CLAMAV_ADDR=127.0.0.1:3310, CLAMAV_TIMEOUT=60s.",
+  "whisper": "REAL whisper.cpp 1.9.2 whisper-server on 127.0.0.1:8099 with the MULTILINGUAL ggml-tiny.bin (74 MiB), default --inference-path /inference, 4 threads, Metal backend. WHISPER_ENABLED=true, WHISPER_ENDPOINT=http://127.0.0.1:8099, WHISPER_DEFAULT_LANGUAGE=en. Run under a supervisor because whisper.cpp aborts on an unknown language tag.",
+  "fixture_origin": "a local Python HTTP server on 127.0.0.1:8199 serving a benign ffmpeg-made mp4 and the EICAR body as video/mp4, for the URL-import lane.",
+  "stall_endpoint": "a local Python server on 127.0.0.1:8098 that accepts the multipart POST to /inference and never answers, for the timeout lane.",
+  "media_fixtures": "two clips with REAL speech: macOS `say` -> aiff -> ffmpeg mp4 (9.19 s and 7 s, h264 + aac). EICAR fixtures are assembled from two string fragments at runtime and are committed nowhere.",
+  "external_dependency": "none at run time. The only network use was fetching ggml-tiny.bin from huggingface.co and the ClamAV database from database.clamav.net before the lab started.",
+  "toolchain": "Go 1.26.2, ffmpeg 8.1, Node 26.8.1, 14 GiB free disk."
+ },
+ "whisper_contract": {
+  "shape": "multipart/form-data POST to <WHISPER_ENDPOINT>/inference with file (16 kHz mono s16le WAV extracted by ffmpeg -vn -ac 1 -ar 16000 -c:a pcm_s16le), response_format=verbose_json, temperature=0, optional language; response segments[] of {start,end,text} in seconds rendered to WebVTT.",
+  "confirmed_against": "whisper.cpp 1.9.2 whisper-server answered exactly that shape; the client also ignores the response's own `language` field, so a transcript is stored under whatever tag the creator asked for.",
+  "trigger": "POST /api/v1/videos/{id}/captions/auto (202) + GET on the same path for status; drain loop is worker-role only and starts on captionjob.BootCapable(), never on the runtime toggle.",
+  "timeout_knob": "NONE - defaultWhisperTimeout in internal/media/whisper.go is a compile-time 10 minutes (measured: claimed 07:25:00, failed 07:35:00).",
+  "retry": "internal/captionjob: baseBackoff 1 min doubling, capped at 1 h, dead-letter at 5 attempts. Measured +1 min then +2 min naturally."
+ },
+ "sc1_manual_captions": {
+  "create": "201, captions/{id}/en.vtt sha256 e63013c8...",
+  "edit_path": "no editor exists - re-upload the same language; AddCaption upserts over the same key. sha256 changed to 048427d9..., readback is the new text.",
+  "put_patch": "PUT /captions/{lang} 405, PATCH 405 (A11's fact re-confirmed)",
+  "second_language": "fr 201; list [en, fr]",
+  "invalid_vtt": "422 unprocessable_entity 'caption must be a WebVTT file with a valid language tag'",
+  "malformed_tag": "422, same typed error",
+  "delete": "204; row gone, object gone from disk, bytes 404, re-delete 204 (idempotent)",
+  "wrong_actors": {
+   "userU_post": 404,
+   "userU_delete": 404,
+   "anon_post": 401,
+   "anon_delete": 401,
+   "admin_post": 404,
+   "anon_list_public": 200,
+   "anon_bytes_public": 200
+  },
+  "browser": "watch page carries both tracks as same-origin blob: <track> (kind=captions, srclang en/fr, labels 'English (edited)' / 'Francais'), a captions toggle is present, and the first track showing yields 3 real cues. Studio panel lists both with Remove controls plus the upload form."
+ },
+ "sc2_whisper": {
+  "success": "job c9efb192 done at 07:07:02 after 2 recorded failures (endpoint down) and a third attempt against the live server; caption row en / label 'Auto-generated'; object written; one caption_ready notification; real transcript with real ASR errors.",
+  "conflict": "an immediate second request while one is in flight is 409.",
+  "editable": "the creator re-uploaded a corrected en through the ordinary POST; label became 'English (creator-corrected)'.",
+  "browser_end_to_end": "Studio 'Generate automatically' settled to 'Automatic captions added.' in 12 s, with the role=status 'Generating captions...' line in between.",
+  "outage": "endpoint down -> worker log 'dial tcp ...: connect: connection refused' (carries the endpoint URL), API error is the safe 'auto-captioning failed'.",
+  "timeout": "stall endpoint: claimed 07:25:00, failed 07:35:00 with 'context deadline exceeded (Client.Timeout exceeded while awaiting headers)'; lease renewed at 07:30:00 so nothing swept it; the next attempt against the restored endpoint SUCCEEDED.",
+  "unsupported_language": "malformed tag -> 422 before any work with fields[language]. A well-formed unknown tag (zz) passes Vidra's validator and ABORTS whisper.cpp (exit 139, 'whisper_lang_id: unknown language'); the job failed, retried on the ladder (pulled forward in SQL after the first two attempts - a stated lab acceleration), dead-lettered at attempt 5, job_runs state dead_lettered, and NO caption row or object was written for zz. The video's existing en track was untouched.",
+  "disabled": "WHISPER_ENABLED=false -> /instance features.transcription false, POST 403 feature_disabled, worker starts no drain loop, Studio hides the control and shows \"Automatic captions aren't available on this server.\" while keeping manual upload. With the admin's transcription_enabled turned ON against a deployment with no Whisper the same request is 503 auto_captions_not_configured carrying its whole sentence - so A17's note that this 503 is a bare echo.NewHTTPError is STALE. Wrong actors while disabled: anon 401, userU 503 (the feature gate runs before the existence check by design)."
+ },
+ "sc3_sc4_scan_paths": {
+  "before_the_fix": {
+   "upload_benign": "clamd OK -> published + HLS",
+   "upload_eicar": "clamd 'Eicar-Test-Signature FOUND' -> video failed, anon 404, no HLS, no thumbnail - BUT video_files row kept, object kept at web-videos/{id}.mp4, GET /videos/{id}/download listed it by filename, and GET /videos/{id}/download/original served the exact 68 EICAR bytes 200 video/mp4 to the OWNER and to an ADMIN.",
+   "import_eicar": "identical, over http://127.0.0.1:8199/infected.mp4",
+   "dm_attachment": "422 'attachment failed the malware scan', ZERO attachment rows and ZERO blobs; a benign JPEG stored exactly one - the DM path already deleted rejected bytes"
+  },
+  "after_core_198": "upload and import both: state failed, video_files count 0, no object on disk, GET /videos/{id}/download -> {\"files\":[]}, /original and /download/original 404 for owner AND admin. A benign upload in the same run still published with HLS and a 200 original.",
+  "where_rejected_bytes_live": "nowhere. There is no quarantine object store and no retention window. The audit row is the whole durable record: content.upload.malware_rejected, actor_kind=system, reason 'video=<uuid> outcome=infected policy=fail-closed', and it carries no file content.",
+  "clamd_log": "5 instream FOUND and 5 instream OK lines across the run"
+ },
+ "sc5_fail_policy": {
+  "master_switch": "MALWARE_SCAN_ENABLED, default FALSE. CLAMAV_ADDR is required when it is true - boot refuses with 'config: CLAMAV_ADDR is required when MALWARE_SCAN_ENABLED=true' (verified).",
+  "mode_knob": "MALWARE_SCAN_MODE, default fail-closed. It decides ONLY what happens when the scan cannot complete; an INFECTED verdict fails in every mode.",
+  "fail_closed": "clamd stopped -> upload AND URL import both failed; audit 'outcome=scan_error policy=fail-closed'",
+  "quarantine": "-> quarantined, visible in the admin quarantine queue; audit 'policy=quarantine'",
+  "fail_open": "-> PUBLISHED UNSCANNED with NO audit row - only a WARN log line 'malware scan failed; publishing anyway (MALWARE_SCAN_MODE=fail-open)'",
+  "unset_clamav_addr": "means scanning is off (config forbids the alternative). A real mp4 with EICAR appended uploaded and PUBLISHED publicly, unscanned, with no boot warning and no log line. The only honest surface is /admin/infrastructure's malware_scan row: enabled false, configured false, with prose saying files publish unscanned. INT-04 requires scanning to gate ALL ingestion; the shipped default gates none.",
+  "admin_system_before": "clamd stopped mid-run: status 'ok', nine healthy components (postgres, redis, s3, storage, smtp, search, ffmpeg, mfa_kek, settings_sync), NO scanner component at all; /admin/infrastructure still said malware_scan enabled:true configured:true because that row is static config.",
+  "admin_system_after": "clamd up -> clamav ok, instance ok. clamd down -> clamav down, instance DEGRADED, sentence 'the malware scanner is unreachable and MALWARE_SCAN_MODE=fail-closed, so every upload and every URL import is failing: clamav: dial: dial tcp the configured address: connect: connection refused'; under fail-open the same failure reads '...is being published WITHOUT being scanned'.",
+  "defect_in_the_fix": "the first cut passed net.Dialer's error through verbatim, putting CLAMAV_ADDR on an admin page - the exact value admin_infra_test forbids there by name. Caught by running the probe against the live lab, not its unit tests. Address and bare host are now redacted; grep -c '3310' over the whole response body is 0; a test pins it."
+ },
+ "findings_needing_a_ruling": [
+  "A malware rejection is invisible to the creator: upload session settles state=completed failure_reason='', import job settles state=done with no error, Studio shows a bare FAILED badge - beside a quarantined video that gets a full explanatory sentence. Not patched: the wording is a product decision.",
+  "MALWARE_SCAN_MODE=fail-open publishing unscanned media leaves no audit row at all, only a WARN log line.",
+  "caption_generate rows in job_runs carry empty correlation_id, request_id and actor_id on 4 of 4 rows, where upload_finalize and video_transcode are stamped on 2 of 2. internal/captionjob never calls jobtrace; uploadfinalize is the pattern to copy. A17's 'six projected queues do not call the job recorder' is half right: the row exists (migration 0083's trigger), the identity does not.",
+  "The Whisper round-trip timeout is a compile-time 10 minutes with no knob.",
+  "A well-formed unknown language tag (zz) passes Vidra's BCP-47-ish validator and ABORTS whisper.cpp, so any creator can kill a shared transcription service. Vidra has no supported-language set to validate against.",
+  "One click on Studio's 'Generate automatically' silently replaced a creator's hand-written en track - label, bytes and all - with 'Auto-generated'. No warning, no undo. Verified in Chromium.",
+  "UpsertCaption keeps the original created_at and there is no updated_at, so nothing distinguishes an edited caption from an untouched one.",
+  "EICAR is a whole-file signature: a real mp4 with EICAR appended scans clean on clamd 1.5.4 (verified with clamdscan). This lane proves the gate and the plumbing, not clamd's detection depth."
+ ],
+ "gates": {
+  "core": "make ci PASSED TWICE (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race) - before and after the redaction commit. Three new test files, all RED first.",
+  "user": "tsc --noEmit clean; npm run lint 0 errors + the 2 pre-existing warnings on main; lint:icons pass; vitest run 254 files / 2541 tests pass; the new assertion verified RED by stashing the component.",
+  "meta": "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file <filled template> config -q exit 0",
+  "not_run": "core's integration / ipfs-integration / ipfs-private-integration tagged lanes (they need Docker Compose), any vidra-user e2e or e2e-backed lane, and vidra-search (untouched)."
+ },
+ "unverified": [
+  "A SELECTED production Whisper endpoint. The fixture is whisper.cpp 1.9.2's own server with ggml-tiny.bin - a real implementation of the contract core speaks, but not a chosen deployment, model size or capacity.",
+  "A SELECTED ClamAV deployment. ClamAV 1.5.4 is real with a real signature database, but it ran on the host as a throwaway daemon, not the packaged one the release will ship.",
+  "S3 storage: the whole slice ran on STORAGE_BACKEND=local.",
+  "Rate limiting was off, so nothing here says anything about the shipped limits on the caption or scan endpoints.",
+  "Scanning of anything other than the video original: thumbnails, storyboards, avatars, banners and account-import archives were not probed for a scan seam."
+ ],
+ "teardown": "clamd, whisper-server and its supervisor, the stall and fixture-origin servers, the throwaway Postgres cluster and redis, the frontend, the proxy and both core processes were stopped, and the lab accounts and their media went with the cluster. The whisper model and the ClamAV signature database are NOT committed. Credentials, raw logs, media fixtures and browser traces stay private under /tmp/vidra-a28-r1. The EICAR string is assembled from two fragments at runtime and appears in no committed file."
+}

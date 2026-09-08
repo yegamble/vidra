@@ -134,8 +134,8 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | STO-03 Storage migration/copy/verification/abort and GC interlocks | C U M | `internal/storagemigration`; phase-2 plan and integration tests | UNVERIFIED | Local→MinIO copy with checksums, failures/resume and final authority switch; prove reads during movement and old-store retention; GC cannot race migration | STO-01, REC-01 → A25 |
 | INT-01 Live RTMP ingest→HLS watch→replay with moderation | M C U | `media` profile, live service/hooks/replay; backed tests simulate hook transitions | BLOCKED | Actual RTMP publisher with audio; live watch advances, authorization and stream-key rotation; terminate/max-duration/disconnect→replay; verify selected ladder/latency; hooks alone insufficient | PUB-03 + live selection/ingest plane → A26 |
 | INT-02 Direct URL import, yt-dlp platform import and channel auto-sync | M C U | Videoimport/channelsync; W2; released image yt-dlp build arg; dedicated channel-sync CI; live evidence `a27-import-sync` (a local fixture origin and an html5 extractor fixture on a two-process core: direct import stored, probed, transcoded and published with a stamped correlation id; sandboxed `resolver=ytdlp` published with h264+aac and prefilled the empty draft field; one scheduled channel sync discovered exactly one item, imported nothing on two `sync-now` runs and two scheduled runs, discovered exactly one new item after the source published one, recorded a real outage as `failed` with a safe reason and recovered with no re-import; a SIGKILLed worker was requeued by the lease sweep and retried to success with no duplicate and the correlation id preserved across processes; seven SSRF probes refused with zero stored bytes, including a public redirector to a private address that imported before this slice; and every disabled/boot gate refused once) | PASS | Local fixture origin/file and extractor fixture; scheduled channel discovers new item once; restart/retry/SSRF/disabled gates; verify released image actually contains executable | PUB-03 → A27. Released-image proof is `ghcr.io/yegamble/vidra-core:v0.6.2` (amd64) carrying `/usr/local/bin/yt-dlp` 2026.07.04 + Python 3.14.7 + ffmpeg 8.1.2 from the `YTDLP_VERSION` build arg — that image PREDATES the fixes in core#184, so the released image is proven to contain the executable but not to run this behaviour. Follow-ups, none blocking: the three boot-capability 503s (`resolver=ytdlp`, sync create, sync-now) are bare `echo.NewHTTPError` so the 5xx scrubber replaces their sentences with "an unexpected error occurred" (A17's open item, measured here on two more routes); URL import has a hard 60-second budget for the WHOLE download (`videoimport.fetchTimeout` is the `http.Client.Timeout`), so `UPLOAD_MAX_SIZE` is not the real ceiling; a failed sync reschedules at the plain `CHANNEL_SYNC_INTERVAL` with no backoff; `channel_syncs` is still unprojected into `job_runs` and has no admin surface (this slice added only a WARN line); a runtime limit change binds the worker only after its settings-poll interval; the channel-sync dedupe key falls back to the entry URL when the extractor reports no id; and the explicit `resolver=ytdlp` path is still not dial-pinned by design. The `channel-sync-backed` lane was NOT run against this branch (it needs Docker Compose); S3 was not exercised |
-| INT-03 Manual captions and Whisper generation/review | M C U | Caption routes/CaptionsManager; backed captions/whisper-captions opt-in | BLOCKED | Manual VTT CRUD, watch track and language; configured Whisper audio→job→editable caption; outage/timeout and unsupported language; owner-only access | PUB-03 + Whisper selection/endpoint → A28 |
-| INT-04 ClamAV scanning actually gates all ingestion | M C U | Scanner service; scan profile; uploads/imports/DM hooks and config policy | BLOCKED | Disposable scanner: benign file, standard EICAR fixture, unavailable scanner, approved fail policy; never publish/link rejected bytes; test URL and DM paths as well as upload | PUB-01 + scanner selection → A28 |
+| INT-03 Manual captions and Whisper generation/review | M C U | Caption routes/CaptionsManager; backed captions/whisper-captions opt-in; live evidence `a28-captions-scan` (section "A28 captions, Whisper and ClamAV lanes — 2026-09-08") on a two-process core with real Chromium: manual VTT create/edit-by-re-upload/list/delete with the object sha changing over the same key, a second language, typed 422s for a non-WebVTT body and a malformed tag, `PUT`/`PATCH` still 405, and an owner-only matrix in which even the admin gets 404 while anonymous reads of a public video's track are 200; both tracks render on the watch page as same-origin `blob:` `<track>` with the right `srclang`/`label` and three real cues; and a REAL local whisper.cpp 1.9.2 `/inference` endpoint drove audio→job→an editable `Auto-generated` caption (12 s end to end from the Studio button), with a measured 1-then-2-minute retry ladder, a dead-letter at attempt 5 that wrote no caption, the compile-time 10-minute timeout firing exactly on time against a stalling endpoint and recovering on the next attempt, and the disabled split proved on both halves (403 `feature_disabled` with the control hidden, 503 `auto_captions_not_configured` when the admin toggle is on without an endpoint) | PASS | Manual VTT CRUD, watch track and language; configured Whisper audio→job→editable caption; outage/timeout and unsupported language; owner-only access | PUB-03 → A28. Evidence is **whisper.cpp 1.9.2 with `ggml-tiny.bin` — a real implementation of the contract core speaks, but the SELECTED endpoint, model size and capacity are DEFERRED**, so nothing here bounds transcription latency or cost at production scale. Findings, none blocking: there is no caption *editor* — the shipped edit path is re-uploading the language, and `UpsertCaption` keeps the original `created_at` with no `updated_at`, so nothing distinguishes an edited track from an untouched one; one click on Studio's "Generate automatically" silently replaced a creator's hand-written `en` track with the machine transcript, no warning and no undo; the Whisper round-trip bound is a compile-time 10 minutes with no knob; `caption_generate` rows reach `job_runs` through migration 0083's trigger but carry empty `correlation_id`/`request_id`/`actor_id` on 4 of 4 rows where `upload_finalize` and `video_transcode` are stamped on 2 of 2; a well-formed unknown tag (`zz`) passes Vidra's validator and **aborts whisper.cpp**, so any creator can kill a shared transcription service; and the client ignores the response's own `language`, so an English transcript is stored under whatever tag was asked for. A17's note that this 503 is a bare `echo.NewHTTPError` is **stale** — it is typed and its sentence survives the scrubber |
+| INT-04 ClamAV scanning actually gates all ingestion | M C U | Scanner service; scan profile; uploads/imports/DM hooks and config policy; live evidence `a28-captions-scan` (section "A28 captions, Whisper and ClamAV lanes — 2026-09-08") against a REAL clamd 1.5.4 with a real 3.6 M-signature database: a benign upload published while a standard EICAR body was refused on the resumable-upload path, the URL-import path and the DM path (the DM half re-cited from A14 and re-run here for one request — 422 `attachment failed the malware scan`, zero rows, zero blobs); all three fail policies measured with the daemon actually stopped (`fail-closed` fails both ingestion paths, `quarantine` parks the upload in the moderation queue, `fail-open` publishes unscanned); boot refuses `MALWARE_SCAN_ENABLED=true` with an empty `CLAMAV_ADDR`; and `/admin/system` now carries a `clamav` component that reads `ok`, then `down` with the instance `degraded` and a sentence naming both the consequence and the policy in force | PASS | Disposable scanner: benign file, standard EICAR fixture, unavailable scanner, approved fail policy; never publish/link rejected bytes; test URL and DM paths as well as upload | PUB-01 → A28. Two defects fixed on the way (vidra-core #198): an INFECTED verdict failed the video but **kept its `video_files` row and its bytes**, so `GET /videos/{id}/download` advertised the rejected original and `/download/original` served it 200 `video/mp4` to the owner AND to an admin on both ingestion paths — the "never link rejected bytes" clause, with the link live; and `/admin/system` had **no scanner component at all**, so a dead clamd left it reporting `"status":"ok"` across nine healthy components while every upload and import was landing in `failed`. Rejected bytes now live **nowhere** — no quarantine store, no retention, the audit row is the whole record. Findings that need a ruling, none blocking: a malware rejection is **invisible to the creator** (the upload session settles `completed` with an empty `failure_reason`, the import job settles `done` with no error, Studio shows a bare `FAILED` badge beside a `quarantined` video that gets a full sentence); `fail-open` publishing unscanned media leaves **no audit row**, only a WARN log line; and **`MALWARE_SCAN_ENABLED` defaults to false**, so out of the box nothing is scanned, with no boot warning and no log line — the only honest surface is `/admin/infrastructure`'s prose. EICAR is a whole-file signature (a real mp4 with it appended scans clean), so this lane proves the gate, not clamd's detection depth. The SELECTED scanner deployment is DEFERRED (a throwaway host daemon, not the packaged one), S3 was not exercised, and thumbnails/storyboards/avatars/account-import archives were not probed for a scan seam |
 | INT-05 ActivityPub remote discover/follow/accept/video/comment/delete/moderation | M C U | Federation service/integration tests; user federation queues; no two-instance backed lane | BLOCKED | Two isolated instances: signed inbox/outbox, approved/rejected follow, new/update/delete videos, reply, block server/account, remote URL; source identity after migration | INS-05, ADM-02 + AP selection → A29 |
 | INT-06 ATProto/Bluesky login, linking and outbound cross-post | M C U | Auth/ATProto service, connection UI; backed atproto opt-in; old extension “no login” claim stale | BLOCKED | Test PDS/account: login callback/state, link/unlink, private exclusion, public post contains working watch URL; restart sealed credential and outage/retry; no public rehearsal posts | AUTH-02, PLAY-02 + provider/test account → A30 |
 | INT-07 Public IPFS mirror and viewer fallback preserve disclosure boundary | M C U | Mirror eligibility; dedicated backed IPFS job and privacy fence | BLOCKED | Private test network: publish eligible object→real CID→master+segments playback; gateway failure→canonical fallback; unlist/delete unpin, no private/quarantine/DM ledger row; record irreversibility of real public publication | PLAY-01 + IPFS selection → A31 |
@@ -10877,3 +10877,277 @@ the throwaway Postgres cluster and redis, the frontend and proxy processes, and
 the lab accounts and their media. The `mirror.gcr.io/minio/*` images are kept.
 Credentials, raw logs, the media fixtures and the browser traces stay private
 under `/tmp/vidra-a32-r1`; nothing from it is committed.
+
+## A28 captions, Whisper and ClamAV lanes — 2026-09-08
+
+**INT-03 flips to PASS. INT-04 flips to PASS, and it took two code fixes to get
+there.** Manual VTT CRUD, a real local whisper.cpp `/inference` endpoint driving
+generation through outage, timeout, unsupported-language and disabled lanes, and
+a real `clamd` gating uploads and URL imports on a two-process core with real
+Chromium. Two PRs — [core
+#198](https://github.com/yegamble/vidra-core/pull/198) and [user
+#195](https://github.com/yegamble/vidra-user/pull/195) — **independent of each
+other**: core#198 changes no OpenAPI (`SystemStatus.components` is
+`additionalProperties`) and adds no migration, so there is no `contract-ci`
+ordering and no client regeneration. [Sanitized
+evidence](evidence/a28-captions-scan.json).
+
+Measured on `VIDRA_ROLE=api` on `:8088` and a separate `VIDRA_ROLE=worker` with
+no listener, a production Next standalone server behind a pipe-only
+single-origin proxy on `:3110`, native PostgreSQL 16.15 (schema 135, clean) and
+native redis, `STORAGE_BACKEND=local`, Chromium via Playwright, ffmpeg 8.1, Node
+26.8.1, Go 1.26.2. Rate limiting was **off**, so this lab says nothing about the
+shipped limits. `TRANSCODING_MIN_FREE_SCRATCH_MB=512` against the shipped floor
+(14 GiB free). The two service fixtures are real and local: **ClamAV 1.5.4**
+(brew, its own `clamd.conf` and a `freshclam` database at signature set 28117 —
+3.6 M signatures) on `127.0.0.1:3310`, and **whisper.cpp 1.9.2**'s
+`whisper-server` on `127.0.0.1:8099` with the multilingual `ggml-tiny.bin`. No
+cloud service was called; the only network use was fetching the model and the
+virus database.
+
+**The Whisper contract, read out of the code and then confirmed against the real
+server.** `internal/media.WhisperClient` extracts the audio with ffmpeg (`-vn
+-ac 1 -ar 16000 -c:a pcm_s16le`), then POSTs `multipart/form-data` to
+`<WHISPER_ENDPOINT>/inference` with `file`, `response_format=verbose_json`,
+`temperature=0` and an optional `language`, and renders the response's
+`segments[]` (`start`/`end` seconds + `text`) to WebVTT. whisper.cpp's server
+answers exactly that shape. The trigger is `POST /videos/{id}/captions/auto`
+(202) with `GET` on the same path for status; the drain loop is worker-role only
+and starts on `captionjob.BootCapable()`, never on the runtime toggle. The
+round-trip bound is `defaultWhisperTimeout` in `internal/media/whisper.go` — a
+**compile-time 10 minutes with no knob of any kind** (`CLAMAV_TIMEOUT` has an env
+var; the Whisper timeout does not).
+
+### SC1 — manual VTT CRUD
+
+There is no caption *editor*: the shipped edit path is re-uploading the same
+language, which `AddCaption` upserts (replace-by-language) over the same object
+key. `PUT` and `PATCH` on `/captions/{lang}` are both 405, confirming A11.
+
+| step | request | result |
+| --- | --- | --- |
+| create | `POST /videos/{id}/captions` `language=en` `label=English (manual)` | 201; `captions/{id}/en.vtt` sha `e63013c8…`; list shows `en` |
+| read | `GET /videos/{id}/captions/en` | 200 `text/vtt; charset=utf-8`, the exact bytes |
+| edit | same POST, `label=English (edited)`, 3-cue body | 201; **same key**, sha `048427d9…`; readback is the new text |
+| second language | `POST … language=fr` | 201; list `["en","fr"]` |
+| invalid VTT | body not starting `WEBVTT` | 422 `unprocessable_entity` "caption must be a WebVTT file with a valid language tag" |
+| malformed tag | `language=not a tag!` | 422, same typed error |
+| `PUT`/`PATCH` `/captions/en` | — | **405** both |
+| delete | `DELETE /videos/{id}/captions/fr` | 204; row gone, `fr.vtt` gone from disk, bytes 404, re-delete 204 (idempotent) |
+
+Wrong actors: user U `POST` **404**, `DELETE` **404**; anonymous `POST`/`DELETE`
+**401**; the **admin** owner account `POST` **404** as well — `AddCaption` is
+owner-only with no staff override. Anonymous reads of a public video's list and
+bytes are **200**, as PLAY-03 requires.
+
+In Chromium the watch page carries both tracks as same-origin `blob:` `<track>`
+elements — `kind=captions srclang=en label="English (edited)"` and `srclang=fr
+label="Francais"` — the player shows a captions toggle, and setting the first
+track to `showing` yields **3 real cues** whose first is "Hand-written English
+caption, revision TWO (edited)." The Studio's captions panel lists both with
+`Remove en caption` / `Remove fr caption`, plus the upload form and the
+generation control.
+
+### SC2 — the Whisper service lane
+
+| when | what | outcome |
+| --- | --- | --- |
+| 07:03:33 | `POST …/captions/auto` `{}` on a 7 s clip of real `say`-synthesized speech | 202, job `pending`, language `en` from `WHISPER_DEFAULT_LANGUAGE` |
+| 07:03:33 | immediate re-request | **409** `an auto-caption job is already in progress` |
+| 07:03:42 | attempt 1 — the endpoint happened to be dead | `pending attempts=1`, client-visible `error` = `auto-captioning failed`; the worker log carries the real cause **and the endpoint URL**, the API never does |
+| 07:04:42 | attempt 2, still dead | `attempts=2`; retry schedule measured at **+1 min, then +2 min** |
+| 07:06:42 → 07:07:02 | attempt 3 against the live server | `done`, `stage=complete`, `progress_percent=100`, `error` cleared |
+| 07:07:02 | the track | `captions` row `en` / label **`Auto-generated`**, object `captions/{id}/en.vtt`, and a real transcript with real ASR errors ("vidro", "spokane") |
+| 07:07:02 | notification | one `caption_ready` row for the owner |
+| — | editable | the creator re-uploaded a corrected `en` through the ordinary POST; label became `English (creator-corrected)` and the bytes changed |
+
+Driven from the browser instead of curl, "Generate automatically" on the other
+clip settled to **"Automatic captions added." in 12 s**, with the
+`role="status"` "Generating captions…" line in between.
+
+**Outage.** With the endpoint down the failure is `Post
+"http://…/inference": dial tcp: connect: connection refused` in the worker log
+and the safe `auto-captioning failed` on the API. Retry is
+`baseBackoff 1 min × 2^(n-1)` capped at 1 h, dead-letter at **5 attempts**
+(`internal/captionjob`).
+
+**Unsupported language.** Two different things, and only one of them is Vidra's.
+A malformed tag is refused **before any work**: `{"language":"not a tag!"}` →
+422 with `fields:[{field:"language", message:"must be a valid BCP-47 language
+tag"}]`. But `zz` **passes** Vidra's BCP-47-ish validator, so it reaches the
+endpoint — and whisper.cpp's server does not refuse it, it **aborts the
+process** (`whisper_lang_id: unknown language 'zz'`, exit 139). Vidra handles
+that correctly: the job failed, retried on the 1/2/4/8-minute ladder (pulled
+forward in SQL after the first two so the lab did not idle 15 minutes — stated
+because it is an acceleration, not a shortcut), **dead-lettered at attempt 5**
+with the safe reason and `job_runs.state = dead_lettered`, and **no caption row
+or object was written for `zz`** — the video's existing `en` track was untouched
+throughout. The finding is upstream-shaped but ours to bound: any creator can
+kill a shared transcription service with a well-formed language tag.
+
+**Timeout.** A local endpoint that absorbs the POST and never answers: job
+claimed **07:25:00**, failed **07:35:00** — exactly the compile-time ten
+minutes — with `context deadline exceeded (Client.Timeout exceeded while
+awaiting headers)` in the worker log and `auto-captioning failed` on the API.
+Its lease was renewed throughout (`updated_at` 07:30:00), so nothing swept it.
+The next attempt, by then pointed back at the real server, **succeeded** — the
+stall recovered without operator action.
+
+**Disabled.** `WHISPER_ENABLED=false` → `/instance` `features.transcription:
+false`, `POST …/captions/auto` **403 `feature_disabled`**, the worker starts no
+auto-caption drain loop at all, and the Studio replaces the control with
+"Automatic captions aren't available on this server." while keeping manual
+upload. The 503 is the *other* half of that split: with the admin's
+`transcription_enabled` turned **on** against a deployment that has no Whisper,
+the same request is **503 `auto_captions_not_configured`** carrying its whole
+sentence ("…this instance has no transcription endpoint to send audio to. Set
+the Whisper endpoint (WHISPER_ENDPOINT) and restart the api"). **A17's standing
+note that the auto-caption 503 is a bare `echo.NewHTTPError` eaten by the 5xx
+scrubber is stale** — it is a typed `AutoCaptionsNotConfiguredError` and the
+sentence survives. Wrong actors while disabled: anonymous **401**, user U
+**503** — the feature gate deliberately runs before the existence check.
+
+### SC3–SC5 — ClamAV, and what failed first
+
+**What failed first was not the gate — it was what happened to the bytes after
+it.** Every path refused correctly, and then kept the rejected file.
+
+| path | file | verdict | video state | public | `video_files` | object | download link |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| resumable upload | 127 KB speech mp4 | clamd `OK` | `published` + HLS | 200 | 1 | present | offered (correct) |
+| resumable upload | 68-byte EICAR named `.mp4` | `Eicar-Test-Signature FOUND` | `failed` | 404 | **1 — kept** | **kept** | **`/download` listed it; `/download/original` served the exact 68 EICAR bytes, 200 `video/mp4`, to the owner AND to an admin** |
+| URL import | same body over `http://127.0.0.1:8199/infected.mp4` | `FOUND` | `failed` | 404 | **1 — kept** | **kept** | **same 200** |
+| DM attachment | same body | `FOUND` | — | — | **0** | **none** | **422 `attachment failed the malware scan`** |
+
+The DM lane is what the other two should have looked like, and it is the same
+`media.ClamAV` scanner: A14 proved it with the same engine, and re-running it
+here cost one request — the EICAR attachment was refused with a typed,
+creator-visible 422 and left **zero** rows and **zero** blobs, while a benign
+JPEG attachment stored exactly one. **core#198 makes upload and import behave
+the same way**: on an INFECTED verdict `Process` now drops the `video_files` row
+and the object, the same posture `ReplaceSource` has always taken for a rejected
+candidate. Re-measured against the rebuilt binary — upload and import both:
+state `failed`, `video_files` count **0**, no object on disk, `GET
+/videos/{id}/download` → `{"files":[]}`, and `/original` and
+`/download/original` **404 for owner and admin alike**. A benign upload in the
+same run still published with HLS and a 200 original, so the drop is scoped.
+Only INFECTED: an unscannable file is not proven bad and quarantine mode needs
+the bytes for review, both pinned by tests.
+
+Where rejected bytes live now: **nowhere**. There is no quarantine object store
+and no retention window, because there is nothing retained — the audit row
+(`content.upload.malware_rejected`, `actor_kind=system`, reason `video=<uuid>
+outcome=infected policy=fail-closed`) is the whole durable record, and it
+deliberately carries no file content.
+
+**The fail policy, measured in all three modes with a real dead daemon.**
+`MALWARE_SCAN_ENABLED` (default **false**) is the master; `CLAMAV_ADDR` is
+*required* when it is true — boot refuses with `config: CLAMAV_ADDR is required
+when MALWARE_SCAN_ENABLED=true`, verified. `MALWARE_SCAN_MODE` (default
+`fail-closed`) decides only what happens when the scan **cannot complete**; an
+INFECTED verdict fails in every mode.
+
+| mode | clamd down, benign file | audit row |
+| --- | --- | --- |
+| `fail-closed` (default) | upload **and** URL import → `failed` | yes, `outcome=scan_error policy=fail-closed` |
+| `quarantine` | → `quarantined`, and it appears in the admin quarantine queue for review | yes, `policy=quarantine` |
+| `fail-open` | **published unscanned** | **none — a WARN log line and nothing else** |
+
+That last row is the answer to "record the audit row that says so": there is no
+audit row. `fail-open` leaves only `malware scan failed; publishing anyway
+(MALWARE_SCAN_MODE=fail-open)` in the worker log, so an instance that spent a
+week publishing unscanned media has no durable trace of it.
+
+**`CLAMAV_ADDR` unset means silently unscanned, and that is a finding.** Because
+config refuses `MALWARE_SCAN_ENABLED=true` with an empty address, "unset" can
+only mean scanning is off — and then a real mp4 with EICAR appended uploaded and
+**published, publicly readable**, with no scan, no boot warning and no log line
+of any kind. The one honest surface is `/admin/infrastructure`, whose
+`malware_scan` row goes `enabled:false, configured:false` with the prose
+"Uploaded files are published without being scanned. Point CLAMAV_ADDR at a
+ClamAV daemon…". INT-04 says scanning must gate *all* ingestion; the shipped
+default is that it gates none, discoverable only by an operator who opens that
+page.
+
+**`/admin/system` could not see the scanner at all.** With clamd stopped mid-run
+the page reported `"status":"ok"` across nine healthy components
+(`postgres, redis, s3, storage, smtp, search, ffmpeg, mfa_kek, settings_sync`)
+while every upload and every URL import was landing in `failed`, and
+`/admin/infrastructure` still said `malware_scan enabled:true configured:true`
+because that row is static config. core#198 adds a `clamav` component (a clamd
+PING — one connection, no signature work). Re-measured: clamd up → `clamav: ok`,
+instance `ok`; clamd down → `clamav: down`, instance **`degraded`**, with the
+sentence naming the consequence *and* the policy in force —
+
+> the malware scanner is unreachable and MALWARE_SCAN_MODE=fail-closed, so every
+> upload and every URL import is failing: clamav: dial: dial tcp the configured
+> address: connect: connection refused
+
+and under `fail-open` the same failure reads "…is being published **WITHOUT
+being scanned**", which is the distinction an operator cannot infer from a dial
+error. **A defect found on the way, in the fix itself**: the first cut passed
+`net.Dialer`'s error through verbatim, which put `CLAMAV_ADDR` on an admin page —
+the exact value `admin_infra_test` forbids there by name. Caught by running the
+probe against the live lab rather than only its unit tests; the address (and the
+bare host a DNS failure reports on its own) is now redacted, `grep -c 3310` over
+the whole response body is **0**, and a test pins it. user#195 gives the new key
+an operator name, along with `storage` and `mfa_kek`, which have been shipping
+unlabeled.
+
+### Findings that need a ruling rather than a patch
+
+1. **A malware rejection is invisible to the creator.** The upload session
+   settles `state: completed, failure_reason: ""`; the import job settles
+   `state: done` with no error; Studio shows a bare **`FAILED`** badge —
+   directly beside a `quarantined` video that gets the full sentence "Held for
+   review — this instance reviews new uploads before they go public…". The
+   vocabulary exists; the malware path has nothing in it. Not patched here
+   because the wording is a product decision (telling a creator "malware" is
+   also telling an attacker their probe worked).
+2. **`fail-open` has no audit trail** (above). One `s.auditMalwareRejected`-shaped
+   call with a `published_unscanned` outcome would close it.
+3. **Auto-caption jobs break the A35 correlation chain.** `job_runs` DOES carry
+   them — `type=caption_generate`, `queue=caption_jobs`, states `succeeded` and
+   `dead_lettered` with the right attempt counts, projected by migration 0083's
+   trigger — but `correlation_id`, `request_id` and `actor_id` are **empty on
+   4 of 4 rows**, where `upload_finalize` and `video_transcode` are stamped on
+   2 of 2. `internal/captionjob` never calls `jobtrace`; `uploadfinalize` is the
+   pattern to copy. A17's "six projected queues do not call the job recorder"
+   is half right for captions: the row exists, the identity does not.
+4. **The Whisper round-trip timeout has no knob** — a compile-time 10 minutes.
+   An instance transcribing hour-long lectures on a small CPU will dead-letter
+   five times over 15 minutes and never say why.
+5. **A well-formed unknown language tag kills whisper.cpp.** `zz` passes
+   Vidra's validator; whisper.cpp aborts. Vidra recovers correctly, but the
+   shared service does not, and Vidra has no supported-language set to validate
+   against. Needs a ruling on where that list lives.
+6. **Auto-generation silently destroys hand-written captions.** One click on
+   "Generate automatically" replaced a creator's manual `en` track — label,
+   bytes and all — with `Auto-generated`, no warning and no undo. Verified in
+   Chromium.
+7. **A caption row records no `updated_at`.** `UpsertCaption` keeps the original
+   `created_at`, so nothing in the list or the API distinguishes an edited track
+   from an untouched one.
+8. **EICAR is a whole-file signature.** A real mp4 with the EICAR string
+   appended scans **clean** on clamd 1.5.4 (verified with `clamdscan`). This
+   lane proves the gate and the plumbing, not clamd's detection depth.
+
+### Gates
+
+core `make ci` **passed twice** (fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race) — before and after the address-redaction commit. Three
+new core test files, all RED first. vidra-user: `tsc --noEmit` clean,
+`npm run lint` 0 errors and the 2 pre-existing warnings on `main`,
+`lint:icons` pass, `vitest run` **254 files / 2541 tests pass**, and the new
+assertion verified RED by stashing the component. Meta: `docker compose -f
+docker-compose.yml -f docker-compose.prod.yml --env-file … config -q` exit 0.
+NOT run: the `integration`/`ipfs-*` tagged lanes (they need Docker Compose), any
+frontend e2e lane, and vidra-search (untouched).
+
+The lab was torn down: clamd, `whisper-server` and its supervisor, the stall and
+fixture-origin servers, the throwaway Postgres cluster and redis, the frontend,
+proxy and both core processes, and the lab accounts and their media. The
+whisper model and the ClamAV signature database are **not** committed and stay
+under `/tmp/vidra-a28-r1`, along with credentials, raw logs, the media fixtures
+and the browser traces. The EICAR string is assembled from two fragments at
+runtime and appears in no committed file.
