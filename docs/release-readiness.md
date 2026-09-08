@@ -10495,7 +10495,8 @@ narrower and better evidenced than F06's: the three purge families F06 named are
 all still open and all now measured against an edge that actually holds a copy,
 and a fourth problem F06 did not name — the edge cannot reproduce a single one
 of the API's response headers — turned up as soon as bytes went through it. One
-defect was found and fixed on the way ([vidra-core
+defect was found and fixed on the way, together with the operator-documentation
+gap the origin-exposure finding turns on ([vidra-core
 #197](https://github.com/yegamble/vidra-core/pull/197)). Complete result:
 [`a32-a33-delivery.json`](evidence/a32-a33-delivery.json); the edge is
 [`a32-a33-edge-simulator.go`](evidence/a32-a33-edge-simulator.go), committed
@@ -10724,9 +10725,12 @@ the privacy flip's textbook-correct 18-key purge, the *very next* fetch of the
 now-private poster through the edge was a MISS that re-pulled 1,604 bytes from
 the origin and cached them again. Purge is necessary and not sufficient: anyone
 holding an edge URL keeps the bytes indefinitely. Neither `.env.example` nor
-`docs/operations.md` warns about this — both say only that eligible media is
+`docs/operations.md` warned about this — both said only that eligible media is
 *handed* to the edge, which is true of the redirect and says nothing about the
-origin.
+origin. Both now say it, in core #197: use the CDN's origin-access mechanism,
+and read a public-read media bucket as a decision to publish every video on the
+instance. The code side is untouched, because there is nothing here for the api
+to enforce — it does not configure the origin and cannot see who can read it.
 
 **Failed purge, and the honest risk statement.** With the edge's purge endpoint
 answering 500, a deletion sent all **18** requests, all rejected, and produced
@@ -10814,8 +10818,10 @@ with honest types.
 2. **A same-source re-transcode's stale segment plays**, silently. The `?v=` tag
    cannot help because it never appears in an edge URL.
 3. **A key-addressed CDN origin exposes private media**, and a purge is undone
-   by the next request. Undocumented in both `.env.example` and
-   `docs/operations.md`.
+   by the next request. It was undocumented in both `.env.example` and
+   `docs/operations.md`; core #197 documents it. Nothing in the api can enforce
+   it — Vidra neither configures the origin nor can see who may read it — so
+   this stays an operator obligation, and the row records it as one.
 4. **A failed purge is never retried** — one pass, one warning line, and the
    edge keeps the object until a TTL Vidra does not set.
 5. **A CDN edge cannot reproduce any of the API's response headers** — no
