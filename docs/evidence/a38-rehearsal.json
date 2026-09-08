@@ -1,0 +1,11 @@
+{
+  "item": "A38",
+  "register_row": "REC-03",
+  "verdict": "IN PROGRESS",
+  "date": "2026-09-08",
+  "lab": {
+    "shape": "one disposable compose project -p a38b on an arm64 macOS host, api 18080 / frontend 13000, Caddy on 80/443, VIDRA_TLS_MODE=plain-http, STORAGE_BACKEND=local, bundled Postgres + Redis",
+    "meta_checkout": "throwaway clone of this repo with its own nested vidra-core / vidra-search / vidra-user clones, so deploy.sh's checkout pinning (AGENTS.md rule 3) is real; the architect's checkouts were never touched",
+    "sources": {"vidra-core": "0f223b4", "vidra-search": "1f8b854", "vidra-user": "721190f", "meta": "0eb5ee0"}
+  }
+}
