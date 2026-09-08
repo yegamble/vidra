@@ -1,0 +1,165 @@
+{
+  "item": "A32/A33",
+  "rows": ["INT-09", "INT-10"],
+  "date": "2026-09-08",
+  "verdict": {
+    "INT-09": "PASS (MinIO cross-origin; selected bucket run deferred - credentials)",
+    "INT-10": "FAIL (stands) - three purge families unwired and the edge cannot reproduce the API's headers"
+  },
+  "lab": {
+    "core_base": "origin/main cb2d27807a20",
+    "core_branch_head": "a32-a33/delivery d176505",
+    "vidra_user": "main 2f71336c47a3 (unmodified; prebuilt .next/standalone with NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8099)",
+    "schema_version": 135,
+    "processes": {
+      "api": "VIDRA_ROLE=api on 127.0.0.1:8088",
+      "worker": "VIDRA_ROLE=worker, separate process, TMPDIR=/tmp/vidra-a32-r1/scratch",
+      "one_origin_proxy": "127.0.0.1:8099, pipe-only, drops the client's Accept-Encoding, never follows redirects",
+      "frontend": "node .next/standalone/server.js on 127.0.0.1:3100, Node 26.8.1",
+      "object_store": "mirror.gcr.io/minio/minio on 127.0.0.1:9210, bucket vidra-a32, path-style, no TLS",
+      "edge_simulator": "docs/evidence/a32-a33-edge-simulator.go on 127.0.0.1:9310, origin http://127.0.0.1:9210/vidra-a32",
+      "postgres": "native 16 on 55460 (fresh)",
+      "redis": "native on 56400 (fresh)"
+    },
+    "browsers": "Playwright 1.62.1 - Chromium and WebKit (the engine Safari ships; Safari.app itself was not driven)",
+    "deviations": [
+      "RATE_LIMIT_ENABLED=false",
+      "VIDRA_ALLOW_PLAIN_HTTP=true + VIDRA_TLS_MODE=plain-http",
+      "TRANSCODING_MIN_FREE_SCRATCH_MB=256 against the shipped 10 GiB floor (13 GiB free)",
+      "MEDIA_GC_ENABLED=false so a superseded generation stays observable",
+      "one lab-only api build with delivery.PresignTTL=8s for the expiry probe; the source was restored before any commit"
+    ]
+  },
+  "a32_presign": {
+    "redirect_shape": "307 Temporary Redirect from the api, one per object. Playlists (master.m3u8, media_N.m3u8) and storyboard.vtt are never redirected - delivery.Redirectable is false for them - so presigned URLs are NEVER written into a playlist; the player fetches every child URI from the api and takes a 307 per segment.",
+    "presigned_query": ["X-Amz-Algorithm", "X-Amz-Credential", "X-Amz-Date", "X-Amz-Expires", "X-Amz-Signature", "X-Amz-SignedHeaders=host", "response-cache-control", "response-content-type (when the row has one)", "response-content-disposition (downloads)"],
+    "ttl": {"default_seconds": 3600, "source": "delivery.PresignTTL = time.Hour", "configurable": false},
+    "preflight": "none observed in either browser: the segment request is same-origin to the api and only becomes cross-origin after the 307, and a single 'bytes=' Range is a CORS-safelisted request header, so no OPTIONS is sent and the CORS check lands on the response",
+    "requests_per_origin": {
+      "chromium_presign_on": {"http://127.0.0.1:8099": 74, "http://127.0.0.1:9210": 7},
+      "webkit_presign_on": {"http://127.0.0.1:8099": 74, "http://127.0.0.1:9210": 8},
+      "chromium_presign_off": {"http://127.0.0.1:8099": 74, "http://127.0.0.1:9210": 0}
+    },
+    "bucket_served_objects_chromium": ["thumbnails/<id>.jpg 200 image/jpeg", "web-videos/<id>.mp4 206 application/octet-stream", "cmaf/init-0.mp4 200 video/mp4", "cmaf/init-1.mp4 200 video/mp4", "cmaf/chunk-0-00001.m4s 200 video/mp4", "cmaf/chunk-1-00001.m4s 200 video/mp4", "cmaf/chunk-1-00002.m4s 200 video/mp4"],
+    "decode": {
+      "chromium_presign_on": {"currentTime": 6.013967, "duration": 6.013967, "readyState": 4, "frames": 150, "dropped": 0, "muted": false, "src": "blob: (MSE)"},
+      "webkit_presign_on": {"currentTime": 6.013968, "readyState": 2, "frames": 150, "dropped": 0, "muted": false, "src": "blob: (MSE - WebKit does not take a native-HLS path here)"},
+      "chromium_presign_off": {"currentTime": 6.013967, "readyState": 4, "frames": 150, "dropped": 0}
+    },
+    "range": "GET /original presigned with Range: bytes=0-99 -> 206, content-range bytes 0-99/151951, cross-origin, Access-Control-Allow-Origin echoed",
+    "expiry": {
+      "past_ttl": "403 AccessDenied - 'Request has expired' (measured on a lab build with an 8-second TTL)",
+      "recovery": "the client re-requests the api route, which mints a fresh signature - measured 200 immediately after the 403",
+      "cached_redirect_can_never_outlive_the_signature": "the 307's own Cache-Control is private, max-age=300 and the signature lasts 3600s; within the 300s window the browser re-dereferences nothing at all (the presigned response body is cached under the same directive), measured by fetching the same segment route twice 12s apart and seeing one 307 and one bucket GET"
+    },
+    "private_refusal": {
+      "anonymous_on_private_video": {"/original": 404, "/thumbnail": 404, "/hls/cmaf/chunk-0-00001.m4s": 404, "/download/original": 404, "location_header": "never present"},
+      "owner_with_authorization": {"status": 200, "path": "api-proxy", "cache_control": "private, no-store", "redirect": false},
+      "relies_on_expiry": false
+    },
+    "credentialed_reads": "Authorization header -> 200 on the proxy with private, no-store and no Location; the A08 rule holds under presign",
+    "outage": {
+      "admin_system_s3": "down - 'storage: s3: check bucket \"vidra-a32\": context deadline exceeded'",
+      "healthz": 200,
+      "readyz": 200,
+      "presign_minting": "still 307s to the dead bucket - signing is a local operation and nothing probes, so it does NOT fail closed",
+      "first_failure_is_the_playlist": "GET /hls/master.m3u8 -> 500, so an HLS session dies on its first request rather than on a segment",
+      "player": "readyState 0, MEDIA_ELEMENT_ERROR code 4 'Format error', no infinite spinner",
+      "viewer_visible_error": "none - the watch page renders 0:00/0:00 with no message after 11s"
+    },
+    "cors_negative_control": {
+      "config": "MINIO_API_CORS_ALLOW_ORIGIN=https://not-the-frontend.example (MinIO's default is '*', so the negative control has to name a foreign origin rather than unset the variable)",
+      "console": "Access to XMLHttpRequest at 'http://127.0.0.1:9210/...' from origin 'http://127.0.0.1:8099' has been blocked by CORS policy",
+      "failed_bucket_requests_in_12s": 39,
+      "player_outcome": "NOT an error - hls.js retries the blocked segment in a loop and the player silently falls back to the progressive <video src> on /original, which is a no-CORS media-element fetch and survives the cross-origin redirect; full muted playback, 150 frames",
+      "api_can_detect": false,
+      "qoe_can_detect": "yes, indirectly: three api-proxy/hls-js/cmaf rows with error_class=network plus one api-proxy/progressive row, against presigned/hls-js/cmaf with no error on the working runs"
+    },
+    "qoe_classification": {"presign_playback": "presigned", "cdn_playback": "cdn", "proxy_playback": "api-proxy", "broken_cdn_or_cors": "api-proxy + error_class=network (the client reports the URL it requested, not the URL that failed)"},
+    "cache_control_presign_off": {"versioned HLS": "private, max-age=31536000, immutable", "original 206": "private, max-age=3600, must-revalidate", "images": "private, max-age=300, must-revalidate"}
+  },
+  "a33_cdn": {
+    "purge_contract_sent": "PURGE http://127.0.0.1:9310/<object key> with X-Edge-Purge-Token: <token>; one request per key; 2xx and 404 are success, everything else is an error",
+    "config": {"DELIVERY_CDN_BASE_URL": "http://127.0.0.1:9310", "DELIVERY_CDN_PURGE_URL": "{url}", "DELIVERY_CDN_PURGE_METHOD": "PURGE", "DELIVERY_CDN_PURGE_HEADER": "X-Edge-Purge-Token", "delivery_cdn_enabled": true},
+    "generation_addressing": {
+      "same_source_retranscode": {
+        "trigger": "POST /api/v1/admin/videos/{id}/transcoding {\"type\":\"hls\"} -> 202",
+        "keys": "IDENTICAL - media.HLSPrefixForSource derives the prefix from the SOURCE key's .rN suffix, and a rerun keeps source version 0, so all 14 objects are overwritten in place; no rN directory appears",
+        "version_tag": "the ?v= cache tag DOES change (dl9u7z2ka8zk -> dl9uk83vtg8w -> dl9umisk1y54) but cdn.EdgeURL is base + '/' + key with no query, so the tag never reaches the edge and cannot version it",
+        "origin_bytes": "208623 B sha 14d18102291de502 -> 203095 B sha 7f81683ea45a08bf (transcoding_max_fps 0 -> 24 between runs)",
+        "edge_bytes_after": "208623 B sha 14d18102291de502 (X-Edge-Cache: HIT) - STALE",
+        "purge_requests": 0,
+        "api_log": "one WARN: 'same-generation re-transcode overwrites edge-cached objects without purge; the CDN may serve stale media until its TTLs expire'",
+        "stale_segment_played": "yes - Chromium decoded the stale 25fps chunk alongside the new 24fps init segment with no error: 6.25s, 150 frames, 0 dropped"
+      },
+      "source_replacement": {
+        "trigger": "POST /videos/{id}/replace-session (video_replace_enabled) + chunks + complete",
+        "keys": ["web-videos/<id>.r1.mp4", "web-videos/<id>/r1/240p.mp4", "streaming-playlists/<id>/r1/**"],
+        "old_generation": "untouched and still present (mediagc collects it later; GC was off here)",
+        "purge_requests": 0,
+        "purge_needed": false,
+        "playback_after": "5.016s, 120 frames, 0 dropped, every fetch a MISS on an r1/ key - the edge's generation-0 entries were never consulted"
+      }
+    },
+    "purge_families": [
+      {"family": "thumbnail/storyboard replacement", "trigger": "POST /videos/{id}/thumbnail -> 201", "purge_requests": 0, "edge_before": "4e0a757124f4b90b", "origin_after": "5a46d2dcf4cf3751", "edge_after": "4e0a757124f4b90b", "result": "STALE"},
+      {"family": "same-source re-transcode", "trigger": "POST /admin/videos/{id}/transcoding -> 202", "purge_requests": 0, "result": "STALE and plays"},
+      {"family": "account deletion", "trigger": "DELETE /auth/me -> 204", "purge_requests": 0, "api_after": "GET /videos/{id}/thumbnail 307 -> 404", "edge_after": "serves all four primed objects, X-Edge-Cache: HIT", "result": "STALE"},
+      {"family": "instance-wide download revocation", "trigger": "PATCH /admin/instance-settings downloads_enabled=false -> 200", "purge_requests": 0, "api_after": "GET /videos/{id}/download/original 307 -> 403", "edge_after": "serves the original, HIT", "result": "STALE (deliberately unwired; needs a leased, resumable job)"},
+      {"family": "per-video download flip (control)", "trigger": "PATCH /videos/{id} download_enabled=false -> 200", "purge_requests": 4, "statuses": {"200": 3, "404": 1}, "edge_after": "empty", "result": "PASS"},
+      {"family": "privacy flip public->private (control)", "trigger": "PATCH /videos/{id} privacy=private -> 200", "purge_requests": 18, "statuses": {"200": 5, "404": 13}, "edge_after": "empty, next fetch is a MISS", "result": "PASS, then immediately undone - see origin_exposure"},
+      {"family": "deletion (control)", "trigger": "DELETE /videos/{id} -> 204", "purge_requests": 18, "result": "PASS when the edge accepts; see failed_purge"}
+    ],
+    "failed_purge": {
+      "injection": "the edge's purge endpoint answers 500",
+      "requests": 18,
+      "statuses": {"500": 18},
+      "retries": 0,
+      "retry_schedule": "there is none - runVideoEdgePurge makes exactly one pass per key and never revisits",
+      "observed_after_30s": "still 18 requests; the edge kept serving the DELETED video's poster on a HIT",
+      "operator_surface": {
+        "log": "one aggregate WARN: 'cdn purge incomplete; the edge may still be serving this video' purged=0 failed=18 key_set_complete=true",
+        "admin_system_cdn_purge": {"runs": 3, "keys_purged": 22, "keys_failed": 18, "last_incomplete_run_at": "2026-09-08T06:08:27-04:00"}
+      },
+      "how_long_stale": "until the edge's own TTL, which Vidra does not set - see cache_control"
+    },
+    "failure_after_redirect": {
+      "injection": "the edge answers 502 for GETs",
+      "api": "still 307s (EdgeURL never consults the network by design)",
+      "hls_js_retries": 28,
+      "player": "fell through to the progressive <video src> on /original, which 307s to the same broken edge - MEDIA_ELEMENT_ERROR code 4, readyState 0, nothing played",
+      "fallback_to_proxy": false,
+      "remedy": "the delivery_cdn_enabled kill switch, which needs an admin"
+    },
+    "cache_control": {
+      "api_307_to_the_edge": "private, max-age=300, must-revalidate (delivery.CacheCDNRedirect)",
+      "api_playlists": "private, max-age=0, must-revalidate unversioned; private, max-age=31536000, immutable with ?v=",
+      "edge_response": {"content_type": "application/octet-stream for every class", "cache_control": "absent", "content_disposition": "absent, so a download loses its filename"},
+      "reading": "nothing becomes public, by design (internal/delivery: promotion is gated on Purge being exercised). But the api's header never governs the edge: the edge pulls from the BUCKET at the object's own key, and Vidra writes no cache metadata on stored objects at all - so edge caching is governed entirely by the CDN's default TTL with no Vidra input, and with three purge families open that TTL is the only bound on stale media."
+    },
+    "origin_exposure": {
+      "requirement": "a key-addressed CDN origin must be readable by the edge; done the obvious way (an anonymous download policy on the bucket) every object becomes world-readable at the origin",
+      "measured": {"public video thumbnail": 200, "PRIVATE video thumbnail": 200, "PRIVATE video original": 200},
+      "no_prefix_separates_them": "public and private media share web-videos/, thumbnails/ and streaming-playlists/",
+      "purge_is_undone": "after the privacy flip's successful 18-key purge, the next edge fetch of the now-private poster was a MISS that re-pulled 1604 bytes from the origin and cached them again",
+      "docs": "neither .env.example nor docs/operations.md warns about this; both say only that eligible media is HANDED to the edge"
+    },
+    "wrong_actors": {
+      "POST /admin/videos/{id}/transcoding": {"anonymous": 401, "user": 403, "admin": 202},
+      "GET /admin/system": {"anonymous": 401, "user": 403},
+      "PATCH /admin/instance-settings": {"anonymous": 401, "user": 403},
+      "PATCH /videos/{id} (privacy, a purge trigger)": {"anonymous": 401, "other user": 404},
+      "POST /videos/{id}/thumbnail": {"anonymous": 401, "other user": 404}
+    }
+  },
+  "fixes": [
+    {"repo": "vidra-core", "commit": "d176505", "what": "storage.ContentTypeForKey; S3 PutSized records it; serveMediaAsset fills a missing content type from the key", "tests": ["TestContentTypeForKey", "TestS3PutStoresContentTypeFromKey (integration)", "TestDeliveryPresignsMediaWithNoRecordedContentType"]}
+  ],
+  "unverified": [
+    "the selected bucket (no credentials on this machine): a real provider's CORS, versioning/retention and virtual-host addressing",
+    "the selected CDN (no zone or credentials): every A33 result is against the local simulator",
+    "Safari.app itself - the WebKit engine Playwright ships was driven instead, and it took the same MSE path Chromium did",
+    "vidra-user's e2e-backed (s3) lane (needs Docker Compose)",
+    "objects stored before the content-type fix keep their application/octet-stream metadata; no backfill was run"
+  ]
+}
