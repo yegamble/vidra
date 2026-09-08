@@ -12097,12 +12097,24 @@ residual**, because neither is surgical:
 Only vidra-core changed, plus this repo's docs and vidra-user's generated
 contract. `make ci` is **green**: `fmt-check`, `vet`, `migrate-lint` (**137** up
 migrations clean), `openapi-verify`, `sqlc-verify` and `test-race` all pass —
-84 `ok` packages, 0 FAIL. `go vet -tags=integration ./...` is clean. The
-`integration` lane is CI's, not a local measurement: **no container runtime was
-used in this slice**, so 0137 was linted and generated against rather than
-applied to a running database, and the Postgres-backed behaviour of the claim
-query (SKIP LOCKED, the lease admitting `running`) is asserted against an
-in-memory fake here and by the `integration` lane on the PR. The OpenAPI
+84 `ok` packages, 0 FAIL. `go vet -tags=integration ./...` is clean.
+
+**The integration lane WAS run**, and it had to be, because three of the
+queue's properties are database behaviours no fake can show and each fails only
+in production: the walk's `ON CONFLICT` inference must land on 0137's partial
+unique index (a mismatch is an ERROR, so an admin's second click on the
+downloads toggle would be a 500 rather than a no-op), the claim must reclaim a
+`running` row past its lease (the one deviation from the `account_exports`
+shape, and the only thing that stops a worker dying mid-walk from stranding it
+forever), and `FOR UPDATE SKIP LOCKED` must give two concurrent claimers
+disjoint rows. Six new tests in `internal/store/cdn_purge_jobs_integration_test.go`
+cover those plus the two catalogue reads the walk derives its work from, which
+have no fake anywhere and would otherwise never be parsed by a real planner.
+Run against a **throwaway native PostgreSQL 16.15** (no container runtime — the
+lab and Docker are another executor's this session), migrated to **schema 137**:
+all six pass, `go test -tags=integration -race ./internal/store/` is green
+whole, and 0137's `down.sql` drops the table and its three indexes cleanly and
+the `up` re-applies. The cluster was torn down afterwards. The OpenAPI
 contract DID change (the `cdn_purge` block), so vidra-user #197 carries the
 regeneration and must merge **after** core #202; `npx tsc --noEmit` passes on it
 and no component changed. In this repo `python3 -m unittest discover -s tests -p
@@ -12112,14 +12124,15 @@ so the prod render is unchanged from the section above.
 ### Unverified, and named rather than skipped
 
 **Edge simulator re-run pending (slice 3).** Every claim above is a unit or
-integration assertion. Nothing here was measured against a caching edge, a
-browser or a live database, and in particular: that a poster replacement makes
-the edge return the new bytes, that an account deletion empties the edge, that
-the revocation walk covers a real catalogue, and that a rejected purge is
-accepted on a later attempt are all **argued from the code and its tests**, not
-observed. The selected edge and the selected bucket stay deferred. Slice 3 must
-re-run the A32/A33 lab against this branch and re-measure the per-family purge
-counts, the failed-purge retry, and the stale-segment clause.
+integration assertion. The database half was measured — see the gates — but
+**nothing here was measured against a caching edge or a browser**, and in
+particular: that a poster replacement makes the edge return the new bytes, that
+an account deletion empties the edge, that the revocation walk covers a real
+catalogue, and that a rejected purge is accepted on a later attempt are all
+**argued from the code and its tests**, not observed. The selected edge and the
+selected bucket stay deferred. Slice 3 must re-run the A32/A33 lab against this
+branch and re-measure the per-family purge counts, the failed-purge retry, and
+the stale-segment clause.
 
 ### Findings
 

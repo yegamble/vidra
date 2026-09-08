@@ -1,9 +1,9 @@
 {
   "record": "a33-remediation-2",
-  "title": "A33 remediation 2 — purge families for replacement, account deletion and download revocation; purge retry with backoff",
+  "title": "A33 remediation 2 \u2014 purge families for replacement, account deletion and download revocation; purge retry with backoff",
   "date": "2026-09-08",
   "register_row": "INT-10",
-  "verdict": "NOT FLIPPED — code change only; the edge-simulator re-run that would flip INT-10 is slice 3",
+  "verdict": "NOT FLIPPED \u2014 code change only; the edge-simulator re-run that would flip INT-10 is slice 3",
   "scope": "vidra-core code + docs, this repo's evidence, and vidra-user's generated contract. No live stack, no container runtime, no browser.",
   "prs": {
     "core": "https://github.com/yegamble/vidra-core/pull/202",
@@ -14,15 +14,16 @@
     "number": "0137",
     "name": "cdn_purge_jobs",
     "shape": "account_exports (0057): pending -> running -> done | failed, attempts/next_attempt_at/last_error, FOR UPDATE SKIP LOCKED",
-    "difference_from_0057": "next_attempt_at IS the lease, so the claim admits 'running' as well as 'pending' and a worker killed mid-walk has its row reclaimed when the lease passes — no separate recovery sweep",
+    "difference_from_0057": "next_attempt_at IS the lease, so the claim admits 'running' as well as 'pending' and a worker killed mid-walk has its row reclaimed when the lease passes \u2014 no separate recovery sweep",
     "down_sql": true,
-    "destructive_ddl": false
+    "destructive_ddl": false,
+    "applied_to_a_real_postgres": "yes \u2014 native PostgreSQL 16.15, schema 137; down.sql verified and the up re-applied"
   },
   "families": [
     {
       "family": "poster replacement",
       "trigger": "POST /videos/{id}/thumbnail (multipart upload and the {at_seconds} frame-pick)",
-      "snapshot": "none needed — the served URL does not move, so the path is a pure function of the video id",
+      "snapshot": "none needed \u2014 the served URL does not move, so the path is a pure function of the video id",
       "purge": "immediate detached pass on /api/v1/videos/{id}/thumbnail; refusals persisted for retry",
       "seam": "video.Service WithMediaReplacedHook, fenced on public AND published",
       "tests": [
@@ -34,8 +35,8 @@
     },
     {
       "family": "storyboard regeneration",
-      "trigger": "video.Service.GenerateStoryboard — the publish path, ReplaceSource, and internal/storyboardbackfill's worker",
-      "snapshot": "none needed — same stable URL",
+      "trigger": "video.Service.GenerateStoryboard \u2014 the publish path, ReplaceSource, and internal/storyboardbackfill's worker",
+      "snapshot": "none needed \u2014 same stable URL",
       "purge": "immediate detached pass on /api/v1/videos/{id}/storyboard.jpg; refusals persisted for retry",
       "seam": "the same service hook; a handler-level call would have missed the backfill worker, which runs where httpapi.Server is never constructed (VIDRA_ROLE=worker)",
       "tests": [
@@ -47,7 +48,7 @@
       "family": "account deletion",
       "trigger": "DELETE /auth/me and DELETE /admin/users/{id}",
       "snapshot": "accountEdgePurgePaths BEFORE the cascade: every video of every owned channel through the same videoEdgePurgeSnapshot the per-video delete uses, plus each channel's and the account's avatar/banner",
-      "purge": "one queued job (reason=account_delete) after the cascade commits — a queue rather than a goroutine so a large catalogue survives a restart and shows on /admin/jobs",
+      "purge": "one queued job (reason=account_delete) after the cascade commits \u2014 a queue rather than a goroutine so a large catalogue survives a restart and shows on /admin/jobs",
       "tests": [
         "internal/httpapi TestAccountSnapshotNamesEveryServedURL",
         "internal/httpapi TestAccountSnapshotIsEmptyAfterTheCascade",
@@ -75,20 +76,28 @@
   "image_url_ruling": {
     "decision": "purge the stable URL; do NOT stamp ?v= on image URLs",
     "reasons": [
-      "slice 1's header table gives thumbnail/storyboard max-age=300 must-revalidate on both sides, so a purge closes the whole window — unlike an HLS child, where ?v= is load-bearing because the entry lives a year",
+      "slice 1's header table gives thumbnail/storyboard max-age=300 must-revalidate on both sides, so a purge closes the whole window \u2014 unlike an HLS child, where ?v= is load-bearing because the entry lives a year",
       "/videos/{id}/thumbnail is the URL the frontend, feeds, oEmbed, ActivityPub and every share link already name; the untagged URL would keep being requested and would still need purging, so a tag buys nothing and costs compatibility",
       "avatar, banner and playlist cover already invalidate a stable URL; a fourth family with a different mechanism would be two answers to one question"
     ]
   },
   "retry": {
-    "arithmetic": "internal/retry.Backoff — base x 2^(n-1), capped",
+    "arithmetic": "internal/retry.Backoff \u2014 base x 2^(n-1), capped",
     "base_seconds": 60,
     "cap_seconds": 3600,
     "max_attempts": 8,
     "immediate_pass_counts_as_attempt": 1,
-    "schedule_minutes_after_immediate_pass": [1, 2, 4, 8, 16, 32, 60],
+    "schedule_minutes_after_immediate_pass": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32,
+      60
+    ],
     "total_minutes_before_dead_letter": 123,
-    "dead_letter": "state='failed' with the unpurged URL list KEPT — it is the operator's manual-invalidation to-do list",
+    "dead_letter": "state='failed' with the unpurged URL list KEPT \u2014 it is the operator's manual-invalidation to-do list",
     "success_clears": "CompleteCDNPurgeJob empties urls and sets state='done'",
     "partial_success": "the urls column is rewritten to only what is still unpurged, so a retry never re-issues an accepted call",
     "operator_expectation": "a transient edge failure self-heals within about two hours; anything that has not is dead-lettered, nothing tries again, and the edge keeps the object until a TTL Vidra does not set",
@@ -102,22 +111,34 @@
   },
   "operator_surface": {
     "admin_system_cdn_purge": {
-      "in_process_counters_reset_by_restart": ["runs", "keys_purged", "keys_failed", "last_incomplete_run_at"],
-      "durable_from_the_queue": ["pending_retries", "oldest_pending_seconds", "dead_letters"],
+      "in_process_counters_reset_by_restart": [
+        "runs",
+        "keys_purged",
+        "keys_failed",
+        "last_incomplete_run_at"
+      ],
+      "durable_from_the_queue": [
+        "pending_retries",
+        "oldest_pending_seconds",
+        "dead_letters"
+      ],
       "openapi_changed": true
     },
-    "admin_jobs": "cdn_purge_jobs is an eighth jobstatus queue — depth, oldest-pending age, and dead letters in the merged failures list (job id and a status summary only, never a URL)",
+    "admin_jobs": "cdn_purge_jobs is an eighth jobstatus queue \u2014 depth, oldest-pending age, and dead letters in the merged failures list (job id and a status summary only, never a URL)",
     "vidra_doctor": {
       "check": "cdn purge backlog (SectionState)",
       "warn_on_dead_letter": "says nothing will try again; fix points at manual invalidation and DELIVERY_CDN_PURGE_URL/_METHOD/_TOKEN",
       "warn_on_stale_backlog_after": "3h",
-      "pass_when_pre_0137": "a database without the table is OK, not a skip — nothing can be pending"
+      "pass_when_pre_0137": "a database without the table is OK, not a skip \u2014 nothing can be pending"
     },
     "not_rendered": "vidra-user's AdminSystemStatusView ignores the three new fields; bounded follow-up"
   },
   "ledger": {
     "still_unpurged": [],
-    "closed_entries_kept_as_notes": ["thumbnail/storyboard replacement", "same-generation admin re-transcode (closed by 0136 in slice 1)"],
+    "closed_entries_kept_as_notes": [
+      "thumbnail/storyboard replacement",
+      "same-generation admin re-transcode (closed by 0136 in slice 1)"
+    ],
     "url_set_complete_causes": [
       "the storage backend cannot list, or a listing failed",
       "the per-video fan-out cap was hit",
@@ -135,30 +156,39 @@
     },
     {
       "case": "a channel handle rename strands /api/v1/channels/<old>/avatar and /banner",
-      "status": "residual, not fixed — surgical but out of this slice's four families",
+      "status": "residual, not fixed \u2014 surgical but out of this slice's four families",
       "operator_remedy": "invalidate those two URLs by hand at the provider after renaming a channel on a CDN-fronted instance; now documented in vidra-core docs/operations.md",
       "follow_up": "a fifth purge trigger at the rename handler, snapshotting the old handle's URLs before the write"
     },
     {
-      "case": "INT-10 clause (4) — no fallback to the api proxy when the edge 5xxs after a 307",
+      "case": "INT-10 clause (4) \u2014 no fallback to the api proxy when the edge 5xxs after a 307",
       "status": "untouched by this slice and still open",
       "why": "the resolver's fail-open discipline covers building a source, not a viewer's fetch failing afterwards; the api cannot learn about the latter",
       "only_remedy_today": "the delivery_cdn_enabled kill switch"
     }
   ],
   "gates": {
-    "core_make_ci": "green — fmt-check, vet, migrate-lint (137 up migrations clean), openapi-verify, sqlc-verify, test-race; 84 ok packages, 0 FAIL",
+    "core_make_ci": "green \u2014 fmt-check, vet, migrate-lint (137 up migrations clean), openapi-verify, sqlc-verify, test-race; 84 ok packages, 0 FAIL",
     "core_go_vet_integration": "clean",
-    "core_integration_lane": "CI's, not local — no container runtime was used in this slice; 0137 was linted and generated against, not applied to a running database",
+    "core_integration_lane": "RUN \u2014 go test -tags=integration -race ./internal/store/ against a throwaway native PostgreSQL 16.15 (no container runtime) migrated to schema 137: 6 new cdn_purge_jobs tests pass and the whole package is green",
+    "core_migration_0137_applied": "yes \u2014 up applies at schema 137, down.sql drops the table and its three indexes cleanly, and the up re-applies; cluster torn down afterwards",
     "user": "npx tsc --noEmit passes on the regen; no component file changed",
     "meta_python_tests": "42 tests OK, zero skips",
-    "meta_compose_render": "unchanged — no compose or env file touched"
+    "meta_compose_render": "unchanged \u2014 no compose or env file touched",
+    "core_integration_tests_added": [
+      "internal/store TestCDNPurgeWalkIsSingletonWhileActive (the ON CONFLICT inference on the partial unique index)",
+      "internal/store TestCDNPurgeClaimReclaimsAnExpiredLease (a 'running' row past its lease is reclaimed with its cursor)",
+      "internal/store TestCDNPurgeConcurrentClaimsAreDisjoint (FOR UPDATE SKIP LOCKED)",
+      "internal/store TestCDNPurgeRetryRewritesTheRemainingURLs (the jsonb round trip and the dead letter keeping its list)",
+      "internal/store TestCDNPurgeSweepKeepsDeadLettersLongerThanSuccesses",
+      "internal/store TestCDNPurgeCatalogueWalkQueriesRun (the two reads the walk derives its work from)"
+    ]
   },
   "unverified": [
-    "edge simulator re-run pending (slice 3): nothing here was measured against a caching edge, a browser or a live database",
     "the selected edge stays deferred (no CDN zone or credential on this machine)",
     "the selected bucket stays deferred",
-    "that a poster replacement makes the edge return the new bytes, that an account deletion empties the edge, that the walk covers a real catalogue, and that a rejected purge is accepted on a later attempt are argued from the code and its tests, not observed"
+    "that a poster replacement makes the edge return the new bytes, that an account deletion empties the edge, that the walk covers a real catalogue, and that a rejected purge is accepted on a later attempt are argued from the code and its tests, not observed",
+    "edge simulator re-run pending (slice 3): nothing here was measured against a caching edge or a browser"
   ],
   "slice_3_must_rerun": [
     "the per-family purge counts against the edge simulator: thumbnail/storyboard replacement, account deletion, instance-wide download revocation",
