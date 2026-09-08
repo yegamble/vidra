@@ -13388,8 +13388,21 @@ contract test caught both new routes as undocumented before the spec was written
 which is what it is for. Three assertions were verified to bite by breaking the
 code under them: swapping rotate/drop, skipping the rotation, and a truthy
 `viewer_count` guard. vidra-user `npm run ci` on Node 26 — typecheck, lint,
-lint:icons, vitest, production build, e2e — **exit 0**, with 11 added tests in
-`LiveWatchView.test.tsx` and 5 in `lib/live/termination.test.ts`. Meta: the Python
+lint:icons, vitest, production build, e2e — **exit 0**: 258 test files / 2579
+unit tests and 627 e2e, with 11 added in `LiveWatchView.test.tsx` and 5 in
+`lib/live/termination.test.ts`.
+
+That last number was **claimed once before it was true**, and the way it happened
+is worth writing down. The vidra-user PR was opened saying `npm run ci` had
+passed; it had not — the local run failed `tsc --noEmit` on a session fixture
+typed `{ id: string }`, which predates this view reading a role at all, and the
+exit code read back was the **background wrapper's** rather than npm's. Five CI
+lanes caught it (`frontend`, `ci-required`, both `e2e-backed` variants and
+`channel-sync-backed`, every one tracing to the same three type errors), which is
+what they are for. The second local attempt then failed on something else
+entirely — a fresh worktree has no Playwright browser cache — and only the third
+was real. A background job's exit status is the shell's, not the gate's, and a
+gate has to print its own. Meta: the Python
 suite, the prod compose render `config -q`, the `--profile core --profile
 frontend` port assertions and the compose-consumer assert. No script changed.
 
