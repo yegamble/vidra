@@ -1,0 +1,215 @@
+{
+  "item": "A29 remediation \u2014 federated playback, dereferenceable ids, social parity",
+  "register_row": "INT-05",
+  "verdict": "NOT FLIPPED \u2014 code remediation only; the two-instance re-run is a later slice",
+  "date": "2026-09-08",
+  "section": "A29 remediation \u2014 federated playback, dereferenceable ids, social parity \u2014 2026-09-08",
+  "headline": "The three failing clauses of INT-05, the four findings the row recorded without letting them decide it, and the three the evidence file carried beyond the row now have code behind them, proved by unit and integration tests with the migrations APPLIED to a real PostgreSQL 16.15. What did not run is the part the verdict turns on: no second instance, no caching edge, no running Caddy, no browser pointed at a live backend.",
+  "prs": {
+    "vidra-core": 203,
+    "vidra-user": 198,
+    "meta": 152,
+    "ordering": "core first; vidra-user regenerates lib/api/generated.ts from core's openapi.yaml and stays a DRAFT until core#203 merges, because contract-ci compares against core main"
+  },
+  "migrations": {
+    "0138_federation_social_parity": "federated_video_tombstones (video_id, deleted_at) + remote_actor_blocks (blocker_id, remote_actor_url, created_at)",
+    "0139_federation_delivery_identity": "request_id/correlation_id on federation_deliveries + a second trigger carrying them onto the job_runs row the 0083 projection creates",
+    "numbering": "0137 belonged to the A33 purge-jobs slice, which merged during this one; the branch was rebased onto it and the sequence is contiguous",
+    "applied": "migrate up from an empty database reached version 140 clean on PostgreSQL 16.15 \u2014 applied, not merely linted",
+    "0140_remote_video_comments": "the MIRRORED comment thread on a remote video \u2014 a separate table, not a nullable comments.video_id, and deliberately with no user_id column"
+  },
+  "cors_matrix": {
+    "rule": "Access-Control-Allow-Origin: * exactly when the response is PUBLIC (the route's own Eligible assertion) AND NON-CREDENTIALED (no ?pt=, no Authorization, no video-read cookie in use)",
+    "seam": "every place delivery.CacheControl is applied and nowhere else: serveMediaAsset's api-proxy branch, setHLSCacheControl, setMediaCacheControl",
+    "wildcard": [
+      "public HLS master and variant playlists",
+      "public HLS/CMAF segments",
+      "public thumbnail, storyboard.jpg, storyboard.vtt, captions",
+      "public /original, /webm, /download/*",
+      "public live HLS (privacy 'public' only)",
+      "avatars, banners, playlist covers, instance logos",
+      "the CDN edge's own origin fetch of a public object"
+    ],
+    "no_header": [
+      "private video, any route",
+      "unlisted video, any route",
+      "unpublished (draft) video",
+      "any request carrying ?pt=",
+      "any request carrying Authorization",
+      "the presigned or CDN 307 itself",
+      "the edge's origin fetch of a non-public object"
+    ],
+    "preflight": {
+      "methods": "GET, HEAD",
+      "headers": "Range",
+      "max_age_seconds": 600,
+      "mechanism": "mediaPreflight runs BEFORE echo's CORS middleware and PRE-SEEDS the wildcard answer; the middleware overwrites it with the credentialed answer for an allow-listed Origin and leaves it in place otherwise \u2014 echo terminates every preflight itself, so a route-level answer is unreachable",
+      "why_needed": "hls.js sends Range on CMAF byte ranges, which is not CORS-safelisted; A32 measured zero preflights only because those fetches were same-origin"
+    },
+    "vary_origin": "not added \u2014 the value is a constant, not a reflection of the request's Origin. Echo's CORS middleware adds one of its own to every response, pre-existing and untouched."
+  },
+  "outbound_video": {
+    "id": "https://<origin>/videos/<uuid> \u2014 FROZEN; moving it re-identifies the video on every peer",
+    "url": "an ARRAY of Links: the HLS master as application/x-mpegURL, then the /v/<code> watch page as text/html",
+    "icon": "an Image object carrying mediaType; width/height OMITTED because vidra records the video's dimensions, never the poster's",
+    "duration": "xsd:duration whole seconds (PT367S), the form PeerTube emits and parseISODurationSeconds reads",
+    "published": "originally_published_at -> publish_at -> created_at",
+    "updated": "the row's updated_at",
+    "omission_rule": "every field is omitted when the fact behind it is absent \u2014 no ladder means no stream link, no poster means no icon, no probe means no duration",
+    "create_vs_update": "the publish hook fires Create, which for every video that is not publish_after_transcode is BEFORE the transcode finishes. The transcode completion hook now fires UpdateVideo LAST \u2014 after releaseHold, because UpdateVideo reads the video's CURRENT privacy/state and would otherwise skip or unfederate it. composeTranscodeCompletion pins the order [release, mirror, federate].",
+    "proof": "a REAL emitted activity is driven through the REAL ingest parsers (videoLinks/iconURL/parseISODurationSeconds), and the outbox object is asserted byte-identical to the delivered one"
+  },
+  "negotiation_rules": {
+    "paths": [
+      "/videos/{uuid}",
+      "/comments/{uuid}"
+    ],
+    "accept_ap": [
+      "application/activity+json",
+      "application/ld+json (the activitystreams profile)"
+    ],
+    "ap_answer": "200 with the AS object, ETag over the serialised bytes, Cache-Control: public, max-age=300",
+    "other_accept": "406 \u2014 core has no HTML, exactly as the actor and collection routes already answer",
+    "non_public": "404, identical to a uuid that was never a video, so the endpoint is not an enumeration oracle",
+    "deleted": "410 + Tombstone (id, formerType, deleted), Cache-Control: no-store \u2014 never cached, because a 410 can legitimately become a 200 again after a restore",
+    "federated_note": "404 \u2014 a federated comment's id belongs to its origin; re-serving it under our own URL would mint a second identity for one object",
+    "routing": "deploy/Caddyfile content-negotiates /videos/* and /comments/* to the api on an AP Accept; a browser never matches (no activity+json or ld+json in a browser's Accept) and the api answers 406 anyway. NOT exercised against a running Caddy in this slice.",
+    "signed_fetch": "NOT implemented \u2014 recorded as a follow-up. The objects are public by construction so nothing leaks, but a peer requiring signed dereferencing is not served, and vidra sends no signature on its own object fetches."
+  },
+  "findings": [
+    {
+      "id": "A29-F1",
+      "status": "fixed",
+      "note": "icon, duration and an HLS url on the outbound Video; an Update when the transcode lands; CORS on public media so the link is usable"
+    },
+    {
+      "id": "A29-F2",
+      "status": "fixed",
+      "note": "core handlers for /videos/{uuid} and /comments/{uuid} plus the Caddy Accept rule"
+    },
+    {
+      "id": "A29-F3",
+      "status": "fixed",
+      "note": "ResolveSearchTarget consults remote_videos by object id OR watch url before any fetch"
+    },
+    {
+      "id": "A29-F4",
+      "status": "half fixed",
+      "note": "a federation.inbox.rejected audit row now records the refusal (the 202 is deliberately unchanged \u2014 a distinguishable refusal is a probe target). REDELIVERY after an unblock is still not attempted and stays OPEN."
+    },
+    {
+      "id": "A29-F5",
+      "status": "fixed",
+      "note": "an Undo or Reject bound for a blocked destination is delivered rather than cancelled \u2014 a block is a refusal to receive, and swallowing the one message that reduces contact makes it leakier"
+    },
+    {
+      "id": "A29-F6",
+      "status": "fixed",
+      "note": "CountChannelFollowers is local + accepted remote, one definition, read by the AP collection too"
+    },
+    {
+      "id": "A29-F7",
+      "status": "fixed",
+      "note": "remote_actor_blocks + GET/POST/DELETE /me/blocks/remote + a Settings tab; feeds, inbound Notes and inbound Follows all honour it"
+    },
+    {
+      "id": "A29-F8",
+      "status": "fixed for the direction A29 measured; authoring deferred",
+      "note": "migration 0140 mirrors the thread the origin already fans out to us, and the follower's page shows it. The authority rule has three checks and the third is specific to this path: the Note's origin must be the VIDEO's origin, or any instance in our follow graph could write onto any mirrored video from any other instance. AUTHORING against a remote video stays deferred: it reverses a shipped product decision (comments, ratings and saving live on the origin instance), raises the question of who answers for a comment an instance hosts about a video it does not own, and would need an account-level follower collection that A29-F11 says does not exist. There is no user_id column and no POST, deliberately."
+    },
+    {
+      "id": "A29-F9",
+      "status": "fixed",
+      "note": "410 + Tombstone from federated_video_tombstones, written by the same delete path that fans the Delete out, BEFORE the fan-out so an AP-disabled or vanished channel still answers"
+    },
+    {
+      "id": "A29-F10",
+      "status": "fixed",
+      "note": "request/correlation identity on the delivery queue row and onto job_runs; a federation component on /admin/system"
+    },
+    {
+      "id": "A29-F11",
+      "status": "deferred",
+      "note": "account actor collections stay hard-coded empty \u2014 a documented decision in collections.go, unchanged by this slice"
+    },
+    {
+      "id": "A29-F12",
+      "status": "fixed",
+      "note": "urlsafety.Guard runs on EVERY actor resolution, cached or not; a signature failing against the cached key is retried once against a freshly fetched one, bounded to actors already cached"
+    }
+  ],
+  "admin_federation_component": {
+    "degraded": "dead_lettered > 0 \u2014 a peer refusing our activities is not this instance being down, and the overall verdict stays ok",
+    "down": "the oldest PENDING delivery older than 20 minutes \u2014 the full ladder (30s doubling to attempt 6, about 15.5 minutes) plus a drain interval, so a queue walking its backoff is never called stalled",
+    "absent": "when federation is not wired \u2014 an instance that does not federate has no federation health"
+  },
+  "remote_account_block": {
+    "keyed_on": "the ACTOR URL, not a remote_actors FK \u2014 a viewer must be able to block an actor never cached here, and evicting the cache must not lift a block",
+    "effects": [
+      "the blocker's feeds and reads exclude that actor's remote videos",
+      "an inbound Create{Note} on a video the BLOCKER owns is dropped",
+      "an inbound Follow of a channel the BLOCKER owns records nothing and sends nothing"
+    ],
+    "deliberately_not": [
+      "it does not hide the blocker from the blocked actor",
+      "it does not stop delivery"
+    ],
+    "why_not": "a remote server decides what it shows its own users; a safety feature that only reads as protection is the worst kind",
+    "unblock": "matches the stored URL VERBATIM \u2014 no handle resolution, so a WebFinger that has since started failing cannot strand a viewer with an unliftable block"
+  },
+  "gates": {
+    "vidra-core": {
+      "make ci": "PASS (fmt-check, vet, migrate-lint 140 up migrations clean, openapi-verify, sqlc-verify, test-race)",
+      "go vet -tags=integration ./...": "clean",
+      "integration": "ok on a fresh PostgreSQL 16.15 for internal/federation, internal/store and internal/httpapi, run per package \u2014 internal/store's owner-claim test needs an empty users table and fails after the federation suite has seeded one, on this branch and on clean main alike"
+    },
+    "vidra-user": {
+      "typecheck": "pass",
+      "lint": "pass (2 pre-existing warnings, 0 errors)",
+      "lint:icons": "pass",
+      "test": "256 files, 2555 tests, all passing",
+      "build": "pass",
+      "node": "22 locally, NOT the Node 26 CI uses",
+      "e2e": "the MOCKED Playwright suite ran: 627 specs, all passing on a clean re-run. player-theater.spec.ts failed once under full-suite load and passes in isolation \u2014 the known flake. It caught the one real defect in this slice's frontend half: e2e/remote-videos.spec.ts pinned the old info-panel copy. The BACKED suites were not run locally."
+    },
+    "meta": {
+      "python3 -m unittest discover -s tests -p '*_test.py'": "see the run recorded with this section",
+      "scripts": "no script changed \u2014 only deploy/Caddyfile and docs"
+    }
+  },
+  "not_run": [
+    "any second live instance",
+    "any browser",
+    "any caching edge",
+    "a running Caddy against the new content-negotiation rule",
+    "PeerTube or Mastodon interoperability",
+    "the mirrored thread against a second live instance \u2014 the exact delivery A29 watched succeed into a drop",
+    "the BACKED Playwright suites (they build vidra-core from its default branch, which does not yet carry this slice's endpoints)"
+  ],
+  "open": [
+    "A29-F4: an activity refused during an instance block is still never redelivered after the unblock",
+    "A29-F8's AUTHORING half: a comment written HERE about a remote video. It reverses a shipped product decision and needs a moderation ruling; the mirroring half is built.",
+    "A29-F11: account actor collections stay hard-coded empty, which is also why a comment authored here would have no follower set to fan out to",
+    "signed fetch on the AP object routes, in both directions",
+    "QoE for remote playback is deliberately not emitted; whether a viewer's own instance should measure playback it did not serve is a product question",
+    "MIG-06's identity/Move clause, unchanged"
+  ],
+  "unrelated_findings": [
+    {
+      "id": "job-run identity, six other queues",
+      "note": "sync_legacy_job_run() (migration 0083) projects SEVEN queue tables into job_runs and writes request_id/correlation_id for none of them; 0133's inherit_job_run_identity only fills a CHILD run from its PARENT, so a top-level projected run has nothing to inherit. Migration 0139 closes it for federation_deliveries with a sibling trigger; transcode_jobs, import_jobs, caption_jobs, account_exports, atproto_posts and peertube_import_runs still show an empty request id on /admin/jobs. Deliberately not folded in: this slice should not rewrite a function six other acceptances depend on."
+    },
+    {
+      "id": "Vary: Origin on shared media responses",
+      "note": "Echo's CORS middleware stamps Vary: Origin on every response, including the shared-cacheable ones A33 promoted for the edge. Unchanged here, and this slice's public-media header is a constant that does not vary by origin \u2014 but an edge entry keys on a header the response does not depend on. A delivery-slice question."
+    },
+    {
+      "id": "meta pull_request CI never fired",
+      "note": "meta-ci and ci-required both ran on the a26/live and a33/purge-families pull requests and produced NO run at all for a29/remediation, before or after the draft was marked ready. meta-ci was dispatched manually against the branch and passes; ci-required has no workflow_dispatch trigger, so it could not be. A CI-visibility gap of exactly the kind ci-required exists to catch, which it cannot catch about itself."
+    },
+    {
+      "id": "integration suites cannot share a database",
+      "note": "internal/store's owner-claim test needs an empty users table and fails after the federation suite has seeded one \u2014 on this branch and on clean main alike. A29 recorded this; re-confirmed. The suites were run per package against a freshly created database each time."
+    }
+  ]
+}
