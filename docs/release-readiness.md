@@ -14752,8 +14752,10 @@ and the recorded error is safe (`atproto: XRPC
 com.atproto.server.createSession failed: status 0`, no URL, no credential).
 Restarting the PDS delivered it **once**: three records for three videos, no
 duplicate. One gap: those rows project into `job_runs` through the
-`sync_legacy_job_run` trigger, but there is **no creator-facing view** of an
-auto-post's state, so a creator whose cross-post dead-lettered is never told.
+`sync_legacy_job_run` trigger, which only an admin sees. The creator's own
+status view carries one coarse signal — `last_posted_at` on the linked account —
+and **nothing per post**, so a creator whose cross-post dead-lettered is never
+told that it did.
 
 **SC5, donation addresses.** The curated set is bitcoin, ethereum, litecoin,
 monero; an unknown network is a 422 naming all four, and a malformed address is a

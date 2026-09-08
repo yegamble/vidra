@@ -160,7 +160,7 @@
       "ladder": "30s base, x2 per attempt, capped 6h, 6 attempts then dead-letter",
       "recovery": "delivered once when the PDS returned; PDS repo held exactly 3 records \u2014 no duplicate"
     },
-    "creator_visible_status": "atproto_posts rows project into job_runs via the sync_legacy_job_run trigger; there is no creator-facing view of an auto-post's state"
+    "creator_visible_status": "atproto_posts rows project into job_runs via the sync_legacy_job_run trigger, which only an admin sees; the creator's own GET /me/atproto carries one coarse signal (last_posted_at) and nothing per post, so a dead-lettered cross-post is never surfaced to them"
   },
   "sc5_donations": {
     "networks": [
