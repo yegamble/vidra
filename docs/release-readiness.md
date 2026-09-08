@@ -10816,54 +10816,69 @@ than skipped: meta CI's lint loop now covers `docs/evidence/*.sh` (closed by
 the storage-hardening slice above) but reaches no `.go` file under `docs/`, so
 this simulator was formatted and built by hand.
 
-### The compat collision, which is an owner's call and not a defect
+### The compat collision, and the ruling on it
 
-`prev-release-against-new-schema` fails, and it is the policy working rather
+`prev-release-against-new-schema` went red, and it was the policy working rather
 than a bug in the migration. That lane applies HEAD's migrations to a fresh
 database and then runs **v0.6.2's own integration suite** against it; v0.6.2's
 `internal/store/search_filters_integration_test.go` seeds a channel whose handle
-EQUALS its owner's username — the exact collision 0142 refuses — and fails on
-`actor_handles_pkey`.
+EQUALS its owner's username — the exact collision 0142 refuses — and dies at
+`actor_handles_pkey` while seeding. It is the only such fixture in that tree.
 
-The one-release schema-compat policy says release N-1's CODE must keep running
-against release N's SCHEMA, and `migrate-lint` spells out the additive half of
-it: add tables, columns and indexes, WIDEN CHECKs, RELAX NOT NULL. **Unifying two
+The one-release schema-compat policy is additive-only (`migrate-lint`: add
+tables, columns and indexes, WIDEN CHECKs, RELAX NOT NULL). **Unifying two
 namespaces is a tightening by construction.** You cannot promise that the old
 code may keep creating collisions in a namespace whose entire purpose is that
 collisions are invalid.
 
-What a rollback actually costs is smaller than the red tick suggests, and it was
-measured rather than assumed: v0.6.2 maps 23505 through
-`pgconv.IsUniqueViolation` at both sites, so against the new schema it answers
-**409 "channel handle already taken"** where it used to answer 201, and 409 on
-the account side. No crash, no 500, no data loss — a rolled-back instance stays
-up and refuses exactly the handle this ruling declares invalid. The failing lane
-is v0.6.2's FIXTURE asserting the old permissiveness, not a broken read or write
-path.
+**Ruled 2026-09-08: accept the tightening.** Not staged over two releases, not
+weakened, not silenced. The rationale, for the record: under the A38 ruling
+app-only rollback is supported **from v0.6.3 onward** and a v0.6.2 target uses
+the **restore path**, so "v0.6.2 running on the new schema" was already outside
+the supported rollback floor before this migration existed. And the measured
+consequence is the boundary behaving rather than breaking — v0.6.2 maps 23505
+through `pgconv.IsUniqueViolation` at both write sites, so it answers **409
+"channel handle already taken"** where it answered 201, and 409 on the account
+side. No crash, no 500, no data loss. Staging was rejected because that shape
+leaves exactly the hole the rehearsal found: for a whole release the database
+would not guarantee the namespace, and creating a channel named after an
+existing account would keep answering **201**.
 
-Two ways out, both the owner's to choose:
+**It is implemented in the lane the way `rollback-floor` already handles its own
+known break** — a capability probe, an asserted expectation, and automatic
+self-clearing:
 
-1. **Accept the break.** Merge as is and record in `deploy/README.md`'s release
-   policy that 0142 is a deliberate one-release compat break whose only effect on
-   N-1 is a 409 in place of a 201. The executable policy gains a documented
-   exception and the lane stays red until v0.6.3 becomes N-1.
-2. **Stage it over two releases.** Release N ships `actor_handles`, the backfill,
-   the aliases and the triggers that MAINTAIN the reservation, with the refusal in
-   the APPLICATION only; release N+1 adds the unique key. The cost is that for one
-   release the database does not guarantee the namespace — which is the guarantee
-   SC1 asked for, and the exact hole the rehearsal found when creating a channel
-   named after an existing account answered **201**. A reservation table that can
-   silently under-report is the kind of safety feature this codebase rejects on
-   principle.
+- the probe is the **migration**, not a version string (`actor_handles` in the
+  N-1 worktree's `migrations/`): a tag comparison would need editing every
+  release and would lie on a backport. Absent ⇒ the expectation applies; present
+  ⇒ the suite must pass clean with no expectations at all;
+- the expectation is **registered in a checked-in file**, not a silent code path:
+  `scripts/ci/expected-prev-release-failures.txt`, one test name per line with
+  the accepted break written out in full above it. Today it holds exactly one
+  line, `TestEntitySearchVisibilityAgainstPostgres`;
+- `scripts/ci/assert-prev-release-failures.sh` does the asserting, and it is
+  **two-sided so it cannot become a mute**: an UNREGISTERED failure fails the
+  job, a REGISTERED test that PASSES fails the job as a stale expectation, and a
+  log with no passing package or test fails the job on the same doctrine as the
+  skip audit. All four branches were exercised against a reconstructed N-1 log
+  before the push;
+- the N-1 log is uploaded as an artifact, so a tolerated break is re-readable
+  months later.
 
-Three things were deliberately NOT done to make the tick green: the workflow was
-not touched, the constraint was not weakened, and no session-variable trapdoor
-was added to let N-1 write past the trigger — a guarantee a missing GUC silently
-removes reads as protection and is not.
+Editing `.github/workflows` is normally out of bounds here; it is in scope
+because the CI gate *is* the task.
 
-(One flake seen in the same lane and not caused by this slice:
-`TestSearchSortAndFilterBehaviourAgainstPostgres/sorts_order` failed on one of
-seven runs against the same tree and passed on the others.)
+`deploy/README.md` gains a **"Release notes: accepted compat breaks"** subsection
+under the release policy, because a break that lives only in a PR body is a break
+nobody finds at 3 a.m. Its v0.6.3 bullet: *v0.6.2 binaries on a v0.6.3+ schema
+answer 409 `handle_reserved` when creating a channel whose handle equals an
+existing username; rolling back to v0.6.2 uses the restore path (A38).*
+
+One consequence worth stating: `TestSearchSortAndFilterBehaviourAgainstPostgres/
+sorts_order` failed on one of seven runs of this lane against the same tree and
+passed on the others — a relevance tie-break flake in v0.6.2's suite. It is NOT
+registered, so if it recurs the lane fails hard. That is the point: the register
+admits one named break, not a quieter lane.
 
 ### Unverified, and named rather than skipped
 
@@ -14379,10 +14394,10 @@ channel actor otherwise, and unblocks with the same URL verbatim.
 ### Gates
 
 `vidra-core`: `make ci` **PASS** (fmt-check, vet, migrate-lint — 142 up
-migrations clean, openapi-verify, sqlc-verify, test-race). **`ci-required` is
-RED**, for one named reason — see "The compat collision" below; every other
-required lane is green (build-test, integration, openapi, ipfs-integration,
-ipfs-private-integration, prev-migrator-against-new-schema, GitGuardian). `go vet
+migrations clean, openapi-verify, sqlc-verify, test-race). `ci-required` **green**,
+including `prev-release-against-new-schema` — see "The compat collision, and the
+ruling on it" below for the one accepted break it now carries and how it clears
+itself. `go vet
 -tags=integration ./...` clean. `go test -tags=integration -count=1 -p 1
 ./internal/federation/... ./internal/store/...` **ok** against a FRESH
 PostgreSQL 16.15 (Homebrew, native — no Docker was used) migrated 0→142 and a

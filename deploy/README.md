@@ -939,6 +939,16 @@ blind spot is the second half of the drop cycle: it proves N−1 still reads and
 fine, not that N−1 had already stopped writing what N removes. Staged drops still need
 a reviewer to confirm the write path went away in the prior release.
 
+A **tightening** — unifying two namespaces, say — cannot satisfy an additive-only
+policy by construction, and that lane no longer has only the two states "green" or
+"abandon the change". It carries an accepted-break register
+(`scripts/ci/expected-prev-release-failures.txt`) consulted ONLY when a capability
+probe says the previous release predates the migration that caused the break. The
+assertion is two-sided and neither half is a mute: an unregistered failure fails the
+job, and a registered test that PASSES also fails it, so an entry cannot outlive the
+break it describes. Every entry is written out in full, with its consequence, and
+listed under "Release notes: accepted compat breaks" below.
+
 **The policy has two halves, and until A38 only the code half was true.**
 `rollback.sh` does not start the api first — `up -d` starts the `migrate` and
 `search-migrate` one-shots, because api and search depend on them with
@@ -966,6 +976,26 @@ half, the other the migrator half.
 An app-only `rollback.sh` across an additive migration therefore works now. It
 is still not enough across an *incompatible* one — old code cannot read a
 renamed column — and that path is still restore-then-rollback.
+
+#### Release notes: accepted compat breaks
+
+Each entry is a schema change the team accepted as a break of the additive-only
+half of the policy, with the exact consequence for the release below it. They are
+listed here because an operator reading a rollback runbook is the person who
+needs them, and because a break that lives only in a PR body is a break nobody
+finds at 3 a.m.
+
+- **v0.6.3 — one handle namespace (migration 0142).** v0.6.2 binaries on a
+  v0.6.3+ schema answer **409 `handle_reserved`** when creating a channel whose
+  handle equals an existing username (and 409 on the account side for the mirror
+  case) where they used to answer 201. Nothing crashes and nothing is lost —
+  v0.6.2 already maps SQLSTATE 23505 at both write sites, so the refusal is the
+  boundary behaving. **Rolling back to v0.6.2 uses the restore path**, per the
+  A38 ruling that app-only rollback is supported from v0.6.3 onward; a v0.6.2
+  target was already outside the app-only floor before this migration existed.
+  vidra-core's `schema-compat` lane records the one v0.6.2 test this breaks in
+  `scripts/ci/expected-prev-release-failures.txt` and clears the expectation
+  automatically once N−1 carries 0142.
 
 ### Secret rotation
 
