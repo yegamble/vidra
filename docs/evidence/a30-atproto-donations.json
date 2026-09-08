@@ -1,0 +1,289 @@
+{
+  "item": "A30",
+  "date": "2026-09-08",
+  "rows": {
+    "INT-06": "ATProto/Bluesky login, linking and outbound cross-posting",
+    "INT-11": "Noncustodial donation addresses verify and display honestly"
+  },
+  "fixture": {
+    "pds": {
+      "implementation": "@atproto/pds",
+      "version": "0.4.107",
+      "source": "npm, pinned",
+      "public_url": "http://localhost:2583",
+      "service_did": "did:web:localhost",
+      "handle_domains": [
+        ".test",
+        ".localtest.me"
+      ],
+      "dev_mode": true,
+      "blobstore": "disk",
+      "appview": "none",
+      "crawlers": "none"
+    },
+    "plc_directory": {
+      "kind": "local stub, ~40 lines, loopback only",
+      "url": "http://127.0.0.1:2582",
+      "validates_with": "@did-plc/lib assureValidOp + didForCreateOp",
+      "serves_with": "@did-plc/lib formatDidDoc",
+      "reason": "the reference PDS submits the did:plc genesis op to PDS_DID_PLC_URL; the default is the PUBLIC plc.directory"
+    },
+    "handle_shim": {
+      "image": "mirror.gcr.io/library/nginx:alpine",
+      "publish": "127.0.0.1:80 -> PDS 2583, Host preserved",
+      "reason": "a handle carries no port, so handle->DID resolution can only hit port 80/443; port 80 is privileged and this lab has no root, so Docker Desktop publishes it",
+      "answer_source": "the PDS's own /.well-known/atproto-did handler (keyed off req.hostname), not a fixture"
+    },
+    "accounts": {
+      "alice.test": "did:plc:axcs65dzgvupqqepsdlupmxr \u2014 cross-post link (app password)",
+      "alice.localtest.me": "did:plc:nmrfcsxnecn7fb27gg5rnv2j \u2014 identity login (OAuth)"
+    },
+    "core": {
+      "processes": "VIDRA_ROLE=api on :8088 + a separate VIDRA_ROLE=worker",
+      "schema": 141,
+      "postgres": "native 16.15, own cluster on 127.0.0.1:55433",
+      "redis": "native, 127.0.0.1:56380",
+      "storage": "STORAGE_BACKEND=local",
+      "flags": {
+        "ATPROTO_ENABLED": true,
+        "ATPROTO_LOGIN_ENABLED": true,
+        "ATPROTO_KEY_KEK": "set (lab value)",
+        "HTTP_IMPORT_ALLOW_PRIVATE_URLS": true,
+        "ATPROTO_PLC_URL": "http://127.0.0.1:2582",
+        "RATE_LIMIT_ENABLED": false,
+        "MALWARE_SCAN_MODE": "disabled"
+      }
+    },
+    "frontend": "production next build, standalone server on :3100 behind a pipe-only origin proxy on 127.0.0.1:8099 that routes /api/v1 to core",
+    "browser": "real Chromium via Playwright"
+  },
+  "no_public_network": {
+    "browser_hosts_contacted": [
+      "127.0.0.1:8099",
+      "localhost:2583"
+    ],
+    "stored_pds_url": "http://localhost:2583",
+    "oauth_issuer_bound": "http://localhost:2583",
+    "plc_directory_contacted": "http://127.0.0.1:2582 (local stub)",
+    "bsky_social_or_app": "never contacted; the single appearance of https://bsky.social was a deliberately forged callback iss, rejected before any outbound hop",
+    "caveat": "no ATProto protocol traffic left loopback at any point. What did reach the network: the npm install of @atproto/pds, the mirror.gcr.io container pull, and DNS lookups for alice.localtest.me \u2014 a public domain that answers 127.0.0.1, which is what removes the need for an /etc/hosts edit"
+  },
+  "sc1_login": {
+    "verdict": "PASS for the dev loopback client; the production hosted-client path is UNVERIFIED",
+    "par": "real PAR against the PDS auth server returned urn:ietf:params:oauth:request_uri:req-...",
+    "state_cookie": "vidra_atproto_state, HttpOnly, SameSite=Lax, Path=/api/v1/auth/atproto, Max-Age=600, HMAC-signed",
+    "consent_screen": "Requested permissions: 'Uniquely identify you' (scope atproto only)",
+    "account_created": {
+      "username": "alice",
+      "email": "did-plc-nmrfcsxnecn7fb27gg5rnv2j@atproto.invalid",
+      "role": "user",
+      "email_verified": false,
+      "password": "none (passwordless)"
+    },
+    "second_login_same_account": "user id 9de4e570-b317-4750-a73a-50ad8390cb78 unchanged, created_at unchanged (login, not create)",
+    "state_matrix": {
+      "no cookie": "400 missing or expired atproto login state",
+      "tampered cookie": "400 missing or expired atproto login state",
+      "valid cookie + wrong state": "400 atproto state mismatch",
+      "valid cookie + right state + iss=https://bsky.social": "302 ?oauth_error=atproto_identity_mismatch, no session",
+      "valid cookie + right state + no iss": "302 ?oauth_error=atproto_identity_mismatch, no session",
+      "replay after the callback cleared the single-use cookie": "400"
+    },
+    "start_negatives": {
+      "malformed handle": "422 field handle",
+      "unresolvable handle": "502 atproto_resolution_failed",
+      "off-origin return_to": "422 field return_to"
+    },
+    "flags_off": {
+      "ATPROTO_LOGIN_ENABLED=false": {
+        "instance.atproto_login": false,
+        "login page": "the Bluesky control disappears",
+        "POST /auth/atproto/start": "503 atproto_disabled",
+        "GET /auth/atproto/callback": "400 (the missing-state check runs before the disabled check)",
+        "client-metadata.json": "200 (stable contract)"
+      },
+      "ATPROTO_ENABLED=false": {
+        "GET/PUT/DELETE /me/atproto": "503, but the body is the generic service_unavailable envelope"
+      }
+    },
+    "not_proven": [
+      "the production hosted client-metadata client (an https PUBLIC_BASE_URL makes ClientID the hosted document; this lab used the spec's virtual-localhost dev client http://localhost?redirect_uri=...)",
+      "a replay of a used authorization code WITH a still-valid state cookie (the cookie is httpOnly and single-use)"
+    ]
+  },
+  "sc2_link_unlink": {
+    "cross_post_link": {
+      "PUT /me/atproto": "200, credentials verified against the real PDS via com.atproto.server.createSession, DID stored",
+      "at_rest": "app_password_sealed starts with 'enc:', 68 chars; never returned by GET",
+      "DELETE": "204; GET then 404; DELETE again 204 (idempotent); relink 200",
+      "wrong app password": "422 'Bluesky rejected these credentials; check the handle and app password'",
+      "unreachable PDS": "502, but the body is the generic server_error envelope",
+      "anonymous": "401",
+      "other user": "sees only their own (404 unlinked); their DELETE is a no-op that leaves the owner's link intact"
+    },
+    "identity_link": {
+      "before_fix": "GET and DELETE /me/oauth-identities both 404 with ATPROTO_LOGIN_ENABLED=true and no OIDC provider configured",
+      "after_fix": "200 listing provider=atproto handle=alice.localtest.me",
+      "unlink_last_method": "422 'cannot remove the last sign-in method \u2014 set a password first', surfaced in the settings UI",
+      "unlink_unlinked_provider_on_passwordless_account": "422 (the last-credential guard runs before the linked lookup)",
+      "unlink_unlinked_provider_on_password_account": "404"
+    }
+  },
+  "sc3_cross_post": {
+    "public": {
+      "post_uri": "at://did:plc:axcs65dzgvupqqepsdlupmxr/app.bsky.feed.post/3muzplrn7ak2x",
+      "record_text": "A30 public cross-post fixture (the title only)",
+      "watch_url_location": "app.bsky.embed.external.uri, NOT the post text",
+      "watch_url": "http://localhost:8099/v/pmwTzyEVua5",
+      "watch_url_resolves": "200 in Chromium with the correct title",
+      "thumbnail_blob": "image/jpeg, 16664 bytes, uploaded to the PDS"
+    },
+    "private_exclusion": {
+      "private": "no queue row, no post",
+      "unlisted": "no queue row, no post",
+      "draft (never uploaded)": "no queue row, no post"
+    },
+    "pds_record_count": 3,
+    "public_videos_published": 3
+  },
+  "sc4_sealed_and_outage": {
+    "restart": "api and worker killed and restarted; the next public publish cross-posted with the sealed credential (3muzponpfks2x)",
+    "wrong_kek": {
+      "state": "failed",
+      "attempts": 1,
+      "error": "the stored app password could not be opened",
+      "behaviour": "dead-lettered immediately as a permanent error \u2014 no retry burn, no plaintext"
+    },
+    "outage": {
+      "attempt_1": "+30.000s, error 'atproto: XRPC com.atproto.server.createSession failed: status 0'",
+      "attempt_2": "+59.9997s (doubling)",
+      "ladder": "30s base, x2 per attempt, capped 6h, 6 attempts then dead-letter",
+      "recovery": "delivered once when the PDS returned; PDS repo held exactly 3 records \u2014 no duplicate"
+    },
+    "creator_visible_status": "atproto_posts rows project into job_runs via the sync_legacy_job_run trigger, which only an admin sees; the creator's own GET /me/atproto carries one coarse signal (last_posted_at) and nothing per post, so a dead-lettered cross-post is never surfaced to them"
+  },
+  "sc5_donations": {
+    "networks": [
+      "bitcoin",
+      "ethereum",
+      "litecoin",
+      "monero"
+    ],
+    "verification_supported": [
+      "ethereum (EIP-191 personal_sign)"
+    ],
+    "invalid_network": "422 'must be one of: bitcoin, ethereum, litecoin, monero'",
+    "invalid_address": "422 'is not a valid bitcoin address'",
+    "stored_state": "verified=false on create for every network",
+    "challenge": {
+      "bitcoin": "501 not_implemented 'address ownership verification is not supported for this network'",
+      "ethereum": "201, message binds instance + network + address + 128-bit nonce, 10-minute expiry"
+    },
+    "verify": {
+      "signature from a different key": "422 'signature did not verify for this address'",
+      "malformed signature": "422",
+      "correct EIP-191 signature": "200 verified=true",
+      "re-verify after success": "409 'no active verification challenge; request one first' (single-use)"
+    },
+    "wrong_actors": {
+      "another user delete/challenge/verify": "403",
+      "anonymous": "401",
+      "unknown id": "404"
+    },
+    "delete": "204, then 404"
+  },
+  "sc6_display": {
+    "watch_support_dialog_anonymous": {
+      "opening_copy": "Send crypto directly to the creator. Vidra never holds or processes funds.",
+      "closing_copy": "Payments are peer-to-peer and irreversible. Double-check the address before sending.",
+      "verified_address": "VERIFIED badge + 'Ownership proven by signed message'",
+      "unverified_addresses": "UNVERIFIED badge + 'Scan or copy \u00b7 on-chain only'",
+      "absent": [
+        "balance",
+        "payment confirmation",
+        "thank-you",
+        "any funds-handling language"
+      ]
+    },
+    "removal": "deleting the Monero address removed it from the dialog on a hard reload",
+    "private_video_anonymous": "404 (no page, no dialog)",
+    "public_projection_fields": [
+      "id",
+      "owner_id",
+      "network",
+      "address",
+      "label",
+      "verified",
+      "created_at"
+    ],
+    "settings_view": "'Display only \u2014 Vidra never holds funds or processes payments'; per-network verification availability explained; Verify ownership offered only where a signing standard exists"
+  },
+  "findings": [
+    {
+      "id": "A30-F1",
+      "severity": "high",
+      "summary": "An ATProto-only account can never gain a second sign-in method, so the unlink refusal's own remedy is unreachable",
+      "detail": "The account is passwordless and its email is the deliberately non-routable did-...@atproto.invalid. ChangePassword returns ErrPasswordNotSet, RequestEmailChange returns ErrPasswordNotSet, and the password-reset mail can never be delivered. Losing the ATProto account therefore loses the Vidra account, and the 422 tells the user to do something no path allows.",
+      "fixed": false
+    },
+    {
+      "id": "A30-F2",
+      "severity": "medium",
+      "summary": "/me/oauth-identities was mounted only when an OIDC provider was configured",
+      "detail": "ATProto login writes its DID into oauth_identities, so an ATProto-only instance answered 404 on list and unlink. Measured before and after on a live instance.",
+      "fixed": "vidra-core PR 213"
+    },
+    {
+      "id": "A30-F3",
+      "severity": "medium",
+      "summary": "ATProto identity login could not reach a loopback PDS at all",
+      "detail": "resolveHandleHTTP hardcoded https://<handle> while the did:web branch already honoured the allowPrivate dev knob, and the did:plc directory was fixed to plc.directory. Both were relaxed under the existing loopback declaration; production is unchanged.",
+      "fixed": "vidra-core PR 213"
+    },
+    {
+      "id": "A30-F4",
+      "severity": "low",
+      "summary": "The 5xx error envelope scrubs the ATProto cross-post messages",
+      "detail": "'Bluesky cross-posting is not enabled on this instance' (503) and 'could not reach the Bluesky server; please try again' (502) both arrive as the generic 'an unexpected error occurred'. The login endpoints escape it because ATProtoLoginError carries a machine code.",
+      "fixed": false
+    },
+    {
+      "id": "A30-F5",
+      "severity": "low",
+      "summary": "The Connected logins row identified an ATProto identity as 'Atproto' with 'no email recorded'",
+      "detail": "The handle is in the payload precisely so the owner can see which account is linked; the row showed neither it nor the network's name.",
+      "fixed": "vidra-user PR 204"
+    },
+    {
+      "id": "A30-F6",
+      "severity": "low",
+      "summary": "Account-level donation addresses have no profile surface",
+      "detail": "GET /users/{id}/donation-addresses is documented as the public projection for a profile page, but only SupportButton consumes it, and only via a channel's owner id. A creator with no channel exposes addresses no page renders.",
+      "fixed": false
+    },
+    {
+      "id": "A30-F7",
+      "severity": "informational",
+      "summary": "A cross-post puts the watch URL only in the embed card, never in the post text",
+      "detail": "The record text is the video title; the link lives in app.bsky.embed.external.uri. Clients that do not render external embeds show a post with no link.",
+      "fixed": false
+    },
+    {
+      "id": "A30-F8",
+      "severity": "informational",
+      "summary": "The callback's disabled check runs after the state-cookie check",
+      "detail": "With ATPROTO_LOGIN_ENABLED=false a bare callback answers 400 (missing state) rather than the typed 503.",
+      "fixed": false
+    }
+  ],
+  "gates": {
+    "vidra-core": "make ci",
+    "vidra-user": "npm run ci",
+    "meta": "not applicable (docs only)"
+  },
+  "prs": {
+    "vidra-core": 213,
+    "vidra-user": 204,
+    "vidra": 158
+  }
+}
