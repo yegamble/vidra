@@ -1,0 +1,78 @@
+{
+  "status": "Code-only slice applying the three owner rulings on the A28 ClamAV findings. Not lab-observed: no clamd was run, no container was built and no stack was started (another executor holds the machine's lab and Docker). Every claim below is read out of the code and pinned by a test that was verified RED before the change; the behaviour against a REAL clamd is INT-04's already-passing A28 lane, which this slice does not re-run.",
+  "scope": "Rulings on A28 findings 1 (a malware rejection is invisible to the creator), 2 (fail-open has no audit trail) and the CLAMAV_ADDR-unset default (silently unscanned), plus the ingestion-scope gap A28 recorded as unprobed: thumbnails, avatars, channel banners and account-import archives.",
+  "core_revision": "scan/hardening @ ee2a39d",
+  "frontend_revision": "scan/hardening @ 21608c0",
+  "search_revision": "vidra-search NOT touched and NOT run",
+  "pull_requests": {
+    "core": "yegamble/vidra-core#201",
+    "user": "yegamble/vidra-user#196",
+    "meta": "yegamble/vidra#PENDING",
+    "ordering": "No OpenAPI schema changed (the two new error codes are prose in the ErrorResponse envelope, not an enum), so there is no contract-ci ordering and no client regeneration. The user PR does not have to land after core. The META PR does: its templates set MALWARE_SCAN_MODE=disabled, which vidra-core v0.6.2 rejects as an unknown mode at boot."
+  },
+  "migration": "none",
+  "posture_matrix": [
+    {"clamav_addr": "set", "malware_scan_mode": "fail-closed | fail-open | quarantine", "ingestion": "accepted and scanned", "instance_features": "uploads/imports true", "clamav_component": "ok (or down when the daemon is unreachable)", "boot": "info line naming the mode and timeout"},
+    {"clamav_addr": "unset", "malware_scan_mode": "anything but disabled (including unset)", "ingestion": "EVERY user-supplied route refuses 503 scanner_not_configured", "instance_features": "uploads/imports/import_http/channel_sync/user_import/video_replace ALL false", "clamav_component": "degraded, sentence names CLAMAV_ADDR and MALWARE_SCAN_MODE=disabled; instance status degrades", "boot": "WARN naming both levers"},
+    {"clamav_addr": "unset", "malware_scan_mode": "disabled", "ingestion": "accepted UNSCANNED", "instance_features": "uploads/imports true", "clamav_component": "not_configured with an honest sentence; instance status ok", "boot": "WARN + one system.malware_scan.disabled audit row per boot (actor_kind=system)"},
+    {"clamav_addr": "set", "malware_scan_mode": "disabled", "ingestion": "n/a", "instance_features": "n/a", "clamav_component": "n/a", "boot": "REFUSED — contradictory; the refusal names both variables"},
+    {"clamav_addr": "unset", "malware_scan_mode": "n/a", "ingestion": "n/a", "instance_features": "n/a", "clamav_component": "n/a", "boot": "REFUSED when the deprecated MALWARE_SCAN_ENABLED=true is set — kept deliberately: an operator who asked for scanning is stopped at boot rather than handed an instance that refuses at runtime"}
+  ],
+  "deprecation": {
+    "variable": "MALWARE_SCAN_ENABLED",
+    "state": "deprecated, no longer a policy input; scanning is derived from CLAMAV_ADDR",
+    "still_read_for": "a boot WARN when present, and the true-with-no-address boot refusal",
+    "migration_path": "true -> delete it, keep CLAMAV_ADDR. false -> delete it AND set MALWARE_SCAN_MODE=disabled, or the instance refuses every upload.",
+    "compose": "vidra-core/docker-compose.yml passes it with NO default (${MALWARE_SCAN_ENABLED:-}); a :-false pin would fire the deprecation warning on every boot of every instance"
+  },
+  "creator_copy": {
+    "sentence": "This file was rejected by the instance's safety scan and was not stored.",
+    "code": "safety_scan_rejected",
+    "defined_in": "vidra-core internal/video/scanpolicy.go; mirrored byte-for-byte in vidra-user components/studio/shared.tsx and pinned by a test in each repo",
+    "renders_at": [
+      "synchronous POST /videos/{id}/file and the other synchronous ingestion routes: 422 with the code and the sentence",
+      "upload session GET /uploads/{id}: state failed (was completed) with the sentence in failure_reason (was empty)",
+      "import job: state failed with the sentence in error (was done with no error)",
+      "Studio: components/studio/shared.tsx importOrUploadError maps the CODE, and also recognises the sentence arriving out of band on a session or job"
+    ],
+    "withheld": "the signature name and the scanner's identity; they stay in the audit row and the moderation-queue entry",
+    "terminal": "the finalize and import workers dead-letter on attempt 1 instead of walking the 1/2/4/8-minute ladder"
+  },
+  "coverage_table": [
+    {"route": "POST /videos/{id}/file", "scanned": "yes (video.Process, existing)", "policy": "full three-mode", "test": "httpapi TestUploadVideoFileScanOutcomes; gate in TestUnconfiguredScannerRefusesEveryIngestionRoute"},
+    {"route": "POST /videos/{id}/upload-session + POST /uploads/{id}/complete", "scanned": "yes (video.Process via uploadfinalize)", "policy": "full three-mode", "test": "uploadfinalize TestMalwareRejectionFailsTheSessionWithTheNeutralSentence, TestMalwareRejectionDoesNotRetry"},
+    {"route": "POST /videos/{id}/replace + /replace-session", "scanned": "yes (video.ReplaceSource, existing)", "policy": "full three-mode; quarantine rejects (documented)", "test": "gate in the coverage table; copy unified to the shared sentence"},
+    {"route": "POST /videos/{id}/import (URL import)", "scanned": "yes (video.Process via videoimport)", "policy": "full three-mode", "test": "videoimport TestImportMalwareRejectionDeadLettersWithTheNeutralSentence"},
+    {"route": "POST /channel-syncs + /{id}/sync-now", "scanned": "yes (imports through the same AttachOriginal -> Process pipeline)", "policy": "full three-mode", "test": "gate in the coverage table"},
+    {"route": "POST /videos/{id}/thumbnail (multipart)", "scanned": "NEW - scanned in memory before store", "policy": "fail-closed; quarantine falls back to fail-closed (no queue for this class); fail-open stores + audits", "test": "httpapi TestNonVideoFilesAreScannedBeforeTheyAreStored"},
+    {"route": "POST /videos/{id}/thumbnail (application/json at_seconds)", "scanned": "EXEMPT - derived from an original the scanner already cleared", "policy": "n/a", "test": "n/a"},
+    {"route": "POST /videos/{id}/captions", "scanned": "NEW - scanned in memory before store", "policy": "as above", "test": "httpapi TestNonVideoFilesAreScannedBeforeTheyAreStored"},
+    {"route": "POST /videos/{id}/captions/auto (Whisper)", "scanned": "EXEMPT - derived", "policy": "n/a", "test": "n/a"},
+    {"route": "POST /playlists/{id}/thumbnail", "scanned": "NEW - scanned in memory before store", "policy": "as above", "test": "gate in the coverage table"},
+    {"route": "POST /me/avatar, /me/banner", "scanned": "NEW - scanned in memory before store", "policy": "as above", "test": "httpapi TestNonVideoFilesAreScannedBeforeTheyAreStored, TestQuarantineFallsBackToFailClosedForNonVideoFiles, TestFailOpenStoresNonVideoFilesUnscanned"},
+    {"route": "POST /channels/{handle}/avatar, /banner", "scanned": "NEW - scanned in memory before store", "policy": "as above", "test": "httpapi TestNonVideoFilesAreScannedBeforeTheyAreStored"},
+    {"route": "POST /admin/instance-avatar, /instance-banner, /instance-logo/{type}", "scanned": "NEW - scanned in memory before store (an admin is a person with a file)", "policy": "as above", "test": "gate in the coverage table"},
+    {"route": "POST /me/import (account archive)", "scanned": "NEW - the body is already whole in memory; scanned before ParseArchive", "policy": "as above", "test": "httpapi TestNonVideoFilesAreScannedBeforeTheyAreStored"},
+    {"route": "POST /conversations/{id}/attachments (DM)", "scanned": "yes (messaging, existing, fail-closed)", "policy": "fail-closed only, unchanged", "test": "gate in the coverage table; A14/A28 proved the scan itself"},
+    {"route": "POST /admin/peertube-import", "scanned": "gated only (the migration copies media through the same pipeline)", "policy": "gate", "test": "gate in the coverage table"},
+    {"route": "server-generated storyboards, transcoder renditions", "scanned": "EXEMPT - derived", "policy": "n/a", "test": "n/a"}
+  ],
+  "new_audit_actions": [
+    {"action": "content.upload.malware_scan_skipped", "when": "a file is published/stored UNSCANNED under MALWARE_SCAN_MODE=fail-open", "reason": "video=<uuid> reason=scanner_unavailable policy=fail-open (or asset=<class> ... for the non-video classes)", "actor_kind": "system", "closes": "A28 finding 2 - fail-open left only a WARN log line"},
+    {"action": "system.malware_scan.disabled", "when": "boot, once, with MALWARE_SCAN_MODE=disabled", "reason": "mode=disabled", "actor_kind": "system", "closes": "an opt-out that lives only in an env file is not reviewable"}
+  ],
+  "gates": {
+    "core": "make ci PASS (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race); go vet -tags=integration ./... clean; go test ./... all packages ok",
+    "user": "Node 26.8.1 - tsc --noEmit clean; eslint 0 errors and the 2 pre-existing warnings on main (WatchView no-location-assign, remote-search _dropped); lint:icons pass; vitest run 255 files / 2549 tests pass",
+    "meta": "bash -n and shellcheck: no scripts touched; python3 -m unittest discover -s tests -p '*_test.py' PASS; prod compose render config -q exit 0 with the 8 required keys filled with dummies; the --profile core --profile frontend render re-asserted (postgres/redis/search publish no ports, api and frontend publish on 127.0.0.1 only, migrate has no volumes)",
+    "red_first": "verified by reverting the change and re-running: uploadfinalize (session settles processing with an empty failure_reason, job stays pending on the ladder); httpapi TestUploadVideoFileScanOutcomes (500 scrubbed instead of 422); vidra-user upload.test.tsx twice (features.uploads read removed; empty state stubbed out)"
+  },
+  "unverified": [
+    "NOT lab-observed: no clamd was started, no EICAR body was scanned, no container was built and no stack was run in this slice. The real-daemon behaviour is INT-04's A28 lane, unchanged by this slice.",
+    "NOT run: the core integration and ipfs-* tagged lanes locally (CI ran them green on core#201), any frontend e2e or e2e-backed lane, and vidra-search (untouched).",
+    "The in-memory scan of the small object classes is proven against a fake FileScanner, not clamd. ClamAV.ScanBytes shares the whole INSTREAM body with the already-exercised Scan; only the reader source differs.",
+    "The one-per-boot system.malware_scan.disabled audit row is pinned by reading the boot path, not by observing a boot.",
+    "No measurement of what scanning every avatar and caption costs a busy instance in clamd round-trips."
+  ],
+  "hard_ordering_constraint": "The meta env templates set MALWARE_SCAN_MODE=disabled. vidra-core v0.6.2 (the currently pinned release) validates MALWARE_SCAN_MODE against three values and REFUSES TO BOOT on 'disabled'. The meta template change must not reach a deployed instance before a core release containing #201. Merging the meta PR is safe (templates are examples); bumping VIDRA_CORE_TAG to a release with #201 is the gate for using them."
+}
