@@ -42,6 +42,12 @@ jobs:
       # deploy/rollback.sh writes `env/production.env.bak` — a byte-for-byte copy
       # of them that the `env/*.env` glob does NOT match on its own. Both must
       # stay ignored, and the *.example templates must stay tracked.
+      # A rename or deletion of a required job would otherwise leave the
+      # `ci-required` fan-in waiting for a check that can never appear, and the
+      # failure would arrive an hour later as an opaque timeout.
+      - name: Every required check name is a job some workflow defines
+        run: bash scripts/ci/check-required-manifest.sh
+
       - name: Filled-in env files (and their .bak copies) are git-ignored
         run: |
           git check-ignore -q env/production.env \
@@ -62,15 +68,49 @@ jobs:
       #
       # The root scripts are listed BY NAME because `deploy/*.sh` does not reach
       # them, and a new one added to the repo root is otherwise linted by nothing.
+      #
+      # A39: `tests/*.sh` replaced the single named `tests/install_test.sh`. The
+      # harnesses tests/blank-server-smoke.sh and tests/runtime-smoke.sh had been
+      # committed, referenced by the acceptance record, and linted by NOTHING —
+      # a syntax error in either would have been found by an operator running an
+      # acceptance rehearsal, not by CI.
       - name: Lint shell scripts
         run: |
-          for f in bootstrap.sh install.sh tests/install_test.sh deploy/*.sh; do
+          for f in bootstrap.sh install.sh tests/*.sh deploy/*.sh; do
             bash -n "$f"
             shellcheck -x "$f"
           done
 
+          # The Node smoke DRIVERS are not executed here (they need a live stack),
+          # but they must at least parse: a typo in one currently surfaces only
+          # mid-acceptance, on the machine being rehearsed.
+          for f in tests/*.mjs; do
+            node --check "$f"
+          done
+
           # Run the unit tests for install.sh
           bash tests/install_test.sh
+
+      # A39: the Python unit suites under tests/ — release_preflight_test.py,
+      # rollback_floor_test.py, runtime_smoke_test.py, backup_test.py,
+      # caddy_reload_test.py, blank_server_smoke_test.py — are pure assertions
+      # over the deploy scripts, need no stack, and ran in NO workflow. Every
+      # acceptance record that cites them ("20 Python tests PASS, zero skips")
+      # was a local claim with nothing in CI to keep it true; a later edit to
+      # deploy/restore.sh or deploy/rollback.sh could silently break the tests
+      # that exist to protect it. They run here, and a SKIP fails the job — an
+      # unrunnable assertion must not read as a passing one.
+      - name: Deploy-script unit tests (tests/*_test.py)
+        run: |
+          mkdir -p ci-report
+          set -o pipefail
+          python3 -m unittest discover -s tests -p '*_test.py' -v 2>&1 | tee ci-report/python-unit.log
+          if grep -qE "\.\.\. skipped" ci-report/python-unit.log; then
+            echo "::error::a deploy-script unit test SKIPPED — a required lane must not pass by skipping:" >&2
+            grep -E "\.\.\. skipped" ci-report/python-unit.log >&2
+            exit 1
+          fi
+          grep -E "^Ran [0-9]+ tests" ci-report/python-unit.log
 
       # install.sh is the only script here that runs on a machine which has
       # nothing yet: no clone, no docker, no vidra, and — under
@@ -717,6 +757,15 @@ jobs:
           "$RUNNER_TEMP/vidra" setup --check "$RUNNER_TEMP/production.env"
           echo "OK: the template defines every key the engine writes, every answer reached it, and the result passes --check."
 
+      - name: Upload validate-lane evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: meta-validate-python-unit
+          path: ci-report/
+          retention-days: 14
+          if-no-files-found: warn
+
       - name: Exercise bootstrap.sh's idempotent update path
         run: |
           ./bootstrap.sh
@@ -1044,6 +1093,24 @@ jobs:
             -c 'SELECT version, dirty FROM schema_migrations;' \
             -c 'SELECT version, dirty FROM vidra_search_migrations;'
           echo "OK: core + search schemas applied by the service images themselves."
+
+      # The 200-line tails elsewhere in this job are rarely the 200 lines that
+      # matter, and the run page's logs age out before a postmortem reaches them.
+      - name: Capture the boot stack's logs
+        if: always()
+        run: |
+          mkdir -p ci-report
+          docker compose -f docker-compose.yml --env-file env/ci-boot.env --profile core \
+            logs --no-color > ci-report/boot-compose.log 2>&1 || true
+
+      - name: Upload boot-lane evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: meta-boot-compose-log
+          path: ci-report/
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Tear down
         if: always()

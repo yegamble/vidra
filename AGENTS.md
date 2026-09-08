@@ -30,6 +30,40 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file /tmp/
   --profile core --profile frontend config
 ```
 
+## CI: what "required for merge" means
+
+One check stands for the whole required set: **`ci-required`** — the only name
+that belongs in branch protection for this repo. It reads
+[`.github/required-checks.txt`](.github/required-checks.txt), the checked-in
+definition of required, and fails if any listed lane failed, was cancelled,
+timed out, or **never ran**. Required today: `validate`, `bundle`, `boot`.
+
+The local gates above are the same assertions `validate` runs, plus two that
+had been committed and wired to nothing until A39:
+
+- **`tests/*.sh`** is now shell-linted, not just `tests/install_test.sh`. The
+  acceptance harnesses `blank-server-smoke.sh` and `runtime-smoke.sh` were
+  checked by nothing; a syntax error in either would have surfaced on the
+  machine being rehearsed, not in CI. `tests/*.mjs` gets `node --check` for the
+  same reason (the smoke DRIVERS need a live stack, so parsing is what CI can
+  honestly assert).
+- **`python3 -m unittest discover -s tests -p '*_test.py'`** runs the
+  deploy-script unit suites — `release_preflight_test.py`,
+  `rollback_floor_test.py`, `runtime_smoke_test.py`, `backup_test.py`,
+  `caddy_reload_test.py`, `blank_server_smoke_test.py`. They need no stack and
+  ran in no workflow, so every acceptance record citing them was a local claim
+  with nothing keeping it true. **A skipped test fails the job**: an unrunnable
+  assertion must not read as a passing one.
+
+`validate` and `boot` upload their evidence as 14-day artifacts
+(`meta-validate-python-unit`, `meta-boot-compose-log`) so a green check's
+console record outlives the run page.
+
+**Known gap, unchanged by A39 (finding F04):** the `boot` lane starts the stack
+in production mode with transcoding disabled and no search integration, so a
+green meta CI cannot certify upload → real transcode → browser decode → search
+indexing. That is stack coverage, not a CI gate, and stays open.
+
 ## Hard rules
 
 1. **One small PR per session.** Deploy tooling failures cost real downtime —
