@@ -9360,6 +9360,24 @@ or volume remains, and the four built images are kept for the A38 rehearsal:
 `vidra-core:v0.6.3-a37`, `vidra-search:v0.6.3-a37`, `vidra-user:v0.6.3-a37` and
 `vidra-core:v0.6.3-a37lowmig`.
 
+### What failed first
+
+Three attempts are retained rather than tidied away. The first seed died at
+`POST /auth/register` with 403 `registration is disabled on this instance`:
+`env/production.env.example` ships `REGISTRATION_ENABLED=false`, which is the
+right default and the wrong one for a lab that needs three more accounts — the
+lab env was flipped and the api restarted, and the seed was made resumable
+(`claim-owner` now falls back to a login) because the owner had already been
+claimed by the failed run. The first `backup.sh` run captured a stack whose
+writers were still up: the quiesce step was written as a shell variable holding
+a whole command line, which zsh tried to execute as one filename. That archive
+was discarded and the capture redone with api, search and frontend actually
+stopped. And the first three verification probes read the wrong shapes — the
+playlist is owner-visible only and reports `video_count`, follows read back
+through `/me/subscriptions`, and `/admin/instance-settings` returns a LIST of
+116 setting objects rather than a map — so the probe was corrected against the
+live API before any of it counted.
+
 ### Findings
 
 - **A37-1 (medium)** — an undecryptable sealed TOTP secret answers **500
