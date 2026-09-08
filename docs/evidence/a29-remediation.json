@@ -170,7 +170,7 @@
       "test": "256 files, 2555 tests, all passing",
       "build": "pass",
       "node": "22 locally, NOT the Node 26 CI uses",
-      "e2e": "not run \u2014 this repo's AGENTS.md forbids the Playwright suites locally"
+      "e2e": "the MOCKED Playwright suite ran: 627 specs, all passing on a clean re-run. player-theater.spec.ts failed once under full-suite load and passes in isolation \u2014 the known flake. It caught the one real defect in this slice's frontend half: e2e/remote-videos.spec.ts pinned the old info-panel copy. The BACKED suites were not run locally."
     },
     "meta": {
       "python3 -m unittest discover -s tests -p '*_test.py'": "see the run recorded with this section",
@@ -183,8 +183,8 @@
     "any caching edge",
     "a running Caddy against the new content-negotiation rule",
     "PeerTube or Mastodon interoperability",
-    "the vidra-user Playwright suites",
-    "the mirrored thread against a second live instance \u2014 the exact delivery A29 watched succeed into a drop"
+    "the mirrored thread against a second live instance \u2014 the exact delivery A29 watched succeed into a drop",
+    "the BACKED Playwright suites (they build vidra-core from its default branch, which does not yet carry this slice's endpoints)"
   ],
   "open": [
     "A29-F4: an activity refused during an instance block is still never redelivered after the unblock",

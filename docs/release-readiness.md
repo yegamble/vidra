@@ -12739,11 +12739,19 @@ because the A29 section's reused-database flake is real: `internal/store`'s
 owner-claim test needs an empty `users` table and fails after the federation
 suite has seeded one, on this branch and on clean `main` alike.
 
-`vidra-user`: `typecheck`, `lint` (2 pre-existing warnings, 0 errors),
-`lint:icons`, `test` (**256 files, 2555 tests, all passing**) and the production
-`build` all pass — **on Node 22, not the Node 26 CI uses**, which is what this
-machine has. The Playwright suites were not run (this repo's AGENTS.md forbids
-them locally).
+`vidra-user`: the whole canonical gate — `typecheck`, `lint` (2 pre-existing
+warnings, 0 errors), `lint:icons`, `test` (**256 files, 2555 tests**), the
+production `build`, and the MOCKED Playwright suite (**627 specs**) — all pass,
+**on Node 22 rather than the Node 26 CI uses**, which is what this machine has.
+`player-theater.spec.ts` failed once in the full run and passes in isolation:
+the known load flake, not a regression. The BACKED Playwright suites were not
+run locally.
+
+The mocked suite is also what caught the one real defect in this slice's
+frontend half: `e2e/remote-videos.spec.ts` pinned the old info-panel sentence
+verbatim, and "comments, ratings, and saving live on the origin instance" became
+misleading about READING the moment the page started showing the origin's
+thread. The copy and the spec now separate authoring from reading.
 
 This repo: `bash -n` on the touched script (none — only `deploy/Caddyfile` and
 docs changed), and `python3 -m unittest discover -s tests -p '*_test.py'`.
