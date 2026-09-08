@@ -236,14 +236,6 @@ fi
 PG_CID="$("${COMPOSE[@]}" ps -q postgres || true)"
 [ -n "$PG_CID" ] || die "the postgres service is not running — start it first: ${COMPOSE[*]} up -d postgres"
 
-# --- stop everything holding a connection --------------------------------------
-# api is the obvious one. search is the easy one to forget: it shares this exact
-# database in the `search` schema, so leaving it up means it reconnects into a
-# half-restored database and logs errors for the whole restore. frontend goes
-# too, so nobody sees a site backed by a database mid-restore.
-log "stopping api, search and frontend"
-"${COMPOSE[@]}" stop api search frontend
-
 # --- normalise the archive to an uncompressed file INSIDE the container --------
 # pg_restore -j (parallel) requires a SEEKABLE archive: it cannot read from a
 # pipe or from stdin. So the dump is decompressed on the host and copied in,
@@ -256,9 +248,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# `|| die` on both branches, not just `set -e`. A tampered .gz dies inside gzip
+# with "invalid compressed data--crc error" and NOTHING else: `set -e` kills the
+# script silently, so the operator reads a CRC error and no line saying the
+# restore refused or that the database was left alone (A37-4). The message is the
+# whole point of the guard — the exit code was already right.
 case "$DUMP" in
-  *.gz) log "decompressing $(basename "$DUMP")"; gzip -dc "$DUMP" > "$HOST_TMP" ;;
-  *)    cp "$DUMP" "$HOST_TMP" ;;
+  *.gz)
+    log "decompressing $(basename "$DUMP")"
+    gzip -dc "$DUMP" > "$HOST_TMP" \
+      || die "$(basename "$DUMP") could not be decompressed — the archive is truncated or corrupt (gzip's own message is above). Nothing was stopped and nothing was dropped; the stack is still serving. Try another copy of this backup, or an earlier one."
+    ;;
+  *)
+    cp "$DUMP" "$HOST_TMP" \
+      || die "$DUMP could not be read. Nothing was stopped and nothing was dropped; the stack is still serving."
+    ;;
 esac
 
 log "copying archive into the postgres container"
@@ -368,6 +372,23 @@ preflight_schema() {
 log "checking that the pinned images can reach this dump's schema"
 preflight_schema "core"   migrate        schema_migrations       VIDRA_CORE_TAG
 preflight_schema "search" search-migrate vidra_search_migrations VIDRA_SEARCH_TAG
+
+# --- stop everything holding a connection --------------------------------------
+# api is the obvious one. search is the easy one to forget: it shares this exact
+# database in the `search` schema, so leaving it up means it reconnects into a
+# half-restored database and logs errors for the whole restore. frontend goes
+# too, so nobody sees a site backed by a database mid-restore.
+#
+# THIS RUNS AFTER EVERY VALIDATION, and that ordering is the point (A37-3). It
+# used to be the first thing the script did, so a corrupt archive or a refused
+# schema pairing took the site down and THEN correctly refused to change
+# anything: the refusal was right and the outage in front of it was pure loss.
+# Everything above this line only reads — the archive is decompressed, copied in,
+# proved to be a readable custom-format dump, and checked against what the pinned
+# images can migrate — so a refusal now means the stack never stopped serving.
+# Everything below it is irreversible.
+log "stopping api, search and frontend"
+"${COMPOSE[@]}" stop api search frontend
 
 # --- drop + create -------------------------------------------------------------
 # --force (PG13+) terminates remaining backends; there should be none left after

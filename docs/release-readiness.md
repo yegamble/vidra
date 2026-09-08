@@ -9778,3 +9778,187 @@ REC-03's stopping criterion is met: upgrade with data, injected migration failur
 abort, a supported app-only rollback, an incompatible/unreachable schema going
 through the tested restore path, and no blind force or automatic down migration
 anywhere. **A38 is closed.**
+
+## Recovery hardening — undecryptable MFA secrets, restore ordering — 2026-09-08
+
+**Four defects that two close-outs recorded and did not fix.** A37 shipped with
+findings A37-1 through A37-4 written down as "recorded, not fixed", and A11's
+close-out carried the same shape for the media collector's operator surface.
+None of them was a reason to hold a register row open — every one of them is the
+kind of defect that only costs you something during an incident, which is the
+worst time to discover it. This slice closes them in code, and it is code only:
+no lab, no stack, nothing observed running.
+
+### What failed first
+
+A37's negative control (a) is what started this: `MFA_KEY_KEK` replaced by a
+different valid base64-32 value, the api still booting, `/readyz` still 200,
+every password login and admin surface still fine — and the TOTP challenge
+answering **500 `internal_error`**. The refusal was right and everything about
+the way it was delivered was wrong. Reproduced here as a unit RED before
+anything was changed:
+
+```
+undecryptable-secret status = 500, want 401;
+body={"error":{"code":"internal_error","message":"an unexpected error occurred", …}}
+```
+
+The mechanism is one line. `openTOTPSecret` returned a bare `error` for both
+ways of failing — a sealed value with no cipher, and a cipher that cannot open
+it — and a bare error reaching echo's handler has nothing to classify it by, so
+the only status left is 500. The same held for the corrupt-archive case in
+`restore.sh`: `set -e` got the exit code right and the operator read
+`gzip: invalid compressed data--crc error` with no `[restore] ERROR:` line
+anywhere, which is the difference between "the restore refused and your database
+is untouched" and "something died".
+
+### What changed
+
+**A37-1 — the challenge fails closed indistinguishably.** `openTOTPSecret` now
+returns `auth.MFASecretUndecryptableError`, which unwraps to the sentinel
+`auth.ErrMFASecretUndecryptable` and carries the account plus the cipher's own
+message (`cipher: message authentication failed`) — never the ciphertext, never
+the key, never the plaintext secret. `handleMFAChallenge` answers it with the
+wrong-code refusal **verbatim**:
+
+```
+401 {"error":{"code":"unauthorized","message":"invalid code","request_id":"…"}}
+```
+
+`request_id` is per-request and is the only field a caller may legitimately see
+differ; the test asserts the two bodies are otherwise byte-identical by
+decoding both and dropping that one key. Indistinguishability is the point: a
+distinguishable answer would let an unauthenticated caller enumerate which
+accounts an instance can no longer verify.
+
+The whole signal goes to the operator instead, in ONE line at error level:
+
+```
+level=ERROR msg="a stored TOTP secret could not be decrypted with the configured
+MFA_KEY_KEK, so this account's second factor can never verify and its challenge
+is being refused like a wrong code. The usual cause is a database restored
+without the config archive that carries the KEK, or with a different one.
+Recovery codes are hashed rather than sealed and still work; an admin can also
+reset the account's second factor."
+  failure=mfa_secret_undecryptable user_id=<uuid> cause="cipher: message
+  authentication failed"
+```
+
+The audit row carries `reason=secret_undecryptable` on
+`ActionMFAChallenge`/failure. The enrollment-verify half — a KEK that changed
+between starting an enrollment and confirming it — gets the same treatment
+against its own wrong-code 400.
+
+**Recovery codes are not KEK-sealed, verified from the code and asserted in a
+test.** `issueRecoveryCodes` stores `hashRecoveryCode(code)`, a SHA-256 hex of
+the canonicalised code, and `CompleteMFAChallenge` routes anything that is not
+six digits to `UseRecoveryCode`, which never touches the cipher. So an account
+whose secret this KEK cannot open is *not* locked out, and the test proves it:
+the same broken row that refuses a correct TOTP code completes the challenge on
+a recovery code with a 200 and a full session. That is what keeps an operator
+fault from becoming a user-facing lockout.
+
+**A37-2 — a KEK that decrypts nothing is now visible before anyone tries.** The
+key was validated for SHAPE at boot (32 bytes of base64) and never against
+anything it had sealed, so a wrong-KEK restore looked healthy in every way an
+operator can check. `auth.CheckMFAKEK` samples the newest 20 `user_mfa` rows
+once at boot through a new `ListRecentUserMFASecrets` query and counts, in that
+sample, how many sealed secrets the configured KEK cannot open. A sample and not
+a scan on purpose: the question is "is this the KEK that sealed this database",
+which one row answers as well as ten thousand, and it sits on the boot path.
+`cmd/api` logs one WARN with **counts only** —
+`check=mfa_kek_mismatch sampled=… sealed=… undecryptable=…`, never a user id and
+never a ciphertext — and hands the result to the server, which renders it as a
+component named **`mfa_kek`** on both `/readyz` and `/admin/system`:
+
+| state | when |
+| --- | --- |
+| `ok` | every sampled sealed secret opens, or nobody has ever enrolled |
+| `degraded` | at least one sampled secret cannot be opened; the message names the count and the key |
+| `not_configured` | the check did not run (unit servers, embedders, a read failure) |
+
+**`degraded`, never `down`, and readiness stays 200.** An operator who has just
+restored with the wrong KEK has to be able to log in with a password to fix it,
+and 503ing the api is the one thing that would stop them. The top-level
+readiness body now reads `degraded` rather than `ok` when any component is
+degraded — previously only a `down` component moved that line, so a degraded one
+would have been reported inside a body whose first field said `ok`.
+`vidra doctor` has no KEK check to extend: nothing in `internal/doctor` opens a
+stored ciphertext, so nothing was added there.
+
+**A37-3 — `restore.sh` no longer takes the site down before it has decided.**
+The stop of api/search/frontend was the first thing the script did after the
+confirmation prompt, so a corrupt archive or a refused schema pairing produced
+an outage and *then* a correct refusal. It now runs after the decompression, the
+`docker cp`, the `pg_restore -l` validation and both schema preflights — every
+step above it only reads — and immediately before the drop. The sacred order is
+otherwise unchanged:
+
+```
+verify (gunzip → copy in → pg_restore -l) → schema preflight → STOP → drop →
+reload → migrate (core, search) → verify-blobs → up -d → /readyz probe
+```
+
+**A37-4 — a corrupt `.gz` prints the script's own refusal.** The `*.gz)` branch
+is `|| die`-guarded, as is the plain `cp` branch beside it (same failure class,
+one line), and both messages say that nothing was stopped and nothing was
+dropped. Before: `gzip: invalid compressed data--crc error` and nothing else.
+After: that, plus
+`[restore] ERROR: … could not be decompressed … Nothing was stopped and nothing
+was dropped; the stack is still serving.`
+
+**A11 — the media-GC sweep's audit row is queryable.** The finding was that a
+sweep writes no `job_runs` row. It cannot, and that is worth stating precisely
+rather than working around: `job_runs` is a projection maintained by AFTER
+triggers on the durable QUEUE tables (migration 0083, extended by 0094, 0107 and
+0120), and a scheduled sweep has no queue row to project. **No scheduled pass in
+this codebase records a job run** — not the media collector, not
+`runTelemetryRetentionWorker`, not the hash backfill; `jobloop.Loop` has no
+repository at all. Making the collector visible on the admin jobs surfaces would
+mean giving scheduled work a queue table, which is a design change and not a
+hardening slice. So the audit row stays the only operator-facing record of a
+sweep, and the two facts that decide whether it deleted anything now ride on it
+as structured metadata rather than inside a formatted sentence:
+`dry_run` and `breaker_tripped`, from one `Result.AuditFields()` helper used by
+both the worker and `POST /admin/media/gc`, so an admin's sweep and the
+scheduled one are filterable the same way. `breaker_tripped` was added to
+`internal/audit`'s metadata vocabulary — that allowlist refuses the whole event
+on an unknown key, so the acceptance is pinned by its own test.
+
+**Playlist delete has no confirmation step, and that is still true.** A11's
+close-out recorded that neither control in `PlaylistDetailView` confirms, while
+the Studio video delete is two-step and the GC purge demands a typed `PURGE`.
+This slice is code-only and deliberately did not touch vidra-user; the
+inconsistency is recorded here for a UI slice, not fixed.
+
+### Gates
+
+vidra-core: `make ci` **exit 0** (fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race across every package) plus
+`go vet -tags=integration ./...` clean. meta: `bash -n` and **shellcheck
+0.11.0** `-x` clean on every `deploy/*.sh`, `bootstrap.sh`, `install.sh` and
+`tests/*.sh`; the Python suites **38/38** (was 34 — `rollback_floor_test.py`
+goes 12 → 16); `config -q` exit 0 on the filled `env/production.env.example`;
+and the `--profile core --profile frontend` render still shows postgres, redis,
+search, `migrate`, `search-migrate` and `prep-volumes` publishing **no** ports
+with api on `127.0.0.1:8080` and frontend on `127.0.0.1:3000`.
+
+The three new script tests were run against `origin/main`'s `restore.sh` first
+and all three failed there — `'[restore] ERROR:' not found in '[restore]
+decompressing vidra-corrupt.dump.gz\ngzip: invalid compressed data--crc
+error…'`, and `6382 not less than 6081 : the archive must be decompressed
+before the site is stopped`. They are regression tests, not decoration.
+
+### Not lab-observed
+
+Everything here. No stack was started, no image was built, no restore was run:
+the 500 was reproduced as a unit RED rather than against a live wrong-KEK
+instance, the boot WARN and the `mfa_kek` component are exercised through fakes
+rather than a real `user_mfa` table, and the new `restore.sh` ordering is
+asserted over the script's own text and its extracted decompression block rather
+than by watching a real archive fail on a real host. A37's own negative controls
+remain the only observed evidence for the behaviour these changes alter. The
+next real restore rehearsal is what would confirm that the site keeps serving
+through a refusal.
+
+[Sanitized evidence](evidence/recovery-hardening.json).

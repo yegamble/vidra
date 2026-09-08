@@ -9,7 +9,9 @@ lifted out of the real scripts — the same trick tests/caddy_reload_test.py use
 them.
 """
 from pathlib import Path
+import gzip
 import subprocess
+import tempfile
 import unittest
 
 DEPLOY = Path(__file__).resolve().parents[1] / 'deploy'
@@ -142,6 +144,25 @@ class RestorePreflightTests(unittest.TestCase):
         self.assertIn('the dump is at 18', out)
         self.assertIn('carries up to 16', out)
 
+    def test_nothing_stops_the_site_until_every_validation_has_passed(self):
+        """A37-3: the stop used to be the FIRST thing the script did, so a
+        corrupt archive or a mismatched pairing took the site down and then
+        correctly refused to change anything. Every refusal must now happen with
+        api/search/frontend still serving. Indexes are taken over the COMMANDS,
+        not the prose, so a comment mentioning `stop` cannot move them."""
+        source = (DEPLOY / 'restore.sh').read_text()
+        code = '\n'.join(l for l in source.splitlines()
+                         if l.strip() and not l.lstrip().startswith('#'))
+        stop = code.index('stop api search frontend')
+        self.assertLess(code.index('gzip -dc'), stop,
+                        'the archive must be decompressed before the site is stopped')
+        self.assertLess(code.index('pg_restore -l'), stop,
+                        'the archive must be validated before the site is stopped')
+        self.assertLess(code.index('preflight_schema "core"'), stop,
+                        'the schema preflight must run before the site is stopped')
+        self.assertLess(stop, code.index('dropdb -U'),
+                        'the site must be stopped before the database is dropped')
+
     def test_the_preflight_runs_before_the_drop(self):
         """Ordering is the whole point: a refusal must mean nothing happened.
         Indexes are taken over the COMMANDS, not the prose, so a comment
@@ -158,6 +179,72 @@ class RestorePreflightTests(unittest.TestCase):
         self.assertLess(code.index('preflight_schema "core"'),
                         code.index('log "running core migrations"'),
                         'the preflight must run before the real migrator step')
+
+
+class RestoreArchiveDecompressionTests(unittest.TestCase):
+    """A37-4: a corrupt .gz died on gzip's own message and nothing else, because
+    the `*.gz)` branch was not `|| die`-guarded. `set -e` got the exit code right
+    and left the operator reading a CRC error with no line saying the restore
+    refused or that the database was untouched."""
+
+    HARNESS = (
+        'set -euo pipefail\n'
+        'DUMP="$1"\n'
+        'HOST_TMP="$2"\n'
+        "log() { printf '[restore] %s\\n' \"$*\"; }\n"
+        "die() { printf '[restore] ERROR: %s\\n' \"$*\" >&2; exit 1; }\n"
+    )
+
+    # A real pg_dump custom-format archive starts with this magic; the body is
+    # filler, because nothing here parses the archive — it only decompresses it.
+    FAKE_ARCHIVE = b'PGDMP not-a-real-dump-just-filler\n' * 64
+
+    def decompress_block(self):
+        """The `case "$DUMP" in … esac` normalisation block, verbatim from the
+        real script, so this test fails if the guard is removed."""
+        source = (DEPLOY / 'restore.sh').read_text()
+        start = source.index('case "$DUMP" in')
+        end = source.index('\nesac', start) + len('\nesac')
+        return source[start:end]
+
+    def run_block(self, dump):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'out'
+            script = self.HARNESS + self.decompress_block()
+            p = subprocess.run(['bash', '-c', script, 'restore', str(dump), str(out)],
+                               capture_output=True, text=True,
+                               env={'PATH': '/usr/bin:/bin:/usr/sbin:/sbin'})
+            return p.returncode, p.stdout + p.stderr
+
+    def test_a_corrupt_gz_prints_the_scripts_own_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / 'vidra-corrupt.dump.gz'
+            # Flip a byte inside the deflate stream: a real CRC failure, which is
+            # what a truncated or bit-rotted transfer produces.
+            corrupt = bytearray(gzip.compress(self.FAKE_ARCHIVE))
+            corrupt[len(corrupt) // 2] ^= 0xFF
+            bad.write_bytes(bytes(corrupt))
+            code, out = self.run_block(bad)
+        self.assertNotEqual(code, 0, out)
+        self.assertIn('[restore] ERROR:', out)
+        self.assertIn('could not be decompressed', out)
+        self.assertIn('nothing was dropped', out)
+
+    def test_a_file_that_is_not_gzip_at_all_lands_in_the_same_branch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / 'not-really.dump.gz'
+            bad.write_bytes(b'this is not a gzip stream')
+            code, out = self.run_block(bad)
+        self.assertNotEqual(code, 0, out)
+        self.assertIn('[restore] ERROR:', out)
+
+    def test_a_valid_gz_decompresses_without_complaint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ok = Path(tmp) / 'vidra-good.dump.gz'
+            ok.write_bytes(gzip.compress(self.FAKE_ARCHIVE))
+            code, out = self.run_block(ok)
+        self.assertEqual(code, 0, out)
+        self.assertIn('decompressing', out)
 
 
 # --- rollback.sh: the trailer survives a failing `up -d` ----------------------

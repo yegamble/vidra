@@ -1,0 +1,158 @@
+{
+  "item": "Recovery hardening — undecryptable MFA secrets, restore ordering",
+  "date": "2026-09-08",
+  "scope": "code only; no lab, no stack started, no image built, no restore run",
+  "closes": ["A37-1", "A37-2", "A37-3", "A37-4", "A11 media-GC audit surface"],
+  "register_rows_changed": "none — REC-02 was already PASS; these were 'recorded, not fixed' findings",
+  "repos": {
+    "vidra-core": {
+      "branch": "recovery/hardening",
+      "pr": "yegamble/vidra-core#195"
+    },
+    "vidra-user": "untouched — the playlist-delete confirmation is recorded for a later UI slice",
+    "vidra-search": "untouched",
+    "meta": {
+      "branch": "recovery/hardening",
+      "pr": "yegamble/vidra#141"
+    }
+  },
+  "a37_1_undecryptable_mfa_secret": {
+    "before": {
+      "status": 500,
+      "body_code": "internal_error",
+      "body_message": "an unexpected error occurred",
+      "observed": "A37 negative control (a), and reproduced here as a unit RED before any change",
+      "red_output": "undecryptable-secret status = 500, want 401"
+    },
+    "after": {
+      "status": 401,
+      "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"invalid code\",\"request_id\":\"<per request>\"}}",
+      "parity": "byte-identical to the wrong-code 401 apart from request_id, asserted by decoding both bodies and deleting that key",
+      "why_indistinguishable": "a distinguishable answer would let an unauthenticated caller enumerate which accounts an instance can no longer verify"
+    },
+    "log_line": {
+      "level": "ERROR",
+      "count": "exactly one, asserted",
+      "attributes": ["failure=mfa_secret_undecryptable", "user_id=<uuid>", "cause=<cipher's own message>"],
+      "never_carries": ["the enc: ciphertext", "the KEK", "the plaintext TOTP secret"],
+      "asserted_absent_in_test": ["the stored ciphertext", "the base32 secret", "base64(KEK)"]
+    },
+    "audit": "ActionMFAChallenge / failure / reason=secret_undecryptable; the enrollment-verify half uses ActionMFAEnable with the same reason and its own wrong-code 400",
+    "mechanism": "openTOTPSecret returned a bare error, which reaches echo's handler unclassified so the only status left is 500; it now returns *auth.MFASecretUndecryptableError, unwrapping to auth.ErrMFASecretUndecryptable",
+    "recovery_codes": {
+      "kek_sealed": false,
+      "storage": "SHA-256 hex of the canonicalised code (issueRecoveryCodes -> hashRecoveryCode)",
+      "path": "CompleteMFAChallenge routes anything that is not six digits to UseRecoveryCode, which never touches the cipher",
+      "proven": "a recovery code completes the challenge with 200 and a full session on the SAME row whose TOTP secret is undecryptable"
+    },
+    "files": [
+      "vidra-core/internal/auth/mfa.go",
+      "vidra-core/internal/httpapi/auth_mfa.go",
+      "vidra-core/internal/auth/mfa_test.go",
+      "vidra-core/internal/httpapi/auth_mfa_test.go"
+    ]
+  },
+  "a37_2_kek_mismatch_surfaced": {
+    "before": "the KEK is validated for SHAPE at boot and never against a stored ciphertext, so a wrong-KEK restore boots, answers /readyz 200 and serves everything except a second-factor login",
+    "check": {
+      "func": "auth.CheckMFAKEK",
+      "query": "ListRecentUserMFASecrets — SELECT user_id, totp_secret_sealed FROM user_mfa ORDER BY created_at DESC, user_id LIMIT $1",
+      "sample": 20,
+      "why_a_sample": "the question is whether this KEK belongs to this database, which one row answers as well as ten thousand; it sits on the boot path",
+      "timeout": "5s bounded context; a read failure is logged and the component reports not_configured"
+    },
+    "boot_warn": {
+      "level": "WARN",
+      "once": true,
+      "attributes": ["check=mfa_kek_mismatch", "sampled", "sealed", "undecryptable"],
+      "counts_only": true
+    },
+    "component": {
+      "name": "mfa_kek",
+      "surfaces": ["GET /readyz", "GET /api/v1/admin/system"],
+      "states": {
+        "ok": "every sampled sealed secret opens, or nobody has ever enrolled",
+        "degraded": "at least one sampled sealed secret cannot be opened; the message names the count and MFA_KEY_KEK",
+        "not_configured": "the check did not run (unit servers, embedders, a read failure)"
+      },
+      "never": "down",
+      "readiness_effect": "none — /readyz still answers 200; the top-level body status now reads degraded rather than ok when any component is degraded",
+      "why_not_down": "an operator who has just restored with the wrong KEK must be able to log in with a password to fix it; 503ing the api is the one thing that would stop them"
+    },
+    "vidra_doctor": "no KEK check exists to extend — nothing in internal/doctor opens a stored ciphertext, so nothing was added",
+    "openapi": "ComponentStatus.status description corrected to ok | degraded | down | not_configured (it said ok, down, not_configured)",
+    "files": [
+      "vidra-core/internal/store/queries/user_mfa.sql",
+      "vidra-core/internal/store/sqlcgen/user_mfa.sql.go",
+      "vidra-core/internal/auth/mfa.go",
+      "vidra-core/internal/httpapi/server.go",
+      "vidra-core/internal/httpapi/health.go",
+      "vidra-core/cmd/api/main.go",
+      "vidra-core/api/openapi.yaml"
+    ]
+  },
+  "a37_3_restore_ordering": {
+    "before": "stop api/search/frontend was the first thing after the confirmation prompt, so a corrupt archive or a refused schema pairing took the site down and THEN correctly refused to change anything",
+    "after_order": [
+      "decompress (gunzip / cp) — guarded",
+      "docker cp the archive into the postgres container",
+      "pg_restore -l validation",
+      "schema preflight (core, search)",
+      "STOP api search frontend",
+      "dropdb --force / createdb",
+      "pg_restore -j4",
+      "core migrations",
+      "search migrations",
+      "verify-blobs (warns, never blocks)",
+      "up -d --no-build api search frontend",
+      "/readyz probe"
+    ],
+    "invariant": "every step above the stop only reads, so every refusal now happens with the stack still serving",
+    "docs": "deploy/README.md's restore paragraph rewritten to match"
+  },
+  "a37_4_gzip_guard": {
+    "before_output": "[restore] decompressing vidra-corrupt.dump.gz / gzip: invalid compressed data--crc error / gzip: <path>: uncompress failed",
+    "before_missing": "no [restore] ERROR: line — set -e had the exit code right and said nothing",
+    "after": "|| die on the *.gz) branch AND on the plain cp branch beside it, both messages stating that nothing was stopped and nothing was dropped",
+    "file": "deploy/restore.sh"
+  },
+  "a11_media_gc": {
+    "finding_confirmed": "a media-GC sweep writes no job_runs row, and it cannot",
+    "mechanism": "job_runs is a projection maintained by AFTER triggers on the durable QUEUE tables (0083, extended by 0094, 0107, 0120); a scheduled sweep has no queue row to project",
+    "wider_finding": "NO scheduled pass in vidra-core records a job run — not runMediaGCWorker, not runTelemetryRetentionWorker, not the media-hash backfill; jobloop.Loop has no repository at all",
+    "not_done": "giving scheduled work a queue table is a design change, not a hardening slice",
+    "done_instead": {
+      "helper": "mediagc.Result.AuditFields()",
+      "fields": ["dry_run", "breaker_tripped"],
+      "call_sites": ["cmd/api runMediaGCWorker", "POST /api/v1/admin/media/gc"],
+      "why_one_helper": "an admin's sweep and the scheduled one must be filterable the same way",
+      "vocabulary": "breaker_tripped added to internal/audit allowedMetadataKeys — that allowlist refuses the WHOLE event on an unknown key, so the acceptance is pinned by its own test in internal/audit"
+    }
+  },
+  "recorded_not_fixed": [
+    "Neither delete control in vidra-user's PlaylistDetailView has a confirmation step, while the Studio video delete is two-step and the GC purge demands a typed PURGE. This slice is code-only in core and meta and deliberately did not touch vidra-user."
+  ],
+  "gates": {
+    "vidra-core": {
+      "make ci": "exit 0 — fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race",
+      "go vet -tags=integration ./...": "clean"
+    },
+    "meta": {
+      "bash -n": "clean on every deploy/*.sh, bootstrap.sh, install.sh, tests/*.sh",
+      "shellcheck": "0.11.0 -x clean on the same set",
+      "python": "38/38 (was 34) — rollback_floor_test.py 12 -> 16",
+      "compose config -q": "exit 0 on the filled env/production.env.example",
+      "profile render": "postgres, redis, search, migrate, search-migrate and prep-volumes publish NO ports; api 127.0.0.1:8080, frontend 127.0.0.1:3000"
+    }
+  },
+  "red_first": {
+    "core": "TestMFAChallengeWithAnUndecryptableSecretIsIndistinguishableFromAWrongCode failed with 'undecryptable-secret status = 500, want 401' before the fix",
+    "meta": "the three new restore tests were run against origin/main's restore.sh and all three failed: \"'[restore] ERROR:' not found in '[restore] decompressing vidra-corrupt.dump.gz\\ngzip: invalid compressed data--crc error…'\" and '6382 not less than 6081 : the archive must be decompressed before the site is stopped'"
+  },
+  "not_lab_observed": [
+    "the 500 was reproduced as a unit RED, not against a live wrong-KEK instance",
+    "the boot WARN and the mfa_kek component are exercised through fake repositories, not a real user_mfa table",
+    "the new restore.sh ordering is asserted over the script's own text and its extracted decompression block, not by watching a real archive fail on a real host",
+    "no stack was started, no image was built, no restore was run"
+  ]
+}

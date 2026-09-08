@@ -1131,13 +1131,19 @@ assuming. And the archive is only as fresh as the last successful run: if
 archive, that change is not in it.
 
 `./deploy/restore.sh` refuses to run without `--yes` or
-`RESTORE_CONFIRM=<database name>`. It stops api + search + frontend (search
-shares the database, so leaving it up means it reconnects mid-restore), validates
-the archive, **checks that the pinned images can reach the dump's schema**, drops
-and recreates the database, restores with `-j4`, runs both migrators to bring the
-schema to HEAD, **checks that the media the restored database references is
-actually in the object store** (see the next section — it warns and continues,
-never blocks), restarts, and polls `/readyz`.
+`RESTORE_CONFIRM=<database name>`. It validates the archive, **checks that the
+pinned images can reach the dump's schema**, and only THEN stops api + search +
+frontend (search shares the database, so leaving it up means it reconnects
+mid-restore), drops and recreates the database, restores with `-j4`, runs both
+migrators to bring the schema to HEAD, **checks that the media the restored
+database references is actually in the object store** (see the next section — it
+warns and continues, never blocks), restarts, and polls `/readyz`.
+
+**Every refusal happens while the site is still serving.** The stop used to be
+the first thing the script did, so a corrupt archive or a mismatched schema
+pairing took the site down and then correctly refused to change anything — the
+refusal was right and the outage in front of it was pure loss (A37-3). Everything
+before the stop only reads.
 
 The schema check is the one that has to happen *before* the drop, because
 everything after it is irreversible. It reads the dump's `schema_migrations` and
