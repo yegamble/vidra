@@ -2,7 +2,7 @@
   "slice": "A26 rehearsal — live termination against the merged hardening",
   "date": "2026-09-08",
   "register_row": "INT-01",
-  "verdict": "PASS (bundled ingest; passthrough ladder; chat/DVR/tips remain SCP-05) — after two defects found and fixed here",
+  "verdict": "PASS (bundled ingest; passthrough ladder; chat/DVR/tips remain SCP-05) — after three defects found and fixed here",
   "lab": {
     "core": "two processes built from the working tree (VIDRA_ROLE=api on 127.0.0.1:8088 and VIDRA_ROLE=worker), native postgres 16 at schema 141 (migration 0141 live_termination applied), native redis on :6399, STORAGE_BACKEND=local",
     "origin": "one origin on 127.0.0.1:8099 — a pipe-only proxy that drops the client's Accept-Encoding, /api/* to core and everything else to `node .next/standalone/server.js` on :3100 (never `next start`; the listener PID was checked)",
@@ -134,13 +134,30 @@
       "streamed_seconds": 127.1,
       "replay_duration_seconds": 127,
       "state": "published",
-      "renditions": [[1280, 720], [854, 480], [640, 360]],
+      "renditions": [
+        [
+          1280,
+          720
+        ],
+        [
+          854,
+          480
+        ],
+        [
+          640,
+          360
+        ]
+      ],
       "hls_master": 200,
       "segment_probe": "init-0.mp4 (829 B) + chunk-0-00001.m4s (2 331 724 B) probes as h264 1280x720 30/1, duration 6.000"
     },
     "owner_end": {
       "route": "POST /live/{id}/end",
-      "response": {"state": "ended", "publisher_disconnected": true, "stream_key_rotated": true},
+      "response": {
+        "state": "ended",
+        "publisher_disconnected": true,
+        "stream_key_rotated": true
+      },
       "N_ffmpeg_exit_s": 0.27,
       "replay": "40 s replay for a 39 s broadcast, published, 1280x720",
       "audit": "NONE — no content.live.terminate row for an owner end; only the later content.live.replay"
@@ -158,7 +175,13 @@
   "sc3_viewer_count": {
     "verdict": "PASS on the API read; the rendered number is a load-time snapshot",
     "principals": "three Chromium contexts on distinct client addresses (203.0.113.11 anonymous, .12 signed in with default consent, .13 signed in and opted out of history + personalization). The pipe proxy is loopback and therefore trusted, so core's ExtractIPFromXFFHeader returns each context's own X-Forwarded-For",
-    "readings": [1, 1, 1, 1, 3],
+    "readings": [
+      1,
+      1,
+      1,
+      1,
+      3
+    ],
     "reached_three_after_polls": 4,
     "decay_after_closing_one_viewer": "3 at 0 s through 85.2 s, 2 at 90.2 s",
     "window_s": 90,
@@ -185,21 +208,42 @@
   },
   "sc5_live_ingest_component": {
     "verdict": "PASS",
-    "ingest_up": {"readyz": 200, "status": "ok", "live_ingest": "ok", "admin_system": "ok"},
+    "ingest_up": {
+      "readyz": 200,
+      "status": "ok",
+      "live_ingest": "ok",
+      "admin_system": "ok"
+    },
     "ingest_stopped": {
       "readyz": 200,
       "status": "degraded",
       "healthz": 200,
       "live_ingest": "down — \"the RTMP ingest did not answer its control surface; publishes will be refused and live viewers will see a dead player\""
     },
-    "live_rtmp_url_unset": {"readyz": 200, "status": "ok", "live_ingest": "not_configured"},
+    "live_rtmp_url_unset": {
+      "readyz": 200,
+      "status": "ok",
+      "live_ingest": "not_configured"
+    },
     "control_url_unset_with_live_configured": {
       "readyz": 200,
       "status": "ok",
       "live_ingest": "not_configured — \"live is configured but LIVE_INGEST_CONTROL_URL is not, so the RTMP ingest is never probed and a moderator cannot disconnect a publisher\""
     },
     "control_url_with_no_secret": "the process refuses to boot: exit 1, \"config: LIVE_INGEST_SECRET is required when LIVE_INGEST_CONTROL_URL is set\"",
-    "components_now": ["clamav", "ffmpeg", "live_ingest", "mfa_kek", "postgres", "redis", "s3", "search", "settings_sync", "smtp", "storage"]
+    "components_now": [
+      "clamav",
+      "ffmpeg",
+      "live_ingest",
+      "mfa_kek",
+      "postgres",
+      "redis",
+      "s3",
+      "search",
+      "settings_sync",
+      "smtp",
+      "storage"
+    ]
   },
   "sc6_re_verified": {
     "key_rotation_mid_broadcast": "POST /live/{id}/key returns 200 with a new key; the current publisher is NOT disconnected and keeps writing (state stays live, segments keep appearing); the old key's next publish is refused at the hook (404 no live stream for that key), the ingest drops the connection and the running publisher is unaffected",
@@ -208,10 +252,10 @@
     "disconnect_to_replay": "SIGKILL at ~57 s -> state ended, live playlist 404, a 56 s replay published; SIGKILL at 14 s in the earlier hardening lab shape reproduced the same way"
   },
   "sc7_no_regression": {
-    "vidra-core": "make ci (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race) and PR #211 ci-required — pass. No migration; api/openapi.yaml unchanged, so no contract ordering with vidra-user",
-    "vidra-user": "npm run ci on Node 26 and PR #201 ci-required, frontend, contract, both e2e-backed lanes, channel-sync-backed, ipfs-backed — pass",
+    "vidra-core": "make ci in a clean environment — `ci: gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race)` — and PR #211 ci-required, build-test, integration, openapi, ipfs-integration, ipfs-private-integration: pass. No migration; api/openapi.yaml unchanged, so no contract ordering with vidra-user",
+    "vidra-user": "npm run ci on Node 26 — 258 test files / 2580 unit tests and 627 e2e, all pass — and PR #201 ci-required, frontend, contract, both e2e-backed lanes, channel-sync-backed, ipfs-backed: pass",
     "vidra-search": "not touched",
-    "meta": "docs only; the prod compose render was re-run unchanged"
+    "meta": "documentation only; the prod compose render `config -q` was re-run with the ${VAR:?} keys filled and passed, and PR #157 ci-required, validate, boot, bundle: pass"
   },
   "findings_open": [
     "DropPublisher cannot distinguish a real disconnect from 'nothing matched': this module build answers both with 200, differing only in a body count that is discarded. With one worker the honest cases coincide, but a termination of a hook-only phantom session (no publisher at all) still reports publisher_disconnected: true. Whether termination should verify the drop is a ruling",
