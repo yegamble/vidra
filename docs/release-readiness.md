@@ -140,7 +140,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | INT-06 ATProto/Bluesky login, linking and outbound cross-post | M C U | Auth/ATProto service, connection UI; backed atproto opt-in; old extension “no login” claim stale | BLOCKED | Test PDS/account: login callback/state, link/unlink, private exclusion, public post contains working watch URL; restart sealed credential and outage/retry; no public rehearsal posts | AUTH-02, PLAY-02 + provider/test account → A30 |
 | INT-07 Public IPFS mirror and viewer fallback preserve disclosure boundary | M C U | Mirror eligibility; dedicated backed IPFS job and privacy fence | BLOCKED | Private test network: publish eligible object→real CID→master+segments playback; gateway failure→canonical fallback; unlist/delete unpin, no private/quarantine/DM ledger row; record irreversibility of real public publication | PLAY-01 + IPFS selection → A31 |
 | INT-08 Private IPFS is isolated replication, never public delivery | M C U | Product decision §5.P; private-swarm CI; no private gateway knob; DM excluded | BLOCKED | Two keyed nodes and outsider: replication works only inside, outsider cannot fetch; private CID absent from APIs; quorum/outage recovery; no DM attachment pins | STO-01 + private topology selection → A31 |
-| INT-09 Presigned S3 browser delivery obeys CORS/expiry/authorization | M C U | Delivery resolver/presign; historical browser CORS incident; core README notes; live evidence `a32-a33-delivery` (a two-process core on `STORAGE_BACKEND=s3` against a MinIO on its own origin, with the one-origin frontend proxy and real Chromium and WebKit: presign ON moved every media byte to the bucket — 7 of 81 requests, the poster, a 206 Range on the original and five CMAF objects, decoded unmuted to 6.014 s at 150 frames and 0 dropped in both engines — while the api served only the three rewritten playlists and the 307s, and presign OFF put the same playback back on the proxy with 0 bucket requests and every response `private`; no preflight is sent because a `bytes=` Range is safelisted and the request only turns cross-origin after the 307; a signature past its TTL is a bucket 403 `Request has expired` and the client's next api request mints a fresh one, with the redirect's own 300 s far inside the 3600 s signature; a private video answers 404 with no `Location` ever minted for a non-owner and the owner's own credentialed read stays on the proxy at `private, no-store`; a stopped bucket reports `s3: down` on `/admin/system` and fails the master playlist 500 before any segment; and a CORS misconfiguration blocks every segment, which the api cannot see and the QoE beacon records as `api-proxy` + `error_class=network`) | PASS | Real cross-origin bucket in browser: Range/preflight/307, expiry and private refusal; Chromium and Safari; bucket outage does not masquerade as success | STO-01, PLAY-03 + selected bucket/CORS → A32. Evidence is **MinIO cross-origin; the selected bucket run is deferred (no credentials on this machine)**, so a real provider's CORS, versioning and virtual-host addressing stay untested, and Safari.app itself was not driven — the WebKit engine it ships was, via Playwright, and it took the same MSE path Chromium did. Defect fixed on the way: the presigned original and official download answered `application/octet-stream` where the proxy answers `video/mp4`, because the S3 PUT recorded no content type and `video_files.content_type` is empty for every resumable upload — the proxy hid both by sniffing (vidra-core #197). Findings that need a ruling rather than a patch, none blocking: presign minting does NOT fail closed on a bucket outage (a 307 to a dead store is still issued; only the playlist's 500 saves the session); `delivery.PresignTTL` is a compile-time hour with no knob of any kind; a CORS failure degrades the player silently from the CMAF ladder to the whole original file per viewer, with an unbounded segment-retry loop (39 blocked fetches in 12 s) and no viewer-visible error; and a total object-store outage renders a dead `0:00/0:00` player with no message at all |
+| INT-09 Presigned S3 browser delivery obeys CORS/expiry/authorization | M C U | Delivery resolver/presign; historical browser CORS incident; core README notes; live evidence `a32-a33-delivery` (a two-process core on `STORAGE_BACKEND=s3` against a MinIO on its own origin, with the one-origin frontend proxy and real Chromium and WebKit: presign ON moved every media byte to the bucket — 7 of 81 requests, the poster, a 206 Range on the original and five CMAF objects, decoded unmuted to 6.014 s at 150 frames and 0 dropped in both engines — while the api served only the three rewritten playlists and the 307s, and presign OFF put the same playback back on the proxy with 0 bucket requests and every response `private`; no preflight is sent because a `bytes=` Range is safelisted and the request only turns cross-origin after the 307; a signature past its TTL is a bucket 403 `Request has expired` and the client's next api request mints a fresh one, with the redirect's own 300 s far inside the 3600 s signature; a private video answers 404 with no `Location` ever minted for a non-owner and the owner's own credentialed read stays on the proxy at `private, no-store`; a stopped bucket reports `s3: down [unreachable]` on `/admin/system` and fails the master playlist with a typed 503 `storage_unavailable` before any segment, though the redirect itself still mints and `/healthz` still answers 200; and a CORS misconfiguration blocks every segment, which the api cannot see and the QoE beacon records as `api-proxy` + `error_class=network`) | PASS | Real cross-origin bucket in browser: Range/preflight/307, expiry and private refusal; Chromium and Safari; bucket outage does not masquerade as success | STO-01, PLAY-03 + selected bucket/CORS → A32. Evidence is **MinIO cross-origin; the selected bucket run is deferred (no credentials on this machine)**, so a real provider's CORS, versioning and virtual-host addressing stay untested, and Safari.app itself was not driven — the WebKit engine it ships was, via Playwright, and it took the same MSE path Chromium did. Defect fixed on the way: the presigned original and official download answered `application/octet-stream` where the proxy answers `video/mp4`, because the S3 PUT recorded no content type and `video_files.content_type` is empty for every resumable upload — the proxy hid both by sniffing (vidra-core #197). Findings that need a ruling rather than a patch, none blocking: presign minting does NOT fail closed on a bucket outage (a 307 to a dead store is still issued; only the playlist's typed 503 saves the session, and `/healthz` reports `{"status":"ok"}` throughout because its storage component is a five-minute write probe); `delivery.PresignTTL` is a compile-time hour with no knob of any kind; a CORS failure degrades the player silently from the CMAF ladder to the whole original file per viewer, with an unbounded segment-retry loop (39 blocked fetches in 12 s) and no viewer-visible error; and a total object-store outage renders a dead `0:00/0:00` player with no message at all |
 | INT-10 CDN redirects, purge and versioned media remain correct | M C U | F06; CDN provider/resolver and purge ledger; live evidence `a32-a33-delivery` against a local caching edge in front of the same MinIO, speaking the shipped `DELIVERY_CDN_PURGE_*` contract | **FAIL (stands, and now measured rather than read)** | Edge simulator first, then selected edge: retranscode/replacement, privacy/delete/global download revoke and failed purge/retry; stale segments must never play; failure after redirect tested | PLAY-03 + CDN selection → A33. What passes: source REPLACEMENT is genuinely generation-addressed (`web-videos/<id>.r1.mp4`, `streaming-playlists/<id>/r1/…`), so old and new never collide and no purge is needed — playback afterwards fetched only `r1/` keys while the edge's generation-0 entry sat unconsulted; and the three wired families each fan out correctly (per-video download flip 4 purges, privacy flip 18, deletion 18, with a 404 for an object never cached counting as success). What fails, each clause: (1) **stale segments DO play** — a same-source re-transcode overwrites the SAME keys (`HLSPrefixForSource` reads the source key's `.rN`, and a rerun is still version 0), sends **zero** purges, and Chromium decoded the edge's old 25 fps chunk beside the new 24 fps init segment with no error; the `?v=` tag moves but `cdn.EdgeURL` carries no query, so it can never version an edge. (2) Thumbnail/storyboard replacement, account deletion and the instance-wide download revocation all send **zero** purges and leave the edge serving bytes the API has already stopped serving — F06's ledger, confirmed with an edge in the loop. (3) **A failed purge is never retried**: 18 rejected calls, one aggregate WARN, no second pass ever, and the edge still serving a deleted video 30 s later; `GET /admin/system`'s `cdn_purge` block reported it accurately. (4) A 307 to an edge that then 5xxs has **no fallback to the proxy** — hls.js retried 28 times and the player died on `MEDIA_ELEMENT_ERROR` code 4. (5) The edge reproduces **none** of the API's response headers — no content type, no `Content-Disposition` (a redirected official download loses the creator's filename), and no `Cache-Control` at all, because the edge pulls from the BUCKET and Vidra writes no cache metadata on stored objects; nothing becomes `public` by design, so a real CDN's own default TTL is the only bound on stale media. (6) New and not in F06: a key-addressed CDN origin must be readable by the edge, and made so the obvious way **every private object becomes world-readable at the origin** — a private video's poster and original both answered 200 to an unauthenticated fetch — so a privacy flip's correct 18-key purge was undone by the very next request re-pulling and re-caching it; undocumented in `.env.example` and `docs/operations.md`. The **selected edge is deferred** (no zone or credential on this machine). Wrong actors verified: admin routes 401/403, purge triggers 401/404 |
 | INT-11 Noncustodial donation addresses verify and display honestly | C U | Donation service; backed donations; product decision excludes custodial flows | UNVERIFIED | Address validation/challenge/ownership verification, update/remove and profile/watch support dialog; no fabricated payment confirmation or funds handling | AUTH-02 → A30 |
 | OPS-01 API/worker split updates settings and recovers leased jobs | M C S | All-role settings poller now fixed; job leases/sweeps; worker Compose profile | UNVERIFIED | API-only + two workers; edit config, observe both; kill one mid-transcode/import, recover once; Redis/DB outage and leader failover; no local-volume split across hosts | PUB-03, ADM-03, STO-01 → A34 |
@@ -10507,9 +10507,16 @@ and a second process at `VIDRA_ROLE=worker`, behind the usual pipe-only
 one-origin proxy on 127.0.0.1:8099 that drops the client's `Accept-Encoding` and
 never follows a redirect, in front of `node .next/standalone/server.js` on
 :3100; native PostgreSQL 16 on 55460 and redis on 56400, both fresh; schema 135;
-core built from `origin/main` `cb2d2780`, frontend the unmodified `main`
-`2f71336c` standalone build baked at `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8099`;
-Node 26.8.1. The object store is one `mirror.gcr.io/minio/minio` on
+core built from `main` at **`7fc19689`**, which was its tip when the lab was
+stood up, frontend the unmodified `main` `2f71336c` standalone build baked at
+`NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8099`; Node 26.8.1. **`cb2d2780`
+(the storage-hardening slice recorded above) landed mid-run**, and this record
+says which of its numbers that moves rather than quietly re-basing the claim:
+that slice's only delivery-path change is a log redaction in
+`internal/delivery/resolver.go`, so every redirect, header, CORS, expiry and
+purge measurement below is unaffected — but it *does* rewrite what a storage
+refusal looks like, so the outage paragraph was re-run against `cb2d2780` plus
+this session's own fix and reports those numbers, not the pre-slice ones. The object store is one `mirror.gcr.io/minio/minio` on
 **127.0.0.1:9210** — its own origin, which is the whole point — path-style, no
 TLS, bucket `vidra-a32`. The two additions are `MINIO_API_CORS_ALLOW_ORIGIN`,
 set and unset across runs, and the **edge simulator** on 127.0.0.1:9310: a
@@ -10608,17 +10615,29 @@ request credentialed, so it takes the proxy path at `private, no-store`. That is
 A08's rule holding under presign, proved rather than assumed.
 
 **A bucket outage does not masquerade as success, but the presign path does not
-fail closed either.** With MinIO stopped, `GET /admin/system` reports the `s3`
-component **`down`** with `storage: s3: check bucket "vidra-a32": context
-deadline exceeded`, while `/healthz` and `/readyz` both stay **200**. The
-minting path still answers **307 with a URL to a dead bucket** — signing is a
-local operation and nothing probes — so "fails closed" is false as stated. What
-saves the session is sequencing: the master playlist is served from the origin
-and **500s**, so an HLS session dies on its first request rather than on a
-segment, and the player lands on `readyState 0` with
-`MEDIA_ELEMENT_ERROR: Format error` (code 4) — an error, not a spinner. **The
-viewer is told nothing**: eleven seconds after load, with a play attempt made,
-the watch page still renders `0:00/0:00` and no message anywhere in the DOM.
+fail closed either.** This clause was re-run on `cb2d2780` plus this session's
+fix, because the storage-hardening slice rewrote exactly these answers; the
+numbers below are the current ones, and where it improved things they say so.
+With MinIO stopped, `GET /admin/system` reports the `s3` component **`down`**
+with `storage: s3: check bucket "vidra-a32b": context deadline exceeded
+**[unreachable]**` — the new classification, carrying the cause rather than a
+bare string. Every media route the api serves itself now answers **503
+`storage_unavailable`** with a real operator sentence (*"this instance cannot
+reach its media store right now…"*) rather than the bare 500 A24 measured: the
+master playlist, and a credentialed `/original` alike. But **the minting path
+still answers 307 with a URL to a dead bucket** — signing is a local operation
+and nothing probes — so "fails closed" remains false as stated, and the hardening
+slice did not change it. What saves the session is sequencing: the playlist is
+served from the origin and fails first, so an HLS session dies on its first
+request rather than on a segment, and the player lands on `readyState 0` with
+`MEDIA_ELEMENT_ERROR: Format error` (code 4) — an error, not a spinner. Two
+things did not improve. `/healthz` and `/readyz` both still answer **200** with
+`{"status":"ok"}`, because the health page's `storage` component is the new
+five-minute **write** probe and still read `ok` throughout an outage in which
+every read failed — a stale answer, not a wrong design, but an operator watching
+`/healthz` sees nothing. And **the viewer is told nothing**: eleven seconds after
+load, with a play attempt made, the watch page still renders `0:00/0:00` and no
+message anywhere in the DOM.
 
 **The CORS negative control is the most interesting result in this half.** With
 `MINIO_API_CORS_ALLOW_ORIGIN=https://not-the-frontend.example` — a foreign
@@ -10779,9 +10798,9 @@ right non-disclosure answer rather than 403.
 Only vidra-core changed. `make ci` is **green**: 81 `ok` packages, 0 FAIL, with
 `fmt-check`, `vet`, `openapi-verify`, `sqlc-verify`, `migrate-lint` (135 up
 migrations clean) and `test-race` all passing. The S3 integration lane run
-against this MinIO — `S3_TEST_ENDPOINT=127.0.0.1:9210 go test -tags=integration
-./internal/storage/...` — is **55 PASS, 0 FAIL, 0 SKIP** (A24 measured 53; the
-two new cases are the delta). `go vet -tags=integration ./...` is clean. No
+against a MinIO — `S3_TEST_ENDPOINT=127.0.0.1:9210 go test -tags=integration
+./internal/storage/...` — is **69 PASS, 0 FAIL, 0 SKIP**. Every gate was re-run
+after rebasing onto `cb2d2780`, since that slice touches the same package. `go vet -tags=integration ./...` is clean. No
 vidra-user or vidra-search file changed. In this repo the simulator is
 `gofmt`-clean and `go build`s; `bash -n` and `shellcheck` pass on every tracked
 script, `docker compose -f docker-compose.yml -f docker-compose.prod.yml
@@ -10830,8 +10849,12 @@ with honest types.
    which is the only lever that reaches a third-party edge; disposition has no
    equivalent lever and a redirected official download loses its filename.
 6. **Presign minting does not fail closed on a bucket outage** — a 307 to a dead
-   store is still issued; the session is saved only because the playlist 500s
-   first.
+   store is still issued; the session is saved only because the playlist fails
+   first. Re-measured on current `main`: the storage-hardening slice turned that
+   first failure into a typed 503 `storage_unavailable`, which is a real
+   improvement, and left the 307 exactly as it was. `/healthz` still answers 200
+   `{"status":"ok"}` through a total read outage, because its `storage`
+   component is the five-minute write probe.
 7. **A CORS misconfiguration is invisible to the API and silent to the viewer** —
    the player degrades from the ladder to the whole original file per viewer,
    with an unbounded segment-retry loop and no error surface. The QoE beacon is

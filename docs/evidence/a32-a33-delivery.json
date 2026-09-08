@@ -10,7 +10,7 @@
     "INT-10": "FAIL (stands) - three purge families unwired and the edge cannot reproduce the API's headers"
   },
   "lab": {
-    "core_base": "origin/main cb2d27807a20",
+    "core_base": "lab binary built from main 7fc19689 (its tip when the lab was stood up); cb2d2780 landed mid-run and the outage clause was re-run against it plus this session's fix",
     "core_branch_head": "a32-a33/delivery d176505",
     "vidra_user": "main 2f71336c47a3 (unmodified; prebuilt .next/standalone with NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8099)",
     "schema_version": 135,
@@ -124,11 +124,13 @@
     },
     "credentialed_reads": "Authorization header -> 200 on the proxy with private, no-store and no Location; the A08 rule holds under presign",
     "outage": {
-      "admin_system_s3": "down - 'storage: s3: check bucket \"vidra-a32\": context deadline exceeded'",
-      "healthz": 200,
+      "rerun_against": "cb2d2780 + this session's fix",
+      "admin_system_s3": "down - 'storage: s3: check bucket \"vidra-a32b\": context deadline exceeded [unreachable]'",
+      "admin_system_storage_write_component": "ok (the five-minute write probe had not re-probed)",
+      "healthz": "200 {\"status\":\"ok\"}",
       "readyz": 200,
-      "presign_minting": "still 307s to the dead bucket - signing is a local operation and nothing probes, so it does NOT fail closed",
-      "first_failure_is_the_playlist": "GET /hls/master.m3u8 -> 500, so an HLS session dies on its first request rather than on a segment",
+      "media_routes_the_api_serves": "503 storage_unavailable with an operator sentence (was a bare 500 before cb2d2780)",
+      "presign_minting": "still 307s to the dead bucket - signing is local and nothing probes; unchanged by the hardening slice",
       "player": "readyState 0, MEDIA_ELEMENT_ERROR code 4 'Format error', no infinite spinner",
       "viewer_visible_error": "none - the watch page renders 0:00/0:00 with no message after 11s"
     },
@@ -328,7 +330,8 @@
         "TestContentTypeForKey",
         "TestS3PutStoresContentTypeFromKey (integration)",
         "TestDeliveryPresignsMediaWithNoRecordedContentType"
-      ]
+      ],
+      "gates": "make ci exit 0, 81 ok packages, 0 FAIL; S3 integration lane 69 PASS / 0 FAIL / 0 SKIP; go vet -tags=integration clean - all re-run after rebasing onto cb2d2780"
     },
     {
       "repo": "vidra-core",
