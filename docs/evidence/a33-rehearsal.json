@@ -255,7 +255,7 @@
         "sha256_16": "c037a57f893a9104",
         "bytes": 9270
       },
-      "record": "immediate pass; only /storyboard.jpg was purged, the poster's entry was left alone"
+      "record": "immediate pass; the purge named /storyboard.jpg and nothing else"
     },
     {
       "family": "privacy flip public->private (control)",

@@ -13015,7 +13015,7 @@ recorded the token as accepted on every call.
 |---|---|---|---|---|
 | poster replacement (multipart) | `POST /videos/{id}/thumbnail` → 201 | **1** (200, held) | HIT `ace182d944f37b22` 18,954 B → **MISS `5a46d2dcf4cf3751` 1,604 B** | immediate pass; `cdn_purge` counters |
 | poster replacement (frame pick) | `POST /videos/{id}/thumbnail {"at_seconds":3}` → 201 | **1** (200, held) | evicted | immediate pass |
-| storyboard regeneration | `POST /videos/{id}/replace` → 200 | **1** (200, held) on `/storyboard.jpg` | HIT `24d31a9747f9b3e3` 17,087 B → **MISS `c037a57f893a9104` 9,270 B** | immediate pass; the poster's entry left alone |
+| storyboard regeneration | `POST /videos/{id}/replace` → 200 | **1** (200, held) on `/storyboard.jpg` | HIT `24d31a9747f9b3e3` 17,087 B → **MISS `c037a57f893a9104` 9,270 B** | immediate pass; the purge named `/storyboard.jpg` and nothing else |
 | privacy flip public→private *(control)* | `PATCH /videos/{id}` → 200 | **13** (6×200, 7×404) | that video's 6 entries evicted; the other video's 6 untouched | immediate pass |
 | deletion *(control)* | `DELETE /videos/{id}` → 204 | **13** (6×200, 7×404) | emptied | immediate pass |
 | account deletion | `DELETE /auth/me` → 204 | **13** (6×200, 7×404) | emptied | one **queued** job `reason=account_delete`, 13 urls, `url_set_complete=t` → `done`, urls emptied |
