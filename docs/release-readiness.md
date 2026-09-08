@@ -137,12 +137,12 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | INT-03 Manual captions and Whisper generation/review | M C U | Caption routes/CaptionsManager; backed captions/whisper-captions opt-in; live evidence `a28-captions-scan` (section "A28 captions, Whisper and ClamAV lanes — 2026-09-08") on a two-process core with real Chromium: manual VTT create/edit-by-re-upload/list/delete with the object sha changing over the same key, a second language, typed 422s for a non-WebVTT body and a malformed tag, `PUT`/`PATCH` still 405, and an owner-only matrix in which even the admin gets 404 while anonymous reads of a public video's track are 200; both tracks render on the watch page as same-origin `blob:` `<track>` with the right `srclang`/`label` and three real cues; and a REAL local whisper.cpp 1.9.2 `/inference` endpoint drove audio→job→an editable `Auto-generated` caption (12 s end to end from the Studio button), with a measured 1-then-2-minute retry ladder, a dead-letter at attempt 5 that wrote no caption, the compile-time 10-minute timeout firing exactly on time against a stalling endpoint and recovering on the next attempt, and the disabled split proved on both halves (403 `feature_disabled` with the control hidden, 503 `auto_captions_not_configured` when the admin toggle is on without an endpoint) | PASS | Manual VTT CRUD, watch track and language; configured Whisper audio→job→editable caption; outage/timeout and unsupported language; owner-only access | PUB-03 → A28. Evidence is **whisper.cpp 1.9.2 with `ggml-tiny.bin` — a real implementation of the contract core speaks, but the SELECTED endpoint, model size and capacity are DEFERRED**, so nothing here bounds transcription latency or cost at production scale. Findings, none blocking: there is no caption *editor* — the shipped edit path is re-uploading the language, and `UpsertCaption` keeps the original `created_at` with no `updated_at`, so nothing distinguishes an edited track from an untouched one; one click on Studio's "Generate automatically" silently replaced a creator's hand-written `en` track with the machine transcript, no warning and no undo; the Whisper round-trip bound is a compile-time 10 minutes with no knob; `caption_generate` rows reach `job_runs` through migration 0083's trigger but carry empty `correlation_id`/`request_id`/`actor_id` on 4 of 4 rows where `upload_finalize` and `video_transcode` are stamped on 2 of 2; a well-formed unknown tag (`zz`) passes Vidra's validator and **aborts whisper.cpp**, so any creator can kill a shared transcription service; and the client ignores the response's own `language`, so an English transcript is stored under whatever tag was asked for. A17's note that this 503 is a bare `echo.NewHTTPError` is **stale** — it is typed and its sentence survives the scrubber |
 | INT-04 ClamAV scanning actually gates all ingestion | M C U | Scanner service; scan profile; uploads/imports/DM hooks and config policy; live evidence `a28-captions-scan` (section "A28 captions, Whisper and ClamAV lanes — 2026-09-08") against a REAL clamd 1.5.4 with a real 3.6 M-signature database: a benign upload published while a standard EICAR body was refused on the resumable-upload path, the URL-import path and the DM path (the DM half re-cited from A14 and re-run here for one request — 422 `attachment failed the malware scan`, zero rows, zero blobs); all three fail policies measured with the daemon actually stopped (`fail-closed` fails both ingestion paths, `quarantine` parks the upload in the moderation queue, `fail-open` publishes unscanned); boot refuses `MALWARE_SCAN_ENABLED=true` with an empty `CLAMAV_ADDR`; and `/admin/system` now carries a `clamav` component that reads `ok`, then `down` with the instance `degraded` and a sentence naming both the consequence and the policy in force | PASS | Disposable scanner: benign file, standard EICAR fixture, unavailable scanner, approved fail policy; never publish/link rejected bytes; test URL and DM paths as well as upload | PUB-01 → A28. Two defects fixed on the way (vidra-core #198): an INFECTED verdict failed the video but **kept its `video_files` row and its bytes**, so `GET /videos/{id}/download` advertised the rejected original and `/download/original` served it 200 `video/mp4` to the owner AND to an admin on both ingestion paths — the "never link rejected bytes" clause, with the link live; and `/admin/system` had **no scanner component at all**, so a dead clamd left it reporting `"status":"ok"` across nine healthy components while every upload and import was landing in `failed`. Rejected bytes now live **nowhere** — no quarantine store, no retention, the audit row is the whole record. Findings that need a ruling, none blocking: a malware rejection is **invisible to the creator** (the upload session settles `completed` with an empty `failure_reason`, the import job settles `done` with no error, Studio shows a bare `FAILED` badge beside a `quarantined` video that gets a full sentence); `fail-open` publishing unscanned media leaves **no audit row**, only a WARN log line; and **`MALWARE_SCAN_ENABLED` defaults to false**, so out of the box nothing is scanned, with no boot warning and no log line — the only honest surface is `/admin/infrastructure`'s prose. EICAR is a whole-file signature (a real mp4 with it appended scans clean), so this lane proves the gate, not clamd's detection depth. The SELECTED scanner deployment is DEFERRED (a throwaway host daemon, not the packaged one), S3 was not exercised, and thumbnails/storyboards/avatars/account-import archives were not probed for a scan seam |
 | INT-05 ActivityPub remote discover/follow/accept/video/comment/delete/moderation | M C U | Federation service/integration tests; user federation queues; live evidence `a29-federation` (section "A29 ActivityPub — two isolated instances — 2026-09-08"): two isolated instances, each a two-process core with its own database, Redis index, storage root and origin, federating over plain HTTP with `FEDERATION_ENABLED=true` and a sealed actor KEK on both — signed `Follow` accepted and rejected through the admin queue with the wrong-actor matrix, `Create`/`Update`/`Delete{Video}` fanned out and applied, an inbound federated comment created, edited and retracted, instance mute and instance block separated on a per-surface matrix, the full 30 s→60→120→240→480 ladder to a dead letter at attempt 6 with no duplicate ingestion on recovery, and a real Chromium walk of the follower's feed and remote watch page; RE-RUN live evidence `a29-rehearsal` (section "A29 rehearsal — two instances against the merged remediation — 2026-09-08"): the same two-instance topology at schema 140 on the merged remediation, this time behind a REAL Caddy reproducing `deploy/Caddyfile` §3a, with Chromium decoding 143 frames of the origin's HLS on the follower's remote watch page (`Access-Control-Allow-Origin: *` on all eight media responses, zero CORS errors), the `Create`-then-`Update` ordering read off the two payloads, the AP negotiation table measured through the edge (200 AS / 304 / 406 at the api / 404 private / 410 + Tombstone), a remote URL deduped with zero outbound fetches, the mirrored thread created, edited and retracted from the origin, the block/unblock matrix with an `federation.inbox.rejected` audit row, and the 30→60→120→240 ladder delivering exactly once on recovery | **FAIL (measured a second time — nine of the remediation's ten re-run clauses pass; the tenth is a REGRESSION the remediation introduced, fixed on vidra-core #209 and unmerged; two sub-clauses of this row's own procedure remain unmet)** | Two isolated instances: signed inbox/outbox, approved/rejected follow, new/update/delete videos, reply, block server/account, remote URL; source identity after migration | INS-05, ADM-02 → A29. What PASSES: discovery (WebFinger + actor documents), signed inbox with unsigned/tampered/spoofed-actor/stolen-keyId all refused and logged, approved AND rejected follow with `Accept`/`Reject` delivered both ways, new/update/delete videos with private and unlisted producing ZERO activities, an inbound reply with its edit and its `Delete`, server block vs mute, the retry ladder and dead letter. What FAILS, each clause: (1) **playback and posters do not federate** — the outbound AS `Video` emits no `icon`, no `duration` and only a watch-page `url`, while the ingest parses all three, so a follower stores a title, a description and a link and its remote watch page renders no `<video>` at all; emitting a stream link additionally needs a CORS ruling, since the origin's media carries no `Access-Control-Allow-Origin`. (2) **`block account` does not exist** — `/me/blocks/{id}` and `/me/mutes/accounts/{id}` take a LOCAL user UUID and `muted_accounts.muted_id` is a `users` FK, so the finest control against a remote person is blocking their whole instance. (3) **`remote URL` resolves an actor but never a video** — the AP object id is not dereferenceable as ActivityPub (`/videos/{uuid}` with `Accept: application/activity+json` answers 200 with frontend HTML), and `ResolveSearchTarget` never consults the already-stored `remote_videos` row by `object_url` before fetching. Also measured, not blocking the verdict: a follower instance stores NO federated comments (it receives `Create{Note}` and drops every one, since `inReplyTo` must resolve to a LOCAL video); a blocked instance's refused activity is answered 202 and never redelivered after the unblock; a cancelled `Undo` leaves the remote with a ghost follower; and the REST channel follower count excludes remote followers, so a creator with three federated followers reads zero. **Source identity after migration is UNVERIFIED and MIG-06-dependent** — it needs actor-`id` continuity, key continuity (a cached `publicKeyPem` is never refreshed) or a `Move`, which `dispatchActivity` has no arm for; it was deliberately not faked. Defect fixed on the way (vidra-core #200): the watched-word queue named the LOCAL VIDEO OWNER as the author of a federated comment. **Remediation merged: vidra-core #203 / vidra-user #198 / meta #152 (section "A29 remediation — federated playback, dereferenceable ids, social parity — 2026-09-08") — the code for clauses (1), (2) and (3) plus the four non-blocking findings; the row still reads FAIL because only the two-instance re-run can flip it.** TLS, real hostnames (`/etc/hosts` needs root, refused — the domains are `host:port` literals) and interoperability with PeerTube/Mastodon are all UNVERIFIED | **Re-run done 2026-09-08 (section "A29 rehearsal — two instances against the merged remediation", evidence `a29-rehearsal.json`) and the row still does not flip, for named reasons rather than for want of a lab.** Clauses (1) and (3) of the original verdict are CLOSED and measured: a remote video plays in a real browser with 143 decoded frames and zero CORS errors through a real Caddy, and a pasted remote URL resolves to the stored row with no outbound fetch. The dereference half is closed too — `/videos/{uuid}` and `/comments/{uuid}` content-negotiate through the edge, a private video answers 404 exactly as a never-existent uuid does, and a deleted one answers 410 + Tombstone. What now FAILS: **(a) a private or unlisted video no longer produces ZERO activities** — the transcode-completion `UpdateVideo` the remediation added makes every private and unlisted upload broadcast a `Delete` naming its uuid to every remote follower, and a metadata edit on a private video does the same through the older `WithUpdateHook` path; fixed and re-measured to zero on [vidra-core #209](https://github.com/yegamble/vidra-core/pull/209), unmerged. **(b) clause (2)'s per-remote-account block addresses the wrong actor for a common naming pattern** — `WebFinger` resolves a colliding `name@domain` to the Person actor while videos are attributed to the Group actor, nothing prevents a channel taking an existing username, and the settings page's only affordance is the handle, so the block a viewer can make hides nothing (blocking the channel actor URL explicitly works). **(c) a blocked remote account's ALREADY-STORED comments are not hidden**, and no audit row is written for a `Note` or `Follow` a per-account block drops. Also newly measured, not blocking: A29-F4's redelivery half is not merely absent — neither side re-attempts, so a block taken and lifted strands the follower's request at `pending` forever; the mirrored thread is FLAT (only Notes replying to the video object are mirrored, every deeper reply is delivered and dropped silently); and `FederationHealth.LastDeliveredAt` is computed and never rendered. A29-F5, F6, F9, F10 and F12 are all confirmed live. **Flipping this row needs vidra-core #209 merged plus a ruling on (b) and (c).** vidra-core #209 IS merged (`37a8e96`). The ruling on (b) and (c) was given and is implemented — one handle namespace, and blocks that name the ACCOUNT and are retroactive — in section "A29 parity — one handle namespace, retroactive blocks, threaded mirror — 2026-09-08" (evidence `a29-parity.json`), **OPEN, not merged**, on vidra-core #210 / vidra-user #202 and proven by tests rather than by a lab. **The row still does not flip: only a THIRD two-instance run can, and that section names what it must show.**
-| INT-06 ATProto/Bluesky login, linking and outbound cross-post | M C U | Auth/ATProto service, connection UI; backed atproto opt-in; old extension “no login” claim stale | BLOCKED | Test PDS/account: login callback/state, link/unlink, private exclusion, public post contains working watch URL; restart sealed credential and outage/retry; no public rehearsal posts | AUTH-02, PLAY-02 + provider/test account → A30 |
+| INT-06 ATProto/Bluesky login, linking and outbound cross-post | M C U | Auth/ATProto service, connection UI; backed atproto opt-in; proved by A30 against a LOCAL reference PDS (`@atproto/pds` 0.4.107 + a loopback PLC stub + a port-80 handle shim) — section “A30 ATProto login, linking, cross-posting and donations — 2026-09-08”, evidence `a30-atproto-donations.json`: real PAR/PKCE/DPoP login in Chromium (consent lists only “Uniquely identify you”), forged/mismatched state and a forged `iss` all refused, account created then re-login returns the same account, identity listed and last-method unlink refused 422, public publish posts once with the `/v/{code}` watch URL in the embed card and resolves 200, private/unlisted/draft post nothing, sealed app password survives a restart of both processes, a wrong KEK dead-letters immediately, and a PDS outage retries at +30 s then +60 s and delivers exactly once — the public network was never contacted | PASS | Test PDS/account: login callback/state, link/unlink, private exclusion, public post contains working watch URL; restart sealed credential and outage/retry; no public rehearsal posts | AUTH-02, PLAY-02 + provider/test account → A30. OPEN, not blocking the row: the PRODUCTION hosted client-metadata OAuth path is unverified (the lab necessarily used the spec's virtual-localhost dev client); an ATProto account is passwordless with an unroutable synthetic email, so it can NEVER gain a second sign-in method and the unlink refusal's own remedy is unreachable; a dead-lettered cross-post has no creator-visible surface |
 | INT-07 Public IPFS mirror and viewer fallback preserve disclosure boundary | M C U | Mirror eligibility; dedicated backed IPFS job and privacy fence | BLOCKED | Private test network: publish eligible object→real CID→master+segments playback; gateway failure→canonical fallback; unlist/delete unpin, no private/quarantine/DM ledger row; record irreversibility of real public publication | PLAY-01 + IPFS selection → A31 |
 | INT-08 Private IPFS is isolated replication, never public delivery | M C U | Product decision §5.P; private-swarm CI; no private gateway knob; DM excluded | BLOCKED | Two keyed nodes and outsider: replication works only inside, outsider cannot fetch; private CID absent from APIs; quorum/outage recovery; no DM attachment pins | STO-01 + private topology selection → A31 |
 | INT-09 Presigned S3 browser delivery obeys CORS/expiry/authorization | M C U | Delivery resolver/presign; historical browser CORS incident; core README notes; live evidence `a32-a33-delivery` (a two-process core on `STORAGE_BACKEND=s3` against a MinIO on its own origin, with the one-origin frontend proxy and real Chromium and WebKit: presign ON moved every media byte to the bucket — 7 of 81 requests, the poster, a 206 Range on the original and five CMAF objects, decoded unmuted to 6.014 s at 150 frames and 0 dropped in both engines — while the api served only the three rewritten playlists and the 307s, and presign OFF put the same playback back on the proxy with 0 bucket requests and every response `private`; no preflight is sent because a `bytes=` Range is safelisted and the request only turns cross-origin after the 307; a signature past its TTL is a bucket 403 `Request has expired` and the client's next api request mints a fresh one, with the redirect's own 300 s far inside the 3600 s signature; a private video answers 404 with no `Location` ever minted for a non-owner and the owner's own credentialed read stays on the proxy at `private, no-store`; a stopped bucket reports `s3: down [unreachable]` on `/admin/system` and fails the master playlist with a typed 503 `storage_unavailable` before any segment, though the redirect itself still mints and `/healthz` still answers 200; and a CORS misconfiguration blocks every segment, which the api cannot see and the QoE beacon records as `api-proxy` + `error_class=network`) | PASS | Real cross-origin bucket in browser: Range/preflight/307, expiry and private refusal; Chromium and Safari; bucket outage does not masquerade as success | STO-01, PLAY-03 + selected bucket/CORS → A32. Evidence is **MinIO cross-origin; the selected bucket run is deferred (no credentials on this machine)**, so a real provider's CORS, versioning and virtual-host addressing stay untested, and Safari.app itself was not driven — the WebKit engine it ships was, via Playwright, and it took the same MSE path Chromium did. Defect fixed on the way: the presigned original and official download answered `application/octet-stream` where the proxy answers `video/mp4`, because the S3 PUT recorded no content type and `video_files.content_type` is empty for every resumable upload — the proxy hid both by sniffing (vidra-core #197). Findings that need a ruling rather than a patch, none blocking: presign minting does NOT fail closed on a bucket outage (a 307 to a dead store is still issued; only the playlist's typed 503 saves the session, and `/healthz` reports `{"status":"ok"}` throughout because its storage component is a five-minute write probe); `delivery.PresignTTL` is a compile-time hour with no knob of any kind; a CORS failure degrades the player silently from the CMAF ladder to the whole original file per viewer, with an unbounded segment-retry loop (39 blocked fetches in 12 s) and no viewer-visible error; and a total object-store outage renders a dead `0:00/0:00` player with no message at all |
 | INT-10 CDN redirects, purge and versioned media remain correct | M C U | F06; CDN provider/resolver and purge ledger; **live evidence [`a33-rehearsal`](evidence/a33-rehearsal.json) (section "A33 rehearsal — CDN edge simulator against the merged remediation — 2026-09-08")** — slice 3, run against core `main` `59d7f51` (#199 + #202 + #203 + #204 merged, schema 140) with the edge simulator's origin pointed at the **api** and a MinIO bucket carrying **no policy at all**: 307s name the api's own route path + `?v=` + `__vidra_edge=1`, the edge's origin fetch is served (zero `Location` headers across eight marked probes) at `public, max-age=31536000, immutable` / `3600` / `300` with honest `Content-Type` and `Content-Disposition: attachment; filename=…`, playlists never reach the edge, a viewer and any intermediary still get `private`, private is 404 and unlisted is never redirected, and an unauthenticated read straight at the bucket is **403** — so clauses (5) and (6) are closed by construction. A same-source re-transcode moved `videos.transcode_generation` 1→2, wrote `r2/`, minted a new `?v=`, sent **zero** purges (correctly) and produced **0** old-tag requests on reload with 144 frames against 150 — clause (1) closed; a superseded `?v=` is refused 404 `private, no-store` and the refusal is not cacheable. All four families purge and the edge serves new bytes: poster (multipart **and** frame-pick) 1 request each, storyboard 1, account deletion 13 as one queued job, download revocation 8 through a leased walk that survived a worker kill — cursor resumed, **no key purged twice** — clause (2) closed. A refused purge retried at **+60 s, +2 min, +4 min** from the persisted `next_attempt_at`, landed on attempt 4 when the edge accepted again, and dead-lettered with its URL list intact on a forced attempt 8 (`pending_retries`/`oldest_pending_seconds`/`dead_letters`, the admin jobs page and `vidra doctor`'s ⚠ all agree) — clause (3) closed. Prior evidence [`a32-a33-delivery`](evidence/a32-a33-delivery.json) is the pre-remediation measurement; **the closing sentences of the notes cell ("the row stays FAIL until the edge simulator is re-run", "neither has been measured against a caching edge") are superseded by this run.** Selected edge and selected bucket remain deferred — no zone, credential or commercial bucket on this machine | **PASS (edge simulator; selected edge deferred; clause 4 residual: no proxy fallback after an edge 5xx)** — clauses (1), (2), (3), (5) and (6) re-measured closed against a caching edge; clause (4) is unchanged and named: a 307 to an edge that then 5xxs has no fallback to the api proxy (hls.js retried 4 segment URLs 27 times, the player fell through to `/original` which 307s to the same broken edge, `MEDIA_ELEMENT_ERROR` code 4, `readyState` 0). The only remedy is the `delivery_cdn_enabled` kill switch, measured working: zero edge requests and playback restored | Edge simulator first, then selected edge: retranscode/replacement, privacy/delete/global download revoke and failed purge/retry; stale segments must never play; failure after redirect tested | PLAY-03 + CDN selection → A33. What passes: source REPLACEMENT is genuinely generation-addressed (`web-videos/<id>.r1.mp4`, `streaming-playlists/<id>/r1/…`), so old and new never collide and no purge is needed — playback afterwards fetched only `r1/` keys while the edge's generation-0 entry sat unconsulted; and the three wired families each fan out correctly (per-video download flip 4 purges, privacy flip 18, deletion 18, with a 404 for an object never cached counting as success). What fails, each clause: (1) **stale segments DO play** — a same-source re-transcode overwrites the SAME keys (`HLSPrefixForSource` reads the source key's `.rN`, and a rerun is still version 0), sends **zero** purges, and Chromium decoded the edge's old 25 fps chunk beside the new 24 fps init segment with no error; the `?v=` tag moves but `cdn.EdgeURL` carries no query, so it can never version an edge. (2) Thumbnail/storyboard replacement, account deletion and the instance-wide download revocation all send **zero** purges and leave the edge serving bytes the API has already stopped serving — F06's ledger, confirmed with an edge in the loop. (3) **A failed purge is never retried**: 18 rejected calls, one aggregate WARN, no second pass ever, and the edge still serving a deleted video 30 s later; `GET /admin/system`'s `cdn_purge` block reported it accurately. (4) A 307 to an edge that then 5xxs has **no fallback to the proxy** — hls.js retried 28 times and the player died on `MEDIA_ELEMENT_ERROR` code 4. (5) The edge reproduces **none** of the API's response headers — no content type, no `Content-Disposition` (a redirected official download loses the creator's filename), and no `Cache-Control` at all, because the edge pulls from the BUCKET and Vidra writes no cache metadata on stored objects; nothing becomes `public` by design, so a real CDN's own default TTL is the only bound on stale media. (6) New and not in F06: a key-addressed CDN origin must be readable by the edge, and made so the obvious way **every private object becomes world-readable at the origin** — a private video's poster and original both answered 200 to an unauthenticated fetch — so a privacy flip's correct 18-key purge was undone by the very next request re-pulling and re-caching it; undocumented in `.env.example` and `docs/operations.md`. The **selected edge is deferred** (no zone or credential on this machine). Wrong actors verified: admin routes 401/403, purge triggers 401/404. **Remediation slice 1 is open** ([vidra-core #199](https://github.com/yegamble/vidra-core/pull/199), section "A33 remediation 1"): the CDN's origin becomes this API rather than the bucket, which removes the mechanism behind clauses (1), (5) and (6) and re-addresses purge from keys to URLs; every transcode run mints its own generation (migration 0136), which closes clause (1)'s same-source overwrite. The row stays FAIL until the edge simulator is re-run against it (slice 3). **Remediation slice 2 is open** ([vidra-core #202](https://github.com/yegamble/vidra-core/pull/202), section "A33 remediation 2"), and closes clauses (2) and (3): `media_purge.go`'s STILL-UNPURGED ledger is **empty** — poster and storyboard replacement purge their stable URL through a `video.Service` hook that also covers the backfill worker, account deletion snapshots the whole account before the cascade and enqueues it, and the instance-wide download revocation is a leased, resumable walk with a persisted cursor (migration **0137**, `cdn_purge_jobs`) — and a refused purge is retried at 1, 2, 4, 8, 16, 32 and 60 minutes before dead-lettering with its URL list intact, surfaced on `cdn_purge` (`pending_retries`/`oldest_pending_seconds`/`dead_letters`), the admin jobs page and `vidra doctor`. **Clause (4) is untouched and still open**: a 307 to an edge that 5xxs still has no fallback to the api proxy. Both slices are code-only — neither has been measured against a caching edge, which is what slice 3 is for |
-| INT-11 Noncustodial donation addresses verify and display honestly | C U | Donation service; backed donations; product decision excludes custodial flows | UNVERIFIED | Address validation/challenge/ownership verification, update/remove and profile/watch support dialog; no fabricated payment confirmation or funds handling | AUTH-02 → A30 |
+| INT-11 Noncustodial donation addresses verify and display honestly | C U | Donation service; backed donations; product decision excludes custodial flows; proved by A30 (same section and evidence file): four curated networks with shape validation (bad network and bad address both typed 422), every address stored unverified, an ethereum EIP-191 challenge bound to instance/network/address/nonce that a wrong-key signature fails 422 and a genuine one verifies, the challenge single-use (409 on re-verify), bitcoin honestly 501 not_implemented, wrong actors 403/401/404, and an anonymous Chromium viewer sees the watch Support dialog say “Vidra never holds or processes funds” with per-address VERIFIED/UNVERIFIED and no balance, confirmation or thank-you; deletion hides the address on reload | PASS | Address validation/challenge/ownership verification, update/remove and profile/watch support dialog; no fabricated payment confirmation or funds handling | AUTH-02 → A30. OPEN, not blocking the row: `GET /users/{id}/donation-addresses` is documented as the public projection for a PROFILE page but nothing renders it there — the only consumer is the Support button, via a channel's owner — so a creator with no channel exposes addresses no page shows |
 | OPS-01 API/worker split updates settings and recovers leased jobs | M C S | All-role settings poller now fixed; job leases/sweeps; worker Compose profile | UNVERIFIED | API-only + two workers; edit config, observe both; kill one mid-transcode/import, recover once; Redis/DB outage and leader failover; no local-volume split across hosts | PUB-03, ADM-03, STO-01 → A34 |
 | OPS-02 Health, logs/trace correlation, metrics/QoE and retention are useful | M C S U | Observability/OTel/QoE packages; search metrics and privacy retention; live evidence `a35-observability` (one browser walk — ffmpeg upload → transcode → CMAF playback over MSE → search — followed on named id fields across eleven hops, with all four job runs and fourteen events carrying the enqueueing request's correlation, request and TRACE ids and the audit row's `job_id` naming the run in the worker's failure lines; a real OpenTelemetry collector showing one trace per server-rendered page spanning vidra-user and vidra-core; a fifteen-check secret sweep over twenty-two artefacts returning zero; a dead-lettered worker job on the admin surfaces with the queue gauge moving 0→1; label cardinality held under 180 requests over 120 distinct URLs with 60 nonsense paths folding into one `route="unmatched"`; a real playback classified `api-proxy` while four client-claimed sources were refused, rolled up with real percentiles and rendered in Chromium; and every retention window run through the shipped prune functions) | PASS | Follow one browser upload/play/search via correlation; inspect safe structured logs, failed worker status and bounded metrics; run retention; distinguish native-HLS/proxy/CDN source truth | SRC-01 → A35. Defects fixed on the way: `jobstatus.RedactDetail` let a bare storage key through into the worker log (core#190), every server-rendered read reached vidra-core with no correlation id and no traceparent (user#184), `vidra_search_table_rows` reported every table empty because PostgreSQL 14+ writes `reltuples = -1` until first analyze (search#39), and three config keys core#189 added never reached the compose environment anchor, which had kept the meta config gate red on `main` (core#190). Findings that need a ruling rather than a patch, none blocking: the QoE beacon ignores the discovery opt-out, so an opted-out viewer's playback still carries their day-scoped pseudonym; `audit_log` has no retention of any kind; `search_outbox` and `qoe_events` carry no correlation column, so both asynchronous hops start a fresh id; a SUCCESSFUL job writes no correlated worker log line; a creator's upload and publish write no audit row at all; the worker role builds a Prometheus registry it can never serve, which is the only place `vidra_search_dead_letters_total` can increment; core has no monotonic job-failure counter; core still logs `object_key`/`storage_key` in the media-GC and storage-migration paths; and vidra-search ships neither logging guard despite handling raw query text |
 | REC-01 Backup includes DB, settings/sealing keys and required media | M C S | `backup.sh`, config archive, deploy runbook local/S3 snapshots; search schema in same DB; matched DB/config/media capture, failed-dump probe and encrypted offsite retrieval verified byte-for-byte (A36 evidence L1561–1594; merged L1664); S3 version-retention documentation still open | PASS | Disposable data: backup/check restore-list; failed dump never finalizes; encrypted offsite config/media retrieval with same timestamp; search models/rebuild plan and S3 version retention documented | INS-04, STO-01 → A36 |
@@ -14579,3 +14579,239 @@ exits when the watchdog fires, that a termination against a phantom session
 reports `publisher_disconnected: false`, that a rendered viewer count moves and
 a terminated page flips without a reload, and that two devices on one NAT count
 as two.
+## A30 ATProto login, linking, cross-posting and donations — 2026-09-08
+
+**INT-06 moves from BLOCKED to PASS and INT-11 from UNVERIFIED to PASS**, both
+against a real local ATProto network that the public Bluesky network never saw.
+Getting there took three fixes in
+[core #213](https://github.com/yegamble/vidra-core/pull/213) and one in
+[user #204](https://github.com/yegamble/vidra-user/pull/204); no migration (core
+stays at schema 141), `api/openapi.yaml` unchanged, so there is no `contract-ci`
+ordering between them. The launch-relevant thing this slice found is not in
+either PR: **an ATProto account can never acquire a second sign-in method**, so
+the refusal that protects it points at a remedy no path allows.
+[Sanitized evidence](evidence/a30-atproto-donations.json).
+
+**The fixture, and why it took three pieces.** The PDS is the reference
+implementation — `@atproto/pds` **0.4.107** from npm, booted on
+`http://localhost:2583` in dev mode with a disk blobstore, no appview and no
+crawlers. It is not self-sufficient for a private lab: account creation submits
+a signed `did:plc` genesis operation to `PDS_DID_PLC_URL`, whose default is the
+**public** plc.directory. So the lab runs a ~40-line local PLC stub on
+`127.0.0.1:2582` that validates the operation with the reference `@did-plc/lib`
+(`assureValidOp`, `didForCreateOp`) and serves the document its `formatDidDoc`
+produces. Third piece: a handle carries no port, so `handle → DID` can only ever
+hit port 80/443 on the handle's own host — and port 80 is privileged on a
+machine with no root. Docker Desktop can publish it without root, so an
+`nginx:alpine` container (pulled from `mirror.gcr.io`, the Docker Hub proxy
+still hangs) holds `127.0.0.1:80` and proxies to the PDS preserving `Host`; the
+DID that comes back is the **PDS's own** `/.well-known/atproto-did` answer, not
+a fixture's. The handle domain is `localtest.me`, a public domain that resolves
+to `127.0.0.1`, which is what makes the whole chain work with no `/etc/hosts`
+edit — the one public thing that happened all session is a DNS lookup for a
+loopback name. Two accounts: `alice.test` (`did:plc:axcs65…`) for the
+app-password cross-posting link, `alice.localtest.me` (`did:plc:nmrfcs…`) for
+identity login. Core runs two processes (`VIDRA_ROLE=api` on `:8088` and a
+separate worker) over its own native postgres 16 cluster on `:55433` and redis
+on `:56380` at schema 141, `STORAGE_BACKEND=local`, `RATE_LIMIT_ENABLED=false`,
+`MALWARE_SCAN_MODE=disabled`, `HTTP_IMPORT_ALLOW_PRIVATE_URLS=true`; the
+frontend is a production `next build` standalone server behind a pipe-only
+origin proxy on `127.0.0.1:8099` that routes `/api/v1` to core, and the browser
+is real Chromium.
+
+**Defect 1 — identity login could not reach a loopback PDS at all, which is why
+it had never run outside unit fakes.** `internal/atproto`'s login client carries
+a documented dev escape hatch: `WithOAuthClientAllowPrivate`, wired from
+`HTTP_IMPORT_ALLOW_PRIVATE_URLS`, whose stated purpose is "so backed e2e can
+reach a loopback PDS/auth server". Two of the three resolution hops ignored it.
+`resolveDIDDoc`'s did:web branch already relaxes to `http` under the knob;
+`resolveHandleHTTP` hardcoded `https://<handle>`, and since a handle cannot
+carry a port that means port 443, forever. The did:plc hop was pinned to
+plc.directory with no override at all. Both are relaxed in #213 under the
+existing loopback declaration — `ATPROTO_PLC_URL` is honoured **only** when
+`HTTP_IMPORT_ALLOW_PRIVATE_URLS` is already on, because pointing DID resolution
+at somebody else's directory is an identity-spoofing primitive and one dev-only
+declaration should unlock the lab rather than a knob per hop. Production, where
+the knob is off, is byte-for-byte unchanged and still pins plc.directory.
+
+**Defect 2 — `/me/oauth-identities` was mounted only when an OIDC provider was
+configured.** ATProto login writes its DID into the same `oauth_identities`
+table, so on an instance with `ATPROTO_LOGIN_ENABLED=true` and no OIDC provider
+— the shape every ATProto-only operator has — both routes answered **404**,
+measured before the fix. That is the list that says which account signs you in
+and the unlink that refuses to strand you, unreachable on accounts that are
+**passwordless and whose DID is their only credential**. The frontend had even
+rationalised it: `ConnectedLogins` treats a 404 as "this instance has no OIDC
+providers configured… there are genuinely no external logins", so a Bluesky user
+saw an empty section rather than an error. #213 constructs the OAuth service
+unconditionally; with zero providers `/auth/oauth/:provider` still answers 404,
+exactly what it answered before.
+
+**SC1, login — passes for the dev loopback client.** `POST /auth/atproto/start`
+resolved the handle bidirectionally, discovered the auth server and completed a
+real **PAR** against the PDS, returning
+`request_uri=urn:ietf:params:oauth:request_uri:req-…`; the attempt is sealed
+into `vidra_atproto_state` (HttpOnly, `SameSite=Lax`, `Path=/api/v1/auth/atproto`,
+`Max-Age=600`, HMAC-signed). In Chromium the PDS's own sign-in page arrived with
+the handle pre-filled and disabled from the `login_hint`, and the consent screen
+listed exactly one requested permission: **"Uniquely identify you"** — the
+identity-only `atproto` scope, nothing about reading or writing the repo.
+Authorize redirected back to `127.0.0.1:8099` and the session was normal
+afterwards: refresh cookie → access token → `/auth/me`. The account was
+**created**, not linked: username `alice` from the handle's first label, email
+`did-plc-nmrfcsxnecn7fb27gg5rnv2j@atproto.invalid` (RFC 2606, unroutable),
+role `user`, `email_verified` false, no password. There is no email-linking
+branch for ATProto by design, so a password account with the same person behind
+it gets a *separate* account — that is the shipped policy, not a defect. Signing
+in again returned the **same** user id and `created_at`: existing identity →
+login. The state matrix: no cookie **400**; a tampered cookie **400**; the right
+cookie with the wrong state **400 "atproto state mismatch"**; the right state
+with `iss=https://bsky.social` **302 `?oauth_error=atproto_identity_mismatch`**
+and no session, same with no `iss` at all — RFC 9207 enforced. A replay after
+the callback cleared its single-use cookie is a 400. `start` negatives: a
+malformed handle 422, an unresolvable one **502 `atproto_resolution_failed`**, an
+off-origin `return_to` 422. With `ATPROTO_LOGIN_ENABLED=false`, `/instance`
+reports `atproto_login: false`, the **Bluesky control disappears from the login
+page**, and `start` answers **503 `atproto_disabled`**;
+`client-metadata.json` stays 200 as the stable contract. With
+`ATPROTO_ENABLED=false` the three `/me/atproto` routes answer 503.
+
+**What SC1 does NOT prove.** `PUBLIC_BASE_URL` was http, so Vidra used the
+spec's virtual-localhost dev client (`http://localhost?redirect_uri=…&scope=atproto`)
+rather than the production hosted client — on an https instance `ClientID()`
+becomes the `client-metadata.json` URL and the auth server fetches it. That path
+stays **unverified**: it needs an https origin the PDS will fetch, which a
+loopback lab cannot mint. And a replay of a *used* authorization code with a
+still-valid state cookie could not be constructed, because the cookie is
+httpOnly and the callback clears it.
+
+**SC2, link and unlink.** Two different things wear the word "link" here and both
+were exercised. The **cross-posting link** (`PUT /me/atproto`) verified the
+handle and app password against the real PDS through
+`com.atproto.server.createSession` and stored the returned DID; the app password
+is at rest as `enc:…` (68 chars) and `GET` never returns it. Unlink 204 → status
+404 → unlink again 204 (idempotent) → relink 200. A wrong app password is a
+typed **422** ("Bluesky rejected these credentials; check the handle and app
+password"). Anonymous is 401; a second user sees only their own row (404) and
+their DELETE is a no-op that leaves the owner's link intact. The **identity
+link** (`/me/oauth-identities`), once mounted, listed `provider: atproto` with
+`handle: alice.localtest.me`, and unlinking it — the account's only sign-in
+method — was refused **422 "cannot remove the last sign-in method — set a
+password first"**, surfaced honestly in the settings UI with that remedy. One
+pinned quirk: the last-credential guard runs *before* the "is this provider
+linked" lookup, so a passwordless account gets the same 422 for a provider it
+never linked (a password account gets 404). Nothing is removed either way.
+
+**And the remedy is a dead end — the finding this slice exists to surface.** The
+422 says "set a password first (use the password-reset flow)". For an
+ATProto-created account that flow cannot complete: `ChangePassword` returns
+`ErrPasswordNotSet` (there is no current password to supply),
+`RequestEmailChange` returns `ErrPasswordNotSet` for the same reason, and the
+password-reset mail goes to `…@atproto.invalid`, which is unroutable **by
+design**. So the account has exactly one credential, cannot acquire a second,
+and cannot release the one it has. Lose the ATProto account or its handle and
+the Vidra account is gone with it. Closing this needs a "set a password"
+capability for passwordless accounts, authorised by the live session rather than
+by a password or an email round trip — bigger than this slice, and recorded
+rather than built.
+
+**SC3, cross-posting.** Publishing a **public** video created exactly one queue
+row, which the worker drained into
+`at://did:plc:axcs65…/app.bsky.feed.post/3muzplrn7ak2x`. The record's text is the
+video title; the watch URL rides in `app.bsky.embed.external.uri` as
+`http://localhost:8099/v/pmwTzyEVua5` — the A08 short form — alongside a real
+16,664-byte `image/jpeg` thumbnail blob uploaded to the PDS. Chromium opened
+that URL: **200**, correct title. Worth stating plainly because the row's
+procedure asks for the URL in the post text: **it is in the embed card, never in
+the text**, so a client that does not render external embeds shows a post with
+no link. Private exclusion holds three ways — a `private` publish, an `unlisted`
+publish and a public draft that was never uploaded produced **no queue row and no
+post**. Across the whole session the PDS repo held exactly **3** records for
+exactly **3** published public videos.
+
+**No public rehearsal posts, asserted rather than assumed.** Every request the
+browser made went to `127.0.0.1:8099` or `localhost:2583` and nothing else. The
+stored `pds_url` is the loopback PDS, the OAuth issuer bound into the state
+cookie is `http://localhost:2583`, the PLC directory is the loopback stub, and
+the PDS itself was configured with no appview and no crawlers. `bsky.social`
+appears exactly once in the entire record: as a deliberately **forged** callback
+`iss`, rejected before any outbound hop.
+
+**SC4, the sealed credential and the outage.** Killing and restarting **both**
+core processes changed nothing: the next public publish opened the `enc:`-sealed
+app password under `ATPROTO_KEY_KEK` and posted (`3muzponpfks2x`). Booting the
+worker with a **wrong KEK** fails closed the way it should — the post
+dead-letters *immediately* as a permanent error (`state: failed`, `attempts: 1`,
+`the stored app password could not be opened`), burning no retries and leaking no
+plaintext. With the PDS stopped, a publish retried on the shipped ladder:
+attempt 1 rescheduled **+30.000 s**, attempt 2 **+59.9997 s** — the documented
+30 s base doubling per attempt, capped at 6 h with dead-lettering after six —
+and the recorded error is safe (`atproto: XRPC
+com.atproto.server.createSession failed: status 0`, no URL, no credential).
+Restarting the PDS delivered it **once**: three records for three videos, no
+duplicate. One gap: those rows project into `job_runs` through the
+`sync_legacy_job_run` trigger, but there is **no creator-facing view** of an
+auto-post's state, so a creator whose cross-post dead-lettered is never told.
+
+**SC5, donation addresses.** The curated set is bitcoin, ethereum, litecoin,
+monero; an unknown network is a 422 naming all four, and a malformed address is a
+422 naming the network (`is not a valid bitcoin address`). All four valid
+addresses stored **unverified**. Ownership proof exists only where a vetted
+signing standard does: a bitcoin challenge answers **501 not_implemented**
+("address ownership verification is not supported for this network"), while
+ethereum issues a challenge whose message binds the instance, the network, the
+exact address and a 128-bit nonce with a 10-minute expiry. Signing that message
+with a *different* key is **422 "signature did not verify for this address"**, a
+malformed signature is 422, and a genuine EIP-191 `personal_sign` from the
+address's own key flips it to `verified: true`. The challenge is single-use:
+verifying again is **409 "no active verification challenge; request one first"**.
+Wrong actors: another user's delete, challenge and verify are all **403**,
+anonymous is **401**, an unknown id is **404**, delete is 204 then 404.
+
+**SC6, honest display.** The watch page's Support dialog, opened by an
+**anonymous** viewer, leads with "Send crypto directly to the creator. **Vidra
+never holds or processes funds.**" and closes with "Payments are peer-to-peer and
+irreversible. Double-check the address before sending." Each address carries its
+state — the proven one badged **VERIFIED** with "Ownership proven by signed
+message", the rest **UNVERIFIED** — and there is no balance, no payment
+confirmation, no thank-you, nothing that implies Vidra saw a transaction.
+Deleting the Monero address removed it from the dialog on a hard reload. The
+public projection returns only id, owner, network, address, label, verified and
+created_at — never the nonce or its expiry. A private video is a 404 for an
+anonymous viewer, so there is no dialog to open. The creator's own management
+view is equally plain ("Display only — Vidra never holds funds or processes
+payments"), explains per-network why verification is or is not offered, and shows
+the exact message to sign. One gap: `GET /users/{id}/donation-addresses` is
+described in code as the public projection **for a profile page**, but nothing
+renders it there — the only consumer is the Support button, which reaches it
+through a *channel's* owner id. A creator with no channel has donation addresses
+that no page shows.
+
+**Also found.** The 5xx error envelope scrubs the ATProto cross-post messages:
+`Bluesky cross-posting is not enabled on this instance` (503) and `could not
+reach the Bluesky server; please try again` (502) both reach the client as the
+generic "an unexpected error occurred", because neither carries a machine code
+the way `ATProtoLoginError` does — the login endpoints' typed codes survive. The
+disabled check on the login callback runs *after* the state-cookie check, so a
+bare callback on a disabled instance is a 400 rather than the typed 503. And the
+Connected logins row identified a Bluesky identity as "Atproto · no email
+recorded" when the handle was in the payload for exactly that purpose (fixed in
+user #204).
+
+**Gates.** vidra-core `make ci` passes (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race). vidra-user `npm run ci` (typecheck,
+lint, lint:icons, unit, build, e2e) passes. The meta change is documentation
+only. Not run: the tagged integration lanes needing docker-compose, and any
+provider-backed check — deliberately, since the whole point of this slice is
+that nothing reached a public network.
+
+**What stays open.** INT-06's production hosted-client OAuth path (an https
+`PUBLIC_BASE_URL` whose `client-metadata.json` the auth server fetches) is
+unverified. The passwordless-account dead end (no second sign-in method ever) is
+a product gap with no fix in these PRs. Cross-post failures have no
+creator-visible surface. SCP-01 (payments, invoices, tips, custodial wallets)
+remains explicitly deferred — INT-11 covers verified display only, and this lab
+confirms the code contains no notion of a balance, payment or settlement.
+Credentials, app passwords, PDS data and lab dumps stay outside the repo; the
+PDS, the PLC stub, the port-80 container, the extra postgres cluster and the
+redis instance were all torn down at the end.
