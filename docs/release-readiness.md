@@ -14553,13 +14553,14 @@ one.
 
 **Gates.** vidra-core `make ci` — fmt-check, vet, migrate-lint, openapi-verify,
 sqlc-verify, test-race — **exit 0**, plus `go vet -tags=integration ./...` exit
-0; new tests in `internal/live` (the drop contract against a fake control
-server: `0`, `1`, `3`, empty, HTML, 404, 401, the request shape and a bounded
-body; the two watchdog paths; the count in the audit row) and in
+0; **16 new tests** — 9 in `internal/live` (the drop contract against a fake
+control server: `0`, `1`, `3`, empty, HTML, 404, 401, the request shape and a
+bounded body; the two watchdog paths; the count in the audit row) and 7 in
 `internal/httpapi` (a termination driven through the REAL HTTP controller
-against a fake ingest answering `0` and `1`, the owner's end, and six on the
+against a fake ingest answering `0` and `1`, the owner's end, and four on the
 viewer principal). vidra-user `npm run ci` on Node 26 — **exit 0**: 258 test
-files / 2586 unit tests and 627 e2e, with six added in `LiveWatchView.test.tsx`.
+files / 2586 unit tests and 627 e2e, with **6 added** in
+`LiveWatchView.test.tsx`.
 Five assertions were verified to bite by breaking the code under them: ignoring
 the drop count, giving the watchdog back its bare state flip, dropping the
 `count` metadata, reverting the view to offline-only polling, and removing the

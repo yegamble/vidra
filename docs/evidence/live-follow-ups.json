@@ -58,12 +58,14 @@
   "gates": {
     "vidra_core": {
       "make ci": "exit 0 (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race)",
-      "go vet -tags=integration ./...": "exit 0"
+      "go vet -tags=integration ./...": "exit 0",
+      "new_tests": "16 — 9 in internal/live (control_test.go x4, terminate_test.go x5) and 7 in internal/httpapi (live_viewers_test.go x4, admin_live_test.go x3); TestOwnerEndStoresNoReason and TestLiveDurationWatchdogHTTP were extended rather than added"
     },
     "vidra_user": {
       "npm run ci": "exit 0 on Node 26.8.1 — typecheck, lint, lint:icons, vitest, production build, e2e",
       "unit": "258 test files / 2586 tests",
-      "e2e": "627 passed"
+      "e2e": "627 passed",
+      "new_tests": "6 in components/LiveWatchView.test.tsx"
     },
     "meta": {
       "python3 -m unittest discover -s tests -p '*_test.py'": "run for this slice",
