@@ -9,7 +9,9 @@ lifted out of the real scripts — the same trick tests/caddy_reload_test.py use
 them.
 """
 from pathlib import Path
+import gzip
 import subprocess
+import tempfile
 import unittest
 
 DEPLOY = Path(__file__).resolve().parents[1] / 'deploy'
@@ -142,6 +144,25 @@ class RestorePreflightTests(unittest.TestCase):
         self.assertIn('the dump is at 18', out)
         self.assertIn('carries up to 16', out)
 
+    def test_nothing_stops_the_site_until_every_validation_has_passed(self):
+        """A37-3: the stop used to be the FIRST thing the script did, so a
+        corrupt archive or a mismatched pairing took the site down and then
+        correctly refused to change anything. Every refusal must now happen with
+        api/search/frontend still serving. Indexes are taken over the COMMANDS,
+        not the prose, so a comment mentioning `stop` cannot move them."""
+        source = (DEPLOY / 'restore.sh').read_text()
+        code = '\n'.join(l for l in source.splitlines()
+                         if l.strip() and not l.lstrip().startswith('#'))
+        stop = code.index('stop api search frontend')
+        self.assertLess(code.index('gzip -dc'), stop,
+                        'the archive must be decompressed before the site is stopped')
+        self.assertLess(code.index('pg_restore -l'), stop,
+                        'the archive must be validated before the site is stopped')
+        self.assertLess(code.index('preflight_schema "core"'), stop,
+                        'the schema preflight must run before the site is stopped')
+        self.assertLess(stop, code.index('dropdb -U'),
+                        'the site must be stopped before the database is dropped')
+
     def test_the_preflight_runs_before_the_drop(self):
         """Ordering is the whole point: a refusal must mean nothing happened.
         Indexes are taken over the COMMANDS, not the prose, so a comment
@@ -158,6 +179,148 @@ class RestorePreflightTests(unittest.TestCase):
         self.assertLess(code.index('preflight_schema "core"'),
                         code.index('log "running core migrations"'),
                         'the preflight must run before the real migrator step')
+
+
+class RestoreArchiveDecompressionTests(unittest.TestCase):
+    """A37-4: a corrupt .gz died on gzip's own message and nothing else, because
+    the `*.gz)` branch was not `|| die`-guarded. `set -e` got the exit code right
+    and left the operator reading a CRC error with no line saying the restore
+    refused or that the database was untouched."""
+
+    HARNESS = (
+        'set -euo pipefail\n'
+        'DUMP="$1"\n'
+        'HOST_TMP="$2"\n'
+        "log() { printf '[restore] %s\\n' \"$*\"; }\n"
+        "die() { printf '[restore] ERROR: %s\\n' \"$*\" >&2; exit 1; }\n"
+    )
+
+    # A real pg_dump custom-format archive starts with this magic; the body is
+    # filler, because nothing here parses the archive — it only decompresses it.
+    FAKE_ARCHIVE = b'PGDMP not-a-real-dump-just-filler\n' * 64
+
+    def decompress_block(self):
+        """The `case "$DUMP" in … esac` normalisation block, verbatim from the
+        real script, so this test fails if the guard is removed."""
+        source = (DEPLOY / 'restore.sh').read_text()
+        start = source.index('case "$DUMP" in')
+        end = source.index('\nesac', start) + len('\nesac')
+        return source[start:end]
+
+    def run_block(self, dump):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'out'
+            script = self.HARNESS + self.decompress_block()
+            p = subprocess.run(['bash', '-c', script, 'restore', str(dump), str(out)],
+                               capture_output=True, text=True,
+                               env={'PATH': '/usr/bin:/bin:/usr/sbin:/sbin'})
+            return p.returncode, p.stdout + p.stderr
+
+    def test_a_corrupt_gz_prints_the_scripts_own_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / 'vidra-corrupt.dump.gz'
+            # Flip a byte inside the deflate stream: a real CRC failure, which is
+            # what a truncated or bit-rotted transfer produces.
+            corrupt = bytearray(gzip.compress(self.FAKE_ARCHIVE))
+            corrupt[len(corrupt) // 2] ^= 0xFF
+            bad.write_bytes(bytes(corrupt))
+            code, out = self.run_block(bad)
+        self.assertNotEqual(code, 0, out)
+        self.assertIn('[restore] ERROR:', out)
+        self.assertIn('could not be decompressed', out)
+        self.assertIn('nothing was dropped', out)
+
+    def test_a_file_that_is_not_gzip_at_all_lands_in_the_same_branch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / 'not-really.dump.gz'
+            bad.write_bytes(b'this is not a gzip stream')
+            code, out = self.run_block(bad)
+        self.assertNotEqual(code, 0, out)
+        self.assertIn('[restore] ERROR:', out)
+
+    def test_a_valid_gz_decompresses_without_complaint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ok = Path(tmp) / 'vidra-good.dump.gz'
+            ok.write_bytes(gzip.compress(self.FAKE_ARCHIVE))
+            code, out = self.run_block(ok)
+        self.assertEqual(code, 0, out)
+        self.assertIn('decompressing', out)
+
+
+class RollbackEnvRestoreTests(unittest.TestCase):
+    """A38R-2: a refusal AFTER the env rewrite used to leave env/production.env
+    pinned to the ROLLBACK TARGET while the pull message read
+    "($ENV_FILE restored from ${ENV_FILE}.bak if you need to undo)" — which an
+    operator mid-incident can read as a statement that it was. It was not. The
+    running stack is untouched on every one of these paths, so the next command
+    they type is the only casualty, and it reads tags that were never deployed."""
+
+    HARNESS = (
+        'set -euo pipefail\n'
+        'ENV_FILE="$1"\n'
+        "log() { printf '[rollback] %s\\n' \"$*\"; }\n"
+        "die() { printf '[rollback] ERROR: %s\\n' \"$*\" >&2; exit 1; }\n"
+    )
+
+    BEFORE = 'VIDRA_CORE_TAG=v0.6.3\nVIDRA_USER_TAG=v0.6.3\n'
+    AFTER = 'VIDRA_CORE_TAG=v0.6.2\nVIDRA_USER_TAG=v0.6.2\n'
+
+    def run_helper(self, with_bak=True):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = Path(tmp) / 'production.env'
+            env.write_text(self.AFTER)          # already rewritten to the target
+            if with_bak:
+                Path(str(env) + '.bak').write_text(self.BEFORE)
+            script = (self.HARNESS
+                      + extract('rollback.sh', 'restore_env_and_die')
+                      + '\nrestore_env_and_die "pull failed"\n')
+            p = subprocess.run(['bash', '-c', script, 'rollback', str(env)],
+                               capture_output=True, text=True,
+                               env={'PATH': '/usr/bin:/bin'})
+            return p.returncode, p.stdout + p.stderr, env.read_text()
+
+    def test_a_refusal_puts_the_env_file_back(self):
+        code, out, content = self.run_helper()
+        self.assertNotEqual(code, 0, out)
+        self.assertEqual(content, self.BEFORE,
+                         'the env file must hold the tags that were being served')
+        self.assertIn('restored', out)
+        self.assertIn('[rollback] ERROR: pull failed', out)
+
+    def test_a_missing_bak_says_so_instead_of_claiming_a_restore(self):
+        """The one thing worse than not restoring is saying you did."""
+        code, out, content = self.run_helper(with_bak=False)
+        self.assertNotEqual(code, 0, out)
+        self.assertEqual(content, self.AFTER)
+        self.assertIn('could not restore', out)
+        self.assertIn('backups/env-history/', out)
+
+    def test_every_refusal_after_the_rewrite_goes_through_the_helper(self):
+        """Counted over the CODE so the explanatory comments do not inflate it:
+        the definition plus the checkout-sync trio, `config -q` and `pull`."""
+        source = (DEPLOY / 'rollback.sh').read_text()
+        code = [l for l in source.splitlines()
+                if l.strip() and not l.lstrip().startswith('#')]
+        uses = sum(1 for l in code if 'restore_env_and_die' in l)
+        self.assertEqual(uses, 6, 'expected the definition plus the five refusal '
+                                  'paths between the env rewrite and `up -d` '
+                                  f'(checkout sync x3, config -q, pull), found {uses}')
+        self.assertNotIn('restored from ${ENV_FILE}.bak if you need to undo',
+                         '\n'.join(code),
+                         'the message that reads as if the .bak had been restored '
+                         'must not survive the fix (the comment above the helper '
+                         'quotes it deliberately, which is why this reads the code)')
+
+    def test_the_helper_sits_between_the_rewrite_and_up_d(self):
+        source = (DEPLOY / 'rollback.sh').read_text()
+        code = '\n'.join(l for l in source.splitlines()
+                         if l.strip() and not l.lstrip().startswith('#'))
+        self.assertLess(code.index('cp "$ENV_FILE" "${ENV_FILE}.bak"'),
+                        code.index('restore_env_and_die() {'),
+                        'the .bak must exist before anything can restore from it')
+        self.assertLess(code.index('restore_env_and_die "pull failed'),
+                        code.index('log "restarting"'),
+                        'every path the helper guards must come before `up -d`')
 
 
 # --- rollback.sh: the trailer survives a failing `up -d` ----------------------
