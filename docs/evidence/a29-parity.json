@@ -157,7 +157,8 @@
       "go vet -tags=integration ./...": "clean",
       "go test -tags=integration -count=1 -p 1 ./internal/federation/... ./internal/store/...": "ok — against a FRESH PostgreSQL 16.15 (Homebrew, native, no Docker) migrated 0→142 and a native Redis 8.x",
       "also run": "go test -tags=integration -p 1 ./internal/httpapi/... ./cmd/api/... ./internal/video/... — all ok",
-      "fixtures corrected": "two pre-existing integration seeds gave a channel its owner's EXACT username — the collision the namespace now refuses, and precisely the shape the backfill renames on a real instance. They derive a handle instead."
+      "fixtures corrected": "two pre-existing integration seeds gave a channel its owner's EXACT username — the collision the namespace now refuses, and precisely the shape the backfill renames on a real instance. They derive a handle instead.",
+      "ci-required": "**RED**, for one named reason: `prev-release-against-new-schema`. See schema_compat_collision below. Every other required lane is green — build-test, integration, openapi, ipfs-integration, ipfs-private-integration, prev-migrator-against-new-schema, GitGuardian."
     },
     "vidra-user": {
       "npm run ci": "PASS on Node 26.8.1 / npm 11.19.0 — typecheck, lint (2 pre-existing warnings, 0 errors), lint:icons, 2587 vitest tests in 258 files, next build, 627 Playwright e2e",
@@ -190,5 +191,17 @@
     "UsernameExists probed only `users`, so OAuth/ATProto username derivation could land on a channel handle. It probes the shared namespace now.",
     "A pending registration REQUEST is still only checked against the channel namespace at APPROVAL time, not at submission — the same behaviour a username already taken by a user has always had there. Left as it is, and stated.",
     "Local blocks and mutes of remote actors: muted_accounts.muted_id is still a users FK, so there is no per-remote-account MUTE, only a block. Not in scope and not changed."
-  ]
+  ],
+  "schema_compat_collision": {
+    "verdict": "OPEN — needs an owner ruling. This slice does not resolve it and does not weaken either rule to hide it.",
+    "what_is_red": "vidra-core's `prev-release-against-new-schema` lane (schema-compat.yml), which is part of `ci-required`. It applies HEAD's migrations to a fresh database and then runs the PREVIOUS RELEASE TAG's own integration suite against it. v0.6.2's `internal/store/search_filters_integration_test.go` seeds a channel whose handle EQUALS its owner's username — the exact collision 0142 refuses — so it fails at `actor_handles_pkey`.",
+    "why_it_is_not_a_bug_in_this_slice": "It is the policy working. The one-release schema-compat policy says release N-1's CODE must keep running against release N's SCHEMA, and `migrate-lint` spells out the additive half of it: add tables/columns/indexes, WIDEN CHECKs, RELAX NOT NULL. Unifying two namespaces is a TIGHTENING by construction — you cannot promise that the old code may keep creating collisions in a namespace whose whole point is that collisions are invalid.",
+    "measured_consequence_of_a_rollback": "Not a crash and not data loss. v0.6.2 maps 23505 through `pgconv.IsUniqueViolation` at both sites, so against the new schema it answers 409 'channel handle already taken' where it used to answer 201, and 409 'username or email already taken' on the account side. A rolled-back instance stays up and only refuses a handle that collides across the namespace — which is the thing this ruling declares invalid anyway. The failing lane is v0.6.2's own FIXTURE asserting the old permissiveness, not a broken read or write path.",
+    "the_two_options_costed": [
+      "ACCEPT THE BREAK: merge as is, and record in deploy/README.md's release policy that 0142 is a deliberate one-release compat break whose only effect on N-1 is a 409 in place of a 201 for a cross-namespace handle. Cost: the executable policy has a documented exception, and the lane stays red until v0.6.3 becomes N-1.",
+      "STAGE IT OVER TWO RELEASES: release N ships actor_handles, the backfill, the aliases and the triggers that MAINTAIN the reservation, with the refusal in the APPLICATION only; release N+1 adds the unique key. Cost: for one release the database does not guarantee the namespace — which is precisely the guarantee SC1 asked for, and precisely the hole the rehearsal found (a channel taking an existing username answered 201). A reservation table that can silently under-report is the kind of safety feature this codebase rejects on principle."
+    ],
+    "not_done_deliberately": "The workflow was not touched (vidra-core AGENTS.md rule 7), the constraint was not weakened, and no session-variable trapdoor was added to let N-1 write past the trigger — a guarantee that a missing GUC silently removes reads as protection and is not.",
+    "unrelated_flake_seen_in_the_same_lane": "TestSearchSortAndFilterBehaviourAgainstPostgres/sorts_order failed on ONE of the seven runs of this lane and passed on the others, with the same tree. A relevance tie-break flake in v0.6.2's suite, not caused by this slice."
+  }
 }

@@ -10816,6 +10816,55 @@ than skipped: meta CI's lint loop now covers `docs/evidence/*.sh` (closed by
 the storage-hardening slice above) but reaches no `.go` file under `docs/`, so
 this simulator was formatted and built by hand.
 
+### The compat collision, which is an owner's call and not a defect
+
+`prev-release-against-new-schema` fails, and it is the policy working rather
+than a bug in the migration. That lane applies HEAD's migrations to a fresh
+database and then runs **v0.6.2's own integration suite** against it; v0.6.2's
+`internal/store/search_filters_integration_test.go` seeds a channel whose handle
+EQUALS its owner's username — the exact collision 0142 refuses — and fails on
+`actor_handles_pkey`.
+
+The one-release schema-compat policy says release N-1's CODE must keep running
+against release N's SCHEMA, and `migrate-lint` spells out the additive half of
+it: add tables, columns and indexes, WIDEN CHECKs, RELAX NOT NULL. **Unifying two
+namespaces is a tightening by construction.** You cannot promise that the old
+code may keep creating collisions in a namespace whose entire purpose is that
+collisions are invalid.
+
+What a rollback actually costs is smaller than the red tick suggests, and it was
+measured rather than assumed: v0.6.2 maps 23505 through
+`pgconv.IsUniqueViolation` at both sites, so against the new schema it answers
+**409 "channel handle already taken"** where it used to answer 201, and 409 on
+the account side. No crash, no 500, no data loss — a rolled-back instance stays
+up and refuses exactly the handle this ruling declares invalid. The failing lane
+is v0.6.2's FIXTURE asserting the old permissiveness, not a broken read or write
+path.
+
+Two ways out, both the owner's to choose:
+
+1. **Accept the break.** Merge as is and record in `deploy/README.md`'s release
+   policy that 0142 is a deliberate one-release compat break whose only effect on
+   N-1 is a 409 in place of a 201. The executable policy gains a documented
+   exception and the lane stays red until v0.6.3 becomes N-1.
+2. **Stage it over two releases.** Release N ships `actor_handles`, the backfill,
+   the aliases and the triggers that MAINTAIN the reservation, with the refusal in
+   the APPLICATION only; release N+1 adds the unique key. The cost is that for one
+   release the database does not guarantee the namespace — which is the guarantee
+   SC1 asked for, and the exact hole the rehearsal found when creating a channel
+   named after an existing account answered **201**. A reservation table that can
+   silently under-report is the kind of safety feature this codebase rejects on
+   principle.
+
+Three things were deliberately NOT done to make the tick green: the workflow was
+not touched, the constraint was not weakened, and no session-variable trapdoor
+was added to let N-1 write past the trigger — a guarantee a missing GUC silently
+removes reads as protection and is not.
+
+(One flake seen in the same lane and not caused by this slice:
+`TestSearchSortAndFilterBehaviourAgainstPostgres/sorts_order` failed on one of
+seven runs against the same tree and passed on the others.)
+
 ### Unverified, and named rather than skipped
 
 The **selected bucket** — no credentials are on this machine, so a real
@@ -14330,7 +14379,10 @@ channel actor otherwise, and unblocks with the same URL verbatim.
 ### Gates
 
 `vidra-core`: `make ci` **PASS** (fmt-check, vet, migrate-lint — 142 up
-migrations clean, openapi-verify, sqlc-verify, test-race). `go vet
+migrations clean, openapi-verify, sqlc-verify, test-race). **`ci-required` is
+RED**, for one named reason — see "The compat collision" below; every other
+required lane is green (build-test, integration, openapi, ipfs-integration,
+ipfs-private-integration, prev-migrator-against-new-schema, GitGuardian). `go vet
 -tags=integration ./...` clean. `go test -tags=integration -count=1 -p 1
 ./internal/federation/... ./internal/store/...` **ok** against a FRESH
 PostgreSQL 16.15 (Homebrew, native — no Docker was used) migrated 0→142 and a
