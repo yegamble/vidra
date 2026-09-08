@@ -15099,10 +15099,20 @@ a `correlation_id` including the ones a transcode completion queued (F(d)), and
 
 `vidra-core`: `make ci` **PASS** on both commits of #215 (fmt-check, vet,
 migrate-lint at 142, openapi-verify, sqlc-verify, test-race); `ci-required`
-green. `vidra-user`: typecheck PASS, lint 0 errors / 2 pre-existing warnings,
-lint:icons PASS, **2598 vitest tests in 259 files**, `next build` PASS,
-`e2e/remote-videos.spec.ts` 11 passed. This repo: evidence only;
-`python3 -m unittest discover -s tests -p '*_test.py'` **OK**. Every code change
+**SUCCESS**. `vidra-user`: typecheck PASS, lint 0 errors / 2 pre-existing
+warnings, lint:icons PASS, **2598 vitest tests in 259 files**, `next build` PASS,
+and the full Playwright suite **627 passed**. One trap worth recording, because
+it cost a re-run: the e2e suite fails 7 tests against a build made WITHOUT
+`NEXT_PUBLIC_API_BASE_URL`, and the lab NEEDS such a build — one bundle serving
+two origins through runtime `PUBLIC_API_BASE_URL` — while `npm run ci` bakes
+`http://localhost:8080` and `hls`/`watch`/`about` assert the absolute `src`. The
+failures reproduce identically on unmodified `origin/main` files, so they say
+nothing about the change and everything about which build is in the tree.
+`vidra-user`'s `contract` lane is red on #205 BY DESIGN: it regenerates from
+vidra-core's DEFAULT branch, which does not carry the 301 yet, which is exactly
+why that PR stays a draft until core #215 merges. This repo: evidence only;
+`python3 -m unittest discover -s tests -p '*_test.py'` **OK (48 tests)**;
+`ci-required` SUCCESS. Every code change
 is test-first, and each new test names the lab observation it encodes.
 `api/openapi.yaml` gains one response (the 301), so core #215 lands before user
 #205, which carries the regen and stays draft until it does.

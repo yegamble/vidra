@@ -326,7 +326,7 @@
  },
  "sc6_mig06_and_regression": {
   "mig06_identity_clause": "STILL UNVERIFIED, unchanged and deliberately not faked. Source identity after a migration needs actor-`id` continuity, key continuity or a `Move`, which `dispatchActivity` still has no arm for. What 0142 freezes is an id across a RENAME on one instance, which is a different promise from an identity that survives moving hosts.",
-  "regression": "vidra-core `make ci` PASS (fmt-check, vet, migrate-lint at 142, openapi-verify, sqlc-verify, test-race) on both commits of #215. vidra-user: typecheck PASS, lint 0 errors / 2 pre-existing warnings, lint:icons PASS, 2598 vitest tests in 259 files PASS, `next build` PASS, `e2e/remote-videos.spec.ts` 11 passed. Every code change is TDD: each defect got a failing test first, and each test names the lab observation it encodes.",
+  "regression": "vidra-core `make ci` PASS (fmt-check, vet, migrate-lint at 142, openapi-verify, sqlc-verify, test-race) on both commits of #215; `ci-required` SUCCESS on head 542b0f3. vidra-user: typecheck PASS, lint 0 errors / 2 pre-existing warnings, lint:icons PASS, 2598 vitest tests in 259 files PASS, `next build` PASS, and the FULL Playwright suite **627 passed**. Every code change is TDD: each defect got a failing test first, and each test names the lab observation it encodes.",
   "openapi": "one response added (301 on GET /api/v1/channels/{handle}) \u2192 vidra-core #215 first, vidra-user #205 carries the regen and stays draft until core merges."
  },
  "defects_found": [
@@ -344,8 +344,9 @@
  ],
  "gates": {
   "vidra-core": "make ci PASS at schema 142; ci-required green on #215",
-  "vidra-user": "typecheck, lint, lint:icons, 2598 vitest, next build, e2e/remote-videos.spec.ts (11) all PASS",
-  "meta": "evidence only; python3 -m unittest discover -s tests -p '*_test.py' OK"
+  "vidra-user": "typecheck, lint, lint:icons, 2598 vitest tests in 259 files, next build and the full 627-test Playwright suite all PASS",
+  "meta": "evidence only; python3 -m unittest discover -s tests -p '*_test.py' OK (48 tests); ci-required SUCCESS on meta #161",
+  "vidra-user-trap": "A trap worth recording: the e2e suite fails 7 tests against a build made WITHOUT `NEXT_PUBLIC_API_BASE_URL`. The lab needs a build with no baked base URL (both origins are served from one bundle through runtime PUBLIC_API_BASE_URL); `npm run ci` bakes `http://localhost:8080`, and hls/watch/about assert the absolute src. The failures reproduce identically on unmodified origin/main files, so they say nothing about the change \u2014 they say the tree still held the LAB build. Rebuilt with the ci env: 627/627."
  },
  "not_run": [
   "TLS anywhere, real hostnames, and any interoperability with PeerTube or Mastodon \u2014 still UNVERIFIED, unchanged since A29",
@@ -353,5 +354,10 @@
   "MIG-06's identity/Move clause",
   "the vidra-user backed Playwright suites"
  ],
- "teardown": "The lab was torn down: both core api and worker processes, both frontends, Caddy, the AP peer, the throwaway PostgreSQL cluster and redis. Credentials, raw logs, fixtures and browser traces stay private under /tmp/a29lab; nothing from it is committed."
+ "teardown": "The lab was torn down: both core api and worker processes, both frontends, Caddy, the AP peer, the throwaway PostgreSQL cluster and redis. Credentials, raw logs, fixtures and browser traces stay private under /tmp/a29lab; nothing from it is committed.",
+ "prs": {
+  "vidra-core #215": "https://github.com/yegamble/vidra-core/pull/215 \u2014 the four core defects; ci-required SUCCESS; NOT merged",
+  "vidra-user #205": "https://github.com/yegamble/vidra-user/pull/205 \u2014 the threaded mirror plus the contract regen; every lane green EXCEPT `contract`, which fails by design because it regenerates from vidra-core's DEFAULT branch and the 301 is not there yet; stays a draft until core #215 merges",
+  "meta #161": "https://github.com/yegamble/vidra/pull/161 \u2014 this evidence; ci-required SUCCESS"
+ }
 }
