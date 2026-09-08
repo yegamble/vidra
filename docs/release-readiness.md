@@ -8678,6 +8678,13 @@ capability probes and `TestLiveRTMPEndToEnd`, exactly the registered set.
 
 ### Remote CI on this slice
 
+Timings below are the first full implementation run on each branch. Two
+behaviour-preserving follow-up commits (extract the manifest-name check into one
+shared `check-required-manifest.sh`; replace its name matcher, whose alternation
+ended in an escaped `\$` rather than an end-of-line anchor, with an exact
+`grep -qxF` compare) re-ran every lane in all four repos, and every branch is
+**green at its head commit**.
+
 | PR | Checks | Notable |
 |---|---|---|
 | [core#194](https://github.com/yegamble/vidra-core/pull/194) [run 34192222487…](https://github.com/yegamble/vidra-core/actions/runs/34192222487) | **10/10 pass** — `build-test` 4m46s, `integration` 7m12s, `openapi` 1m31s, `ipfs-integration` 1m4s, `ipfs-private-integration` 1m55s, `guard` 5s, `prev-migrator-against-new-schema` 1m29s, `prev-release-against-new-schema` 6m22s, GitGuardian, **`ci-required` 7m18s** | Go 1.27 builds and tests clean; `go mod verify` "all modules verified"; `tidy -diff` exit 0; audits `6 registered skips / 4703 passed / 0 unregistered`, `0 skipped / 2 passed` (ipfs local), `0 skipped / 43 passed` (ipfs private), static guard `4 registered sites` |
@@ -8690,11 +8697,33 @@ after the last lane — 7m18s in core against a 4m46s–7m12s spread, 9m22s in u
 against lanes finishing between 5s and 7m43s. It is not a lane that passes by
 running nothing.
 
+**And it failed for real, unplanned.** On the head-commit re-run, core's
+`prev-release-against-new-schema` failed, and `ci-required` **failed with it**
+(run [34194101356](https://github.com/yegamble/vidra-core/actions/runs/34194101356),
+step "Every required lane succeeded", 7m19s) rather than reporting success over
+a red required lane. Both went green on re-run (`prev-release-against-new-schema`
+6m54s, `ci-required` 7m2s). So the fan-in's FAILED branch is proved in CI, not
+just locally; only its never-ran branch remains a local dry run.
+
+**New finding — `schema-compat` is flaky, and it is not A39's doing.** The two
+failures were in the N-1 (v0.6.2) tree, which this branch cannot modify, on a
+branch that changes no migration, query or store code, and the same lane passed
+on the same schema an hour earlier. Both failures are shared-database
+interference: `TestListTotalsExecuteAgainstPostgres/admin_inventory_filters…`
+reported `total 25 but the unpaginated page has 24 rows — the Count and List
+predicates disagree` (a row landed between the two statements), and
+`TestSearchSortAndFilterBehaviourAgainstPostgres/sorts_order` got a relevance tie
+in a different order. The lane runs `go test -tags=integration -race ./...`,
+whose packages execute in parallel against ONE Postgres, so cross-package writes
+are visible to each other. `backend-integration` runs the same way and is
+exposed to the same class. Not fixed here — the fix belongs in the store tests'
+isolation (per-test schema or serialised packages), not in a CI gate.
+
 ### Unverified / not run
 
-- **`ci-required`'s never-ran branch is proved by a local dry run, not by a real
-  CI incident.** Deleting a lane to watch the fan-in fail would have meant
-  landing a broken workflow.
+- **`ci-required`'s NEVER-RAN branch is proved by a local dry run only.**
+  Deleting a lane to watch the fan-in fail would have meant landing a broken
+  workflow. Its FAILED branch is proved in CI (above).
 - **`ipfs-public-gateway` and `quarantine-backed` have not run.** Both are
   `workflow_dispatch`/schedule; neither gates a merge, and neither has executed
   on this branch. They are declared, not demonstrated.
