@@ -193,5 +193,23 @@
     "signed fetch on the AP object routes, in both directions",
     "QoE for remote playback is deliberately not emitted; whether a viewer's own instance should measure playback it did not serve is a product question",
     "MIG-06's identity/Move clause, unchanged"
+  ],
+  "unrelated_findings": [
+    {
+      "id": "job-run identity, six other queues",
+      "note": "sync_legacy_job_run() (migration 0083) projects SEVEN queue tables into job_runs and writes request_id/correlation_id for none of them; 0133's inherit_job_run_identity only fills a CHILD run from its PARENT, so a top-level projected run has nothing to inherit. Migration 0139 closes it for federation_deliveries with a sibling trigger; transcode_jobs, import_jobs, caption_jobs, account_exports, atproto_posts and peertube_import_runs still show an empty request id on /admin/jobs. Deliberately not folded in: this slice should not rewrite a function six other acceptances depend on."
+    },
+    {
+      "id": "Vary: Origin on shared media responses",
+      "note": "Echo's CORS middleware stamps Vary: Origin on every response, including the shared-cacheable ones A33 promoted for the edge. Unchanged here, and this slice's public-media header is a constant that does not vary by origin \u2014 but an edge entry keys on a header the response does not depend on. A delivery-slice question."
+    },
+    {
+      "id": "meta pull_request CI never fired",
+      "note": "meta-ci and ci-required both ran on the a26/live and a33/purge-families pull requests and produced NO run at all for a29/remediation, before or after the draft was marked ready. meta-ci was dispatched manually against the branch and passes; ci-required has no workflow_dispatch trigger, so it could not be. A CI-visibility gap of exactly the kind ci-required exists to catch, which it cannot catch about itself."
+    },
+    {
+      "id": "integration suites cannot share a database",
+      "note": "internal/store's owner-claim test needs an empty users table and fails after the federation suite has seeded one \u2014 on this branch and on clean main alike. A29 recorded this; re-confirmed. The suites were run per package against a freshly created database each time."
+    }
   ]
 }

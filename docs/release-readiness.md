@@ -12805,3 +12805,34 @@ it did not serve is a product question this slice was not given.
 **A29-F4's redelivery half stays open, and so does A29-F8's AUTHORING half** —
 both named above, both for reasons stated rather than shaded.
 MIG-06's identity/`Move` clause stays deferred, unchanged.
+
+### Found on the way, unrelated to A29
+
+**Six other legacy queues have the identity gap 0139 closes for one.** A17
+recorded that federation deliveries carry no correlation id, and this slice
+fixed it — but the cause is not specific to federation. `sync_legacy_job_run()`
+(migration 0083) projects SEVEN queue tables into `job_runs` and writes no
+`request_id`/`correlation_id` for any of them, and 0133's
+`inherit_job_run_identity` only fills a CHILD run from its PARENT, so a
+top-level projected run has nothing to inherit from. `transcode_jobs`,
+`import_jobs`, `caption_jobs`, `account_exports`, `atproto_posts` and
+`peertube_import_runs` therefore still show an empty request id on
+`/admin/jobs`, under the same advice — "inspect correlated system logs" —
+pointing at logs that share no id with the run. Closing it for all seven is one
+change (either widen the shared function once, or repeat 0139's sibling-trigger
+shape per queue that carries the columns), and it was deliberately not folded in
+here: A29's slice should not rewrite a function six other acceptances depend on.
+
+**Echo's CORS middleware stamps `Vary: Origin` on every response**, including
+the shared-cacheable ones A33 promoted for the edge. Nothing here changed it and
+the public-media header this slice adds is a constant that does not vary by
+origin — but it means an edge entry keys on a header the response does not
+actually depend on. Worth a look in a delivery slice, not this one.
+
+**The meta repo's `pull_request` CI did not fire for this branch at all.**
+`meta-ci` and `ci-required` both ran on `a26/live` and `a33/purge-families`
+pull requests and produced no run whatsoever for `a29/remediation`, before or
+after the draft was marked ready. `meta-ci` was dispatched manually against the
+branch and passes; `ci-required` has no `workflow_dispatch` trigger, so it could
+not be. That is a CI-visibility gap of exactly the kind `ci-required` exists to
+catch, and it cannot catch its own absence.
