@@ -1,11 +1,318 @@
 {
-  "item": "A38",
-  "register_row": "REC-03",
-  "verdict": "IN PROGRESS",
-  "date": "2026-09-08",
-  "lab": {
-    "shape": "one disposable compose project -p a38b on an arm64 macOS host, api 18080 / frontend 13000, Caddy on 80/443, VIDRA_TLS_MODE=plain-http, STORAGE_BACKEND=local, bundled Postgres + Redis",
-    "meta_checkout": "throwaway clone of this repo with its own nested vidra-core / vidra-search / vidra-user clones, so deploy.sh's checkout pinning (AGENTS.md rule 3) is real; the architect's checkouts were never touched",
-    "sources": {"vidra-core": "0f223b4", "vidra-search": "1f8b854", "vidra-user": "721190f", "meta": "0eb5ee0"}
+ "item": "A38",
+ "register_row": "REC-03",
+ "verdict": "PASS — REC-03 flips; A38 closed",
+ "date": "2026-09-08",
+ "section": "A38 rehearsal — rollback floor re-run against the merged fix — 2026-09-08",
+ "headline": "On a seeded stack with real transcoded media, deploy/rollback.sh completed an app-only rollback across an additive migration: the previous release's migrator met a newer CLEAN ledger, logged the no-op line and exited 0, and the old binaries served the newer schema completely. Rolling back to a release WITHOUT the fix still fails in the migration one-shot, and now fails loudly with the trailer instead of dying under set -e.",
+ "lab": {
+  "shape": "one disposable compose project -p a38b on an arm64 macOS host; api 18080, frontend 13000, Caddy on 80/443, VIDRA_TLS_MODE=plain-http, STORAGE_BACKEND=local, bundled Postgres 18 + Redis 8",
+  "meta_checkout": "throwaway clone of this repo with its own nested vidra-core / vidra-search / vidra-user clones, so deploy.sh's checkout pinning (AGENTS.md rule 3) was real; the architect's checkouts were never touched",
+  "registry": "local OCI registry on 127.0.0.1:5001 served through VIDRA_IMAGE_REGISTRY (every prod service carries pull_policy: always)",
+  "sources": {
+   "vidra-core": "0f223b4",
+   "vidra-search": "1f8b854",
+   "vidra-user": "721190f",
+   "meta": "0eb5ee0"
+  },
+  "scripts_unmodified_sha256": {
+   "deploy/deploy.sh": "36bbd71259acee49a323ff42648909a3ea3dcae59d0cb6c742f3fd8862651fd5",
+   "deploy/rollback.sh": "ae5471bd490ccf4ccd94f36bc236fcfb9dc5ac97cbf17d4f8d22676b71cad3c9",
+   "deploy/restore.sh": "c7ad2af774cacfd6e0be728f708f7f54737850d0fb60d1aa51747b7f1ea9ac2e",
+   "deploy/backup.sh": "52b832686ac604dfbfb61230338352ec2c639c389a15eac06005fd704e32d702",
+   "note": "identical in this repo and in the throwaway tree; no script was changed by this slice"
+  },
+  "lab_deviations": [
+   "RATE_LIMIT_ENABLED=false and REGISTRATION_ENABLED=true in the lab env file so a synthetic seeder could create three accounts and poll an upload; neither is a supported production posture and neither touches the paths under test",
+   "VIDRA_ALLOW_PLAIN_HTTP=true, required by the api for a plain-http PUBLIC_BASE_URL"
+  ]
+ },
+ "images": {
+  "vidra-core:v0.6.3-a37": {
+   "embedded_max": 135,
+   "id": "sha256:c3e7cb0b878716715474fa591835b40f63edd1c53186f4d0018a26658d641710",
+   "note": "kept from A37; carries the ledger-ahead no-op and migrate embedded-max"
+  },
+  "vidra-search:v0.6.3-a37": {
+   "embedded_max": 18,
+   "id": "sha256:9f7b4762c4cc325640413257864e50830d10c68c992779183639b2708a10f406"
+  },
+  "vidra-user:v0.6.3-a37": {
+   "id": "sha256:1bf0f806a5338d2ddc19f61521f5a79b798384f7ee36f401b1ecdbb7f04fd973"
+  },
+  "vidra-core:v0.6.3-a37lowmig": {
+   "embedded_max": 130,
+   "id": "sha256:2dd8ae3b5b00fa1168c8d89d286d300b63bde09a9e5c35b99ef68a71af5037a4",
+   "note": "kept from A37"
+  },
+  "vidra-core:v0.6.4-a38": {
+   "embedded_max": 136,
+   "id": "sha256:83869d7826d01bab445643b412536f8d2b6d5a56d731cee1febc0da0e5817be0",
+   "note": "built for this run: v0.6.3-a37 plus one throwaway additive migration 0136_a38_rehearsal_marker (nullable TEXT column with a DEFAULT on videos)"
+  },
+  "vidra-core:v0.6.4-a38bad": {
+   "embedded_max": 136,
+   "id": "sha256:9c1c9d4178e91c40511a5c39957a0f14c0a8a1b661a12014561d2384e6fcfa32",
+   "note": "the same 0136 rewritten to fail: a good ADD COLUMN ... DEFAULT followed by ADD COLUMN ... NOT NULL with no default against populated rows"
+  },
+  "vidra-core:v0.6.2-arm64": {
+   "embedded_max": 125,
+   "embedded_max_answer": "unknown migrate subcommand \"embedded-max\"",
+   "id": "sha256:221da785f259aaa4b9bcd2dd3b04c776ae39187aeb15a3e801f7784051eb946d",
+   "note": "the v0.6.2 source tag rebuilt for this host's architecture; a genuine release without the fix. The RELEASED amd64 images could not be pulled on this arm64 host"
   }
+ },
+ "throwaway_migration": {
+  "name": "0136_a38_rehearsal_marker",
+  "where_it_lives": "a local branch + tag in the throwaway SOURCE clone only, never pushed; the throwaway nested clone fetches the tag from it exactly as it would fetch a real release",
+  "why": "deploy.sh's rule-3 ledger assertion computes expected_version from the nested checkout's migrations/*.up.sql, so the checkout has to carry the same file at the pinned tag",
+  "guarantee": "no 0136 exists in this repo, in vidra-core, or on any remote"
+ },
+ "seed": {
+  "users": 4,
+  "channels": 1,
+  "videos": 2,
+  "private_videos": 1,
+  "transcode_jobs": 2,
+  "renditions": 2,
+  "comments": 1,
+  "playlists": 1,
+  "playlist_items": 1,
+  "follows": 1,
+  "instance_settings_overrides": 2,
+  "search_documents": 2,
+  "media_files": 37,
+  "mfa_enrollments": 1,
+  "recovery_codes": 10
+ },
+ "baseline_census": {
+  "fingerprints": {
+   "users": "b244f71579911b6027efb8a2a82df31d",
+   "videos": "be9cab5818500cf208aa554c3b2286f9",
+   "comments": "6d7cc6b688b42898dfde13557b97e141",
+   "channels": "5804c0913fd3a3d3c55c744cf9f6a84e",
+   "settings": "b955d2677b9fd164eb9f219fc472e74f",
+   "mfa_sealed": "a815928cc01d8c0bbce259f1c40a8d38",
+   "media_tree": "8796c5d0cc0e08f35fc89ce592eadc0b"
+  },
+  "ledgers": {
+   "core": "135|false",
+   "search": "18|false"
+  }
+ },
+ "steps": [
+  {
+   "n": 1,
+   "cmd": "deploy.sh",
+   "what": "first deploy of v0.6.3-a37 on an empty host",
+   "exit": 1,
+   "seconds": 18,
+   "where": "died at 4/6: the api refuses a plain-http PUBLIC_BASE_URL without VIDRA_ALLOW_PLAIN_HTTP=true (lab configuration, not a defect); the migrations had already run"
+  },
+  {
+   "n": 2,
+   "cmd": "deploy.sh",
+   "what": "the same with the flag set",
+   "exit": 0,
+   "seconds": 13,
+   "where": "6/6, ledger 135, edge OK; the project was then wiped with down -v and redeployed clean in 22 s before seeding"
+  },
+  {
+   "n": 3,
+   "cmd": "seed + census + verify",
+   "what": "seed and baseline",
+   "exit": 0,
+   "where": "26/26 functional probes green"
+  },
+  {
+   "n": 4,
+   "cmd": "deploy.sh",
+   "what": "SC1 upgrade to v0.6.4-a38",
+   "exit": 0,
+   "seconds": 13,
+   "where": "dump verified first, pull, 135->136 as a discrete exit-gated step, ledger assertion from the nested checkout, up -d, caddy reload attempt 1, api + frontend + edge probes; search stays 18"
+  },
+  {
+   "n": 5,
+   "cmd": "rollback.sh v0.6.3-a37",
+   "what": "SC2 app-only rollback across 0136",
+   "exit": 0,
+   "seconds": 10,
+   "where": "the migrate one-shot no-ops, api/search/frontend start, both probes pass"
+  },
+  {
+   "n": 6,
+   "cmd": "rollback.sh --core v0.6.4-a38",
+   "what": "SC2 roll forward again",
+   "exit": 0,
+   "seconds": 10,
+   "where": "schema already up to date, version 136 — no re-migration"
+  },
+  {
+   "n": 7,
+   "cmd": "rollback.sh v0.6.2",
+   "what": "SC3 with the RELEASED images",
+   "exit": 1,
+   "seconds": 1,
+   "where": "died at pull: no matching manifest for linux/arm64/v8 — before up -d, so zero downtime; edge still 200 on the running release"
+  },
+  {
+   "n": 8,
+   "cmd": "rollback.sh --core v0.6.2-arm64",
+   "what": "SC3 a release without the fix",
+   "exit": 1,
+   "seconds": 7,
+   "where": "the one-shot died 'no migration found for version 136'; the trailer printed; api gone"
+  },
+  {
+   "n": 9,
+   "cmd": "restore.sh (SC1 dump @135, tag v0.6.2-arm64)",
+   "what": "SC3 recovery A, the documented order",
+   "exit": 1,
+   "seconds": 4,
+   "where": "preflight NOT CHECKED, allowed, dropped, reloaded, then died at 'running core migrations' — A38 run 13 with a warning in front of it"
+  },
+  {
+   "n": 10,
+   "cmd": "restore.sh (same dump, tag v0.6.3-a37)",
+   "what": "SC3 recovery B, the matched pairing",
+   "exit": 0,
+   "seconds": 14,
+   "where": "'dump schema 135 matches' -> drop -> pg_restore -j4 -> both migrators -> verify-blobs clean -> up -> /readyz 200"
+  },
+  {
+   "n": 11,
+   "cmd": "deploy.sh (v0.6.4-a38bad)",
+   "what": "SC4 injected migration failure",
+   "exit": 1,
+   "seconds": 3,
+   "where": "died at 3/6, never reached 4/6, previous release still serving (edge 200, readyz 200), ledger 136 dirty and NEITHER column landed"
+  },
+  {
+   "n": 12,
+   "cmd": "backup.sh",
+   "what": "capture the dirty state",
+   "exit": 0,
+   "seconds": 1,
+   "where": "dump + config archive on one stamp"
+  },
+  {
+   "n": 13,
+   "cmd": "restore.sh (that dirty dump)",
+   "what": "SC4 the dirty-dump refusal",
+   "exit": 1,
+   "seconds": 1,
+   "where": "refused before the drop; 'dropping and recreating' never printed"
+  },
+  {
+   "n": 14,
+   "cmd": "migrate force 135 --yes-i-know",
+   "what": "SC4 recovery by the runbook",
+   "exit": 0,
+   "where": "refused without the flag first; before: 136 dirty=true / after: 135 dirty=false"
+  },
+  {
+   "n": 15,
+   "cmd": "deploy.sh (v0.6.4-a38)",
+   "what": "SC4 the fixed image",
+   "exit": 0,
+   "seconds": 13,
+   "where": "ledger 136 clean, every count and fingerprint back to the baseline"
+  },
+  {
+   "n": 16,
+   "cmd": "restore.sh (135 dump, tag v0.6.3-a37lowmig)",
+   "what": "SC5 the low-migration refusal",
+   "exit": 1,
+   "seconds": 2,
+   "where": "refused before the drop naming 135, 130 and the tag"
+  },
+  {
+   "n": 17,
+   "cmd": "deploy.sh",
+   "what": "bring the stack back after SC5's stop",
+   "exit": 0,
+   "seconds": 11,
+   "where": "6/6"
+  }
+ ],
+ "verbatim": {
+  "sc2_migrator_noop": "{\"level\":\"WARN\",\"msg\":\"schema version 136 is newer than this binary's newest migration 135; nothing to apply\",\"ledger_version\":136,\"embedded_max\":135,\"dirty\":false}",
+  "sc2_rollforward": "{\"level\":\"INFO\",\"msg\":\"schema already up to date\",\"version\":136,\"dirty\":false}",
+  "sc3_migrator_failure": "dbmigrate: apply migrations: no migration found for version 136: read down for version 136 .: file does not exist",
+  "sc3_trailer": "[rollback] THE ROLLBACK TARGET IS ALSO UNHEALTHY.\\n  compose up -d exited non-zero; its output is above. Check the migration one-shots FIRST: '... logs migrate search-migrate'. A message like 'no migration found for version N' means this release's migrator is older than the schema in front of it — the app itself is fine on that schema, but the one-shot has to exit 0 before api, search and frontend are allowed to start.\\n\\n  If the newer release ran an incompatible migration, the old code cannot read the new schema — restore the pre-deploy dump before rolling back again:\\n      ./deploy/restore.sh backups/pre-deploy-<ts>.dump.gz",
+  "restore_not_checked": "[restore] core: the pinned image (VIDRA_CORE_TAG=v0.6.2-arm64) does not answer 'migrate embedded-max', so the dump's schema 135 could NOT be checked against it. Every release cut before that subcommand existed lands here. Continuing — but if the migrator step below refuses the restored database, this pairing is the first thing to look at.",
+  "restore_matched": "[restore] core: dump schema 135 matches what VIDRA_CORE_TAG=v0.6.3-a37 carries — nothing to apply.",
+  "restore_dirty_refusal": "[restore] ERROR: core: the dump's schema_migrations ledger is DIRTY at version 136 — a migration was half-applied when it was taken, and both migrators refuse a dirty ledger. ... Nothing was changed.",
+  "restore_lowmig_refusal": "[restore] ERROR: core: the dump is at 135; pinned VIDRA_CORE_TAG=v0.6.3-a37lowmig carries up to 130. ... Nothing was changed.",
+  "doctor_dirty": "✗ schema ledger: the core migration ledger (schema_migrations) is DIRTY at version 136: a migration failed halfway and the schema state is unknown",
+  "doctor_ledger_ahead": "✓ schema ledger: the core migration ledger (schema_migrations) is at version 136 and clean",
+  "force_refusal_without_flag": "refusing to force schema_migrations to version 135: this rewrites the ledger WITHOUT running any migration SQL, so the schema must already match. Re-run with --yes-i-know if that is true",
+  "force_applied": "before: version=136 dirty=true / after: version=135 dirty=false"
+ },
+ "sc2_on_the_old_binaries": {
+  "logins": "owner, admin and viewer 200",
+  "mfa": "password alone -> 200 mfa_required + mfa_token; POST /auth/mfa/challenge -> 200; GET /auth/me -> a38totp",
+  "playback": {
+   "hls_master_bytes": 475,
+   "variant_playlist": 200,
+   "segment_bytes": 182069
+  },
+  "private_video": "404 anonymous, 200 to its owner",
+  "search": "200 with its hit, served by the search service",
+  "admin_surfaces": "users, videos, instance-settings, system all 200",
+  "reads": "comment, playlist item and subscription all read back",
+  "census": "byte-identical to the post-upgrade census; ledger 136 clean, search 18 clean"
+ },
+ "verdicts": {
+  "SC1": "PASS",
+  "SC2": "PASS",
+  "SC3": "PASS",
+  "SC4": "PASS",
+  "SC5": "PASS",
+  "SC6": "PASS",
+  "SC7": "PASS"
+ },
+ "findings": [
+  {
+   "id": "A38R-1",
+   "severity": "low",
+   "text": "vidra doctor cannot say 'your binary is behind the schema'. On the rolled-back stack it printed a green ✓ naming version 136 and clean — truthful about the ledger, silent about the one fact that distinguishes this state from a matched deployment. It has both numbers available now that migrate embedded-max exists."
+  },
+  {
+   "id": "A38R-2",
+   "severity": "low",
+   "text": "A rollback.sh refusal after the env rewrite leaves the env rewritten. Runs 7 and an unknown-tag attempt died after set_key had pinned the target tags, and the pull message reads '($ENV_FILE restored from ${ENV_FILE}.bak if you need to undo)', which can be read as a statement that it was restored. It was not; the config -q failure path a few lines above does restore it."
+  },
+  {
+   "id": "A38R-3",
+   "severity": "informational",
+   "text": "Re-confirms A37-3: restore.sh stops api, search and frontend before the schema preflight, so both new refusals (runs 13 and 16) took the site down and then correctly changed nothing."
+  },
+  {
+   "id": "A38R-4",
+   "severity": "informational",
+   "text": "An api-only outage behind Caddy hangs rather than errors: lb_try_duration 30s holds requests instead of 502ing, so a probe with a 5 s timeout reports a connection failure while a browser simply waits."
+  }
+ ],
+ "release_note_facts_v063": [
+  "An app-only rollback across an additive migration now works, from v0.6.3 onward — proven on a running stack.",
+  "Rolling back to v0.6.2 or older requires the restore path; rollback.sh now names that failure instead of dying silently.",
+  "A restore's pinned tags are part of the restore: restore.sh refuses, before the drop, a dump the pinned images cannot reach and a dump whose ledger is dirty; against a release predating migrate embedded-max it reports NOT CHECKED and continues.",
+  "Carried forward: access tokens 401 once after a roll-forward and it is one-way; process_heartbeats is populated only by the new release; new env defaults apply only when set; the deploy floor refuses a non-semver tag."
+ ],
+ "gates": {
+  "bash -n": "clean on deploy/*.sh, tests/*.sh, install.sh, bootstrap.sh",
+  "shellcheck": "0.11.0 -x -S warning clean on the same set",
+  "compose config -q": "exit 0 on the filled env/production.env.example",
+  "prod render": "--profile core --profile frontend: postgres, redis, search, search-migrate, migrate and prep-volumes publish no ports; api 127.0.0.1:8080, frontend 127.0.0.1:3000",
+  "meta python suites": "34/34 (backup 2, rollback_floor 12, caddy_reload 3, release_preflight 8, runtime_smoke 3, blank_server_smoke 6)",
+  "scripts changed": "none"
+ },
+ "unverified": [
+  "The RELEASED amd64 v0.6.2 images were never run on this arm64 host; 'rolling back to v0.6.2 fails' is proven against the v0.6.2 source tree rebuilt for this architecture",
+  "Only the core ledger moved; search stayed at 18, so a rollback across a search migration is untested at the stack level",
+  "External Postgres and external Redis; the bundle path (expected_version from vidra-bundle.manifest); acme / internal / external TLS modes; multi-replica and split api/worker topologies; a rollback across more than one release; S3 storage (verify-blobs ran only against the local media volume); restore.sh --allow-schema-mismatch against a live stack"
+ ],
+ "teardown": "the -p a38b project and its volumes, the local registry and its volume, the three images built for this run (v0.6.4-a38, v0.6.4-a38bad, v0.6.2-arm64) and the throwaway meta clone with its nested checkouts were all removed; the four A37 images are kept"
 }
