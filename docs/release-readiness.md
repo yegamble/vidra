@@ -141,7 +141,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | INT-07 Public IPFS mirror and viewer fallback preserve disclosure boundary | M C U | Mirror eligibility; dedicated backed IPFS job and privacy fence | BLOCKED | Private test network: publish eligible object→real CID→master+segments playback; gateway failure→canonical fallback; unlist/delete unpin, no private/quarantine/DM ledger row; record irreversibility of real public publication | PLAY-01 + IPFS selection → A31 |
 | INT-08 Private IPFS is isolated replication, never public delivery | M C U | Product decision §5.P; private-swarm CI; no private gateway knob; DM excluded | BLOCKED | Two keyed nodes and outsider: replication works only inside, outsider cannot fetch; private CID absent from APIs; quorum/outage recovery; no DM attachment pins | STO-01 + private topology selection → A31 |
 | INT-09 Presigned S3 browser delivery obeys CORS/expiry/authorization | M C U | Delivery resolver/presign; historical browser CORS incident; core README notes; live evidence `a32-a33-delivery` (a two-process core on `STORAGE_BACKEND=s3` against a MinIO on its own origin, with the one-origin frontend proxy and real Chromium and WebKit: presign ON moved every media byte to the bucket — 7 of 81 requests, the poster, a 206 Range on the original and five CMAF objects, decoded unmuted to 6.014 s at 150 frames and 0 dropped in both engines — while the api served only the three rewritten playlists and the 307s, and presign OFF put the same playback back on the proxy with 0 bucket requests and every response `private`; no preflight is sent because a `bytes=` Range is safelisted and the request only turns cross-origin after the 307; a signature past its TTL is a bucket 403 `Request has expired` and the client's next api request mints a fresh one, with the redirect's own 300 s far inside the 3600 s signature; a private video answers 404 with no `Location` ever minted for a non-owner and the owner's own credentialed read stays on the proxy at `private, no-store`; a stopped bucket reports `s3: down [unreachable]` on `/admin/system` and fails the master playlist with a typed 503 `storage_unavailable` before any segment, though the redirect itself still mints and `/healthz` still answers 200; and a CORS misconfiguration blocks every segment, which the api cannot see and the QoE beacon records as `api-proxy` + `error_class=network`) | PASS | Real cross-origin bucket in browser: Range/preflight/307, expiry and private refusal; Chromium and Safari; bucket outage does not masquerade as success | STO-01, PLAY-03 + selected bucket/CORS → A32. Evidence is **MinIO cross-origin; the selected bucket run is deferred (no credentials on this machine)**, so a real provider's CORS, versioning and virtual-host addressing stay untested, and Safari.app itself was not driven — the WebKit engine it ships was, via Playwright, and it took the same MSE path Chromium did. Defect fixed on the way: the presigned original and official download answered `application/octet-stream` where the proxy answers `video/mp4`, because the S3 PUT recorded no content type and `video_files.content_type` is empty for every resumable upload — the proxy hid both by sniffing (vidra-core #197). Findings that need a ruling rather than a patch, none blocking: presign minting does NOT fail closed on a bucket outage (a 307 to a dead store is still issued; only the playlist's typed 503 saves the session, and `/healthz` reports `{"status":"ok"}` throughout because its storage component is a five-minute write probe); `delivery.PresignTTL` is a compile-time hour with no knob of any kind; a CORS failure degrades the player silently from the CMAF ladder to the whole original file per viewer, with an unbounded segment-retry loop (39 blocked fetches in 12 s) and no viewer-visible error; and a total object-store outage renders a dead `0:00/0:00` player with no message at all |
-| INT-10 CDN redirects, purge and versioned media remain correct | M C U | F06; CDN provider/resolver and purge ledger; live evidence `a32-a33-delivery` against a local caching edge in front of the same MinIO, speaking the shipped `DELIVERY_CDN_PURGE_*` contract | **FAIL (stands, and now measured rather than read)** | Edge simulator first, then selected edge: retranscode/replacement, privacy/delete/global download revoke and failed purge/retry; stale segments must never play; failure after redirect tested | PLAY-03 + CDN selection → A33. What passes: source REPLACEMENT is genuinely generation-addressed (`web-videos/<id>.r1.mp4`, `streaming-playlists/<id>/r1/…`), so old and new never collide and no purge is needed — playback afterwards fetched only `r1/` keys while the edge's generation-0 entry sat unconsulted; and the three wired families each fan out correctly (per-video download flip 4 purges, privacy flip 18, deletion 18, with a 404 for an object never cached counting as success). What fails, each clause: (1) **stale segments DO play** — a same-source re-transcode overwrites the SAME keys (`HLSPrefixForSource` reads the source key's `.rN`, and a rerun is still version 0), sends **zero** purges, and Chromium decoded the edge's old 25 fps chunk beside the new 24 fps init segment with no error; the `?v=` tag moves but `cdn.EdgeURL` carries no query, so it can never version an edge. (2) Thumbnail/storyboard replacement, account deletion and the instance-wide download revocation all send **zero** purges and leave the edge serving bytes the API has already stopped serving — F06's ledger, confirmed with an edge in the loop. (3) **A failed purge is never retried**: 18 rejected calls, one aggregate WARN, no second pass ever, and the edge still serving a deleted video 30 s later; `GET /admin/system`'s `cdn_purge` block reported it accurately. (4) A 307 to an edge that then 5xxs has **no fallback to the proxy** — hls.js retried 28 times and the player died on `MEDIA_ELEMENT_ERROR` code 4. (5) The edge reproduces **none** of the API's response headers — no content type, no `Content-Disposition` (a redirected official download loses the creator's filename), and no `Cache-Control` at all, because the edge pulls from the BUCKET and Vidra writes no cache metadata on stored objects; nothing becomes `public` by design, so a real CDN's own default TTL is the only bound on stale media. (6) New and not in F06: a key-addressed CDN origin must be readable by the edge, and made so the obvious way **every private object becomes world-readable at the origin** — a private video's poster and original both answered 200 to an unauthenticated fetch — so a privacy flip's correct 18-key purge was undone by the very next request re-pulling and re-caching it; undocumented in `.env.example` and `docs/operations.md`. The **selected edge is deferred** (no zone or credential on this machine). Wrong actors verified: admin routes 401/403, purge triggers 401/404. **Remediation slice 1 is open** ([vidra-core #199](https://github.com/yegamble/vidra-core/pull/199), section "A33 remediation 1"): the CDN's origin becomes this API rather than the bucket, which removes the mechanism behind clauses (1), (5) and (6) and re-addresses purge from keys to URLs; every transcode run mints its own generation (migration 0136), which closes clause (1)'s same-source overwrite. The row stays FAIL until the edge simulator is re-run against it (slice 3). **Remediation slice 2 is open** ([vidra-core #202](https://github.com/yegamble/vidra-core/pull/202), section "A33 remediation 2"), and closes clauses (2) and (3): `media_purge.go`'s STILL-UNPURGED ledger is **empty** — poster and storyboard replacement purge their stable URL through a `video.Service` hook that also covers the backfill worker, account deletion snapshots the whole account before the cascade and enqueues it, and the instance-wide download revocation is a leased, resumable walk with a persisted cursor (migration **0137**, `cdn_purge_jobs`) — and a refused purge is retried at 1, 2, 4, 8, 16, 32 and 60 minutes before dead-lettering with its URL list intact, surfaced on `cdn_purge` (`pending_retries`/`oldest_pending_seconds`/`dead_letters`), the admin jobs page and `vidra doctor`. **Clause (4) is untouched and still open**: a 307 to an edge that 5xxs still has no fallback to the api proxy. Both slices are code-only — neither has been measured against a caching edge, which is what slice 3 is for |
+| INT-10 CDN redirects, purge and versioned media remain correct | M C U | F06; CDN provider/resolver and purge ledger; **live evidence [`a33-rehearsal`](evidence/a33-rehearsal.json) (section "A33 rehearsal — CDN edge simulator against the merged remediation — 2026-09-08")** — slice 3, run against core `main` `59d7f51` (#199 + #202 + #203 + #204 merged, schema 140) with the edge simulator's origin pointed at the **api** and a MinIO bucket carrying **no policy at all**: 307s name the api's own route path + `?v=` + `__vidra_edge=1`, the edge's origin fetch is served (zero `Location` headers across eight marked probes) at `public, max-age=31536000, immutable` / `3600` / `300` with honest `Content-Type` and `Content-Disposition: attachment; filename=…`, playlists never reach the edge, a viewer and any intermediary still get `private`, private is 404 and unlisted is never redirected, and an unauthenticated read straight at the bucket is **403** — so clauses (5) and (6) are closed by construction. A same-source re-transcode moved `videos.transcode_generation` 1→2, wrote `r2/`, minted a new `?v=`, sent **zero** purges (correctly) and produced **0** old-tag requests on reload with 144 frames against 150 — clause (1) closed; a superseded `?v=` is refused 404 `private, no-store` and the refusal is not cacheable. All four families purge and the edge serves new bytes: poster (multipart **and** frame-pick) 1 request each, storyboard 1, account deletion 13 as one queued job, download revocation 8 through a leased walk that survived a worker kill — cursor resumed, **no key purged twice** — clause (2) closed. A refused purge retried at **+60 s, +2 min, +4 min** from the persisted `next_attempt_at`, landed on attempt 4 when the edge accepted again, and dead-lettered with its URL list intact on a forced attempt 8 (`pending_retries`/`oldest_pending_seconds`/`dead_letters`, the admin jobs page and `vidra doctor`'s ⚠ all agree) — clause (3) closed. Prior evidence [`a32-a33-delivery`](evidence/a32-a33-delivery.json) is the pre-remediation measurement; **the closing sentences of the notes cell ("the row stays FAIL until the edge simulator is re-run", "neither has been measured against a caching edge") are superseded by this run.** Selected edge and selected bucket remain deferred — no zone, credential or commercial bucket on this machine | **PASS (edge simulator; selected edge deferred; clause 4 residual: no proxy fallback after an edge 5xx)** — clauses (1), (2), (3), (5) and (6) re-measured closed against a caching edge; clause (4) is unchanged and named: a 307 to an edge that then 5xxs has no fallback to the api proxy (hls.js retried 4 segment URLs 27 times, the player fell through to `/original` which 307s to the same broken edge, `MEDIA_ELEMENT_ERROR` code 4, `readyState` 0). The only remedy is the `delivery_cdn_enabled` kill switch, measured working: zero edge requests and playback restored | Edge simulator first, then selected edge: retranscode/replacement, privacy/delete/global download revoke and failed purge/retry; stale segments must never play; failure after redirect tested | PLAY-03 + CDN selection → A33. What passes: source REPLACEMENT is genuinely generation-addressed (`web-videos/<id>.r1.mp4`, `streaming-playlists/<id>/r1/…`), so old and new never collide and no purge is needed — playback afterwards fetched only `r1/` keys while the edge's generation-0 entry sat unconsulted; and the three wired families each fan out correctly (per-video download flip 4 purges, privacy flip 18, deletion 18, with a 404 for an object never cached counting as success). What fails, each clause: (1) **stale segments DO play** — a same-source re-transcode overwrites the SAME keys (`HLSPrefixForSource` reads the source key's `.rN`, and a rerun is still version 0), sends **zero** purges, and Chromium decoded the edge's old 25 fps chunk beside the new 24 fps init segment with no error; the `?v=` tag moves but `cdn.EdgeURL` carries no query, so it can never version an edge. (2) Thumbnail/storyboard replacement, account deletion and the instance-wide download revocation all send **zero** purges and leave the edge serving bytes the API has already stopped serving — F06's ledger, confirmed with an edge in the loop. (3) **A failed purge is never retried**: 18 rejected calls, one aggregate WARN, no second pass ever, and the edge still serving a deleted video 30 s later; `GET /admin/system`'s `cdn_purge` block reported it accurately. (4) A 307 to an edge that then 5xxs has **no fallback to the proxy** — hls.js retried 28 times and the player died on `MEDIA_ELEMENT_ERROR` code 4. (5) The edge reproduces **none** of the API's response headers — no content type, no `Content-Disposition` (a redirected official download loses the creator's filename), and no `Cache-Control` at all, because the edge pulls from the BUCKET and Vidra writes no cache metadata on stored objects; nothing becomes `public` by design, so a real CDN's own default TTL is the only bound on stale media. (6) New and not in F06: a key-addressed CDN origin must be readable by the edge, and made so the obvious way **every private object becomes world-readable at the origin** — a private video's poster and original both answered 200 to an unauthenticated fetch — so a privacy flip's correct 18-key purge was undone by the very next request re-pulling and re-caching it; undocumented in `.env.example` and `docs/operations.md`. The **selected edge is deferred** (no zone or credential on this machine). Wrong actors verified: admin routes 401/403, purge triggers 401/404. **Remediation slice 1 is open** ([vidra-core #199](https://github.com/yegamble/vidra-core/pull/199), section "A33 remediation 1"): the CDN's origin becomes this API rather than the bucket, which removes the mechanism behind clauses (1), (5) and (6) and re-addresses purge from keys to URLs; every transcode run mints its own generation (migration 0136), which closes clause (1)'s same-source overwrite. The row stays FAIL until the edge simulator is re-run against it (slice 3). **Remediation slice 2 is open** ([vidra-core #202](https://github.com/yegamble/vidra-core/pull/202), section "A33 remediation 2"), and closes clauses (2) and (3): `media_purge.go`'s STILL-UNPURGED ledger is **empty** — poster and storyboard replacement purge their stable URL through a `video.Service` hook that also covers the backfill worker, account deletion snapshots the whole account before the cascade and enqueues it, and the instance-wide download revocation is a leased, resumable walk with a persisted cursor (migration **0137**, `cdn_purge_jobs`) — and a refused purge is retried at 1, 2, 4, 8, 16, 32 and 60 minutes before dead-lettering with its URL list intact, surfaced on `cdn_purge` (`pending_retries`/`oldest_pending_seconds`/`dead_letters`), the admin jobs page and `vidra doctor`. **Clause (4) is untouched and still open**: a 307 to an edge that 5xxs still has no fallback to the api proxy. Both slices are code-only — neither has been measured against a caching edge, which is what slice 3 is for |
 | INT-11 Noncustodial donation addresses verify and display honestly | C U | Donation service; backed donations; product decision excludes custodial flows | UNVERIFIED | Address validation/challenge/ownership verification, update/remove and profile/watch support dialog; no fabricated payment confirmation or funds handling | AUTH-02 → A30 |
 | OPS-01 API/worker split updates settings and recovers leased jobs | M C S | All-role settings poller now fixed; job leases/sweeps; worker Compose profile | UNVERIFIED | API-only + two workers; edit config, observe both; kill one mid-transcode/import, recover once; Redis/DB outage and leader failover; no local-volume split across hosts | PUB-03, ADM-03, STO-01 → A34 |
 | OPS-02 Health, logs/trace correlation, metrics/QoE and retention are useful | M C S U | Observability/OTel/QoE packages; search metrics and privacy retention; live evidence `a35-observability` (one browser walk — ffmpeg upload → transcode → CMAF playback over MSE → search — followed on named id fields across eleven hops, with all four job runs and fourteen events carrying the enqueueing request's correlation, request and TRACE ids and the audit row's `job_id` naming the run in the worker's failure lines; a real OpenTelemetry collector showing one trace per server-rendered page spanning vidra-user and vidra-core; a fifteen-check secret sweep over twenty-two artefacts returning zero; a dead-lettered worker job on the admin surfaces with the queue gauge moving 0→1; label cardinality held under 180 requests over 120 distinct URLs with 60 nonsense paths folding into one `route="unmatched"`; a real playback classified `api-proxy` while four client-claimed sources were refused, rolled up with real percentiles and rendered in Chromium; and every retention window run through the shipped prune functions) | PASS | Follow one browser upload/play/search via correlation; inspect safe structured logs, failed worker status and bounded metrics; run retention; distinguish native-HLS/proxy/CDN source truth | SRC-01 → A35. Defects fixed on the way: `jobstatus.RedactDetail` let a bare storage key through into the worker log (core#190), every server-rendered read reached vidra-core with no correlation id and no traceparent (user#184), `vidra_search_table_rows` reported every table empty because PostgreSQL 14+ writes `reltuples = -1` until first analyze (search#39), and three config keys core#189 added never reached the compose environment anchor, which had kept the meta config gate red on `main` (core#190). Findings that need a ruling rather than a patch, none blocking: the QoE beacon ignores the discovery opt-out, so an opted-out viewer's playback still carries their day-scoped pseudonym; `audit_log` has no retention of any kind; `search_outbox` and `qoe_events` carry no correlation column, so both asynchronous hops start a fresh id; a SUCCESSFUL job writes no correlated worker log line; a creator's upload and publish write no audit row at all; the worker role builds a Prometheus registry it can never serve, which is the only place `vidra_search_dead_letters_total` can increment; core has no monotonic job-failure counter; core still logs `object_key`/`storage_key` in the media-GC and storage-migration paths; and vidra-search ships neither logging guard despite handling raw query text |
@@ -12836,3 +12836,343 @@ after the draft was marked ready. `meta-ci` was dispatched manually against the
 branch and passes; `ci-required` has no `workflow_dispatch` trigger, so it could
 not be. That is a CI-visibility gap of exactly the kind `ci-required` exists to
 catch, and it cannot catch its own absence.
+
+## A33 rehearsal — CDN edge simulator against the merged remediation — 2026-09-08
+
+**INT-10 flips to PASS**, with the two deferrals the row has always carried and
+one residual it names rather than hides: `PASS (edge simulator; selected edge
+deferred; clause 4 residual: no proxy fallback after an edge 5xx)`. This is
+slice 3 — the measurement the two remediation sections above deliberately did
+not claim. Five of INT-10's six failing clauses were re-run against a caching
+edge that holds a copy, and all five are closed; the sixth, clause (4), was
+never in either slice's scope and is unchanged, so it is written into the row's
+own cell as the residual rather than left to be rediscovered. Complete result:
+[`a33-rehearsal.json`](evidence/a33-rehearsal.json); the edge is the same
+[`a32-a33-edge-simulator.go`](evidence/a32-a33-edge-simulator.go), re-keyed —
+see below.
+
+The lab is A32/A33's shape with the origin moved. A vidra-core api on
+127.0.0.1:8088 and a second process at `VIDRA_ROLE=worker`, behind the pipe-only
+one-origin proxy on 127.0.0.1:8099 that drops the client's `Accept-Encoding` and
+never follows a redirect, in front of `node .next/standalone/server.js` on
+:3100; native PostgreSQL 16.15 on 55461 and redis on 56401, both fresh; schema
+**140**; frontend the unmodified `main` `766bb59`, rebuilt so
+`NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8099` is baked; Node 26.8.1; browser
+Playwright 1.62.1's real Chromium. The object store is one
+`mirror.gcr.io/minio/minio` on 127.0.0.1:9210, bucket `vidra-a33`, **with no
+bucket policy applied at all** — which is the first result and not a setup
+detail. The edge simulator is on 127.0.0.1:9310 with `-origin
+http://127.0.0.1:8088`: the api, not the bucket.
+
+**The run started on `85e4a91` and every number below is `59d7f51`'s.** core
+#203 (A29 remediation) landed on `main` mid-run and it touches exactly one thing
+this row measures — the CORS header on public media — so the binary was rebuilt
+at the new tip, the database migrated 137 → 140, and the whole origin-model
+table re-measured rather than re-based by assertion. The pre-#203 reading is
+reported where it differs and nowhere else.
+
+Lab deviations, recorded rather than hidden: `RATE_LIMIT_ENABLED=false`;
+**`MALWARE_SCAN_MODE=disabled` explicitly**, because there is no clamd on this
+machine and core #201 makes every ingestion refuse without one;
+`VIDRA_ALLOW_PLAIN_HTTP=true` + `VIDRA_TLS_MODE=plain-http`;
+`TRANSCODING_MIN_FREE_SCRATCH_MB=256` against the shipped 10 GiB floor on a box
+with 9.8 GiB free, with 6-second 640×360 fixtures to match;
+`MEDIA_GC_ENABLED=false` so a superseded generation stays observable, the sweep
+then run by hand through `POST /admin/media/gc`; and `REGISTRATION_ENABLED=true`
+for the whole run, for two synthetic actors.
+
+**The fixture had to be re-keyed, and that is a finding about the change rather
+than about the fixture.** The committed simulator was written for the
+key-addressed model and keyed its cache on the request **path**, because a
+key-addressed edge URL is `base + "/" + <object key>` and has no query at all.
+Against #199's api-as-origin model that is wrong in two ways that both pass
+silently: every generation of a segment collapses onto one cache entry (the `?v=`
+tag lives in the query, which is the entire point of putting it there), and the
+origin fetch drops `__vidra_edge=1`, so the api answers the edge with a redirect
+back to the edge — a loop, not a cache. Cache key and origin fetch now both
+carry the whole request URI, which is also exactly what `cdn.Provider.Purge`
+names. Anyone re-running A32/A33's numbers against current `main` needs this
+commit first.
+
+### SC1 — the origin model
+
+The edge URL the api emits is the operator's base plus this api's own media
+route path **and query**, plus the marker:
+
+```text
+http://127.0.0.1:9310/api/v1/videos/<id>/hls/cmaf/chunk-0-00001.m4s?v=dla1t3y805q0&__vidra_edge=1
+```
+
+| route | a viewer, anonymous, direct to the api | the edge's own origin fetch (`__vidra_edge=1`) |
+|---|---|---|
+| `/hls/master.m3u8?v=`, `/hls/cmaf/media_N.m3u8?v=` | 200 `private, max-age=31536000, immutable` | **never reaches the edge** — not `Redirectable` |
+| `/hls/cmaf/media_N.m3u8` (no `?v=`) | 200 `private, max-age=0, must-revalidate` | never reaches the edge |
+| `/storyboard.vtt` | 200 `private, max-age=300, must-revalidate` | never reaches the edge |
+| `/hls/cmaf/init-N.mp4?v=`, `…/chunk-N-*.m4s?v=` | **307** → edge; the 307 itself `private, max-age=300, must-revalidate` | 200 **`public, max-age=31536000, immutable`**, `video/mp4` |
+| `/hls/cmaf/chunk-N-*.m4s` (no `?v=`) | 307 → edge | 200 **`public, max-age=0, must-revalidate`** |
+| `/original` | 307 → edge | 200 **`public, max-age=3600, must-revalidate`**, `video/mp4` |
+| `/download/original` | 307 → edge | 200 **`public, max-age=3600, must-revalidate`**, `video/mp4`, **`Content-Disposition: attachment; filename=fixture.mp4`** |
+| `/thumbnail`, `/storyboard.jpg` | 307 → edge | 200 **`public, max-age=300, must-revalidate`**, `image/jpeg` |
+| a superseded `?v=` tag | 404 `private, no-store` | 404 `private, no-store`, passed through and **not cached** (MISS on two consecutive tries) |
+| `Authorization` present | 200 `private, no-store`, no `Location`, no CORS header | never reaches the edge |
+
+**An edge origin fetch is never answered with a redirect**: across the eight
+edge-marked probes the count of `Location` headers is **zero**. Content type and
+disposition reach the edge intact, because the edge now fetches the route that
+sets them — A32/A33's `application/octet-stream`-with-no-filename result is gone
+by construction, not by a backfill.
+
+**Private and unlisted media never get an edge URL, and the bucket stays
+private.** On a private video every media route answers 404 to an anonymous
+caller with no `Location` ever present, and the edge's own marked fetch is 404
+too. An unlisted video is served by the origin at `private` and is **never**
+307'd. And an unauthenticated `curl` straight at MinIO answers **403
+`AccessDenied`** for `thumbnails/<id>.jpg` and `web-videos/<id>.mp4` alike —
+because no bucket policy was applied at any point in this run. That retires
+A32/A33's origin-exposure finding by construction: an api-origined edge needs no
+public read, so there is nothing for an operator to get wrong there any more.
+
+**Playback.** One Chromium walk of the watch page: **76** requests to the api
+origin, **7** to the edge — the poster, the original's 206, both CMAF init
+segments and three chunks — 6.014/6.014 s, `readyState` 4, 150 frames, 3
+dropped, `error: null`. A second walk answered every one of those seven with
+`X-Edge-Cache: HIT`, which is the precondition SC2 needs and the property a
+plain reverse proxy could never demonstrate.
+
+**`Vary: Origin`, recorded because the row's neighbour asked for it.** The api's
+public-media CORS answer genuinely varies: `Access-Control-Allow-Origin: *` with
+no credentials for an absent or unknown `Origin`, and `Access-Control-Allow-
+Origin: http://127.0.0.1:8099` **plus `Access-Control-Allow-Credentials: true`**
+for an origin in `CORS_ALLOWED_ORIGINS` — so the `Vary: Origin` core #203 stamps
+is load-bearing rather than decorative. The simulator stamps `Vary: Origin` on
+what it serves but **its cache key is the URL alone, and it forwards no `Origin`
+upstream at all**, so it can only ever hold the `*` variant; the failure it
+cannot show is a real CDN that forwards `Origin` and ignores `Vary`, where one
+same-origin fetch would populate the entry with the credentialed echo and every
+other origin's player would then be refused by its own browser. Nothing in the
+api can enforce a third party's cache key, and `docs/operations.md` does not
+name it — recorded as a finding rather than fixed here.
+
+### SC2 — a same-source re-transcode, and where the old bytes go
+
+The trigger is `POST /api/v1/admin/videos/{id}/transcoding {"type":"hls"}` →
+202 (anonymous **401**, ordinary user **403**), with `transcoding_max_fps` moved
+0 → 24 between runs so the encoder genuinely produced different bytes.
+
+| | `videos.transcode_generation` | key prefix | `?v=` | `chunk-0-00001.m4s` sha256 (first 16) | bytes |
+|---|---|---|---|---|---|
+| before | **1** | `streaming-playlists/<id>/r1/` | `dla1t3y805q0` | `a63607893342ca33` | 657,994 |
+| after the re-transcode | **2** (bumped at enqueue) | `streaming-playlists/<id>/**r2**/` | `dla1yo2vujsw` | **`60393685106885db`** | **650,072** |
+| what the edge served on the NEW url | — | — | `dla1yo2vujsw` | `60393685106885db` (**MISS**) | 650,072 |
+| what the edge still holds under the OLD url | — | — | `dla1t3y805q0` | `a63607893342ca33` (HIT) | 657,994 |
+
+The last two rows are the whole result. The old entry is untouched *because it is
+a different URL* — nothing was overwritten, so there is no stale-versus-fresh
+race to lose. **Zero purge requests** were sent, which is now correct rather
+than a gap, and the `same-generation re-transcode overwrites edge-cached objects
+without purge` warning appears **zero** times in either process's log: #199
+deleted it because the situation it described can no longer arise.
+
+**And the stale segment does not play.** After a reload Chromium issued **0**
+requests carrying the old tag and **13** carrying the new one, and decoded
+6.014 s at **144 frames** — exactly 24 fps × 6 s, against 150 before. The frame
+count is the assertion: the decoder consumed the new generation, not a mixture.
+
+*Mid-playback, honestly.* The fixture is 6 seconds and fully buffered inside the
+first second, so a promotion could not be made to land between two segment
+fetches; rather than stage a race that would prove nothing, the mechanism was
+measured in both directions. A session that already holds the old generation's
+URLs finishes off them — the edge keeps serving that entry (HIT) and the objects
+stay on disk until media GC. A segment of the old generation the edge does *not*
+already hold is refused at the origin with **404 `private, no-store`** the
+instant the new generation is promoted — before any sweep — and the edge passes
+that 404 through **uncached**. So the answer to "finishes or reloads cleanly" is:
+it finishes off what it already has, otherwise it errors, and a reload is clean.
+
+*The old generation's collection.* A dry-run sweep named exactly the **14**
+superseded `r1` objects and nothing else; `{"dry_run": false}` deleted 14 of 71
+scanned at an orphan ratio of 19 % with the breaker untripped. A subsequent
+source replacement (`POST /videos/{id}/replace`) moved the counter 2 → **3** and
+wrote `r3`, so a replacement still gets its own directory.
+
+### SC3 — the purge families through the simulator
+
+Every family was measured with the edge **holding a copy first**. The request
+`internal/cdn` sends is one `PURGE http://127.0.0.1:9310/<the same URL a viewer
+was handed, marker and all>` carrying `X-Edge-Purge-Token`; the simulator
+recorded the token as accepted on every call.
+
+| family | trigger → status | purge requests | edge before → after | the durable record |
+|---|---|---|---|---|
+| poster replacement (multipart) | `POST /videos/{id}/thumbnail` → 201 | **1** (200, held) | HIT `ace182d944f37b22` 18,954 B → **MISS `5a46d2dcf4cf3751` 1,604 B** | immediate pass; `cdn_purge` counters |
+| poster replacement (frame pick) | `POST /videos/{id}/thumbnail {"at_seconds":3}` → 201 | **1** (200, held) | evicted | immediate pass |
+| storyboard regeneration | `POST /videos/{id}/replace` → 200 | **1** (200, held) on `/storyboard.jpg` | HIT `24d31a9747f9b3e3` 17,087 B → **MISS `c037a57f893a9104` 9,270 B** | immediate pass; the poster's entry left alone |
+| privacy flip public→private *(control)* | `PATCH /videos/{id}` → 200 | **13** (6×200, 7×404) | that video's 6 entries evicted; the other video's 6 untouched | immediate pass |
+| deletion *(control)* | `DELETE /videos/{id}` → 204 | **13** (6×200, 7×404) | emptied | immediate pass |
+| account deletion | `DELETE /auth/me` → 204 | **13** (6×200, 7×404) | emptied | one **queued** job `reason=account_delete`, 13 urls, `url_set_complete=t` → `done`, urls emptied |
+| instance-wide download revocation | `PATCH /admin/instance-settings {"downloads_enabled": false}` → 200 | **8** (6×200, 2×404) | each video's four download URLs evicted — **`/original` and `/thumbnail` deliberately left in place** | one **leased walk** job, cursor persisted per page → `done`, `purged=8`, `url_set_complete=t` |
+
+The 13-URL takedown set is exactly what slice 1 promised, `?v=` and all:
+`/original`, `/download/original`, `/thumbnail`, `/storyboard.jpg`,
+`/download/audio`, `/download/hls/360`, `/download/hls/360?audio=false`, and the
+six versioned HLS children. The 404s are objects the edge never held, which
+`internal/cdn` counts as success. And the download revocation's set being
+*narrower* is the visible half of slice 1's "more precise": `/original` survived
+the revocation at the edge, so enforcing a download gate no longer cold-starts
+every viewer's progressive fallback.
+
+**Resumability.** The catalogue was padded to **252** public downloadable rows
+(two real, 250 media-less rows inserted by SQL and sorting after them) so the
+walk pages more than once against `DefaultWalkPage = 100`. Page 1 purged all
+eight real URLs and persisted `cursor_video_id = f60ad924…`; the worker process
+was then killed. **Twenty-five seconds with no worker moved nothing** — cursor,
+`purged` and the edge's purge count all frozen, which is the negative control
+that makes the next line mean something. The restarted worker resumed **at the
+cursor** (`fff8a7b5…`), finished the remaining pages and completed the row, and
+the edge's total purge count was **still 8 with no key appearing twice**: the
+already-purged videos were not re-issued. Downloads then answer 403 at the api.
+A second `downloads_enabled=false` while the walk was live added no second row —
+`ON CONFLICT DO NOTHING` against 0137's partial unique index, exercised against a
+real planner rather than a fake.
+
+**Wrong actors.** `POST /admin/videos/{id}/transcoding` and `PATCH
+/admin/instance-settings` are **401** anonymous and **403** for an ordinary
+user. `PATCH /videos/{id}`, `POST /videos/{id}/thumbnail` and `DELETE
+/videos/{id}` are **401** anonymous and **404** for a non-owner — the
+non-disclosure answer rather than 403. `DELETE /auth/me` with a wrong password
+is **403**.
+
+### SC4 — a refused purge, its ladder, and the dead letter
+
+With the edge's purge endpoint answering 500, a poster replacement's immediate
+pass failed and left one row: `kind=urls`, `reason=retry`, `attempts=1`, and
+`urls = ["/api/v1/videos/<id>/thumbnail"]` — **this api's own route path**, no
+purge endpoint, no edge URL, no token, exactly as slice 2 argued it should be.
+
+| attempt | claimed at | outcome | `next_attempt_at` persisted | interval |
+|---|---|---|---|---|
+| 1 — the immediate pass | 12:01:29 | 500 | 12:02:29 | **+60 s** |
+| 2 | 12:02:29 | 500 | 12:04:30 | **+2 min** |
+| 3 | 12:04:40 | 500 | 12:08:40 | **+4 min** |
+| 4 | 12:08:40 | **200** | — | row `done`, `purged=1`, urls emptied |
+
+The injection was cleared at 12:06:02 and the 12:08:40 attempt landed, so the
+"transient failure self-heals" half is measured rather than argued. The rungs
+match `internal/cdnpurge`'s `DefaultRetryBase = 1m`, `DefaultRetryMax = 1h`,
+`DefaultMaxAttempts = 8` — seven persisted retries, 123 minutes.
+
+**The operator surface while it was failing**, at attempt 3: `GET
+/admin/system` → `cdn_purge` `{runs: 6, keys_purged: 29, keys_failed: 1,
+pending_retries: 1, oldest_pending_seconds: 273, dead_letters: 0}`, and `vidra
+doctor` → `✓ cdn purge backlog: 1 CDN invalidation(s) in flight, none older than
+3h0m0s`.
+
+**The dead letter was forced, and this record says how.** There is no
+`--max-attempts` knob and no environment variable wired to
+`cdnpurge.WithRetry`, so 123 minutes is the only unassisted route to the cap;
+`attempts` was set to 7 on the queue row so the next claim was attempt 8. Every
+earlier rung above was measured in real time. The transition itself is the
+shipped code's: the row went `state=failed`, `attempts=8`, **`urls` kept**
+(`["/api/v1/videos/<id>/thumbnail"]`) with `last_error` naming the 500, and the
+three surfaces answered together — `cdn_purge` `{keys_failed: 2,
+pending_retries: 0, dead_letters: 1}`; the admin jobs page `{queue:
+cdn_purge_jobs, pending: 0, running: 0, done: 3, failed: 1}`; and `vidra doctor`
+
+> ⚠ cdn purge backlog: 1 CDN invalidation(s) GAVE UP after the retry cap … The
+> edge is still serving media this instance has stopped serving … and nothing
+> will try again → invalidate them by hand at the CDN's own console, then check
+> `DELIVERY_CDN_PURGE_URL`/`_METHOD`/`_TOKEN`
+
+plus one `ERROR` log line naming the job, the attempt count and the unpurged
+count. **There is no `audit_log` action for a CDN purge at all** — the record is
+the queue row, the log line and the counters; the *triggers* are audited
+(`content.video.delete`, `auth.account.delete`, `admin.instance.update`,
+`content.video.transcode`). That is a defensible split and it is written down
+here so nobody looks for a purge in the audit log.
+
+### SC5 — failure after the redirect: clause 4, still open by design
+
+With the edge answering 502 for GETs, the api keeps 307ing (`EdgeURL` never
+consults the network, by design), hls.js retried **4** distinct segment URLs a
+total of **27** times, and the player then fell through to the progressive
+`<video src>` on `/original` — which 307s to the same broken edge — and ended on
+`readyState 0` with `MEDIA_ELEMENT_ERROR` code 4. **There is no fallback to the
+api proxy**, and `origin/main` has not grown one: the resolver's fail-open
+discipline covers *building* a source, not a viewer's fetch failing afterwards,
+and the api cannot learn about the latter. The only remedy is the
+`delivery_cdn_enabled` kill switch, which needs an admin — and which does work:
+flipping it off produced **zero** requests to the edge origin and playback
+recovered immediately (5.0 s, 120 frames, 0 dropped, `error: null`). This is the
+residual the row's new cell names.
+
+### Gates
+
+**No vidra-core, vidra-user or vidra-search file changed** — nothing needed
+fixing, which is the point of a rehearsal. Only this repo's docs and the
+committed lab fixture. The simulator is `gofmt`-clean and `go build`s; `bash -n`
+and `shellcheck` pass on every tracked script; `docker compose -f
+docker-compose.yml -f docker-compose.prod.yml --env-file <filled> config -q`
+passes; `python3 -m unittest discover -s tests -p '*_test.py'` is **48 tests OK,
+zero skips**. Because a MinIO was up, the S3 integration lane was run against it
+as well — `S3_TEST_ENDPOINT=127.0.0.1:9210 go test -tags=integration
+./internal/storage/...` is **69 PASS, 0 FAIL, 0 SKIP**. `make ci` was **not**
+re-run: no vidra-core file changed in this slice, and #199's and #202's own
+sections carry their green runs.
+
+### Unverified, and named rather than skipped
+
+The **selected edge** stays deferred — no CDN zone or credential is on this
+machine, so every number here is the simulator's. What a real CDN adds is its
+own TTL policy, its purge API's rate limits, whether it forwards the query
+string and `Origin`, and whether its cache key honours `Vary` — and the last two
+are exactly what the CORS note above turns on. The **selected bucket** stays
+deferred (MinIO only), though this topology no longer needs a public-read bucket
+at all. **Safari/WebKit** was not driven in this slice; A32/A33 measured WebKit
+taking the same MSE path and nothing in #199 or #202 touches the client.
+vidra-user's `e2e-backed (s3)` lane was not executed (it needs Docker Compose);
+no vidra-user file changed. The **dead-letter transition was forced** by writing
+`attempts=7` rather than waiting 123 minutes. **Mid-playback across a promotion
+was not observed as a race** — see SC2 for what was measured instead. And the
+walk's **paging was measured against a padded catalogue**: the cursor, the claim,
+the kill/restart and every purge call are the real code; only the row count is
+synthetic.
+
+### Findings
+
+1. **All four previously unwired purge families now evict the edge's copy**, and
+   the next fetch serves new bytes — poster replacement in both its forms,
+   storyboard regeneration, account deletion (queued after the cascade) and the
+   instance-wide download revocation (leased, resumable, cursor-persisted).
+   F06's ledger is empty and measured empty.
+2. **A same-source re-transcode's stale segment no longer plays.** Generation 2
+   landed under `r2/` with its own `?v=`, the edge served the new bytes on a
+   MISS, and the browser fetched zero old-tag URLs. Clause (1) is closed.
+3. **A superseded `?v=` cannot be resurrected through the edge**: the origin
+   refuses it 404 `private, no-store` from the moment of promotion, and a
+   `no-store` 404 is not cacheable, so the refusal survives the edge.
+4. **The bucket needs no public policy.** Unauthenticated reads straight at the
+   store are 403 for every media prefix, with no policy applied. A32/A33's
+   origin-exposure finding is retired by construction rather than documented
+   around.
+5. **The api's public-media CORS answer varies by request `Origin`** (`*` for
+   absent/unknown, an echoed origin **plus** `Allow-Credentials` for a configured
+   one), so `Vary: Origin` is load-bearing. A shared cache that forwards `Origin`
+   and ignores `Vary` would serve one origin's echo to another; the simulator
+   cannot show it because it forwards no `Origin` at all. `docs/operations.md`
+   does not tell an operator to include `Origin` in the cache key or to stop
+   forwarding it. Bounded follow-up, adjacent to A29.
+6. **No `audit_log` action exists for a CDN purge.** The record is the
+   `cdn_purge_jobs` row, one structured log line and the `cdn_purge` counters.
+   Defensible, and worth knowing before an incident.
+7. **`cdnpurge.WithRetry` is wired to no environment variable**, so an operator
+   cannot tune the ladder and a lab cannot reach the cap by configuration. Not a
+   defect; a named limit on what an acceptance run can force.
+8. **Clause (4) is unchanged and is the row's residual**: an edge 5xx after the
+   307 has no fallback to the api proxy, and the only remedy is the
+   `delivery_cdn_enabled` kill switch — which was measured working.
+
+The lab was torn down: the MinIO container and its volume, the edge simulator,
+the throwaway PostgreSQL cluster and redis, the frontend, proxy and both core
+processes, and every lab account and its media. Credentials, raw logs, the media
+fixtures and the browser traces stay private under `/tmp/vidra-a33-r3`; nothing
+from it is committed.
