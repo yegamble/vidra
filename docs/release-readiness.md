@@ -13829,8 +13829,11 @@ the wrong actor, silently. `POST /me/remote-follows` with the handle queues a
 with the handle stores `/accounts/<name>` while `remote_videos.remote_actor_url`
 is `/video-channels/<name>`, so the blocker's feed does not change. Blocking the
 channel actor URL explicitly works (3 → 1) — but the settings page is
-placeholdered `@name@instance.example` and the remote card shows no actor URL to
-copy, so the block a viewer can actually make is the one that does nothing. This
+placeholdered `@name@instance.example`, and the `RemoteVideo` view the watch page
+renders carries `domain`, `object_url` and `watch_url` and **no actor URL and no
+channel handle at all**, so there is nowhere for a viewer to copy the identity
+that would work. The block a viewer can actually make is the one that does
+nothing. This
 needs a ruling, not a patch: either the handle namespaces are unified at channel
 creation, or WebFinger answers with both links, or the block resolves an
 account's channels as well.
