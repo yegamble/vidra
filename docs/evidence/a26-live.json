@@ -1,0 +1,106 @@
+{
+  "slice": "A26 live RTMP — ingest, watch, moderation, replay",
+  "date": "2026-09-08",
+  "register_row": "INT-01",
+  "verdict": "FAIL (moved off BLOCKED; the ingest-plane selection is ruled and the lab has run)",
+  "lab": {
+    "core": "two processes from the working tree (VIDRA_ROLE=api on 127.0.0.1:8088 and VIDRA_ROLE=worker), native postgres 16 at schema 136, native redis, STORAGE_BACKEND=local",
+    "origin": "one origin on 127.0.0.1:8099 — a pipe-only proxy that drops the client's Accept-Encoding, routing /api/* to core and everything else to a production Next standalone server on :3100",
+    "ingest": "the bundled `media`-profile service: alfg/nginx-rtmp:latest (nginx 1.23.1 + Arut's nginx-rtmp-module, linux/amd64 under emulation) in Docker, running the SHIPPED deploy/media/nginx.conf.template with exactly two lines changed — the shim's api upstream, from api:8080 to host.docker.internal:8090 (a transparent logging proxy in front of core, used to capture the hook contract verbatim)",
+    "publisher": "ffmpeg 8.1, `-re -f lavfi -i testsrc2 -f lavfi -i sine -c:v libx264 -c:a aac -f flv rtmp://127.0.0.1:1935/live/<key>`, 1280x720@30 + 48 kHz mono AAC; testsrc2 burns a millisecond timecode and a frame counter into the frame, which is what the latency number is read from",
+    "browser": "real Chromium via Playwright 1.62.1",
+    "rate_limiting": "off (RATE_LIMIT_ENABLED=false), so the zero 429s is not a limits observation",
+    "not_run": [
+      "OBS or any real streaming client (ffmpeg was the publisher)",
+      "the compose `media` profile itself (docker compose --profile media) — the service definition was rendered and its command reproduced by hand",
+      "a second concurrent viewer, and the simultaneous-live caps (live_max_instance_lives / live_max_user_lives)",
+      "TLS, a real hostname, or an ingest reachable from another machine",
+      "S3 storage: the replay VOD landed on local storage"
+    ]
+  },
+  "hook_contract": {
+    "transport": "POST application/x-www-form-urlencoded from nginx-rtmp to a shim on :8082 inside the ingest container, which injects the shared secret header and proxies to the api",
+    "auth": "X-Ingest-Secret, constant-time compared; the routes 404 when LIVE_INGEST_SECRET is unset",
+    "fields": ["app", "flashver", "swfurl", "tcurl", "pageurl", "addr", "clientid", "call", "name", "type"],
+    "start": {
+      "route": "POST /api/v1/live/ingest/start",
+      "call": "publish",
+      "name": "the RAW STREAM KEY, always",
+      "accepted": "302 with Location: <stream id> (the rename)",
+      "refused": "404 for an unknown key, 403 for a policy refusal"
+    },
+    "stop": {
+      "route": "POST /api/v1/live/ingest/stop",
+      "call": "publish_done",
+      "name_before_this_slice": "the RAW STREAM KEY (the module caches the pre-rename name)",
+      "name_after_this_slice": "the STREAM ID (the hook now sits on the `hls` application, whose session is named by the id)",
+      "accepted": "204"
+    }
+  },
+  "sc1_authorization_and_key": {
+    "wrong_key_publish": {"hook": 404, "hook_message": "no live stream for that key", "ingest_behaviour": "connection dropped ~100 ms after connect; ffmpeg exits 251 'Input/output error'", "bytes_written_to_LIVE_HLS_ROOT": 0},
+    "right_key_publish": {"hook": 302, "location": "<stream id>", "state": "live"},
+    "rotation_while_live": {"http": 200, "current_publisher": "ALLOWED TO FINISH — not disconnected, segments kept being written, state stayed live", "old_key_next_publish": "refused (hook 404, connection dropped)"},
+    "rotation_defect_before_the_fix": "the stop hook carried the pre-rename raw key, so after a rotation it no longer resolved: 404, the stream stayed `live` for 20+ minutes with no replay, until the duration watchdog closed it",
+    "who_can_read_the_key": {"owner_list_body_contains_stream_key": false, "viewer_U_rotate": 404, "admin_rotate": 404, "anonymous_rotate": 401, "viewer_U_list_channel_streams": 403, "anonymous_list_channel_streams": 401}
+  },
+  "sc2_watch": {
+    "viewer": "anonymous",
+    "resolution": "1280x720",
+    "current_time_advance_s": 29.025,
+    "wall_clock_window_s": 45.67,
+    "audio": {"muted": false, "volume": 1, "decoded_bytes_start": 36305, "decoded_bytes_end": 510496, "analyser_rms": 0.1254, "silent": false},
+    "frames": {"decoded": 937, "dropped": 26},
+    "playlist": {"type": "live media playlist served at master.m3u8", "ext_x_stream_inf_count": 0, "ext_x_endlist": false, "media_sequence_moves": true, "target_duration_s": 2, "window_s": 12, "content_type": "application/vnd.apple.mpegurl", "cache_control": "private, max-age=0, must-revalidate"},
+    "ladder": {"renditions": 1, "transcoding_in_the_ingest": "none — passthrough", "measured_segment": {"video": "h264 Constrained Baseline 1280x720 30/1", "audio": "aac LC 48000 Hz 1 channel 131286 bps", "container": "mpegts"}, "note": "the live 'ladder' is exactly whatever the publisher pushes; there is no ABR and no variant playlist"},
+    "latency_glass_to_glass_s": {"at_join": 9.13, "after_45s_of_watching": 26.36, "method": "burned-in testsrc2 timecode read from a canvas grab of the decoded frame, against the encoder's own source-time-to-wall-clock anchor (anchor spread 0.13 s)"},
+    "drift": {"media_clock_rate": "~0.64x while the buffer grew from 14 s to 60 s", "cause": "CPU starvation in this lab (a software-rendered headless Chromium beside an x86-emulated ingest and a native x264 encoder); playbackRate stayed 1 and nothing resynced to the live edge"}
+  },
+  "sc3_moderation": {
+    "admin_terminate_control": "DOES NOT EXIST — there is no /admin/live* route in core and no control in the admin UI; an admin gets 404 on DELETE /live/{id} and PATCH /live/{id} because those are owner-scoped",
+    "max_duration": {"limit_s": 60, "minimum_the_setting_accepts_s": 60, "sweep_interval_s": 30, "measured_cut_after_s": 85, "state": "ended", "hls_after_cut": 404, "publisher": "NOT disconnected — the ingest socket lingered and segments kept being written", "audit": {"action": "content.live.force_close", "result": "success", "actor_kind": "system", "reason": "stream=<id> max_duration_secs exceeded", "resource_id": "empty — the id is only in free text"}},
+    "blocked_creator_before_the_fix": {"api_routes": "GET /me 404, login 403", "rtmp_publish": "ACCEPTED", "state": "live", "hls": 200, "public_live_now_rail": "listed"},
+    "blocked_creator_after_the_fix": {"hook": 403, "hook_message": "stream owner is blocked", "state": "offline", "public_live_now_rail": "empty"}
+  },
+  "sc4_disconnect_and_replay": {
+    "mechanism": "nginx-rtmp records each session to <LIVE_HLS_ROOT>/rec/<stream-id>-<unixtime>.flv; on the stop hook the api opens the newest recording for the stream and pushes it through the ordinary video pipeline (draft, attach original, process)",
+    "before_the_fix": "no recording was EVER written — nginx-rtmp does not create a missing record_path, and the HLS cleanup rmdir()s an empty `rec` (it sits inside hls_path) ~12 s after start; every session logged 'live replay: no recording for finished session'",
+    "sigkill_mid_stream": {"publish_seconds_before_kill": 14, "state_after": "ended", "hls_after": 404, "recording_written": true, "replay_video": {"title_suffix": " (replay)", "duration_s": 15, "state": "published", "privacy": "public", "channel": "the stream's own"}},
+    "replay_playback_in_chromium": {"hls_master": 200, "variants": 3, "segment_requests": 9, "all_200": true, "rendition_played": "854x480", "frames_decoded": 184, "frames_dropped": 0, "audio_decoded_bytes": 104551},
+    "job_runs": {"type": "video_transcode", "correlation_id": "present", "request_id": "present", "actor_id": "null (system)"},
+    "grace_window": "none — the state flips on the stop hook; re-publishing with the same key restarts the SAME stream row as a NEW session with a new started_at, and an `ended` one-shot stream is fully reusable",
+    "audit": {"action": "content.live.replay", "result": "success", "reason": "stream=<id> video=<id>"}
+  },
+  "sc5_hooks_alone": {
+    "wrong_secret": {"http": 401, "message": "invalid ingest secret", "correlation_id": "present", "state_change": "none"},
+    "no_secret_header": {"http": 401, "state_change": "none"},
+    "valid_secret_no_rtmp_publish": {"http": 302, "state": "live", "hls_url_advertised": true, "playlist": 404, "public_live_now_rail": "LISTED", "watch_page": "no <video> element at all; 'Can't play this live stream / Your browser could not play the live video feed.' beside a LIVE badge", "fabricated_playback": false}
+  },
+  "sc6_capability_truth": {
+    "ingest_configured": {"features_live": true, "create": 201},
+    "no_ingest_derived_default": {"live_enabled_setting": false, "features_live": false, "create": "403 feature_disabled"},
+    "setting_on_no_ingest": {"features_live": false, "create": "503 live_not_configured", "typed": true, "message_survives_the_5xx_scrubber": true},
+    "studio_with_live_unavailable": "the Live-streams header is down to Reload, no create control anywhere on the page; existing streams stay listed and manageable",
+    "admin_system_live_component": "NONE — ten components (clamav, ffmpeg, mfa_kek, postgres, redis, s3, search, settings_sync, smtp, storage) and not one of them watches the ingest, so a dead RTMP plane leaves /admin/system reading ok",
+    "admin_infrastructure": {"live": {"rtmp_url": "echoed", "hls_root": "echoed"}, "features_live_row": {"enabled": true, "configured": true}, "note": "static config echo, not a probe"}
+  },
+  "defects_fixed": [
+    "the on-publish redirect answered an rtmp:// Location, which nginx-rtmp reads as a PUSH RELAY target rather than a rename, so HLS was written under the raw stream key and the api 404d the whole broadcast",
+    "the HLS module never sees a rename (reverse module order), so packaging moved to a second loopback-only `hls` application fed by a push",
+    "the recorder directory was never created and, when empty, was deleted by the HLS cleanup — no session had ever been recorded and replay had never run",
+    "a mid-broadcast key rotation orphaned the session (stop hook 404, stream stuck live) — the stop hook moved to the `hls` application, whose session is named by the id",
+    "the public stream ID was accepted as a publish identity, making the stream key decorative",
+    "a deactivated owner could still publish and be listed on the public rail"
+  ],
+  "findings_open": [
+    "no admin control terminates a live stream",
+    "the duration watchdog is server-side only: the publisher keeps ingesting and keeps writing segments and a recording",
+    "live audit rows leave resource_id empty and carry the stream id only in free-text reason",
+    "session recordings are never deleted after the replay publishes (six .flv files, 66 MB, still on the volume at the end of the lab)",
+    "a hook-only flip puts a stream with no bytes on the public Live-now rail",
+    "no live ABR ladder and no viewer count",
+    "nothing resyncs a drifted live player to the edge",
+    "the ingest image is pinned to alfg/nginx-rtmp:latest, a 2022 build"
+  ],
+  "gates": {"vidra-core": "make ci — fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race; 81 packages ok, exit 0", "vidra-user": "not touched", "vidra-search": "not touched"}
+}
