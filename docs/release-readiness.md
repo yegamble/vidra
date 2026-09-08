@@ -13653,3 +13653,9 @@ topology** — "THE CDN'S ORIGIN MUST BE KEY-ADDRESSED … pointing this at the
 Vidra API origin 404s every request" — which #199 inverted three sections ago.
 Corrected in passing, since the same struct block was being edited for the
 retry knobs.
+
+## A29 rehearsal — two instances against the merged remediation — 2026-09-08
+
+**RUN IN PROGRESS.** This heading is a placeholder so the branch has a diff; the
+lab is coming up as it is written and every number below will be measured before
+this PR leaves draft. Nothing here is evidence yet.
