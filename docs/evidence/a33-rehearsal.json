@@ -157,7 +157,7 @@
     "transcode_generation": {
       "before": 1,
       "after_enqueue": 2,
-      "after_a_source_replacement": 3
+      "after_a_source_replacement": "3 (counter readback only - the bucket was not re-listed after that replacement)"
     },
     "keys": {
       "before": "streaming-playlists/<id>/r1/...",

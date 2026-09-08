@@ -12971,7 +12971,7 @@ The trigger is `POST /api/v1/admin/videos/{id}/transcoding {"type":"hls"}` →
 | | `videos.transcode_generation` | key prefix | `?v=` | `chunk-0-00001.m4s` sha256 (first 16) | bytes |
 |---|---|---|---|---|---|
 | before | **1** | `streaming-playlists/<id>/r1/` | `dla1t3y805q0` | `a63607893342ca33` | 657,994 |
-| after the re-transcode | **2** (bumped at enqueue) | `streaming-playlists/<id>/**r2**/` | `dla1yo2vujsw` | **`60393685106885db`** | **650,072** |
+| after the re-transcode | **2** (bumped at enqueue) | **`streaming-playlists/<id>/r2/`** | `dla1yo2vujsw` | **`60393685106885db`** | **650,072** |
 | what the edge served on the NEW url | — | — | `dla1yo2vujsw` | `60393685106885db` (**MISS**) | 650,072 |
 | what the edge still holds under the OLD url | — | — | `dla1t3y805q0` | `a63607893342ca33` (HIT) | 657,994 |
 
@@ -13001,8 +13001,9 @@ it finishes off what it already has, otherwise it errors, and a reload is clean.
 *The old generation's collection.* A dry-run sweep named exactly the **14**
 superseded `r1` objects and nothing else; `{"dry_run": false}` deleted 14 of 71
 scanned at an orphan ratio of 19 % with the breaker untripped. A subsequent
-source replacement (`POST /videos/{id}/replace`) moved the counter 2 → **3** and
-wrote `r3`, so a replacement still gets its own directory.
+source replacement (`POST /videos/{id}/replace`) moved the counter 2 → **3**,
+which is the readback that matters here — the bucket was not re-listed after
+that replacement, so this record claims the counter and not the directory name.
 
 ### SC3 — the purge families through the simulator
 
