@@ -656,14 +656,26 @@ cd /opt/vidra && git pull --ff-only            # compose + Caddyfile only; CHECK
 $EDITOR env/production.env                     # VIDRA_CORE_TAG=v0.2.0
 ./deploy/deploy.sh                             # dump -> pull -> gated migrate -> up -> probe
 
-# ROLLBACK — app only, no schema change (see the one-release rule below):
+# ROLLBACK — app only; fine across an ADDITIVE migration (one-release rule below):
 ./deploy/rollback.sh v0.2.0
 
-# ROLLBACK across an incompatible schema change:
+# ROLLBACK across an INCOMPATIBLE schema change (a rename, a drop):
 ./deploy/compose.sh stop api frontend
-./deploy/restore.sh backups/pre-deploy-<ts>.dump.gz
+./deploy/restore.sh backups/pre-deploy-<ts>.dump.gz     # dump and tag must PAIR
 ./deploy/rollback.sh v0.2.0
 ```
+
+The second form has a trap worth reading before you need it: `restore.sh` runs
+both migrators *after* it has dropped and reloaded the database, so exactly one
+pairing works — a dump whose schema the tags pinned in `env/production.env` can
+reach. Restoring a dump from **after** the migration you are escaping, or with
+the tags already rewritten to the older release, used to drop the database and
+then die in the migrator. `restore.sh` now checks that pairing **before** the
+drop and refuses with the numbers ("the dump is at 137; pinned
+`VIDRA_CORE_TAG=v0.6.2` carries up to 125"). `--allow-schema-mismatch` overrides
+it. Note the check can only be made against an image that answers
+`migrate embedded-max`; against an older image it reports **NOT CHECKED** and
+continues, which is not the same as reporting that the pairing is fine.
 
 **On a bundle tree there is no `git pull`.** An upgrade is the tag bump plus
 `vidra deploy` — a release changes the images, and that is what the tags name.
@@ -927,6 +939,34 @@ blind spot is the second half of the drop cycle: it proves N−1 still reads and
 fine, not that N−1 had already stopped writing what N removes. Staged drops still need
 a reviewer to confirm the write path went away in the prior release.
 
+**The policy has two halves, and until A38 only the code half was true.**
+`rollback.sh` does not start the api first — `up -d` starts the `migrate` and
+`search-migrate` one-shots, because api and search depend on them with
+`service_completed_successfully`. Those one-shots run `migrate up` on the
+release being rolled back *to*, and a migrator whose newest embedded migration
+is below the ledger in front of it used to exit 1 (`no migration found for
+version 135`), so every service waiting on it never started. The rehearsal on
+2026-09-07 took a lab site down that way — while proving, in the same run, that
+the previous release's *binaries* served the newer schema perfectly.
+
+Both migrators now treat that state as what the policy says it is: a **clean**
+ledger above the newest embedded migration logs one line and exits 0.
+
+```
+schema version 135 is newer than this binary's newest migration 125; nothing to apply
+```
+
+A **dirty** ledger still fails, whatever its version — dirty means the schema
+state is unknown, which no policy makes safe. And each repo carries a
+`rollback-floor` workflow that runs the previous release's **migrator** (not its
+tests) against this branch's schema, which is the process `up -d` actually
+starts. That lane and `schema-compat` are complementary: one checks the code
+half, the other the migrator half.
+
+An app-only `rollback.sh` across an additive migration therefore works now. It
+is still not enough across an *incompatible* one — old code cannot read a
+renamed column — and that path is still restore-then-rollback.
+
 ### Secret rotation
 
 `ATProtoKEK()` and `MFAKEK()` in `vidra-core/internal/config/config.go:1257-1274`
@@ -1092,11 +1132,29 @@ archive, that change is not in it.
 
 `./deploy/restore.sh` refuses to run without `--yes` or
 `RESTORE_CONFIRM=<database name>`. It stops api + search + frontend (search
-shares the database, so leaving it up means it reconnects mid-restore), drops and
-recreates the database, restores with `-j4`, runs both migrators to bring the
+shares the database, so leaving it up means it reconnects mid-restore), validates
+the archive, **checks that the pinned images can reach the dump's schema**, drops
+and recreates the database, restores with `-j4`, runs both migrators to bring the
 schema to HEAD, **checks that the media the restored database references is
 actually in the object store** (see the next section — it warns and continues,
 never blocks), restarts, and polls `/readyz`.
+
+The schema check is the one that has to happen *before* the drop, because
+everything after it is irreversible. It reads the dump's `schema_migrations` and
+`vidra_search_migrations` versions straight out of the archive (no temporary
+database) and asks each pinned image what it embeds:
+
+| dump vs image | what happens |
+| --- | --- |
+| dump **ahead** of the image | refused, naming both numbers and the tag to set |
+| dump ledger **dirty** | refused — both migrators reject a dirty ledger, after the drop |
+| dump **behind** | allowed; the migrators apply the difference (the forward path) |
+| equal | allowed |
+| image cannot answer `migrate embedded-max` | reported **NOT CHECKED**, allowed |
+
+`--allow-schema-mismatch` turns both refusals into warnings. Use it when you
+already know what the migrator will do — for example restoring a dirty dump you
+intend to repair with `migrate force` afterwards.
 
 ### S3-canonical deployments
 

@@ -8276,3 +8276,160 @@ The lab was torn down: the whole `-p a38` project and its volumes, the local
 registry and its volume, every image built for the rehearsal, and the throwaway
 meta clone with its nested checkouts. Nothing here is merged and no deployment is
 authorized.
+
+## A38 rollback floor — migrator no-op, restore preflight — 2026-09-08
+
+**REC-03 does not flip here either — but for the opposite reason.** Yesterday's
+rehearsal found the rollback floor broken; this is the code that closes it, and
+code is all it is. No stack was brought up. The rehearsal that flips REC-03 is a
+separate slice, and until it runs, "`rollback.sh` completes across an additive
+migration" is a claim about three test suites and a CI lane, not about a deploy.
+Three PRs: [core #193](https://github.com/yegamble/vidra-core/pull/193),
+[search #40](https://github.com/yegamble/vidra-search/pull/40),
+[meta #136](https://github.com/yegamble/vidra/pull/136).
+[Sanitized evidence](evidence/a38-rollback-floor.json).
+
+### What failed first
+
+Two runs, two different scripts, the same shape: the site went down and the
+output did not say why.
+
+**Run 4.** `rollback.sh` documents itself as a tag flip that never touches the
+database, and the one-release policy is what makes that safe. The rehearsal
+proved the policy's *code* half true — the v0.6.2 images, started by hand
+against schema 135, served logins, HLS segments, search and all four admin
+surfaces. But `rollback.sh` does not start the api first. `up -d` starts the
+`migrate` and `search-migrate` one-shots, because api and search depend on them
+with `service_completed_successfully`, and their `migrate up` runs on the image
+being rolled back *to*. `internal/dbmigrate.Up()` had no branch for *the ledger
+is ahead of the newest embedded migration*: golang-migrate resolved the current
+version against the source, found no file, and returned `no migration found for
+version 135`. Exit 1, nothing downstream started, and because `up -d` was
+unguarded, `set -e` killed the script before the readiness probes **and** before
+the trailer that would have said *restore the pre-deploy dump*.
+
+**Run 13.** `restore.sh` runs both migrators *after* it has dropped and reloaded
+the database. Exactly one pairing works — a dump whose schema the pinned images'
+migrator can reach — and neither script checked it. With the tags already
+rewritten to the previous release (which `rollback.sh` does before it fails),
+`restore.sh` dropped the database, reloaded it successfully, and **then** died at
+*running core migrations*. `verify-blobs` and `up -d` never ran.
+
+### What changed
+
+**The migrator no-ops, in both repos.** A **clean** ledger above the newest
+embedded migration is the state the one-release policy calls supported, so
+`Up()` now checks that before handing over to golang-migrate — it has to run
+first, because the old error came out of `Up()` itself resolving the current
+version — logs one line and returns nil:
+
+```
+schema version 135 is newer than this binary's newest migration 125; nothing to apply
+  ledger_version=135 embedded_max=125 dirty=false
+```
+
+A **dirty** ledger still fails exactly as before, whatever its version: dirty
+means the schema state is unknown, which no policy makes safe. A clean ledger at
+or below the max is untouched, and `migrate version` still reports the truth and
+still exits non-zero on dirty. vidra-core and vidra-search carry TWIN copies with
+byte-identical wording, so one grep finds a rolled-back core and a rolled-back
+search. Both were driven RED first: with the branch removed, the new integration
+tests fail with the rehearsal's exact message (`no migration found for version
+145` in core, `28` in search) against a real Postgres.
+
+**A lane that runs the previous release's MIGRATOR.** `schema-compat.yml` runs
+N−1's *test suite*; that was already passing, and run 5 showed why — the code
+half was never the problem. The new `rollback-floor.yml` (in both repos; search
+had no compat lane at all) applies HEAD's migrations with HEAD's migrator, then
+runs the N−1 tree's own `migrate up` against that schema, then asserts from HEAD
+that the ledger did not move. Which outcome it asserts is decided by a
+**capability probe** of the N−1 tree — does it carry `LedgerAheadMessage`? — not
+by a hardcoded version, so the lane flips itself the moment a release carries the
+fix. Today N−1 is v0.6.2, so it takes the second branch: the previous migrator
+*must* fail in the known way, and a **different** failure is still a hard
+failure. Verified locally against the real v0.6.2 worktree (prev\_max 125, HEAD
+ledger 135, exit 1, ledger intact) and, for the positive branch, by stamping the
+ledger to 145 and running HEAD's own migrator (exit 0, the WARN line). Both jobs
+are green in CI: 57 s in core, 27 s in search. It is deliberately cheap — one
+Postgres, no Redis, no clamav, no ffmpeg, no test suite — so it can watch
+`internal/dbmigrate/` and `cmd/api/migrate.go` without dragging schema-compat's
+45-minute job onto every migrator change.
+
+**`restore.sh` checks the pairing before it drops anything.** The dump's ledgers
+are read straight out of the custom-format archive — `pg_restore --data-only -t
+schema_migrations -f -` prints the COPY block, no temporary database — and each
+pinned **image** is asked what it embeds via a new `migrate embedded-max`
+subcommand that prints a bare integer and opens no database. The image is asked
+rather than a checkout read because migrations are compiled into the release
+binaries: what matters is what the container that runs after the drop can do.
+Ahead → refuse, naming both numbers and the tag to set. Dirty → refuse, because
+that is the same unrecoverable failure under the same override. Behind → allowed,
+that is the documented forward path. `--allow-schema-mismatch` overrides.
+
+One branch of that matters more than the rest today: **an image that cannot
+answer reports NOT CHECKED and continues.** Every release cut so far predates the
+subcommand, so refusing would break every restore right now — and the wording is
+deliberate, because "I could not check" and "I checked and it is fine" send an
+operator to completely different places. The ordering is unchanged: verify dump →
+preflight → drop → reload → migrate → verify-blobs → up → probes.
+
+**`rollback.sh` keeps its trailer.** `up -d` is now `|| rollback_target_unhealthy`,
+and the trailer moved out of the bottom of the script into a function both
+failure paths reach. Its message names the migration one-shots *first*, because
+that is where the failure was.
+
+`tests/rollback_floor_test.py` lifts those functions out of the real scripts —
+the `tests/caddy_reload_test.py` trick — and covers all six preflight branches,
+the ordering, and both trailer paths: 12 tests, verified to fail against the
+pre-fix scripts.
+
+### Release-note facts for v0.6.3
+
+- **An app-only rollback across an additive migration now works.** The previous
+  release's migrator meets a newer clean ledger, says so, and exits 0 instead of
+  taking api, search and frontend down with it. It is still not enough across an
+  *incompatible* migration — old code cannot read a renamed column — and that
+  path is still restore-then-rollback.
+- **This only helps rolling back TO a release that has the fix.** Rolling back to
+  v0.6.2 or older still fails in the one-shot. `rollback.sh` now names that
+  failure instead of dying silently on it.
+- Carried forward from the rehearsal, unchanged: **existing access tokens 401
+  once and it is one-way** (a v0.6.2 token 401s on the new release while its
+  refresh token still answers 200; a new-release token works unchanged on
+  v0.6.2); **`process_heartbeats` is populated** by the new release and v0.6.2
+  neither writes nor reads it, so a rolled-back api loses the A17 worker view
+  rather than showing it red; and **new env defaults apply only when set** — an
+  operator who does not touch `env/*.env` keeps the old ones.
+
+### Gates
+
+vidra-core and vidra-search: `make ci` PASS in both (fmt-check, vet,
+migrate-lint, openapi-verify, sqlc-verify, test-race), `go vet -tags=integration
+./...` clean in both, and the `internal/dbmigrate` integration lane green against
+a local Postgres 16. meta: `bash -n` and **shellcheck 0.11.0** `-x` clean on
+`bootstrap.sh`, `install.sh`, `tests/install_test.sh` and every `deploy/*.sh`;
+`tests/rollback_floor_test.py` 12/12; `config -q` exit 0 on the filled
+`env/production.env.example`; and the `--profile core --profile frontend` render
+still asserts postgres, redis, search, `migrate` and `search-migrate` publish
+**no** ports with api and frontend on `127.0.0.1` only.
+
+### Unverified
+
+**The rehearsal.** Nothing here has met a running stack — no images were built,
+`compose run --rm migrate migrate embedded-max` has never been executed against a
+real image, and the restore preflight has never refused a real restore (against
+today's releases it takes the NOT CHECKED branch every time). The CI lane's
+positive branch has never run in CI either, because no released tag carries the
+fix; it was verified locally instead. Also untouched: the external-Postgres
+topology, where `restore.sh` refuses outright and the preflight is unreachable,
+and a rollback across more than one release.
+
+Three gaps are recorded rather than fixed. `tests/*.py` in this repo are **not**
+wired into `meta-ci.yml` — only `tests/install_test.sh` runs there — which
+predates this change and affects six existing files; wiring them in means editing
+`.github/workflows`, out of scope by AGENTS.md rule 7. `MIN_EMBEDDED_MIGRATE_TAG`
+is still `v0.2.0`; a second floor naming the first release that answers
+`migrate embedded-max` would let the preflight refuse instead of degrading, but
+it cannot be set until that release is cut. And `deploy.sh` has no equivalent
+preflight — it does not need one for this failure, since it never drops the
+database.

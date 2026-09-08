@@ -26,6 +26,15 @@
 #
 # Migrations are NOT re-run here: `migrate up` cannot walk backwards, and running
 # it would simply re-apply the newer schema you are trying to leave.
+#
+# But `up -d` below DOES start both migration one-shots — api and search depend
+# on them with service_completed_successfully — so the release you roll back to
+# still has to survive meeting a newer ledger. Since A38 (2026-09-07) it does: a
+# migrator whose newest embedded migration is below a CLEAN ledger logs
+# "schema version N is newer than this binary's newest migration M; nothing to
+# apply" and exits 0. Rolling back to a release cut BEFORE that fix exits 1 there
+# instead, and nothing that depends on the one-shot starts — the failure this
+# script now names for you rather than dying silently on.
 
 set -euo pipefail
 
@@ -58,7 +67,7 @@ while [ $# -gt 0 ]; do
     --core)   CORE_TAG="${2:-}";   shift 2 ;;
     --user)   USER_TAG="${2:-}";   shift 2 ;;
     --search) SEARCH_TAG="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,28p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,37p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *)  CORE_TAG="$1"; USER_TAG="$1"; SEARCH_TAG="$1"; shift ;;
   esac
