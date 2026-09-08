@@ -592,7 +592,7 @@
   },
   "gates": {
     "bash_n": "PASS on every deploy/*.sh, bootstrap.sh, install.sh, tests/*.sh",
-    "shellcheck": "0.11.0, -x, exit 0 on every deploy/*.sh, bootstrap.sh, install.sh, tests/install_test.sh",
+    "shellcheck": "0.11.0, -x, exit 0 on every deploy/*.sh, bootstrap.sh, install.sh and tests/*.sh",
     "compose_config_q": "exit 0 on the filled env/production.env.example",
     "profile_render": "postgres, redis, search, migrate, search-migrate and prep-volumes publish NO ports; api and frontend publish on 127.0.0.1 only",
     "meta_tests": "34 tests green \u2014 backup_test.py 2, rollback_floor_test.py 12, caddy_reload_test.py 3, release_preflight_test.py 8, runtime_smoke_test.py 3, blank_server_smoke_test.py 6",
