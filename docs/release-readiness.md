@@ -85,7 +85,7 @@ Raw local scratch evidence: `/tmp/vidra-readiness-*.log` and the `vidra-readines
 
 ## Workflow readiness register
 
-Owners: **M** meta-repo; **C** core; **S** search; **U** user. Relative source paths below are rooted in the named owner unless prefixed otherwise. Recounted from the Status cells on 2026-09-08, there are **59 workflow rows: 23 PASS, 20 UNVERIFIED, 13 BLOCKED, 2 FAIL, and 1 split row — AUTH-04, whose TOTP half is PASS and whose OIDC half is BLOCKED, is counted in none of the four**; the 10 scope families below are additionally BLOCKED on decisions. These are workflow statuses, not test counts. All required workflows are retained. “Conditional” means required if that capability is selected; disabling it does not prove it. Decision-dependent extensions remain visible in the scope register after this table.
+Owners: **M** meta-repo; **C** core; **S** search; **U** user. Relative source paths below are rooted in the named owner unless prefixed otherwise. Recounted from the Status cells on 2026-09-08 (after A39 flipped QLT-01), there are **59 workflow rows: 24 PASS, 19 UNVERIFIED, 13 BLOCKED, 2 FAIL, and 1 split row — AUTH-04, whose TOTP half is PASS and whose OIDC half is BLOCKED, is counted in none of the four**; the 10 scope families below are additionally BLOCKED on decisions. These are workflow statuses, not test counts. All required workflows are retained. “Conditional” means required if that capability is selected; disabling it does not prove it. Decision-dependent extensions remain visible in the scope register after this table.
 
 Every procedure involving a mutation includes independent API/DB readback and UI reload, even where abbreviated below. For all media paths include owner, ordinary user and anonymous visibility, failed jobs, retries, and deletion/revocation. Dependency IDs are gates, not reasons to omit a row.
 
@@ -148,7 +148,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | REC-01 Backup includes DB, settings/sealing keys and required media | M C S | `backup.sh`, config archive, deploy runbook local/S3 snapshots; search schema in same DB; matched DB/config/media capture, failed-dump probe and encrypted offsite retrieval verified byte-for-byte (A36 evidence L1561–1594; merged L1664); S3 version-retention documentation still open | PASS | Disposable data: backup/check restore-list; failed dump never finalizes; encrypted offsite config/media retrieval with same timestamp; search models/rebuild plan and S3 version retention documented | INS-04, STO-01 → A36 |
 | REC-02 Restore on replacement host yields usable accounts/media/search | M C S U | `restore.sh`, disaster-recovery order; no audit rehearsal | UNVERIFIED | Destroy only disposable host; restore config before DB/media, apply known migrations, login and decrypt saved integrations, play old+new uploads, reindex search; measure RPO/RTO | REC-01, SRC-01 → A37 |
 | REC-03 Upgrade/rollback and dirty-schema recovery preserve data | M C S U | Deploy/rollback floor, separate ledger guards, schema-compat workflow | UNVERIFIED | Upgrade previous compatible release with data; injected migration failure abort; supported app-only rollback; incompatible schema uses tested backup restoration; no blind force/automatic down migrations | REL-01, REC-02 → A38 |
-| QLT-01 Contract/codegen/sqlc/tests remain reproducible and maintainable | M C S U | Final contract/codegen PASS; frontend baseline FAIL on unsupported Node; independent gates insufficient for release | UNVERIFIED | Same release manifest under supported Node/Go; contract/codegen/sqlc diff, unit/race/tagged integration and selected backed suites; required missing services fail; preserve small additive contract changes | REL-01 → A01 then A39 |
+| QLT-01 Contract/codegen/sqlc/tests remain reproducible and maintainable | M C S U | Live evidence `a39-ci-gates`: supported-toolchain pins (core/search Go 1.27 = the release image; user Node 24 = the stated policy), `go mod verify` + `tidy -diff` + `npm ci` + `uv --locked` as gates, one named required check `ci-required` per repo over a checked-in manifest, and skip audits that make a missing dependency FAIL (core integration 6 registered skips / 4703 passed; search 0 / 316; user backed 11 registered / 100 passed; single-purpose lanes 0). All four PRs' CI green. Open: `search-discovery` still has no stack to run in (F04) and is registered, not proved | PASS | Same release manifest under supported Node/Go; contract/codegen/sqlc diff, unit/race/tagged integration and selected backed suites; required missing services fail; preserve small additive contract changes | REL-01 → A01 then A39 |
 | QLT-02 All required screens handle keyboard/mobile/themes/errors and real persistence | U C | Design system; mocked axe suite vs backed persistence; unfinished P-MSG2 and admin notes | UNVERIFIED | Inventory every required control by role; 390px and desktop, light/dark, keyboard/axe, loading/empty/error/retry; mutation readback after full reload; no dead controls | All selected workflows → A40 |
 
 **Register sync — 2026-09-08.** Every acceptance PR through A38 is merged, so
@@ -8472,3 +8472,271 @@ is still `v0.2.0`; a second floor naming the first release that answers
 it cannot be set until that release is cut. And `deploy.sh` has no equivalent
 preflight — it does not need one for this failure, since it never drops the
 database.
+
+
+## A39 CI gates — supported toolchain, exact manifest, zero silent skips — 2026-09-08
+
+**Status: bounded A39 verification PASS; QLT-01 flipped to PASS. Four draft PRs
+open — [core#194](https://github.com/yegamble/vidra-core/pull/194),
+[search#41](https://github.com/yegamble/vidra-search/pull/41),
+[user#186](https://github.com/yegamble/vidra-user/pull/186),
+[meta#138](https://github.com/yegamble/vidra/pull/138) — awaiting merge. This
+agent merged nothing and changed no branch protection.**
+One agent, four worktrees on `a39/ci-gates`. No production pin, image digest,
+migration, API route, compose file, deploy script or generated client changed;
+the only version moves are the toolchain alignments below, which are the task.
+All four repos' AGENTS.md forbid touching `.github/workflows` "unless that is
+the task" — each PR body says so explicitly.
+
+### The finding this closes
+
+A green check answered "did the command exit 0", never "did the command run the
+thing its name claims". Three shapes of that, all live before this slice:
+
+1. **A lane could exit 0 having executed nothing.** ~46 files under core's
+   `-tags=integration` self-skip on an unset `DATABASE_URL` / `REDIS_URL` /
+   `S3_TEST_ENDPOINT` / `CLAMAV_TEST_ADDR`; every test in search's integration
+   suite self-skips on the first two. The workflows set them, but nothing
+   asserted the tests saw them, so a service that died after its healthcheck or
+   a renamed variable produced a green check over a fully skipped suite. The
+   sharpest instance was in the frontend: `channel-sync-backed` runs ONE spec,
+   and that spec self-skips when `GET /instance` reports
+   `features.channel_sync=false` — the single automated proof of channel
+   auto-sync could disappear silently. `ipfs-backed` has the same shape.
+2. **Nothing defined "required for merge."** `gh api
+   repos/yegamble/<repo>/branches/main/protection` returns **404 Branch not
+   protected on all four repos** (verified 2026-09-08). With `needs:` unable to
+   cross workflows, the required set existed only as habit, so a `paths:` filter
+   that grew too narrow — or a renamed job — removes a proof from every PR with
+   no signal at all.
+3. **Committed tests wired to nothing.** meta-ci linted `tests/install_test.sh`
+   by name and ran it; `tests/blank-server-smoke.sh`, `tests/runtime-smoke.sh`
+   and **34 Python unit tests** across six `tests/*_test.py` files ran in NO
+   workflow. Every acceptance record citing them was a local claim with nothing
+   in CI keeping it true — and those are the assertions protecting
+   `deploy/restore.sh` and `deploy/rollback.sh` from the A38 class of regression.
+
+### SC1 — inventory
+
+Trigger legend: **PR** = push(main)+pull_request; **path** = additionally
+path-filtered; **sched** = schedule/dispatch only; **rel** = release-triggered.
+Every `uses:` in all four repos is already pinned to a full 40-character commit
+SHA (each repo's own guard enforces it; verified by reading all 27 workflows).
+No `continue-on-error`, no matrix `exclude`, and no `|| true` masking a test
+command exists anywhere in the four repos.
+
+| Repo | Lane (check name) | Trigger | Toolchain | Install | Required now | Could pass without running its tests | Closed by |
+|---|---|---|---|---|---|---|---|
+| core | `build-test` (backend-ci) | PR | Go **1.27** (was 1.26) | `go mod verify` + `tidy -diff`, `-mod=readonly` | **yes** | a `t.Skip` added to an untagged test file; `make ci` runs non-verbosely so a skip prints nothing at all | static guard `assert-no-untagged-skips.sh` (4 registered sites, all `GOOS==windows`/`sh`, none reachable on the runner) |
+| core | `integration` (backend-integration) | PR | Go 1.27 | same | **yes** | every `<VAR> not set` self-skip; whole suite could skip green | `GO_TEST_FLAGS=-v` + `assert-no-silent-skips.sh` vs `allowed-skips-integration.txt` |
+| core | `openapi` | PR | Go 1.27, Node 24, Redocly `@1` | `npx --yes` | **yes** | none found | — |
+| core | `ipfs-integration` | PR | Go 1.27 | same | **yes** (local proofs only) | `IPFS_TEST_API_URL not set`; and a 5-minute public-gateway fetch made it the flakiest required check | split: public proof moved to `ipfs-public-gateway` (sched); local half audited vs an EMPTY allowlist |
+| core | `ipfs-private-integration` | PR | Go 1.27 | same | **yes** | already hard-failed via `IPFS_PRIVATE_PROOFS_REQUIRED=1` | log audit added as belt-and-braces (43 passed, 0 skipped) |
+| core | `guard` (ci-guard) | PR path `.github/workflows/**` | — | — | **if run** | — | + manifest-name check |
+| core | `prev-migrator-against-new-schema` (rollback-floor) | PR path migrations/dbmigrate/migrate.go | Go 1.27 | same | **if run** | none (no test suite; asserts a ledger) | — |
+| core | `prev-release-against-new-schema` (schema-compat, ~45 min) | PR path `migrations/**` | Go 1.27 | same | **if run** — cadence unchanged | runs the **N-1 tree's** `make test-integration`; that tree has no audit hook | recorded, not closed: auditing N-1 would need the guard to exist in the released tag |
+| core | `bench`, `fuzz` (bench-fuzz) | sched | Go 1.27 | same | no — stated in-file | exploratory by design | — |
+| core | `ipfs-public-gateway` (**new**) | sched | Go 1.27 | same | **no, explicitly** | — | `IPFS_PUBLIC_PROOFS_REQUIRED=1` + empty-allowlist audit |
+| core | `assets` (release-assets), `publish` | rel | Go **1.27** (was 1.26) | — | no | — | toolchain aligned: the shipped CLI now builds on the image's compiler |
+| search | `build-test`, `integration`, `openapi` | PR | Go **1.27** (was 1.26) | `go mod verify` + `tidy -diff`, `-mod=readonly` | **yes** | integration: every test self-skips on `DATABASE_URL`/`REDIS_URL` | verbose log + audit vs an **empty** allowlist; static guard on the untagged suite (0 sites) |
+| search | `smoke` (training-ci) | PR path `training/**` | Python 3.11, uv 0.11.28 | `uv sync --locked`, `uv run --locked` | **if run** | a suite that collects then skips still exits 0 | `-rs --junitxml` + a step failing on `skipped="…"` > 0 |
+| search | `guard`, `prev-migrator-against-new-schema` | PR path | — / Go 1.27 | — | **if run** | — | + manifest-name check |
+| search | `publish` | rel | — | — | no | — | — |
+| user | `frontend` (frontend-ci) | PR | Node 24 | `npm ci` (lockfile) | **yes** | a `test.skip` in the mocked suite; vitest globs matching nothing | Playwright JSON audit vs an **empty** allowlist (97 mocked spec files contain zero skip constructs); `passWithNoTests: false` |
+| user | `contract` (contract-ci) | PR | Node 24 | `npm ci` | **yes** | none — but checks core's **default branch**, so cross-repo PR ordering makes it red until core merges | ordering rule written into the workflow header + AGENTS.md; check kept required |
+| user | `e2e-backed (local)`, `(s3)` | PR | Node 24 | `npm ci` | **yes**, both legs (`fail-fast: false` is deliberate, so each leg is required independently) | six specs skipped silently every run and looked like coverage | audit vs `allowed-skips-backed.txt`, which names each and says where it DOES run |
+| user | `channel-sync-backed`, `ipfs-backed` | PR | Node 24 | `npm ci` | **yes** | single-purpose lanes that self-skip to green | audit vs an **empty** allowlist |
+| user | `quarantine-backed` (**new**, frontend-e2e-optional) | sched | Node 24 | `npm ci` | **no, explicitly** | — | flag set + empty-allowlist audit |
+| user | `guard` (ci-guard) | PR path | — | — | **if run** | — | + `npm install` ban + manifest-name check |
+| user | `publish` | rel | — | — | no | — | — |
+| meta | `validate` (meta-ci) | PR | runner python3/node/shellcheck/compose | — | **yes** | `tests/*.sh` and all `tests/*_test.py` ran in no workflow | lint loop takes `tests/*.sh`; `node --check tests/*.mjs`; unittest discover with a skip failing the job |
+| meta | `bundle`, `boot` | PR | — | — | **yes** | boot builds core in production mode with transcoding OFF and search integration UNSET | **not closed — finding F04**, recorded again below |
+| meta | `ci-required` (**new**, all four repos) | PR | — | — | **the one name for branch protection** | — | — |
+
+**Workflows that pull their own compose images.** Confirmed and stated: core's
+`backend-integration` starts `minio/minio:RELEASE.2025-09-07T16-13-09Z` and
+`clamav/clamav:1.5` chosen to mirror `docker-compose.yml`; `ipfs-integration`
+and the user backed lanes bring up core's compose and **build the api from
+source** (`up -d --build`). None of these lanes runs a PUBLISHED release image,
+so a green CI proves the source tree, never the artefact an operator pulls —
+that separation is what A01's release preflight and meta's `boot` lane exist
+for, and A39 does not change it.
+
+**Retries.** `playwright.config.ts` keeps `retries: 2` under CI (documented
+there as absorbing runner-load flakiness). The audit now counts flaky outcomes
+and emits a `::warning::` naming the number, so a test that only ever passes on
+retry is visible rather than indistinguishable from a clean pass.
+
+### SC2/SC3 — required vs optional, and how a skip fails now
+
+| Lane | Verdict | Allowlist | Observed on this slice's run |
+|---|---|---|---|
+| core `integration` | required | `allowed-skips-integration.txt` — 5 ffmpeg/hardware capability probes + `LIVE_RTMP_TEST` | `OK: skip audit — 6 registered skips, 4703 passed, 0 unregistered` |
+| core `ipfs-integration` | required (local proofs) | empty | `0 skipped, 2 passed` |
+| core `ipfs-private-integration` | required | empty | `0 skipped, 43 passed` |
+| core `build-test` | required | `allowed-skips-unit.txt` (static) | `4 skip site(s) in the default build, all registered` |
+| core `ipfs-public-gateway` | **optional**, named | empty | third-party gateway availability must not decide whether a PR merges |
+| search `integration` | required | empty | `0 skipped, 316 passed` |
+| search `smoke` (training) | required when `training/**` changes | junit `skipped="0"` | pass |
+| user mocked `frontend` | required | empty | `625 passed, 0 flaky, 0 failed, 0 skipped`; 97 spec files carry zero skip constructs |
+| user main backed matrix | required (both legs) | `allowed-skips-backed.txt` — 8 named patterns | `100 passed, 0 flaky, 0 failed, 11 skipped (11 registered)` |
+| user `channel-sync-backed`, `ipfs-backed` | required | empty | `2 passed, 0 skipped` and `3 passed, 0 skipped`; the downloaded artifact shows the channel-sync spec actually EXECUTED (`expected`), which is the whole point |
+| user `quarantine-backed` | **optional**, named | empty | flag on, zero skips permitted |
+| meta `validate` Python suites | required | any `... skipped` fails | `Ran 34 tests … OK` |
+
+**Eleven of the 111 tests in the backed matrix were skipping silently every
+run** — roughly a tenth of the suite, indistinguishable from coverage in a green
+check. Downloaded from `playwright-backed-report-local` on this slice's run and
+enumerated in full: two `search-discovery`, two `registration-approval`, two
+`quarantine`, one each `atproto`, `whisper-captions`, `peertube-import`,
+`channel-sync` (which has its own required lane) and the `owner-claim` first-run
+branch (unreachable by construction here, since the setup project claims the
+owner first). Each is now a named line in the allowlist with the reason and the
+lane it belongs to; a twelfth would fail the job.
+
+`LIVE_RTMP_TEST` is registered rather than enabled: `TestLiveRTMPEndToEnd` needs
+a running RTMP ingest (compose `media` profile) AND a live api on
+`LIVE_RTMP_BASE_URL`, neither of which that lane starts.
+
+The core `ipfs-integration` ruling, in full: the two LOCAL proofs
+(`TestIntegrationAddPinCat`, `TestIntegrationAddDirectoryHLSTree`) are
+deterministic against this repo's own kubo compose service and stay REQUIRED;
+`TestIntegrationPublicVideoRoundTrip` fetches a freshly-marked CID back through
+`ipfs.io` with a 5-minute DHT budget, which is a real proof of provider
+reachability and an availability dependency on a third party. It moved to a
+scheduled lane with `IPFS_PUBLIC_PROOFS_REQUIRED=1`, so an optional lane may be
+absent but may not be falsely green. `schema-compat`'s ~45-minute cadence is
+unchanged and it remains required WHEN ITS PATH FILTER FIRES (`?` in the
+manifest), which is exactly when it has anything to say.
+
+### SC3 — the one required check per repo
+
+`ci-required` in all four repos reads `.github/required-checks.txt` and waits on
+the checks the manifest names, failing when a lane fails, is cancelled, times
+out, or **never ran**. Nothing but `success` passes — `neutral`, `skipped`,
+`cancelled` and `timed_out` all fail. `?name` marks a path-filtered lane as
+required-if-present. Each repo's `guard`/`validate` asserts every manifest name
+still maps to a defined job, so a rename fails in ten seconds instead of as an
+opaque fan-in timeout an hour later.
+
+**For the owner — configure exactly one required status check per repo, all
+named `ci-required`:** `yegamble/vidra`, `yegamble/vidra-core`,
+`yegamble/vidra-user`, `yegamble/vidra-search`. This slice configured none; all
+four remain unprotected.
+
+The `contract` ordering rule is written where the fan-in is described: that lane
+checks this client against vidra-core's DEFAULT branch, so a frontend PR
+consuming a new endpoint is red until the core PR adding it has merged. The red
+is correct and the fix is merge order, never demoting the check.
+
+### SC4 — toolchain and exact manifest
+
+| Repo | CI pinned to | Repo's stated policy | Release image builds with | Verdict |
+|---|---|---|---|---|
+| vidra-core | Go **1.27** (was 1.26) | `go.mod`: `go 1.26.2` (a minimum, satisfied by 1.27) | `golang:1.27-alpine` | **aligned to the image**; `release-assets` moved too, so the shipped CLI and the api binary now share a compiler |
+| vidra-search | Go **1.27** (was 1.26) | `go.mod`: `go 1.26.2` | `golang:1.27-alpine` | aligned to the image |
+| vidra-user | Node **24** (unchanged) | `engines.node: ">=24"`, `.nvmrc: 24` | **`node:26-alpine`** | CI follows the STATED policy; **the image disagrees with it — finding F09 below** |
+| vidra-search training | Python 3.11, uv 0.11.28 | `uv.lock` | n/a | `uv sync --locked` + `uv run --locked` — already exact |
+
+Exact manifest: both Go repos now run `go mod verify` (re-hashes every module in
+the build list against `go.sum`) and `go mod tidy -diff` (fails when
+`go.mod`/`go.sum` are not what the source actually requires — the module-graph
+equivalent of a stale lockfile) as gates, with `GOFLAGS=-mod=readonly` stated in
+every Go job rather than inherited from Go's default. vidra-user already used
+`npm ci` everywhere; `ci-guard` now FAILS a workflow that uses `npm install`, so
+it cannot regress.
+
+### SC5 — artifacts
+
+14-day retention, stable names, uploaded with `if: always()`:
+
+| Repo | Artifact | Contents |
+|---|---|---|
+| core | `core-make-ci-log` | tee'd console output of the canonical gate |
+| core | `core-integration-log` | full `go test -v -tags=integration` log |
+| core | `core-ipfs-local-log`, `core-ipfs-private-log`, `core-ipfs-public-gateway-log` | test log + kubo container logs |
+| search | `search-make-ci-log`, `search-integration-log`, `search-training-junit` | as above + pytest JUnit XML |
+| user | `frontend-ci-reports` | Playwright HTML + JSON report, traces, vitest JUnit |
+| user | `playwright-backed-report-{local,s3}`, `playwright-channel-sync-report`, `playwright-ipfs-report`, `playwright-quarantine-report` | HTML + JSON + traces + backend compose log on failure |
+| meta | `meta-validate-python-unit`, `meta-boot-compose-log` | unittest log; the boot stack's full compose logs |
+
+Proved by download, not by declaration: `gh run download 34192222541 -R
+yegamble/vidra-core` retrieved `core-integration-log/integration.log`, **2.0 MB,
+4703 `--- PASS`, 6 `--- SKIP`, 0 `--- FAIL`** — the six being the five hardware
+capability probes and `TestLiveRTMPEndToEnd`, exactly the registered set.
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| Guard scripts, TDD red first | `assert-no-untagged-skips.sh` red on an injected `os.Getenv`-gated `t.Skip` in `internal/version`, green after removal. `assert-no-silent-skips.sh` red on an unregistered reason, green when registered, red on a log with zero passes. `assert-no-skipped-tests.mjs` red on an unregistered skip, green on a registered one, red on an empty report, red on a missing report. `require-checks.sh` green against a real core commit with all lanes passing, red (naming the lane) against a manifest entry that never ran |
+| core local | `make ci` **exit 0** on Go 1.26.2; `go mod verify` all modules verified; `go mod tidy -diff` exit 0 |
+| search local | `make ci` **exit 0**; `go mod verify` / `tidy -diff` exit 0; untagged-skip guard 0 sites |
+| user local (Node **24.4.1**) | `npx tsc --noEmit` 0; `npm run lint` 0 errors / 2 pre-existing warnings; `npm run lint:icons` 0; `npm test` **254 files / 2539 tests passed, 0 failed, 0 skipped**. `npm run e2e` not run locally — AGENTS.md assigns it to CI, and CI ran it |
+| meta local | `python3 -m unittest discover -s tests -p '*_test.py'` **Ran 34 tests, OK, zero skips**; skip detector red on an injected `... skipped` line; `bash -n` + `shellcheck -x` on the two newly-covered harnesses and both new `scripts/ci/*.sh` exit 0; `node --check` on all 12 `tests/*.mjs` exit 0; `docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file <dummies> config -q` exit 0 and `--profile core config -q` exit 0 (nested checkouts symlinked read-only for the render, then removed) |
+| Remote CI | **all four PRs fully green**, table below |
+
+### Remote CI on this slice
+
+| PR | Checks | Notable |
+|---|---|---|
+| [core#194](https://github.com/yegamble/vidra-core/pull/194) [run 34192222487…](https://github.com/yegamble/vidra-core/actions/runs/34192222487) | **10/10 pass** — `build-test` 4m46s, `integration` 7m12s, `openapi` 1m31s, `ipfs-integration` 1m4s, `ipfs-private-integration` 1m55s, `guard` 5s, `prev-migrator-against-new-schema` 1m29s, `prev-release-against-new-schema` 6m22s, GitGuardian, **`ci-required` 7m18s** | Go 1.27 builds and tests clean; `go mod verify` "all modules verified"; `tidy -diff` exit 0; audits `6 registered skips / 4703 passed / 0 unregistered`, `0 skipped / 2 passed` (ipfs local), `0 skipped / 43 passed` (ipfs private), static guard `4 registered sites` |
+| [search#41](https://github.com/yegamble/vidra-search/pull/41) | **7/7 pass** — `build-test` 2m20s, `integration` 2m2s, `openapi` 51s, `smoke` 12s, `guard` 5s, GitGuardian, **`ci-required` 2m30s** | audit `0 skipped, 316 passed` against an EMPTY allowlist |
+| [user#186](https://github.com/yegamble/vidra-user/pull/186) | **9/9 pass** — `frontend` 9m12s, `contract` 23s, `e2e-backed (local)` 7m18s, `(s3)` 7m43s, `channel-sync-backed` 2m49s, `ipfs-backed` 3m47s, `guard` 5s, GitGuardian, **`ci-required` 9m22s** | vitest `254 files / 2539 tests passed`; mocked `625 passed / 0 skipped`; backed `100 passed / 11 registered skips`; single-purpose lanes `0 skipped` |
+| [meta#138](https://github.com/yegamble/vidra/pull/138) | **5/5 pass** — `validate` 52s, `bundle` 10s, `boot` 2m2s, GitGuardian, **`ci-required` 2m9s** | `Ran 34 tests … OK`; `OK: all 3 entries in .github/required-checks.txt map to a defined job` |
+
+`ci-required` in all four repos really did wait for its manifest and conclude
+after the last lane — 7m18s in core against a 4m46s–7m12s spread, 9m22s in user
+against lanes finishing between 5s and 7m43s. It is not a lane that passes by
+running nothing.
+
+### Unverified / not run
+
+- **`ci-required`'s never-ran branch is proved by a local dry run, not by a real
+  CI incident.** Deleting a lane to watch the fan-in fail would have meant
+  landing a broken workflow.
+- **`ipfs-public-gateway` and `quarantine-backed` have not run.** Both are
+  `workflow_dispatch`/schedule; neither gates a merge, and neither has executed
+  on this branch. They are declared, not demonstrated.
+- **`schema-compat`'s N-1 tree is unaudited** for silent skips: it runs the
+  PREVIOUS release's `make test-integration`, and the audit hook does not exist
+  in that tag. It becomes self-auditing one release after core#194 merges.
+- **Go 1.27 is proved by CI, not locally** — this workstation has Go 1.26.2.
+- **No release image was built or pulled.** Every lane here builds from source.
+
+### Findings
+
+- **F09 (new) — vidra-user's stated Node policy and its published image
+  disagree.** `engines.node: ">=24"` and `.nvmrc: 24` describe Node 24;
+  `Dockerfile` builds and runs `node:26-alpine`. CI now follows the stated
+  policy (24). Which is authoritative is an **owner ruling**: either bump
+  `engines`/`.nvmrc`/CI to 26, or bring the image back to 24. Nothing was
+  changed either way.
+- **F04 is half closed, and the open half is now visible instead of invisible.**
+  `e2e-backed/search-discovery.spec.ts` still cannot run: it needs a
+  vidra-search service, and **vidra-core's `docker-compose.yml` has no search
+  service at all**, so no stack in vidra-user can satisfy `E2E_SEARCH_SERVICE`.
+  It is registered in `allowed-skips-backed.txt` with that reason, so it can no
+  longer be counted as coverage by a green required check — but it is still not
+  proved. A09's `E2E_SEARCH_SERVICE=true` enforcement is in the meta-repo lab
+  harness, not in this workflow; it did not "stick" here because there was
+  nothing here for it to stick to. Closing it needs a cross-repo backed stack
+  (core + search + user in one compose), which is stack coverage, not a CI gate.
+- **meta's `boot` lane still runs with transcoding disabled and search
+  integration unset**, so a green meta CI cannot certify upload → real transcode
+  → browser decode → search indexing. Unchanged by this slice; recorded in
+  meta's AGENTS.md.
+- **Three backed specs remain unwired anywhere** and are listed with reasons in
+  `frontend-e2e-optional.yml`: `registration-approval` (approval-from-boot also
+  gates the deterministic admin the setup project registers first, so the stack
+  needs a seeded admin before the flag goes on), `whisper-captions` (model
+  download + minutes of CPU), `atproto` and `peertube-import` (real third-party
+  credentials / a real source instance).
+- **Minor:** `npm ci` warns `EBADENGINE` for `jsdom@30.0.1`
+  (`^22.22.2 || ^24.15.0 || >=26.0.0`) on Node 24.4.1. CI's `node-version: "24"`
+  resolves to a current 24.x and is unaffected; `.nvmrc`'s bare `24` installs a
+  current 24.x too. No action taken.
+
+**Next action:** review and merge the four PRs, then configure the single
+required status check `ci-required` on `main` in all four repos. No merge or
+deployment was performed here.
