@@ -12158,3 +12158,8 @@ the stale-segment clause.
    exists. `httpapi` keeps one-line aliases, so no call site moved, and
    `TestMediaPathsMatchTheirRoutes` still asserts every builder against its
    route registration from inside the package that owns the router.
+
+## A26 live RTMP — ingest, watch, moderation, replay — 2026-09-08
+
+**IN PROGRESS.** The lab is running; this section is filled in as each clause is
+measured. The register row INT-01 is untouched until the evidence is complete.
