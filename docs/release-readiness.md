@@ -19004,3 +19004,7 @@ the health-component unit test and the boot code path rather than measured, and
 the admin page was never opened in a browser — the controls are proved by
 component tests against the regenerated contract.
 
+## AUTH-01/02 and PLAY-01 residuals — provider pre-claim and registration paths; native-HLS Safari — 2026-09-09
+
+**In progress.** This section is being written by the run it describes; the
+results below are placeholders until the lab finishes.
