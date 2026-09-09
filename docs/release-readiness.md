@@ -16168,6 +16168,13 @@ it. On the account that also has a password, unlink is **204**, the list is then
 empty, unlinking again is **404**, an unknown provider is **404**, and signing in
 through the provider again re-creates the row.
 
+Removing the provider from the configuration afterwards keeps the identities:
+with `OAUTH_PROVIDERS` unset the account's `dex` row is still listed by
+`/me/oauth-identities`, password login is unaffected, the kept row can still be
+unlinked (**204**), and only the login route is gone — **404 `not_found`,
+"unknown oauth provider"**, again where ATProto would answer a typed 503. So an
+operator who turns a provider off strands nobody and loses no linkage.
+
 **The 422's remedy is real here, which is the difference from ATProto.** A30
 recorded that an ATProto account can never acquire a second sign-in method,
 because its synthetic `@atproto.invalid` address is deliberately unroutable. An

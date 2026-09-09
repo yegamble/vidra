@@ -100,7 +100,9 @@
     "unlink again / unknown provider": "404 'identity not linked'",
     "relink": "signing in through the provider again re-creates the row with a new created_at",
     "422 remedy is real for OIDC": "password-reset on the passwordless OIDC account: request 202, confirm 204, password login issues a session, unlink then 204 — unlike ATProto, whose synthetic @atproto.invalid address makes the same remedy impossible",
-    "no link-from-settings": "ConnectedLogins lists and unlinks only; /settings/connections is outbound cross-posting. The callback is session-blind: a signed-in user who authenticates as a different provider user is silently switched to that other account (measured newcomer -> mfauser)."
+    "no link-from-settings": "ConnectedLogins lists and unlinks only; /settings/connections is outbound cross-posting. The callback is session-blind: a signed-in user who authenticates as a different provider user is silently switched to that other account (measured newcomer -> mfauser).",
+    "provider removed from config after linking": "identities KEPT and still listed (200), password login unaffected, the kept row still unlinkable (204), begin for that provider 404 not_found (ATProto answers a typed 503 for its disabled case)",
+    "clause not satisfiable": "'link the identity from settings' has no implementation to exercise — see no_link_from_settings above"
   },
   "sc4_second_factor": {
     "setup": "one account with a password, TOTP enrolled and verified, and a linked Dex identity",
