@@ -85,18 +85,18 @@ Raw local scratch evidence: `/tmp/vidra-readiness-*.log` and the `vidra-readines
 
 ## Workflow readiness register
 
-Owners: **M** meta-repo; **C** core; **S** search; **U** user. Relative source paths below are rooted in the named owner unless prefixed otherwise. Recounted from the Status cells on 2026-09-08 (after A39 flipped QLT-01), there are **59 workflow rows: 24 PASS, 19 UNVERIFIED, 13 BLOCKED, 2 FAIL, and 1 split row — AUTH-04, whose TOTP half is PASS and whose OIDC half is BLOCKED, is counted in none of the four**; the 10 scope families below are additionally BLOCKED on decisions. These are workflow statuses, not test counts. All required workflows are retained. “Conditional” means required if that capability is selected; disabling it does not prove it. Decision-dependent extensions remain visible in the scope register after this table.
+Owners: **M** meta-repo; **C** core; **S** search; **U** user. Relative source paths below are rooted in the named owner unless prefixed otherwise. Recounted from the Status cells on 2026-09-09, after the v0.6.3 release flipped REL-01 and INS-01/02/04/05, there are **59 workflow rows: 50 PASS, 3 UNVERIFIED, 5 BLOCKED and 1 FAIL**. The 3 UNVERIFIED are AUTH-01, AUTH-02 and PLAY-01; the 5 BLOCKED and the 1 FAIL are the six MIG rows, every one of them waiting on the same missing input, a sanitized copy of the operator's source instance. AUTH-04 is no longer a split row: A05 passed its OIDC half on a local Dex fixture, with the selected external provider named as a residual in its own cell. A PASS carrying a parenthesised residual is still counted as a PASS, and the residual is written out in the row rather than in this total; the 10 scope families below are additionally BLOCKED on decisions. These are workflow statuses, not test counts. All required workflows are retained. “Conditional” means required if that capability is selected; disabling it does not prove it. Decision-dependent extensions remain visible in the scope register after this table.
 
 Every procedure involving a mutation includes independent API/DB readback and UI reload, even where abbreviated below. For all media paths include owner, ordinary user and anonymous visibility, failed jobs, retries, and deletion/revocation. Dependency IDs are gates, not reasons to omit a row.
 
 | ID / required behavior | Owners | Evidence at audited revisions | Status | Verification procedure | Dependencies → next action |
 |---|---|---|---|---|---|
-| REL-01 Compatible release sources, contracts and images | M C S U | F01 initial mismatch; A01 now pins and validates v0.6.2 sources/images/assets (see implementation evidence below); runtime version probes remain unverified | UNVERIFIED | Resolve all four SHAs and OCI digests for one release in a disposable tree; run both route guards, frontend path/codegen drift checks and version probes | None → A01 |
-| INS-01 Install on blank supported Linux host without developer tools | M C | `install.sh`, `tests/install_test.sh`, `cmd/vidra`, release-assets; F05 | UNVERIFIED | Empty Debian/Ubuntu VM: verified bundle+CLI download, install/setup, re-run preserving secrets/config; also test git fallback, corrupt download and interrupted install | REL-01 → A02 |
-| INS-02 One setup engine writes valid configuration and explains next steps | M C U | Core `internal/setup`, `cmd/vidra`; prod template; first-boot runbook | UNVERIFIED | CLI/noninteractive/web setup: domain, local/S3, registration and existing-key preservation; compare generated config, validate runtime frontend API origin; no browser credential disclosure | INS-01 → A03 |
+| REL-01 Compatible release sources, contracts and images | M C S U | F01 initial mismatch; A01 pinned and validated v0.6.2; **v0.6.3 cut and frozen** (section "v0.6.3 release — cut, verified, deployed to beta — 2026-09-09"): `deploy/release.sh --yes v0.6.3` tagged the meta repository at `7ecbcd3` and cut all three component releases, each publish-container run pushing and verifying its GHCR image; `deploy/release-preflight.py --tag v0.6.3` exits 0 PASS on all four checks over four source SHAs (vidra `7ecbcd3`, core `12bd1c7`, user `7242885`, search `1f8b854`), three OCI index digests (core `sha256:8636d5da…`, user `sha256:083d3994…`, search `sha256:fc6bdd6f…`, linux/amd64 only, every image's revision label matching its frozen source), three assets checked against the release's own SHA256SUMS, a byte-identical `generated.ts` and an explicitly rejected resolver skew; the bundle's provenance carries `core_schema_version=0144`; and the **runtime version probe A01 could not do** now answers on a running instance — `GET /version` = `{"version":"v0.6.3","commit":"12bd1c7","go":"go1.27.1"}` (evidence `release-v0.6.3`) | PASS | Resolve all four SHAs and OCI digests for one release in a disposable tree; run both route guards, frontend path/codegen drift checks and version probes | A01 → released as v0.6.3. Residual: images are **linux/amd64 only**, so an arm64 host cannot run this release |
+| INS-01 Install on blank supported Linux host without developer tools | M C | `install.sh`, `tests/install_test.sh`, `cmd/vidra`, release-assets; F05; **A02 re-run against the released v0.6.3 artefacts** (section "v0.6.3 release — cut, verified, deployed to beta — 2026-09-09"): `bash tests/blank-server-smoke.sh` exit 0, 7 acceptance groups PASS / 0 failed / 0 skipped on a NEW Ubuntu 24.04.4 LTS VM with no Docker and no install tree at start — the installer installed Docker 29.8.0 and Compose 5.5.1, refused a corrupted bundle and then a corrupted CLI with CHECKSUM MISMATCH and exit 1 (nothing promoted, no env generated), the unmodified install and a reinstall each exited 0 with env, rendered Caddyfile and CLI bytes identical, the installed native CLI matched the release SHA256SUMS entry and executed, the rendered production Compose published nothing for postgres/redis/search and bound api/frontend to 127.0.0.1 only, and all three v0.6.3 digests pulled and inspected clean (evidence `release-v0.6.3`) | PASS | Empty Debian/Ubuntu VM: verified bundle+CLI download, install/setup, re-run preserving secrets/config; also test git fallback, corrupt download and interrupted install | REL-01 → A02, re-run at v0.6.3. Residuals: the **git fallback** and an **interrupted transfer** are still untested; the harness's own host is arm64, so the amd64 release runs under emulation |
+| INS-02 One setup engine writes valid configuration and explains next steps | M C U | Core `internal/setup`, `cmd/vidra`; prod template; first-boot runbook; **proven at v0.6.3** (section "v0.6.3 release — cut, verified, deployed to beta — 2026-09-09"): on the blank host, `vidra setup --non-interactive --yes --domain … --registration closed --tls-mode … --storage local --release-tag v0.6.3 --template env/production.env.example` exits 0 and `vidra setup --check` exits 0; the generated file is what `deploy.sh` then consumed through both migrators and a healthy api; A02 proves an existing configuration survives a reinstall byte-for-byte; and the **runtime frontend API origin** is validated on the real beta edge — `/runtime-config.js` returns `self.__VIDRA_RUNTIME_CONFIG__={"apiBaseUrl":"https://<instance origin>"}`, the public origin and not `localhost:8080` (evidence `release-v0.6.3`) | PASS | CLI/noninteractive/web setup: domain, local/S3, registration and existing-key preservation; compare generated config, validate runtime frontend API origin; no browser credential disclosure | INS-01 → A03, re-run at v0.6.3. Residuals: the **web** setup path and the **S3** storage answer were not re-exercised at v0.6.3; `vidra setup --scan=false` still writes a pair (`scan` dropped, `CLAMAV_ADDR` kept) that `deploy.sh` pre-flight deliberately refuses |
 | INS-03 Production Compose closes datastore ports and binds app ports locally | M C S | Fresh dummy JSON render; both migrators use service images with no volumes | PASS | Re-render explicit base+prod, core/frontend/edge; inspect ports, image equality, missing-required-secret failure; PASS here covers default static render only | REL-01 → carry render assertion into A02 |
-| INS-04 First deploy migrates both ledgers before starting serving processes | M C S | `deploy.sh` dump→pull→two gated migrators→independent ledgers→up→probes; embedded SQL | UNVERIFIED | Empty volumes; assert expected core/search version and clean flag; inject failing/dirty migrator and failed pre-upgrade dump; prove no subsequent restart; test lock timeout | INS-01 → A03; preserve pin/ledger guards |
-| INS-05 TLS/proxy/runtime URLs work at the installed domain | M C U | Caddy routes; user runtime-config and server API origin; five TLS modes in deploy library | UNVERIFIED | Real HTTPS edge: API, frontend, media Range, setup, static, well-known/federation and legacy watch routes; restart with new lab origin; test selected external/internal TLS mode separately | INS-04 → A03 |
+| INS-04 First deploy migrates both ledgers before starting serving processes | M C S | `deploy.sh` dump→pull→two gated migrators→independent ledgers→up→probes; embedded SQL; **proven at v0.6.3 on empty volumes AND on a real upgrade** (section "v0.6.3 release — cut, verified, deployed to beta — 2026-09-09"): first deploy on a host with zero containers and zero volumes printed `expected core schema 0144 (from vidra-bundle.manifest — this tree has no migrations directory)` then `core schema OK (version 144)`, the search migrator exited 0, and `4/6 start` came after both; injecting a dirty `schema_migrations` made deploy exit 1 at `CORE MIGRATION FAILED` without ever printing `4/6 start`, with all five serving/datastore container ids, start times and restart counts unchanged and the dirty bit retained rather than silently repaired; the same four assertions passed independently for `vidra_search_migrations`; and the beta upgrade moved core `125 → 144` and search `16 → 18` as two discrete exit-code-gated steps with the rule-3 independent ledger assertion computed from the pinned nested checkout (evidence `release-v0.6.3`) | PASS | Empty volumes; assert expected core/search version and clean flag; inject failing/dirty migrator and failed pre-upgrade dump; prove no subsequent restart; test lock timeout | INS-01 → A03, re-run at v0.6.3. Residuals: the **failed pre-upgrade dump** injection and the **lock timeout** were not re-run at v0.6.3 (both passed at v0.6.2); pin/ledger guards preserved |
+| INS-05 TLS/proxy/runtime URLs work at the installed domain | M C U | Caddy routes; user runtime-config and server API origin; five TLS modes in deploy library; **proven at v0.6.3 on a REAL public ACME edge** (section "v0.6.3 release — cut, verified, deployed to beta — 2026-09-09"): the beta instance deployed with `VIDRA_TLS_MODE=acme` and `deploy.sh`'s own edge probe passed over HTTPS, then a route matrix probed on the host through the real Caddy pinned to `127.0.0.1:443` returned 200 for `/healthz`, `/readyz`, `/` (123710B of frontend HTML), `/runtime-config.js` (naming the public origin), `/api/v1/instance`, `/version`, `/v/{short_code}` (the watch page, title matching), the legacy `/videos/{uuid}` route, `/sitemap.xml` (513774B) and the HLS master playlist, and a media **Range** request returned `206 video/mp4` with exactly 65536 bytes after one redirect to storage. `/.well-known/nodeinfo` and `/.well-known/webfinger` answer 404 because `FEDERATION_ENABLED=false` on that instance (evidence `release-v0.6.3`) | PASS | Real HTTPS edge: API, frontend, media Range, setup, static, well-known/federation and legacy watch routes; restart with new lab origin; test selected external/internal TLS mode separately | INS-04 → A03 + the beta deploy. Residuals: **federation routes** are unproven at v0.6.3 because that instance disables federation; the **internal-CA TLS transition** and the **restart-with-a-new-origin** clause passed at v0.6.2 and were not re-run (the v0.6.3 lab run stopped at the frontend probe — Node 26 segfaults under this host's `qemu-user-static`); **external** TLS mode untested |
 | AUTH-01 Owner claim is exclusive, one-time and grants admin | C U M | `auth/ownerclaim.go`, `e2e-backed/owner-claim.spec.ts`, setup routes | UNVERIFIED | Before claim all signup methods refuse; valid boot token claims once; restart invalidates old token; race two claims; admin/system succeeds only for claimant | INS-05 → A04 |
 | AUTH-02 Registration, approval, login, logout and session refresh persist | C U | Auth service/routes; backed auth-persistence/session/registration-approval tests; approval opt-in | UNVERIFIED | Open/closed/approval registration with two users; accept/reject; expiration/refresh/revoke; reload and multi-tab/logout; rejected credentials never create sessions | AUTH-01 → A04 |
 | AUTH-03 Email verification and password recovery deliver real mail | M C U | `internal/mail/smtp.go`; live evidence `a05-mail-totp` (disposable Mailpit, capture seam OFF, browser link redemption, expiry/reuse, measured enumeration, four SMTP modes, disabled- and broken-mail UX) | PASS | Disposable SMTP sink + browser token redemption, expiry/reuse and enumeration behavior; then operator-selected SMTP delivery and disabled-mail UX | Provider-agnostic: proven over plain SMTP and over STARTTLS-required + AUTH PLAIN with a trusted CA. Two defects fixed (no redeemable link in any token message; reset was an account-existence oracle with the relay down) → A05 |
@@ -18356,3 +18356,290 @@ reachable by an API client, and it is a message, not a behaviour. And the
 step-up's query transport now has a measured cost — its tokens are in the proxy's
 `Referer` lines — which the slice argued is acceptable and this run neither
 disputes nor closes.
+
+
+## v0.6.3 release — cut, verified, deployed to beta — 2026-09-09
+
+**Verdict: v0.6.3 is cut, proved against its own released artefacts on a blank
+Linux host, and running on the beta instance. REL-01 and INS-01/02/04/05 flip to
+PASS**, each with the residual its own cell now names. Release notes:
+[platform](releases/v0.6.3.md), [vidra-core](releases/v0.6.3-vidra-core.md),
+[vidra-user](releases/v0.6.3-vidra-user.md),
+[vidra-search](releases/v0.6.3-vidra-search.md). Durable evidence:
+[`evidence/release-v0.6.3.json`](evidence/release-v0.6.3.json).
+
+Nothing in a production script, compose file, env template, migration, workflow
+or component repository was changed by this work. The one non-documentation file
+touched here is `tests/runtime_smoke.py`, which is test tooling, and both of its
+changes are defects it found in itself (below).
+
+### What was cut
+
+`./deploy/release.sh --yes v0.6.3`, from this repository with all four checkouts
+on `main`, identical to `origin/main`, zero open pull requests anywhere, and
+`ci-required` green on each head (vidra-user's was still running and was waited
+out to success first). The script tagged this repository `v0.6.3` at `7ecbcd3`
+**before** creating any release — vidra-core's release-assets workflow builds
+the deployment bundle from a checkout of that tag — then created each component
+release, watched its `publish-container` run to conclusion and verified the
+image with `docker manifest inspect`. `vidra-search` is in `release.sh`'s
+`ALL_REPOS` and follows the platform tag; its previous GitHub release was
+v0.6.2, so this is one step, not a catch-up.
+
+| Repository | Source revision | GHCR image (OCI index digest) |
+|---|---|---|
+| yegamble/vidra | `7ecbcd3c6209c89db30bdfe3e6e19b1c65b9a189` | tagged, not released — no image |
+| yegamble/vidra-core | `12bd1c757c17e59bb7492c4c27ec37845cc570e5` | `ghcr.io/yegamble/vidra-core@sha256:8636d5daf37674c6fa867294f47e615bbbb9b0ef6ca65984201ea32ef3f7c64e` |
+| yegamble/vidra-user | `7242885ef7a5b38263e7f899e2ce6ef2ba04fef9` | `ghcr.io/yegamble/vidra-user@sha256:083d399408b64b268ce8cef44185e5dc56ebe4e710457e5dfbcd1cd252ad680d` |
+| yegamble/vidra-search | `1f8b85425e7d4dbb039edca56850282df9b93c6d` | `ghcr.io/yegamble/vidra-search@sha256:fc6bdd6fcc4abc65858bb9f3394f4a1f85a4337977b2e973311fbf9769675ee9` |
+
+Each tag is an OCI index carrying **one `linux/amd64` manifest** plus the
+`unknown/unknown` attestation manifest. There is no arm64 image; an arm64 host
+cannot run this release. Every image's
+`org.opencontainers.image.revision` label equals its frozen source above.
+Measured inside the images: core is `alpine 3.24.1` with `ffmpeg`/`ffprobe`
+**8.1.2** and a pinned `yt-dlp` **2026.07.04** at `/usr/local/bin/yt-dlp`
+(3071553 bytes); user is `alpine 3.24.1` with **Node v26.8.1** running Next.js
+16.3.0; search is `alpine 3.24.1`.
+
+`python3 deploy/release-preflight.py --tag v0.6.3` exits **0**, status PASS, on
+Node v26.8.1 / npm 11.19.0 / buildx v0.32.1-desktop.1 — four check groups, zero
+skips: assets (all three names present exactly once, downloaded, matched against
+the release's own `SHA256SUMS`, and the bundle's `meta_commit`/`core_commit`
+matching the frozen sources), paths, generated types (byte-identical
+`generated.ts` from the frozen lockfile), and an explicitly rejected resolver
+skew. The bundle's provenance file records `tag=v0.6.3` and
+**`core_schema_version=0144`** — which is what `deploy.sh` later checks the
+migrator against, from a file written at build time from the filenames rather
+than read out of the binary that is about to claim a version.
+
+Asset hashes: `SHA256SUMS` `adc5988b…`, `vidra-bundle_v0.6.3.tar.gz`
+`3a8dc24d…`, `vidra_v0.6.3_linux_amd64` `859a7b5e…`,
+`vidra_v0.6.3_linux_arm64` `cd9103a9…`.
+
+### Smoke against the released artefacts — clause by clause
+
+Host: a NEW Ubuntu 24.04.4 LTS **aarch64** multipass VM with no Docker, no CLI
+and no install tree at start. It was resized to 4 CPUs / 8 GiB before the
+runtime run so the newly-default `clamav` service fits — a recorded deviation
+from the 2 CPUs / 4 GiB used for v0.6.2. The amd64 release images run under
+Ubuntu's `qemu-user-static` (`binfmt_misc/qemu-x86_64`, flags `POF`).
+
+| Row / clause | Assertion | Result |
+|---|---|---|
+| INS-01 verified bundle+CLI download | installer fetches the released bundle and CLI and verifies both against `SHA256SUMS` | **PASS** — unmodified install exit 0 |
+| INS-01 corrupt download | one byte appended after the real transfer, twice | **PASS** — exit 1 CHECKSUM MISMATCH for the bundle, then again for the CLI; nothing promoted, no env generated |
+| INS-01 re-run preserves secrets/config | reinstall over an installed tree | **PASS** — env, rendered Caddyfile and CLI bytes identical |
+| INS-01 native CLI executes | installed `vidra_v0.6.3_linux_arm64` (`cd9103a9…`) runs, identity by checksum | **PASS** |
+| INS-01 git fallback, interrupted install | — | **NOT RUN** — carried as a residual in the row |
+| INS-03 port exposure | rendered base+prod, core/frontend profiles | **PASS** — postgres/redis/search publish nothing; api `127.0.0.1:8080`, frontend `127.0.0.1:3000` |
+| REL-01 image availability | all three v0.6.3 digests pulled and inspected | **PASS** |
+| REL-01 version probe | `GET /version` on a running instance | **PASS** — `v0.6.3` @ `12bd1c7`, `go1.27.1` (on beta) |
+| INS-02 setup writes valid config | `vidra setup --non-interactive --yes … --template env/production.env.example`, then `vidra setup --check` | **PASS** — both exit 0, and `deploy.sh` consumed the result |
+| INS-02 runtime frontend API origin | `/runtime-config.js` names the public origin | **PASS** on beta — `apiBaseUrl` is the instance origin, not `localhost:8080` |
+| INS-04 default render | ACME edge profile present; **both** migrators have no volumes and use the same image as their service | **PASS** |
+| INS-04 first deploy on empty volumes | zero containers, zero volumes at start; expected version from the bundle manifest | **PASS** — `expected core schema 0144 (from vidra-bundle.manifest …)` then `core schema OK (version 144)`; search migrator exit 0; ledgers read back `144|f` and `18|f` |
+| INS-04 ordering | migrations complete before serving processes start | **PASS** — `3/6 migrations` precedes `4/6 start` in every run |
+| INS-04 dirty core migrator aborts | inject `dirty=true` into `schema_migrations`, run the released `deploy.sh` | **PASS** — exit 1 at `CORE MIGRATION FAILED`; `4/6 start` never printed; all five serving/datastore container ids, start times and restart counts unchanged; the dirty bit retained, not silently repaired |
+| INS-04 dirty search migrator aborts | same, independently, on `vidra_search_migrations` | **PASS** — exit 1 at `SEARCH MIGRATION FAILED`, same four assertions |
+| INS-04 recovery | clear only the injected bits, read the ledgers | **PASS** — `144|f` and `18|f` |
+| INS-04 failed pre-upgrade dump, lock timeout | — | **NOT RUN at v0.6.3** — both passed at v0.6.2; residual in the row |
+| INS-05 default TLS profile renders | ACME edge in the default render | **PASS** |
+| INS-05 selected internal-CA TLS | setup to a `https://` origin, deploy, probe with the lab CA root | **NOT REACHED at v0.6.3** — the harness gets there only after the plain-http deploy returns 0; passed at v0.6.2 |
+| INS-05 real HTTPS edge | see the beta matrix below | **PASS** on a real public ACME edge |
+| Scan by default | the shipped default posture, `scan` in `VIDRA_COMPOSE_PROFILES` with `CLAMAV_ADDR` set | **PASS in the lab** — clamav started, reached healthy, and the api that depends on it `service_healthy` came up healthy behind it |
+| Frontend probe | `deploy.sh` 6/6 waits for the frontend | **NOT CERTIFIED on this lab host** — see below |
+| Owner claim, upload, transcode, playback, search on the lab stack | A04/A06/A07/A09 driver chain | **NOT RUN** — the chain's precondition is an A03 `result.json` with `status: PASS` and `checks.recovery: PASS`, which this run does not have. Playback and search were exercised on beta instead |
+
+**The frontend clause, exactly.** `deploy.sh`'s 300 s frontend probe timed out
+and the deploy exited 1. The cause is the emulator, not the release: the
+container logs nothing but
+`x86_64-binfmt-P: QEMU internal SIGSEGV {code=MAPERR, addr=0x20}` in a crash
+loop. The **identical image digest** serves `HTTP 200` in 6 s under Docker
+Desktop's emulation on the same workstation (Next.js 16.3.0, 54247 bytes), and
+serves the beta instance natively on amd64 where `deploy.sh`'s own probe
+reported `frontend OK`. v0.6.2's frontend (Node 24) did not crash under this
+emulator on 2026-09-05; v0.6.3's is Node 26. Because the abort happens at 6/6,
+every clause the harness runs *after* the plain-http deploy — internal TLS,
+and the driver chain that depends on a PASS result file — is untested at
+v0.6.3 rather than failed. The two migration-abort clauses were run separately
+and by hand against the same stack, because those aborts happen at 3/6 and
+never reach the frontend at all.
+
+**Two defects the harness found in itself**, both fixed here, both test tooling:
+
+1. `runtime_smoke.py` pinned the release digests into the disposable overlay
+   with a regex anchored on a literal `ghcr.io/`. That stopped matching when
+   `VIDRA_IMAGE_REGISTRY` made the registry host interpolated
+   (`${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/…`) — zero
+   matches for all three repositories. The `require(count > 0, …)` guard turned
+   that into a refusal instead of a run that quietly tested the mutable tag,
+   which is the one thing the pin exists to avoid.
+2. The same platform pin did not extend to `clamav`, which the scan-by-default
+   profile set now starts and which is published for **linux/amd64 only**
+   (`docker manifest inspect clamav/clamav:1.5` lists one linux/amd64 manifest
+   and no arm64, as does `:latest`). On the arm64 lab host `compose pull` died
+   at deploy step 2/6 with `no matching manifest for linux/arm64/v8` before
+   anything started. Pinning it to the candidate's platform is the same
+   decision the three release images already get; it was measured affordable
+   first — clamd healthy (`clamdcheck.sh` exit 0, "Clamd is up") in **81 s** at
+   **996 MiB** RSS under emulation, inside its own 120 s `start_period`.
+
+### Beta deploy
+
+`deploy/deploy.sh` **unmodified**, run as the `vidra` user on the droplet (root
+trips git dubious-ownership on `/opt/vidra`), amd64, 8 GiB RAM, 62 GiB free,
+Docker 29.7.2, Compose 5.5.0. `VIDRA_SKIP_DNS_PREFLIGHT=1` because the instance
+sits behind Cloudflare: its A record resolves to `104.21.x`/`172.67.x`, not to
+the droplet, so `require_dns_points_here` would refuse. The script prints that
+skip as a WARNING.
+
+Preparation, before the script: the live `env/production.env` was copied to
+`/root/production.env.bak-v0.6.2` (mode 0600, **outside** the repo — never a
+`.bak` under `env/`); `/opt/vidra` was checked out `--detach` at `v0.6.3` as the
+`vidra` user, because `deploy.sh` pins the nested component checkouts but never
+advances the meta one; the three `VIDRA_*_TAG` pins were bumped to `v0.6.3`; and
+the scan posture was set explicitly. One repair was needed on the way:
+`/opt/vidra/tests` was owned `root:root` from an earlier root-run operation, so
+the checkout could not write 20 files into it — `chown -R vidra:vidra` and the
+checkout completed clean.
+
+| Step | Result | Detail |
+|---|---|---|
+| 0/6 pre-flight | exit 0 | compose 5.5.0, `VIDRA_TLS_MODE=acme`, migrator tags >= v0.2.0; nested core/search/user checkouts synced to `v0.6.3`; `compose config -q` passed |
+| 1/6 pre-deploy dump | exit 0 | wrote `/opt/vidra/backups/pre-deploy-2026-09-09T212458.dump.gz` (**72M**) and pruned the oldest |
+| 2/6 pull | exit 0 | three v0.6.3 images |
+| 3/6 migrations | exit 0 | core migrator: `{"msg":"migrations applied","from_version":125,"to_version":144}`; the **independent** rule-3 ledger read, computed from the pinned nested checkout's migration filenames, reported `core schema OK (version 144)`; search migrator: `migrate up: version=18 dirty=false table=vidra_search_migrations` |
+| 4/6 start | exit 0 | `up -d --no-build` |
+| 5/6 reload Caddy | exit 0 | `caddy reloaded (attempt 1)` |
+| 6/6 health probes | exit 0 | api `/readyz` OK, frontend OK, edge OK over real HTTPS |
+| **total** | **exit 0** | **54 s** wall clock |
+
+Ledgers after: `schema_migrations` **144|f**, `vidra_search_migrations` **18|f**.
+`GET /version` = `{"name":"vidra","version":"v0.6.3","commit":"12bd1c7","build_date":"2026-09-09T20:17:56Z","go":"go1.27.1"}`.
+
+**Undo.** App-only rollback to v0.6.2 is **not** supported — the A38 floor says
+app-only rollback is available *from* v0.6.3 onward, and 0142 is a registered
+compat break on top of that. The undo is the restore path:
+
+```
+./deploy/restore.sh backups/pre-deploy-2026-09-09T212458.dump.gz
+```
+
+with `VIDRA_*_TAG` back at `v0.6.2`. `restore.sh` refuses a dirty dump, and
+refuses a pinned image whose schema is below the dump's, both before the drop.
+
+#### Scan posture on beta: the documented opt-out
+
+The droplet's env file — the operator's file, not the template — carried
+`MALWARE_SCAN_ENABLED=false`, no `CLAMAV_ADDR`, and
+`VIDRA_COMPOSE_PROFILES=core frontend`. Under v0.6.3 that is **not a posture**:
+`MALWARE_SCAN_ENABLED` is no longer read, and with neither an address nor the
+opt-out the api boots and refuses every ingestion route with
+`503 scanner_not_configured`. Left alone it would have silently broken uploads
+on beta.
+
+`free -m` showed 7941 MiB total with 6720 available, so clamd's ~2 GiB **would**
+have fitted. It was still declined: this instance has never scanned, and adding
+a service the api waits on `service_healthy` — 120 s `start_period` plus a
+first-boot freshclam download — inside a 19-migration upgrade lengthens the
+restart window for a capability the instance did not have. So the live file was
+given `MALWARE_SCAN_MODE=disabled` with a comment saying why and how to turn
+scanning on later. That is a first-class posture, not a silence: the api WARNs
+every boot, writes one `system.malware_scan.disabled` audit row per boot, and
+`/admin/system` reports the clamav component `not_configured`. Verified after
+the deploy: `GET /api/v1/instance` reports `features.uploads=true` and
+`features.imports=true`, so ingestion is allowed rather than refused.
+
+#### `vidra doctor`
+
+The first run after the upgrade reported two **false** failures, and the reason
+is worth recording: `deploy.sh` upgrades the images and never the `vidra` CLI,
+which is a release asset installed by `install.sh`. The droplet's CLI was an
+August build, so it validated the new configuration against an old release's
+rules — it rejected `MALWARE_SCAN_MODE=disabled` as "must be one of
+fail-closed, fail-open, quarantine" on an api that had accepted it at boot, and
+could not read the schema ledger at all
+(`exec: "migrate": executable file not found in $PATH` — the defect vidra-core
+#191 fixed). The CLI was reinstalled at v0.6.3 from the release asset, verified
+against the release `SHA256SUMS` (`859a7b5e…`), with the old binary kept at
+`/root/vidra-cli.bak-preupgrade`.
+
+With the v0.6.3 CLI: **21 pass, 7 warn, 1 fail**. The one failure is `domain
+DNS` — the hostname resolves to Cloudflare, not to this host — which is the same
+fact `VIDRA_SKIP_DNS_PREFLIGHT` exists for and the reason ACME renewal on this
+instance is a standing risk. Passing and load-bearing: `configuration values: 76
+variable(s) … pass the api's own boot validation` (this is what accepts
+`MALWARE_SCAN_MODE=disabled`), `schema ledger: … version 144 and clean`,
+published ports (only caddy 80/443 face the internet), the search service
+answering `/healthz` inside the compose network, and ffmpeg 8.1.2 in the api
+container.
+
+Two warnings are new information rather than noise:
+
+- **No account is marked as this instance's owner.** Migration 0131's marker is
+  written only by the first-run setup claim, and this instance was claimed
+  before that existed; the backfill needs an `auth.owner_claim` audit row or a
+  claimed `owner_claim_tokens` row whose `claimed_at` matches the founding
+  account's `created_at`, and neither survived here. Nothing is broken — the
+  last-admin guard still stops a lockout — but every admin is equal, and there
+  is exactly one owner slot with no transfer route from the console.
+- **The media bucket carries no `.vidra/owner` marker**, so media GC would
+  report what it would delete and delete nothing.
+
+#### Beta edge matrix
+
+Probed on the droplet through the real Caddy over HTTPS, pinned to
+`127.0.0.1:443`, so the answers are the instance's own and not Cloudflare's
+cache.
+
+| Request | Result |
+|---|---|
+| `GET /healthz` | 200 application/json |
+| `GET /readyz` | 200 application/json |
+| `GET /` | 200 text/html, 123710B |
+| `GET /runtime-config.js` | 200 — `self.__VIDRA_RUNTIME_CONFIG__={"apiBaseUrl":"https://<instance origin>"}` |
+| `GET /api/v1/instance` | 200 application/json |
+| `GET /version` | 200 — v0.6.3 @ 12bd1c7 |
+| `GET /v/{short_code}` | 200 text/html — the watch page, `<title>` matching the video |
+| `GET /videos/{uuid}` (legacy) | 200 text/html |
+| `GET /sitemap.xml` | 200 application/xml, 513774B |
+| `GET …/hls/master.m3u8` | 200 `application/vnd.apple.mpegurl`, 1402B, five variant renditions plus subtitle and audio groups |
+| media `Range: bytes=0-65535` | **206 video/mp4, exactly 65536B**, after one redirect to storage |
+| `GET /api/v1/videos/search?q=…` | 200 with ranked results; a broader query reports `total: 12051` |
+| `GET /api/v1/videos?limit=3` | 200, `total: 13528`, each item carrying its stored 11-character `short_code` |
+| `GET /.well-known/nodeinfo` | 404 — expected, `FEDERATION_ENABLED=false` here |
+| `GET /.well-known/webfinger` | 404 — same reason |
+| `GET /feed/videos.xml` | 404 — not investigated; the feed may live at another path on this release |
+
+### What is NOT verified by this release
+
+- **Login on beta, and therefore the TOTP second factor.** No credentials for an
+  existing beta account were available to this session, and creating an account
+  on beta was out of scope. Every beta check above is anonymous. The
+  release-note fact that old access tokens 401 once is unverified for the same
+  reason: it needs a token minted before the deploy.
+- **Every authenticated beta surface** — Studio, admin, messaging,
+  notifications.
+- **The lab frontend, internal-CA TLS, and the owner-claim → upload → transcode
+  → playback → search driver chain at v0.6.3**, for the emulator reason above.
+- **arm64.** The release publishes no arm64 image.
+- The register's own standing gaps are unchanged: AUTH-01, AUTH-02 and PLAY-01
+  remain UNVERIFIED, and the six MIG rows remain BLOCKED or FAIL on the same
+  missing sanitized source input.
+
+### Three operator caveats this release introduces
+
+Recorded in [the release notes](releases/v0.6.3.md) as well, because an operator
+meets all three on the way in:
+
+1. **The release is amd64-only, and so is the bundled scanner.** With `scan` now
+   in the template's default profiles, an arm64 host fails at `deploy.sh` step
+   2/6 before anything starts.
+2. **`deploy.sh` does not upgrade the `vidra` CLI**, so `vidra doctor` after an
+   upgrade validates against the previous release's rules until the CLI is
+   reinstalled at the tag.
+3. **`vidra setup --scan=false` writes a pair `deploy.sh` refuses** — it drops
+   the `scan` profile and leaves `CLAMAV_ADDR` pointing at the bundled service.
+   The pre-flight refuses that by name and prints the three ways out, which is
+   the guard working; turning scanning off is still two edits, not one flag.
