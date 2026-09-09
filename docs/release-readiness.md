@@ -149,7 +149,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | REC-02 Restore on replacement host yields usable accounts/media/search | M C S U | `restore.sh`, disaster-recovery order; no audit rehearsal; sealed restore on a replacement host closed the held-open decryption clause (A37 close-out evidence `a37-close-out.json`, section "A37 close-out — sealed restore on a replacement host — 2026-09-08") | PASS | Destroy only disposable host; restore config before DB/media, apply known migrations, login and decrypt saved integrations, play old+new uploads, reindex search; measure RPO/RTO | REC-01, SRC-01 → A37 |
 | REC-03 Upgrade/rollback and dirty-schema recovery preserve data | M C S U | Deploy/rollback floor, separate ledger guards, schema-compat workflow; live rehearsal `a38-rehearsal` (section "A38 rehearsal — rollback floor re-run against the merged fix — 2026-09-08"): a seeded stack with real transcodes upgraded 135→136, `rollback.sh` completed the app-only rollback back across that migration on the previous release's migrator (`schema version 136 is newer than this binary's newest migration 135; nothing to apply`) with every count and fingerprint identical, an injected failing `0136` aborted at 3/6 before `up -d` and its 136-dirty ledger was recovered by the runbook with `vidra doctor` naming it, and both new `restore.sh` refusals (dirty dump; pinned image below the dump's schema) fired before the drop — **app-only rollback supported from v0.6.3 onward; v0.6.2 targets use the restore path** | PASS | Upgrade previous compatible release with data; injected migration failure abort; supported app-only rollback; incompatible schema uses tested backup restoration; no blind force/automatic down migrations | REL-01, REC-02 → A38 |
 | QLT-01 Contract/codegen/sqlc/tests remain reproducible and maintainable | M C S U | Live evidence `a39-ci-gates`: supported-toolchain pins (core/search Go 1.27 = the release image; user Node 24 = the stated policy), `go mod verify` + `tidy -diff` + `npm ci` + `uv --locked` as gates, one named required check `ci-required` per repo over a checked-in manifest, and skip audits that make a missing dependency FAIL (core integration 6 registered skips / 4703 passed; search 0 / 316; user backed 11 registered / 100 passed; single-purpose lanes 0). All four PRs' CI green. Open: `search-discovery` still has no stack to run in (F04) and is registered, not proved | PASS | Same release manifest under supported Node/Go; contract/codegen/sqlc diff, unit/race/tagged integration and selected backed suites; required missing services fail; preserve small additive contract changes | REL-01 → A01 then A39 |
-| QLT-02 All required screens handle keyboard/mobile/themes/errors and real persistence | U C | Design system; mocked axe suite vs backed persistence; unfinished P-MSG2 and admin notes | UNVERIFIED | Inventory every required control by role; 390px and desktop, light/dark, keyboard/axe, loading/empty/error/retry; mutation readback after full reload; no dead controls | All selected workflows → A40 |
+| QLT-02 All required screens handle keyboard/mobile/themes/errors and real persistence | U C | Design system; mocked axe suite vs backed persistence; unfinished P-MSG2 and admin notes; live evidence `a40-controls` (section "A40 required-control inventory — mobile, theme, keyboard, error, persistence — 2026-09-09"): 75 routes and 1 950 distinct controls walked against a two-process core at 390 px and 640 px in both themes, in Chromium and WebKit, with axe on wcag2a/2aa/21a/21aa — horizontal pan 8 page-states → 0, serious/critical axe 42 page-states / 246 nodes → 0, 76 routes tab-walked with no trap and no invisible focus stop, all 76 rendering something with the api killed (0 spinners, 0 blanks), and theme/volume/speed/watch-position persistence measured through the real controls | PASS | Inventory every required control by role; 390px and desktop, light/dark, keyboard/axe, loading/empty/error/retry; mutation readback after full reload; no dead controls | All selected workflows → A40. Five defects fixed on the way (user #210): two admin tables panned 621–859 px into blank space on a phone, `text-fg-subtle` and `text-accent` were used for meaningful text at 2.35:1 and 3.36:1, the moderation thumbnail was a nameless link, volume was never remembered, and the role gate flashed "Administrators only" at an administrator mid-restore. Residuals, none blocking: **Safari itself was never driven** — Playwright's WebKit takes the MSE path, so the native-HLS branch stays UNVERIFIED; no screen reader and no touch device were used; and with the api down, viewer-scoped surfaces say "Sign in" rather than naming the outage, because the boot refresh cannot tell a refused connection from an absent session |
 
 **Register sync — 2026-09-08.** Every acceptance PR through A38 is merged, so
 the eleven `PASS (candidate; unmerged)` qualifiers are dropped to plain PASS
@@ -16559,3 +16559,357 @@ existing `IPFS_ENABLED`.
 - **The block unpin end to end on a real node.** The ledger transition and the SQL
   join are proved; the worker's node-side removal is the same reference-guarded
   path A31 already measured for a privacy flip.
+## A40 required-control inventory — mobile, theme, keyboard, error, persistence — 2026-09-09
+
+**QLT-02 moves from UNVERIFIED to PASS.** Every route a PASS register row's
+procedure names was walked against a real two-process core at the two widths the
+record calls the worst cases, in both themes, by keyboard, with axe, in Chromium
+and WebKit — 75 routes, 1 950 distinct controls, 304 measured page-states. Five
+frontend defects were found and fixed, one of them a race in this slice's own
+first fix that only four parallel workers could produce; three earlier carry-ins
+were re-measured closed and one was measured still open. The walk is not a
+session's notes: it lands as `e2e-backed/required-controls.spec.ts`, eight tests
+in the backed lanes. [Evidence](evidence/a40-controls.json). PRs:
+[user #210](https://github.com/yegamble/vidra-user/pull/210),
+[meta #PLACEHOLDER](https://github.com/yegamble/vidra/pull/PLACEHOLDER).
+
+### The lab
+
+Core runs as two processes — `VIDRA_ROLE=api` on `:8188` and a separate
+`VIDRA_ROLE=worker` — over its own native PostgreSQL 16.15 on a private socket,
+**migrated from empty to schema 144** (`dirty=false`), and a native Redis on
+`:56380`. `STORAGE_BACKEND=local`; `TRANSCODING_ENABLED=true` with the host
+ffmpeg, so the seeded clips carry a real CMAF ladder rather than a stub. The
+frontend is `next build` with `NEXT_PUBLIC_API_BASE_URL=http://localhost:8188`,
+served from `.next/standalone` on `:3200`; the backed spec runs against the same
+build through the Playwright `webServer` on `:3300`. Browsers are Playwright
+1.62.1 **Chromium and WebKit**; accessibility is `@axe-core/playwright` 4.13 on
+`wcag2a, wcag2aa, wcag21a, wcag21aa`, gated on serious and critical.
+
+Seams, stated: `RATE_LIMIT_ENABLED=false` (the walk logs in hundreds of times),
+`MALWARE_SCAN_MODE=disabled` (no clamd in this lab),
+`DEV_MAIL_CAPTURE_ENABLED=true`, `HTTP_IMPORT_ALLOW_PRIVATE_URLS=true`,
+`LIVE_INGEST_SECRET` and `OWNER_CLAIM_TOKEN` pinned to the values
+`e2e-backed/fixtures.ts` states, and `CORS_ALLOWED_ORIGINS` naming both frontend
+ports. Fixtures: an owner-claimed admin, a creator with a channel, avatar and
+banner, three published videos (two public, one private) plus a file-less draft,
+a viewer who follows, comments, replies, rates, saves, reports and holds a
+two-way DM thread, a public playlist, and one live stream driven through the
+media-server-facing ingest hook.
+
+**One thing the harness had to learn.** Refresh tokens rotate and are
+single-use, and core treats a reused one as compromise by revoking every session
+for that account. A walk that signs in once and replays `storageState` into
+fifty contexts therefore signs itself out on the second context AND kills the
+account — the first hour of this run measured signed-out pages while believing
+they were an admin's. Every context signs in fresh through
+`POST /auth/login` with `cookie_mode: true` on the context's own cookie jar; the
+committed spec says so where the next harness will read it.
+
+### SC1 — the inventory
+
+`docs/evidence/a40-controls.json` carries the table the row asks for: for each
+of the 75 routes, the register rows whose procedure reaches it, the evidence
+section that proved the API side, and every interactive control the walk found,
+with its smallest measured dimension at each width and whether an
+overflow-hidden ancestor cut it off. The 22 controls of the app chrome — header,
+sidebar, bottom tab bar, skip link — repeat on nearly every route and are listed
+once rather than 75 times, so each route's entry is the controls that make that
+screen what it is (the watch page owns 23 of its 38; the home feed 14 of 29). The routes are the ones the register names:
+watch, embed, home, trending, search, channel, public profile, playlists,
+login/signup/reset/verify/email-change, the four About surfaces, 404, a private
+video's refusal; subscriptions, history, library, notifications, messages and a
+thread, and all thirteen settings tabs; the five Studio tabs and live watch; and
+the twenty-two admin and moderation surfaces including all nine config tabs.
+
+### SC2 — mobile: 390 px and the 640 px stage
+
+**Two routes could be swiped into blank space on a phone, and neither
+`scrollWidth` nor an element scan could see it.** `/admin/jobs` panned 621 px at
+390 and 371 px at 640; `/moderation/videos` panned 859 px and 845 px. Both
+report `document.body.scrollWidth === 390` throughout, no element's right edge
+crosses the viewport outside a scroll container, and `elementsFromPoint` at
+x = 380 after panning returns only `<html>` — the page pans into nothing, with
+the sticky header and bottom tab bar staying put because they are fixed to the
+layout viewport. The walk measures this by **trying to pan** (`scrollTo(4000,0)`,
+then read `scrollX`), which is the only method that sees it.
+
+The mechanism: both tables already sat inside `overflow-x-auto` wrappers, and the
+wrappers were doing nothing. A positioned descendant inside the table resolved
+its containing block OUTSIDE the wrapper — the wrapper is `position: static` —
+so the table's layout overflow escaped the scroller and landed on the root.
+`contain: paint`, `transform: translateZ(0)` and `position: relative` each close
+it; `overflow: hidden` on the wrapper, `overflow-x: hidden` on `main`, and
+`max-width` do not. `relative` is the fix, because it names the actual cause.
+Both engines reproduce (Chromium 1012 px, WebKit 1021 px of root scroll width)
+and both measure closed. Applied to the shared `components/admin/AdminTable.tsx`
+and the four bespoke wrappers of the same shape, so the class is closed rather
+than the two instances that happened to be measured.
+
+**Hit targets.** The honest measurement is the EFFECTIVE target: a bare
+`<input type=checkbox>` is 16 px, but the `<label>` wrapping it is what a finger
+lands on. Measured that way, **no control on any required screen is under
+24 × 24 in both dimensions** at either width. The first pass, measuring the raw
+element, produced 160 "failures" that were all one of two things: label-wrapped
+checkboxes on `/settings` and `/admin/config` (13 × 16 and 16 × 16 raw; the row
+they sit in is 342 × 28), and card titles and channel links (258 × 18 — wide,
+short, and covered by WCAG 2.5.8's spacing exception at a 30 px row pitch). Both
+are recorded here because the next walk will re-derive them and should not
+re-report them. 352 controls sit between 24 px and Apple's 44 px target — almost
+all of them the same wide-and-short text links — and the player bar's own
+controls, the ones HIG's 44 px is really about, all clear it.
+
+**Clipping.** Zero controls are cut off by an overflow-hidden ancestor. The two
+candidate classes both turned out to be reachable and are now excluded by rule
+rather than by hand: the studio tab rail (`Channel`, `Analytics`, `Live` sit past
+390 px inside an `overflow-x-auto` row) and the admin config language list
+(`Hebrew` onward, inside a `max-h-44 overflow-y-auto` list). The rule the spec
+uses is "the NEAREST ancestor that is not `overflow: visible` decides": if it
+scrolls, the control is reachable. The skip link, parked off-screen until
+focused, is excluded by name.
+
+### SC3 — theme: light and dark, both paths
+
+Every page-state was measured twice over — once under an emulated
+`prefers-color-scheme` and again with the explicit `data-theme` the in-app
+switch writes — and axe run on each. Two real classes came out, both **token
+misuse rather than token failure**, which is why both fixes are one word each:
+
+- **`text-fg-subtle` on meaningful text.** `globals.css` documents that token as
+  "decorative only, never meaningful text", and every admin config surface used
+  it for its `<h2>` section headings: **2.35:1 in light** (#a1a1aa on #f5f5f7)
+  and **4.09:1 in dark** (#71717a on #0a0a0a), at 12 px bold — which is not
+  large text, so AA wants 4.5:1. Eleven nodes per config tab across nine tabs,
+  plus the IPFS panel's `<dt>`, `<thead>` and `<dd>`. They use `text-fg-muted`,
+  which is what that token exists for.
+- **`text-accent` on free-standing links.** `--accent` is the ACTION colour, for
+  `bg-accent` under white; `--accent-text` is the hand-tuned free-standing-text
+  pair. Six links used the former and measured **3.36:1 on the dark elevated
+  surface** (#5e5ce6 on #1c1c1e) — 21 nodes on `/admin/infrastructure` alone.
+  They use `--accent-text` (#8a87ff dark, 5.8:1; #4f4dcb light, 5.8:1).
+
+One more serious violation, not a colour: the moderation video thumbnail was a
+`<Link>` wrapping an `alt=""` image with no text — a `link-name` failure, and a
+control a screen reader cannot announce. It carries the video's title now.
+
+**The whole walk, before and after.** The same 75-route, 304-page-state Chromium
+walk was run against the merged fixes. Horizontal pan: **8 page-states → 0**.
+Serious/critical axe: **42 page-states and 246 nodes → 0**. The re-walk left
+exactly one violation standing that the first had not shown —
+`scrollable-region-focusable` on `/admin/playback-health`, whose rows carry no
+links at all, so its table could be dragged sideways by a pointer and reached by
+nothing else; it appeared only once this lab had generated enough QoE rows to
+make that table wide. The shared `AdminTable`'s scroller takes `tabIndex={0}`
+with `role="region"` and the table's own label, which closes it for every admin
+surface built on it, and a third pass confirms **zero**.
+
+### SC4 — keyboard
+
+Seventy-six routes were tab-walked from a fresh load, up to 80 stops each
+(median 28). **No focus trap, no route with zero tab stops, and no stop that
+landed on an invisible element.** `/admin/jobs` tripped the trap heuristic and
+was hand-walked: its 25 stops run header → admin rail → refresh → filters in
+document order, with no repeat — the heuristic was fooled by the SSE-updating
+list re-rendering under a stationary focus, and is recorded as a false positive
+rather than a finding.
+
+The one apparent failure — the global search field reporting `outline: none` and
+`box-shadow: none` on 73 routes — is also a false positive, and worth writing
+down because it will recur: the ring is a **`focus-within` box-shadow on the
+field's wrapper** (`rgb(88,86,214) 0 0 0 2px`), not on the input. A focus-ring
+check that reads only the focused element will report every wrapped input in this
+codebase.
+
+The interactive half is pinned in the backed spec: the account menu is reached by
+Tab, opened with Enter, closed with Escape, and focus returns to the opener —
+with the opener's own ring asserted, because a `visibility:hidden` pre-measure
+has silently killed `focus()` on this codebase before.
+
+### SC5 — error states
+
+**A total object-store outage now says so.** A32/A33 recorded that with the store
+gone the watch page rendered a dead `0:00/0:00` and no message anywhere in the
+DOM. Reproduced here by moving the storage root out from under a running api:
+before, exactly that; after, `role="alert"` reading *"This video could not be
+played. The media may be temporarily unavailable on this instance"* with a
+**Try again** control, over a `MEDIA_ELEMENT_ERROR` code 4 and `readyState 0`;
+and putting the root back plus one click resumes playback to 4.0 s with no
+reload. The mechanism was that the engines which play through the media element
+itself — native HLS and the progressive original — had no error channel: hls.js
+reports its fatal errors, a plain `<video src>` only fires `error`, and nobody
+was listening, so exhausting the candidate list was a state nothing could see.
+
+That first fix had a race, and **only four parallel workers could produce it**:
+0 of 4 failed with four workers, 8 of 8 passed with one. With the transcode queue
+backed up the seeded video has no HLS, so the progressive engine wins selection
+on the FIRST commit — and React commits `src` as a prop, so the browser starts
+loading before any effect runs. A source that fails instantly (a refused
+connection, an offline device) has already fired `error` by the time the listener
+attaches. The effect catches up on `el.error`, gated on
+`el.currentSrc === src` so the hls.js attempt's leftover error cannot condemn the
+fallback untried. 5 of 5 under four workers afterwards.
+
+**With the api killed outright, all 76 routes render something.** Zero spinners
+left running, zero blank pages. Public data surfaces render a typed error with a
+retry — `/` , `/videos/{id}` ("Could not load this video. Try again"), `/search`
+("Search failed. Please try again"): 16 routes carry an error sentence and 12
+carry a retry control. **The remaining routes render the signed-out prompt
+instead of an outage**, because the boot refresh cannot distinguish a refused
+connection from an absent session: `/subscriptions` says "Sign in to see your
+subscriptions" to a viewer whose session is fine and whose instance is down.
+Not a spinner and not a blank, but a misattribution — recorded, not fixed,
+because the fix is in `AuthProvider`'s restore contract and every gate that reads
+it, which is a slice, not a patch.
+
+**Not-found and permission states are all typed.** Unknown video, channel,
+profile, playlist, short code and conversation each name what is missing
+("Video not found — this video does not exist, or it is private"); an anonymous
+visitor's view of a private video is byte-identical to the unknown-id page, which
+is the non-enumeration posture; `/a40-no-such-route` is a real 404. Two defects
+in the role gate came out of this half and are fixed: it rendered its refusal
+while the session was still restoring, so every hard reload of `/admin/*` and
+`/moderation/*` flashed **"Administrators only" at an actual administrator**; and
+it told a signed-in non-admin to "Sign in with an admin account", which they
+cannot act on. It holds until settled, and the two viewers now get the two
+different sentences they need.
+
+### SC6 — persistence
+
+- **Theme**: chosen through the real control on `/settings`, stored as
+  `vidra.theme=dark`, and the body background actually switches
+  (`rgb(245,245,247)` → `rgb(10,10,10)`). Survives a reload AND a second tab, with
+  no flash — the pre-paint bootstrap in `app/layout.tsx` applies it before first
+  paint.
+- **Volume did not survive anything, and does now.** It was `useState(1)` with no
+  store: a viewer who turned it down met full blast on the very next page.
+  `lib/player-volume.ts` keeps it in localStorage, written on every
+  `volumechange`, so the slider, the mute toggle and the keyboard shortcut all
+  persist without knowing about it. Measured: 0.95 set, 0.95 after reload,
+  **0.95 in a new tab**.
+- **Speed** survives a reload in the same tab (1.5×) and correctly resets to 1×
+  in a new one — `lib/player-rates.ts` uses sessionStorage deliberately, and the
+  spec asserts both halves so the split stays a decision.
+- **Watch position** resumes: 2.51 s before the reload, 2.88 s after.
+- **Nothing leaks across a sign-out**: the viewer's history page lists their
+  watched video; after signing out through the UI and signing a different account
+  in on the same browser, the history page reads "No watch history yet". The
+  upload draft's half is the server-side private draft `upload-draft-recovery`
+  already covers, and it is account-scoped by construction.
+
+### SC7 — WebKit
+
+Thirty-one required screens were re-walked in Playwright WebKit at both widths:
+**no horizontal pan on any of them** (the two admin tables measure closed in
+WebKit as they do in Chromium), no clipped control beyond the two known-reachable
+classes, and no navigation error.
+
+**The native-HLS branch could not be reached and stays UNVERIFIED.** Playwright's
+WebKit reports `MediaSource`, so hls.js wins engine selection exactly as it does
+in Chromium: both engines played the same seeded video from a **blob URL**
+(`usesMse: true`) off the same CMAF ladder — one `206` on `/original` for the
+poster frame, then `master.m3u8`, `media_0.m3u8`, `init-0.mp4`, `chunk-0-00001.m4s`
+— reaching `currentTime` 4.0 s in both. The A07/A08 carry-in is about the branch
+an MSE-partial Apple browser takes (iOS Safari's `ManagedMediaSource`), and no
+engine available here takes it. What DID differ: WebKit exposes
+`webkitSupportsPresentationMode` on the media element (AirPlay/PiP) where
+Chromium does not; both report `pictureInPictureEnabled` and both render the same
+26 controls, the same quality menu ("Quality: Auto (16p)") and the same PiP
+button. `readyState` sampled 4 in Chromium and 2 in WebKit at the same instant —
+a buffering difference, not a capability one.
+
+### SC8 — what now runs in CI
+
+`e2e-backed/required-controls.spec.ts`, eight tests: the pan/clip/hit-target walk
+at 390 px and at 640 px, the axe walk in light and in dark, the account-menu
+keyboard round trip, the media-failure surface, and the speed/volume persistence
+walk. It ran RED first — 6 of 8 failing on exactly the defects above — and is 8
+of 8 after them, twice, including once with a single worker and once with the
+default four.
+
+**The skip allowlist is unchanged, and that is the correct answer.**
+`scripts/ci/allowed-skips-backed.txt` has nine entries; every one of them is a
+stack this lane deliberately does not start — a real Bluesky PDS, a PeerTube
+source, `REGISTRATION_REQUIRE_APPROVAL`, whisper.cpp, a vidra-search service,
+`QUARANTINE_NEW_UPLOADS`, `YTDLP_IMPORT_ENABLED`, and the owner-claim first-run
+branch this lane's own setup consumes. **None of them is a missing UI surface**,
+so there is nothing here for this item to remove, and no new skip was registered.
+
+### Carry-ins re-measured
+
+- **A26, "the live watch view polls only while offline"** — closed, and now
+  lab-observed rather than code-only. Offline: 1 poll in 20 s. Flipped live
+  through the ingest hook: **2 polls in 20 s at a 10 s interval**, and the view
+  says *"This stream is live, but its video feed isn't available yet"* with a
+  Refresh control rather than rendering a dead player for a byte-less stream.
+- **A11, "playlist delete has no confirmation step"** — closed. It was one click
+  from a button sitting inches from Edit, while the Studio video delete is
+  two-step and the media-GC purge demands a typed `PURGE`. It is two-step now, in
+  the Studio row's shape.
+- **A29 rehearsal 3, "the block control names the channel, not the person"** —
+  verified merged in `RemoteWatchView`, whose accessible name is now
+  "Block account &lt;actor&gt;" and is pinned by three of its own tests; not
+  re-measured in a browser here, because this lab federates with nobody.
+
+### Gates
+
+`vidra-user`: `npm run ci` (typecheck, eslint, the icon lint, 2 630 vitest
+tests, a production build, and the mocked Chromium suite) **PASS** (263 test files / 2 630 tests, and 627 of 627 mocked Chromium tests). The backed
+proof is the run above: `e2e-backed/required-controls.spec.ts` 8/8 against the
+two-process core, at four workers and again at one. Repo CI on user #210:
+GATES_PRCI.
+
+Not run here: the `e2e-backed (s3)` leg (no MinIO in this lab — the walk is a
+layout, colour and keyboard measurement, and the storage backend does not reach
+it), `channel-sync-backed`, `ipfs-backed`, and vidra-core's and vidra-search's
+own suites, which this slice does not touch — **no core or search change was
+needed and none was made**, so there is no contract regen and no merge ordering
+between the two PRs.
+
+### What this run does NOT prove
+
+- **Safari itself was never driven.** The WebKit engine it ships was, through
+  Playwright, and it took the MSE path — so the native-HLS branch the A07/A08
+  carry-in is about remains **UNVERIFIED**, and no lab here can reach it without
+  an MSE-partial Apple browser (iOS Safari).
+- **No screen reader was run.** axe measures the half of accessibility that is
+  measurable; announcement order, live-region politeness and the actual
+  experience of VoiceOver or NVDA on these surfaces are untested. The
+  `link-name` defect this walk found is the kind axe catches; the kind it cannot
+  is still open.
+- **No touch device.** 390 × 844 with `hasTouch` is a viewport, not a finger.
+- **The remote/federated surfaces were walked against nothing.** `/remote/{id}`
+  and the About network page render their empty states here; the block control's
+  naming is verified by reading and by its tests, not by a second instance.
+- **Screenshot pairs were not kept.** The theme evidence is the measured
+  computed values (`rgb(245,245,247)` ↔ `rgb(10,10,10)`, the axe contrast ratios
+  and the token pairs), not images; nothing image-shaped is committed.
+- The two admin routes' pan was closed by naming the containing block. The
+  underlying engine behaviour — a positioned descendant escaping an
+  `overflow-x-auto` box for scrollable-overflow purposes — was reproduced in both
+  engines but not reduced to a minimal test case, so it is a **class to watch**:
+  any future wide table in a static wrapper can bring it back, which is why the
+  measurement lives in CI rather than in this section.
+
+### Open, none blocking
+
+1. **With the api down, viewer-scoped surfaces say "Sign in" rather than "this
+   instance is unreachable"** — 60 of 76 routes. The boot refresh cannot tell a
+   refused connection from an absent session. The fix belongs in
+   `AuthProvider`'s restore contract and in every gate that reads it.
+2. **`text-fg-subtle` has no lint fence.** Two of this slice's three contrast
+   defects were the same mistake — using a token the design system documents as
+   decorative for meaningful text — and nothing stops the third. A stylelint or
+   an eslint rule over `text-fg-subtle`/`text-accent` on text-bearing elements
+   would close the class; this slice closed the instances.
+3. **Sign-out clears device preferences as well as account state.** Measured
+   only indirectly here (the post-sign-out store was empty, but that context had
+   never set volume or theme), so it is a question rather than a finding: should
+   a shared browser forget the volume and theme of the person who just left?
+4. **The 44 px HIG target is not enforced anywhere.** 352 controls sit between
+   24 px and 44 px; nearly all are wide-and-short text links where the spacing
+   exception applies, but the spec gates on 24 px, so a genuinely small new
+   button would pass.
+5. **`/admin/jobs` holds an SSE stream**, so `networkidle` never settles there
+   and any future walk must wait by time or by content on that route — recorded
+   because the naive fix costs a lane 60 s of timeout.
+
