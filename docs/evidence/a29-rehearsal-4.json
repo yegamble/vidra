@@ -1,0 +1,203 @@
+{
+  "item": "A29 rehearsal 4",
+  "register_row": "INT-05",
+  "verdict": "PASS (two-instance lab). SC1, SC2, SC3 and SC4 all pass against merged main at schema 143. Two clauses were reached by a stated substitution rather than literally, and both are named below rather than papered over: the \"Note from a blocked instance\" probe comes from the third-party peer because B's users cannot author onto a remote video at all (F8), and \"a comment on a private video\" is unreachable through the API — POST /videos/{id}/comments answers 404 on a private video even for its owner — so the clause is exercised as a comment on a video that GOES private inside the block window, which is the shape the resume predicate actually names. Residuals unchanged and re-measured where cheap: F8 authoring, third-instance thread parents, signed fetch, MIG-06 identity.",
+  "date": "2026-09-09",
+  "section": "A29 rehearsal 4 — the block that speaks, resumed comments, safe renames — 2026-09-09",
+  "headline": "Two isolated Vidra instances at schema 143 on merged main (core #216 / user #206 landed), behind a real Caddy reproducing deploy/Caddyfile sections 1, 2, 3, 3a and 4. The three things rehearsal 3 could not settle by patching — a block that speaks, resumed comment Creates, validator-safe renames — are all measured live for the first time, and all three hold. No code changed in this run.",
+  "lab": {
+    "scheme": "plain HTTP; no TLS anywhere. Caddy runs with `auto_https off` and `admin off` on two http:// site addresses, so §3a routing is exercised without an internal CA.",
+    "edge": "REAL Caddy v2.11.4 (brew, `caddy run --config`), ONE config with two site blocks mirroring deploy/Caddyfile sections 1, 2, 3, 3a and 4 verbatim in structure — the /metrics and /api/v1/dev/* 404s, the @api path list, the @ap_object / @ap_object_ld Accept matchers above the frontend fallthrough, `encode zstd gzip` scoped to the frontend block, the lb_try_duration/lb_try_interval pairs. Only site addresses and upstreams differ. `caddy validate` passed on both the full config and the B-less variant used for the retry ladder.",
+    "hostnames": "NONE ADDED — /etc/hosts needs root. The two instances are distinguished by PORT and their fediverse domains are literally `127.0.0.1:18080` and `127.0.0.1:28080`.",
+    "instance_a": {
+      "origin": "http://127.0.0.1:18080 (Caddy)",
+      "core_api": "127.0.0.1:18081 (VIDRA_ROLE=api)",
+      "core_worker": "separate VIDRA_ROLE=worker process",
+      "frontend": "127.0.0.1:18082, node .next/standalone/server.js",
+      "database": "vidra_a",
+      "redis_db": 1,
+      "storage": "STORAGE_BACKEND=local, own STORAGE_LOCAL_ROOT"
+    },
+    "instance_b": {
+      "origin": "http://127.0.0.1:28080 (Caddy)",
+      "core_api": "127.0.0.1:28081 (VIDRA_ROLE=api)",
+      "core_worker": "separate VIDRA_ROLE=worker process",
+      "frontend": "127.0.0.1:28082, node .next/standalone/server.js",
+      "database": "vidra_b",
+      "redis_db": 2,
+      "storage": "STORAGE_BACKEND=local, own STORAGE_LOCAL_ROOT"
+    },
+    "third_party_peer": "one instance of docs/evidence/a29-ap-peer.go — `probe` on :48080 — supplying the signature probes, the six-row block-silence table and the third-instance Note. Throwaway key under the scratchpad, never committed.",
+    "one_build_two_origins": "ONE `next build` of vidra-user, served by both frontends with different INTERNAL_API_BASE_URL and PUBLIC_API_BASE_URL; NEXT_PUBLIC_API_BASE_URL was never baked.",
+    "infrastructure": "PostgreSQL 16.15 (Homebrew, native, own cluster on 127.0.0.1:55491, socket -k /tmp), Redis 8.6.2 on 127.0.0.1:56491, ffmpeg 8.1, six-second 640x360 fixtures, Node 26.8.1 for both frontends, Go 1.26.2 binaries, Playwright 1.62.1's real Chromium. No Docker.",
+    "code_under_test": {
+      "vidra-core": "origin/main 03ac3e8 (schema 143 — core #215 and #216 merged)",
+      "vidra-user": "origin/main cdf09b2 (user #205 and #206 merged)",
+      "meta": "deploy/Caddyfile unmodified — the lab config reproduces §3a rather than editing it."
+    },
+    "schema": "143 on both instances, dirty=false, migrated from EMPTY by the api binary's embedded `migrate up`",
+    "deviations_recorded_not_hidden": [
+      "MALWARE_SCAN_MODE=disabled EXPLICITLY on both: there is no clamd on this machine.",
+      "RATE_LIMIT_ENABLED=false on both.",
+      "HTTP_IMPORT_ALLOW_PRIVATE_URLS=true on both — the only knob that lets urlsafety.Guard reach a loopback origin.",
+      "VIDRA_ENV=development, because production refuses HTTP_IMPORT_ALLOW_PRIVATE_URLS and OWNER_CLAIM_TOKEN outright and requires an https PUBLIC_BASE_URL.",
+      "MEDIA_GC_ENABLED=false, TRANSCODING_MIN_FREE_SCRATCH_MB=256 against the shipped floor (11 GiB free).",
+      "REGISTRATION_ENABLED=true for the whole run, for eight synthetic actors.",
+      "FEDERATION_KEY_KEK / MFA_KEY_KEK / ATPROTO_KEY_KEK are base64 of 32 identical bytes; JWT_SECRET and OWNER_CLAIM_TOKEN are obviously fake lab strings. None committed."
+    ]
+  },
+  "sc1_a_block_that_speaks": {
+    "verdict": "PASS",
+    "reject_timeline_utc": [
+      {"t": "06:34:44", "event": "A's admin blocks 127.0.0.1:28080. 204; audit row moderation.instance.block reason=domain=127.0.0.1:28080."},
+      {"t": "06:34:44", "event": "ownerb (no prior follow) follows films@127.0.0.1:18080. B answers its own caller 201 with state=pending and queues a signed Follow."},
+      {"t": "06:34:44", "event": "A's inbox answers the Follow 202 (request_id ELdIaTBgHtVOZgpvMsPAyHZDPqkBzikp) and writes ONE audit row federation.inbox.rejected reason=domain=127.0.0.1:28080 under the same request_id."},
+      {"t": "06:34:44", "event": "A queues a Reject to http://127.0.0.1:28080/accounts/ownerb/inbox and DELIVERS it on the first attempt, while GET /admin/instances/blocked still lists the domain."},
+      {"t": "06:34:44", "event": "B's remote_channel_follows row for ownerb reads `rejected`, and GET /me/remote-follows shows it as rejected — terminal and creator-visible."},
+      {"t": "06:42:02", "event": "A unblocks 127.0.0.1:28080."},
+      {"t": "06:42:20", "event": "ownerb re-follows the same channel: the row re-arms to pending with a NEW follow activity id (…196dd55b0952, was …a778e2c1e7c1) and reaches `accepted`."}
+    ],
+    "reject_payload": {
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "actor": "http://127.0.0.1:18080/video-channels/films",
+      "id": "http://127.0.0.1:18080/video-channels/films/activities/reject/3259cd0b-c394-4949-9b70-6a778e59fdd9",
+      "object": {
+        "actor": "http://127.0.0.1:28080/accounts/ownerb",
+        "id": "http://127.0.0.1:28080/accounts/ownerb/activities/follow/2c965b89-5900-4fb6-8175-a778e2c1e7c1",
+        "object": "http://127.0.0.1:18080/video-channels/films",
+        "type": "Follow"
+      },
+      "type": "Reject"
+    },
+    "signature_note": "The Reject is signed by the channel actor: B verifies HTTP signatures on its own inbox, so B's acceptance of the Reject (and its state transition) is the proof that it was correctly signed — no unsigned activity survives that inbox, as the refusal matrix below shows.",
+    "silence_table_from_the_blocked_peer": {
+      "method": "A blocked 127.0.0.1:48080 and the peer posted seven correctly-signed activities to A's shared inbox. Every one answered 202 and wrote one federation.inbox.rejected audit row (8 rows total including B's). Exactly ONE outbound delivery to the peer resulted, and the peer's own inbox logged exactly one receipt.",
+      "rows": [
+        {"activity": "Follow of a local channel, signer == actor", "http": 202, "outbound": "one Reject (delivered; peer inbox logged it)"},
+        {"activity": "Create{Note}", "http": 202, "outbound": "nothing"},
+        {"activity": "Undo{Follow}", "http": 202, "outbound": "nothing"},
+        {"activity": "Follow whose actor is not the signer", "http": 202, "outbound": "nothing"},
+        {"activity": "Follow of a channel this instance does not hold", "http": 202, "outbound": "nothing"},
+        {"activity": "Follow of an ACCOUNT actor", "http": 202, "outbound": "nothing"},
+        {"activity": "Follow of a channel with activitypub_enabled=false", "http": 202, "outbound": "nothing"}
+      ],
+      "substitution_stated": "The `Create{Note} during the block` clause is measured from the PEER, not from B, because B's users cannot author a comment onto a remote video at all — POST /api/v1/remote-videos/{id}/comments answers 405, which is F8 and is the design."
+    }
+  },
+  "sc2_resumed_comment_creates": {
+    "verdict": "PASS",
+    "window": "block 06:40:40Z → unblock 06:42:02Z on 127.0.0.1:28080, three followers (viewerb, otherb, ownerb) so each activity fans out three ways",
+    "resume_table": [
+      {"case": "W2-SURVIVOR — comment on a public, published video on an AP-enabled channel", "during_block": "Create ×3 cancelled: destination instance is blocked", "after_unblock": "requeued and delivered ×3", "on_B": "exactly ONE remote_video_comments row"},
+      {"case": "W2-DELETED — comment deleted inside the same window", "during_block": "Create ×3 cancelled", "after_unblock": "NOT requeued — still failed/cancelled", "on_B": "absent"},
+      {"case": "W2-PRIVATED — comment whose video went private inside the window", "during_block": "Create ×3 cancelled", "after_unblock": "NOT requeued — still failed/cancelled", "on_B": "absent"},
+      {"case": "Delete{Note} for the deleted comment, and Delete{Video} for the privated video", "during_block": "6 Deletes cancelled", "after_unblock": "requeued and delivered", "on_B": "the privated video's remote_videos row is removed"}
+    ],
+    "resume_log_line": "resumed outbound deliveries cancelled while the instance was blocked domain=127.0.0.1:28080 requeued=9 (3 survivor Creates + 6 Deletes; the 6 refused Creates are not counted)",
+    "first_window_confirmation": "An earlier window (06:34:44Z → 06:38:20Z) had already shown the same split with requeued=4: one surviving comment resumed and arrived once, one deleted comment's Create stayed cancelled, its Delete resumed.",
+    "admin_system_before_the_unblock": {"status": "ok", "detail": {"cancelled_by_policy": "17", "dead_lettered": "0", "pending": "0"}},
+    "private_video_substitution_stated": "A comment on an ALREADY-private video cannot be created: POST /api/v1/videos/{id}/comments answers 404 `video not found` on a private video even for its owner, so no Create is ever queued and there is nothing for a block to cancel. The clause is therefore exercised in the only shape that reaches the resume predicate — the video goes private inside the window — which is also the clause the follow-ups section actually writes down."
+  },
+  "sc3_validator_safe_renames": {
+    "verdict": "PASS",
+    "method": "Instance A was migrated 0→143 from empty, then rolled back with 0143's own down SQL plus 0142's plus `migrate force 141`, seeded with the shape the API can no longer create, then stepped forward: 0142's up SQL applied by hand + `migrate force 142` to capture the intermediate state, then `migrate up` for 0143 alone.",
+    "seed_at_141": ["user creatora + channel creatora (a straight collision)", "user creatorb + channel creatorb + a decoy channel literally named creatorb-channel, so the first candidate is taken"],
+    "rename_table": [
+      {"stage": "seeded at 141", "creatora_channel_handle": "creatora", "creatorb_channel_handle": "creatorb", "aliases": "none", "rename_audit_rows": 0},
+      {"stage": "after 0142", "creatora_channel_handle": "creatora-channel", "creatorb_channel_handle": "creatorb-channel-2", "aliases": "creatora:is_actor_id=true, creatorb:is_actor_id=true", "rename_audit_rows": "2 (cause=handle_namespace_backfill)"},
+      {"stage": "after 0143", "creatora_channel_handle": "creatora_channel", "creatorb_channel_handle": "creatorb_channel", "aliases": "creatora:true, creatorb:true, creatora-channel:false, creatorb-channel-2:false", "rename_audit_rows": "4 (2 more, cause=handle_validator_alphabet, each carrying original=<colliding name>)"}
+    ],
+    "the_minted_shape_is_creatable": [
+      {"request": "POST /channels {handle: creatorc_channel}", "status": 201, "note": "the shape 0143 mints is accepted by the instance's own validator"},
+      {"request": "POST /channels {handle: creatorc-channel}", "status": 422, "message": "must be 3–30 chars: letters, digits, or underscore"},
+      {"request": "POST /channels {handle: creatora_channel}", "status": 409, "code": "conflict"},
+      {"request": "POST /channels {handle: creatora}", "status": 409, "code": "handle_reserved"}
+    ],
+    "redirects_through_caddy": [
+      {"path": "/api/v1/channels/creatora", "status": 301, "location": "/api/v1/channels/creatora_channel"},
+      {"path": "/api/v1/channels/creatora-channel", "status": 301, "location": "/api/v1/channels/creatora_channel"},
+      {"path": "/api/v1/channels/creatorb", "status": 301, "location": "/api/v1/channels/creatorb_channel"},
+      {"path": "/api/v1/channels/creatorb-channel-2", "status": 301, "location": "/api/v1/channels/creatorb_channel"},
+      {"path": "/api/v1/channels/creatorb-channel (the decoy, a real channel)", "status": 200},
+      {"path": "/api/v1/channels/creatora_channel", "status": 200}
+    ],
+    "actor_id_unmoved": {
+      "GET /video-channels/creatora": {"id": "http://127.0.0.1:18080/video-channels/creatora", "type": "Group", "preferredUsername": "creatora_channel", "inbox": "…/video-channels/creatora/inbox", "outbox": "…/video-channels/creatora/outbox", "followers": "…/video-channels/creatora/followers", "publicKey.id": "…/video-channels/creatora#main-key", "attributedTo": "…/accounts/creatora"},
+      "GET /video-channels/creatora_channel": "200, and its `id` is still …/video-channels/creatora — the NEW handle serves the actor at the FROZEN id"
+    },
+    "webfinger": [
+      {"resource": "acct:creatora@127.0.0.1:18080", "links": [{"rel": "self", "href": "…/accounts/creatora"}, {"rel": "alternate", "href": "…/video-channels/creatora"}]},
+      {"resource": "acct:creatora_channel@127.0.0.1:18080", "links": [{"rel": "self", "href": "…/video-channels/creatora"}]}
+    ],
+    "b_follows_the_group_at_the_frozen_id": {
+      "request": "POST /me/remote-follows {handle: creatora@127.0.0.1:18080} on B",
+      "stored_actor_url": "http://127.0.0.1:18080/video-channels/creatora",
+      "reported_handle": "creatora_channel@127.0.0.1:18080",
+      "state_within_20s": "accepted",
+      "followers_collection": {"id": "http://127.0.0.1:18080/video-channels/creatora/followers", "totalItems": 1}
+    },
+    "actor_handles_after_0143": "the reservation follows the rename: creatora_channel and creatorb_channel are reserved to the channels, creatora and creatorb to the accounts, and the interim names are released to the alias table."
+  },
+  "sc4_reverified": {
+    "signed_follow_accept": "five follows across four B accounts all reach `accepted`; A's Accept is signed by the channel actor.",
+    "create_update_delete_video": "Create{Video} carries only the html url; the transcode-completion Update carries [{href: …/api/v1/videos/<id>/hls/master.m3u8, mediaType: application/x-mpegURL}, {href: …/v/<code>, mediaType: text/html}] — the ordering read off the two payloads. A Delete removes the mirror row on B.",
+    "playback_on_B": {"frames_decoded": 150, "size": "640x360", "buffered": [0, 6.013967], "readyState": 4, "cross_origin_responses": 8, "acao_on_all": "*", "cors_errors": 0, "only_console_error": "422 on POST /api/v1/auth/refresh — the anonymous visitor's refresh, the same benign class as rehearsal 3's 401"},
+    "media_preflight": {"OPTIONS master.m3u8": 204, "Access-Control-Allow-Headers": "Range", "Access-Control-Allow-Methods": "GET, HEAD", "Access-Control-Allow-Origin": "*"},
+    "negotiation_through_caddy": [
+      {"request": "GET /videos/{id} Accept: application/activity+json", "status": 200, "content_type": "application/activity+json", "etag": "\"9484d4bd61abeae2249a7a9451e781e3\""},
+      {"request": "same, If-None-Match", "status": 304},
+      {"request": "GET /videos/{id} Accept: application/ld+json; profile=…", "status": 200, "content_type": "application/activity+json"},
+      {"request": "GET /videos/{id} browser Accept", "status": 200, "content_type": "text/html", "note": "falls through to the frontend"},
+      {"request": "GET /comments/{id} Accept: AS", "status": 200},
+      {"request": "GET /videos/{private id} Accept: AS", "status": 404},
+      {"request": "GET /videos/{unknown uuid} Accept: AS", "status": 404},
+      {"request": "GET /videos/{deleted id} Accept: AS", "status": 410, "body_type": "Tombstone", "etag": "NONE", "cache_control": "no-store"},
+      {"request": "GET /metrics at the edge", "status": 404},
+      {"request": "GET /api/v1/dev/email-token at the edge", "status": 404},
+      {"request": "GET /videos/{id} Accept: text/plain, straight at the api", "status": 406}
+    ],
+    "signature_refusals": [
+      {"mode": "signed", "status": 202},
+      {"mode": "unsigned", "status": 401, "code": "unauthorized", "message": "signature verification failed"},
+      {"mode": "tampered", "status": 401},
+      {"mode": "stolen keyId", "status": 401},
+      {"mode": "correctly signed, actor claims another instance's account", "status": 400, "code": "bad_request", "message": "invalid activity"}
+    ],
+    "account_scoped_block_matrix": {
+      "columns": "videos in GET /videos/search?q=clip | authors visible in the films thread | authors visible in the newsroom thread",
+      "rows": [
+        {"observer": "viewerb (the blocker)", "baseline": "2, creatora+ownera, creatora+ownera", "after_viewer_block": "1 (Newsroom only), ownera, ownera", "after_admin_block": "1, ownera, ownera", "after_unblock": "restored exactly"},
+        {"observer": "otherb", "baseline": "2, both, both", "after_viewer_block": "unchanged", "after_admin_block": "1, ownera, ownera", "after_unblock": "restored exactly"},
+        {"observer": "anonymous", "baseline": "2, both, both", "after_viewer_block": "unchanged", "after_admin_block": "1, ownera, ownera", "after_unblock": "restored exactly"},
+        {"observer": "B's admin", "baseline": "2, both, both", "after_viewer_block": "unchanged", "after_admin_block": "1, ownera, ownera", "after_unblock": "restored exactly"}
+      ],
+      "audit": "moderation.remote_actor.block and .unblock both PERSIST on B with resource_type=remote_actor, actor_role=admin, reason=actor=http://127.0.0.1:18080/accounts/creatora — core #215's correction confirmed on merged main.",
+      "reach": "the block names the ACCOUNT and reaches the CHANNEL and the person's comments on a channel they do not own; remote_actor_block_reach is empty once both blocks are lifted."
+    },
+    "threaded_mirror": {"data": "depth 0 → 1 → 2 with parent_object_url chained", "chromium": [{"depth": "0", "text": "creatora … c1"}, {"depth": "1", "text": "ownera … Replying to creatora … c2"}, {"depth": "2", "text": "creatora … Replying to ownera … c3"}]},
+    "retry_ladder": {"method": "B's site block removed from the Caddy config and Caddy restarted, so 127.0.0.1:28080 refuses at TCP level", "observed_next_attempt_deltas_seconds": [30, 60, 120, 240], "recovery": "all three B deliveries reached `delivered` on attempt 5 after the edge returned, and B holds EXACTLY ONE copy of the comment"},
+    "f4_video_redelivery": {"method": "block, publish a public video, unblock", "cancelled": 6, "requeued": 6, "remote_videos_rows_on_B": 1},
+    "request_ids": "77 of 77 federation_deliveries rows carry both a request_id and a correlation_id, including the ones a transcode completion queued.",
+    "admin_system": {"status": "ok", "cancelled_by_policy_counted_separately": true, "dead_lettered": "0", "component_not_degraded_by_a_block": true}
+  },
+  "sc5_residuals": {
+    "f8_authoring": "UNCHANGED and re-measured: POST /api/v1/remote-videos/{id}/comments answers 405. There is no route by which a local user authors onto a video hosted elsewhere; internal/httpapi/remote_video_comments.go states that as the design.",
+    "third_instance_thread_parents": "UNCHANGED and re-measured live: the peer posted a Note on A's public video (202); A stored it as a remote-authored local comment and did NOT fan it out. A's creator then replied to it; the outbound Create carries inReplyTo: http://127.0.0.1:48080/notes/r4-2 — a parent B was never sent — A's ledger reads `delivered` on all four deliveries, and B stored NOTHING. The hole at the top of a third-instance thread is still silent. Re-broadcasting a Note this instance cannot sign is an Announce-shaped design change, not a patch.",
+    "signed_fetch": "UNVERIFIED as a requirement and measured as absent: an unauthenticated, unsigned GET of an AP object id with an activity+json Accept answers 200. vidra does not require signed fetch on the object routes.",
+    "mig06_identity_clause": "UNVERIFIED and deliberately not faked. What 0142/0143 freeze is an actor id across a RENAME on one instance; source identity after a MIGRATION needs id continuity across hosts, key continuity, or a `Move`, and dispatchActivity still has no arm for one.",
+    "also_unverified": "TLS, real hostnames, and interoperability with PeerTube or Mastodon — unchanged."
+  },
+  "code_changes": "NONE. Nothing in this run needed a patch; every clause passed against merged main.",
+  "gates": {
+    "meta": "python3 -m unittest discover -s tests -p '*_test.py' — see the section for the result; evidence-only change otherwise.",
+    "vidra-core": "not modified in this run (origin/main 03ac3e8 built and run as-is)",
+    "vidra-user": "not modified in this run (origin/main cdf09b2; one `next build` PASS, served standalone)"
+  },
+  "not_run": [
+    "A Chromium walk of the RENAMED channel's human-facing /channels/<old> page: the 301 is measured on the api route (/api/v1/channels/<old>), which is where core #215 wired it.",
+    "The 0143 down/up cycle on a live instance: the follow-ups section measured it on a seeded database and this run measured the up path only.",
+    "A ladder run all the way to a dead letter at attempt 6 — rehearsal 3 measured that; this run stopped at the 240 s rung and proved recovery instead.",
+    "Interop with any non-vidra ActivityPub implementation."
+  ],
+  "teardown": "both cores (api + worker), both frontends, Caddy, the AP peer, the Redis server and the PostgreSQL cluster were stopped and the cluster removed; no lab process, database or key survives the run, and nothing lab-shaped is committed."
+}
