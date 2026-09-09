@@ -118,14 +118,15 @@
     },
     "callback_link": {
       "success": "302 to return_to with ?link=<provider>; no session is minted and no refresh cookie set — the caller already has the session the link belongs to",
-      "failures": "?link_error=<code>: identity_belongs_to_another_account, provider_already_linked, account_disabled, link_failed, oauth_exchange_failed, atproto_upstream, atproto_identity_mismatch",
+      "failures": "?link_error=<code> for an attempt started at /link/start; ?oauth_error=<code> for a LOGIN-purpose callback that turned into a link because a session was already in the browser — the failure key follows the ORIGIN page, because a refusal the landing page does not render is a silent one. Codes either way: identity_belongs_to_another_account, provider_already_linked, account_disabled, link_failed, oauth_exchange_failed, atproto_upstream, atproto_identity_mismatch",
       "vocabulary": "deliberately separate from oauth_error: a link is not a sign-in, and the page receiving it is the settings page (the same reasoning step-up applies to step_up_error)",
       "idempotent": "re-linking the SAME subject to the SAME account is not an error — a second click on Connect is not a mistake"
     },
     "login_callback_inside_a_session": {
       "rule": "a login-purpose callback arriving with a LIVE refresh session is a link attempt for that session, or a refusal — never an account switch",
       "measured_before": "A05 watched a signed-in browser go from `newcomer` to a freshly created `mfauser`",
-      "session_read": "auth.Service.SessionAccount reads the refresh cookie WITHOUT rotating it — a callback that answered the question with Refresh would rotate the caller's token as a side effect of looking, and the bearer token cannot ride a top-level navigation from an IdP"
+      "session_read": "auth.Service.SessionAccount reads the refresh cookie WITHOUT rotating it — a callback that answered the question with Refresh would rotate the caller's token as a side effect of looking, and the bearer token cannot ride a top-level navigation from an IdP",
+      "refusal_visible": "the refusal lands as ?oauth_error=identity_belongs_to_another_account, which the login page already renders; the copy names the door ('sign out first, then sign in with it') rather than only reporting the refusal"
     },
     "email_verified": "set locally when a provider-verified email is what authorised the link AND it is the account's OWN address (case-insensitive). A verified claim about a DIFFERENT address changes nothing. Best-effort — a failure here does not undo a completed link.",
     "unlink": "unchanged: 422 with the set-a-password remedy on the last sign-in method, 404 for a provider that is not linked",

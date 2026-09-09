@@ -17343,6 +17343,17 @@ client renders one vocabulary. And `link_error` is a separate vocabulary from
 `oauth_error` on purpose: a link is not a sign-in, and the page receiving it is
 the settings page, exactly as the step-up reasons about its own `step_up_error`.
 
+The failure **key** therefore follows the origin page, not the act. An attempt
+started at `/link/start` lands back on settings and answers `?link_error=`; a
+login-purpose callback that turned into a link because a session was already in
+the browser lands on the LOGIN page, which reads `oauth_error`, so it answers
+under that key. Getting this wrong was caught by reading the diff rather than by
+a test: the 409-shaped refusal was arriving on a page with no code to render it,
+and a refusal the landing page cannot show is the one thing worse than the
+switch it prevents. The login vocabulary now carries copy for both codes that
+names the door — *"sign out first, then sign in with it"* — rather than only
+reporting the refusal.
+
 **A callback is no longer session-blind.** A05 watched a signed-in browser go
 from `newcomer` to a freshly created `mfauser` by starting an ordinary login
 flow — a silent account switch nobody asked for. A **login**-purpose callback
