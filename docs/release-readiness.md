@@ -138,8 +138,8 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | INT-04 ClamAV scanning actually gates all ingestion | M C U | Scanner service; scan profile; uploads/imports/DM hooks and config policy; live evidence `a28-captions-scan` (section "A28 captions, Whisper and ClamAV lanes — 2026-09-08") against a REAL clamd 1.5.4 with a real 3.6 M-signature database: a benign upload published while a standard EICAR body was refused on the resumable-upload path, the URL-import path and the DM path (the DM half re-cited from A14 and re-run here for one request — 422 `attachment failed the malware scan`, zero rows, zero blobs); all three fail policies measured with the daemon actually stopped (`fail-closed` fails both ingestion paths, `quarantine` parks the upload in the moderation queue, `fail-open` publishes unscanned); boot refuses `MALWARE_SCAN_ENABLED=true` with an empty `CLAMAV_ADDR`; and `/admin/system` now carries a `clamav` component that reads `ok`, then `down` with the instance `degraded` and a sentence naming both the consequence and the policy in force | PASS | Disposable scanner: benign file, standard EICAR fixture, unavailable scanner, approved fail policy; never publish/link rejected bytes; test URL and DM paths as well as upload | PUB-01 → A28. Two defects fixed on the way (vidra-core #198): an INFECTED verdict failed the video but **kept its `video_files` row and its bytes**, so `GET /videos/{id}/download` advertised the rejected original and `/download/original` served it 200 `video/mp4` to the owner AND to an admin on both ingestion paths — the "never link rejected bytes" clause, with the link live; and `/admin/system` had **no scanner component at all**, so a dead clamd left it reporting `"status":"ok"` across nine healthy components while every upload and import was landing in `failed`. Rejected bytes now live **nowhere** — no quarantine store, no retention, the audit row is the whole record. Findings that need a ruling, none blocking: a malware rejection is **invisible to the creator** (the upload session settles `completed` with an empty `failure_reason`, the import job settles `done` with no error, Studio shows a bare `FAILED` badge beside a `quarantined` video that gets a full sentence); `fail-open` publishing unscanned media leaves **no audit row**, only a WARN log line; and **`MALWARE_SCAN_ENABLED` defaults to false**, so out of the box nothing is scanned, with no boot warning and no log line — the only honest surface is `/admin/infrastructure`'s prose. EICAR is a whole-file signature (a real mp4 with it appended scans clean), so this lane proves the gate, not clamd's detection depth. The SELECTED scanner deployment is DEFERRED (a throwaway host daemon, not the packaged one), S3 was not exercised, and thumbnails/storyboards/avatars/account-import archives were not probed for a scan seam |
 | INT-05 ActivityPub remote discover/follow/accept/video/comment/delete/moderation | M C U | Federation service/integration tests; user federation queues; live evidence `a29-federation` (section "A29 ActivityPub — two isolated instances — 2026-09-08"): two isolated instances, each a two-process core with its own database, Redis index, storage root and origin, federating over plain HTTP with `FEDERATION_ENABLED=true` and a sealed actor KEK on both — signed `Follow` accepted and rejected through the admin queue with the wrong-actor matrix, `Create`/`Update`/`Delete{Video}` fanned out and applied, an inbound federated comment created, edited and retracted, instance mute and instance block separated on a per-surface matrix, the full 30 s→60→120→240→480 ladder to a dead letter at attempt 6 with no duplicate ingestion on recovery, and a real Chromium walk of the follower's feed and remote watch page; RE-RUN live evidence `a29-rehearsal` (section "A29 rehearsal — two instances against the merged remediation — 2026-09-08"): the same two-instance topology at schema 140 on the merged remediation, this time behind a REAL Caddy reproducing `deploy/Caddyfile` §3a, with Chromium decoding 143 frames of the origin's HLS on the follower's remote watch page (`Access-Control-Allow-Origin: *` on all eight media responses, zero CORS errors), the `Create`-then-`Update` ordering read off the two payloads, the AP negotiation table measured through the edge (200 AS / 304 / 406 at the api / 404 private / 410 + Tombstone), a remote URL deduped with zero outbound fetches, the mirrored thread created, edited and retracted from the origin, the block/unblock matrix with an `federation.inbox.rejected` audit row, and the 30→60→120→240 ladder delivering exactly once on recovery | **FAIL (measured a THIRD time, and this time for two named reasons rather than for want of a lab — see "A29 rehearsal 3": four clauses the parity slice claimed were broken on merged `main` and are fixed but UNMERGED on vidra-core #215 / vidra-user #205, and one clause needs a ruling — a Follow refused by an instance block strands the sender at `pending` forever)** | Two isolated instances: signed inbox/outbox, approved/rejected follow, new/update/delete videos, reply, block server/account, remote URL; source identity after migration | INS-05, ADM-02 → A29. What PASSES: discovery (WebFinger + actor documents), signed inbox with unsigned/tampered/spoofed-actor/stolen-keyId all refused and logged, approved AND rejected follow with `Accept`/`Reject` delivered both ways, new/update/delete videos with private and unlisted producing ZERO activities, an inbound reply with its edit and its `Delete`, server block vs mute, the retry ladder and dead letter. What FAILS, each clause: (1) **playback and posters do not federate** — the outbound AS `Video` emits no `icon`, no `duration` and only a watch-page `url`, while the ingest parses all three, so a follower stores a title, a description and a link and its remote watch page renders no `<video>` at all; emitting a stream link additionally needs a CORS ruling, since the origin's media carries no `Access-Control-Allow-Origin`. (2) **`block account` does not exist** — `/me/blocks/{id}` and `/me/mutes/accounts/{id}` take a LOCAL user UUID and `muted_accounts.muted_id` is a `users` FK, so the finest control against a remote person is blocking their whole instance. (3) **`remote URL` resolves an actor but never a video** — the AP object id is not dereferenceable as ActivityPub (`/videos/{uuid}` with `Accept: application/activity+json` answers 200 with frontend HTML), and `ResolveSearchTarget` never consults the already-stored `remote_videos` row by `object_url` before fetching. Also measured, not blocking the verdict: a follower instance stores NO federated comments (it receives `Create{Note}` and drops every one, since `inReplyTo` must resolve to a LOCAL video); a blocked instance's refused activity is answered 202 and never redelivered after the unblock; a cancelled `Undo` leaves the remote with a ghost follower; and the REST channel follower count excludes remote followers, so a creator with three federated followers reads zero. **Source identity after migration is UNVERIFIED and MIG-06-dependent** — it needs actor-`id` continuity, key continuity (a cached `publicKeyPem` is never refreshed) or a `Move`, which `dispatchActivity` has no arm for; it was deliberately not faked. Defect fixed on the way (vidra-core #200): the watched-word queue named the LOCAL VIDEO OWNER as the author of a federated comment. **Remediation merged: vidra-core #203 / vidra-user #198 / meta #152 (section "A29 remediation — federated playback, dereferenceable ids, social parity — 2026-09-08") — the code for clauses (1), (2) and (3) plus the four non-blocking findings; the row still reads FAIL because only the two-instance re-run can flip it.** TLS, real hostnames (`/etc/hosts` needs root, refused — the domains are `host:port` literals) and interoperability with PeerTube/Mastodon are all UNVERIFIED | **Re-run done 2026-09-08 (section "A29 rehearsal — two instances against the merged remediation", evidence `a29-rehearsal.json`) and the row still does not flip, for named reasons rather than for want of a lab.** Clauses (1) and (3) of the original verdict are CLOSED and measured: a remote video plays in a real browser with 143 decoded frames and zero CORS errors through a real Caddy, and a pasted remote URL resolves to the stored row with no outbound fetch. The dereference half is closed too — `/videos/{uuid}` and `/comments/{uuid}` content-negotiate through the edge, a private video answers 404 exactly as a never-existent uuid does, and a deleted one answers 410 + Tombstone. What now FAILS: **(a) a private or unlisted video no longer produces ZERO activities** — the transcode-completion `UpdateVideo` the remediation added makes every private and unlisted upload broadcast a `Delete` naming its uuid to every remote follower, and a metadata edit on a private video does the same through the older `WithUpdateHook` path; fixed and re-measured to zero on [vidra-core #209](https://github.com/yegamble/vidra-core/pull/209), unmerged. **(b) clause (2)'s per-remote-account block addresses the wrong actor for a common naming pattern** — `WebFinger` resolves a colliding `name@domain` to the Person actor while videos are attributed to the Group actor, nothing prevents a channel taking an existing username, and the settings page's only affordance is the handle, so the block a viewer can make hides nothing (blocking the channel actor URL explicitly works). **(c) a blocked remote account's ALREADY-STORED comments are not hidden**, and no audit row is written for a `Note` or `Follow` a per-account block drops. Also newly measured, not blocking: A29-F4's redelivery half is not merely absent — neither side re-attempts, so a block taken and lifted strands the follower's request at `pending` forever; the mirrored thread is FLAT (only Notes replying to the video object are mirrored, every deeper reply is delivered and dropped silently); and `FederationHealth.LastDeliveredAt` is computed and never rendered. A29-F5, F6, F9, F10 and F12 are all confirmed live. **Flipping this row needs vidra-core #209 merged plus a ruling on (b) and (c).** vidra-core #209 IS merged (`37a8e96`). The ruling on (b) and (c) was given and is implemented — one handle namespace, and blocks that name the ACCOUNT and are retroactive — in section "A29 parity — one handle namespace, retroactive blocks, threaded mirror — 2026-09-08" (evidence `a29-parity.json`), **OPEN, not merged**, on vidra-core #210 / vidra-user #202 and proven by tests rather than by a lab. **The row still does not flip: only a THIRD two-instance run can, and that section names what it must show.** **That run has now happened — section "A29 rehearsal 3 — two instances against the merged parity", evidence `a29-rehearsal-3.json` — and every line of the parity section's checklist was measured against merged `main` at schema 142.** The reservation (409 `handle_reserved` both directions, byte-identical, with the pre-0142 same-kind messages intact), the backfill on a REAL seeded collision (`creatora` → `creatora-channel-2`, one audit row, one alias with `is_actor_id`), WebFinger's two links, the frozen actor id, the whole per-scope block matrix with retroactive hiding and exact restoration, the Chromium block control on the remote watch page, the threaded mirror with its edit and delete, the F4 redelivery of six cancelled VIDEO activities landing exactly once, the `rejected` follow state re-arming on a re-follow, remote playback (99 decoded frames, 8 cross-origin responses, zero CORS errors), the negotiation table including a 410 Tombstone with NO ETag and a private video answering 404, the signature refusals, the 30→60→120→240→480 ladder delivering once on recovery, `last_delivered_at` on `/admin/system`, request ids on 53 of 53 deliveries, and the percent-encoded unblock — all PASS. What holds the row: **five defects the run found in clauses the parity slice had claimed** — `/channels/<old>` answered 404 not 301; a follow of a colliding handle addressed the Person because no client read the `rel=alternate` link; every inbound arm and both collection routes dropped activity aimed at the FROZEN actor id (202 and discarded — 0142's whole promise to other servers); `moderation.remote_actor.block`/`.unblock` persisted NOTHING because the audit envelope refuses a URL in `resource_id`; and the mirrored thread rendered FLAT in the browser. All five are fixed, TDD'd and re-measured live, on [vidra-core #215](https://github.com/yegamble/vidra-core/pull/215) and [vidra-user #205](https://github.com/yegamble/vidra-user/pull/205), **neither merged**. And one clause fails for a reason no patch settles: **a `Follow` refused because the sender's instance is blocked leaves the SENDER's row `pending` forever** — A answers 202 and drops by design, B's delivery succeeded, and nothing re-attempts or expires it; either a block emits a Reject (which A29-F5 already exempts from cancellation) or the sender expires its own pending follows, and that is a ruling. Also newly measured, not blocking: a `Create{Note}` cancelled by a block is never resumed on unblock (F4 covers videos only), a reply whose parent is a THIRD instance's comment is delivered and dropped because this instance never re-broadcasts remote-authored content, and 0142's backfill mints `<h>-channel-2` handles the instance's own channel-handle validator refuses. **Flipping this row now needs vidra-core #215 and vidra-user #205 merged plus the refused-Follow ruling; nothing else in the procedure is outstanding except the MIG-06 identity clause, which is a domain-migration question.** vidra-core #215 and vidra-user #205 ARE merged (`4f74b09`, `806b90b`). The refused-Follow ruling was given and is implemented — a block emits a signed `Reject` — along with F4 for comments and a validator-safe rename rule (migration 0143), in section "A29 follow-ups — a block that speaks, resumed comments, validator-safe renames — 2026-09-09" (evidence `a29-follow-ups.json`), **OPEN, not merged**, on vidra-core #216 / vidra-user #206 and proven by tests and CI rather than by a lab. **The row still does not flip: only a FOURTH two-instance run can, and that section names what it must show.**
 | INT-06 ATProto/Bluesky login, linking and outbound cross-post | M C U | Auth/ATProto service, connection UI; backed atproto opt-in; proved by A30 against a LOCAL reference PDS (`@atproto/pds` 0.4.107 + a loopback PLC stub + a port-80 handle shim) — section “A30 ATProto login, linking, cross-posting and donations — 2026-09-08”, evidence `a30-atproto-donations.json`: real PAR/PKCE/DPoP login in Chromium (consent lists only “Uniquely identify you”), forged/mismatched state and a forged `iss` all refused, account created then re-login returns the same account, identity listed and last-method unlink refused 422, public publish posts once with the `/v/{code}` watch URL in the embed card and resolves 200, private/unlisted/draft post nothing, sealed app password survives a restart of both processes, a wrong KEK dead-letters immediately, and a PDS outage retries at +30 s then +60 s and delivers exactly once — the public network was never contacted | PASS | Test PDS/account: login callback/state, link/unlink, private exclusion, public post contains working watch URL; restart sealed credential and outage/retry; no public rehearsal posts | AUTH-02, PLAY-02 + provider/test account → A30. OPEN, not blocking the row: the PRODUCTION hosted client-metadata OAuth path is unverified (the lab necessarily used the spec's virtual-localhost dev client); an ATProto account is passwordless with an unroutable synthetic email, so it can NEVER gain a second sign-in method and the unlink refusal's own remedy is unreachable; a dead-lettered cross-post has no creator-visible surface |
-| INT-07 Public IPFS mirror and viewer fallback preserve disclosure boundary | M C U | Mirror eligibility; dedicated backed IPFS job and privacy fence | BLOCKED | Private test network: publish eligible object→real CID→master+segments playback; gateway failure→canonical fallback; unlist/delete unpin, no private/quarantine/DM ledger row; record irreversibility of real public publication | PLAY-01 + IPFS selection → A31 |
-| INT-08 Private IPFS is isolated replication, never public delivery | M C U | Product decision §5.P; private-swarm CI; no private gateway knob; DM excluded | BLOCKED | Two keyed nodes and outsider: replication works only inside, outsider cannot fetch; private CID absent from APIs; quorum/outage recovery; no DM attachment pins | STO-01 + private topology selection → A31 |
+| INT-07 Public IPFS mirror and viewer fallback preserve disclosure boundary | M C U | Mirror eligibility; dedicated backed IPFS job and privacy fence; measured against real kubo in section "A31 IPFS — public mirror with fallback, private swarm isolation — 2026-09-09" (evidence `a31-ipfs.json`): an eligible video reaches a real CID on the ledger and on `GET /videos/{id}`, Chromium played master AND segments from the gateway (120 frames, 0 dropped, 0 api media requests after the switch), the privacy fence and the kill switch hold, and the player falls back to the server when the gateway dies | FAIL | Private test network: publish eligible object→real CID→master+segments playback; gateway failure→canonical fallback; unlist/delete unpin, no private/quarantine/DM ledger row; record irreversibility of real public publication | PLAY-01 + IPFS selection → A31. FAILING CLAUSES: (a) delete did NOT unpin — the ON DELETE SET NULL FK strips provenance before the delete hook runs, leaving rows `pinned` and CIDs retrievable forever; fixed on vidra-core#218 (unmerged) and re-measured live; (b) "gateway failure→canonical fallback" holds for HLS (client-side probe) but NOT for thumbnails/storyboards, which are redirected server-side with `Cache-Control: public, max-age=300` and no health check and no runtime lever; (c) `/admin/system` has no `ipfs` component, and reconcile never compares the ledger to the node (a lost pin is not re-pinned, a stray is not removed). A moderator block leaves pins in place — a ruling, not a patch. Cluster on either swarm is UNVERIFIED (no ipfs-cluster binary) |
+| INT-08 Private IPFS is isolated replication, never public delivery | M C U | Product decision §5.P; private-swarm CI; no private gateway knob; DM excluded; proved on real swarm.key'd kubo nodes in section "A31 IPFS — public mirror with fallback, private swarm isolation — 2026-09-09" (evidence `a31-ipfs.json`): private+unlisted media routes to `network='private'`, P1→P2 replication works, the keyless outsider is refused at the pnet security handshake and times out fetching the CID, ZERO of the 9 private CIDs appear in 11 API payloads (public-CID positive control present), the public gateway 404s them, P1 outage → `networks.private.node_reachable=false` + the retry ladder + convergence with public delivery unaffected, and no DM attachment is pinned on either rail | PASS | Two keyed nodes and outsider: replication works only inside, outsider cannot fetch; private CID absent from APIs; quorum/outage recovery; no DM attachment pins | STO-01 + private topology selection → A31. Cluster replication on the private swarm is UNVERIFIED (no ipfs-cluster binary on the lab machine), and the mirror writes no `job_runs` rows or correlation ids, so its retries are invisible to the job surface |
 | INT-09 Presigned S3 browser delivery obeys CORS/expiry/authorization | M C U | Delivery resolver/presign; historical browser CORS incident; core README notes; live evidence `a32-a33-delivery` (a two-process core on `STORAGE_BACKEND=s3` against a MinIO on its own origin, with the one-origin frontend proxy and real Chromium and WebKit: presign ON moved every media byte to the bucket — 7 of 81 requests, the poster, a 206 Range on the original and five CMAF objects, decoded unmuted to 6.014 s at 150 frames and 0 dropped in both engines — while the api served only the three rewritten playlists and the 307s, and presign OFF put the same playback back on the proxy with 0 bucket requests and every response `private`; no preflight is sent because a `bytes=` Range is safelisted and the request only turns cross-origin after the 307; a signature past its TTL is a bucket 403 `Request has expired` and the client's next api request mints a fresh one, with the redirect's own 300 s far inside the 3600 s signature; a private video answers 404 with no `Location` ever minted for a non-owner and the owner's own credentialed read stays on the proxy at `private, no-store`; a stopped bucket reports `s3: down [unreachable]` on `/admin/system` and fails the master playlist with a typed 503 `storage_unavailable` before any segment, though the redirect itself still mints and `/healthz` still answers 200; and a CORS misconfiguration blocks every segment, which the api cannot see and the QoE beacon records as `api-proxy` + `error_class=network`) | PASS | Real cross-origin bucket in browser: Range/preflight/307, expiry and private refusal; Chromium and Safari; bucket outage does not masquerade as success | STO-01, PLAY-03 + selected bucket/CORS → A32. Evidence is **MinIO cross-origin; the selected bucket run is deferred (no credentials on this machine)**, so a real provider's CORS, versioning and virtual-host addressing stay untested, and Safari.app itself was not driven — the WebKit engine it ships was, via Playwright, and it took the same MSE path Chromium did. Defect fixed on the way: the presigned original and official download answered `application/octet-stream` where the proxy answers `video/mp4`, because the S3 PUT recorded no content type and `video_files.content_type` is empty for every resumable upload — the proxy hid both by sniffing (vidra-core #197). Findings that need a ruling rather than a patch, none blocking: presign minting does NOT fail closed on a bucket outage (a 307 to a dead store is still issued; only the playlist's typed 503 saves the session, and `/healthz` reports `{"status":"ok"}` throughout because its storage component is a five-minute write probe); `delivery.PresignTTL` is a compile-time hour with no knob of any kind; a CORS failure degrades the player silently from the CMAF ladder to the whole original file per viewer, with an unbounded segment-retry loop (39 blocked fetches in 12 s) and no viewer-visible error; and a total object-store outage renders a dead `0:00/0:00` player with no message at all |
 | INT-10 CDN redirects, purge and versioned media remain correct | M C U | F06; CDN provider/resolver and purge ledger; **live evidence [`a33-rehearsal`](evidence/a33-rehearsal.json) (section "A33 rehearsal — CDN edge simulator against the merged remediation — 2026-09-08")** — slice 3, run against core `main` `59d7f51` (#199 + #202 + #203 + #204 merged, schema 140) with the edge simulator's origin pointed at the **api** and a MinIO bucket carrying **no policy at all**: 307s name the api's own route path + `?v=` + `__vidra_edge=1`, the edge's origin fetch is served (zero `Location` headers across eight marked probes) at `public, max-age=31536000, immutable` / `3600` / `300` with honest `Content-Type` and `Content-Disposition: attachment; filename=…`, playlists never reach the edge, a viewer and any intermediary still get `private`, private is 404 and unlisted is never redirected, and an unauthenticated read straight at the bucket is **403** — so clauses (5) and (6) are closed by construction. A same-source re-transcode moved `videos.transcode_generation` 1→2, wrote `r2/`, minted a new `?v=`, sent **zero** purges (correctly) and produced **0** old-tag requests on reload with 144 frames against 150 — clause (1) closed; a superseded `?v=` is refused 404 `private, no-store` and the refusal is not cacheable. All four families purge and the edge serves new bytes: poster (multipart **and** frame-pick) 1 request each, storyboard 1, account deletion 13 as one queued job, download revocation 8 through a leased walk that survived a worker kill — cursor resumed, **no key purged twice** — clause (2) closed. A refused purge retried at **+60 s, +2 min, +4 min** from the persisted `next_attempt_at`, landed on attempt 4 when the edge accepted again, and dead-lettered with its URL list intact on a forced attempt 8 (`pending_retries`/`oldest_pending_seconds`/`dead_letters`, the admin jobs page and `vidra doctor`'s ⚠ all agree) — clause (3) closed. Prior evidence [`a32-a33-delivery`](evidence/a32-a33-delivery.json) is the pre-remediation measurement; **the closing sentences of the notes cell ("the row stays FAIL until the edge simulator is re-run", "neither has been measured against a caching edge") are superseded by this run.** Selected edge and selected bucket remain deferred — no zone, credential or commercial bucket on this machine | **PASS (edge simulator; selected edge deferred; clause 4 residual: no proxy fallback after an edge 5xx)** — clauses (1), (2), (3), (5) and (6) re-measured closed against a caching edge; clause (4) is unchanged and named: a 307 to an edge that then 5xxs has no fallback to the api proxy (hls.js retried 4 segment URLs 27 times, the player fell through to `/original` which 307s to the same broken edge, `MEDIA_ELEMENT_ERROR` code 4, `readyState` 0). The only remedy is the `delivery_cdn_enabled` kill switch, measured working: zero edge requests and playback restored | Edge simulator first, then selected edge: retranscode/replacement, privacy/delete/global download revoke and failed purge/retry; stale segments must never play; failure after redirect tested | PLAY-03 + CDN selection → A33. What passes: source REPLACEMENT is genuinely generation-addressed (`web-videos/<id>.r1.mp4`, `streaming-playlists/<id>/r1/…`), so old and new never collide and no purge is needed — playback afterwards fetched only `r1/` keys while the edge's generation-0 entry sat unconsulted; and the three wired families each fan out correctly (per-video download flip 4 purges, privacy flip 18, deletion 18, with a 404 for an object never cached counting as success). What fails, each clause: (1) **stale segments DO play** — a same-source re-transcode overwrites the SAME keys (`HLSPrefixForSource` reads the source key's `.rN`, and a rerun is still version 0), sends **zero** purges, and Chromium decoded the edge's old 25 fps chunk beside the new 24 fps init segment with no error; the `?v=` tag moves but `cdn.EdgeURL` carries no query, so it can never version an edge. (2) Thumbnail/storyboard replacement, account deletion and the instance-wide download revocation all send **zero** purges and leave the edge serving bytes the API has already stopped serving — F06's ledger, confirmed with an edge in the loop. (3) **A failed purge is never retried**: 18 rejected calls, one aggregate WARN, no second pass ever, and the edge still serving a deleted video 30 s later; `GET /admin/system`'s `cdn_purge` block reported it accurately. (4) A 307 to an edge that then 5xxs has **no fallback to the proxy** — hls.js retried 28 times and the player died on `MEDIA_ELEMENT_ERROR` code 4. (5) The edge reproduces **none** of the API's response headers — no content type, no `Content-Disposition` (a redirected official download loses the creator's filename), and no `Cache-Control` at all, because the edge pulls from the BUCKET and Vidra writes no cache metadata on stored objects; nothing becomes `public` by design, so a real CDN's own default TTL is the only bound on stale media. (6) New and not in F06: a key-addressed CDN origin must be readable by the edge, and made so the obvious way **every private object becomes world-readable at the origin** — a private video's poster and original both answered 200 to an unauthenticated fetch — so a privacy flip's correct 18-key purge was undone by the very next request re-pulling and re-caching it; undocumented in `.env.example` and `docs/operations.md`. The **selected edge is deferred** (no zone or credential on this machine). Wrong actors verified: admin routes 401/403, purge triggers 401/404. **Remediation slice 1 is open** ([vidra-core #199](https://github.com/yegamble/vidra-core/pull/199), section "A33 remediation 1"): the CDN's origin becomes this API rather than the bucket, which removes the mechanism behind clauses (1), (5) and (6) and re-addresses purge from keys to URLs; every transcode run mints its own generation (migration 0136), which closes clause (1)'s same-source overwrite. The row stays FAIL until the edge simulator is re-run against it (slice 3). **Remediation slice 2 is open** ([vidra-core #202](https://github.com/yegamble/vidra-core/pull/202), section "A33 remediation 2"), and closes clauses (2) and (3): `media_purge.go`'s STILL-UNPURGED ledger is **empty** — poster and storyboard replacement purge their stable URL through a `video.Service` hook that also covers the backfill worker, account deletion snapshots the whole account before the cascade and enqueues it, and the instance-wide download revocation is a leased, resumable walk with a persisted cursor (migration **0137**, `cdn_purge_jobs`) — and a refused purge is retried at 1, 2, 4, 8, 16, 32 and 60 minutes before dead-lettering with its URL list intact, surfaced on `cdn_purge` (`pending_retries`/`oldest_pending_seconds`/`dead_letters`), the admin jobs page and `vidra doctor`. **Clause (4) is untouched and still open**: a 307 to an edge that 5xxs still has no fallback to the api proxy. Both slices are code-only — neither has been measured against a caching edge, which is what slice 3 is for |
 | INT-11 Noncustodial donation addresses verify and display honestly | C U | Donation service; backed donations; product decision excludes custodial flows; proved by A30 (same section and evidence file): four curated networks with shape validation (bad network and bad address both typed 422), every address stored unverified, an ethereum EIP-191 challenge bound to instance/network/address/nonce that a wrong-key signature fails 422 and a genuine one verifies, the challenge single-use (409 on re-verify), bitcoin honestly 501 not_implemented, wrong actors 403/401/404, and an anonymous Chromium viewer sees the watch Support dialog say “Vidra never holds or processes funds” with per-address VERIFIED/UNVERIFIED and no balance, confirmation or thank-you; deletion hides the address on reload | PASS | Address validation/challenge/ownership verification, update/remove and profile/watch support dialog; no fabricated payment confirmation or funds handling | AUTH-02 → A30. OPEN, not blocking the row: `GET /users/{id}/donation-addresses` is documented as the public projection for a PROFILE page but nothing renders it there — the only consumer is the Support button, via a channel's owner — so a creator with no channel exposes addresses no page shows |
@@ -15361,3 +15361,292 @@ unmoved; and `/admin/system` reporting cancelled deliveries as cancelled rather
 than dead-lettered. Deferred and untouched: third-instance comment re-broadcast
 (an `Announce`-shaped design change), F8 authoring, signed fetch on the object
 routes, and MIG-06's identity clause.
+## A31 IPFS — public mirror with fallback, private swarm isolation — 2026-09-09
+
+**INT-08 flips to PASS. INT-07 does not, and none of the reasons is "nobody has
+run it".** A real kubo topology — an offline public node with its gateway, a
+`swarm.key`'d pair, and a keyless outsider — against a two-process core and real
+Chromium proved the parts INT-07 is mostly about: an eligible video reaches a
+real CID, the watch page plays master AND segments from the gateway, the privacy
+fence holds on both swarms, and the kill switch does what it says. Three clauses
+failed, one of them badly enough to fix here: **deleting a video left its bytes
+pinned on the public node forever**, unreachable by every backstop the mirror
+has. That is fixed on [vidra-core #218](https://github.com/yegamble/vidra-core/pull/218),
+**not merged**, and re-measured live. The two that remain are a delivery
+question and an observability one, both stated below.
+[Sanitized evidence](evidence/a31-ipfs.json).
+
+### The lab, and why nothing was published
+
+A real public IPFS publication is **irreversible**. Once a CID is announced, any
+peer that fetched it may keep and re-serve it; unpinning removes this instance's
+copy and nothing else. So this lab never published to the public network, and
+the flags are the guarantee rather than the intention:
+
+| node | role | RPC | flags | daemon says |
+|---|---|---|---|---|
+| public | the instance's mirror + `IPFS_GATEWAY_URL` | `:5011`, gw `:8081` | `ipfs daemon --offline`, `Routing.Type=none`, `bootstrap rm --all` | `Swarm not listening, running in offline mode.` |
+| P1 | `IPFS_PRIVATE_API_URL` | `:5021`, swarm `:4021` | `LIBP2P_FORCE_PNET=1` + lab `swarm.key`, `AutoConf.Enabled=false`, no bootstrap | `Swarm is limited to private network of peers with the swarm key` |
+| P2 | second keyed node | `:5031`, swarm `:4031` | same `swarm.key` | same line |
+| outsider | no key | `:5041`, swarm `:4041` | no `swarm.key`, no bootstrap | ordinary daemon |
+
+kubo 0.40.1, four repos under the scratch dir with distinct `IPFS_PATH`. Core is
+one binary run twice (`VIDRA_ROLE=api` on `:8088`, `VIDRA_ROLE=worker` with no
+listener) at schema 142, `dirty=false`, `STORAGE_BACKEND=local`, native
+PostgreSQL 16 and Redis, no Docker. `RATE_LIMIT_ENABLED=false` and
+`MALWARE_SCAN_MODE=disabled` are set explicitly and said out loud;
+`REGISTRATION_ENABLED=true` for one synthetic viewer. The frontend is a `next
+build` **with** `NEXT_PUBLIC_API_BASE_URL` set to the lab origin, served from
+`.next/standalone` behind a pipe-only one-origin proxy on `:3210`. Kubo's
+`swarm.key` is a lab-generated file under the scratch dir and is not committed.
+
+### The toggle is real now, and it plays real bytes
+
+The memory that opened this lane is that the IPFS watch toggle was once
+unreachable in production, and that a mocked spec fabricated the flag, the CID,
+the gateway URL and the gateway's response. **What ships now is none of those
+things.** `GET /videos/{id}` for a public+published video really does carry the
+`ipfs` object, and the watch page gates the toggle on THAT object rather than on
+the card-only `ipfs_pinned` flag — which is exactly the distinction the old
+defect turned on.
+
+An upload transcoded, published, and the worker pinned five objects inside one
+drain:
+
+| media_class | object_key | bytes | state |
+|---|---|---|---|
+| `hls` | `streaming-playlists/<id>/` | 892 684 (13 files) | pinned |
+| `video_original` | `web-videos/<id>.mp4` | 80 303 | pinned |
+| `thumbnail` | `thumbnails/<id>.jpg` | 11 414 | pinned |
+| `storyboard` | `storyboards/<id>.jpg` | 14 381 | pinned |
+| `storyboard_vtt` | `storyboards/<id>.vtt` | 326 | pinned |
+
+Then Chromium, anonymous, on the watch page: the bar read *Playing from server
+(HLS)*, "Use IPFS" flipped it to **IPFS · pinned**, and the video played to the
+end — **120 frames decoded, 0 dropped, currentTime 5.02 s** — with **zero** API
+media requests after the switch and eight requests to the gateway origin:
+`http://127.0.0.1:8081/ipfs/<hls_cid>/master.m3u8`, then `cmaf/media_0.m3u8` and
+`cmaf/media_1.m3u8`, then `cmaf/init-0.mp4`, `cmaf/chunk-0-00001.m4s`,
+`cmaf/init-1.mp4`, `cmaf/chunk-1-00001.m4s`. The gateway URL shape is
+`{IPFS_GATEWAY_URL}/ipfs/{hls_cid}/master.m3u8` and the playlist's relative URIs
+resolve under it, so the whole ladder is content-addressed.
+
+The fence held everywhere it was asked. Private and unlisted uploads produced
+**zero** ledger rows while the private tier was off. A public→private flip moved
+all five rows to `unpinned`, and the node kept the CIDs only because three other
+videos legitimately shared them — the reference-count guard, doing its job.
+Setting a video's state to `quarantined` unpinned all five on the next sweep
+tick. No `dm_attachment` row exists, and none can: **no code path in the entire
+repository enqueues that class** — the constant exists only so the eligibility
+table can assert the refusal — and `Route` defaults it to `NetworkNone` on both
+swarms. A15 (MSG-03) already proved that invariant against a real node.
+
+### Delete left the bytes on the public node, permanently
+
+Deleting a video left all five of its ledger rows `pinned`, with `video_id` AND
+`owner_user_id` NULL and the CIDs still on the node. Not delayed — **stuck**:
+
+`media_ipfs_pins.video_id` references `videos(id) ON DELETE SET NULL`, and the
+video service fires its delete hooks AFTER the row is gone. By the time the
+mirror's hook calls `UnpinVideo(id)`, the FK has already nulled `video_id` on
+every row, so `ListIPFSPinsByVideo` returns nothing and the unpin is a silent
+no-op. Nothing else could reach them either: the eligibility backstop's branch 1
+requires `video_id` and branch 2 requires `owner_user_id`, and a video-derived
+row has neither once the FK has fired. On a real public swarm that is content
+the creator deleted, left retrievable from any gateway that ever held the CID —
+and the pin ledger has no memory that it should not be.
+
+The fix is one more `UNION` branch in the backstop that exists for exactly this
+class of miss. A video-derived row always carries `video_id` at enqueue, so a
+row of one of those classes with `video_id` NULL can ONLY be such an orphan, on
+either swarm. Identity images are `video_id`-NULL by design but carry
+`owner_user_id` and stay branch 2's; playlist covers carry neither and stay out
+of scope, unchanged. The branch has no provenance left to join on, so it names
+the video-derived classes literally — and a guard test in `internal/ipfsmirror`,
+the one package that knows both lists, asserts the SQL list and `isVideoDerived`
+are the same set (verified to fail when either drifts).
+
+Live, on this build: the next reconcile tick re-armed **10** orphan rows — the
+video just deleted plus one orphaned earlier under the unfixed binary, so the
+fix heals history — the worker dropped the CID no live row still referenced, and
+kept the two that a second video legitimately shares.
+
+### Gateway failure: the player recovers, the images do not
+
+The fallback mechanism is **client-side, and only for HLS**. The watch page
+probes the gateway master with `fetch()` and switches hls.js only on an `ok`
+response; a failed probe sets the error state. With the gateway stopped, that is
+exactly what happened: one request to the gateway, the bar read **IPFS ·
+unavailable — playing from server**, and the video still played to the end (120
+frames, 0 dropped) with no error page.
+
+Thumbnails and storyboards do not work that way. They are redirected
+**server-side**: with the mirror on, `GET /videos/{id}/thumbnail` answers `307`
+to `{gateway}/ipfs/{cid}` with `Cache-Control: public, max-age=300`.
+`delivery.mirrorSource` fails open on "not pinned" and on a ledger error, but it
+never asks whether the gateway is reachable — so with the gateway down the API
+kept issuing those redirects, and following one gave `Failed to connect to
+127.0.0.1 port 8081` and zero bytes. A viewer sees broken images for up to five
+minutes per cached redirect, and there is **no runtime lever to stop it**: unlike
+the CDN (`delivery_cdn_enabled`) and presign (`delivery_presign_enabled`), the
+mirror source is gated on `cfg.IPFSEnabled`, which no instance setting overrides.
+Turning the mirror off is a restart. (`WithMirror`'s own comment claims the
+per-request read "lets an operator turn the mirror off without a restart"; the
+switch it reads cannot change at runtime.)
+
+The admin cannot see it either. `GET /admin/system` probes postgres, redis, s3,
+smtp, search, ffmpeg, clamav and settings_sync — **there is no `ipfs`
+component**, so an unreachable node never degrades that page. The honest signal
+exists one endpoint away: `GET /api/v1/ipfs/status` reported
+`node_reachable: false` throughout, and its `networks` block split public from
+private correctly. The node probe is on the RPC API, not the gateway, so a node
+that answers RPC while its gateway is down still reads healthy.
+
+QoE is half honest. The server-side classifier is right — a beacon carrying a
+real gateway segment URL was stored as `delivery_source = ipfs-gateway`. But the
+client emits `playback.start` once per session and nothing at the source switch,
+so a viewer who flips to IPFS and watches to the end contributes **one row
+labelled `api-proxy`**; only a later rebuffer, bitrate switch or error carries
+the new source. IPFS delivery is therefore near-invisible in QoE for the clean
+case.
+
+### Reconcile re-arms; it does not compare
+
+| staged | reconcile did | verdict |
+|---|---|---|
+| a dead-lettered pin (`state='failed'`, `cid=''`) | re-armed to `pending`, re-pinned with a real CID within one drain | works |
+| the node loses a CID (`ipfs pin rm` by hand) | nothing — the ledger still says `pinned`, the node still does not have it | **not implemented** |
+| a stray pin the ledger never knew | nothing — still pinned | **not implemented** |
+| a live pin/unpin backlog | drained; `IPFS_PIN_CONCURRENCY=1` gave max 1 concurrent add over 5, `=3` gave max 3 (measured through a counting proxy in front of the kubo RPC) | works |
+| a video mirrored while the mirror was off | `POST /admin/ipfs/reconcile` seeded 5 intents, one per class; all pinned | works |
+
+`Reconcile` re-arms dead letters and `SweepIneligible` converges the ledger on
+visibility facts. Neither ever asks the node what it actually holds, so the
+ledger and the node can disagree indefinitely in both directions.
+
+The outage ladder itself is sound. With the node down, a fresh upload's five
+rows sat at `pending`, `attempts` 1→2, `next_attempt_at` about a minute out,
+`last_error` `add+pin rpc failed` (and `directory add+pin rpc failed` for the
+tree); the node came back and all five pinned on the next attempt. The API never
+degraded and the detail's `ipfs` object stayed absent while the pins were merely
+pending, which is the correct answer.
+
+### The kill switch stops publishing; it does not retract
+
+`IPFS_ENABLED=false` is a restart-only env switch — there is no
+`instancesettings` key for it. With it off: no mirror worker starts, an upload
+produced **zero** ledger rows, `GET /videos/{id}` omits the `ipfs` object so the
+watch toggle is **absent** (confirmed in Chromium), the thumbnail route answers
+`200` from the api instead of redirecting, and `GET /ipfs/status` and `POST
+/admin/ipfs/reconcile` both answer `503 ipfs_disabled`. **Existing pins are left
+exactly as they were** — 15 private and 25 public `pinned` rows in the ledger,
+all 15 pins still on the node — so the switch stops publishing and stops
+advertising, and retracts nothing. It also governs the PUBLIC tier only:
+`IPFS_MIRROR_PRIVATE` is a separate switch and a private-only deployment is
+explicitly supported by `validateIPFSPrivate`.
+
+### The private swarm is replication, and only replication
+
+`IPFS_MIRROR_PRIVATE=true` with `IPFS_PRIVATE_API_URL` at P1 routed private AND
+unlisted videos — and every derivative — to `network='private'`; a public→private
+flip transitioned the rows across swarms, leaving the public row `unpinned` and
+a private row `pinned`. Replication is real: P2 fetched and pinned P1's private
+original over the keyed swarm (52 715 bytes, and 45 691 bytes for a second video
+after a P2 outage).
+
+The outsider is refused below the application entirely. `ipfs swarm connect` to
+P1 failed at **`failed to negotiate security protocol: context deadline
+exceeded`** — the pnet handshake, not an authorization check — and `ipfs cat` of
+a private CID timed out at 45 s with no bytes. The shipped
+`TestOutsideNodeCannotFetch` and `TestKeylessDaemonRefusesToStart` agree.
+
+No private CID reaches any API. Eleven payloads — owner and anonymous detail for
+the private and the unlisted video, the public feed, the authenticated feed, the
+channel's videos, the ActivityPub representation, search, `/me/videos` and
+`/ipfs/status` — contain **zero** of the nine private CIDs, while the positive
+control (the public video's `hls` CID) appears twice in the same corpus. The
+anonymous unlisted detail is a `200` in that set, so the absence is a real
+filter and not a 404. The public gateway answered **404 in 7 ms** for a private
+CID, and the public node's pin list never contained it. There is deliberately no
+`IPFS_PRIVATE_GATEWAY_URL`, and not having the knob is the guarantee.
+
+Outage timeline, private tier:
+
+| t | event | measured |
+|---|---|---|
+| 0 | P1 stopped | `networks.private.node_reachable=false`, `networks.public` still `true` |
+| +1 m | private upload | 5 rows `pending`, attempts 1→2, `add+pin rpc failed`; public thumbnail still `307`, public HLS master still `200`; no crash |
+| +3 m | P1 restarted | — |
+| +5 m | next attempt | all 5 `pinned` (attempt 3) |
+| later | P2 stopped, then restarted | ledger untouched (P2 is a pull replica; no cluster is configured), P2 reconnected to P1 and converged on the CID it had missed |
+
+The one thing the private rail cannot show is itself in the job surface: the
+mirror writes **no `job_runs` rows and carries no correlation id**. Its only
+durable trace is `media_ipfs_pins` (`attempts`, `next_attempt_at`, `last_error`)
+plus `ipfs_pin_ok` / `ipfs_unpin_ok` logs — invisible to the correlation chain
+A17 and A35 built.
+
+### Wrong actors
+
+| surface | anonymous | viewer | admin |
+|---|---|---|---|
+| `GET /api/v1/ipfs/status` | 401 | 403 | 200 |
+| `POST /api/v1/admin/ipfs/reconcile` | 401 | 403 | 202 |
+
+The watch-page toggle is viewer-side only and needed no privilege — the Chromium
+run that played 120 frames from the gateway was an anonymous session.
+
+### Gates
+
+`make ci` in vidra-core PASSES (fmt-check, vet, migrate-lint, openapi-verify,
+sqlc-verify, test-race; 82 packages `ok`). The full `-tags=integration`
+`internal/store` suite passes (11.6 s) including the new
+`TestSweepIneligibleIPFSPinsOrphanedByDelete`, which was watched to fail first
+(`re-armed 0 rows, want 3`). `make test-ipfs-integration-local` passes against
+the real node (`TestIntegrationAddPinCat`, `TestIntegrationAddDirectoryHLSTree`,
+`TestIntegrationMirrorPinsPromotedGeneration`). `make
+test-ipfs-private-integration` passes three of four proofs
+(`TestPrivateSwarmReplication`, `TestOutsideNodeCannotFetch`,
+`TestKeylessDaemonRefusesToStart`).
+
+### Unverified
+
+- **IPFS Cluster, on either swarm.** No `ipfs-cluster-service` binary was
+  available, so `IPFS_CLUSTER_API_URL` / `IPFS_PRIVATE_CLUSTER_API_URL`, the
+  cluster pin/unpin calls, and `TestPrivateClusterReplicationPinned` are
+  untested. The private tier's durability story beyond a manually-peered pair is
+  therefore unproven.
+- **A real public network.** Never touched, deliberately. Nothing here says how
+  a CID behaves once it is announced to the DHT, and nothing here can be undone
+  because nothing was published.
+- **The `webm` and `caption` pin classes.** The lab's fixtures produced no VP9
+  alternate and no captions, so those two eligible classes were never pinned.
+- **The re-transcode CID move.** An admin HLS rerun did promote generation `r2`
+  and the worker re-added the tree at the new `master_key` prefix, but the r2
+  output was byte-identical to r1, so the CID did not move and the
+  release-the-old-generation half was not separable in the live run.
+  `TestIntegrationMirrorPinsPromotedGeneration` covers it against a real node.
+- **vidra-user's `ipfs-backed` lane.** No frontend change was made; the watch
+  page's behaviour was measured directly in Chromium instead.
+
+### What INT-07 still needs
+
+1. **A gateway-aware delivery source, or a runtime lever.** Either
+   `mirrorSource` consults node/gateway health (a cached probe) before minting a
+   `307`, or a `delivery_ipfs_enabled` instance setting joins its two siblings so
+   an operator can stop redirecting to a broken gateway without a restart. Today
+   neither exists, and the failure is viewer-visible for `max-age=300` per URL.
+2. **An `ipfs` component on `/admin/system`**, so an unreachable node degrades
+   the page an operator opens because something is wrong, instead of hiding one
+   endpoint away.
+3. **A ledger↔node reconciliation**, so a pin the node lost is re-pinned and a
+   stray the ledger never knew is either adopted or removed. Both directions are
+   currently silent.
+4. **A source-switch QoE event**, so an IPFS watch is not recorded as
+   `api-proxy`.
+5. **A ruling, then a mechanism, for the moderator block.** `POST
+   /admin/videos/{id}/block` makes a video `404` to the public API but does NOT
+   change `videos.state`, so its ledger rows stay `pinned` and its CIDs stay
+   retrievable from the gateway — measured. Whether a block must unpin (and
+   whether an unblock must re-pin, which needs a path that does not exist today)
+   is a product decision, not a patch.

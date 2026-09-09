@@ -1,0 +1,97 @@
+{
+  "acceptance": "A31 — INT-07 public IPFS mirror with viewer fallback, INT-08 private swarm isolation",
+  "date": "2026-09-09",
+  "verdict": {
+    "INT-07": "FAIL (measured) — the mirror, the toggle, real gateway playback, the privacy fence and the kill switch all hold; three delivery/observability clauses do not",
+    "INT-08": "PASS — replication is intra-swarm only, the outsider is refused at the security handshake, and no private CID reaches any API payload"
+  },
+  "topology": {
+    "core": "two processes from one binary — VIDRA_ROLE=api on 127.0.0.1:8088, VIDRA_ROLE=worker (no listener); schema 142, dirty=false; STORAGE_BACKEND=local; native PostgreSQL 16 and Redis, no Docker",
+    "frontend": "next build WITH NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:3210, node .next/standalone/server.js on :3211 behind a pipe-only one-origin proxy on :3210",
+    "declared_lab_settings": ["RATE_LIMIT_ENABLED=false", "MALWARE_SCAN_MODE=disabled", "REGISTRATION_ENABLED=true (one synthetic viewer)", "TRANSCODING_MIN_FREE_SCRATCH_MB=0"],
+    "kubo": "0.40.1 (Homebrew), four repos under the scratch dir with distinct IPFS_PATH and ports",
+    "nodes": {
+      "public": {"role": "the instance's public mirror + its gateway", "api": "127.0.0.1:5011", "gateway": "127.0.0.1:8081", "flags": "ipfs daemon --offline --enable-gc=false, Routing.Type=none, bootstrap rm --all", "daemon_line": "Swarm not listening, running in offline mode."},
+      "private_p1": {"role": "IPFS_PRIVATE_API_URL — the api's private node", "api": "127.0.0.1:5021", "swarm": "127.0.0.1:4021", "flags": "LIBP2P_FORCE_PNET=1 + swarm.key, AutoConf.Enabled=false, Routing.Type=none, bootstrap rm --all", "daemon_line": "Swarm is limited to private network of peers with the swarm key"},
+      "private_p2": {"role": "second keyed node (replica)", "api": "127.0.0.1:5031", "swarm": "127.0.0.1:4031", "flags": "same swarm.key as P1", "daemon_line": "Swarm is limited to private network of peers with the swarm key"},
+      "outsider": {"role": "no swarm key", "api": "127.0.0.1:5041", "swarm": "127.0.0.1:4041", "flags": "no swarm.key, Routing.Type=none, bootstrap rm --all"}
+    },
+    "irreversibility": "A real public IPFS publication is IRREVERSIBLE: once a CID is announced, any peer that fetched it may keep and re-serve it, and unpinning removes only this instance's copy. This lab therefore NEVER published to the public network. The public node ran with --offline (swarm not listening, no DHT, no bitswap) and the private pair ran under LIBP2P_FORCE_PNET with a lab-generated swarm key and no bootstrap peers. Every CID recorded here exists only on this machine."
+  },
+  "int07": {
+    "SC1_mirror_and_playback": {
+      "verdict": "PASS for the eligible path, FAIL for delete (fixed on vidra-core#218)",
+      "detail_object_is_really_sent": "GET /videos/{id} returned ipfs.original_cid, ipfs.hls_cid and ipfs.gateway_url for a public+published video — the mocked-green defect recorded under 'Mocked tests hide dead features' is fixed; the watch toggle gates on that object, not on the card-only ipfs_pinned flag",
+      "ledger_after_publish": [
+        {"media_class": "hls", "network": "public", "state": "pinned", "object_key": "streaming-playlists/<id>/", "bytes": 892684, "files": 13},
+        {"media_class": "video_original", "network": "public", "state": "pinned", "object_key": "web-videos/<id>.mp4", "bytes": 80303},
+        {"media_class": "thumbnail", "network": "public", "state": "pinned", "bytes": 11414},
+        {"media_class": "storyboard", "network": "public", "state": "pinned", "bytes": 14381},
+        {"media_class": "storyboard_vtt", "network": "public", "state": "pinned", "bytes": 326}
+      ],
+      "chromium_gateway_playback": {
+        "bar_before": "Playing from server (HLS)",
+        "bar_after": "IPFS · pinned",
+        "frames_decoded": 120,
+        "frames_dropped": 0,
+        "current_time_s": 5.02,
+        "gateway_requests": 8,
+        "gateway_master": "http://127.0.0.1:8081/ipfs/<hls_cid>/master.m3u8",
+        "gateway_variants": ["cmaf/media_0.m3u8", "cmaf/media_1.m3u8"],
+        "gateway_segments": ["cmaf/init-0.mp4", "cmaf/chunk-0-00001.m4s", "cmaf/init-1.mp4", "cmaf/chunk-1-00001.m4s"],
+        "api_media_requests_after_switch": 0
+      },
+      "privacy_fence_readback": "private and unlisted uploads produced ZERO ledger rows with the private tier off; with it on they routed to network=private only; a public->private flip moved all 5 rows to 'unpinned' and the node kept the CIDs only because three other videos still referenced them (reference-count guard); a state change to 'quarantined' unpinned all 5 rows on the next sweep tick",
+      "delete_defect": "deleting a video left all 5 rows 'pinned' with video_id AND owner_user_id NULL — unreachable by every sweep branch, CIDs still on the node. Root cause: media_ipfs_pins.video_id is ON DELETE SET NULL and the delete hooks fire after the row is gone, so UnpinVideo lists by a video_id the FK already nulled. Fixed on vidra-core#218 and re-measured live: the next reconcile tick re-armed 10 orphan rows (two deleted videos' worth, including one orphaned before the fix) and the worker dropped the CID no live row still referenced.",
+      "retranscode": "TestIntegrationMirrorPinsPromotedGeneration passes against the real node; live, an admin HLS rerun promoted generation r2 and the worker re-added the tree at the new master_key prefix (files=14, 1066007 bytes). The r2 output was byte-identical to r1, so the CID did not move and the release-the-old half was not separable in the live run."
+    },
+    "SC2_fallback_and_kill_switch": {
+      "player_fallback": {"verdict": "PASS", "mechanism": "client-side: the watch page probes the gateway master with fetch() and only switches hls.js when the probe is ok; a failed probe sets the 'error' state and playback continues from the server", "measured": {"gateway_requests": 1, "bar": "IPFS · unavailable — playing from server", "frames_decoded": 120, "frames_dropped": 0, "error_page": false}},
+      "image_fallback": {"verdict": "FAIL", "measured": "with the gateway stopped, GET /videos/{id}/thumbnail and /storyboard.jpg still answered 307 to the dead gateway (Cache-Control: public, max-age=300); following the redirect gave 'Failed to connect to 127.0.0.1 port 8081' and 0 bytes. delivery.mirrorSource fails open on 'not pinned' and on a ledger error, but never on an unreachable gateway, and there is no runtime toggle to stop it without a restart."},
+      "qoe": {"server_half": "PASS — a beacon carrying a gateway segment URL was classified delivery_source=ipfs-gateway", "client_half": "PARTIAL — playback.start fires once per session, so a viewer who switches to IPFS and watches to the end contributes one row labelled api-proxy; only a later rebuffer/bitrate_switch/error event carries the new source"},
+      "admin_system": {"verdict": "FAIL", "measured": "GET /admin/system probes s3, smtp, search, ffmpeg, clamav, postgres, redis and settings_sync. There is no ipfs component, so an unreachable node never degrades that page. GET /api/v1/ipfs/status does report node_reachable=false, and it did."},
+      "kill_switch": {"verdict": "PASS", "semantics": "IPFS_ENABLED=false is a restart-only env switch (no instancesettings key). With it off: no mirror worker starts, an upload produced ZERO ledger rows, GET /videos/{id} omits the ipfs object so the watch toggle is absent (confirmed in Chromium), the thumbnail route answers 200 from the api instead of redirecting, and GET /ipfs/status and POST /admin/ipfs/reconcile both answer 503 ipfs_disabled. EXISTING pins are LEFT ALONE — the ledger kept 15 private + 25 public 'pinned' rows and the node kept all 15 pins — so the switch stops publishing and advertising but never retracts. It governs the PUBLIC tier only; IPFS_MIRROR_PRIVATE is a separate switch and a private-only deployment is explicitly supported."}
+    },
+    "SC3_reconcile": {
+      "dead_letter_rearm": "PASS — a row staged state='failed', cid='' was re-armed to 'pending' by POST /admin/ipfs/reconcile and re-pinned with a real CID within one drain",
+      "outage_ladder": "PASS — with the node down a fresh upload's 5 rows went state='pending', attempts 1→2, next_attempt_at ~1 min out, last_error 'add+pin rpc failed' / 'directory add+pin rpc failed'; the node came back and all 5 pinned on the next attempt",
+      "node_lost_a_cid": "FAIL — `ipfs pin rm` by hand, then reconcile: the ledger still said 'pinned' and the node still did not have it. Reconcile re-arms dead-lettered rows and sweeps ineligible ones; it never compares the ledger to the node.",
+      "stray_pin": "FAIL — a CID added directly to the node and never in the ledger survived reconcile untouched",
+      "concurrency": "PASS — measured through a counting reverse proxy in front of the kubo RPC: IPFS_PIN_CONCURRENCY=1 gave max_concurrent_add=1 over 5 adds; =3 gave max_concurrent_add=3 over 5 adds",
+      "backfill": "POST /admin/ipfs/reconcile seeded 5 intents (one per class) for the video uploaded while the mirror was off, and all 5 pinned"
+    }
+  },
+  "int08": {
+    "SC4_isolation": {
+      "eligibility": "private and unlisted videos and their derivatives route to network='private' (Route treats unlisted as private for mirroring); a public->private flip transitions the rows across swarms",
+      "replication": "P1 held the private original; P2 fetched and pinned it over the keyed swarm (52715 bytes, then 45691 bytes for a second video after a P2 outage)",
+      "outsider_refusal": "`ipfs swarm connect` from the keyless node failed at 'failed to negotiate security protocol: context deadline exceeded'; `ipfs cat <private cid>` timed out at 45 s with no bytes; the shipped TestOutsideNodeCannotFetch also passes",
+      "api_absence": "11 payloads (owner and anonymous detail for the private and unlisted videos, public and authenticated feeds, channel videos, the ActivityPub representation, search, /me/videos and /ipfs/status) contain ZERO of the 9 private CIDs; the positive control — the public video's hls CID — appears twice in the same corpus",
+      "public_gateway": "the public gateway answered 404 in 7 ms for a private CID, and the public node's pin list never contained it"
+    },
+    "SC5_outage": {
+      "p1_down": "GET /ipfs/status reported networks.private.node_reachable=false while networks.public stayed true; a private upload's 5 rows retried with the shipped ladder (attempts 1→2); public delivery was unaffected (thumbnail 307 to the gateway, HLS master 200); no crash",
+      "p1_recovery": "all 5 rows pinned on attempt 3, about 2 minutes after the node returned",
+      "p2_down_and_back": "P2 is a pull replica (no cluster configured), so its outage does not touch the ledger; after restart it reconnected to P1 and converged on the CID it had missed",
+      "dm_no_pin": "no code path anywhere in vidra-core enqueues ClassDMAttachment — the constant exists only so the eligibility table can assert the refusal — Route defaults to NetworkNone for it on BOTH swarms, and the lab ended with zero dm_attachment rows. A15 (MSG-03) already proved the invariant against a real kubo node.",
+      "observability_gap": "the mirror writes NO job_runs rows and carries no correlation id; its only durable trace is media_ipfs_pins (attempts, next_attempt_at, last_error) plus ipfs_pin_ok / ipfs_unpin_ok logs"
+    },
+    "SC6_wrong_actors": {
+      "GET /api/v1/ipfs/status": {"anonymous": 401, "viewer": 403, "admin": 200},
+      "POST /api/v1/admin/ipfs/reconcile": {"anonymous": 401, "viewer": 403, "admin": 202},
+      "toggle": "viewer-side only — the watch page's IPFS switch worked for an anonymous browser session and needs no privilege"
+    }
+  },
+  "gates": {
+    "vidra-core make ci": "PASS — fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race; 82 packages ok",
+    "vidra-core internal/store -tags=integration": "PASS (11.6 s) including the new TestSweepIneligibleIPFSPinsOrphanedByDelete",
+    "make test-ipfs-integration-local": "PASS — TestIntegrationAddPinCat, TestIntegrationAddDirectoryHLSTree, TestIntegrationMirrorPinsPromotedGeneration",
+    "make test-ipfs-private-integration": "PASS — TestPrivateSwarmReplication, TestOutsideNodeCannotFetch, TestKeylessDaemonRefusesToStart; TestPrivateClusterReplicationPinned SKIPPED (no ipfs-cluster)"
+  },
+  "not_run": [
+    "IPFS Cluster on either swarm (IPFS_CLUSTER_API_URL / IPFS_PRIVATE_CLUSTER_API_URL) — no ipfs-cluster-service binary on the lab machine, so cluster pin/unpin and the private cluster leg are UNVERIFIED",
+    "a real public IPFS network — deliberately never touched (see irreversibility)",
+    "vidra-user's ipfs-backed e2e lane — no frontend change was made, and the watch-page behaviour was measured directly in Chromium instead",
+    "webm/caption pin classes — the lab's fixtures produced no VP9 alternate and no captions"
+  ]
+}
