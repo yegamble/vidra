@@ -18890,6 +18890,35 @@ that can see the cookie. The body field survives as **optional**, for an API
 client with no cookie jar; the cookie wins when both are present, so a stale
 token in a body cannot outrank a fresh grant.
 
+### Two defects the pause rail introduced, and review caught
+
+Recorded because they are the same defect twice, and it is the one this package
+is built around: **a handle that means different things on either side of a
+cutover**.
+
+`reconcileTargetWritability` ran **above** the topology switch, so it fired in
+the SWAPPED reading too — where `s.target` is the OLD SOURCE, the store being
+decommissioned, not the one being copied into. A source that refused a write
+probe would have paused a campaign mid-cutover and then **stalled the
+delete-source phase indefinitely**: pausing is not legal from `cutover` or
+`deleting_source`, so the guarded `UPDATE` matched no row while the rail logged
+that it had paused something and told the sweep to stop. A lie in the log
+holding a move open forever. It now lives inside the forward branch, the only
+reading in which "can we write to the target" is a question about the campaign
+at all.
+
+And `abortCleanupBatch` finished on a **short batch alone**, without checking
+that every key in it had actually gone — so a batch some of whose deletes failed
+would have fallen through to `cancelled` with objects still on the destination,
+the exact silence the clean-up exists to end. It now finishes only when the
+batch was short *and* every key went; the failed rows stay `verified` and the
+campaign sits visibly in `aborting`, which is what `deleteSourceBatch` does at
+the other end of a successful move.
+
+Both have regression tests that fail against the commit before their fix
+(`TestAWriteDeniedTargetDoesNotStallTheDeleteSourcePhase`,
+`TestAbortWithCleanupStaysOpenWhileADeleteKeepsFailing`).
+
 ### Migration 0145
 
 `storage_migration_pause_and_identity`: five columns (`paused_reason`,
