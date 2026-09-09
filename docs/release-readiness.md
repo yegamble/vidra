@@ -16756,8 +16756,9 @@ fallback untried. 5 of 5 under four workers afterwards.
 left running, zero blank pages. Public data surfaces render a typed error with a
 retry — `/` , `/videos/{id}` ("Could not load this video. Try again"), `/search`
 ("Search failed. Please try again"): 16 routes carry an error sentence and 12
-carry a retry control. **The remaining routes render the signed-out prompt
-instead of an outage**, because the boot refresh cannot distinguish a refused
+carry a retry control. **Fifty-nine render the signed-out prompt instead of an
+outage** (the last, `/reset-password/confirm`, renders its form, which needs no
+read), because the boot refresh cannot distinguish a refused
 connection from an absent session: `/subscriptions` says "Sign in to see your
 subscriptions" to a viewer whose session is fine and whose instance is down.
 Not a spinner and not a blank, but a misattribution — recorded, not fixed,
@@ -16858,8 +16859,11 @@ so there is nothing here for this item to remove, and no new skip was registered
 `vidra-user`: `npm run ci` (typecheck, eslint, the icon lint, 2 630 vitest
 tests, a production build, and the mocked Chromium suite) **PASS** (263 test files / 2 630 tests, and 627 of 627 mocked Chromium tests). The backed
 proof is the run above: `e2e-backed/required-controls.spec.ts` 8/8 against the
-two-process core, at four workers and again at one. Repo CI on user #210:
-GATES_PRCI.
+two-process core, at four workers and again at one. Repo CI on user #210, all green on `520d6e4`+`878c7a2`: `ci-required`,
+`frontend`, `contract`, **`e2e-backed (local)` and `e2e-backed (s3)`** — so the
+new walk ran twice on the runner, once per storage backend, and the zero-skip
+audit passed both times — plus `channel-sync-backed`, `ipfs-backed` and
+GitGuardian.
 
 Not run here: the `e2e-backed (s3)` leg (no MinIO in this lab — the walk is a
 layout, colour and keyboard measurement, and the storage backend does not reach
@@ -16896,8 +16900,10 @@ between the two PRs.
 ### Open, none blocking
 
 1. **With the api down, viewer-scoped surfaces say "Sign in" rather than "this
-   instance is unreachable"** — 60 of 76 routes. The boot refresh cannot tell a
-   refused connection from an absent session. The fix belongs in
+   instance is unreachable"** — 59 of the 76 routes render a sign-in prompt, 16
+   render a typed error, and one (`/reset-password/confirm`) renders its form
+   because it needs no read to do so. The boot refresh cannot tell a refused
+   connection from an absent session. The fix belongs in
    `AuthProvider`'s restore contract and in every gate that reads it.
 2. **`text-fg-subtle` has no lint fence.** Two of this slice's three contrast
    defects were the same mistake — using a token the design system documents as
