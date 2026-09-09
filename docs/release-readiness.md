@@ -16951,8 +16951,9 @@ component an operator reads. [Sanitized evidence](evidence/a31-rehearsal.json).
 A real public IPFS publication is irreversible, so this rehearsal published
 nothing either. The public node ran `ipfs daemon --offline` with
 `Routing.Type=none` and `bootstrap rm --all` — `Swarm not listening, running in
-offline mode.` — and the private pair ran under `LIBP2P_FORCE_PNET=1` with a
-lab-generated `swarm.key` that is not committed. Every CID below exists only on
+offline mode.` — and the private node ran under `LIBP2P_FORCE_PNET=1` with a
+lab-generated `swarm.key` that is not committed (one keyed node and a keyless
+outsider this time; A31's second keyed replica was not re-run). Every CID below exists only on
 this machine.
 
 | node | role | RPC | flags | daemon says |
