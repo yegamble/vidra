@@ -15968,7 +15968,7 @@ and neither was previously knowable from the API.
 | Step-up start with `ATPROTO_LOGIN_ENABLED=false` | **503 `atproto_disabled`**, typed — not a handle error for a challenge that can never complete |
 | A step-up callback whose subject is linked to a different account | redirect `?step_up_error=step_up_identity_mismatch`, no assertion |
 | Address already resolving to another account's email OR username | **409 `ErrEmailTaken`**, unchanged: the step-up authorises WHO, never WHAT |
-| TOTP-enrolled account | unchanged — the second factor is a LOGIN challenge and the step-up runs through that same login, so an enrolled account is still challenged on the provider's next sign-in |
+| TOTP-enrolled account | The step-up **mints no session**, so nothing about the second factor changes. Stated precisely, because the obvious reading is wrong: the MFA gate lives in the PASSWORD `Login` path only (`service.go:543`), and **both** OIDC and ATProto login already call `issueTokens` directly without it, so a provider sign-in is not challenged today and a step-up through a provider inherits exactly that. Pre-existing, unchanged by this slice, and recorded rather than patched blind — it is a product ruling about whether a second factor should gate a federated identity the IdP itself may already have second-factored |
 
 **Migration 0144** `step_up_tokens` (+ `.down.sql`), additive, `migrate-lint`
 clean at 144 up migrations. It was written as 0143 and **renamed**: the
