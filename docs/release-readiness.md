@@ -16928,3 +16928,8 @@ between the two PRs.
    and any future walk must wait by time or by content on that route — recorded
    because the naive fix costs a lane 60 s of timeout.
 
+
+## A31 rehearsal — public mirror against the merged follow-ups — 2026-09-09
+
+**IN PROGRESS.** The lab is being brought up; this section will carry the
+measurement. Nothing here is a verdict yet.
