@@ -1,0 +1,218 @@
+{
+  "item": "Auth trust — no auto-link on a provider email, the second factor on SSO, link from settings, provider env_file",
+  "date": "2026-09-09",
+  "closes": {
+    "source": "A05 OIDC (2026-09-09), findings 1-5",
+    "rulings": [
+      "1. Never auto-link on a provider-asserted email; a provider-created account is matched by subject only",
+      "2. The second factor applies to provider sign-ins (OIDC and ATProto)",
+      "3. Link from settings; the callback is session-aware and never switches accounts",
+      "4. Compose passthrough for the per-provider variables, plus a typed 503 when none are configured"
+    ]
+  },
+  "not_lab_observed": {
+    "statement": "code-only slice: no Dex, no hostile-provider fixture, no browser, no containers. The proof is unit and integration tests plus CI.",
+    "rerun": "the A05 OIDC lab (Dex 2.45.1 + the stdlib hostile provider under docs/evidence/)",
+    "rerun_must_prove": [
+      "the takeover A05 measured is gone AGAINST DEX: a second configured provider asserting the owner's address email_verified redirects ?oauth_error=email_conflict and issues no session",
+      "the settings Connect control completes a real Dex round trip and the identity appears in /me/oauth-identities",
+      "a signed-in browser that starts an ordinary login flow as an UNLINKED Dex user lands ?link=dex, and as ANOTHER account's user lands ?link_error=identity_belongs_to_another_account, with the session still the one it started as",
+      "an MFA-enrolled account signing in through Dex lands ?mfa=required with the vidra_mfa_pending cookie set, and a real authenticator code at POST /auth/mfa/challenge issues the session",
+      "the mfa token appears in NO access log line, NO Referer header and NO history entry on the real proxy the lab runs",
+      "an operator flow: cp env/oauth.env.example env/oauth.env, fill it, and a containerised api boots with the provider complete (the render is proven here; the BOOT through env_file is not)",
+      "begin answers 503 oauth_not_configured with OAUTH_PROVIDERS unset against the real binary"
+    ],
+    "still_unverified_unchanged": "no hosted IdP (Google/Okta/Entra quirks: audience arrays, email_verified as a string, non-RS256 id_tokens); no https PUBLIC_BASE_URL; no provider-initiated or back-channel logout (vidra implements neither)"
+  },
+  "collision_matrix": {
+    "rule": "an account is matched by the issuer-scoped SUBJECT; an email match is a refusal",
+    "rows": [
+      {
+        "attempt": "known (provider, subject)",
+        "answer": "login, same account",
+        "session": true
+      },
+      {
+        "attempt": "existing PASSWORD account's address, email_verified true",
+        "answer": "email_conflict",
+        "session": false,
+        "linked": false,
+        "note": "this is the row that used to link; the owner takeover rode in on it"
+      },
+      {
+        "attempt": "existing PASSWORD account's address, email_verified false",
+        "answer": "email_conflict",
+        "session": false,
+        "note": "byte-identical to the verified answer, so the response cannot be probed for whether the provider verified"
+      },
+      {
+        "attempt": "no local account with that address",
+        "answer": "account created, email_verified inherited from the claim",
+        "session": true
+      },
+      {
+        "attempt": "PROVIDER-created account, re-login by the SAME subject",
+        "answer": "login, same account",
+        "session": true
+      },
+      {
+        "attempt": "a DIFFERENT provider asserting the PROVIDER-created account's address, verified",
+        "answer": "email_conflict",
+        "session": false,
+        "note": "the subject rule; a provider-created account has no password to compare and an address the FIRST provider put there"
+      }
+    ],
+    "red_first": {
+      "how": "the old auto-link ladder was restored in internal/auth/oauth.go and the new test run against it",
+      "output": "second provider claiming a provider account's address: err = <nil>, want ErrOAuthEmailConflict; identities on the provider-created account = 2, want 1; verified email match: err = <nil>, want ErrOAuthEmailConflict; identities for the refused account = 1, want 0"
+    },
+    "tests": [
+      "vidra-core internal/auth/oauth_test.go TestOAuthCollisionMatrix",
+      "vidra-core internal/httpapi/oauth_test.go TestOAuthRefusesToClaimAnExistingAccountByEmail (httptest fake OIDC provider: real discovery + JWKS + RS256 id_tokens)"
+    ],
+    "audit": "a refused collision emits auth.login failure oauth_email_conflict and NO auth.oauth.link success row (asserted)"
+  },
+  "mfa_on_sso": {
+    "mechanism": "one door: auth.Service.providerSession. Five call sites reached issueTokens directly (three in auth/oauth.go, two in auth/atproto.go) and none consulted mfaEnabled.",
+    "withheld": "the callback issues no session and mints the SAME single-purpose mfa_token auth.Service.Login mints; POST /auth/mfa/challenge is unchanged",
+    "transport": {
+      "chosen": "httpOnly cookie vidra_mfa_pending; the landing URL carries only the flag ?mfa=required",
+      "rejected": "a one-time ?mfa=<token> on the landing URL",
+      "why": "unlike the step-up assertion (?step_up=<token>), which is bound to the session it was minted for and authorises nothing without it, an mfa_token is bound to NO session — it IS the first factor, standing in for a password already proven. A query parameter would put it in the browser history, in the Referer of every same-origin subresource the landing page fetches, and in the access log of the frontend server and any reverse proxy. Three places a password would never be written.",
+      "cookie": {
+        "name": "vidra_mfa_pending",
+        "httpOnly": true,
+        "samesite": "Lax",
+        "path": "/api/v1/auth/mfa/challenge",
+        "max_age_seconds": 300
+      },
+      "samesite_lax_because": "the cookie must survive the top-level GET back from the identity provider",
+      "ttl": "300s, equal to auth.mfaTokenTTL, so the browser stops sending a token the server would refuse rather than the two disagreeing about when the challenge died",
+      "single_use": "cleared the moment it authorises a session, and cleared when the token cannot be resolved at all (nothing left to spend). KEPT across a wrong code: a typo is not a use, and the password path lets you retype too."
+    },
+    "contract_change": "MFAChallengeRequest.mfa_token becomes OPTIONAL (required: [code]); the body still wins when both are present, so the password path is unchanged and does not read the cookie",
+    "recovery_codes": "work on a provider challenge (asserted) — an account that lost its authenticator must not be locked out of its own sign-in method",
+    "limiter": "unchanged: the challenge stays behind the strict per-IP auth limiter",
+    "frontend": "the login page reads ?mfa=required and shows the challenge it already had; completeMfaChallenge takes string|null and OMITS the field for the cookie path (sending null would be a supplied-and-empty token, which is 422). The signup page redirects ?mfa=required to /login?mfa=required: an account that needs a code already exists.",
+    "tests": [
+      "vidra-core internal/httpapi/oauth_link_test.go TestOAuthSignInIsChallengedByTheSecondFactor",
+      "vidra-user components/auth/LoginForm.test.tsx 'LoginForm provider two-factor landing'",
+      "vidra-user e2e/oauth.spec.ts 'a provider sign-in with two-factor lands on the challenge and finishes without a token' (asserts the request body has NO mfa_token)"
+    ]
+  },
+  "link_contract": {
+    "start_oidc": {
+      "route": "POST /api/v1/auth/oauth/{provider}/link/start",
+      "auth": "requireAuth + strict auth limiter",
+      "seals": "purpose:\"link\" + uid + sid inside the SIGNED vidra_oauth_state cookie (the core #217 step-up pattern)",
+      "response": "{authorization_url} as JSON, not a 302 — the request must carry the caller's bearer token, which a top-level navigation cannot send",
+      "401": "anonymous, or a request not bound to a session",
+      "404": "unknown provider name on an instance that HAS providers",
+      "422": "provider_already_linked — this account already holds an identity for this provider, refused BEFORE the round trip (no state cookie is sealed)",
+      "503": "oauth_not_configured — the instance has no providers at all"
+    },
+    "start_atproto": {
+      "route": "POST /api/v1/auth/atproto/link/start",
+      "extra": "409 identity_belongs_to_another_account is answered HERE, not at the callback, because ATProto resolves its subject (the DID) at Begin — before the browser leaves. OIDC cannot know its subject until the id_token comes back, so that one is a redirect code.",
+      "503": "atproto_disabled"
+    },
+    "callback_link": {
+      "success": "302 to return_to with ?link=<provider>; no session is minted and no refresh cookie set — the caller already has the session the link belongs to",
+      "failures": "?link_error=<code> for an attempt started at /link/start; ?oauth_error=<code> for a LOGIN-purpose callback that turned into a link because a session was already in the browser — the failure key follows the ORIGIN page, because a refusal the landing page does not render is a silent one. Codes either way: identity_belongs_to_another_account, provider_already_linked, account_disabled, link_failed, oauth_exchange_failed, atproto_upstream, atproto_identity_mismatch",
+      "vocabulary": "deliberately separate from oauth_error: a link is not a sign-in, and the page receiving it is the settings page (the same reasoning step-up applies to step_up_error)",
+      "idempotent": "re-linking the SAME subject to the SAME account is not an error — a second click on Connect is not a mistake"
+    },
+    "login_callback_inside_a_session": {
+      "rule": "a login-purpose callback arriving with a LIVE refresh session is a link attempt for that session, or a refusal — never an account switch",
+      "measured_before": "A05 watched a signed-in browser go from `newcomer` to a freshly created `mfauser`",
+      "session_read": "auth.Service.SessionAccount reads the refresh cookie WITHOUT rotating it — a callback that answered the question with Refresh would rotate the caller's token as a side effect of looking, and the bearer token cannot ride a top-level navigation from an IdP",
+      "refusal_visible": "the refusal lands as ?oauth_error=identity_belongs_to_another_account, which the login page already renders; the copy names the door ('sign out first, then sign in with it') rather than only reporting the refusal"
+    },
+    "email_verified": "set locally when a provider-verified email is what authorised the link AND it is the account's OWN address (case-insensitive). A verified claim about a DIFFERENT address changes nothing. Best-effort — a failure here does not undo a completed link.",
+    "unlink": "unchanged: 422 with the set-a-password remedy on the last sign-in method, 404 for a provider that is not linked",
+    "refusal_shapes": "409 identity_belongs_to_another_account and 422 provider_already_linked are typed errors rendered by the central handler wherever the answer is JSON; the SAME machine codes ride ?link_error= where the answer is a browser redirect",
+    "tests": [
+      "vidra-core internal/auth/oauth_test.go TestOAuthLinkIdentity",
+      "vidra-core internal/httpapi/oauth_link_test.go TestOAuthLinkFromSettings, TestOAuthLinkStartRefusesWhenNoProviderIsConfigured, TestOAuthLoginCallbackInsideASessionLinksRatherThanSwitches",
+      "vidra-user components/auth/ConnectedLogins.test.tsx (9 tests) and e2e/oauth.spec.ts"
+    ]
+  },
+  "env_file": {
+    "problem": "vidra-core's compose environment map is an explicit allow-list, and it cannot name a key whose NAME is derived from the operator's provider list (OAUTH_PROVIDERS=okta -> OAUTH_OKTA_ISSUER/_CLIENT_ID/_CLIENT_SECRET/_SCOPES). A05 measured a filled env file delivering exactly ONE OAuth variable — OAUTH_PROVIDERS — after which the api refused to boot for the other three.",
+    "change": "vidra-core/docker-compose.yml: api AND worker gain `env_file: [{path: ./env/oauth.env, required: false}]` (Compose >= 2.24 long syntax — the meta AGENTS.md rule 4 floor)",
+    "worker_too_because": "a worker runs the same binary through the same config.Load; a provider complete for api and incomplete for worker is half a split deployment refusing to boot",
+    "precedence": "`environment:` wins over `env_file:` in Compose, so nothing in the tracked compose file can be silently overridden by dropping a file beside it",
+    "values": "read as literal KEY=VALUE, NOT compose substitution — a $ in a client secret needs no escaping",
+    "committed": "vidra-core/env/oauth.env.example, plus env/*.env + !env/*.env.example in vidra-core/.gitignore",
+    "renders_measured": {
+      "without_the_file": "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file env/production.env.example --profile core --profile frontend --profile edge config -q → exit 0, render unchanged",
+      "with_a_filled_file": "same command → exit 0",
+      "delivery": "with OAUTH_PROVIDERS=okta and a filled env/oauth.env, the rendered api AND worker environment each carry OAUTH_OKTA_CLIENT_ID, OAUTH_OKTA_CLIENT_SECRET, OAUTH_OKTA_ISSUER, OAUTH_OKTA_SCOPES and OAUTH_PROVIDERS — five keys where A05 measured one"
+    },
+    "validate_lane": {
+      "assert": "meta-ci 'Every config key vidra-core reads has a compose consumer'",
+      "treatment": "NO CHANGE NEEDED, and this was checked rather than assumed. The assert extracts keys by regex from config.go — getEnv*/p.Str/p.Int/p.Int64/p.Bool/p.Duration followed by a LITERAL \"[A-Z0-9_]+\". The per-provider names are built by concatenation (prefix := \"OAUTH_\" + strings.ToUpper(...)), so the regex never sees them: the only OAUTH key it extracts is OAUTH_PROVIDERS, which has had a compose consumer all along.",
+      "run_locally": "the exact CI step re-run in the meta worktree: OK: all 176 config keys reach BOTH api and worker (177 entries in each map)",
+      "api_worker_equality": "still holds — env_file keys appear in both rendered maps or in neither"
+    },
+    "docs": [
+      "vidra-core/docs/operations.md gains 'Single sign-on (OIDC) — the one family of settings compose cannot allow-list'",
+      "meta env/production.env.example and env/staging.env.example: the per-provider variables move OUT of the template and point at vidra-core/env/oauth.env.example; the UNPROVEN banner is replaced by the two trust rules"
+    ],
+    "setup_engine": "`vidra setup --template env/production.env.example` still writes no '# Managed by' block (re-run locally) — the engine collects no OAUTH answer, so removing the commented per-provider lines cannot strand one"
+  },
+  "typed_503": {
+    "change": "OAUTH_PROVIDERS unset makes GET /auth/oauth/{provider} and its callback answer 503 oauth_not_configured, matching ATProto's disabled path",
+    "was": "404, which A05 recorded as coherent but the wrong shape — a client could not tell 'you named a provider this instance does not have' from 'this instance does not do SSO'",
+    "unchanged": "an unknown name on an instance that HAS providers is still 404"
+  },
+  "migration": {
+    "number": null,
+    "why_none": "oauth_identities already carries UNIQUE (provider, subject) and UNIQUE (user_id, provider) from migration 0055 — exactly the two refusals the link contract needs. Core stays at schema 144."
+  },
+  "gates": {
+    "core": {
+      "make_ci": "PASS — ci: gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race)",
+      "go_vet_integration": "PASS, exit 0 (go vet -tags=integration ./...)",
+      "integration_p1": "EXECUTED, not merely compiled: go test -tags=integration -race -p 1 over ./internal/store/... (6.5s), ./internal/auth/... (10.7s) and ./internal/httpapi/... (59.1s), all ok, against a native Postgres 16.15 on 127.0.0.1:55491 initdb'd EMPTY and migrated 0 -> 144 in one run (dirty=false) plus a native Redis on :56491. -p 1 because those packages share one database."
+    },
+    "user": {
+      "node": "26.8.1",
+      "typecheck": "PASS",
+      "lint": "0 errors (2 pre-existing warnings)",
+      "lint_icons": "PASS",
+      "vitest": "2639 of 2643 across 264 files; the 4 failures are the known suite-interaction flake on this machine — all four pass when run alone, and three (AdminTable, Modal, ResetPasswordForm) are files this slice does not touch",
+      "build": "PASS (production next build)",
+      "playwright_chromium": "630 specs; 629 pass and one — e2e/donations.spec.ts 'deleting an address removes it from the list', a file this slice does not touch — failed once in a full run and passes when its file is run alone. Same flake class as the vitest four. Repo CI is the authority.",
+      "regen": "lib/api/generated.ts regenerated from the core spec — contract-ci ordering is core, then user"
+    },
+    "meta": {
+      "python_unit": "Ran 48 tests, OK, zero skips",
+      "prod_render": "PASS with and without env/oauth.env",
+      "staging_render": "PASS",
+      "consumer_assert": "PASS (176 keys, api == worker)",
+      "setup_template_assert": "PASS (nothing appended)"
+    }
+  },
+  "prs": {
+    "vidra-core": 222,
+    "vidra-user": 211,
+    "vidra": null,
+    "ordering": "core (OpenAPI) -> user (regen) -> meta (evidence)"
+  },
+  "recorded_not_fixed": [
+    "a per-provider trusted_email_domains allow-list stays a later option: it would let an operator say 'this IdP may auto-link addresses at corp.example', which is a real convenience for a single-IdP instance and a second trust surface for a two-IdP one. Not needed to close the takeover, so not built.",
+    "the ATProto Connect control needs a handle before the handoff, so it expands an inline field rather than navigating on the first click — a small asymmetry with the OIDC rows that is inherent to the protocol",
+    "an identity for a provider the operator has switched OFF stays listed and unlinkable (asserted), because hiding it would make it invisible and unremovable"
+  ],
+  "unrelated_findings": [
+    {
+      "finding": "a CONFLICTING PR in this repo gets no CI runs at all — not a failure, not a skip, nothing — so `ci-required` never evaluates the head commit and the PR reads as merely 'waiting'",
+      "how_it_surfaced": "three pushes to the meta branch produced zero pull_request workflow runs. `gh run list` showed no cancelled runs and no skipped ones; `gh pr checks` showed only GitGuardian (a third-party app, which does run). `gh pr view --json mergeStateStatus` said CONFLICTING/DIRTY: GitHub cannot build the merge ref, so the pull_request event never fires.",
+      "why_it_matters": "ci-required exists precisely to catch a required lane that NEVER RUNS (its own header says so), but it cannot catch its own absence. A conflicting PR therefore presents as pending-forever rather than as needing a rebase, and the signal that it needs one lives only in mergeStateStatus.",
+      "cause_here": "docs/release-readiness.md — both this slice and the A31 rehearsal (meta #170, merged mid-flight) append a 2026-09-09 section at the end of the file, which is a textbook append-append conflict. The stacked-PR memory already records this file serialising chains.",
+      "resolved": "rebased on origin/main keeping BOTH sections (A31 first, then this one) plus the separating blank line; the PR went CONFLICTING -> MERGEABLE and CI ran on the next push",
+      "recorded_not_fixed": "a possible guard is a scheduled or Stop-hook check that reports any open PR whose mergeStateStatus is DIRTY, since no in-repo workflow can run to report it"
+    }
+  ]
+}
