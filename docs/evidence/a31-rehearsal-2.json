@@ -1,0 +1,101 @@
+{
+  "acceptance": "A31 rehearsal 2 — INT-07: the stray count computed where the component is read, and takedown completeness on the instance's own gateway (vidra-core#223)",
+  "date": "2026-09-09",
+  "verdict": {
+    "INT-07": "PASS (private test network — no real public publication; residual: IPFS Cluster durability unverified). Clause (d) closed by core#221 on merged main and re-measured live (ipfs_rearmed: 5, byte-identical CIDs). Clause (e) ruled on and measured: the health probe runs the ledger<->node comparison itself in every role, so unaccounted_node_pins reaches the api role that serves /admin/system. The rehearsal's third open note — unpinning is not forgetting — now has IPFS_GC_AFTER_UNPIN and a documented default."
+  },
+  "topology": {
+    "core": "one binary BUILT FROM THE ipfs/strays WORKTREE, run twice — VIDRA_ROLE=api on 127.0.0.1:8098, VIDRA_ROLE=worker with no listener; schema 144, dirty=false, migrated from an EMPTY database; STORAGE_BACKEND=local; native PostgreSQL 16.15 on :5452 and Redis db 9 on :6389; no Docker",
+    "frontend": "none — the three clauses re-measured are a component's detail on /admin/system, a gateway HTTP status and a boot refusal; none is a browser question and nothing in #223 touches delivery. The 307 gate, the runtime kill switch, the client fallback and the QoE classification are the first rehearsal's measurements, carried forward",
+    "kubo": "0.40.1, IPFS_PATH under the scratch dir, RPC :5051, gateway :8091, `ipfs daemon --offline --enable-gc=false`, Routing.Type=none, `bootstrap rm --all`, Addresses.Swarm []; daemon says 'Swarm not listening, running in offline mode.'",
+    "declared_lab_settings": [
+      "RATE_LIMIT_ENABLED=false",
+      "MALWARE_SCAN_MODE=disabled",
+      "REGISTRATION_ENABLED=true (owner claim only)",
+      "IPFS_RECONCILE_INTERVAL=20s (default 5m) — declared",
+      "IPFS_HEALTH_PROBE_INTERVAL=20s (default 5m) — the knob under test",
+      "TRANSCODING_MIN_FREE_SCRATCH_MB=512 (0 means the 10 GiB default; this machine had ~6 GiB free)"
+    ],
+    "fixture": "one 3s 160x120 clip, 56 KB, producing five pin classes",
+    "baseline_stray": "1 — `ipfs init -e` leaves the node pinning its own empty-directory root (QmUNLL...), which no ledger row accounts for. Every count starts from it, which is the point: the number is about the node an operator runs",
+    "irreversibility": "nothing published; every CID exists only on this machine"
+  },
+  "comparison_design_and_cost": {
+    "where": "Service.probePublic / probePrivate (health.go), in every process, on IPFS_HEALTH_PROBE_INTERVAL — not inherited from the leader's VerifyPins sweep",
+    "cost_per_process_per_swarm_per_interval": "one pin/ls?type=recursive (bounded by ipfs.Client.ListPins: 16 MiB body, 100k entries, a larger pinset errors) plus one bounded live-CID read (SELECT DISTINCT cid over pinned/pending/unpinning, LIMIT 100001) — roughly 6 MB of transient strings at the cap; two roles list the node twice per interval instead of once",
+    "dedupe": "countStrays is one free function with no logging, called by verifyNetwork (leader) and by strayPins (every process's probe); the repair writes and the single actionable ipfs_stray_pins WARN stay leader-only",
+    "capped_case": "reported ABSENT, not as a floor. A short ledger read leaves live CIDs out of the accounted set, so their node pins are counted as strays: the error runs UPWARD and 'N+' would be a false floor under an over-count. This is the rule verify.go already applied to a truncated pinset",
+    "deviation_from_brief": "the live-CID read is ONE bounded query rather than 500-row keyset pages iterated to completion: paging a DISTINCT set would be ~200 round trips per process per interval instead of one, and the '+' marker the brief suggested is unavailable in the over-count direction"
+  },
+  "SC5_strays_per_role": {
+    "verdict": "PASS",
+    "timeline_utc": [
+      {"t": "15:51:58", "event": "five classes pinned", "api_role_component": "ok, pinned 5, unaccounted_node_pins 1"},
+      {"t": "15:52:34", "event": "ipfs add of an operator's own file"},
+      {"t": "15:53:20", "event": "probe", "api_role_component": "unaccounted_node_pins 2"},
+      {"t": "15:55:14", "event": "the node is killed"},
+      {"t": "15:55:20", "event": "probe", "api_role_component": "down; unaccounted_node_pins ABSENT (never 0) — 6s"},
+      {"t": "15:56:15", "event": "the node is restored"},
+      {"t": "15:56:20", "event": "probe", "api_role_component": "ok, unaccounted_node_pins 2 — 5s"},
+      {"t": "16:02:04", "event": "THE WORKER PROCESS IS STOPPED, then a second ipfs add"},
+      {"t": "16:02:20", "event": "probe", "api_role_component": "unaccounted_node_pins 3 — 16s, with VerifyPins running nowhere in the deployment"}
+    ],
+    "leader_only_logging": "worker log: ipfs_stray_pins network=public count=2 with the full NOTHING WAS REMOVED remedy. api log: ZERO ipfs_stray_pins lines across the whole run",
+    "nothing_removed": "the hand-added file stayed in `ipfs pin ls` and answered 200 on the gateway at the end of the run, including after the automatic collection",
+    "extra_reading": "with the video blocked and pinned=0 the component reads not_configured ('the public mirror has pinned nothing yet, so there is no CID to ask the gateway for') and STILL renders unaccounted_node_pins: 2 — the count rides every arm of the verdict, not only ok",
+    "regression_on_main": "in this process the number was -1 (absent) forever"
+  },
+  "SC6_takedown_completeness": {
+    "verdict": "PASS",
+    "round_1_knob_false": [
+      {"t": "15:57:43", "event": "POST /admin/videos/{id}/block", "result": "204; audit row {\"ipfs_unpinned\": \"5\"}"},
+      {"t": "15:57:47", "event": "check", "result": "all five rows unpinning"},
+      {"t": "15:57:51", "event": "check", "result": "all five unpinned; node recursive pins 7 -> 2"},
+      {"t": "15:57:59", "event": "gateway, all five withdrawn CIDs", "result": "301 (the HLS directory) and 200 x4 — EVERY ONE STILL SERVED"},
+      {"t": "15:58:22", "event": "ipfs repo gc, by hand", "result": "all five -> 404; the still-pinned control CID stays 200"},
+      {"note": "zero ipfs_repo_gc log lines in this round — the knob was off"}
+    ],
+    "round_2_knob_true": [
+      {"t": "15:58:56", "event": "DELETE .../block", "result": "204; audit {\"ipfs_rearmed\": \"5\"} — core#221 on merged main"},
+      {"t": "15:59:08", "event": "drain", "result": "all five pinned; CIDs byte-identical to before the block; gateway serves them again"},
+      {"t": "15:59:26.5", "event": "POST .../block", "result": "204"},
+      {"t": "15:59:28/30/32/34", "event": "gateway", "result": "still 301/200 — the unpins are draining"},
+      {"t": "15:59:36", "event": "gateway", "result": "ALL FIVE 404 — under 10 seconds, with no hand"},
+      {"t": "15:59:35.566", "event": "worker log", "result": "ipfs_repo_gc network=public unpinned=5 blocks_removed=24"}
+    ],
+    "one_collection_per_batch": "exactly one ipfs_repo_gc line in the whole run — the unblock's five re-pins produced none, because the collection is on a batch that unpinned something",
+    "control": "the still-pinned stray CID answered 200 through the automatic collection",
+    "where_the_count_lands": "ipfs_repo_gc is a structured log line carrying unpinned and blocks_removed, not an audit_log row — media_ipfs_pins has no audit writer, the gap the first rehearsal recorded about the mirror's correlation chain. The moderator-facing record is the moderation.video.block audit row with {\"ipfs_unpinned\": \"5\"}",
+    "docs": "docs/operations.md now states the gateway-serves-until-GC fact plainly and names both remedies (IPFS_GC_AFTER_UNPIN, or --enable-gc on the node)"
+  },
+  "SC7_probe_interval": {
+    "verdict": "PASS",
+    "boot": "both processes logged `ipfs health probe started interval=20s`",
+    "consecutive_probed_at_utc": ["15:53:20", "15:53:40", "15:54:00", "15:54:20", "15:54:40"],
+    "refusals": {
+      "5s": "config: IPFS_HEALTH_PROBE_INTERVAL must be at least 10s (got 5s): each probe is a gateway fetch plus one pin/ls per swarm, in every process, so a shorter interval is a load generator rather than a health check; the default is 5m0s",
+      "banana": "config: IPFS_HEALTH_PROBE_INTERVAL must be a duration (e.g. 30s, 5m, 12h): time: invalid duration \"banana\"",
+      "10s": "boots; ipfs health probe started interval=10s"
+    },
+    "refused_not_clamped": "a clamp would leave the env file saying one thing and the process doing another"
+  },
+  "gates": {
+    "vidra-core make ci": "PASS — fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race; 82 packages ok; 'ci: gate passed'",
+    "go vet -tags=integration ./...": "clean",
+    "make test-ipfs-integration-local": "PASS against the lab's offline kubo — 6 proofs including the new TestIntegrationRepoGCRemovesUnpinnedBlocksOnly, which logged 'the unpinned CID is STILL served by this node's own gateway' and 'repo gc removed 14 blocks' before asserting the 404 and the still-pinned control's 200",
+    "meta python3 -m unittest discover -s tests -p '*_test.py'": "48 tests OK",
+    "meta prod compose render": "config -q exits 0; the profiled render carries IPFS_HEALTH_PROBE_INTERVAL: 20s and IPFS_GC_AFTER_UNPIN: \"true\"",
+    "migration": "none",
+    "openapi": "unchanged — the component's detail is a free string map; no contract regeneration, no vidra-user change",
+    "ci": "vidra-core#223 — all checks green (GitGuardian, build-test, ci-required, integration, ipfs-integration, ipfs-private-integration, openapi)"
+  },
+  "unverified": [
+    "IPFS Cluster on either swarm — no ipfs-cluster-service binary; durability beyond a single node is unproven and is the residual named in the status cell",
+    "a real public network — never touched, deliberately",
+    "the private tier's stray count against a real second node (unit-tested against its own client; this lab ran one node)",
+    "a remote or third-party gateway, and Chromium playback — untouched by this change; the first rehearsal's results stand",
+    "the comparison and repo gc at scale — five ledger rows and seven node pins here; the 100k cap and its absent-rather-than-lie behaviour were exercised in unit tests only",
+    "a dead-lettered pin, and the webm / caption pin classes — unchanged from the first rehearsal; dead_lettered read 0 throughout"
+  ],
+  "unrelated_finding": "last_pinned_at drifts forward between page loads: it is rendered as now - last_pinned_age_seconds with the age captured at probe time and now evaluated per request, so two reads of the same probe record five seconds apart report timestamps five seconds apart. Cosmetic; recorded, not fixed."
+}
