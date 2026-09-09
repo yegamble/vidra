@@ -1,9 +1,429 @@
 {
-  "slice": "Auth rehearsal — set-password, no auto-link, link flow, MFA over SSO on real providers",
+  "slice": "Auth rehearsal \u2014 set-password, no auto-link, link flow, MFA over SSO on real providers",
   "date": "2026-09-09",
-  "status": "LAB IN PROGRESS — this file is rewritten with measurements when the run completes",
-  "rows_under_test": {
-    "AUTH-04": "already PASS — the re-run annotates Evidence only",
-    "INT-06": "already PASS — the re-run annotates Evidence only"
-  }
+  "rows": {
+    "AUTH-04": "stays PASS \u2014 Evidence annotated, Status untouched",
+    "INT-06": "stays PASS \u2014 Evidence annotated, Status untouched"
+  },
+  "verdict": {
+    "SC1": "PASS after a core fix this run made (the step-up could not work in any browser before it)",
+    "SC2": "PASS",
+    "SC3": "PASS",
+    "SC4": "PASS, including the three transport negatives",
+    "SC5": "PASS",
+    "SC6": "PASS \u2014 three defects fixed, each RED first; no contract change"
+  },
+  "lab": {
+    "core": "two processes from vidra-core auth/rehearsal (VIDRA_ROLE=api on 127.0.0.1:8088 + a separate VIDRA_ROLE=worker), schema 144",
+    "postgres": "native postgresql@16.15 on 127.0.0.1:55501, socket /tmp/vidra-authreh, initdb'd EMPTY and migrated 0 -> 144 in one run",
+    "redis": "native on 127.0.0.1:56501, flushed at start",
+    "proxy": "Caddy 2.11.4 (brew) on 127.0.0.1:8099 with `log { output file \u2026 format json }` \u2014 /api/v1/* to core, everything else to the frontend",
+    "frontend": "production `next build` standalone (`node .next/standalone/server.js`, never `next start`) on 127.0.0.1:3100, built with NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8099",
+    "one_origin": "everything is http://127.0.0.1:8099 \u2014 vidra_refresh is SameSite=Lax, Path=/api/v1/auth",
+    "browser": "real Chromium via Playwright 1.62.1 (chromium-1234), headless",
+    "mail": "Mailpit container, real SMTP on 127.0.0.1:1025, DEV_MAIL_CAPTURE_ENABLED=false",
+    "flags": {
+      "MFA_KEY_KEK": "set (lab value)",
+      "ATPROTO_KEY_KEK": "set (lab value)",
+      "MALWARE_SCAN_MODE": "disabled",
+      "RATE_LIMIT_ENABLED": "false",
+      "HTTP_IMPORT_ALLOW_PRIVATE_URLS": "true (the ATProto client needs it to reach a loopback PDS; A30 established this)",
+      "ATPROTO_PLC_URL": "http://127.0.0.1:2582 (honoured only because the private-URL knob is on)",
+      "PUBLIC_BASE_URL": "http://127.0.0.1:8099",
+      "STORAGE_BACKEND": "local"
+    },
+    "providers": {
+      "dex": {
+        "product": "Dex 2.45.1 (Homebrew dexidp, Go 1.26.0)",
+        "issuer": "http://127.0.0.1:5556/dex",
+        "storage": "memory",
+        "connector": "enablePasswordDB static",
+        "clients": 1,
+        "users": 6
+      },
+      "evil": {
+        "what": "a ~180-line stdlib-only Go OIDC provider written for this lab",
+        "issuer": "http://127.0.0.1:5599/p/evil",
+        "control": "POST-free /control?email=&verified=&sub= freezes what the NEXT authorization will assert, so one provider name covers the whole collision matrix",
+        "why": "a correct provider cannot be made to assert somebody else's address, which is the attempt this run has to make"
+      },
+      "atproto": {
+        "pds": "@atproto/pds 0.4.107 from npm on http://localhost:2583, dev mode, disk blobstore, no appview, no crawlers",
+        "plc": "a ~60-line loopback did:plc stub on 127.0.0.1:2582 validating with the reference @did-plc/lib (didForCreateOp + assureValidOp + assureValidSig) and serving formatDidDoc, persisted to disk so a restart does not orphan a DID the PDS already created",
+        "handle_shim": "mirror.gcr.io/library/nginx:alpine publishing 127.0.0.1:80 -> the PDS with Host preserved (a handle carries no port, so handle->DID resolution can only hit 80/443)",
+        "handles": "alice/bob/carol/dave .localtest.me \u2014 a public domain that answers 127.0.0.1"
+      }
+    },
+    "no_public_network": "every issuer, JWKS, token endpoint, PDS and redirect URI is a 127.0.0.1 or localhost address. What reached the network: the npm install of the PDS, the nginx pull, DNS for *.localtest.me, and one accidental AWS reachability attempt from a container boot that still had the env template's placeholder S3 credentials (replaced with STORAGE_BACKEND=local immediately)."
+  },
+  "sc1_step_up": {
+    "defect_found": {
+      "symptom": "the whole round trip completes, step_up_tokens holds the row UNSPENT, and POST /auth/me/password/set answers 403 step_up_required \u2014 every run",
+      "mechanism": "a step-up completes as a TOP-LEVEL redirect; that navigation discards the SPA's in-memory access token, so the landing page redeems a new one from the refresh cookie, and Refresh rotates (revokes the session row, creates a new one). The token is bound to (user, session), so the binding is destroyed by the very page load that receives it.",
+      "measured": "the step-up grant at 14:04:49.727 bound session b10959f9\u2026; that session was revoked at 14:04:49.826 and replaced; the set at 14:04:52.908 came from 48160b27\u2026 -> 403, audit auth.password.set failure step_up_required",
+      "why_the_tests_missed_it": "TestStepUpSetPasswordEndToEnd holds one bearer from sign-in and never refreshes in the middle, which no browser can do",
+      "fix": "vidra-core #225 \u2014 carry a LIVE assertion onto the session that replaces the one it was bound to (one new query on the 0144 table; no migration, no OpenAPI change)"
+    },
+    "after_the_fix_password_first": {
+      "account": "dave (ATProto sign-in, passwordless, did-plc-\u2026@atproto.invalid)",
+      "card": "Finish securing your account | You sign in with Bluesky and nothing else. If you lose that account, you lose this one \u2014 there is no password to fall back on. The address on file was generated for you and cannot receive mail, so a reset link has nowhere to go either. | Set a password | A second way in, so this account survives losing the first. | Set a password | Add a real email address | Where a password reset and any security notice can actually arrive. | Add a real email address",
+      "landing_url": "http://127.0.0.1:8099/settings/security?secure=password&step_up=<redacted-32-bytes>",
+      "url_after_history_replaceState": "http://127.0.0.1:8099/settings/security",
+      "row_readback_before_spend": {
+        "raw": "b2cb8a16c46c17b116cd9fe462703af320c2380f17f5c0f56ffbec46501d5c15|3bbba167-f940-4de1-b885-00f8eb99e8e8|62f56ba3-0f20-4178-a857-632139f0a63b|NULL|00:09:59.999871",
+        "shape": "token_hash | user_id | session_id | used_at | expires_at - created_at"
+      },
+      "row_hash_is_the_sha256_of_the_landing_token": true,
+      "ttl": "00:09:59.999871 \u2014 ten minutes",
+      "after_set": "Your password is set. Every other device was signed out; this one stays signed in.",
+      "used_at_after_spend": "2026-09-09 14:49:06.115324-04",
+      "replay_of_the_same_token": {
+        "status": 422,
+        "code": "password_already_set"
+      },
+      "anonymous_password_set": 401,
+      "anonymous_step_up_start": 401,
+      "sessions_active": {
+        "before": "2",
+        "after": "1"
+      },
+      "other_browser_signed_out": true,
+      "audit": "auth.password.set failure @2026-09-09 14:49:08.655154-04 ; auth.password.set success @2026-09-09 14:49:06.373894-04 ; auth.password.set success @2026-09-09 14:16:28.49732-04",
+      "password_login_after": {
+        "status": 200,
+        "has_token": true
+      },
+      "unlink_last_method": {
+        "status": 204
+      },
+      "identities_after_unlink": "0"
+    },
+    "email_first_order": {
+      "account": "carol (ATProto sign-in)",
+      "landing": "http://127.0.0.1:8099/settings/security?secure=email&step_up=<redacted>",
+      "row_before_spend": "0eb595fffd14cf3f7fe7b4eba341b25194be0a2cb013ef83dfcc466a687152fd|NULL|00:09:59.999775",
+      "row_hash_matches": true,
+      "used_at_after_spend": "2026-09-09 14:15:54.745477-04",
+      "ui": "Confirm the change from the message we sent to carol-real@lab.test. Your address does not move until that link is used.",
+      "mail": [
+        {
+          "to": "carol-real@lab.test",
+          "subject": "Confirm your new email address on Auth"
+        }
+      ],
+      "confirm_link_path": "http://127.0.0.1:8099/email-change/confirm",
+      "confirm_page": "Skip to content | Auth | \u2318K | Create | C | Home | Trending | Subscriptions | Library | History | Messages | Studio | About | Collapse | Auth | Confirm email change | Your email address is now carol-real@lab.test. We told your previous address about the change. | Back to security settings | Powered by Vidra",
+      "email_after_confirm": "carol-real@lab.test verified=true",
+      "then_the_password": "Your password is set. Every other device was signed out; this one stays signed in.",
+      "final": "carol-real@lab.test verified=true has_password=true",
+      "card_after_both": "(card gone \u2014 nothing left to prompt)"
+    },
+    "second_defect_found": {
+      "symptom": "on the account that took the PASSWORD row first, the card's email row 422s password_already_set forever \u2014 a step-up is a substitute for a password, so core refuses one once a password exists",
+      "measured": "alice, password set first: auth.email_change.request failure password_already_set, and the message the user got was about 'setting a new first password' on a form about an email address",
+      "fix": "vidra-user #212 \u2014 the card names the ordinary Change-email control instead of offering a challenge whose result cannot be spent",
+      "verified_after": {
+        "card": "Finish securing your account | Your account has a password, but no address we can reach. If you forget it, no reset link can be sent \u2014 the address on file was generated for you and cannot receive mail. | Add a real email address | Now that this account has a password, change the address in Email address below and confirm it with that password. A provider sign-in cannot authorise this once a password exists.",
+        "step_up_buttons_on_the_email_row": 0,
+        "the_named_door_works": "sent \u2014 the address on file was generated for you and cannot receive mail.",
+        "email_after": "alice-real@lab.test verified=true",
+        "card_final": "(card gone \u2014 nothing left to prompt)"
+      }
+    },
+    "third_defect_found": {
+      "symptom": "the confirmation page said 'We told your previous address about the change' when the previous address was the unroutable placeholder and core had correctly SKIPPED that notice",
+      "measured": "no such message reached Mailpit; the only mail at the placeholder is the deliberate 'your password was changed' attempt",
+      "fix": "vidra-user #212",
+      "verified_after": "Your email address is now alice-real@lab.test. Your previous address was generated for you and cannot receive mail, so no notice was sent to it.",
+      "mail_at_the_placeholder": [
+        "Your password on Auth was changed"
+      ]
+    }
+  },
+  "sc2_collision_matrix": [
+    {
+      "attempt": "no local account with that address (newcomer@lab.test)",
+      "answer": "account created + signed in",
+      "landed": "http://127.0.0.1:8099/",
+      "callback_redirect": "http://127.0.0.1:8099/",
+      "session": true,
+      "users_delta": 1,
+      "identities_delta": 1
+    },
+    {
+      "attempt": "a provider-created account, re-login by the SAME subject",
+      "answer": "login, same account",
+      "users_delta": 0,
+      "identities_delta": 0,
+      "landed": "http://127.0.0.1:8099/"
+    },
+    {
+      "attempt": "an existing PASSWORD account's address, email_verified: true",
+      "answer": "email_conflict",
+      "callback_redirect": "http://127.0.0.1:8099/login?oauth=1&oauth_error=email_conflict",
+      "session": false,
+      "users_delta": 0,
+      "identities_delta": 0,
+      "page": "Skip to content | Auth | Sign in to Auth | An account here already uses that email address. Sign in with your password and connect this provider from Settings \u203a Connected logins. | Email or username |"
+    },
+    {
+      "attempt": "a SECOND provider asserting the instance OWNER's address, email_verified: true",
+      "answer": "email_conflict",
+      "callback_redirect": "http://127.0.0.1:8099/login?oauth=1&oauth_error=email_conflict",
+      "session": false,
+      "users_delta": 0,
+      "identities_delta": 0,
+      "page": "Skip to content | Auth | Sign in to Auth | An account here already uses that email address. Sign in with your password and connect this provider from Settings \u203a Connected logins. | Email or username |"
+    },
+    {
+      "attempt": "the same, email_verified: false",
+      "answer": "email_conflict",
+      "callback_redirect": "http://127.0.0.1:8099/login?oauth=1&oauth_error=email_conflict",
+      "session": false,
+      "users_delta": 0,
+      "identities_delta": 0
+    },
+    {
+      "attempt": "a DIFFERENT provider asserting a provider-created account's address",
+      "answer": "email_conflict",
+      "callback_redirect": "http://127.0.0.1:8099/login?oauth=1&oauth_error=email_conflict",
+      "session": false,
+      "users_delta": 0,
+      "identities_delta": 0,
+      "page": "Skip to content | Auth | Sign in to Auth | An account here already uses that email address. Sign in with your password and connect this provider from Settings \u203a Connected logins. | Email or username |"
+    }
+  ],
+  "sc2_notes": {
+    "provider_created_account": "newcomer newcomer@lab.test verified=true",
+    "owner_after_the_takeover_attempt": "labowner role=admin is_owner=true verified=false",
+    "owner_identity_rows": "0",
+    "verified_and_unverified_answers_byte_identical": true,
+    "audit": "auth.login failure oauth_email_conflict ; auth.login failure oauth_email_conflict ; auth.login failure oauth_email_conflict ; auth.login failure oauth_email_conflict ; auth.login failure oauth_email_conflict ; auth.login failure oauth_email_conflict ; auth.login failure oauth_email_conflict ; auth.login failure oauth_email_conflict",
+    "auth.oauth.link_success_rows_from_a_collision": "0"
+  },
+  "sc3_link_matrix": [
+    {
+      "attempt": "Connect from settings, subject unlinked",
+      "answer": "link=dex",
+      "landed": "http://127.0.0.1:8099/settings"
+    },
+    {
+      "attempt": "a second account connects a different Dex user",
+      "answer": "link=dex"
+    },
+    {
+      "attempt": "signed in, a LOGIN flow as another account's Dex subject",
+      "answer": "oauth_error=identity_belongs_to_another_account",
+      "account_before": "linkme",
+      "account_after": "linkme",
+      "identities_delta": 0,
+      "landed": "http://127.0.0.1:8099/login"
+    },
+    {
+      "attempt": "signed in, a LOGIN flow with an UNLINKED subject (its own address, the one refused at login)",
+      "answer": "?link=dex",
+      "account_before": "pwcollide",
+      "account_after": "pwcollide",
+      "landed": "http://127.0.0.1:8099/"
+    },
+    {
+      "attempt": "start, this account already has an identity for this provider",
+      "answer": "{\"status\":422,\"body\":{\"error\":{\"code\":\"provider_already_linked\",\"message\":\"that provider is already connected to this account \u2014 disconnect it before connecting a different one\",\"request_id\":\"bdslAOyug"
+    },
+    {
+      "attempt": "start, anonymous",
+      "answer": 401
+    },
+    {
+      "attempt": "start, unknown provider name on an instance that HAS providers",
+      "answer": 404
+    },
+    {
+      "attempt": "ATProto start, that handle's DID is linked to another account",
+      "answer": "409 identity_belongs_to_another_account"
+    },
+    {
+      "attempt": "ATProto start, an unlinked handle",
+      "answer": "200 + authorization_url"
+    }
+  ],
+  "sc3_notes": {
+    "connected_logins_before": "Connected logins | External accounts you can use to sign in here. | Dex | Not connected | Connect | Evil | Not connected | Connect | Bluesky | Not connected | Connect",
+    "connected_logins_after": "Connected logins | External accounts you can use to sign in here. | Dex | connector@lab.test \u00b7 linked 9/9/2026 | Unlink | Evil | Not connected | Connect | Bluesky | Not connected | Connect",
+    "login_page_copy_on_the_refusal": "Skip to content | Auth | Sign in to Auth | That provider account belongs to a different account here. Sign out first, then sign in with it. | Email or username | Password | Forgot your password? | Sign in | or | Continue with Dex | Continue with Evil | Continue with Bluesky | No account? Create one | Powered by Vidra",
+    "email_verified_set_when_the_provider_verified_the_account's_own_address": "t",
+    "audit": "auth.oauth.link failure identity_belongs_to_another_account ; auth.oauth.link success oauth:dex ; auth.oauth.link failure identity_belongs_to_another_account ; auth.oauth.link success oauth:dex ; auth.oauth.link success oauth:dex"
+  },
+  "sc4_mfa_over_sso": {
+    "setup": {
+      "account": "mfauser (password + TOTP enrolled, sealed under MFA_KEY_KEK)",
+      "identities": "atproto,dex"
+    },
+    "dex_landing_navigation": [
+      "http://127.0.0.1:8099/login?mfa=required"
+    ],
+    "session_minted_at_landing": false,
+    "vidra_mfa_pending": {
+      "path": "/api/v1/auth/mfa/challenge",
+      "httpOnly": true,
+      "sameSite": "Lax",
+      "secure": false,
+      "ttl_s": 297,
+      "value_len": 275
+    },
+    "challenge_ui": "Skip to content | Two-factor authentication | Enter the 6-digit code from your authenticator app. | Verify code | Use a recovery code instead | Back to sign in | Powered by Vidra",
+    "challenge_request_bodies": [
+      "{\"code\":\"632840\",\"cookie_mode\":true}"
+    ],
+    "body_carries_no_token": true,
+    "session_after_challenge": true,
+    "pending_cookie_after_challenge": "cleared",
+    "who": "mfauser",
+    "recovery_code_path": {
+      "landing": "http://127.0.0.1:8099/login",
+      "after": "http://127.0.0.1:8099/",
+      "session": true
+    },
+    "wrong_code_then_retype": {
+      "after_wrong": {
+        "message": [
+          "Enter the 6-digit code from your authenticator app.",
+          "That code didn't work, or this sign-in attempt has expired. Enter a fresh code, or go back and sign in again.",
+          "Verify code"
+        ],
+        "cookie_kept": true,
+        "session": false
+      },
+      "after_retype": {
+        "url": "http://127.0.0.1:8099/",
+        "session": true,
+        "bodies": [
+          "{\"code\":\"000000\",\"cookie_mode\":true}",
+          "{\"code\":\"501359\",\"cookie_mode\":true}"
+        ]
+      }
+    },
+    "atproto_landing": {
+      "cookie": {
+        "path": "/api/v1/auth/mfa/challenge",
+        "httpOnly": true
+      },
+      "session_at_landing": false,
+      "after_challenge": {
+        "url": "http://127.0.0.1:8099/",
+        "session": true
+      }
+    },
+    "audit": "auth.mfa.challenge success totp ; auth.login failure mfa_required ; auth.mfa.challenge failure invalid_code ; auth.mfa.challenge failure invalid_code ; auth.login failure mfa_required ; auth.mfa.challenge success recovery_code ; auth.login failure mfa_required ; auth.mfa.challenge success totp",
+    "transport_proof": {
+      "token_length": 275,
+      "caddy_access_log_hits": "0",
+      "core_api_log_hits": "0",
+      "frontend_server_log_hits": "0",
+      "dex_log_hits": "0",
+      "referers_carrying_the_token": 0,
+      "browser_history_entry_carrying_the_token": false,
+      "cookie_header_as_the_proxy_logs_it": "\"Cookie\":[\"REDACTED\"]",
+      "the_contrast_the_lab_gives_for_free": "the SAME access log carries step_up=<token> inside Referer headers, because the step-up deliberately rides in the query. The two designs are visible side by side in one file.",
+      "referer_sample": [
+        "\"Referer\":[\"http://127.0.0.1:8099/settings/security?secure=email&step_up=<redacted-32-bytes>\"]",
+        "\"Referer\":[\"http://127.0.0.1:8099/settings/security?secure=email&step_up=<redacted-32-bytes>\"]",
+        "\"Referer\":[\"http://127.0.0.1:8099/settings/security?secure=password&step_up=<redacted-32-bytes>\"]"
+      ]
+    }
+  },
+  "sc5_negatives": [
+    {
+      "attempt": "GET /auth/oauth/dex (begin)",
+      "answer": 302,
+      "location_host": "http://127.0.0.1:5556/dex/auth?client_id=vidr"
+    },
+    {
+      "attempt": "callback with NO state cookie",
+      "answer": 400,
+      "code": "bad_request"
+    },
+    {
+      "attempt": "callback with a TAMPERED state cookie",
+      "answer": 400,
+      "code": "bad_request"
+    },
+    {
+      "attempt": "right cookie, WRONG state parameter",
+      "answer": 400,
+      "code": "bad_request"
+    },
+    {
+      "attempt": "right cookie, state parameter MISSING",
+      "answer": 400,
+      "code": "bad_request"
+    },
+    {
+      "attempt": "POST /auth/atproto/start",
+      "answer": 200,
+      "sealed": true
+    },
+    {
+      "attempt": "atproto callback with NO state cookie",
+      "answer": 400,
+      "msg": null
+    },
+    {
+      "attempt": "atproto callback with a TAMPERED state cookie",
+      "answer": 400,
+      "msg": null
+    },
+    {
+      "attempt": "password login on an MFA account",
+      "answer": 200,
+      "mfa_required": true,
+      "session": false
+    },
+    {
+      "attempt": "challenge with a fresh code",
+      "answer": 200,
+      "session": true
+    },
+    {
+      "attempt": "the SAME code again, on a new challenge (TOTP burn)",
+      "answer": 401,
+      "code": "unauthorized"
+    },
+    {
+      "attempt": "a tampered mfa_token",
+      "answer": 401,
+      "code": "unauthorized"
+    },
+    {
+      "attempt": "a challenge with neither a body token nor the cookie",
+      "answer": 422,
+      "code": "unprocessable_entity"
+    }
+  ],
+  "sc5_config_refusals": {
+    "OAUTH_PROVIDERS unset: begin": "503 oauth_not_configured (A05 measured 404)",
+    "OAUTH_PROVIDERS unset: instance.oauth_providers": "[]",
+    "providers configured, unknown name: begin": "404 not_found 'unknown oauth provider'",
+    "ATPROTO_LOGIN_ENABLED=false: POST /auth/atproto/start": "503 atproto_disabled",
+    "ATPROTO_LOGIN_ENABLED=false: POST /auth/step-up/start {provider: atproto}": "503 atproto_disabled",
+    "ATPROTO_LOGIN_ENABLED=false: POST /auth/atproto/link/start": "503 atproto_disabled",
+    "a WRONG MFA_KEY_KEK: password login": "200 mfa_required, no session",
+    "a WRONG MFA_KEY_KEK: challenge with a correct code": "401 'invalid code' \u2014 parity, not a 500; audit auth.mfa.challenge failure secret_undecryptable, plus a boot WARN naming the restore-without-the-config-archive cause",
+    "a WRONG MFA_KEY_KEK: recovery code": "200 + session \u2014 recovery codes are hashed, not sealed, exactly as the recovery-hardening slice promises"
+  },
+  "env_file": {
+    "render_without_the_file": "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file <filled> config -q \u2014 clean",
+    "render_with_the_file": "clean, and with --profile core --profile worker --profile frontend the rendered api AND worker environments each carry OAUTH_PROVIDERS + OAUTH_DEX_ISSUER/_CLIENT_ID/_CLIENT_SECRET/_SCOPES \u2014 five keys where A05 measured one",
+    "lab_note": "the worker sits behind the `worker` profile, not `core`: a render with only --profile core --profile frontend contains no worker service at all, and reading 'the worker has no OAUTH keys' out of it would be wrong",
+    "container_boot_with_the_file": "ghcr.io/yegamble/vidra-core:v0.6.2 through `docker compose \u2026 run --rm --no-deps api`: 'oauth provider configured provider=dex issuer=https://sso.example.org/dex', then 'http server starting', and GET /api/v1/instance answers oauth_providers: [\"dex\"]",
+    "container_boot_without_the_file": "the same command, same env file, file moved aside: fatal 'config: OAUTH_DEX_ISSUER must be a valid http(s) URL / OAUTH_DEX_CLIENT_ID is required / OAUTH_DEX_CLIENT_SECRET is required' \u2014 exactly the A05 failure",
+    "gitignore": "vidra-core/.gitignore:78 env/*.env \u2014 `git check-ignore -v env/oauth.env` confirms the filled file cannot be committed"
+  },
+  "not_proven": [
+    "any hosted IdP (Google/Okta/Entra quirks: audience arrays, email_verified as a string, id_token algorithms other than RS256)",
+    "an https PUBLIC_BASE_URL, so neither a production redirect-URI registration nor the ATProto hosted client-metadata client was exercised (unchanged from A05/A30)",
+    "provider-initiated or back-channel logout \u2014 vidra implements none",
+    "delivery failure to the .invalid placeholder: Mailpit accepts every recipient, so the 'this address can never receive mail' claim is architectural here, not measured",
+    "the container boot used the v0.6.2 release image (the newest one on this machine), so it proves env_file DELIVERY and the boot gate, not this branch's code in a container"
+  ]
 }

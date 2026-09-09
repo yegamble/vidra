@@ -100,7 +100,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | AUTH-01 Owner claim is exclusive, one-time and grants admin | C U M | `auth/ownerclaim.go`, `e2e-backed/owner-claim.spec.ts`, setup routes | UNVERIFIED | Before claim all signup methods refuse; valid boot token claims once; restart invalidates old token; race two claims; admin/system succeeds only for claimant | INS-05 → A04 |
 | AUTH-02 Registration, approval, login, logout and session refresh persist | C U | Auth service/routes; backed auth-persistence/session/registration-approval tests; approval opt-in | UNVERIFIED | Open/closed/approval registration with two users; accept/reject; expiration/refresh/revoke; reload and multi-tab/logout; rejected credentials never create sessions | AUTH-01 → A04 |
 | AUTH-03 Email verification and password recovery deliver real mail | M C U | `internal/mail/smtp.go`; live evidence `a05-mail-totp` (disposable Mailpit, capture seam OFF, browser link redemption, expiry/reuse, measured enumeration, four SMTP modes, disabled- and broken-mail UX) | PASS | Disposable SMTP sink + browser token redemption, expiry/reuse and enumeration behavior; then operator-selected SMTP delivery and disabled-mail UX | Provider-agnostic: proven over plain SMTP and over STARTTLS-required + AUTH PLAIN with a trusted CA. Two defects fixed (no redeemable link in any token message; reset was an account-existence oracle with the relay down) → A05 |
-| AUTH-04 TOTP enrollment, recovery and removal; OAuth/OIDC login/link/unlink | C U M | Core auth/MFA/OAuth routes; live evidence `a05-mail-totp` (TOTP half: KEK ciphertext at rest, enrollment, second login step in Chromium, recovery codes, limiter, password-gated removal) and `a05-oidc` (OIDC half: Dex 2.45.1 fixture, begin parameters, state/nonce/PKCE + id_token matrices, email collision, link/unlink, outage) | **PASS (TOTP + OIDC on a local Dex fixture; selected provider deferred)** | TOTP second login/recovery/revoke; local OIDC provider callback/state/PKCE, account collision and unlink-last-method policy; never substitute a precreated identity for login | OIDC half proven 2026-09-09 against Dex 2.45.1 plus a hostile-provider fixture: S256 PKCE + nonce + signed single-use state, every state/nonce/iss/foreign-key/replay case refused with no session, verified-email collision links without a second account, unverified refused, unlink-last-method 422 whose password-reset remedy actually works. No hosted IdP and no https redirect URI were exercised. Open, needing rulings: the second factor does NOT apply to a provider login (measured side by side on one account — the MFA gate lives only in the password path); any configured provider can claim any local account by asserting its email verified (a second provider signed in as the owner); there is no link-from-settings and the callback is session-blind; enabling a provider still needs a hand edit to the api compose environment map. TOTP-half notes are superseded by §Auth hardening (2026-09-07); `OAUTH_PROVIDERS` is now fully documented in the env template (verified 2026-09-09); **trust model hardened 2026-09-09**: a provider-asserted email links nothing (subject-only matching, so neither the owner nor a provider-created account can be claimed by a second IdP), the second factor applies to provider sign-ins over a Path-scoped httpOnly `vidra_mfa_pending` cookie with only `?mfa=required` in the URL, link-from-settings exists (`/auth/oauth/{provider}/link/start`, `/auth/atproto/link/start`) and a login callback inside a live session links or refuses instead of switching accounts, and the per-provider variables reach api and worker through an optional `env/oauth.env` env_file — code+CI only, the Dex lab is the re-run → A05 OIDC, §Auth trust |
+| AUTH-04 TOTP enrollment, recovery and removal; OAuth/OIDC login/link/unlink | C U M | Core auth/MFA/OAuth routes; live evidence `a05-mail-totp` (TOTP half: KEK ciphertext at rest, enrollment, second login step in Chromium, recovery codes, limiter, password-gated removal) and `a05-oidc` (OIDC half: Dex 2.45.1 fixture, begin parameters, state/nonce/PKCE + id_token matrices, email collision, link/unlink, outage) **Re-run 2026-09-09** — §Auth rehearsal, evidence `auth-rehearsal.json`: one lab with Dex 2.45.1, a hostile stdlib provider and a reference PDS behind a real logging Caddy proxy. The takeover is GONE (the second provider asserting the owner's address verified → `email_conflict`, no session, no identity row, owner untouched, zero `auth.oauth.link success` rows), the verified/unverified answers are byte-identical, Connect-from-settings completes a real Dex round trip (`?link=dex`), a signed-in browser starting a login flow as another account's subject is refused (`identity_belongs_to_another_account`) with the account unchanged, and the second factor now applies to BOTH Dex and ATProto sign-ins over a `Path=/api/v1/auth/mfa/challenge` httpOnly `vidra_mfa_pending` cookie — the token appears in 0 proxy access-log lines, 0 `Referer` headers and 0 browser history entries, and the challenge body carries no token. `OAUTH_PROVIDERS` unset now answers 503 `oauth_not_configured` (was 404); a wrong `MFA_KEY_KEK` is 401 parity with recovery codes still working; the `env/oauth.env` env_file delivers five keys to api AND worker in the render and boots a container that answers `oauth_providers: ["dex"]`. | **PASS (TOTP + OIDC on a local Dex fixture; selected provider deferred)** | TOTP second login/recovery/revoke; local OIDC provider callback/state/PKCE, account collision and unlink-last-method policy; never substitute a precreated identity for login | OIDC half proven 2026-09-09 against Dex 2.45.1 plus a hostile-provider fixture: S256 PKCE + nonce + signed single-use state, every state/nonce/iss/foreign-key/replay case refused with no session, verified-email collision links without a second account, unverified refused, unlink-last-method 422 whose password-reset remedy actually works. No hosted IdP and no https redirect URI were exercised. Open, needing rulings: the second factor does NOT apply to a provider login (measured side by side on one account — the MFA gate lives only in the password path); any configured provider can claim any local account by asserting its email verified (a second provider signed in as the owner); there is no link-from-settings and the callback is session-blind; enabling a provider still needs a hand edit to the api compose environment map. TOTP-half notes are superseded by §Auth hardening (2026-09-07); `OAUTH_PROVIDERS` is now fully documented in the env template (verified 2026-09-09); **trust model hardened 2026-09-09**: a provider-asserted email links nothing (subject-only matching, so neither the owner nor a provider-created account can be claimed by a second IdP), the second factor applies to provider sign-ins over a Path-scoped httpOnly `vidra_mfa_pending` cookie with only `?mfa=required` in the URL, link-from-settings exists (`/auth/oauth/{provider}/link/start`, `/auth/atproto/link/start`) and a login callback inside a live session links or refuses instead of switching accounts, and the per-provider variables reach api and worker through an optional `env/oauth.env` env_file — code+CI only, the Dex lab is the re-run → A05 OIDC, §Auth trust |
 | AUTH-05 Profile/privacy, email/password changes, deactivation/deletion and account archive | C U S | Backed profile-edit/deactivate/delete-account/account-export; core account and search deletion hooks; live evidence `a12-profile-archive` (profile/privacy + archive round trip), `a12-deletion` (deactivation/deletion with content, DM retention, media cleanup, search hook), `a12-password-change` (password change with re-verification, on session-bound access tokens) and `a12-email-change` (two-step email change with re-verification over real SMTP) | PASS | Mutate profile/unlisted/email/password with re-verification, export and import supported archive; delete/deactivate with content, sessions, follows and search history; verify recipient DM retention policy and media cleanup | AUTH-02, SRC-02 → A12 |
 | PUB-01 Create channel and draft; upload a real file within quota | C U M | `internal/video`, upload routes; backed upload/studio/channel-management; live browser channel/draft/real-upload/quota/durability proof (A06 evidence L560–568) | PASS | Browser-create channel/draft; upload generated audiovisual clip; inspect original metadata, owner quota accounting and durable state; deny nonowner/overquota/invalid input | AUTH-02 → A06 |
 | PUB-02 Resumable upload, cancel, draft recovery and batch publishing | C U | W2 plans; backed upload-draft-recovery/upload-cancel/upload-batch | PASS | Interrupt network and restart service between chunks; resume without duplicate files/charges; recover draft on another session; cancel cleanup; partial batch failure retained | PUB-01 → A10 |
@@ -137,7 +137,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | INT-03 Manual captions and Whisper generation/review | M C U | Caption routes/CaptionsManager; backed captions/whisper-captions opt-in; live evidence `a28-captions-scan` (section "A28 captions, Whisper and ClamAV lanes — 2026-09-08") on a two-process core with real Chromium: manual VTT create/edit-by-re-upload/list/delete with the object sha changing over the same key, a second language, typed 422s for a non-WebVTT body and a malformed tag, `PUT`/`PATCH` still 405, and an owner-only matrix in which even the admin gets 404 while anonymous reads of a public video's track are 200; both tracks render on the watch page as same-origin `blob:` `<track>` with the right `srclang`/`label` and three real cues; and a REAL local whisper.cpp 1.9.2 `/inference` endpoint drove audio→job→an editable `Auto-generated` caption (12 s end to end from the Studio button), with a measured 1-then-2-minute retry ladder, a dead-letter at attempt 5 that wrote no caption, the compile-time 10-minute timeout firing exactly on time against a stalling endpoint and recovering on the next attempt, and the disabled split proved on both halves (403 `feature_disabled` with the control hidden, 503 `auto_captions_not_configured` when the admin toggle is on without an endpoint) | PASS | Manual VTT CRUD, watch track and language; configured Whisper audio→job→editable caption; outage/timeout and unsupported language; owner-only access | PUB-03 → A28. Evidence is **whisper.cpp 1.9.2 with `ggml-tiny.bin` — a real implementation of the contract core speaks, but the SELECTED endpoint, model size and capacity are DEFERRED**, so nothing here bounds transcription latency or cost at production scale. Findings, none blocking: there is no caption *editor* — the shipped edit path is re-uploading the language, and `UpsertCaption` keeps the original `created_at` with no `updated_at`, so nothing distinguishes an edited track from an untouched one; one click on Studio's "Generate automatically" silently replaced a creator's hand-written `en` track with the machine transcript, no warning and no undo; the Whisper round-trip bound is a compile-time 10 minutes with no knob; `caption_generate` rows reach `job_runs` through migration 0083's trigger but carry empty `correlation_id`/`request_id`/`actor_id` on 4 of 4 rows where `upload_finalize` and `video_transcode` are stamped on 2 of 2; a well-formed unknown tag (`zz`) passes Vidra's validator and **aborts whisper.cpp**, so any creator can kill a shared transcription service; and the client ignores the response's own `language`, so an English transcript is stored under whatever tag was asked for. A17's note that this 503 is a bare `echo.NewHTTPError` is **stale** — it is typed and its sentence survives the scrubber |
 | INT-04 ClamAV scanning actually gates all ingestion | M C U | Scanner service; scan profile; uploads/imports/DM hooks and config policy; live evidence `a28-captions-scan` (section "A28 captions, Whisper and ClamAV lanes — 2026-09-08") against a REAL clamd 1.5.4 with a real 3.6 M-signature database: a benign upload published while a standard EICAR body was refused on the resumable-upload path, the URL-import path and the DM path (the DM half re-cited from A14 and re-run here for one request — 422 `attachment failed the malware scan`, zero rows, zero blobs); all three fail policies measured with the daemon actually stopped (`fail-closed` fails both ingestion paths, `quarantine` parks the upload in the moderation queue, `fail-open` publishes unscanned); boot refuses `MALWARE_SCAN_ENABLED=true` with an empty `CLAMAV_ADDR`; and `/admin/system` now carries a `clamav` component that reads `ok`, then `down` with the instance `degraded` and a sentence naming both the consequence and the policy in force | PASS | Disposable scanner: benign file, standard EICAR fixture, unavailable scanner, approved fail policy; never publish/link rejected bytes; test URL and DM paths as well as upload | PUB-01 → A28. Two defects fixed on the way (vidra-core #198): an INFECTED verdict failed the video but **kept its `video_files` row and its bytes**, so `GET /videos/{id}/download` advertised the rejected original and `/download/original` served it 200 `video/mp4` to the owner AND to an admin on both ingestion paths — the "never link rejected bytes" clause, with the link live; and `/admin/system` had **no scanner component at all**, so a dead clamd left it reporting `"status":"ok"` across nine healthy components while every upload and import was landing in `failed`. Rejected bytes now live **nowhere** — no quarantine store, no retention, the audit row is the whole record. Findings that need a ruling, none blocking: a malware rejection is **invisible to the creator** (the upload session settles `completed` with an empty `failure_reason`, the import job settles `done` with no error, Studio shows a bare `FAILED` badge beside a `quarantined` video that gets a full sentence); `fail-open` publishing unscanned media leaves **no audit row**, only a WARN log line; and **`MALWARE_SCAN_ENABLED` defaults to false**, so out of the box nothing is scanned, with no boot warning and no log line — the only honest surface is `/admin/infrastructure`'s prose. EICAR is a whole-file signature (a real mp4 with it appended scans clean), so this lane proves the gate, not clamd's detection depth. The SELECTED scanner deployment is DEFERRED (a throwaway host daemon, not the packaged one), S3 was not exercised, and thumbnails/storyboards/avatars/account-import archives were not probed for a scan seam |
 | INT-05 ActivityPub remote discover/follow/accept/video/comment/delete/moderation | M C U | Federation service/integration tests; user federation queues; live evidence `a29-federation` (section "A29 ActivityPub — two isolated instances — 2026-09-08"): two isolated instances, each a two-process core with its own database, Redis index, storage root and origin, federating over plain HTTP with `FEDERATION_ENABLED=true` and a sealed actor KEK on both — signed `Follow` accepted and rejected through the admin queue with the wrong-actor matrix, `Create`/`Update`/`Delete{Video}` fanned out and applied, an inbound federated comment created, edited and retracted, instance mute and instance block separated on a per-surface matrix, the full 30 s→60→120→240→480 ladder to a dead letter at attempt 6 with no duplicate ingestion on recovery, and a real Chromium walk of the follower's feed and remote watch page; RE-RUN live evidence `a29-rehearsal` (section "A29 rehearsal — two instances against the merged remediation — 2026-09-08"): the same two-instance topology at schema 140 on the merged remediation, this time behind a REAL Caddy reproducing `deploy/Caddyfile` §3a, with Chromium decoding 143 frames of the origin's HLS on the follower's remote watch page (`Access-Control-Allow-Origin: *` on all eight media responses, zero CORS errors), the `Create`-then-`Update` ordering read off the two payloads, the AP negotiation table measured through the edge (200 AS / 304 / 406 at the api / 404 private / 410 + Tombstone), a remote URL deduped with zero outbound fetches, the mirrored thread created, edited and retracted from the origin, the block/unblock matrix with an `federation.inbox.rejected` audit row, and the 30→60→120→240 ladder delivering exactly once on recovery; RE-RUN 4 live evidence `a29-rehearsal-4` (section "A29 rehearsal 4 — the block that speaks, resumed comments, safe renames — 2026-09-09"): the same two-instance topology rebuilt from EMPTY at schema 143 on merged `main` (core #215/#216 and user #205/#206 all landed), behind the same real Caddy — the Reject timeline above, the resume table, the rename table stepped through 141 → 0142 → 0143 on a REAL seeded collision, 150 decoded frames of the origin's HLS on B's remote watch page with `Access-Control-Allow-Origin: *` on all eight media responses and zero CORS errors, the negotiation table through the edge including a `410` Tombstone with `no-store` and no ETag, the account-scoped block matrix with BOTH admin audit rows now persisting, the mirrored thread threaded at depth 2 in the data and on the page, the 30→60→120→240 ladder delivering exactly once on recovery, F4 for videos at one row, and 77/77 deliveries carrying a request id | **PASS (two-instance lab; residuals: F8 authoring, third-instance thread parents, signed fetch, MIG-06 identity clause)** — flipped on the FOURTH run (section "A29 rehearsal 4 — the block that speaks, resumed comments, safe renames — 2026-09-09"), which measured every clause the follow-ups section left UNVERIFIED and found none of them wanting: a `Follow` from a blocked instance answered 202 + one `federation.inbox.rejected` row AND a signed `Reject` delivered into the sender's inbox while the block still stood (the sender's row `rejected`, re-arming to `pending` with a fresh Follow id on re-follow), a six-row silence table proving a block speaks for exactly that one activity, a comment `Create` cancelled inside a block window resumed and arriving EXACTLY ONCE on the follower while a deleted comment's and a privated video's stayed cancelled, `/admin/system` reporting them `cancelled_by_policy` and not dead-lettered, and 0143's renames landing on `creatora_channel`/`creatorb_channel` — names `POST /channels` accepts — with `/channels/<old>` and `/channels/<interim>` both 301, the ActivityPub ids unmoved and B following the Group at the frozen id | Two isolated instances: signed inbox/outbox, approved/rejected follow, new/update/delete videos, reply, block server/account, remote URL; source identity after migration | INS-05, ADM-02 → A29. What PASSES: discovery (WebFinger + actor documents), signed inbox with unsigned/tampered/spoofed-actor/stolen-keyId all refused and logged, approved AND rejected follow with `Accept`/`Reject` delivered both ways, new/update/delete videos with private and unlisted producing ZERO activities, an inbound reply with its edit and its `Delete`, server block vs mute, the retry ladder and dead letter. What FAILS, each clause: (1) **playback and posters do not federate** — the outbound AS `Video` emits no `icon`, no `duration` and only a watch-page `url`, while the ingest parses all three, so a follower stores a title, a description and a link and its remote watch page renders no `<video>` at all; emitting a stream link additionally needs a CORS ruling, since the origin's media carries no `Access-Control-Allow-Origin`. (2) **`block account` does not exist** — `/me/blocks/{id}` and `/me/mutes/accounts/{id}` take a LOCAL user UUID and `muted_accounts.muted_id` is a `users` FK, so the finest control against a remote person is blocking their whole instance. (3) **`remote URL` resolves an actor but never a video** — the AP object id is not dereferenceable as ActivityPub (`/videos/{uuid}` with `Accept: application/activity+json` answers 200 with frontend HTML), and `ResolveSearchTarget` never consults the already-stored `remote_videos` row by `object_url` before fetching. Also measured, not blocking the verdict: a follower instance stores NO federated comments (it receives `Create{Note}` and drops every one, since `inReplyTo` must resolve to a LOCAL video); a blocked instance's refused activity is answered 202 and never redelivered after the unblock; a cancelled `Undo` leaves the remote with a ghost follower; and the REST channel follower count excludes remote followers, so a creator with three federated followers reads zero. **Source identity after migration is UNVERIFIED and MIG-06-dependent** — it needs actor-`id` continuity, key continuity (a cached `publicKeyPem` is never refreshed) or a `Move`, which `dispatchActivity` has no arm for; it was deliberately not faked. Defect fixed on the way (vidra-core #200): the watched-word queue named the LOCAL VIDEO OWNER as the author of a federated comment. **Remediation merged: vidra-core #203 / vidra-user #198 / meta #152 (section "A29 remediation — federated playback, dereferenceable ids, social parity — 2026-09-08") — the code for clauses (1), (2) and (3) plus the four non-blocking findings; the row still reads FAIL because only the two-instance re-run can flip it.** TLS, real hostnames (`/etc/hosts` needs root, refused — the domains are `host:port` literals) and interoperability with PeerTube/Mastodon are all UNVERIFIED |
-| INT-06 ATProto/Bluesky login, linking and outbound cross-post | M C U | Auth/ATProto service, connection UI; backed atproto opt-in; proved by A30 against a LOCAL reference PDS (`@atproto/pds` 0.4.107 + a loopback PLC stub + a port-80 handle shim) — section “A30 ATProto login, linking, cross-posting and donations — 2026-09-08”, evidence `a30-atproto-donations.json`: real PAR/PKCE/DPoP login in Chromium (consent lists only “Uniquely identify you”), forged/mismatched state and a forged `iss` all refused, account created then re-login returns the same account, identity listed and last-method unlink refused 422, public publish posts once with the `/v/{code}` watch URL in the embed card and resolves 200, private/unlisted/draft post nothing, sealed app password survives a restart of both processes, a wrong KEK dead-letters immediately, and a PDS outage retries at +30 s then +60 s and delivers exactly once — the public network was never contacted | PASS | Test PDS/account: login callback/state, link/unlink, private exclusion, public post contains working watch URL; restart sealed credential and outage/retry; no public rehearsal posts | AUTH-02, PLAY-02 + provider/test account → A30. OPEN, not blocking the row: the PRODUCTION hosted client-metadata OAuth path is unverified (the lab necessarily used the spec's virtual-localhost dev client); an ATProto account is passwordless with an unroutable synthetic email, so it can NEVER gain a second sign-in method and the unlink refusal's own remedy is unreachable; a dead-lettered cross-post has no creator-visible surface. **Recovery path merged 2026-09-09** — section “Auth: session-authorised set-password and real email for provider accounts”, evidence `auth-set-password.json`: a step-up (a fresh provider round trip, 10 min, single-use, session-bound, core #217 migration 0144) now authorises `POST /auth/me/password/set` and a `step_up_token` on the email change, so the account CAN acquire a second sign-in method and a routable address, and the unlink refusal names a reachable remedy. Merged, not lab-observed — this row's own PDS lab is the re-run |
+| INT-06 ATProto/Bluesky login, linking and outbound cross-post | M C U | Auth/ATProto service, connection UI; backed atproto opt-in; proved by A30 against a LOCAL reference PDS (`@atproto/pds` 0.4.107 + a loopback PLC stub + a port-80 handle shim) — section “A30 ATProto login, linking, cross-posting and donations — 2026-09-08”, evidence `a30-atproto-donations.json`: real PAR/PKCE/DPoP login in Chromium (consent lists only “Uniquely identify you”), forged/mismatched state and a forged `iss` all refused, account created then re-login returns the same account, identity listed and last-method unlink refused 422, public publish posts once with the `/v/{code}` watch URL in the embed card and resolves 200, private/unlisted/draft post nothing, sealed app password survives a restart of both processes, a wrong KEK dead-letters immediately, and a PDS outage retries at +30 s then +60 s and delivers exactly once — the public network was never contacted **Re-run 2026-09-09** — §Auth rehearsal, evidence `auth-rehearsal.json`: the recovery path this cell claimed **could not work in any browser** and is now fixed ([core #225](https://github.com/yegamble/vidra-core/pull/225)). A step-up completes only as a top-level redirect, whose landing page redeems a new access token and ROTATES the session the assertion was bound to 99 ms after the grant, so `POST /auth/me/password/set` answered 403 with the row unspent — every run. After the fix, measured live against the reference PDS: the round trip through the real consent screen, `?step_up=<token>` stripped by `replaceState`, the `step_up_tokens` row read back (hash = SHA-256 of the landing token, `used_at` NULL, TTL 00:09:59.9), the set → 204 with `used_at` stamped, replay 422 `password_already_set`, sessions 2 → 1 with the other browser signed out, `auth.password.set success`, password login 200, and unlink-last-method 204. A real address via step-up reaches the NEW mailbox and nothing else. Two card-honesty defects also fixed ([user #212](https://github.com/yegamble/vidra-user/pull/212)): the email row was a dead end after the password row, and the confirmation page claimed a notice went to an address that cannot receive mail. | PASS | Test PDS/account: login callback/state, link/unlink, private exclusion, public post contains working watch URL; restart sealed credential and outage/retry; no public rehearsal posts | AUTH-02, PLAY-02 + provider/test account → A30. OPEN, not blocking the row: the PRODUCTION hosted client-metadata OAuth path is unverified (the lab necessarily used the spec's virtual-localhost dev client); an ATProto account is passwordless with an unroutable synthetic email, so it can NEVER gain a second sign-in method and the unlink refusal's own remedy is unreachable; a dead-lettered cross-post has no creator-visible surface. **Recovery path merged 2026-09-09** — section “Auth: session-authorised set-password and real email for provider accounts”, evidence `auth-set-password.json`: a step-up (a fresh provider round trip, 10 min, single-use, session-bound, core #217 migration 0144) now authorises `POST /auth/me/password/set` and a `step_up_token` on the email change, so the account CAN acquire a second sign-in method and a routable address, and the unlink refusal names a reachable remedy. Merged, not lab-observed — this row's own PDS lab is the re-run |
 | INT-07 Public IPFS mirror and viewer fallback preserve disclosure boundary | M C U | Mirror eligibility; dedicated backed IPFS job and privacy fence; measured against real kubo in section "A31 IPFS — public mirror with fallback, private swarm isolation — 2026-09-09" (evidence `a31-ipfs.json`): an eligible video reaches a real CID on the ledger and on `GET /videos/{id}`, Chromium played master AND segments from the gateway (120 frames, 0 dropped, 0 api media requests after the switch), the privacy fence and the kill switch hold, and the player falls back to the server when the gateway dies **RE-RUN 2 2026-09-09**: section "A31 rehearsal 2 — strays where the component is read; takedown completeness — 2026-09-09" (evidence `a31-rehearsal-2.json`, code [vidra-core #223](https://github.com/yegamble/vidra-core/pull/223)) closed the last clause on the SAME two-process topology that hid it: the health probe now runs the ledger↔node comparison itself in every role (one bounded `pin/ls` + one bounded live-CID read per swarm per interval, sharing one `countStrays` with the leader's sweep, which keeps the writes and the single actionable WARN), `IPFS_HEALTH_PROBE_INTERVAL` replaces the hard-coded const, and `IPFS_GC_AFTER_UNPIN` lets a takedown finish on the instance's own gateway | PASS (private test network — no real public publication; residual: IPFS Cluster durability unverified) | Private test network: publish eligible object→real CID→master+segments playback; gateway failure→canonical fallback; unlist/delete unpin, no private/quarantine/DM ledger row; record irreversibility of real public publication | PLAY-01 + IPFS selection → A31. FAILING CLAUSES: (a) delete did NOT unpin — the ON DELETE SET NULL FK strips provenance before the delete hook runs, leaving rows `pinned` and CIDs retrievable forever; fixed on vidra-core#218 (unmerged) and re-measured live; (b) "gateway failure→canonical fallback" holds for HLS (client-side probe) but NOT for thumbnails/storyboards, which are redirected server-side with `Cache-Control: public, max-age=300` and no health check and no runtime lever; (c) `/admin/system` has no `ipfs` component, and reconcile never compares the ledger to the node (a lost pin is not re-pinned, a stray is not removed). A moderator block leaves pins in place — a ruling, not a patch. Cluster on either swarm is UNVERIFIED (no ipfs-cluster binary). FOLLOW-UPS MERGED: see section "IPFS follow-ups — health-gated redirects, real reconcile, unpin on block — 2026-09-09" (evidence `ipfs-follow-ups.json`) — clauses (b) and (c) now have a gateway-probed `ipfs` component gating the 307, a runtime `delivery_ipfs_enabled`, and a ledger↔node comparison in both directions; the moderator block was ruled on and unpins like a privacy flip, with unblock re-arming. THE ROW STILL READS FAIL: an A31 re-run against a real kubo topology is what moves it **RE-RUN 2026-09-09**: section "A31 rehearsal — public mirror against the merged follow-ups — 2026-09-09" (evidence `a31-rehearsal.json`) measured the merged follow-ups against a real kubo topology with the gateway behind a killable TCP pipe so the node's RPC stayed up while the gateway died — A31's exact failure shape. CLOSED ON MEASUREMENT: the 307 is gated on a real gateway probe (gateway killed 14:53:31Z → component `down` and thumbnail 200 from the api at 14:57:05Z, a measured 3m34s bound; restored → `ok` and 307s resume); the runtime `delivery_ipfs_enabled` kill switch takes effect on the NEXT request with no restart and removes the watch control; reconcile re-armed and re-pinned a hand-removed CID in 12s, counted a stray and left it, and wrote NOTHING when the node refused `pin/ls`; a Chromium watch produced `api-proxy`→`ipfs-gateway`→`api-proxy` starts with no rebuffer; `media_ipfs_pins` is on `/admin/jobs` with a real backlog; delete still unpins; INT-08's fence re-verified in one pass. STILL FAILING: (d) an unblock re-published only 4 of a video's 5 pin classes — the HLS tree, the one class IPFS playback loads, stayed terminally `unpinned` (`ipfs_rearmed: 4`), and the same hole swallows any privacy flip whose unpin has drained; fixed on [vidra-core #221](https://github.com/yegamble/vidra-core/pull/221) (unmerged) and re-measured to 5/5. (e) `unaccounted_node_pins` never reaches the component on a two-process deployment: it is a per-process `sync.Map` written only by the worker role's leader-gated sweep and read only by that process's probe, so the api role — the one serving `/readyz` and `/admin/system` — renders it absent; proved by a single-process positive control that DID render it. THE ROW MOVES when #221 merges and (e) is ruled on. **THE ROW MOVES, 2026-09-09.** #221 is merged and re-measured live (`{"ipfs_rearmed": "5"}`, byte-identical CIDs, the gateway serving the HLS tree again). Clause (e) is ruled on the way the rehearsal's first option described and MEASURED on the two-role split: with the WORKER PROCESS STOPPED — no leader, no sweep anywhere — the api role saw a hand-added pin and rendered `unaccounted_node_pins` 2→3 on its own next probe 16s later; a killed node produced the key ABSENT rather than a `0`; the count also rides the `not_configured` arm (`pinned: 0`) that the first rehearsal never reached; and the api log carried ZERO `ipfs_stray_pins` lines, so the operator-facing WARN stayed leader-only. The probe interval is a knob (`20s` observed on a 20s grid: 15:53:20/40, 15:54:00/20/40; `5s` and `banana` refuse boot with typed messages). And the rehearsal's standing warning is now actionable: with the collector off a moderator's block left all five withdrawn CIDs served by this instance's own gateway (301+200×4) until a hand-run `ipfs repo gc`; with `IPFS_GC_AFTER_UNPIN=true` the same block reached `404` on all five in under 10 seconds (`ipfs_repo_gc unpinned=5 blocks_removed=24`), exactly once per unpinning batch and never on a pin-only one, with a still-pinned control CID untouched. RESIDUAL: IPFS Cluster on either swarm is still unverified (no `ipfs-cluster-service` binary), and no real public publication has ever been made — the row is PASS on a private test network, which is the only honest way to pass it. |
 | INT-08 Private IPFS is isolated replication, never public delivery | M C U | Product decision §5.P; private-swarm CI; no private gateway knob; DM excluded; proved on real swarm.key'd kubo nodes in section "A31 IPFS — public mirror with fallback, private swarm isolation — 2026-09-09" (evidence `a31-ipfs.json`): private+unlisted media routes to `network='private'`, P1→P2 replication works, the keyless outsider is refused at the pnet security handshake and times out fetching the CID, ZERO of the 9 private CIDs appear in 11 API payloads (public-CID positive control present), the public gateway 404s them, P1 outage → `networks.private.node_reachable=false` + the retry ladder + convergence with public delivery unaffected, and no DM attachment is pinned on either rail | PASS | Two keyed nodes and outsider: replication works only inside, outsider cannot fetch; private CID absent from APIs; quorum/outage recovery; no DM attachment pins | STO-01 + private topology selection → A31. Cluster replication on the private swarm is UNVERIFIED (no ipfs-cluster binary on the lab machine), and the mirror writes no `job_runs` rows or correlation ids, so its retries are invisible to the job surface |
 | INT-09 Presigned S3 browser delivery obeys CORS/expiry/authorization | M C U | Delivery resolver/presign; historical browser CORS incident; core README notes; live evidence `a32-a33-delivery` (a two-process core on `STORAGE_BACKEND=s3` against a MinIO on its own origin, with the one-origin frontend proxy and real Chromium and WebKit: presign ON moved every media byte to the bucket — 7 of 81 requests, the poster, a 206 Range on the original and five CMAF objects, decoded unmuted to 6.014 s at 150 frames and 0 dropped in both engines — while the api served only the three rewritten playlists and the 307s, and presign OFF put the same playback back on the proxy with 0 bucket requests and every response `private`; no preflight is sent because a `bytes=` Range is safelisted and the request only turns cross-origin after the 307; a signature past its TTL is a bucket 403 `Request has expired` and the client's next api request mints a fresh one, with the redirect's own 300 s far inside the 3600 s signature; a private video answers 404 with no `Location` ever minted for a non-owner and the owner's own credentialed read stays on the proxy at `private, no-store`; a stopped bucket reports `s3: down [unreachable]` on `/admin/system` and fails the master playlist with a typed 503 `storage_unavailable` before any segment, though the redirect itself still mints and `/healthz` still answers 200; and a CORS misconfiguration blocks every segment, which the api cannot see and the QoE beacon records as `api-proxy` + `error_class=network`) | PASS | Real cross-origin bucket in browser: Range/preflight/307, expiry and private refusal; Chromium and Safari; bucket outage does not masquerade as success | STO-01, PLAY-03 + selected bucket/CORS → A32. Evidence is **MinIO cross-origin; the selected bucket run is deferred (no credentials on this machine)**, so a real provider's CORS, versioning and virtual-host addressing stay untested, and Safari.app itself was not driven — the WebKit engine it ships was, via Playwright, and it took the same MSE path Chromium did. Defect fixed on the way: the presigned original and official download answered `application/octet-stream` where the proxy answers `video/mp4`, because the S3 PUT recorded no content type and `video_files.content_type` is empty for every resumable upload — the proxy hid both by sniffing (vidra-core #197). Findings that need a ruling rather than a patch, none blocking: presign minting does NOT fail closed on a bucket outage (a 307 to a dead store is still issued; only the playlist's typed 503 saves the session, and `/healthz` reports `{"status":"ok"}` throughout because its storage component is a five-minute write probe); `delivery.PresignTTL` is a compile-time hour with no knob of any kind; a CORS failure degrades the player silently from the CMAF ladder to the whole original file per viewer, with an unbounded segment-retry loop (39 blocked fetches in 12 s) and no viewer-visible error; and a total object-store outage renders a dead `0:00/0:00` player with no message at all |
@@ -18049,3 +18049,310 @@ separate host for the second worker, so a real network partition between a worke
 and the store was not exercised; a bucket-to-bucket (s3 → s3) campaign, since
 local → s3 is the direction the row names; and any browser run, because the
 storage-migration surface has no write controls in the UI.
+
+## Auth rehearsal — set-password, no auto-link, link flow, MFA over SSO on real providers — 2026-09-09
+
+**AUTH-04 and INT-06 both stay PASS, and neither is contradicted.** Two auth
+slices merged on code and CI alone — §Auth: session-authorised set-password and
+real email for provider accounts ([core #217](https://github.com/yegamble/vidra-core/pull/217),
+[user #207](https://github.com/yegamble/vidra-user/pull/207), migration 0144)
+and §Auth trust ([core #222](https://github.com/yegamble/vidra-core/pull/222),
+[user #211](https://github.com/yegamble/vidra-user/pull/211), meta #171) — and
+each wrote down, precisely, what a lab still owed it. This is that lab: one
+origin, Dex and a hostile provider and a reference PDS at once, a real Chromium,
+and a real reverse proxy with an access log in front, because one of the claims
+is about what is written into logs. [Evidence](evidence/auth-rehearsal.json).
+
+Everything the trust slice asked for holds, exactly as written. The
+set-password slice's own asks did **not**: its capability could not work in any
+browser at all, for a reason no unit or integration test in this repo can see.
+Three defects were found, fixed RED-first and re-measured live —
+[core #225](https://github.com/yegamble/vidra-core/pull/225) and
+[user #212](https://github.com/yegamble/vidra-user/pull/212).
+
+**The lab.** Core runs two processes from `auth/rehearsal` (`VIDRA_ROLE=api` on
+`127.0.0.1:8088` and a separate `VIDRA_ROLE=worker`) at schema 144 over a native
+postgres 16.15 on `127.0.0.1:55501` **initdb'd empty and migrated 0 → 144 in one
+run**, plus a native redis on `:56501` flushed at start. `STORAGE_BACKEND=local`,
+`MFA_KEY_KEK` set, `MALWARE_SCAN_MODE=disabled` and `RATE_LIMIT_ENABLED=false` —
+both stated because both change what a negative means. The frontend is a
+production `next build` standalone server (`node .next/standalone/server.js`,
+never `next start`) built with `NEXT_PUBLIC_API_BASE_URL`, and in front of both
+sits **Caddy 2.11.4 with `log { output file … format json }`** — a real proxy
+with a real access log, not the pipe proxy earlier labs used, because the MFA
+transport claim is a claim about proxy logs and cannot be tested against a
+process that keeps none. Everything is one origin, `http://127.0.0.1:8099`,
+which is what `vidra_refresh` (`SameSite=Lax`, `Path=/api/v1/auth`) requires.
+
+Three providers, all loopback. **Dex 2.45.1** (`http://127.0.0.1:5556/dex`,
+memory storage, the `enablePasswordDB` static connector, one static client, six
+static users). A **~180-line stdlib-only Go OIDC provider** on `:5599` whose
+`/control` endpoint freezes the email, the `email_verified` claim and the subject
+its *next* authorization will assert — one provider name covering the whole
+collision matrix, because a correct provider cannot be made to assert somebody
+else's address, and that is the attempt this run exists to make. And A30's
+ATProto fixture rebuilt: `@atproto/pds` **0.4.107**, a loopback `did:plc` stub
+validating with the reference `@did-plc/lib` and serving its `formatDidDoc`, and
+an `nginx:alpine` from `mirror.gcr.io` holding `127.0.0.1:80` so a handle — which
+carries no port — can resolve. Four PDS accounts on `localtest.me`. No protocol
+traffic left loopback.
+
+**Two lab facts worth keeping.** The PLC stub must **persist its operations**:
+an in-memory directory that restarts orphans every DID the PDS has already
+created, and the PDS then answers `UpstreamFailure` for the next account with no
+hint why. And a link or step-up **must be started from the browser, not from a
+script's HTTP client**: `…/link/start` seals the attempt into an httpOnly cookie,
+so an attempt started by a Node `fetch` sends the browser to a provider whose
+callback then answers `400 missing or expired atproto login state`. Measured
+twice before the cause was obvious.
+
+### SC1 — the step-up could not work in a browser, and now does
+
+The A30-shaped account was re-created for real: ATProto sign-in through the
+PDS's own consent screen (which lists exactly *"Uniquely identify you"*),
+producing a passwordless account whose address is
+`did-plc-…@atproto.invalid`. `/settings/security` shows the card, in the words
+the slice wrote: *"You sign in with Bluesky and nothing else. If you lose that
+account, you lose this one — there is no password to fall back on."* Connect →
+the PDS consent screen again → back to
+`/settings/security?secure=password&step_up=<token>`, stripped to
+`/settings/security` by `history.replaceState` on arrival. All of that worked
+the first time.
+
+**Then `POST /auth/me/password/set` answered `403 step_up_required`, with the
+token's own row sitting unspent in `step_up_tokens`.** Every run. The audit trail
+said `auth.password.set failure step_up_required` while `auth.step_up.grant
+success` sat three seconds above it.
+
+The mechanism, and it is structural rather than incidental. A step-up can only
+complete as a **top-level redirect** back from the provider — that is the entire
+transport, and the slice says so. A top-level navigation discards the SPA's
+in-memory access token, so the landing page redeems a new one from the refresh
+cookie before it can submit anything. `Service.Refresh` **rotates**: it revokes
+the session row and creates a new one with a new id. The assertion is bound to
+`(user, session)`. So the binding is destroyed by the very page load that
+receives the token. In the run recorded here the grant was minted at
+`14:04:49.727` against session `b10959f9…`; that session was revoked at
+`14:04:49.826` — 99 ms later, by the landing page — and the form's request at
+`14:04:52.908` arrived on `48160b27…`. The window in which the capability could
+work was never open.
+
+`TestStepUpSetPasswordEndToEnd` cannot see this, and neither could any test
+written the same way: it holds one bearer from sign-in and never refreshes in
+the middle, which is the one thing a browser cannot avoid doing. This is the
+"mocked tests hide dead features" shape again, in a slice whose own closing
+paragraph asked the lab to check exactly this — *"that the assertion the callback
+hands back actually spends on a real Postgres row"* — and the answer was no.
+
+The fix (core #225) carries a **live** assertion onto the session that replaces
+the one it was bound to. It grants nothing: rotating required the previous
+refresh token, which only the browser that earned the assertion held, so it is
+the same browser continuing; another browser's rotation moves only its own rows;
+and the statement excludes spent and expired rows, so single use and the
+ten-minute window are untouched. It is best-effort, because failing a refresh
+would sign the user out to protect a convenience. Three tests, RED first: two in
+`internal/auth` (survives one rotation and is still single-use; a different
+browser's rotation collects nothing) and one in `internal/httpapi` that drives
+the browser's own sequence — sign in, step up, **one landing-page refresh**, then
+the set — which answered 403 before and 204 after.
+
+**Re-measured live on a fresh ATProto account after the fix**, which is the
+proof the row's Evidence cell was owed:
+
+| | |
+|---|---|
+| landing | `/settings/security?secure=password&step_up=<32 bytes>`, stripped to `/settings/security` |
+| row before spend | `token_hash \| user 3bbba167… \| session 62f56ba3… \| used_at NULL \| expires_at−created_at 00:09:59.999871` |
+| the row is THIS token's | the stored hash equals the SHA-256 of the token in the landing URL — asserted, not assumed |
+| after the set | *"Your password is set. Every other device was signed out; this one stays signed in."* |
+| row after spend | `used_at 2026-09-09 14:49:06` |
+| the same token again | **422 `password_already_set`** (the account now has one; the routing answer wins before the token is read) |
+| anonymous set / anonymous step-up start | **401** / **401** |
+| sessions active | **2 → 1**; the other browser lands signed out |
+| audit | `auth.password.set success` |
+| password login with the new password | **200** with a session |
+| unlink of the (formerly) last sign-in method | **204**, identities 0 — the refusal's remedy is now real |
+
+**Two more defects, both in the card's honesty, both fixed in user #212.**
+Taking the card's rows in the order the card lists them — password first, then
+the address — makes the second row a button that can only fail: a step-up is a
+*substitute* for a password, so core answers `422 password_already_set` on
+`/auth/me/email-change` once a password exists, and the message the user gets is
+about *"setting a new first password"* on a form about an email address.
+Measured as `auth.email_change.request failure password_already_set`. The card
+now names the door that opens — the ordinary Change-email control on the same
+page — and keeps the step-up only while the account is passwordless. And the
+confirmation page said *"We told your previous address about the change"* when
+the previous address was the unroutable placeholder and core had **correctly
+skipped** that notice; no such message reached the sink, and the page claimed one
+had. That is the exact failure the suppression exists to prevent, named in the
+slice's own text (*"a UI that believes a warning landed"*). It now says which of
+the two happened.
+
+Both orders are proven end to end. Email-first, on a second account: step-up →
+`Confirm your new email address` to the **new** address and nowhere else →
+`/email-change/confirm` → *"Your email address is now carol-real@lab.test"*,
+`email_verified` true, **no** notice to the placeholder → then the password from
+the same card → the card disappears. Password-first, on a third: the password
+above, then the address through the named door → *"Your previous address was
+generated for you and cannot receive mail, so no notice was sent to it."* → card
+gone. The only mail ever addressed to a `.invalid` name is the deliberate
+"your password was changed" attempt the slice says it makes anyway.
+
+### SC2 — a provider's word about an email address links nothing
+
+Against Dex for the honest half and the hostile provider for the half a correct
+IdP cannot express. Every refusal was read from the **callback's own redirect**,
+not from where the page ended up.
+
+| attempt | answer | session | users | identities |
+|---|---|---|---|---|
+| no local account with that address | account created, signed in | yes | +1 | +1 |
+| a provider-created account, re-login by the same subject | login, same account | yes | 0 | 0 |
+| an existing **password** account's address, `email_verified: true` | `?oauth_error=email_conflict` | **no** | 0 | 0 |
+| the **owner's** address, `email_verified: true`, from the SECOND provider | `?oauth_error=email_conflict` | **no** | 0 | 0 |
+| the same, `email_verified: false` | `?oauth_error=email_conflict` | **no** | 0 | 0 |
+| a **different** provider asserting a provider-created account's address | `?oauth_error=email_conflict` | **no** | 0 | 0 |
+
+The takeover A05 measured is gone: after the attempt the owner is still
+`labowner`, `role=admin`, `is_owner=true`, `email_verified=false`, with **zero**
+identity rows. The verified and unverified redirects are byte-identical, so the
+answer cannot be probed for what the provider asserted. The audit carries
+`auth.login failure oauth_email_conflict` for each and **zero**
+`auth.oauth.link success` rows across the whole matrix. The login page renders
+the refusal with the door: *"An account here already uses that email address.
+Sign in with your password and connect this provider from Settings › Connected
+logins."*
+
+### SC3 — link from settings, and a callback that is no longer session-blind
+
+| attempt | answer |
+|---|---|
+| Connect Dex from settings, subject unlinked | `?link=dex`; the row becomes `connector@lab.test · linked 9/9/2026` |
+| signed in, a **login** flow as another account's Dex subject | `?oauth_error=identity_belongs_to_another_account`; account before and after both `linkme`; identities +0 |
+| signed in, a **login** flow with an unlinked subject | `?link=dex`; account before and after both `pwcollide`; the identity attaches |
+| start, this account already has an identity for this provider | **422 `provider_already_linked`** |
+| start, anonymous | **401** |
+| start, unknown name on an instance that HAS providers | **404** |
+| ATProto start, that handle's DID is linked to another account | **409 `identity_belongs_to_another_account`** |
+| ATProto start, an unlinked handle | **200** + `authorization_url` |
+
+The silent account switch A05 watched is gone, and the login page carries the
+copy that names the door: *"That provider account belongs to a different account
+here. Sign out first, then sign in with it."* One thing worth stating plainly:
+the account is unchanged across the refusal, but the **session id is not the
+measurement to take** — it rotates on every refresh by design, which is the same
+mechanism SC1 exposed. What is asserted is the account before and after, and that
+no identity row moved.
+
+The smaller A05 observation is now implemented and measured: linking from a
+signed-in session with a provider-verified claim about **the account's own
+address** sets `email_verified` locally (`pwcollide` went `f` → `t`). A verified
+claim about a different address still changes nothing.
+
+### SC4 — the second factor over SSO, and where the token is written
+
+`mfauser` holds a password, TOTP (sealed under `MFA_KEY_KEK`) and both a Dex and
+an ATProto identity. A Dex sign-in lands `/login?mfa=required` — the flag, and
+only the flag — with **no session cookie** and a `vidra_mfa_pending` cookie read
+straight out of CDP: `httpOnly true`, `Path=/api/v1/auth/mfa/challenge`,
+`SameSite=Lax`, `Max-Age` 297 s of 300. The login page shows the challenge UI it
+already had. A computed authenticator code issues the session, and the request
+body is `{"code":"…","cookie_mode":true}` — **no `mfa_token` in it**, asserted as
+an absence. The cookie is cleared the instant it authorises. A recovery code
+satisfies the same challenge. A wrong code keeps the cookie and mints nothing,
+and retyping a fresh code then works — a typo is not a use. An ATProto sign-in of
+the same account lands identically, with the same cookie, and completes the same
+way. `auth.login failure mfa_required` then `auth.mfa.challenge success totp` /
+`success recovery_code`.
+
+**The transport proof, which is the one thing a unit test cannot make.** With the
+275-byte token in hand and before it was spent:
+
+| where a query parameter would have written it | occurrences |
+|---|---|
+| the Caddy access log — every request line, `uri` plus every request header | **0** |
+| the core api log | **0** |
+| the frontend server log | **0** |
+| Dex's own log | **0** |
+| `Referer` headers the proxy recorded | **0** |
+| the browser's history / navigation entries | **0** — the single entry is `/login?mfa=required` |
+
+The proxy logs `"Cookie":["REDACTED"]`, so the token has no field in that file to
+appear in at all, which is the design working rather than a gap in the test. And
+the lab hands over the contrast for free: **the same access log carries
+`step_up=<token>` inside `Referer` headers**, because the step-up deliberately
+rides in the query. Both designs are visible side by side in one file, and the
+slices' reasoning about why they differ — the step-up assertion is worthless
+without the session it is bound to, the `mfa_token` *is* the first factor — is
+the reason that is acceptable rather than an oversight.
+
+### SC5 — negatives
+
+State: an OIDC callback with **no** state cookie, a **tampered** cookie, the
+right cookie with the **wrong** `state`, and the right cookie with `state`
+**missing** are all **400** with no session; the ATProto callback answers 400 for
+the first two. TOTP: a fresh code issues a session; **the same code on a new
+challenge is 401** (burn); a tampered `mfa_token` is 401; a challenge with
+neither a body token nor the cookie is 422.
+
+Config refusals, each against a real boot of the real binary:
+
+| | |
+|---|---|
+| `OAUTH_PROVIDERS` unset → begin | **503 `oauth_not_configured`** — A05 measured 404 here; `/instance` reports `oauth_providers: []` |
+| providers configured, unknown name → begin | **404 `not_found`** "unknown oauth provider" — a different fact, kept different |
+| `ATPROTO_LOGIN_ENABLED=false` → `/auth/atproto/start` | **503 `atproto_disabled`** |
+| the same → `/auth/step-up/start {provider: atproto}` | **503 `atproto_disabled`** |
+| the same → `/auth/atproto/link/start` | **503 `atproto_disabled`** |
+| a **wrong** `MFA_KEY_KEK` → password login | 200 `mfa_required`, no session |
+| a wrong KEK → challenge with a correct code | **401 "invalid code"** — parity, not a 500; `auth.mfa.challenge failure secret_undecryptable`, plus the boot WARN that names "a database restored without its config archive" |
+| a wrong KEK → recovery code | **200** + session — hashed, not sealed, exactly as §Recovery hardening promises |
+
+### The provider `env_file`, rendered and booted
+
+`vidra-core/env/oauth.env` filled with a provider's four variables and
+`OAUTH_PROVIDERS=dex` in the main env file. With no such file the prod render is
+`config -q` clean; with it, `config -q` is clean **and** the rendered `api` and
+`worker` environments each carry all five keys — where A05 measured one. A trap
+for the next operator or agent to read this: **the worker sits behind the
+`worker` profile, not `core`**, so a render with `--profile core --profile
+frontend` contains no `worker` service at all, and "the worker has no OAUTH keys"
+is what you will wrongly conclude from it.
+
+The boot is now proven too, not only the render. `docker compose … run --rm
+--no-deps api` on `ghcr.io/yegamble/vidra-core:v0.6.2` with the file present logs
+`oauth provider configured provider=dex issuer=https://…`, then `http server
+starting`, and `GET /api/v1/instance` answers `oauth_providers: ["dex"]`. The
+same command with the file moved aside, everything else identical, dies with
+`config: OAUTH_DEX_ISSUER must be a valid http(s) URL / OAUTH_DEX_CLIENT_ID is
+required / OAUTH_DEX_CLIENT_SECRET is required` — the exact A05 failure. The
+release image was used because it is the newest one on this machine, so this
+proves the env_file delivery and the boot gate, not this branch's code in a
+container. `git check-ignore` confirms the filled file cannot be committed.
+
+**Gates.** vidra-core `make ci` — *"ci: gate passed (fmt-check, vet,
+migrate-lint, openapi-verify, sqlc-verify, test-race)"*, exit 0. vidra-user
+`npm run ci` on Node 26.8.1 — typecheck, lint (0 errors, 2 pre-existing
+warnings), icon lint, vitest, production build, mocked Playwright — exit 0. No
+migration in either PR and **no OpenAPI change**, so there is no core-before-user
+ordering; the meta change is documentation and evidence.
+
+**Not proven, and unchanged from A05/A30.** No hosted IdP, so Google/Okta/Entra
+quirks (audience arrays, `email_verified` as a string, id_token algorithms other
+than RS256) stay untested. `PUBLIC_BASE_URL` was http, so neither a production
+redirect-URI registration nor the ATProto hosted client-metadata client was
+exercised. No provider-initiated or back-channel logout, which vidra does not
+implement. And one thing this lab structurally cannot show: **Mailpit accepts
+every recipient**, so "this address can never receive mail" stays an
+architectural claim rather than a measured one — what is measured is that core
+does not *try* on the paths where it says it will not.
+
+**Recorded, not built.** `/auth/me/email-change` refused with a step-up on a
+password account still answers the set-password route's sentence ("change it
+with your current one instead of setting a new first password"), which reads
+oddly on an email form; the card no longer routes anyone into it, so this is only
+reachable by an API client, and it is a message, not a behaviour. And the
+step-up's query transport now has a measured cost — its tokens are in the proxy's
+`Referer` lines — which the slice argued is acceptable and this run neither
+disputes nor closes.
