@@ -16571,7 +16571,7 @@ were re-measured closed and one was measured still open. The walk is not a
 session's notes: it lands as `e2e-backed/required-controls.spec.ts`, eight tests
 in the backed lanes. [Evidence](evidence/a40-controls.json). PRs:
 [user #210](https://github.com/yegamble/vidra-user/pull/210),
-[meta #PLACEHOLDER](https://github.com/yegamble/vidra/pull/PLACEHOLDER).
+[meta #169](https://github.com/yegamble/vidra/pull/169).
 
 ### The lab
 
@@ -16646,18 +16646,21 @@ and both measure closed. Applied to the shared `components/admin/AdminTable.tsx`
 and the four bespoke wrappers of the same shape, so the class is closed rather
 than the two instances that happened to be measured.
 
-**Hit targets.** The honest measurement is the EFFECTIVE target: a bare
+**Hit targets, measured the way the rule is actually written.** Two corrections
+took this from 160 "failures" to none, and both are in the committed spec so the
+next walk does not re-derive them. First, the EFFECTIVE target: a bare
 `<input type=checkbox>` is 16 px, but the `<label>` wrapping it is what a finger
-lands on. Measured that way, **no control on any required screen is under
-24 × 24 in both dimensions** at either width. The first pass, measuring the raw
-element, produced 160 "failures" that were all one of two things: label-wrapped
-checkboxes on `/settings` and `/admin/config` (13 × 16 and 16 × 16 raw; the row
-they sit in is 342 × 28), and card titles and channel links (258 × 18 — wide,
-short, and covered by WCAG 2.5.8's spacing exception at a 30 px row pitch). Both
-are recorded here because the next walk will re-derive them and should not
-re-report them. 352 controls sit between 24 px and Apple's 44 px target — almost
-all of them the same wide-and-short text links — and the player bar's own
-controls, the ones HIG's 44 px is really about, all clear it.
+lands on — the checkbox rows on `/settings` and `/admin/config` measure 13 × 16
+and 16 × 16 raw inside a 342 × 28 row. Second, **WCAG 2.5.8's spacing
+exception**: an undersized target passes when a 24 px circle around it reaches no
+other target's centre. That is what makes a card title link (258 × 18, 30 px of
+pitch) not a finding — and it is what caught a difference between this laptop and
+the CI runner, where the search field's own box measures 22 × 20 inside its
+44 px-tall wrapper because the font metrics differ. Measured that way, **no
+control on any required screen fails the 24 px floor** at either width. 352
+controls sit between 24 px and Apple's 44 px target — almost all the same
+wide-and-short text links — and the player bar's own controls, the ones HIG's
+44 px is really about, all clear it.
 
 **Clipping.** Zero controls are cut off by an overflow-hidden ancestor. The two
 candidate classes both turned out to be reachable and are now excluded by rule
