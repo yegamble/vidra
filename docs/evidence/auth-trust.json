@@ -204,5 +204,15 @@
     "a per-provider trusted_email_domains allow-list stays a later option: it would let an operator say 'this IdP may auto-link addresses at corp.example', which is a real convenience for a single-IdP instance and a second trust surface for a two-IdP one. Not needed to close the takeover, so not built.",
     "the ATProto Connect control needs a handle before the handoff, so it expands an inline field rather than navigating on the first click — a small asymmetry with the OIDC rows that is inherent to the protocol",
     "an identity for a provider the operator has switched OFF stays listed and unlinkable (asserted), because hiding it would make it invisible and unremovable"
+  ],
+  "unrelated_findings": [
+    {
+      "finding": "a CONFLICTING PR in this repo gets no CI runs at all — not a failure, not a skip, nothing — so `ci-required` never evaluates the head commit and the PR reads as merely 'waiting'",
+      "how_it_surfaced": "three pushes to the meta branch produced zero pull_request workflow runs. `gh run list` showed no cancelled runs and no skipped ones; `gh pr checks` showed only GitGuardian (a third-party app, which does run). `gh pr view --json mergeStateStatus` said CONFLICTING/DIRTY: GitHub cannot build the merge ref, so the pull_request event never fires.",
+      "why_it_matters": "ci-required exists precisely to catch a required lane that NEVER RUNS (its own header says so), but it cannot catch its own absence. A conflicting PR therefore presents as pending-forever rather than as needing a rebase, and the signal that it needs one lives only in mergeStateStatus.",
+      "cause_here": "docs/release-readiness.md — both this slice and the A31 rehearsal (meta #170, merged mid-flight) append a 2026-09-09 section at the end of the file, which is a textbook append-append conflict. The stacked-PR memory already records this file serialising chains.",
+      "resolved": "rebased on origin/main keeping BOTH sections (A31 first, then this one) plus the separating blank line; the PR went CONFLICTING -> MERGEABLE and CI ran on the next push",
+      "recorded_not_fixed": "a possible guard is a scheduled or Stop-hook check that reports any open PR whose mergeStateStatus is DIRTY, since no in-repo workflow can run to report it"
+    }
   ]
 }
