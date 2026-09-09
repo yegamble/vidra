@@ -122,8 +122,33 @@ def guest(stage):
                           '/bin/sh', image['reference'], '-c', 'uname -m'], 'execute-' + repo)[1]
             require(output.strip() == {'linux/amd64': 'x86_64', 'linux/arm64': 'aarch64'}[image['platform']],
                     f'{repo}: image execution architecture mismatch')
+        # The SAME adaptation, for the one third-party image the shipped default
+        # profile set now starts. `scan` is in the template's
+        # VIDRA_COMPOSE_PROFILES since the scan-by-default posture, so a default
+        # `vidra setup` deploy pulls clamav/clamav — and that image is published
+        # for linux/amd64 ONLY (measured: `docker manifest inspect
+        # clamav/clamav:1.5` lists one linux/amd64 manifest and no arm64). On an
+        # arm64 lab host the daemon therefore asks for a manifest that does not
+        # exist and `compose pull` dies at deploy step 2/6 with "no matching
+        # manifest for linux/arm64/v8", taking the whole run with it before
+        # anything starts.
+        #
+        # Pinning it to the CANDIDATE's platform is the honest fix rather than a
+        # workaround: this release is amd64-only in every image it publishes, so
+        # "run the release on its own platform, emulated where the lab is not
+        # that platform" is exactly what the three pins above already do. It is
+        # affordable: clamd came up healthy in 81s under QEMU user-mode
+        # emulation at 996 MiB RSS, inside the service's own 120s start_period.
+        #
+        # Only the disposable bundle copy is touched, and only the platform: the
+        # image reference, its tag and the profile stay the release's own.
+        content, clamav_count = re.subn(r'(?m)^([ \t]*)clamav:$',
+                                        lambda m: m[0] + '\n' + m[1] + '  platform: ' + candidate['platform'],
+                                        content, count=1)
+        require(clamav_count == 1, 'could not pin the clamav service platform')
         prod.write_text(content)
         evidence['checks']['image_execution'] = 'PASS'
+        evidence['clamav_platform_pin'] = candidate['platform']
         binfmt = Path('/proc/sys/fs/binfmt_misc/qemu-x86_64')
         evidence['emulation'] = binfmt.read_text() if binfmt.exists() else 'native'
         # The search second opinion comes from frozen SOURCE filenames, never
