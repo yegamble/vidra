@@ -48,7 +48,10 @@
     },
     "pause": {
       "state": "paused (migration 0145, in the state CHECK)",
-      "reason_vocabulary": ["target_write_denied", "operator"],
+      "reason_vocabulary": [
+        "target_write_denied",
+        "operator"
+      ],
       "resume_state": "the phase the campaign came out of, so a resume never guesses — a campaign paused out of synced is ready to cut over and one paused out of copying is not",
       "set_by": "Service.reconcileTargetWritability, at the top of every SweepOnce, before anything reads a store",
       "auto_resume": "the same function, when the probe turns positive again. An OPERATOR pause is never lifted there — an admin who paused a move for a maintenance window must not find it running again five minutes later",
@@ -128,7 +131,16 @@
       "shape": "per PASS, not per loop: a failing sweep cannot silence the drain beside it",
       "ladder": "retry.Backoff(consecutive_failures, Interval, DefaultBackoffMax) — base x 2^n, capped",
       "cap": "DefaultBackoffMax = 10 minutes, overridable per Loop via BackoffMax",
-      "values_at_a_10s_interval": ["10s", "20s", "40s", "80s", "160s", "320s", "600s", "600s forever"],
+      "values_at_a_10s_interval": [
+        "10s",
+        "20s",
+        "40s",
+        "80s",
+        "160s",
+        "320s",
+        "600s",
+        "600s forever"
+      ],
       "first_failure": "costs NO extra delay — Backoff(1, ...) is the interval itself, so one bad tick is not treated as an outage",
       "reset": "on the first success, so a flaky dependency that works one tick in three never climbs",
       "log": "the WARN moved from Pass.run up to Loop.Run (only the loop knows how far up the ladder a failure is) and now carries consecutive_failures and retry_in. A recovery logs `job loop pass recovered` with after_failures, so the last line in the log is never a failure",
@@ -137,8 +149,20 @@
     "anonymous_database_outage": {
       "before": "an AUTHENTICATED request answered a typed 503 session_store_unavailable; an ANONYMOUS read of the same instance answered a bare 500 internal_error",
       "now": "503 database_unavailable, from pgconv.IsUnavailable in the central error handler, placed LAST so any service that already turned a driver error into a domain answer keeps it",
-      "predicate_true_for": ["*pgconn.ConnectError (dial refused/DNS/TLS)", "SQLSTATE class 08", "57P01 / 57P02 / 57P03", "53300 too_many_connections", "a closed pool"],
-      "predicate_false_for": ["57014 statement timeout", "40P01 deadlock", "40001 serialization failure", "23505/23514 constraint violations", "42P01/42501"],
+      "predicate_true_for": [
+        "*pgconn.ConnectError (dial refused/DNS/TLS)",
+        "SQLSTATE class 08",
+        "57P01 / 57P02 / 57P03",
+        "53300 too_many_connections",
+        "a closed pool"
+      ],
+      "predicate_false_for": [
+        "57014 statement timeout",
+        "40P01 deadlock",
+        "40001 serialization failure",
+        "23505/23514 constraint violations",
+        "42P01/42501"
+      ],
       "why_narrow": "those mean the database ANSWERED. Calling them unavailable would turn a slow query into a dependency outage on the status page and tell a client to retry a request that will fail the same way",
       "leak_check": "the tests assert the response body carries no host, port, user or driver sentence"
     },
@@ -147,7 +171,11 @@
       "why_it_is_the_default_shape": "a backend error names the key it failed on almost by definition, so an unredacted error string beside a redacted key is the normal case rather than an unlucky one",
       "guard_extension": "TestObjectKeyLogValuesAreRedacted now requires that when a log call names a storage key, the PROSE fields in the SAME call (error, reason, detail, cause, path) are redacted too. Conditional on purpose: an `error` on a mail-relay line names a host, not a key, and redacting it would cost an operator the sentence they need",
       "sites_fixed": 20,
-      "packages": ["storagemigration", "ipfsmirror", "delivery"],
+      "packages": [
+        "storagemigration",
+        "ipfsmirror",
+        "delivery"
+      ],
       "helper": "jobstatus.RedactError — RedactDetail for an error value, nil-safe"
     },
     "storage_migration_identity": {
@@ -193,9 +221,18 @@
   "migration": {
     "number": 145,
     "name": "storage_migration_pause_and_identity",
-    "columns_added": ["paused_reason", "resume_state", "request_id", "correlation_id", "worker_id"],
+    "columns_added": [
+      "paused_reason",
+      "resume_state",
+      "request_id",
+      "correlation_id",
+      "worker_id"
+    ],
     "check_widened": "storage_migrations_state_check, by the drop-then-re-add-the-same-name idiom scripts/migrate-lint.sh allows — widening a CHECK cannot invalidate a row that already satisfied the narrower one",
-    "states_added": ["paused", "aborting"],
+    "states_added": [
+      "paused",
+      "aborting"
+    ],
     "projection": {
       "paused": "job_runs state retry_scheduled, stage paused — the run is not waiting to START, it started and will continue",
       "aborting": "job_runs state cancel_requested, stage aborting — the cancel is accepted and the work of cancelling is still running"
@@ -208,7 +245,7 @@
       "make ci": "PASS (fmt-check, vet, migrate-lint 145 clean, openapi-verify, sqlc-verify, test-race) — 0 failures",
       "go vet -tags=integration ./...": "PASS, clean",
       "integration -p 1": "PASS against a FRESH native PostgreSQL 16.15 (initdb from empty, schema 145) for internal/storagemigration and internal/httpapi",
-      "not_run": "the five S3-backed integration cases in internal/storagemigration self-skip without S3_TEST_ENDPOINT — TestLocalToObjectStoreEndToEnd, TestTamperedObjectStoreCopyFailsVerification, TestCompletedMigrationClaimsTheDestinationBucket, TestCompletedMigrationLeavesAForeignBucketMarkerAlone, TestASecondCampaignReEnumeratesAgainstTheRealLedger. This session ran no containers by instruction (another executor holds Docker for a release cut), so MinIO was never started"
+      "not_run": "Locally, the five S3-backed cases in internal/storagemigration self-skipped without S3_TEST_ENDPOINT — this session started no containers by instruction (another executor holds Docker for a release cut). They DID run in CI's `integration` lane, which stands up MinIO: TestLocalToObjectStoreEndToEnd, TestTamperedObjectStoreCopyFailsVerification, TestCompletedMigrationClaimsTheDestinationBucket, TestCompletedMigrationLeavesAForeignBucketMarkerAlone and TestASecondCampaignReEnumeratesAgainstTheRealLedger all PASS on this branch (run 34406117440), so the local→S3 campaign, the dual-read, the tamper detection and the media-GC interlock are exercised against a real object store at schema 145"
     },
     "vidra-user": {
       "typecheck": "PASS",
@@ -222,7 +259,7 @@
   },
   "unverified": [
     "Every claim in this file is from unit and integration tests plus a live native PostgreSQL, and NOT lab-observed. No process was booted against a real write-denied bucket, so 'boot succeeds and readiness stays 200' is asserted by the health-component unit test and the boot code path, not measured",
-    "No S3-compatible store was exercised at all, so the abort clean-up has removed objects only from a local backend",
+    "The ABORT CLEAN-UP has removed objects only from a LOCAL backend. It has no S3-backed integration case of its own, so the one new destructive path in this slice is the one an object store has not seen",
     "The admin page was never opened in a browser — the controls are proved by component tests against the regenerated contract"
   ]
 }
