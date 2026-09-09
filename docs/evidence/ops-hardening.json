@@ -1,0 +1,228 @@
+{
+  "item": "Ops hardening",
+  "title": "Paused campaigns on a write-denied target, migration controls, jobloop backoff, step-up cookie",
+  "date": "2026-09-09",
+  "kind": "code slice, not an acceptance run — nothing here is lab-observed",
+  "closes": {
+    "a34_finding_1": "a migration target the process cannot write to is a fatal boot refusal, for the api AND the workers",
+    "a34_finding_2": "an anonymous read during a PostgreSQL outage answers a bare 500 internal_error where the authenticated path is typed",
+    "a34_finding_3": "internal/jobloop has no backoff ladder — every loop retries at its fixed tick for the whole outage",
+    "a34_finding_4": "a campaign whose objects are failing shows objects_failed 0 and last_error '' until the attempt budget is spent; the failure categories are projected nowhere",
+    "a34_finding_5": "the storage-migration WARN redacts object_key and then prints the same key verbatim inside the error string beside it",
+    "a34_finding_6": "storage_migrations job_runs rows carry empty correlation_id/request_id/worker_id",
+    "a34_finding_8": "an aborted campaign's partial copies stay on the destination forever; nothing in the product removes them",
+    "a34_finding_9": "the GC refusal during cutover reports bucket_ownership before storage_migration_active",
+    "auth_rehearsal_finding": "the step-up query token appears in the proxy's Referer lines, where the identically-shaped mfa_token does not"
+  },
+  "not_closed": {
+    "a34_finding_7": "vidra-user cannot start or cancel a storage migration — CLOSED by this slice's user PR, listed here only because A34 wrote it as a separate line from finding 4"
+  },
+  "prs": {
+    "vidra-core": {
+      "number": 226,
+      "branch": "ops/hardening",
+      "url": "https://github.com/yegamble/vidra-core/pull/226",
+      "scope": "migration 0145, the pause rail, the control surface, the three SC3 fixes, the step-up cookie, OpenAPI",
+      "migration": 145
+    },
+    "vidra-user": {
+      "number": 213,
+      "branch": "ops/hardening",
+      "url": "https://github.com/yegamble/vidra-user/pull/213",
+      "scope": "StorageMigrationControls, the api wrappers, SecureAccountSection's transport change, lib/api/generated.ts regen",
+      "ordering": "DRAFT UNTIL core#226 MERGES; the contract lane regenerates against that PR's openapi.yaml and cannot be green before it"
+    },
+    "vidra": {
+      "branch": "ops/hardening",
+      "scope": "docs/release-readiness.md section + this file"
+    }
+  },
+  "sc1_paused_campaigns": {
+    "ruling": "a write-denied migration TARGET must not be a boot refusal; only the AUTHORITATIVE store being write-denied stays fatal",
+    "what_it_replaced": "boot with a read-only target credential printed `fatal error=\"storage migration target: ... Access Denied. [write_denied]\"` and the process exited BEFORE the listener opened — /healthz answered nothing at all, for the api as well as the workers",
+    "boot_now": {
+      "handle": "kept — newMigrationTargetBackend builds the backend without EnsureBucket when the bucket check is refused with class write_denied; every OTHER class stays fatal",
+      "probe": "storage.NewWriteHealth on the TARGET, boot sample taken synchronously (RecordDenied when the bucket check already answered, so no second round trip), then its own storage.WriteProbeInterval = 5 min ticker in EVERY role",
+      "readiness": "200. The `storage` component reads `degraded` with the class — never `down`, because the store this instance SERVES from is fine and it is the MOVE that has stopped",
+      "authoritative_store": "unchanged. blobs' own EnsureBucket failure is still fatal and its own boot write probe is still non-fatal-but-degrading, exactly as the Storage hardening slice left them"
+    },
+    "pause": {
+      "state": "paused (migration 0145, in the state CHECK)",
+      "reason_vocabulary": ["target_write_denied", "operator"],
+      "resume_state": "the phase the campaign came out of, so a resume never guesses — a campaign paused out of synced is ready to cut over and one paused out of copying is not",
+      "set_by": "Service.reconcileTargetWritability, at the top of every SweepOnce, before anything reads a store",
+      "auto_resume": "the same function, when the probe turns positive again. An OPERATOR pause is never lifted there — an admin who paused a move for a maintenance window must not find it running again five minutes later",
+      "start_refuses": "Start answers ErrTargetWriteDenied (409) rather than creating a campaign that would park on its first tick",
+      "resume_refuses": "Resume answers ErrTargetWriteDenied (409) rather than resuming a campaign the next sweep would pause again within the minute",
+      "single_active_index": "untouched. paused and aborting are both LIVE by storage_migrations_single_active_idx's predicate, so neither lets a second campaign start — VERIFIED against live PostgreSQL 16.15 (a second INSERT with state='paused' beside an 'aborting' row was refused: duplicate key on storage_migrations_single_active_idx)"
+    },
+    "tests": [
+      "TestAWriteDeniedTargetPausesTheCampaign — pause, reason, resume_state, the operator sentence, CopyOnce claims zero, the source keeps every object",
+      "TestARecoveredTargetResumesTheCampaign — the probe recovers and the campaign finishes with no operator action",
+      "TestAnOperatorPauseSurvivesAHealthyProbe — and an explicit Resume finishes it",
+      "TestStartRefusesAWriteDeniedTarget / TestResumeRefusesAStillWriteDeniedTarget"
+    ]
+  },
+  "sc2_migration_controls": {
+    "routes": [
+      "POST /api/v1/admin/storage/migrations {dry_run} — 200 preview (creates nothing) or 201 campaign",
+      "POST /api/v1/admin/storage/migrations/{id}/pause",
+      "POST /api/v1/admin/storage/migrations/{id}/resume",
+      "POST /api/v1/admin/storage/migrations/{id}/abort {clean_destination, confirm}",
+      "POST /api/v1/admin/storage/migrations/{id}/switch",
+      "POST /api/v1/admin/storage/migrations/{id}/release"
+    ],
+    "all_routes": "admin-only (requireAuth + requireRole(admin)) and audited through one shared helper, so a control cannot be added without an audit row",
+    "audit_actions": [
+      "admin.storage.migration.preview",
+      "admin.storage.migration.pause",
+      "admin.storage.migration.resume",
+      "admin.storage.migration.abort",
+      "admin.storage.migration.switch",
+      "admin.storage.migration.release"
+    ],
+    "audit_content": "campaign id, the resulting state, and COUNTS only. A refusal records a short category (illegal_transition state=<state>, target_write_denied, cutover_not_observed, objects_uncopied), never the error's own sentence, which can name a store",
+    "transitions": {
+      "pause": "enumerating | copying | synced -> paused",
+      "resume": "paused -> resume_state (or copying when it names nothing)",
+      "abort": "enumerating | copying | synced | paused -> aborting -> cancelled (with clean-up); anything non-terminal -> cancelled (without)",
+      "cancel": "anything not terminal -> cancelled",
+      "switch": "copying | synced -> cutover, AND the topology must already be SWAPPED",
+      "release": "cutover -> deleting_source, AND every object must be accounted for"
+    },
+    "illegal_transition": "409 NAMING the state the campaign is actually in, re-read from the row rather than echoed from the caller — the commonest cause is a stale page",
+    "guards": "every control is a guarded UPDATE whose ROWCOUNT decides, never a read-then-write, so it is safe against the sweep worker changing the same row on its own clock. The in-memory fake mirrors each predicate exactly",
+    "dry_run": {
+      "creates": "nothing — no campaign row, no ledger row, no write to the target",
+      "returns": "both store identities, the exact object count, and the byte total",
+      "bytes": "storage.SizedRootLister, a new optional capability both shipped backends satisfy at no extra cost (the local walk already holds a DirEntry it can Info(); an S3 list response already carries every object's size). bytes_known is false rather than a zero when a backend cannot answer cheaply"
+    },
+    "abort_cleanup": {
+      "why_a_state": "a campaign aborted at 90% has hundreds of thousands of objects to remove and an admin request must not hold a connection open for them",
+      "who": "the LEADER-GATED sweep, in batches of 200 — the same rail, the same batch size and the same interruptibility as the delete-source phase at the other end of a successful move",
+      "which_objects": "only rows in state 'verified' — a row that never reached that state was never confirmed to be on the destination, and a delete for a key whose copy might not be ours is the mistake this package exists to prevent",
+      "identity_assertion": "Describe(s.target) == campaign.target_desc, repeated at the batch even though the caller established the topology, exactly as deleteSourceBatch does — inverted",
+      "refused_after_cutover": "the destination is then the store the api SERVES from; the api refuses it and the UI does not offer the button",
+      "confirmation": "typed PURGE in the body (422 without it) and arm-then-type in the UI — the media-GC page's word and doctrine, unchanged"
+    },
+    "switch_and_release": {
+      "switch": "RECORDS a cutover the operator has already performed in the environment. It cannot perform one — which store a process serves from is decided by the environment it started with — so a forward topology answers 409 cutover_not_observed saying which half of the two-step action is missing. What it buys over the leader sweep is immediacy: the sweep observes cutover on a 1-minute ticker (A34 measured 60 s), this answers at once, either way",
+      "release": "ends the grace window early. Until now the only way to express that was to edit STORAGE_MIGRATION_GRACE_HOURS and restart — a config change to express a one-off intent, on a running instance, mid-migration. The precondition that cannot be waived (every object accounted for) is RE-CHECKED here rather than trusted from the counters",
+      "two_steps": "release is reachable only from cutover, never as a consequence of switch. It is the act that makes the move irreversible"
+    },
+    "failure_categories": {
+      "finding": "objects_failed counts only rows whose whole five-attempt budget is spent, so a campaign every object of which is being refused reports 0 failed and an empty last_error for as long as the backoff ladder takes — the operator watches progress stall and is told nothing",
+      "query": "CountStorageMigrationObjectFailuresByCategory — GROUP BY last_error, splitting terminal from retrying",
+      "surface": "the single-campaign read (GET .../{id}) carries `failures`, and the admin page renders it as a table. The list omits it, as it omits `objects`",
+      "safety": "the category column has been a short FIXED vocabulary since 0107 precisely so it could be projected; it never carries a key, an endpoint or a raw backend error"
+    },
+    "frontend": {
+      "component": "components/StorageMigrationControls.tsx, hosted by AdminInfrastructureView's Storage panel",
+      "session": "the campaign-DETAIL read is viewer-scoped and goes through useSettledSession (settled + viewerKey), so it is not fired before the access token is redeemed from the httpOnly refresh cookie",
+      "state_vocabulary": "MIGRATION_STATE_LABEL/VARIANT stay exhaustive Records over the contract union, so a phase added core-side is a type error rather than a raw snake_case string on the page — which is exactly what happened when paused and aborting arrived",
+      "honesty": "the card SAYS cutover is an environment change the page cannot make, instead of that being the unexplained reason there are no buttons"
+    }
+  },
+  "sc3_the_rest": {
+    "jobloop_backoff": {
+      "shape": "per PASS, not per loop: a failing sweep cannot silence the drain beside it",
+      "ladder": "retry.Backoff(consecutive_failures, Interval, DefaultBackoffMax) — base x 2^n, capped",
+      "cap": "DefaultBackoffMax = 10 minutes, overridable per Loop via BackoffMax",
+      "values_at_a_10s_interval": ["10s", "20s", "40s", "80s", "160s", "320s", "600s", "600s forever"],
+      "first_failure": "costs NO extra delay — Backoff(1, ...) is the interval itself, so one bad tick is not treated as an outage",
+      "reset": "on the first success, so a flaky dependency that works one tick in three never climbs",
+      "log": "the WARN moved from Pass.run up to Loop.Run (only the loop knows how far up the ladder a failure is) and now carries consecutive_failures and retry_in. A recovery logs `job loop pass recovered` with after_failures, so the last line in the log is never a failure",
+      "measured_before": "A34 sampled the same WARN at exactly 10.000 s apart for a whole PostgreSQL outage, scaling with workers x loops"
+    },
+    "anonymous_database_outage": {
+      "before": "an AUTHENTICATED request answered a typed 503 session_store_unavailable; an ANONYMOUS read of the same instance answered a bare 500 internal_error",
+      "now": "503 database_unavailable, from pgconv.IsUnavailable in the central error handler, placed LAST so any service that already turned a driver error into a domain answer keeps it",
+      "predicate_true_for": ["*pgconn.ConnectError (dial refused/DNS/TLS)", "SQLSTATE class 08", "57P01 / 57P02 / 57P03", "53300 too_many_connections", "a closed pool"],
+      "predicate_false_for": ["57014 statement timeout", "40P01 deadlock", "40001 serialization failure", "23505/23514 constraint violations", "42P01/42501"],
+      "why_narrow": "those mean the database ANSWERED. Calling them unavailable would turn a slow query into a dependency outage on the status page and tell a client to retry a request that will fail the same way",
+      "leak_check": "the tests assert the response body carries no host, port, user or driver sentence"
+    },
+    "redaction": {
+      "the_leak": "the WARN redacted object_key to [redacted-key] and printed the same key verbatim inside `\"error\", err.Error()` beside it — `storage: s3: put \"thumbnails/<uuid>.jpg\": Access Denied`",
+      "why_it_is_the_default_shape": "a backend error names the key it failed on almost by definition, so an unredacted error string beside a redacted key is the normal case rather than an unlucky one",
+      "guard_extension": "TestObjectKeyLogValuesAreRedacted now requires that when a log call names a storage key, the PROSE fields in the SAME call (error, reason, detail, cause, path) are redacted too. Conditional on purpose: an `error` on a mail-relay line names a host, not a key, and redacting it would cost an operator the sentence they need",
+      "sites_fixed": 20,
+      "packages": ["storagemigration", "ipfsmirror", "delivery"],
+      "helper": "jobstatus.RedactError — RedactDetail for an error value, nil-safe"
+    },
+    "storage_migration_identity": {
+      "finding": "storage_migrations IS projected into job_runs (the 0107 trigger), so A17's 'does not call the job recorder yet' list is stale for this queue — but the projected rows carried EMPTY request_id/correlation_id/worker_id",
+      "columns": "on the QUEUE ROW (storage_migrations), not only on the projection, because the queue row is what survives — the 0139 reasoning verbatim",
+      "written_by": "CreateStorageMigration, from observability.CorrelationFromContext, so the campaign names the admin request that started it; worker_id is stamped by whichever worker is driving it (processheartbeat.SelfID, the same string jobtrace uses)",
+      "carried_by": "a SECOND trigger, storage_migrations_run_identity, which sorts after storage_migrations_operational_projection alphabetically so the run exists by the time it fires. Guarded on the existing value, so a later empty-identity update cannot erase what the start recorded",
+      "verified_live": "on PostgreSQL 16.15 at schema 145 — UPDATE storage_migrations SET request_id/correlation_id/worker_id produced job_runs 'req-fixture-1 / corr-fixture-1 / host-fixture:9'"
+    },
+    "gc_interlock_order": {
+      "before": "a destructive POST /admin/media/gc DURING cutover reported forced_reason=bucket_ownership, because a campaign stamps the destination's ownership marker as its LAST act, so mid-move the destination legitimately carries no marker and the ownership gate fired first",
+      "now": "the migration interlock is evaluated first and names storage_migration_active",
+      "outcome_unchanged": "both rails refuse the same sweep and deleted stays 0 either way. Only the SENTENCE changes, and 'a migration is running' is the cause where an unadopted destination mid-move is one of its symptoms",
+      "bonus": "the ownership branch re-reads the marker OUT OF THE STORE before it forces a dry run; a sweep already blocked by a live campaign no longer pays for that round trip",
+      "test": "TestMigrationReasonWinsOverTheOwnershipCheck (was TestOwnershipReasonWinsOverTheMigrationCheck, inverted) plus TestOwnershipStillNamesItselfWithNoMigration, which pins that the ownership rail is still live"
+    }
+  },
+  "sc4_step_up_transport": {
+    "measured_cost_of_the_query": "the auth rehearsal put a real logging Caddy proxy in front of the flow: `step_up=<32 bytes>` appears in its access log and in the `Referer` of every same-origin subresource the landing page fetches, while `vidra_mfa_pending` — the same shape of secret, one route away — appears in 0 access-log lines, 0 Referer headers and 0 browser history entries, because the proxy logs \"Cookie\":[\"REDACTED\"]",
+    "cookie": {
+      "name": "vidra_step_up",
+      "path": "/api/v1/auth/me",
+      "why_that_path": "the narrowest prefix BOTH consumers share — POST /auth/me/password/set and POST /auth/me/email-change. Not '/': a cookie that rides requests it cannot authorise is a cookie in more logs than necessary, which is the finding",
+      "samesite": "Lax — it must survive the top-level GET back from the provider",
+      "httponly": true,
+      "ttl": "auth.StepUpTTL = 10 minutes, the same constant the row uses, exported so the two cannot drift",
+      "single_use": "the ROW is spent by the statement that reads it; the cookie is cleared on success and whenever the token turns out to be missing, spent, expired or another session's"
+    },
+    "landing_url": "return_to UNCHANGED — typically /settings/security?secure=password. No token AND no flag beside it: the page shows the form it was asked for, and an absent assertion is answered by the route as 403 step_up_required, which the page already renders. step_up and step_up_error are both stripped from the redirect on success",
+    "row_binding": "the fix from core#225 is untouched — the assertion still survives the refresh rotation the redirect causes",
+    "body_field": "step_up_token survives as OPTIONAL, for an API client with no cookie jar. The COOKIE wins when both are present, so a stale token in a body cannot outrank a fresh grant",
+    "behaviour_changes_worth_naming": [
+      "POST /auth/me/password/set with no assertion is now 403 step_up_required rather than 422 — a browser's request carries no such field, and a validation error naming one is an instruction the page cannot follow",
+      "/auth/me/email-change moved its exactly-one-proof rule out of Validate and into the handler, the only place that can see the cookie"
+    ],
+    "frontend": "SecureAccountSection reads NO token, from the URL or anywhere else. `?secure=` is a flag that can only be on the URL because a callback redirected to a return_to the page built, so its presence at mount is what distinguishes a completed round trip from someone opening settings; a failed one carries ?step_up_error= instead and does NOT unlock the form",
+    "tests": [
+      "core: the shared callback helper asserts the Location carries no step_up=, that the ONLY query parameter is `secure`, and that the cookie is httpOnly + SameSite=Lax + Path=/api/v1/auth/me",
+      "core: TestStepUpCookieAloneAuthorises — a body naming no token, cookie only, 204, the cookie cleared, and the same cookie refused on replay",
+      "user: unlocks the form from the flag alone with no token in the URL; does not unlock when the round trip failed; both writes send bodies without step_up_token"
+    ]
+  },
+  "migration": {
+    "number": 145,
+    "name": "storage_migration_pause_and_identity",
+    "columns_added": ["paused_reason", "resume_state", "request_id", "correlation_id", "worker_id"],
+    "check_widened": "storage_migrations_state_check, by the drop-then-re-add-the-same-name idiom scripts/migrate-lint.sh allows — widening a CHECK cannot invalidate a row that already satisfied the narrower one",
+    "states_added": ["paused", "aborting"],
+    "projection": {
+      "paused": "job_runs state retry_scheduled, stage paused — the run is not waiting to START, it started and will continue",
+      "aborting": "job_runs state cancel_requested, stage aborting — the cancel is accepted and the work of cancelling is still running"
+    },
+    "down": "reversible with LIVE ROWS: a paused campaign is put back into the state its resume_state names (copying when it names none) and an aborting one becomes cancelled BEFORE the CHECK narrows, so the constraint can never fail against real data",
+    "verified_live": "native PostgreSQL 16.15 on 55931, migrated from empty to 145, then down and up again with a paused campaign in the table — state came back as 'synced' (its resume_state), all five columns dropped and returned, and both new projections re-checked"
+  },
+  "gates": {
+    "vidra-core": {
+      "make ci": "PASS (fmt-check, vet, migrate-lint 145 clean, openapi-verify, sqlc-verify, test-race) — 0 failures",
+      "go vet -tags=integration ./...": "PASS, clean",
+      "integration -p 1": "PASS against a FRESH native PostgreSQL 16.15 (initdb from empty, schema 145) for internal/storagemigration and internal/httpapi",
+      "not_run": "the five S3-backed integration cases in internal/storagemigration self-skip without S3_TEST_ENDPOINT — TestLocalToObjectStoreEndToEnd, TestTamperedObjectStoreCopyFailsVerification, TestCompletedMigrationClaimsTheDestinationBucket, TestCompletedMigrationLeavesAForeignBucketMarkerAlone, TestASecondCampaignReEnumeratesAgainstTheRealLedger. This session ran no containers by instruction (another executor holds Docker for a release cut), so MinIO was never started"
+    },
+    "vidra-user": {
+      "typecheck": "PASS",
+      "lint": "PASS (0 errors; 3 warnings, all pre-existing on main)",
+      "vitest": "PASS — 2669 tests, 265 files",
+      "not_run": "npm run build and the Playwright lanes (npm run ci's last two steps): a production build and a browser run were out of scope for a code-only slice"
+    },
+    "vidra": {
+      "python3 -m unittest discover -s tests -p '*_test.py'": "see the section"
+    }
+  },
+  "unverified": [
+    "Every claim in this file is from unit and integration tests plus a live native PostgreSQL, and NOT lab-observed. No process was booted against a real write-denied bucket, so 'boot succeeds and readiness stays 200' is asserted by the health-component unit test and the boot code path, not measured",
+    "No S3-compatible store was exercised at all, so the abort clean-up has removed objects only from a local backend",
+    "The admin page was never opened in a browser — the controls are proved by component tests against the regenerated contract"
+  ]
+}
