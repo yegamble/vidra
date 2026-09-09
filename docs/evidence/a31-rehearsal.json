@@ -1,0 +1,139 @@
+{
+  "acceptance": "A31 rehearsal — INT-07 public IPFS mirror re-run against the merged follow-ups (core#219, user#209, meta#168)",
+  "date": "2026-09-09",
+  "verdict": {
+    "INT-07": "FAIL (measured) — four of A31's five outstanding clauses are closed on measurement; the moderator block re-published only 4 of a video's 5 pin classes on merged main (fixed on vidra-core#221, unmerged), and unaccounted_node_pins never reaches the component on a two-process deployment",
+    "INT-08": "re-verified in one pass — outsider refused at the pnet handshake, zero private CIDs in 15 API payloads with the public positive control present, public gateway 404s the private original"
+  },
+  "topology": {
+    "core": "two processes from one binary — VIDRA_ROLE=api on 127.0.0.1:8098, VIDRA_ROLE=worker (no listener); schema 144, dirty=false, migrated from an EMPTY database; STORAGE_BACKEND=local; native PostgreSQL 16 on :5442 and Redis db 8, no Docker",
+    "frontend": "next build WITH NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:3220, node .next/standalone/server.js on :3221 behind a pipe-only one-origin proxy on :3220, Node 26.8.1",
+    "declared_lab_settings": [
+      "RATE_LIMIT_ENABLED=false",
+      "MALWARE_SCAN_MODE=disabled",
+      "REGISTRATION_ENABLED=true (owner claim only)",
+      "IPFS_RECONCILE_INTERVAL=30s (default 5m) — declared",
+      "TRANSCODING_MIN_FREE_SCRATCH_MB=512"
+    ],
+    "scratch_floor_trap": "TRANSCODING_MIN_FREE_SCRATCH_MB=0 does NOT mean 'no floor': WithScratchGuard treats 0 as 'use DefaultMinFreeScratchBytes' (10 GiB), so on a 9 GiB-free machine every transcode job deferred with 'scratch space below the floor'. A small-disk lab must set a small POSITIVE value.",
+    "kubo": "0.40.1, repos under the scratch dir with distinct IPFS_PATH and ports",
+    "gateway_rig": "IPFS_GATEWAY_URL points at a bare TCP pipe on :8082 forwarding to kubo's gateway on :8081. Killing the pipe leaves the node's RPC (:5011) answering 200 while every gateway URL is refused — the RPC-up/gateway-down split A31 measured and the follow-up's probe exists for. Killing the daemon would not reproduce it.",
+    "irreversibility": "Nothing was published. The public node ran --offline (Swarm not listening) with Routing.Type=none and no bootstrap peers; the private node ran under LIBP2P_FORCE_PNET=1 with a lab-generated swarm.key that is not committed. Every CID recorded here exists only on this machine."
+  },
+  "SC1_publish_and_playback": {
+    "verdict": "PASS",
+    "ledger_after_publish": [
+      {"media_class": "hls", "object_key": "streaming-playlists/<id>/", "bytes": 289045, "files": 13, "state": "pinned"},
+      {"media_class": "video_original", "object_key": "web-videos/<id>.mp4", "bytes": 40430, "state": "pinned"},
+      {"media_class": "thumbnail", "bytes": 16664, "state": "pinned"},
+      {"media_class": "storyboard", "bytes": 8756, "state": "pinned"},
+      {"media_class": "storyboard_vtt", "bytes": 198, "state": "pinned"}
+    ],
+    "chromium_gateway_playback": {
+      "bar_before": "Playing from server (HLS)",
+      "bar_after": "IPFS · pinned",
+      "frames_decoded": 45,
+      "frames_dropped": 0,
+      "current_time_s": 3.018593,
+      "duration_s": 3.018593,
+      "gateway_requests": 8,
+      "gateway_paths": ["master.m3u8 (x2)", "cmaf/media_0.m3u8", "cmaf/media_1.m3u8", "cmaf/init-0.mp4", "cmaf/chunk-0-00001.m4s", "cmaf/init-1.mp4", "cmaf/chunk-1-00001.m4s"],
+      "api_media_requests_after_switch": 0
+    },
+    "privacy_fence": "a private and an unlisted upload produced ZERO ledger rows with the private tier off; state='quarantined' unpinned all 5 on the next sweep tick; approval re-pinned all 5; POST /admin/videos/{id}/reject moved all 5 to 'unpinning' within 8s through the hook, not the sweep",
+    "delete_unpins": "core#218 holds live: the FK still nulls video_id AND owner_user_id before the hook runs, and the next sweep re-armed exactly those 5 orphan rows; the worker dropped the 4 CIDs unique to that video and node pins went 18 -> 14"
+  },
+  "SC2_fallback_and_kill_switches": {
+    "verdict": "PASS",
+    "component_timeline": [
+      {"t": "14:19:47Z", "event": "boot, nothing pinned", "component": "not_configured (the public mirror has pinned nothing yet, so there is no CID to ask the gateway for)", "thumbnail": "200 from the api"},
+      {"t": "14:24:22Z", "event": "first probe after 4 rows pinned", "component": "ok", "thumbnail": "307"},
+      {"t": "14:53:02Z", "event": "delivery_ipfs_enabled=false (runtime PATCH)", "component": "not_configured (admin switched delivery off)", "thumbnail": "200 on the NEXT request, no restart"},
+      {"t": "14:53:2xZ", "event": "delivery_ipfs_enabled=true", "component": "ok", "thumbnail": "307"},
+      {"t": "14:53:31Z", "event": "gateway pipe killed; RPC still answers 200", "component": "still ok (the 14:52:05 record)", "thumbnail": "307 to a dead gateway"},
+      {"t": "14:57:05Z", "event": "probe fires", "component": "down, with the refused URL in the reason", "thumbnail": "200 from the api"},
+      {"t": "14:57:39Z", "event": "gateway restored", "component": "down (the 14:57:05 record)", "thumbnail": "200"},
+      {"t": "15:02:05Z", "event": "probe while every pinned row was re-armed to pending by the backlog rig", "component": "not_configured, backlog 10, pinned 0", "thumbnail": "200"},
+      {"t": "15:07:05Z", "event": "probe, backlog drained", "component": "ok, pinned 10", "thumbnail": "307 resumed"}
+    ],
+    "measured_bound_seconds": 214,
+    "measured_bound_note": "gateway died 14:53:31Z, the api stopped redirecting at 14:57:05Z — 3m34s, inside the 5-minute interval the follow-ups wrote down as the cost",
+    "probe_interval_is_a_const": "ipfsHealthProbeInterval = 5 * time.Minute in cmd/api/main.go — no env lever, so an operator cannot tighten the bound and a lab cannot shorten it",
+    "readyz": "200 with a top line of 'degraded' throughout the outage; the gate never fails readiness",
+    "client_fallback": "one refused request to the gateway master; the bar read 'IPFS · unavailable — playing from server' with 'Couldn't retrieve this video from IPFS' and a 'Play from server' action; the video still played to the end (45 frames, 0 dropped), no error page",
+    "runtime_kill_switch": {
+      "key": "delivery_ipfs_enabled",
+      "observed_default": "value true, default true, overridden false — it reads IPFS_ENABLED, unlike its two siblings which both read false",
+      "off": "thumbnail 200 (Cache-Control: private, max-age=300, must-revalidate) on the next request with no restart; the ipfs object is absent from GET /videos/{id}; Chromium showed NO IPFS control and no delivery bar; GET /ipfs/status still 200 (delivery only, pinning unaffected)",
+      "on": "307 and the control both return"
+    },
+    "env_kill_switch": "IPFS_ENABLED=false (restart): component not_configured, thumbnail 200, no ipfs object, GET /ipfs/status and POST /admin/ipfs/reconcile both 503 ipfs_disabled, and existing pins untouched — 10 pinned ledger rows and 11 node pins before and after"
+  },
+  "SC3_reconcile": {
+    "verdict": "PASS on the node, FAIL on the component for the stray count",
+    "results": [
+      {"staged": "ipfs pin rm a pinned CID by hand at 14:43:14Z", "reconcile_did": "the 14:43:17Z tick re-armed 1 row; the worker re-pinned at 14:43:26Z with the SAME CID (files=13)", "elapsed_seconds": 12, "verdict": "works"},
+      {"staged": "ipfs add a file the ledger never knew", "reconcile_did": "stray count 1 -> 2 in ipfs_verify_done and one ipfs_stray_pins WARN naming the remedy; the file was LEFT pinned and the gateway still serves it", "verdict": "works on the node, invisible on the component"},
+      {"staged": "the node refuses pin/ls (daemon stopped)", "reconcile_did": "ipfs_verify_skipped — 'the node did not list its pins, so the ledger was not compared against it' — and the public ledger was byte-identical (md5 over object_key+state+cid+attempts) across two ticks; the private swarm kept verifying independently", "verdict": "works"}
+    ],
+    "stray_count_invisibility": {
+      "mechanism": "Service.strays is a per-process sync.Map, written by VerifyPins (runWorkers only, leader-gated) and read by probePublic via lastStrays. The api role serves /readyz and /admin/system and runs no workers, so its map is never written, Strays stays -1, and system_ipfs.go renders -1 as ABSENT by design.",
+      "observed_two_process_detail_keys": ["backlog", "dead_lettered", "pinned", "last_pinned_at", "probed_at"],
+      "positive_control": "run as ONE process (api + workers), the first probe after a sweep rendered \"unaccounted_node_pins\": \"2\" — the two strays that existed (kubo's own welcome docs plus the file added by hand). The number is real and correct; it is unreachable from the surface on any deployment that separates the roles, which is what docker-compose.prod.yml renders."
+    }
+  },
+  "SC4_block_lifecycle": {
+    "verdict": "FAIL on merged main, PASS on vidra-core#221",
+    "block": "POST /admin/videos/{id}/block flipped all 5 rows to 'unpinning' within 6s through the hook; the worker completed all 5 unpins; audit row {\"ipfs_unpinned\": \"5\"}",
+    "unpin_is_not_forgetting": "with --enable-gc=false the gateway kept serving all 4 of the video's unique CIDs after the unpin; only `ipfs repo gc` turned them into 404, while the still-live control CID stayed 200 through the same GC. This is docs/operations.md's 'unpin != erasure, run repo gc' warning holding as written — a takedown does not complete on the instance's own gateway until the node's collector runs.",
+    "unblock_rounds": [
+      {"round": "1, merged main", "rows_rearmed": 4, "audit": "{\"ipfs_rearmed\": \"4\"}", "hls": "unpinned, attempts 0, no error, through every later tick — permanently"},
+      {"round": "generalised", "trigger": "public -> private -> public", "rows_rearmed": 4, "hls": "unpinned — so it is not block-specific"},
+      {"round": "2, on core#221", "rows_rearmed": 5, "audit": "{\"ipfs_rearmed\": \"5\"}", "hls": "pinned; the gateway serves the tree again"}
+    ],
+    "root_cause": "SyncVideoCounted skips a terminal 'unpinned' row so a superseded generation's key is never resurrected. The HLS tree fell under that rule by accident: its key is stable across re-transcodes, it is deliberately absent from videoMirrorRefs (a directory intent, not a video_files row), and the only other path that arms it is OnTranscodeComplete. The four single-file classes came back because routePin re-claims them in any state.",
+    "fix": "one narrow exception — the video's CURRENT HLS directory-intent key only, force re-claimed the way OnTranscodeComplete arms it, and only when the ledger already carries that row. TestSyncVideoRearmsTheHLSTreeAfterAnUnblock watched to fail first; TestSyncVideoLeavesASupersededTranscodeRowTerminal pins the negative.",
+    "quarantine_and_reject": "entering quarantine needs no hook (the sweep converges, all 5 unpinned); approval re-pins all 5 through the real publish transition; POST /admin/videos/{id}/reject calls the seam explicitly — all 5 'unpinning' within 8s"
+  },
+  "SC5_qoe": {
+    "verdict": "PASS",
+    "rows": [
+      {"received_at": "11:07:46-04", "delivery_source": "api-proxy", "engine": "hls-js", "packaging_format": "cmaf", "ttff_ms": 200, "viewer_action": "opened the watch page"},
+      {"received_at": "11:07:54-04", "delivery_source": "ipfs-gateway", "engine": "hls-js", "packaging_format": "cmaf", "ttff_ms": 37, "viewer_action": "pressed Use IPFS"},
+      {"received_at": "11:08:01-04", "delivery_source": "api-proxy", "engine": "hls-js", "packaging_format": "cmaf", "ttff_ms": 34, "viewer_action": "pressed Use server"}
+    ],
+    "note": "no rebuffer was needed to produce any of the three; the client still never names a delivery source — the server classified all three from the URL"
+  },
+  "SC6_visibility": {
+    "verdict": "PARTIAL",
+    "admin_jobs": "media_ipfs_pins appears with a real backlog: with the drain stopped and 10 rows re-armed the row read {\"pending\": 10, \"running\": 0, \"done\": 10, \"failed\": 0, \"oldest_pending_age_seconds\": 0}; after the worker came back {\"pending\": 0, \"done\": 20}. running is structurally 0, as documented.",
+    "component_detail": "backlog, dead_lettered, pinned, last_pinned_at, probed_at — but never unaccounted_node_pins on the two-process topology (see SC3)",
+    "private_tier": "private_ipfs appeared as its own ok component beside ipfs when IPFS_MIRROR_PRIVATE=true"
+  },
+  "INT08_reverify": {
+    "routing": "a private upload's 5 classes routed to network='private' with real CIDs",
+    "outsider": "ipfs swarm connect to P1 failed at 'failed to negotiate security protocol' — the pnet handshake, not an authorization check; ipfs cat of a private CID returned no content at a 45s cap",
+    "api_absence": "15 payloads (owner and anonymous detail for the private video, the public detail, the feed, the channel's videos, search, /me/videos, /ipfs/status, the ActivityPub actor) contained ZERO of the 5 private CIDs, with the public video's hls CID present in the same corpus as the positive control",
+    "public_node": "does not hold the private original; the public gateway 404s it",
+    "content_addressing_nuance": "4 of the 5 private CIDs 404 on the public gateway; the fifth — the storyboard VTT — answers 200 because it is byte-identical to the VTT every public fixture produced and therefore IS the same CID, which the public node holds on the public videos' account. Nothing private leaked; a degenerate derivative has no private identity to leak. Recorded because a naive 'no private CID resolves publicly' assertion fails here for a non-privacy reason."
+  },
+  "gates": {
+    "vidra_core_make_ci": "PASS on the fix branch — fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race; 81 packages ok; 'ci: gate passed'",
+    "ipfsmirror_package": "PASS, with the new HLS re-arm test watched to fail first (the HLS tree is \"unpinned\", want pending; rearmed = 1, want 2)",
+    "openapi": "unchanged",
+    "migration": "none taken — the fix is one branch inside an existing function"
+  },
+  "unverified": [
+    "IPFS Cluster on either swarm — no ipfs-cluster-service binary, unchanged from A31",
+    "a real public network — never touched, deliberately",
+    "a remote or third-party gateway; the lab gateway shares a host with the RPC API, although the killable pipe did separate the two listeners",
+    "the webm and caption pin classes — the fixtures produced neither",
+    "a dead-lettered pin — dead_lettered read 0 throughout; the dead-letter re-arm is A31's measurement",
+    "P2 and private replication between two keyed nodes — only P1 and the outsider were run this time",
+    "the stray count against an operator's own pins at scale"
+  ],
+  "what_int07_still_needs": [
+    "vidra-core#221 merged — until then merged main re-publishes 4 of an unblocked video's 5 pin classes and the missing one is the one that plays",
+    "a ruling on unaccounted_node_pins: compute the comparison in the health probe so every role has its own answer (one pin/ls plus one bounded CID read per process per 5 minutes, against a leader-only single pass today), or persist it, which costs a migration"
+  ]
+}
