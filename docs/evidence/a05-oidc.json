@@ -1,0 +1,122 @@
+{
+  "slice": "A05 OIDC — login, linking, collision and the second factor on a local provider",
+  "date": "2026-09-09",
+  "register_row": "AUTH-04",
+  "verdict": "SC1 SC2 SC3 SC5 PASS; SC4 FAIL (second factor not applied on a provider login); SC6 PASS",
+  "provider_fixtures": {
+    "primary": {
+      "product": "Dex",
+      "version": "2.45.1 (Homebrew dexidp; built with Go 1.26.0, darwin/arm64)",
+      "issuer": "http://127.0.0.1:5556/dex",
+      "storage": "memory",
+      "connector": "enablePasswordDB static connector",
+      "client": "one staticClient, redirect URI http://127.0.0.1:8099/api/v1/auth/oauth/dex/callback, skipApprovalScreen true",
+      "users": 5,
+      "why_not_keycloak": "Dex's static connector expresses as many users with distinct or colliding emails as needed; the collision this row cares about is between a provider identity and a LOCAL password account, not between two provider users. What Dex cannot express is email_verified:false — it always asserts verified — so the unverified case moved to the hostile fixture rather than to Keycloak."
+    },
+    "hostile": {
+      "what": "≈140-line stdlib-only OIDC provider written for this lab",
+      "listen": "127.0.0.1:5599",
+      "shape": "one issuer per mode under /p/<mode>, each with its own discovery document, JWKS and RS256 signer, so one core boot could be pointed at all of them",
+      "modes": ["ok", "badnonce", "badiss", "foreignkey", "unverified", "noemail", "takeover"],
+      "why": "a correct provider can never produce a wrong nonce, a foreign issuer, a foreign signing key or an unverified email"
+    }
+  },
+  "lab": {
+    "core": "branch a05/oidc off 03ac3e8, two processes (VIDRA_ROLE=api on :8088, a separate VIDRA_ROLE=worker), schema 143",
+    "postgres": "native postgresql@16.15 on 127.0.0.1:55477, socket /tmp/voidc, migrated from EMPTY to 143",
+    "redis": "native on 127.0.0.1:56411",
+    "storage": "STORAGE_BACKEND=local + STORAGE_LOCAL_ROOT",
+    "flags": "RATE_LIMIT_ENABLED=false, MALWARE_SCAN_MODE=disabled, HTTP_IMPORT_ALLOW_PRIVATE_URLS=false, MFA_KEY_KEK set, DEV_MAIL_CAPTURE_ENABLED=true only for the reset-remedy probe",
+    "ssrf_guard": "OIDC discovery/JWKS/token traffic does NOT pass the URL-import SSRF guard — OAuthService.httpClient is a plain http.Client with a 15s timeout — so the loopback issuer needed no dev knob",
+    "frontend": "production next build standalone on 127.0.0.1:3100 behind a pipe-only origin proxy on 127.0.0.1:8099 that routes /api/v1 to core",
+    "browser": "real Chromium via Playwright"
+  },
+  "sc1_begin_parameters": {
+    "status": 302,
+    "query": ["client_id", "code_challenge (43 chars)", "code_challenge_method=S256", "nonce", "redirect_uri (derived from PUBLIC_BASE_URL, never from a request parameter)", "response_type=code", "scope=openid profile email", "state"],
+    "state_cookie": "vidra_oauth_state; Path=/api/v1/auth/oauth; Max-Age=600; HttpOnly; SameSite=Lax; HMAC-SHA256 over the JWT secret (signed, not encrypted — stated in statecookie.go)"
+  },
+  "sc1_state_matrix": {
+    "no state cookie": "400, no session",
+    "tampered state cookie": "400, no session",
+    "right cookie, wrong state parameter": "400, no session",
+    "right cookie, state parameter missing": "400, no session",
+    "signature-valid cookie sealed 11 minutes ago": "400 — the age is checked server-side, not only by Max-Age",
+    "happy path": "302 to the validated return_to, vidra_refresh set",
+    "authorization code replayed with a captured, still-valid state cookie": "502, no session",
+    "provider reports ?error=access_denied": "302 return_to?oauth_error=access_denied, no session",
+    "callback for a provider name that is not configured": "404"
+  },
+  "sc1_id_token_matrix": {
+    "control (hostile fixture, everything correct)": "302 + session — the fixture is faithful",
+    "wrong nonce in the id_token": "400, no session",
+    "iss claim = https://accounts.google.com while discovery says otherwise": "502, no session",
+    "RS256 signature by a key absent from the JWKS": "502, no session",
+    "no email claim": "302 ?oauth_error=email_required, no session",
+    "email of an existing account with email_verified:false": "302 ?oauth_error=email_conflict, no session"
+  },
+  "sc1_username_derivation": {
+    "rule": "UsernameExists probes actor_handles, not users — accounts and channels share one namespace (migration 0142)",
+    "measured": "a channel handle 'labchan' existed; the provider identity whose name claim was 'labchan' became username 'labchan2'"
+  },
+  "sc1_config_refusals": {
+    "provider named, _CLIENT_SECRET missing": "boot refused: config: OAUTH_DEX_CLIENT_SECRET is required",
+    "provider named, no variables at all": "boot refused, all three reported at once",
+    "provider named, PUBLIC_BASE_URL empty": "boot refused: PUBLIC_BASE_URL must be a valid http(s) origin when OAUTH_PROVIDERS is set",
+    "OAUTH_PROVIDERS unset": "instance.oauth_providers = [], login page renders no provider buttons, begin answers 404 (not 503), /me/oauth-identities still 200 with an empty list, unlink 404"
+  },
+  "sc2_email_collision": {
+    "setup": "password account pwcollide / collide@lab.test, locally email_verified=false",
+    "provider": "Dex asserting the same address with email_verified:true",
+    "outcome": "LINKED to the existing account and signed in as it; no second account created (user count unchanged); audit row auth.oauth.link success oauth:dex",
+    "unverified variant": "refused with ?oauth_error=email_conflict, no session, no account created",
+    "observation": "the local email_verified stays false after the link — SetUserEmailVerified runs only on the account-creation path",
+    "cross_provider_takeover": "a SECOND configured provider asserting email_verified:true for labowner@lab.test signed in as the instance OWNER (role admin, is_owner true). There is no per-provider email-domain restriction: every configured provider can claim every local account whose address it is willing to assert."
+  },
+  "sc3_link_unlink": {
+    "anonymous list": 401,
+    "anonymous unlink": 401,
+    "cross-user unlink": "not addressable — the route is /me/oauth-identities/:provider, scoped to the principal, so there is no IDOR surface",
+    "OIDC-only account, unlink last method": "422 'cannot remove the last sign-in method — set a password first'",
+    "password account, unlink": "204; list then empty",
+    "unlink again / unknown provider": "404 'identity not linked'",
+    "relink": "signing in through the provider again re-creates the row with a new created_at",
+    "422 remedy is real for OIDC": "password-reset on the passwordless OIDC account: request 202, confirm 204, password login issues a session, unlink then 204 — unlike ATProto, whose synthetic @atproto.invalid address makes the same remedy impossible",
+    "no link-from-settings": "ConnectedLogins lists and unlinks only; /settings/connections is outbound cross-posting. The callback is session-blind: a signed-in user who authenticates as a different provider user is silently switched to that other account (measured newcomer -> mfauser)."
+  },
+  "sc4_second_factor": {
+    "setup": "one account with a password, TOTP enrolled and verified, and a linked Dex identity",
+    "password login": "{\"mfa_required\":true,\"mfa_token\":\"…\"} — no session",
+    "provider login on the same account": "302 + full session, no challenge",
+    "mechanism": "auth/oauth.go calls Service.issueTokens at three sites and auth/atproto.go at two; only Service.Login consults mfaEnabled",
+    "verdict": "the second factor is bypassed by every provider login path; recorded, not fixed — the fix needs a challenge over a top-level redirect (a new transport for the mfa_token), which is a contract change across core and user, not a surgical edit"
+  },
+  "sc5_outage": {
+    "boot with a dead issuer": "succeeds — discovery is lazy, so an unreachable IdP delays only login attempts",
+    "begin, no cached discovery, issuer down": "502 oauth_provider_unavailable (this slice's fix; it was an untyped server_error before)",
+    "begin, discovery already cached, issuer down": "302 to the dead issuer — the browser fails at the IdP; vidra cannot know without probing",
+    "callback needing the token endpoint, issuer down": "502 oauth_exchange_failed, no session",
+    "discovery cache": "per-process and in-memory, so it does NOT survive a restart",
+    "sealed credentials": "none — the client secret is plain configuration, read at boot"
+  },
+  "compose_passthrough": {
+    "render": "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file <filled> --profile core --profile frontend config",
+    "env_file_had": ["OAUTH_PROVIDERS=dex", "OAUTH_DEX_ISSUER", "OAUTH_DEX_CLIENT_ID", "OAUTH_DEX_CLIENT_SECRET"],
+    "api_service_received": ["OAUTH_PROVIDERS: dex"],
+    "consequence": "exactly the boot refusal measured above; env/production.env.example documents the trap and the render confirms it",
+    "note": "no tracked compose file was edited — the lab runs core natively"
+  },
+  "gates": {
+    "vidra-core": "make ci — gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race); 82 packages ok, 0 failures",
+    "vidra-user": "npm run ci — see the section for the recorded result"
+  },
+  "unverified": [
+    "any hosted IdP (Google, Okta, Entra, GitHub's OIDC shim) — the fixture is Dex plus a hand-written provider",
+    "an https instance: PUBLIC_BASE_URL was http, so no production redirect-URI registration was exercised",
+    "provider-initiated logout / back-channel logout — vidra implements none",
+    "id_token algorithms other than RS256",
+    "refresh-token rotation against the provider — vidra persists no provider tokens by design",
+    "the set-password step-up through the OIDC callback (core #217, still OPEN at the time of this run)"
+  ]
+}
