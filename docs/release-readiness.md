@@ -16029,8 +16029,10 @@ this is that run. Everything A05 listed as unproven — the callback, state/PKCE
 the email collision, unlink-last-method in practice — is now measured. One
 surgical fix went in,
 [core #220](https://github.com/yegamble/vidra-core/pull/220) (+ the comment-only
-regen [user #208](https://github.com/yegamble/vidra-user/pull/208)); no
-migration, core stays at schema 143. The launch-relevant thing this slice found
+regen [user #208](https://github.com/yegamble/vidra-user/pull/208)), alongside
+an unrelated ~0.1% flake in a required lane that this run's own CI exposed. **No
+migration**: the lab ran at schema 143 and #220 adds nothing, so core moved to
+144 only because the set-password slice landed underneath it. The launch-relevant thing this slice found
 is not in either PR: **an account's second factor does not apply to a provider
 login**, and **any configured provider can claim any local account by asserting
 its email verified**. [Sanitized evidence](evidence/a05-oidc.json).
