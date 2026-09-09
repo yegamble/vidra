@@ -85,7 +85,7 @@ Raw local scratch evidence: `/tmp/vidra-readiness-*.log` and the `vidra-readines
 
 ## Workflow readiness register
 
-Owners: **M** meta-repo; **C** core; **S** search; **U** user. Relative source paths below are rooted in the named owner unless prefixed otherwise. Recounted from the Status cells on 2026-09-09, after the v0.6.3 release flipped REL-01 and INS-01/02/04/05, there are **59 workflow rows: 50 PASS, 3 UNVERIFIED, 5 BLOCKED and 1 FAIL**. The 3 UNVERIFIED are AUTH-01, AUTH-02 and PLAY-01; the 5 BLOCKED and the 1 FAIL are the six MIG rows, every one of them waiting on the same missing input, a sanitized copy of the operator's source instance. AUTH-04 is no longer a split row: A05 passed its OIDC half on a local Dex fixture, with the selected external provider named as a residual in its own cell. A PASS carrying a parenthesised residual is still counted as a PASS, and the residual is written out in the row rather than in this total; the 10 scope families below are additionally BLOCKED on decisions. These are workflow statuses, not test counts. All required workflows are retained. “Conditional” means required if that capability is selected; disabling it does not prove it. Decision-dependent extensions remain visible in the scope register after this table.
+Owners: **M** meta-repo; **C** core; **S** search; **U** user. Relative source paths below are rooted in the named owner unless prefixed otherwise. Recounted from the Status cells on 2026-09-09, after the v0.6.3 release flipped REL-01 and INS-01/02/04/05, there are **59 workflow rows: 52 PASS, 1 UNVERIFIED, 5 BLOCKED and 1 FAIL** (recounted again on 2026-09-09 after section "AUTH-01/02 and PLAY-01 residuals — provider pre-claim and registration paths; native-HLS Safari — 2026-09-09" flipped AUTH-01 and AUTH-02). The 1 UNVERIFIED is PLAY-01, whose residual is native-HLS Safari and which is blocked on an OS refusal, not on the product: macOS will not permit WebDriver or Apple-Events automation of Safari without an interactive admin password (`sudo safaridriver --enable`, or Develop ▸ Allow Remote Automation); the 5 BLOCKED and the 1 FAIL are the six MIG rows, every one of them waiting on the same missing input, a sanitized copy of the operator's source instance. AUTH-04 is no longer a split row: A05 passed its OIDC half on a local Dex fixture, with the selected external provider named as a residual in its own cell. A PASS carrying a parenthesised residual is still counted as a PASS, and the residual is written out in the row rather than in this total; the 10 scope families below are additionally BLOCKED on decisions. These are workflow statuses, not test counts. All required workflows are retained. “Conditional” means required if that capability is selected; disabling it does not prove it. Decision-dependent extensions remain visible in the scope register after this table.
 
 Every procedure involving a mutation includes independent API/DB readback and UI reload, even where abbreviated below. For all media paths include owner, ordinary user and anonymous visibility, failed jobs, retries, and deletion/revocation. Dependency IDs are gates, not reasons to omit a row.
 
@@ -97,8 +97,8 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | INS-03 Production Compose closes datastore ports and binds app ports locally | M C S | Fresh dummy JSON render; both migrators use service images with no volumes | PASS | Re-render explicit base+prod, core/frontend/edge; inspect ports, image equality, missing-required-secret failure; PASS here covers default static render only | REL-01 → carry render assertion into A02 |
 | INS-04 First deploy migrates both ledgers before starting serving processes | M C S | `deploy.sh` dump→pull→two gated migrators→independent ledgers→up→probes; embedded SQL; **proven at v0.6.3 on empty volumes AND on a real upgrade** (section "v0.6.3 release — cut, verified, deployed to beta — 2026-09-09"): first deploy on a host with zero containers and zero volumes printed `expected core schema 0144 (from vidra-bundle.manifest — this tree has no migrations directory)` then `core schema OK (version 144)`, the search migrator exited 0, and `4/6 start` came after both; injecting a dirty `schema_migrations` made deploy exit 1 at `CORE MIGRATION FAILED` without ever printing `4/6 start`, with all five serving/datastore container ids, start times and restart counts unchanged and the dirty bit retained rather than silently repaired; the same four assertions passed independently for `vidra_search_migrations`; and the beta upgrade moved core `125 → 144` and search `16 → 18` as two discrete exit-code-gated steps with the rule-3 independent ledger assertion computed from the pinned nested checkout (evidence `release-v0.6.3`) | PASS | Empty volumes; assert expected core/search version and clean flag; inject failing/dirty migrator and failed pre-upgrade dump; prove no subsequent restart; test lock timeout | INS-01 → A03, re-run at v0.6.3. Residuals: the **failed pre-upgrade dump** injection and the **lock timeout** were not re-run at v0.6.3 (both passed at v0.6.2); pin/ledger guards preserved |
 | INS-05 TLS/proxy/runtime URLs work at the installed domain | M C U | Caddy routes; user runtime-config and server API origin; five TLS modes in deploy library; **proven at v0.6.3 on a REAL public ACME edge** (section "v0.6.3 release — cut, verified, deployed to beta — 2026-09-09"): the beta instance deployed with `VIDRA_TLS_MODE=acme` and `deploy.sh`'s own edge probe passed over HTTPS, then a route matrix probed on the host through the real Caddy pinned to `127.0.0.1:443` returned 200 for `/healthz`, `/readyz`, `/` (123710B of frontend HTML), `/runtime-config.js` (naming the public origin), `/api/v1/instance`, `/version`, `/v/{short_code}` (the watch page, title matching), the legacy `/videos/{uuid}` route, `/sitemap.xml` (513774B) and the HLS master playlist, and a media **Range** request returned `206 video/mp4` with exactly 65536 bytes after one redirect to storage. `/.well-known/nodeinfo` and `/.well-known/webfinger` answer 404 because `FEDERATION_ENABLED=false` on that instance (evidence `release-v0.6.3`) | PASS | Real HTTPS edge: API, frontend, media Range, setup, static, well-known/federation and legacy watch routes; restart with new lab origin; test selected external/internal TLS mode separately | INS-04 → A03 + the beta deploy. Residuals: **federation routes** are unproven at v0.6.3 because that instance disables federation; the **internal-CA TLS transition** and the **restart-with-a-new-origin** clause passed at v0.6.2 and were not re-run (the v0.6.3 lab run stopped at the frontend probe — Node 26 segfaults under this host's `qemu-user-static`); **external** TLS mode untested |
-| AUTH-01 Owner claim is exclusive, one-time and grants admin | C U M | `auth/ownerclaim.go`, `e2e-backed/owner-claim.spec.ts`, setup routes | UNVERIFIED | Before claim all signup methods refuse; valid boot token claims once; restart invalidates old token; race two claims; admin/system succeeds only for claimant | INS-05 → A04 |
-| AUTH-02 Registration, approval, login, logout and session refresh persist | C U | Auth service/routes; backed auth-persistence/session/registration-approval tests; approval opt-in | UNVERIFIED | Open/closed/approval registration with two users; accept/reject; expiration/refresh/revoke; reload and multi-tab/logout; rejected credentials never create sessions | AUTH-01 → A04 |
+| AUTH-01 Owner claim is exclusive, one-time and grants admin | C U M | `auth/ownerclaim.go`, `e2e-backed/owner-claim.spec.ts`, setup routes; the residual "all signup methods" clause proved live in section "AUTH-01/02 and PLAY-01 residuals — provider pre-claim and registration paths; native-HLS Safari — 2026-09-09" (evidence [`auth-providers-safari`](evidence/auth-providers-safari.json)) | PASS | Before claim all signup methods refuse; valid boot token claims once; restart invalidates old token; race two claims; admin/system succeeds only for claimant | INS-05 → A04 for the password path; **providers: this slice**. On one instance migrated 0 → 146 from EMPTY with `owner_claim_pending` true, all three doors refuse and leave nothing behind — password `403 owner_claim_required`, an OIDC callback through Dex's real sign-in page `302 → ?oauth_error=owner_claim_required`, an ATProto callback through the reference PDS's real consent screen the same — with `users`, `oauth_identities`, `sessions` and `registration_requests` all **0** afterwards, no session cookie from either callback, and three `auth.login \| failure \| owner_claim_required` rows. Restart rotates the token and the old one is `403 owner_claim_invalid`; two claims leaving a barrier together on a separate empty database give exactly one 201 and one 403, `1 users, 1 admin, 1 owner`; the real `/setup/claim` form answers 201 with `/admin/system` 200 for the claimant and 403 for the spent token. After the claim BOTH providers create ordinary accounts — `user`, `is_owner=false`, `/admin/system` **403** |
+| AUTH-02 Registration, approval, login, logout and session refresh persist | C U | Auth service/routes; backed auth-persistence/session/registration-approval tests; approval opt-in; the residual provider-account matrix proved live in section "AUTH-01/02 and PLAY-01 residuals — provider pre-claim and registration paths; native-HLS Safari — 2026-09-09" (evidence [`auth-providers-safari`](evidence/auth-providers-safari.json)) | PASS | Open/closed/approval registration with two users; accept/reject; expiration/refresh/revoke; reload and multi-tab/logout; rejected credentials never create sessions | AUTH-01 → A04 for the password path; **providers: this slice**, which found the row's residual FAILING and fixed it ([core #227](https://github.com/yegamble/vidra-core/pull/227) migration 0146, [user #214](https://github.com/yegamble/vidra-user/pull/214)): the provider create branches consulted the owner-claim gate and nothing else, so a CLOSED instance still minted an account and a session through Dex (users 2 → 3, `auth.register success oauth:dex`) while the password path answered 403, and an APPROVAL-REQUIRED instance created the account outright while the password path queued. Re-measured after the fix, OIDC and ATProto answer identically: closed → `?oauth_error=registration_closed` with Δusers/Δrequests **0/0**; approval → `?oauth_error=registration_pending` with **0/+1**, a repeat filing no duplicate, approve **204** creating the account WITH the identity it applied under, and the next sign-in an ordinary login (refresh 200); reject **204** with `auth.registration.reject success`; open → an ordinary `user`. Sessions on provider accounts behave as password ones: two tabs both refresh 200, an admin deactivation and a `logout-all` each make another browser's next refresh **401** (OIDC and ATProto), and at 6 s/18 s TTLs access is 401 after 8.5 s while a PINNED refresh cookie is 401 past its window. Three rows of A05's state matrix re-run — no state cookie, wrong `state`, tampered cookie — are all **400** with no session cookie and no new rows **The PASS is on the FIXED build.** On v0.6.3 as released the closed and approval-required provider rows FAIL as measured above, so this row reverts to UNVERIFIED if core #227 and user #214 do not land. AUTH-01 carries no such condition: its clauses passed against unmodified code |
 | AUTH-03 Email verification and password recovery deliver real mail | M C U | `internal/mail/smtp.go`; live evidence `a05-mail-totp` (disposable Mailpit, capture seam OFF, browser link redemption, expiry/reuse, measured enumeration, four SMTP modes, disabled- and broken-mail UX) | PASS | Disposable SMTP sink + browser token redemption, expiry/reuse and enumeration behavior; then operator-selected SMTP delivery and disabled-mail UX | Provider-agnostic: proven over plain SMTP and over STARTTLS-required + AUTH PLAIN with a trusted CA. Two defects fixed (no redeemable link in any token message; reset was an account-existence oracle with the relay down) → A05 |
 | AUTH-04 TOTP enrollment, recovery and removal; OAuth/OIDC login/link/unlink | C U M | Core auth/MFA/OAuth routes; live evidence `a05-mail-totp` (TOTP half: KEK ciphertext at rest, enrollment, second login step in Chromium, recovery codes, limiter, password-gated removal) and `a05-oidc` (OIDC half: Dex 2.45.1 fixture, begin parameters, state/nonce/PKCE + id_token matrices, email collision, link/unlink, outage) **Re-run 2026-09-09** — §Auth rehearsal, evidence `auth-rehearsal.json`: one lab with Dex 2.45.1, a hostile stdlib provider and a reference PDS behind a real logging Caddy proxy. The takeover is GONE (the second provider asserting the owner's address verified → `email_conflict`, no session, no identity row, owner untouched, zero `auth.oauth.link success` rows), the verified/unverified answers are byte-identical, Connect-from-settings completes a real Dex round trip (`?link=dex`), a signed-in browser starting a login flow as another account's subject is refused (`identity_belongs_to_another_account`) with the account unchanged, and the second factor now applies to BOTH Dex and ATProto sign-ins over a `Path=/api/v1/auth/mfa/challenge` httpOnly `vidra_mfa_pending` cookie — the token appears in 0 proxy access-log lines, 0 `Referer` headers and 0 browser history entries, and the challenge body carries no token. `OAUTH_PROVIDERS` unset now answers 503 `oauth_not_configured` (was 404); a wrong `MFA_KEY_KEK` is 401 parity with recovery codes still working; the `env/oauth.env` env_file delivers five keys to api AND worker in the render and boots a container that answers `oauth_providers: ["dex"]`. | **PASS (TOTP + OIDC on a local Dex fixture; selected provider deferred)** | TOTP second login/recovery/revoke; local OIDC provider callback/state/PKCE, account collision and unlink-last-method policy; never substitute a precreated identity for login | OIDC half proven 2026-09-09 against Dex 2.45.1 plus a hostile-provider fixture: S256 PKCE + nonce + signed single-use state, every state/nonce/iss/foreign-key/replay case refused with no session, verified-email collision links without a second account, unverified refused, unlink-last-method 422 whose password-reset remedy actually works. No hosted IdP and no https redirect URI were exercised. Open, needing rulings: the second factor does NOT apply to a provider login (measured side by side on one account — the MFA gate lives only in the password path); any configured provider can claim any local account by asserting its email verified (a second provider signed in as the owner); there is no link-from-settings and the callback is session-blind; enabling a provider still needs a hand edit to the api compose environment map. TOTP-half notes are superseded by §Auth hardening (2026-09-07); `OAUTH_PROVIDERS` is now fully documented in the env template (verified 2026-09-09); **trust model hardened 2026-09-09**: a provider-asserted email links nothing (subject-only matching, so neither the owner nor a provider-created account can be claimed by a second IdP), the second factor applies to provider sign-ins over a Path-scoped httpOnly `vidra_mfa_pending` cookie with only `?mfa=required` in the URL, link-from-settings exists (`/auth/oauth/{provider}/link/start`, `/auth/atproto/link/start`) and a login callback inside a live session links or refuses instead of switching accounts, and the per-provider variables reach api and worker through an optional `env/oauth.env` env_file — code+CI only, the Dex lab is the re-run → A05 OIDC, §Auth trust |
 | AUTH-05 Profile/privacy, email/password changes, deactivation/deletion and account archive | C U S | Backed profile-edit/deactivate/delete-account/account-export; core account and search deletion hooks; live evidence `a12-profile-archive` (profile/privacy + archive round trip), `a12-deletion` (deactivation/deletion with content, DM retention, media cleanup, search hook), `a12-password-change` (password change with re-verification, on session-bound access tokens) and `a12-email-change` (two-step email change with re-verification over real SMTP) | PASS | Mutate profile/unlisted/email/password with re-verification, export and import supported archive; delete/deactivate with content, sessions, follows and search history; verify recipient DM retention policy and media cleanup | AUTH-02, SRC-02 → A12 |
@@ -19004,3 +19004,226 @@ the health-component unit test and the boot code path rather than measured, and
 the admin page was never opened in a browser — the controls are proved by
 component tests against the regenerated contract.
 
+## AUTH-01/02 and PLAY-01 residuals — provider pre-claim and registration paths; native-HLS Safari — 2026-09-09
+
+**AUTH-01 and AUTH-02 move to PASS; PLAY-01 does not move, and the reason is an
+OS refusal this run cannot work around.** Three rows were UNVERIFIED on a
+residual clause rather than on their substance: A04 proved AUTH-01 and AUTH-02
+for password accounts and left "all signup methods" and "the same matrix for
+provider-created accounts" open until provider fixtures existed; A07 and A40
+proved PLAY-01 in Chromium and in Playwright WebKit, which takes MSE, and left
+real native-HLS Safari open. Two of the three are now measured against real
+providers. [Sanitized evidence](evidence/auth-providers-safari.json).
+
+The provider halves found a launch-relevant defect that no earlier slice could
+have seen, because no earlier slice ran a provider against a registration
+policy: **an instance with sign-ups closed still minted accounts through any
+configured provider, and an instance behind approval created them outright
+instead of queueing them.** Fixed RED-first —
+[core #227](https://github.com/yegamble/vidra-core/pull/227) (migration 0146) and
+[user #214](https://github.com/yegamble/vidra-user/pull/214) — and re-measured
+live on both providers.
+
+**The lab.** One origin, `http://127.0.0.1:8099`, which is what `vidra_refresh`
+(`SameSite=Lax`, `Path=/api/v1/auth`) requires: a pipe-only proxy splitting
+`deploy/Caddyfile`'s own `@api` path set to core and everything else to the
+frontend, dropping `Accept-Encoding` and transforming no body. Core runs two
+processes from `a04/providers-safari` (`VIDRA_ROLE=api` on `127.0.0.1:8088` and a
+separate `VIDRA_ROLE=worker`) over a native postgres 16.15 on `:55601`, with
+**two databases each initdb'd empty and migrated 0 → 146 in one run** —
+AUTH-01's pre-claim matrix needs a genuinely fresh instance, and a third
+database carries the concurrent-claim harness. Redis on `:56601`, flushed.
+`STORAGE_BACKEND=local` + `STORAGE_LOCAL_ROOT`. `MALWARE_SCAN_MODE=disabled` and
+`RATE_LIMIT_ENABLED=false` — both stated because both change what a negative
+means. The frontend is a production `next build` standalone server (`node
+.next/standalone/server.js`, never `next start`) built with
+`NEXT_PUBLIC_API_BASE_URL`. The browser is real Chromium.
+
+Two providers, both loopback. **Dex 2.45.1**, issuer `http://127.0.0.1:5556/dex`,
+memory storage, the `enablePasswordDB` static connector, one static client whose
+only redirect URI is this instance's callback. And A30's ATProto fixture
+rebuilt: **@atproto/pds 0.4.107**, a **persisting** loopback `did:plc` stub
+validating with the reference `@did-plc/lib` and serving its `formatDidDoc`, and
+a `caddy:2.11.4-alpine` container holding `127.0.0.1:80` so a handle — which
+carries no port — resolves. No OIDC or ATProto protocol traffic left loopback.
+
+Two fixture facts worth keeping. The PLC stub must **persist its operation log**,
+exactly as A30 recorded — an in-memory directory orphans every DID the PDS has
+already created. And `PDS_DEV_MODE=true` is unavoidable for a loopback OAuth
+lab: `@atproto/pds` validates its own protected-resource metadata and refuses
+any `http` origin that is not `localhost`/`127.0.0.1`/`[::1]`, so A30's shape —
+a public URL on the shim hostname — cannot be reused for the OAuth half. The
+port-80 shim is still needed, but only for the handle → DID hop.
+
+### SC1 — the pre-claim matrix, all three signup methods
+
+Measured on one fresh instance while `owner_claim_pending` was true, so the
+three refusals are the same instance answering three doors.
+
+| method | answer | account | session |
+|---|---|---|---|
+| password `POST /auth/register` | **403 `owner_claim_required`** | none | none |
+| OIDC first sign-in (real Dex sign-in page) | callback **302 → `/login?oauth=1&oauth_error=owner_claim_required`** | none | none |
+| ATProto first sign-in (real PDS consent screen) | callback **302 → `/login?oauth_error=owner_claim_required`** | none | none |
+
+After all three: `users` **0**, `oauth_identities` **0**, `sessions` **0**,
+`registration_requests` **0**, and three `auth.login | failure |
+owner_claim_required` rows. Both provider landings render the same honest line —
+*"This server is still waiting for its owner, so new accounts cannot be created
+yet."* Neither callback set a session cookie; a refresh from either browser is
+422 (there is no cookie to present).
+
+The rest of the row holds as A04 left it, re-measured here. A restart mints a
+distinct token and the previous one is **403 `owner_claim_invalid`**, as is a
+fabricated one. Two valid claims leaving a barrier together on a separate empty
+database produce exactly **one 201 and one 403 `owner_claim_invalid`**, and SQL
+reads `1 users, 1 admin, 1 owner`. The real `/setup/claim` form answers **201**,
+the page says *"Your server is ready"*, the row is `labowner | admin |
+is_owner=true`, `/admin/system` is **200** for the claimant, and re-presenting
+the spent token is **403**.
+
+And the clause that matters most after the claim: a provider sign-in creates an
+**ordinary** account, never the admin. OIDC → `ordinary | user | is_owner=false`,
+`/admin/system` **403**. ATProto → `atalice | user | is_owner=false`, the
+synthetic `did-plc-…@atproto.invalid` address, passwordless, identity `atproto |
+did:plc:… | atalice.localtest.me`, `/admin/system` **403**.
+
+### SC2 — the registration policy, and the defect it exposed
+
+The password path has honoured `registration_enabled` and
+`registration_require_approval` since W7. The provider paths did not consult
+either. Measured before the fix, on the same instance, minutes apart:
+
+| policy | password path | provider path (before) |
+|---|---|---|
+| **closed** | `403 forbidden` | account **created**, session issued, `auth.register success oauth:dex`, users 2 → 3 |
+| **approval required** | `202 pending`, request queued | account **created**, session issued, `registration_requests` untouched |
+
+The cause is one missing check rather than a broken one. Both provider create
+branches call `refuseIfOwnerUnclaimed` and stop; `registrationEnabled()` and
+`registrationRequiresApproval()` are read in the HTTP signup handler, which the
+callbacks never pass through. Nor can the check simply move up to the handler:
+only the service knows whether a verified assertion is a signup or a **login**
+for an identity that already exists, and a closed instance must keep signing in
+the accounts it has. So the policy is consulted on the create branch, after an
+existing identity has been ruled out — and, for approval, the signup is filed as
+a real queue entry rather than refused, because "requires approval" is an
+admission decision and refusing outright would make SSO unusable on exactly the
+instances that most want review. Migration **0146** gives
+`registration_requests` the provider columns that makes possible, and approval
+attaches the identity in the same all-or-nothing statement as the user insert —
+so the approved applicant signs in through the same subject, not merely one
+asserting the same address.
+
+After the fix, both providers answer identically:
+
+| case | OIDC (Dex) | ATProto (PDS) |
+|---|---|---|
+| closed | `?oauth_error=registration_closed`, Δusers **0**, Δrequests **0**, refresh 422 | same, Δ **0/0**, refresh 422 |
+| approval, first sign-in | `?oauth_error=registration_pending`, Δusers **0**, Δrequests **+1** | same, Δ **0/+1** |
+| approval, repeat while pending | same answer, Δrequests **0** (no duplicate) | same, Δrequests **0** |
+| the queue row | `fix2 \| pending \| dex \| <subject>` | `atcarol \| pending \| atproto \| did:plc:… \| atcarol.localtest.me` |
+| approve | **204** → `user`, `is_owner=false`, passwordless, identity attached | **204** → `atcarol \| user`, identity `atproto \| did:plc:…` with the handle kept |
+| sign in again after approval | lands signed in, refresh **200** | lands signed in, refresh **200** |
+| reject | **204**, row `rejected`, `auth.registration.reject success` | — |
+| sign in after rejection | refused, Δusers **0**, a **fresh** request filed | — |
+| open | Δusers **+1**, refresh **200**, role `user` | Δusers **+1**, refresh **200**, role `user` |
+
+The two refusals also needed copy, because both fell through to *"Signing in
+with the provider failed. Please try again."* — wrong twice over: neither is a
+failure, and retrying is precisely what cannot help. Verified rendering in the
+page's `[role="alert"]`: *"This server is not accepting new accounts right now,
+so signing in with a provider cannot create one."* and *"Your request to join
+was sent to the moderators. You will be able to sign in once it is approved."*
+
+**Sessions on provider accounts behave exactly as password sessions do.** Two
+tabs in one context both refresh **200**. An admin deactivation
+(`PATCH /admin/users/{id}`, `is_active: false`) makes another browser's next
+refresh **401**, on an OIDC session and on an ATProto one. A `logout-all` from
+one browser answers 204 and the other browser's next refresh is **401**, its
+reload signed out, active sessions **2 → 0**. With TTLs temporarily at 6 s / 18 s
+an access token is 200 immediately and **401** after 8.5 s, the cookie still
+rotates and the new access token is 200 — and a refresh cookie **pinned** to one
+value is **401 `invalid or expired refresh token`** past its window. That
+pinning is the point: the first attempt read 200 because a page left open keeps
+rotating the cookie, so `credentials: include` was sending a fresh one. An
+expiry measurement must hold the cookie still.
+
+**Rejected assertions create nothing**, re-running three rows of A05's state
+matrix against the same Dex fixture: no state cookie **400 `missing or expired
+oauth state`**; the right cookie with the wrong `state` **400 `oauth state
+mismatch`**; a tampered cookie **400**. None issued a session cookie, and
+`users` and `sessions` were unchanged across all three.
+
+### SC3 — native-HLS Safari: refused by the OS, and the residual is not what it looked like
+
+**Not measured. The row stays UNVERIFIED, and this is a blocker to report
+rather than to work around.** Both automation transports are gated behind a
+Safari setting that needs an interactive admin password:
+
+- `/usr/bin/safaridriver` exists and `safaridriver -p 4499` starts and answers
+  `/status` `{"ready":true}` — but `POST /session` returns *"session not created
+  … You must enable 'Allow remote automation' in the Developer section of Safari
+  Settings"*. `safaridriver --enable` prompts `Password:` and exits 1; `sudo -n`
+  is refused.
+- The Apple-Events fallback gets further and stops in the same place:
+  `tell application "Safari" to open location …` **works** (Accessibility is
+  granted), but `do JavaScript` answers *"You must enable 'Allow JavaScript from
+  Apple Events'"*.
+- The toggle cannot be written around either: the Safari container's preferences
+  are `Operation not permitted` without Full Disk Access.
+
+**What the user must do, exactly one of:**
+
+```
+sudo safaridriver --enable          # asks for the admin password
+```
+
+or Safari ▸ Settings ▸ Advanced ▸ *"Show features for web developers"*, then
+**Develop ▸ Allow Remote Automation**.
+
+What this run *could* establish is that the residual is narrower and stranger
+than the register cell assumes. From `vidra-user lib/player-engine.ts`: the
+engine order is `hls-js`, then `native-hls`, then `progressive`, and `hls-js`'s
+condition is `mseSupported`, which `probeSupport()` sets from `"MediaSource" in
+window || "ManagedMediaSource" in window` — **both true in modern Safari**.
+`native-hls` is reached only when hls.js's own `isSupported()` DECLINES at
+import time, which removes just that engine and lets the next survivor take
+over. There is no query parameter, setting or admin knob that forces an engine;
+selection is capability-only.
+
+So **desktop Safari does not skip hls.js** — it takes the same MSE path
+Playwright WebKit took in A40, which is more coverage than the cell credits. The
+genuinely unmeasured surface is real Safari's *media stack*: AVFoundation-backed
+decode of the ladder, `audioTracks` / `webkitAudioDecodedByteCount`,
+`webkitSetPresentationMode` PiP, theater mode, native `<track>` captions, the
+original/progressive fallback when the master 404s, and saved quality/speed and
+resume. A future native-HLS lab must also **force hls.js to decline** (or use an
+MSE-less Apple browser) rather than assume Safari lands on that engine at all.
+
+### Gates
+
+`make ci` on core: **gate passed** (fmt-check, vet, migrate-lint,
+openapi-verify, sqlc-verify, test-race); `openapi-verify` clean and no new
+routes, so the contract is unchanged. `migrate-lint` clean over **146** up
+migrations. The core tests were RED first: the four behavioural cases failed
+`err = <nil>` against the unpatched call sites, and six pass after. On the
+frontend: `typecheck`, `lint`, `lint:icons` pass and vitest is **265 files /
+2649 tests**, with the new `OAuthButtons.test.tsx` RED first (both codes
+returned the generic fallback).
+
+### Recorded, not blocking a row
+
+- The login page offers **both provider buttons on an unclaimed instance**, next
+  to the banner saying accounts are on hold, and each completes a full provider
+  round trip before being refused. The refusal is correct and the copy is
+  honest; the affordance still promises something the instance cannot do.
+- A **rejected applicant can re-apply** by signing in through the provider
+  again, filing a fresh pending request each time. This is parity with the
+  password path — both pending unique indexes are partial — not a regression,
+  but neither path has a re-application cooldown, so one applicant can re-fill a
+  queue indefinitely.
+- The ATProto queue entry carries the synthetic `…@atproto.invalid` address into
+  the approval queue, which is exactly what a direct create would have stored.
+  A reviewer therefore sees a handle and a placeholder address, never a routable
+  one — worth knowing before an operator tries to mail an applicant back.
