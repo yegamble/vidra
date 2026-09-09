@@ -1,0 +1,162 @@
+{
+  "slice": "AUTH-01/02 and PLAY-01 residuals — provider pre-claim and registration paths; native-HLS Safari",
+  "date": "2026-09-09",
+  "rows": {
+    "AUTH-01": "UNVERIFIED -> PASS (password: A04; providers: this slice)",
+    "AUTH-02": "UNVERIFIED -> PASS (password: A04; providers: this slice)",
+    "PLAY-01": "UNVERIFIED -> UNVERIFIED (blocked: macOS refuses WebDriver and Apple-Events automation of Safari without an admin password)"
+  },
+  "lab": {
+    "topology": "one origin http://127.0.0.1:8099 — a pipe-only proxy (Accept-Encoding dropped, bodies never transformed) splitting deploy/Caddyfile's @api path set to core and everything else to the frontend",
+    "core": "two processes from a04/providers-safari, VIDRA_ROLE=api on 127.0.0.1:8088 and a separate VIDRA_ROLE=worker",
+    "database": "native postgres 16.15 on 127.0.0.1:55601, TWO databases each initdb'd empty and migrated 0 -> 146 in one run (authprov1, authprov2); a third (authprovrace) for the concurrent-claim harness",
+    "redis": "native redis on 127.0.0.1:56601, db 0/1/2, flushed at start",
+    "frontend": "production `next build` standalone (node .next/standalone/server.js, never `next start`) built with NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8099",
+    "storage": "STORAGE_BACKEND=local + STORAGE_LOCAL_ROOT",
+    "stated_because_they_change_what_a_negative_means": {
+      "MALWARE_SCAN_MODE": "disabled",
+      "RATE_LIMIT_ENABLED": "false"
+    },
+    "providers": {
+      "oidc": "Dex 2.45.1 (Homebrew dexidp), issuer http://127.0.0.1:5556/dex, memory storage, enablePasswordDB static connector, one static client whose only redirect URI is this instance's callback, 15 static users",
+      "atproto": "@atproto/pds 0.4.107 on 127.0.0.1:2583 with PDS_DEV_MODE=true (its OAuth metadata refuses any non-loopback http origin), a PERSISTING loopback did:plc stub on 127.0.0.1:2582 validating with the reference @did-plc/lib and serving its formatDidDoc, and a caddy:2.11.4-alpine container holding 127.0.0.1:80 so a handle — which carries no port — resolves. Handles on *.localtest.me (wildcard DNS to 127.0.0.1). 5 PDS accounts",
+      "loopback": "no OIDC or ATProto protocol traffic left loopback at any point"
+    },
+    "browser": "real Chromium via Playwright 1.62.1"
+  },
+  "SC1": {
+    "verdict": "PASS",
+    "instance": "authprov2, migrated 0 -> 146 from empty, owner_claim_pending true",
+    "preclaim_matrix": {
+      "password_signup": {"status": 403, "code": "owner_claim_required"},
+      "oidc_first_signin": {"callback": 302, "location": "/login?oauth=1&oauth_error=owner_claim_required", "session_cookie": false, "refresh": 422},
+      "atproto_first_signin": {"callback": 302, "location": "/login?oauth_error=owner_claim_required", "session_cookie": false, "refresh": 422},
+      "page_copy": "This server is still waiting for its owner, so new accounts cannot be created yet.",
+      "state_after_all_three": {"users": 0, "oauth_identities": 0, "sessions": 0, "registration_requests": 0},
+      "audit": "three rows auth.login | failure | owner_claim_required"
+    },
+    "token_rotation": {
+      "old_token_after_restart": {"status": 403, "code": "owner_claim_invalid"},
+      "invalid_token": {"status": 403, "code": "owner_claim_invalid"},
+      "rotated": true
+    },
+    "race": {
+      "database": "authprovrace (separate, migrated 0 -> 146 from empty)",
+      "harness": "two threads leaving one barrier together",
+      "result": {"a": {"status": 403, "code": "owner_claim_invalid"}, "b": {"status": 201}},
+      "sql": "1 users, 1 admin, 1 owner"
+    },
+    "claim": {
+      "form": "real /setup/claim submission",
+      "status": 201,
+      "page": "Your server is ready",
+      "row": "labowner | admin | is_owner=true",
+      "admin_system_as_claimant": 200,
+      "spent_token_reclaim": {"status": 403, "code": "owner_claim_invalid"}
+    },
+    "after_claim_provider_signins_are_ordinary": {
+      "oidc": {"row": "ordinary | user | is_owner=false | email_verified=true | passwordless", "admin_system": 403},
+      "atproto": {"row": "atalice | user | is_owner=false | did-plc-…@atproto.invalid | email_verified=false | passwordless", "identity": "atproto | did:plc:… | atalice.localtest.me", "admin_system": 403}
+    }
+  },
+  "SC2": {
+    "verdict": "PASS (after the fix in vidra-core#227 / vidra-user#214)",
+    "defects_found": [
+      "registration CLOSED: the password path answered 403 while a first OIDC sign-in CREATED an account and issued a session (users 2 -> 3, identities 1 -> 2, refresh 200, audit auth.register success oauth:dex)",
+      "registration APPROVAL-REQUIRED: the password path filed a pending request (202) while a first OIDC sign-in created the account outright and signed it in, never touching the approval queue (registration_requests unchanged)"
+    ],
+    "cause": "the provider create branches called refuseIfOwnerUnclaimed and stopped there; registrationEnabled() and registrationRequiresApproval() are read in the HTTP signup handler, which the callbacks never pass through",
+    "registration_policy_matrix_after_fix": {
+      "oidc": {
+        "closed": {"redirect": "?oauth_error=registration_closed", "users_delta": 0, "requests_delta": 0, "refresh": 422, "password_control": 403},
+        "approval_first": {"redirect": "?oauth_error=registration_pending", "users_delta": 0, "requests_delta": 1, "refresh": 422},
+        "approval_repeat": {"redirect": "?oauth_error=registration_pending", "users_delta": 0, "requests_delta": 0},
+        "queue_row": "fix2 | pending | dex | <subject>",
+        "approve": {"status": 204, "user": "fix2 | user | is_owner=false | email_verified=true | passwordless", "identity": "dex | <subject>"},
+        "after_approve_signin": {"refresh": 200, "landing": "/"},
+        "reject": {"status": 204, "row": "rejected", "audit": "auth.registration.reject | success"},
+        "after_reject_signin": {"redirect": "?oauth_error=registration_pending", "users_delta": 0, "requests_delta": 1, "note": "a fresh request, not an account — parity with the password path, whose pending unique indexes are equally partial"},
+        "open": {"users_delta": 1, "refresh": 200, "row": "fix4 | user"}
+      },
+      "atproto": {
+        "closed": {"redirect": "/login?oauth_error=registration_closed", "users_delta": 0, "requests_delta": 0, "refresh": 422},
+        "approval_first": {"redirect": "/login?oauth_error=registration_pending", "users_delta": 0, "requests_delta": 1, "refresh": 422},
+        "approval_repeat": {"redirect": "/login?oauth_error=registration_pending", "users_delta": 0, "requests_delta": 0},
+        "queue_row": "atcarol | did-plc-…@atproto.invalid | pending | atproto | did:plc:… | atcarol.localtest.me",
+        "approve": {"status": 204, "user": "atcarol | user | is_owner=false | passwordless", "identity": "atproto | did:plc:… | atcarol.localtest.me"},
+        "after_approve_signin": {"refresh": 200, "landing": "/"},
+        "open": {"users_delta": 1, "refresh": 200, "row": "atdave | user"}
+      },
+      "page_copy": {
+        "registration_closed": "This server is not accepting new accounts right now, so signing in with a provider cannot create one.",
+        "registration_pending": "Your request to join was sent to the moderators. You will be able to sign in once it is approved."
+      }
+    },
+    "sessions_on_provider_accounts": {
+      "two_tabs_one_context": [200, 200],
+      "admin_deactivate_bites_the_other_browser": {"patch": 200, "other_browser_next_refresh": 401},
+      "logout_all_from_one_browser": {"status": 204, "other_browser_next_refresh": 401, "other_browser_reload": "signed out", "active_sessions": "2 -> 0"},
+      "atproto_session_revocation": {"patch": 200, "other_browser_next_refresh": 401, "active_sessions": "3 -> 0"},
+      "expiry": {
+        "ttls": {"JWT_ACCESS_TTL": "6s", "JWT_REFRESH_TTL": "18s"},
+        "access_immediately": 200,
+        "access_after_8.5s": 401,
+        "rotation_after_access_expiry": {"refresh": 200, "me_with_new_access": 200},
+        "refresh_with_a_PINNED_cookie_after_20s": {"status": 401, "code": "unauthorized", "message": "invalid or expired refresh token"},
+        "harness_note": "the first attempt read 200 because a page left open keeps rotating the cookie, so `credentials: include` sent a fresh one; an expiry measurement must pin the cookie value"
+      }
+    },
+    "rejected_assertions_create_nothing": {
+      "cited": "A05's state matrix, three rows re-run against the same Dex fixture",
+      "begin_cookie": "vidra_oauth_state; Path=/api/v1/auth/oauth; Max-Age=600; HttpOnly; SameSite=Lax",
+      "no_state_cookie": {"status": 400, "code": "bad_request", "message": "missing or expired oauth state"},
+      "right_cookie_wrong_state": {"status": 400, "code": "bad_request", "message": "oauth state mismatch"},
+      "tampered_cookie": {"status": 400, "code": "bad_request", "message": "missing or expired oauth state"},
+      "session_cookie_issued": false,
+      "delta": {"users": 0, "sessions": 0}
+    }
+  },
+  "SC3": {
+    "verdict": "BLOCKED — not measured",
+    "blocker": "macOS 26.5.1 refuses both automation transports without an interactive admin password",
+    "measured": {
+      "safaridriver_binary": "/usr/bin/safaridriver present, `safaridriver -p 4499` starts and answers /status {\"ready\":true}",
+      "new_session": "POST /session -> {\"error\":\"session not created\",\"message\":\"You must enable 'Allow remote automation' in the Developer section of Safari Settings to control Safari via WebDriver.\"}",
+      "safaridriver_enable": "`safaridriver --enable` prompts `Password:` and exits 1; `sudo -n` is refused (a password is required)",
+      "apple_events_fallback": "`tell application \"Safari\" to open location …` WORKS (System Events/Accessibility is granted), but `do JavaScript` answers \"You must enable 'Allow JavaScript from Apple Events' in the Developer section of Safari Settings\"",
+      "safari_container_prefs": "~/Library/Containers/com.apple.Safari/Data/Library/Preferences is `Operation not permitted` (no Full Disk Access), so the toggle cannot be written with `defaults`"
+    },
+    "what_the_user_must_enable": [
+      "sudo safaridriver --enable        # requires the user's admin password",
+      "Safari ▸ Settings ▸ Advanced ▸ \"Show features for web developers\", then Develop ▸ Allow Remote Automation"
+    ],
+    "established_from_the_player_code_instead": {
+      "file": "vidra-user lib/player-engine.ts",
+      "finding": "desktop Safari does NOT skip hls.js. The engine order is hls-js, then native-hls, then progressive; hls-js's condition is `mseSupported`, which probeSupport() sets from `\"MediaSource\" in window || \"ManagedMediaSource\" in window` — both true in modern Safari. native-hls is reached only when hls.js's own isSupported() DECLINES at import time, which removes just that engine",
+      "consequence": "the residual as written ('in Safari the <video> element consumes the HLS master natively, no MSE') is contradicted by the code: real desktop Safari takes the SAME hls.js/MSE path Playwright WebKit took in A40. A native-HLS lab must therefore force the decline (or use an MSE-less Apple browser) rather than assume Safari lands there",
+      "no_override": "there is no query parameter, setting or admin knob that forces an engine — selection is capability-only",
+      "still_unmeasured_in_real_safari": ["AVFoundation-backed decode of the ladder", "webkitAudioDecodedByteCount / audioTracks", "webkitSetPresentationMode PiP", "theater mode", "native <track> captions", "the original/progressive fallback when the HLS master 404s", "saved quality/speed preferences", "resume from the saved position"]
+    }
+  },
+  "SC4": {
+    "verdict": "PASS",
+    "core": {
+      "pr": "vidra-core#227",
+      "migration": "0146_provider_registration_requests (additive: five nullable/defaulted columns and one partial unique index; migrate-lint clean over 146 up migrations)",
+      "tdd": "internal/auth/provider_signup_policy_test.go — 4 behavioural cases failed `err = <nil>` against the unpatched call sites, 6 pass after",
+      "gate": "make ci — gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race)",
+      "openapi": "unchanged (openapi-verify clean); no new routes"
+    },
+    "user": {
+      "pr": "vidra-user#214",
+      "tdd": "components/auth/OAuthButtons.test.tsx — both codes returned the generic fallback before the copy existed",
+      "gates": {"typecheck": "pass", "lint": "pass", "lint:icons": "pass", "vitest": "265 files / 2649 tests passed"}
+    },
+    "no_new_viewer_scoped_read": "no component was added, so lib/use-settled-session.ts is not implicated"
+  },
+  "open_findings_not_blocking_a_row": [
+    "The login page offers 'Continue with Dex' and 'Continue with Bluesky' on an UNCLAIMED instance, next to the banner saying accounts are on hold. Both buttons complete a full provider round trip before being refused. Cosmetic, and the refusal is correct and honest — but the affordance promises something the instance cannot do.",
+    "A rejected applicant can re-apply simply by signing in through the provider again, filing a fresh pending request each time. This is parity with the password path (both pending unique indexes are partial), not a regression — but neither path has any re-application cooldown, so a queue can be re-filled indefinitely by one applicant.",
+    "PDS_DEV_MODE was required for a loopback lab: @atproto/pds refuses any http OAuth resource URL that is not localhost/127.0.0.1/[::1], so the A30-shaped 'public URL on a shim hostname' arrangement cannot be used for the OAuth half. The port-80 shim is still needed, but only for the handle -> DID hop."
+  ]
+}
