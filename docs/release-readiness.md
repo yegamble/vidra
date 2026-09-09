@@ -104,7 +104,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | AUTH-05 Profile/privacy, email/password changes, deactivation/deletion and account archive | C U S | Backed profile-edit/deactivate/delete-account/account-export; core account and search deletion hooks; live evidence `a12-profile-archive` (profile/privacy + archive round trip), `a12-deletion` (deactivation/deletion with content, DM retention, media cleanup, search hook), `a12-password-change` (password change with re-verification, on session-bound access tokens) and `a12-email-change` (two-step email change with re-verification over real SMTP) | PASS | Mutate profile/unlisted/email/password with re-verification, export and import supported archive; delete/deactivate with content, sessions, follows and search history; verify recipient DM retention policy and media cleanup | AUTH-02, SRC-02 → A12 |
 | PUB-01 Create channel and draft; upload a real file within quota | C U M | `internal/video`, upload routes; backed upload/studio/channel-management; live browser channel/draft/real-upload/quota/durability proof (A06 evidence L560–568) | PASS | Browser-create channel/draft; upload generated audiovisual clip; inspect original metadata, owner quota accounting and durable state; deny nonowner/overquota/invalid input | AUTH-02 → A06 |
 | PUB-02 Resumable upload, cancel, draft recovery and batch publishing | C U | W2 plans; backed upload-draft-recovery/upload-cancel/upload-batch | PASS | Interrupt network and restart service between chunks; resume without duplicate files/charges; recover draft on another session; cancel cleanup; partial batch failure retained | PUB-01 → A10 |
-| PUB-03 Transcode durable jobs into playable CMAF/HLS ladder | C M U | `internal/media/hls.go`, CMAF packager, transcode jobs; backed hls-playback | UNVERIFIED | Real ffmpeg job: source→processing→ready; fetch advertised master, audio/video variants, init/segments; decode audio and video; retry crash without duplicate promotion | PUB-01 → A07 |
+| PUB-03 Transcode durable jobs into playable CMAF/HLS ladder | C M U | `internal/media/hls.go`, CMAF packager, transcode jobs; backed hls-playback; A07 proved the pipeline and playback clauses; the residual **retry-crash** clause is closed by live evidence [`a34-a25-ops-storage`](evidence/a34-a25-ops-storage.json) (section "A34/A25 …"): a real ffmpeg transcode of a 1280×720 300 s source was SIGKILLed at `progress_percent` 48 on one of two workers, requeued by the leader's lease sweep 116.9 s after the 30-minute lease clock was advanced, retried **once** on the other worker, and promoted **exactly one** generation — `videos.transcode_generation` 1, one `streaming_playlists` row on `…/r1/master.m3u8`, one `transcode_jobs` row (`done`, `attempts=1`), `r1` and nothing else under both prefixes, and **345 stored objects, byte-for-byte the count an uninterrupted run of the same fixture produced** — with the api's `POST /videos/{id}/file` request id carried onto the run row the SECOND worker finished | PASS | Real ffmpeg job: source→processing→ready; fetch advertised master, audio/video variants, init/segments; decode audio and video; retry crash without duplicate promotion | PUB-01 → A07 for source→processing→ready, the advertised master and its variants, init/segments and decoded audio and video; A34 for the retry clause A07 left open. Not re-measured here: browser decode, which PLAY-01 and A07 own |
 | PUB-04 Schedule/quarantine/privacy gates survive processing and replacement | C U S | Schedule/quarantine backed specs; replace handlers; instance gates | PASS | Publish-after-transcode and schedule, quarantine approve/reject, replacement preserving URL/metadata; no premature discovery; concurrent old/new playback; failed replacement retains prior usable generation | PUB-03, SRC-02 → A10 |
 | PLAY-01 Watch, seek, quality, speed, resume, PiP/theater and mobile/native playback | C U | `components/player`, HLS hook, backed hls-playback/player-settings/history | UNVERIFIED | Browser actual currentTime advance and audible track, seek, quality change and saved preferences; Chromium plus native-HLS Safari on representative ladder; original fallback when appropriate | PUB-03 → A07 |
 | PLAY-02 Canonical/legacy links, sharing, embeds, oEmbed/feed/sitemap | C U M | F01 resolved at final snapshot; resolver and imported UUID mapping now present; canonical/legacy/short/source-UUID links, timestamps, share/embed, oEmbed/feed/sitemap all proven in a real browser (A08 evidence L729–734, L901–929) | PASS | Run path guard first; follow canonical and old PeerTube/UUID/short links through edge with timestamps; verify privacy/password unlock and embed origin rules, metadata and downloadable file | REL-01, PLAY-01 → A01 then A08 |
@@ -131,7 +131,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | MIG-06 Repeatable cutover, old links and federation continuity | M C S U | Source-authoritative mode; legacy frontend routes; source readonly design | BLOCKED | Rehearsal timed full+delta; stop source writes for final snapshot, reconcile media/data, old links and two-instance actors/follows; documented rollback while source retained; no dual-writer or public federation rehearsal | MIG-02–05, PLAY-02, REC-02 + domain plan → A23 |
 | STO-01 Local/S3 canonical storage persists and serves valid media | M C U | Storage interface, local/S3 adapters; current MinIO CI lanes; local half proved by A07/A08; S3 half proved by this slice on MinIO (section "A24 S3 storage on MinIO and reference-mode GC protection — 2026-09-08", evidence `a24-s3-minio.json`): app-created bucket, 19-object key layout, real Chromium CMAF playback (90 frames, 0 dropped), Range/content-type table, byte-identical objects across container recreation, a fresh api on an empty disk, and the scratch floor honoured — write refusal and bucket-quota exhaustion both surface as a bare 500 with the sentence in the log only | PASS | Run PUB/PLAY on both backends; bucket creation/write/Range/content-type/space exhaustion; recreate containers and verify bytes; deployment filesystem ownership | PUB-01 → A07 local, A24 S3. Provider run DEFERRED: no credentials for the beta bucket are on the lab machine, so a real provider's bucket creation, versioning/retention and CORS are untested and the B2 bucket-GC / versioning-billing risks stay open |
 | STO-02 Reference-mode foreign media is protected from garbage collection | C M | `internal/mediagc` ownership marker, foreign-layout adoption refusal and keep rules; proved by this slice (section "A24 S3 storage on MinIO and reference-mode GC protection — 2026-09-08", evidence `a24-s3-minio.json`): a shared MinIO bucket carrying eleven foreign objects beside three real videos, dry runs listing zero foreign keys, the 409 `foreign_media_layout` adoption refusal and its audit row, a tripped orphan breaker (150 orphans, 69 %, deleted 0) then an exact 50-object delete, and — after the imported record was deleted on a force-adopted bucket — a destructive sweep that deleted nothing, with all 11 foreign objects sha256-identical throughout | PASS | Disposable shared bucket with foreign and Vidra keys; dry-run/adoption refusal/orphan breaker; delete imported record then sweep; foreign objects remain byte-identical | MIG-01, STO-01 → A24. The foreign dataset is SYNTHETIC (planted by `docs/evidence/a24-plant-foreign-media.sh` in the importer's own key shapes); no PeerTube import ran, because MIG-01/A18 is blocked on a source database |
-| STO-03 Storage migration/copy/verification/abort and GC interlocks | C U M | `internal/storagemigration`; phase-2 plan and integration tests | UNVERIFIED | Local→MinIO copy with checksums, failures/resume and final authority switch; prove reads during movement and old-store retention; GC cannot race migration | STO-01, REC-01 → A25 |
+| STO-03 Storage migration/copy/verification/abort and GC interlocks | C U M | `internal/storagemigration`; phase-2 plan and integration tests; live evidence [`a34-a25-ops-storage`](evidence/a34-a25-ops-storage.json) (same section): a real **local→MinIO** campaign of 1 272 objects / 306 MB run to `done` with 0 failures, verified end to end (the digest is taken from the bytes read from the SOURCE, the object is re-opened from the TARGET and re-hashed, and `video_files.sha256` is a third opinion) and independently sampled 6/6 — ledger sha256 == local file == object read back through the S3 API; a worker SIGKILLed mid-copy at 733/1191 leaving **exactly one** object stranded and NOT on the destination, recovered by the lease sweep with the other 1 190 rows still at `attempts=0` and untouched since; a bucket flipped to **read-only mid-flight**, which put all 54 in-flight objects on `attempts=1 last_error="copy failed; retrying"` and then verified every one of them on the 1-minute backoff once the policy was restored; an **abort** at 136/1191 that left the source untouched, stopped claiming at once, RETAINED the partial copies on the destination by design and changed no authority; a **26 412-sample** read loop across the whole slice with **zero 404s and zero 5xx** (201 connection-refused, every one inside a deliberate restart) and an authority switch costing **3 requests in one second**; retention held through cutover and released only by an explicit operator step, with a rollback of authority before expiry working and NAMED on the admin surface; and the GC interlock proven not silent — `forced_dry_run_reason: "storage_migration_active"` in the response, the audit row and the admin UI's own sentence | PASS | Local→MinIO copy with checksums, failures/resume and final authority switch; prove reads during movement and old-store retention; GC cannot race migration | STO-01, REC-01 → A25. **A defect was found and fixed on the way** ([vidra-core #224](https://github.com/yegamble/vidra-core/pull/224)): the object ledger is primary-keyed on the STORAGE KEY alone and a finished campaign's rows outlive it, so the next campaign's `ON CONFLICT DO NOTHING` enumeration inserted **nothing**, started with an empty ledger and announced *"every object in the source is verified in the target"* with `objects_total: 0` — measured live, 136 of 1 191 objects copied and 1 055 never touched, which is the sentence an operator cuts over on. It bites a retry after an abort AND **the second move an instance ever makes**, since a bucket-to-bucket migration re-uses the same keys. Start now clears the ledger of every campaign that is over, guarded on the CAMPAIGN's state so it can never touch a live one; unit + integration regressions, RED before and GREEN after. Findings, none blocking: a migration target the process cannot WRITE to is a **fatal boot refusal** for the api and the workers alike (`fatal … check bucket … Access Denied [write_denied]`, no listener, no `/healthz`), so a rotated target credential takes the whole instance down rather than pausing a campaign; a campaign whose objects are failing shows `objects_failed: 0` and an empty `last_error` until the attempt budget is spent, because the short fixed failure categories are projected by no surface; the worker WARN redacts `object_key` and then prints the same key verbatim inside the error string; `storage_migrations` IS projected into `job_runs` (contradicting A17's list) but with empty `correlation_id`/`request_id`/`worker_id`; an aborted campaign's partial copies stay on the destination forever; and **vidra-user has no control that starts or cancels a migration** — the admin surface is a read-only campaign list, which is why this slice needed no browser. Not run: a real provider bucket (MinIO stands in, so provider versioning/object-lock/lifecycle stay untested as STO-01 records) and an s3→s3 campaign |
 | INT-01 Live RTMP ingest→HLS watch→replay with moderation | M C U | `media` profile, live service/hooks/replay; backed tests simulate hook transitions; live evidence `a26-live` (section "A26 live RTMP — ingest, watch, moderation, replay — 2026-09-08"): the BUNDLED nginx-rtmp ingest actually run against a two-process core with a real `ffmpeg` publisher (720p30 h264 + 48 kHz AAC) and real Chromium — the hook contract read verbatim off the wire, a wrong key refused at the hook with zero bytes written, an anonymous viewer's `currentTime` advancing 29.0 s with non-silent decoded audio (analyser RMS 0.125), a mid-broadcast key rotation, the `live_max_duration_secs` watchdog cutting a session with its typed audit row, a SIGKILLed publisher producing a watchable CMAF replay, and the hook-alone and capability-truth matrices. Four of that run's five open findings were then built out (section "Live follow-ups — verified drop, watchdog disconnect, audited ends, polling watch view", evidence `live-follow-ups`), code-only and **not lab-observed**: the drop is verified against the control module's count so a termination that dropped nobody says so, the duration watchdog runs the same four-step termination instead of flipping the state alone, the owner's own end and the watchdog's cut are both audited with `resource_type`/`resource_id`, and the watch view polls during a broadcast | **PASS (bundled ingest; passthrough ladder; chat/DVR/tips remain SCP-05)** | Actual RTMP publisher with audio; live watch advances, authorization and stream-key rotation; terminate/max-duration/disconnect→replay; verify selected ladder/latency; hooks alone insufficient | PUB-03 + live selection/ingest plane → A26. **The bundled plane did not work at all before this slice** and five defects were fixed to make the rest measurable ([vidra-core #205](https://github.com/yegamble/vidra-core/pull/205)): the on-publish redirect answered an `rtmp://` Location, which nginx-rtmp reads as a PUSH RELAY target rather than a rename, so every segment and playlist was written under the RAW STREAM KEY and the api — serving `<id>.m3u8` — 404d the whole broadcast; the rename can never reach the HLS module (reverse handler order), so packaging moved to a loopback-only second application fed by a push; the recorder directory was never created and, when empty, was deleted by the HLS cleanup 12 s after start, so replay-to-VOD had NEVER run on any deployment; a mid-broadcast key rotation orphaned the session (the stop hook carries the pre-rename name) and left the stream `live` for twenty minutes with no replay; and two paths bypassed the stream key entirely — the PUBLIC stream id was accepted as a publish identity, and a deactivated owner kept publishing to the public "Live now" rail. What now PASSES: authorization and key handling (wrong key refused at the hook, key absent from every list body, viewer 404/403 and anonymous 401, admin 404 on the owner-scoped routes), live watch (29.0 s of advance, unmuted non-silent audio, a real moving live playlist), disconnect→replay (SIGKILL at 14 s → `ended`, HLS 404, a 15 s replay published on the right channel and played from a three-variant CMAF ladder with 0 dropped frames, `job_runs` stamped with correlation and request ids), hooks-alone (401 on a bad secret with no state change; a valid hook with no publish flips the row but the watch page renders no `<video>` and says so), and the capability gates (`features.live` true with the ingest, 403 `feature_disabled` on the derived default, typed 503 `live_not_configured` with the setting on and no ingest, Studio create control hidden). What FAILED THEN, and is closed by the hardening plus the rehearsal recorded at the end of this cell: **there was no control that terminates a live stream** — core registers no `/admin/live*` route, the admin surface is settings only, and an admin gets 404 on the owner's `DELETE`/`PATCH`; the only lever is the global `live_max_duration_secs`, which has a 60 s floor, cuts up to one 30 s sweep late, and is server-side only — the publisher stays connected and keeps writing segments and a recording. Also measured, not blocking the verdict: there is **no live ABR ladder** (zero `EXT-X-STREAM-INF`; the ingest transcodes nothing, so every viewer gets the streamer's single bitrate) and no viewer count; glass-to-glass latency is 9.1 s at join and nothing resyncs a drifted player to the edge; live audit rows leave `resource_id` empty; session recordings are never deleted after their replay publishes; a hook-only flip advertises a byte-less stream on the public rail; `/admin/system` carries **no ingest component**, so a dead RTMP plane leaves it reading `ok`; and the ingest image is the unpinned `alfg/nginx-rtmp:latest`, a 2022 build. Not run: OBS or any real streaming client, the compose `media` profile as a profile, a second concurrent viewer, the simultaneous-live caps, TLS/real hostnames, and S3 (the replay landed on local storage). **Hardening merged** (moderator + owner termination, a concurrent-viewer count, `LIVE_RECORDING_RETENTION`, the ingest pinned by digest, a `live_ingest` health component — core #206 / user #200, migration 0141), and the re-run of this row's own procedure has now measured it: section "A26 rehearsal — live termination against the merged hardening — 2026-09-08" ([evidence](evidence/a26-rehearsal.json)), which found the termination broken in **three** independent places and fixed all three ([core #211](https://github.com/yegamble/vidra-core/pull/211), [user #201](https://github.com/yegamble/vidra-user/pull/201)): nginx-rtmp's control module is PER WORKER, so under the shipped `worker_processes auto` twelve consecutive drops against a live publisher all answered `0`, the streamer kept writing seventeen more segments and 12.5 MB of recording, and the moderator was told `publisher_disconnected: true` every time; `content.live.terminate` set a `resource_id` with no `resource_type`, which the audit envelope refuses, so the row was never written at all; and the frontend double-encoded the request body, so every click of **End stream** answered `400`. With those fixed the whole clause passes on the wire — a moderator's dialog returns `200 {"state":"ended","publisher_disconnected":true,"stream_key_rotated":true}`, **ffmpeg exits 0.08 s later**, **zero further bytes** reach `LIVE_HLS_ROOT` in the next twelve seconds, the old key is refused at the hook, the creator (and only the creator and staff) is told which rule and in whose words on both surfaces, the audit row carries the stream in `resource_id`, and terminate → drop → `on_publish_done` publishes a **127 s replay for a 127 s broadcast** that plays from a three-variant CMAF ladder. Also measured: `viewer_count` 3 with three viewers and a decay to 2 at **90.2 s**, `LIVE_RECORDING_RETENTION` in both modes, and `live_ingest` `ok`/`down`/`not_configured` with `/readyz` staying 200. Open, none blocking: the count is unreachable for signed-in viewers and its rendered value never refreshes during a broadcast, the duration watchdog still does not disconnect the publisher, `DropPublisher` cannot tell a real disconnect from "nothing matched", and an owner's own end writes no audit row |
 | INT-02 Direct URL import, yt-dlp platform import and channel auto-sync | M C U | Videoimport/channelsync; W2; released image yt-dlp build arg; dedicated channel-sync CI; live evidence `a27-import-sync` (a local fixture origin and an html5 extractor fixture on a two-process core: direct import stored, probed, transcoded and published with a stamped correlation id; sandboxed `resolver=ytdlp` published with h264+aac and prefilled the empty draft field; one scheduled channel sync discovered exactly one item, imported nothing on two `sync-now` runs and two scheduled runs, discovered exactly one new item after the source published one, recorded a real outage as `failed` with a safe reason and recovered with no re-import; a SIGKILLed worker was requeued by the lease sweep and retried to success with no duplicate and the correlation id preserved across processes; seven SSRF probes refused with zero stored bytes, including a public redirector to a private address that imported before this slice; and every disabled/boot gate refused once) | PASS | Local fixture origin/file and extractor fixture; scheduled channel discovers new item once; restart/retry/SSRF/disabled gates; verify released image actually contains executable | PUB-03 → A27. Released-image proof is `ghcr.io/yegamble/vidra-core:v0.6.2` (amd64) carrying `/usr/local/bin/yt-dlp` 2026.07.04 + Python 3.14.7 + ffmpeg 8.1.2 from the `YTDLP_VERSION` build arg — that image PREDATES the fixes in core#184, so the released image is proven to contain the executable but not to run this behaviour. Follow-ups, none blocking: the three boot-capability 503s (`resolver=ytdlp`, sync create, sync-now) are bare `echo.NewHTTPError` so the 5xx scrubber replaces their sentences with "an unexpected error occurred" (A17's open item, measured here on two more routes); URL import has a hard 60-second budget for the WHOLE download (`videoimport.fetchTimeout` is the `http.Client.Timeout`), so `UPLOAD_MAX_SIZE` is not the real ceiling; a failed sync reschedules at the plain `CHANNEL_SYNC_INTERVAL` with no backoff; `channel_syncs` is still unprojected into `job_runs` and has no admin surface (this slice added only a WARN line); a runtime limit change binds the worker only after its settings-poll interval; the channel-sync dedupe key falls back to the entry URL when the extractor reports no id; and the explicit `resolver=ytdlp` path is still not dial-pinned by design. The `channel-sync-backed` lane was NOT run against this branch (it needs Docker Compose); S3 was not exercised |
 | INT-03 Manual captions and Whisper generation/review | M C U | Caption routes/CaptionsManager; backed captions/whisper-captions opt-in; live evidence `a28-captions-scan` (section "A28 captions, Whisper and ClamAV lanes — 2026-09-08") on a two-process core with real Chromium: manual VTT create/edit-by-re-upload/list/delete with the object sha changing over the same key, a second language, typed 422s for a non-WebVTT body and a malformed tag, `PUT`/`PATCH` still 405, and an owner-only matrix in which even the admin gets 404 while anonymous reads of a public video's track are 200; both tracks render on the watch page as same-origin `blob:` `<track>` with the right `srclang`/`label` and three real cues; and a REAL local whisper.cpp 1.9.2 `/inference` endpoint drove audio→job→an editable `Auto-generated` caption (12 s end to end from the Studio button), with a measured 1-then-2-minute retry ladder, a dead-letter at attempt 5 that wrote no caption, the compile-time 10-minute timeout firing exactly on time against a stalling endpoint and recovering on the next attempt, and the disabled split proved on both halves (403 `feature_disabled` with the control hidden, 503 `auto_captions_not_configured` when the admin toggle is on without an endpoint) | PASS | Manual VTT CRUD, watch track and language; configured Whisper audio→job→editable caption; outage/timeout and unsupported language; owner-only access | PUB-03 → A28. Evidence is **whisper.cpp 1.9.2 with `ggml-tiny.bin` — a real implementation of the contract core speaks, but the SELECTED endpoint, model size and capacity are DEFERRED**, so nothing here bounds transcription latency or cost at production scale. Findings, none blocking: there is no caption *editor* — the shipped edit path is re-uploading the language, and `UpsertCaption` keeps the original `created_at` with no `updated_at`, so nothing distinguishes an edited track from an untouched one; one click on Studio's "Generate automatically" silently replaced a creator's hand-written `en` track with the machine transcript, no warning and no undo; the Whisper round-trip bound is a compile-time 10 minutes with no knob; `caption_generate` rows reach `job_runs` through migration 0083's trigger but carry empty `correlation_id`/`request_id`/`actor_id` on 4 of 4 rows where `upload_finalize` and `video_transcode` are stamped on 2 of 2; a well-formed unknown tag (`zz`) passes Vidra's validator and **aborts whisper.cpp**, so any creator can kill a shared transcription service; and the client ignores the response's own `language`, so an English transcript is stored under whatever tag was asked for. A17's note that this 503 is a bare `echo.NewHTTPError` is **stale** — it is typed and its sentence survives the scrubber |
@@ -143,7 +143,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | INT-09 Presigned S3 browser delivery obeys CORS/expiry/authorization | M C U | Delivery resolver/presign; historical browser CORS incident; core README notes; live evidence `a32-a33-delivery` (a two-process core on `STORAGE_BACKEND=s3` against a MinIO on its own origin, with the one-origin frontend proxy and real Chromium and WebKit: presign ON moved every media byte to the bucket — 7 of 81 requests, the poster, a 206 Range on the original and five CMAF objects, decoded unmuted to 6.014 s at 150 frames and 0 dropped in both engines — while the api served only the three rewritten playlists and the 307s, and presign OFF put the same playback back on the proxy with 0 bucket requests and every response `private`; no preflight is sent because a `bytes=` Range is safelisted and the request only turns cross-origin after the 307; a signature past its TTL is a bucket 403 `Request has expired` and the client's next api request mints a fresh one, with the redirect's own 300 s far inside the 3600 s signature; a private video answers 404 with no `Location` ever minted for a non-owner and the owner's own credentialed read stays on the proxy at `private, no-store`; a stopped bucket reports `s3: down [unreachable]` on `/admin/system` and fails the master playlist with a typed 503 `storage_unavailable` before any segment, though the redirect itself still mints and `/healthz` still answers 200; and a CORS misconfiguration blocks every segment, which the api cannot see and the QoE beacon records as `api-proxy` + `error_class=network`) | PASS | Real cross-origin bucket in browser: Range/preflight/307, expiry and private refusal; Chromium and Safari; bucket outage does not masquerade as success | STO-01, PLAY-03 + selected bucket/CORS → A32. Evidence is **MinIO cross-origin; the selected bucket run is deferred (no credentials on this machine)**, so a real provider's CORS, versioning and virtual-host addressing stay untested, and Safari.app itself was not driven — the WebKit engine it ships was, via Playwright, and it took the same MSE path Chromium did. Defect fixed on the way: the presigned original and official download answered `application/octet-stream` where the proxy answers `video/mp4`, because the S3 PUT recorded no content type and `video_files.content_type` is empty for every resumable upload — the proxy hid both by sniffing (vidra-core #197). Findings that need a ruling rather than a patch, none blocking: presign minting does NOT fail closed on a bucket outage (a 307 to a dead store is still issued; only the playlist's typed 503 saves the session, and `/healthz` reports `{"status":"ok"}` throughout because its storage component is a five-minute write probe); `delivery.PresignTTL` is a compile-time hour with no knob of any kind; a CORS failure degrades the player silently from the CMAF ladder to the whole original file per viewer, with an unbounded segment-retry loop (39 blocked fetches in 12 s) and no viewer-visible error; and a total object-store outage renders a dead `0:00/0:00` player with no message at all |
 | INT-10 CDN redirects, purge and versioned media remain correct | M C U | F06; CDN provider/resolver and purge ledger; **live evidence [`a33-rehearsal`](evidence/a33-rehearsal.json) (section "A33 rehearsal — CDN edge simulator against the merged remediation — 2026-09-08")** — slice 3, run against core `main` `59d7f51` (#199 + #202 + #203 + #204 merged, schema 140) with the edge simulator's origin pointed at the **api** and a MinIO bucket carrying **no policy at all**: 307s name the api's own route path + `?v=` + `__vidra_edge=1`, the edge's origin fetch is served (zero `Location` headers across eight marked probes) at `public, max-age=31536000, immutable` / `3600` / `300` with honest `Content-Type` and `Content-Disposition: attachment; filename=…`, playlists never reach the edge, a viewer and any intermediary still get `private`, private is 404 and unlisted is never redirected, and an unauthenticated read straight at the bucket is **403** — so clauses (5) and (6) are closed by construction. A same-source re-transcode moved `videos.transcode_generation` 1→2, wrote `r2/`, minted a new `?v=`, sent **zero** purges (correctly) and produced **0** old-tag requests on reload with 144 frames against 150 — clause (1) closed; a superseded `?v=` is refused 404 `private, no-store` and the refusal is not cacheable. All four families purge and the edge serves new bytes: poster (multipart **and** frame-pick) 1 request each, storyboard 1, account deletion 13 as one queued job, download revocation 8 through a leased walk that survived a worker kill — cursor resumed, **no key purged twice** — clause (2) closed. A refused purge retried at **+60 s, +2 min, +4 min** from the persisted `next_attempt_at`, landed on attempt 4 when the edge accepted again, and dead-lettered with its URL list intact on a forced attempt 8 (`pending_retries`/`oldest_pending_seconds`/`dead_letters`, the admin jobs page and `vidra doctor`'s ⚠ all agree) — clause (3) closed. Prior evidence [`a32-a33-delivery`](evidence/a32-a33-delivery.json) is the pre-remediation measurement; **the closing sentences of the notes cell ("the row stays FAIL until the edge simulator is re-run", "neither has been measured against a caching edge") are superseded by this run.** Selected edge and selected bucket remain deferred — no zone, credential or commercial bucket on this machine | **PASS (edge simulator; selected edge deferred; clause 4 residual: no proxy fallback after an edge 5xx)** — clauses (1), (2), (3), (5) and (6) re-measured closed against a caching edge; clause (4) is unchanged and named: a 307 to an edge that then 5xxs has no fallback to the api proxy (hls.js retried 4 segment URLs 27 times, the player fell through to `/original` which 307s to the same broken edge, `MEDIA_ELEMENT_ERROR` code 4, `readyState` 0). The only remedy is the `delivery_cdn_enabled` kill switch, measured working: zero edge requests and playback restored | Edge simulator first, then selected edge: retranscode/replacement, privacy/delete/global download revoke and failed purge/retry; stale segments must never play; failure after redirect tested | PLAY-03 + CDN selection → A33. What passes: source REPLACEMENT is genuinely generation-addressed (`web-videos/<id>.r1.mp4`, `streaming-playlists/<id>/r1/…`), so old and new never collide and no purge is needed — playback afterwards fetched only `r1/` keys while the edge's generation-0 entry sat unconsulted; and the three wired families each fan out correctly (per-video download flip 4 purges, privacy flip 18, deletion 18, with a 404 for an object never cached counting as success). What fails, each clause: (1) **stale segments DO play** — a same-source re-transcode overwrites the SAME keys (`HLSPrefixForSource` reads the source key's `.rN`, and a rerun is still version 0), sends **zero** purges, and Chromium decoded the edge's old 25 fps chunk beside the new 24 fps init segment with no error; the `?v=` tag moves but `cdn.EdgeURL` carries no query, so it can never version an edge. (2) Thumbnail/storyboard replacement, account deletion and the instance-wide download revocation all send **zero** purges and leave the edge serving bytes the API has already stopped serving — F06's ledger, confirmed with an edge in the loop. (3) **A failed purge is never retried**: 18 rejected calls, one aggregate WARN, no second pass ever, and the edge still serving a deleted video 30 s later; `GET /admin/system`'s `cdn_purge` block reported it accurately. (4) A 307 to an edge that then 5xxs has **no fallback to the proxy** — hls.js retried 28 times and the player died on `MEDIA_ELEMENT_ERROR` code 4. (5) The edge reproduces **none** of the API's response headers — no content type, no `Content-Disposition` (a redirected official download loses the creator's filename), and no `Cache-Control` at all, because the edge pulls from the BUCKET and Vidra writes no cache metadata on stored objects; nothing becomes `public` by design, so a real CDN's own default TTL is the only bound on stale media. (6) New and not in F06: a key-addressed CDN origin must be readable by the edge, and made so the obvious way **every private object becomes world-readable at the origin** — a private video's poster and original both answered 200 to an unauthenticated fetch — so a privacy flip's correct 18-key purge was undone by the very next request re-pulling and re-caching it; undocumented in `.env.example` and `docs/operations.md`. The **selected edge is deferred** (no zone or credential on this machine). Wrong actors verified: admin routes 401/403, purge triggers 401/404. **Remediation slice 1 is open** ([vidra-core #199](https://github.com/yegamble/vidra-core/pull/199), section "A33 remediation 1"): the CDN's origin becomes this API rather than the bucket, which removes the mechanism behind clauses (1), (5) and (6) and re-addresses purge from keys to URLs; every transcode run mints its own generation (migration 0136), which closes clause (1)'s same-source overwrite. The row stays FAIL until the edge simulator is re-run against it (slice 3). **Remediation slice 2 is open** ([vidra-core #202](https://github.com/yegamble/vidra-core/pull/202), section "A33 remediation 2"), and closes clauses (2) and (3): `media_purge.go`'s STILL-UNPURGED ledger is **empty** — poster and storyboard replacement purge their stable URL through a `video.Service` hook that also covers the backfill worker, account deletion snapshots the whole account before the cascade and enqueues it, and the instance-wide download revocation is a leased, resumable walk with a persisted cursor (migration **0137**, `cdn_purge_jobs`) — and a refused purge is retried at 1, 2, 4, 8, 16, 32 and 60 minutes before dead-lettering with its URL list intact, surfaced on `cdn_purge` (`pending_retries`/`oldest_pending_seconds`/`dead_letters`), the admin jobs page and `vidra doctor`. **Clause (4) is untouched and still open**: a 307 to an edge that 5xxs still has no fallback to the api proxy. Both slices are code-only — neither has been measured against a caching edge, which is what slice 3 is for |
 | INT-11 Noncustodial donation addresses verify and display honestly | C U | Donation service; backed donations; product decision excludes custodial flows; proved by A30 (same section and evidence file): four curated networks with shape validation (bad network and bad address both typed 422), every address stored unverified, an ethereum EIP-191 challenge bound to instance/network/address/nonce that a wrong-key signature fails 422 and a genuine one verifies, the challenge single-use (409 on re-verify), bitcoin honestly 501 not_implemented, wrong actors 403/401/404, and an anonymous Chromium viewer sees the watch Support dialog say “Vidra never holds or processes funds” with per-address VERIFIED/UNVERIFIED and no balance, confirmation or thank-you; deletion hides the address on reload | PASS | Address validation/challenge/ownership verification, update/remove and profile/watch support dialog; no fabricated payment confirmation or funds handling | AUTH-02 → A30. OPEN, not blocking the row: `GET /users/{id}/donation-addresses` is documented as the public projection for a PROFILE page but nothing renders it there — the only consumer is the Support button, via a channel's owner — so a creator with no channel exposes addresses no page shows |
-| OPS-01 API/worker split updates settings and recovers leased jobs | M C S | All-role settings poller now fixed; job leases/sweeps; worker Compose profile | UNVERIFIED | API-only + two workers; edit config, observe both; kill one mid-transcode/import, recover once; Redis/DB outage and leader failover; no local-volume split across hosts | PUB-03, ADM-03, STO-01 → A34 |
+| OPS-01 API/worker split updates settings and recovers leased jobs | M C S | All-role settings poller now fixed; job leases/sweeps; worker Compose profile; live evidence [`a34-a25-ops-storage`](evidence/a34-a25-ops-storage.json) (section "A34/A25 — api + two workers, storage migration and the GC interlock — 2026-09-09"): one api process and TWO worker processes on one PostgreSQL/redis/MinIO, with an admin settings write reaching all three within one 10 s poll (2.26 / 9.12 / 9.96 s) and a worker that was never restarted encoding the NEW ladder — rungs 144p+240p, neither of which is in the shipped default `{1080,720,480,360}`; a transcode SIGKILLed at 48 % requeued by the leader's lease sweep 116.9 s after the clock was advanced, retried once on the OTHER worker and promoting exactly one generation with the same 345 objects an uninterrupted run produced; the same for a URL import killed mid-download, with the api's request id carried onto the run the survivor finished in both cases; a redis outage leaving `/readyz` 200 `degraded` (never 503) with both limiters failing open by name and a full upload→transcode completing on a worker DURING it; a PostgreSQL outage answering `/readyz` 503 `unavailable` and a typed 503 `session_store_unavailable`, with all three processes alive; leader failover in **10.4 s** on a kill and **1.4 s** after the database came back, with exactly one advisory lock at every sample and never two leaders; and — after the STO-03 migration — every read and a whole fresh upload→transcode served from the bucket with NO local media root in existence | PASS | API-only + two workers; edit config, observe both; kill one mid-transcode/import, recover once; Redis/DB outage and leader failover; no local-volume split across hosts | PUB-03, ADM-03, STO-01 → A34. The brief's warning that the settings poller is role-gated is **stale** — it is wired in every role before the role split, and only its admin-surface half is gated on `ServesHTTP()`. The local phase deliberately shares one `STORAGE_LOCAL_ROOT` between api and workers (with local storage a worker must reach the api's root — that IS the forbidden assumption); the clause is discharged at the other end, by a worker with no local root at all. Findings, none blocking: an ANONYMOUS read during a PostgreSQL outage answers a bare 500 `internal_error` where the authenticated path is typed (A17/core#180 typed only that half); `internal/jobloop` has **no backoff ladder** — every loop retries at its fixed tick for the whole outage (measured at exactly 10.000 s apart), so the WARN rate is constant and scales with workers × loops; and a SUCCESSFUL job still writes no correlated worker log line (A35's item). Not run: a genuinely separate host for the second worker, so no real network partition between a worker and the store was exercised |
 | OPS-02 Health, logs/trace correlation, metrics/QoE and retention are useful | M C S U | Observability/OTel/QoE packages; search metrics and privacy retention; live evidence `a35-observability` (one browser walk — ffmpeg upload → transcode → CMAF playback over MSE → search — followed on named id fields across eleven hops, with all four job runs and fourteen events carrying the enqueueing request's correlation, request and TRACE ids and the audit row's `job_id` naming the run in the worker's failure lines; a real OpenTelemetry collector showing one trace per server-rendered page spanning vidra-user and vidra-core; a fifteen-check secret sweep over twenty-two artefacts returning zero; a dead-lettered worker job on the admin surfaces with the queue gauge moving 0→1; label cardinality held under 180 requests over 120 distinct URLs with 60 nonsense paths folding into one `route="unmatched"`; a real playback classified `api-proxy` while four client-claimed sources were refused, rolled up with real percentiles and rendered in Chromium; and every retention window run through the shipped prune functions) | PASS | Follow one browser upload/play/search via correlation; inspect safe structured logs, failed worker status and bounded metrics; run retention; distinguish native-HLS/proxy/CDN source truth | SRC-01 → A35. Defects fixed on the way: `jobstatus.RedactDetail` let a bare storage key through into the worker log (core#190), every server-rendered read reached vidra-core with no correlation id and no traceparent (user#184), `vidra_search_table_rows` reported every table empty because PostgreSQL 14+ writes `reltuples = -1` until first analyze (search#39), and three config keys core#189 added never reached the compose environment anchor, which had kept the meta config gate red on `main` (core#190). Findings that need a ruling rather than a patch, none blocking: the QoE beacon ignores the discovery opt-out, so an opted-out viewer's playback still carries their day-scoped pseudonym; `audit_log` has no retention of any kind; `search_outbox` and `qoe_events` carry no correlation column, so both asynchronous hops start a fresh id; a SUCCESSFUL job writes no correlated worker log line; a creator's upload and publish write no audit row at all; the worker role builds a Prometheus registry it can never serve, which is the only place `vidra_search_dead_letters_total` can increment; core has no monotonic job-failure counter; core still logs `object_key`/`storage_key` in the media-GC and storage-migration paths; and vidra-search ships neither logging guard despite handling raw query text |
 | REC-01 Backup includes DB, settings/sealing keys and required media | M C S | `backup.sh`, config archive, deploy runbook local/S3 snapshots; search schema in same DB; matched DB/config/media capture, failed-dump probe and encrypted offsite retrieval verified byte-for-byte (A36 evidence L1561–1594; merged L1664); S3 version-retention documentation still open | PASS | Disposable data: backup/check restore-list; failed dump never finalizes; encrypted offsite config/media retrieval with same timestamp; search models/rebuild plan and S3 version retention documented | INS-04, STO-01 → A36 |
 | REC-02 Restore on replacement host yields usable accounts/media/search | M C S U | `restore.sh`, disaster-recovery order; no audit rehearsal; sealed restore on a replacement host closed the held-open decryption clause (A37 close-out evidence `a37-close-out.json`, section "A37 close-out — sealed restore on a replacement host — 2026-09-08") | PASS | Destroy only disposable host; restore config before DB/media, apply known migrations, login and decrypt saved integrations, play old+new uploads, reindex search; measure RPO/RTO | REC-01, SRC-01 → A37 |
@@ -17700,4 +17700,352 @@ with no pin behind it. Not fixed here; recorded.
 
 ## A34/A25 — api + two workers, storage migration and the GC interlock — 2026-09-09
 
-*(run in progress — this section is being written as the lab produces it)*
+**OPS-01 and STO-03 both flip to PASS, and PUB-03's one residual clause closes
+with them.** The two rows share a lab shape and were run as one slice: a single
+`VIDRA_ROLE=api` process and **two** `VIDRA_ROLE=worker` processes over one
+PostgreSQL, one redis and one MinIO container, with media starting on local disk
+and ending in the bucket with no local root left at all. One defect was found and
+fixed on the way, and it is the kind the row exists to catch: **the second
+storage migration an instance ever runs copied nothing and reported success**
+([vidra-core #224](https://github.com/yegamble/vidra-core/pull/224)). Complete
+result: [`a34-a25-ops-storage.json`](evidence/a34-a25-ops-storage.json).
+
+The lab is three core processes built from `a34-a25/ops-storage` `ff5e598` on
+go1.26.2 (schema **144**, migrated from empty): api on `127.0.0.1:8088`, workers
+on 8091 and 8092 for their own health ports, three distinct `process_heartbeats`
+rows. Native PostgreSQL 16.15 on 55470 and redis on 56410, both fresh; the object
+store is one `mirror.gcr.io/minio/minio`
+(`sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e`) on a
+named volume at `127.0.0.1:9130`, bucket `vidra-a34`, read back with `mc`
+RELEASE.2025-08-13T08-35-41Z from inside the container. Lab deviations, recorded
+rather than hidden: `RATE_LIMIT_ENABLED=false` **except** for the Redis-outage
+step, where it was deliberately **true** so the fail-open could be measured;
+`MALWARE_SCAN_MODE=disabled`; `HTTP_IMPORT_ALLOW_PRIVATE_URLS=true` for the
+loopback fixture origin; `TRANSCODING_MIN_FREE_SCRATCH_MB=512` against the
+shipped 10 GiB floor; `VIDRA_ALLOW_PLAIN_HTTP=true` + `VIDRA_TLS_MODE=plain-http`;
+and `MEDIA_GC_MAX_ORPHAN_PERCENT=90`, so a deliberate one-video delete would not
+trip the breaker. Fixtures are ffmpeg-generated (320×240 6 s, 1280×720 30 s, and
+a 1280×720 300 s `smptehdbars` clip at 2.6 MB for the kill cases). No real
+provider bucket was used — MinIO stands in, exactly as STO-01 already records.
+
+**The "no host-local media" clause, stated plainly.** During the local phase the
+api and both workers share one `STORAGE_LOCAL_ROOT`, because with local storage a
+worker *must* reach the api's root — that is the assumption OPS-01 forbids, not a
+shortcut around it. The clause is discharged at the other end: after the
+migration the local root is renamed away and deleted, and a worker with **no
+local root at all** serves and transcodes purely from the bucket (SC5 below).
+
+### The settings poller runs in every role, and a worker proves it
+
+`PATCH /admin/instance-settings` at 12:20:46.102 set `instance_name` and
+`transcoding_resolutions` and moved `settings_version` 0 → 1. All three processes
+reloaded within one poll interval, each logging the line once:
+
+| process | reloaded at | lag |
+|---|---|---|
+| worker w1 (pid 41672) | 12:20:48.359 | **2.26 s** |
+| worker w2 (pid 41677) | 12:20:55.217 | **9.12 s** |
+| api (pid 41244) | 12:20:56.065 | **9.96 s** |
+
+The api-side half is immediate for a different reason: the writing replica
+reloads inside `Apply`, so `GET /instance` already read `A34 Lab Instance` before
+the api's own tick reloaded a second time (idempotent, by design). The
+worker-side half is the one that matters, and it is not a log line: the next
+transcode — run by w1, a process not restarted since before the write — produced
+rungs **144p and 240p only**. The shipped default ladder is `{1080, 720, 480,
+360}`; neither 144 nor 240 is in it, so those two rungs exist *only* because a
+worker picked up an admin change over the poller. A second write
+(`[144,240,360,480,720]` plus `transcoding_threads=1`) was honoured the same way
+on the 720p fixture: five rungs, ten `transcode_steps`.
+
+**A34's brief warned that the poller is role-gated and a worker may be frozen at
+boot values. That is stale.** `cmd/api/main.go` wires `settingsversion.New`
+*before* the role split and every process logs `settings version poller started
+interval=10s role=<role>`; only the admin-surface half — `WithSettingsPoller`,
+`WithStorageWriteHealth`, `WithProcessFleet` — is gated on
+`cfg.Role.ServesHTTP()`, because those are HTTP surfaces a worker does not have.
+A17's fix is in and measured here.
+
+### Kill a worker mid-transcode and mid-import, recover exactly once
+
+**Transcode.** w1 was `SIGKILL`ed at **12:31:22.33** with all five rungs at
+`progress_percent` 48. The row stayed `running` with `next_attempt_at` 30 minutes
+out — restarting a worker does *not* recover it, and should not: the sweep only
+takes rows nobody is renewing. The lease clock was advanced in the database
+rather than waited out (A27's idiom), and the **leader** worker w2 requeued it at
+**12:34:50.878** — *"requeued jobs whose worker stopped renewing their lease"
+queue=transcode_jobs requeued=1* — 116.9 s later, inside the 2-minute
+leader-gated `jobrecovery` ticker. w2 claimed it at ~12:35:00 and finished at
+12:35:35.
+
+Exactly one generation was promoted: `videos.transcode_generation` **1**, one
+`streaming_playlists` row on `.../r1/master.m3u8`, one `transcode_jobs` row
+(`done`, `attempts=1`), `r1` and nothing else under both
+`streaming-playlists/<id>/` and `web-videos/<id>/`, and **345 stored objects —
+byte-for-byte the same count as an uninterrupted run of the same fixture**. The
+correlation id survives the process death: `wRHtBVSaQKNbLrLHXqxNcsBrVbViXrsS` is
+the api's `POST /videos/{id}/file` request id at 12:30:59.379 *and* the
+`correlation_id`/`request_id` on the `job_runs` row the **second** worker
+finished (one run row, reused across the retry, `attempt=1`, `worker_id` = the
+survivor).
+
+**Import.** w2 was `SIGKILL`ed at **12:38:09.44** mid-download from a
+deliberately trickling loopback origin (150 KB/s), `state=running
+stage=processing` — and w2 was also the leader, so this doubles as the failover
+case. Lease advanced 12:38:42; the **new** leader w1 requeued at **12:40:34.845**
+(112.8 s) and finished at 12:41:01. One `import_job` (`done`, `attempts=1`), one
+transcode job, generation 1, nine `video_files`, no duplicate. Correlation id
+`eZpRtszsiKHupUwLxMedvGvbyKekVSon` is the api's `POST /videos/{id}/import`
+request id, carried onto the run the survivor finished.
+
+**The dashboards see it.** `settings_sync` went `ok` → `down` **35 s** after the
+kill and named the dead process: *"the worker process
+Yosefs-MacBook-Air.local:41672 has not checked in for 35s, so it is stopped,
+wedged or unable to reach the database; work it owns is not running and it may be
+serving stale instance settings"*. Restarting that host's worker reaped the stale
+row (`heartbeat.ReapLocal`) and the component returned to `ok`. A **successful**
+job still writes no correlated worker log line — A35's open finding, unchanged.
+
+**PUB-03's residual clause is this paragraph.** A07 left "retry crash without
+duplicate promotion" as the one unmeasured clause of the row; a transcode killed
+at 48 % was retried exactly once and promoted exactly one generation, with the
+object count identical to a clean run of the same source. A07's other clauses —
+source→processing→ready, the advertised master and its variants, init and
+segments, decoded audio and video — stand as recorded there.
+
+### Outage matrix
+
+| dependency | `/healthz` | `/readyz` | api routes | workers |
+|---|---|---|---|---|
+| **redis down** (12:42:36) | 200 | **200, `degraded`**, `redis: down` | `/admin/system` 200, `/videos` 200, `/auth/login` 200 | unaffected: **zero** redis errors, and a full upload→transcode completed during the outage |
+| **postgres down** (12:44:18) | 200 | **503, `unavailable`** | authenticated 503 typed `session_store_unavailable`; anonymous `/videos` **500 `internal_error`** | alive, each loop retrying at its fixed tick |
+
+Redis is a degradation, never a 503: both limiters failed open with a named WARN
+per request carrying the path and request id (*"rate limiter unavailable, failing
+open"*, *"auth rate limiter unavailable, failing open"*), and the worker fleet is
+untouched because queue leases are PostgreSQL-backed — video `773912e9` was
+uploaded, claimed by w2 and transcoded to one playlist and generation 1 **while
+redis was down**. Redis back at 12:43:38 → `/readyz` `ok`, and no video anywhere
+in the run ever acquired a second `transcode_jobs` row.
+
+Two things the PostgreSQL half taught. First, **an anonymous read answers a bare
+500**: A17's `core#180` typed the authenticated path (`session_store_unavailable`,
+with the reassuring sentence about the session being unaffected) and the
+anonymous path was never typed, so a signed-out visitor gets *"an unexpected
+error occurred"*. Second, **there is no backoff ladder.** `internal/jobloop`
+retries at its fixed interval for as long as the dependency is down — the
+transcode drain's failures are 10.000 s apart, exactly its tick (12:44:23.23,
+:33.23, :43.23, :53.23, 12:45:03.23, :13.23) — so the WARN rate is constant and
+scales with workers × loops rather than decaying: 34 and 35 lines per worker over
+~40 s. Bounded and harmless at this size; recorded because A34's procedure
+assumed a ladder.
+
+### Leader failover, timed
+
+| event | time | gap |
+|---|---|---|
+| leader w2 `SIGKILL`ed | 12:38:09.44 | — |
+| w1 *"elected leader for the singleton background sweeps"* | 12:38:19.82 | **10.4 s** |
+| leader w1 *"lost the connection holding the lock; standing down"* (`FATAL … 57P01`) | 12:44:19.82 | 1.6 s after postgres stopped |
+| w1 retries *"could not take a connection"* | every **15.000 s** | the `leaderlock` retry interval |
+| postgres accepting again | 12:45:33 | — |
+| w1 re-elected | 12:45:34.82 | **1.4 s** |
+
+`pg_locks` held **exactly one** advisory lock at every sample, including after
+the killed worker was restarted alongside the new leader — two leaders never.
+Scheduled passes continued exactly once: both `jobrecovery` requeues above were
+logged by the leader of the moment and never by both workers.
+
+### The storage migration: copy, verify, resume, abort
+
+The shipped surface is `POST`/`GET`/`POST …/cancel` on
+`/api/v1/admin/storage/migrations`, admin-only and audited. An operator reads
+`state`, both store identities, `objects_total`/`done`/`failed`, `last_error`,
+`observed_cutover_at` and a per-state object breakdown; the admin **jobs**
+overview additionally carries the object ledger as a queue
+(`storage_migrations` pending/running/done/failed). **vidra-user has no control
+that starts or cancels one** — `AdminInfrastructureView` renders the campaign
+list read-only, so both write actions are API-only. That is why this slice needed
+no Chromium: there is no UI to drive.
+
+| clause | result |
+|---|---|
+| copy | 1 272 objects / 306 211 229 bytes, `local:…/media` → `s3://127.0.0.1:9130/vidra-a34`, started 12:58:26, `done` 13:30:32, **0 failed** |
+| checksums | end-to-end by construction — the digest is taken from the bytes **read from the source**, the object is then re-opened **from the target** and re-hashed, and `video_files.sha256` is a third opinion. Independently sampled: six random keys, ledger sha256 == local file == object read back through the S3 API, **6/6** |
+| resume | w1 `SIGKILL`ed at 12:59:11.27 with 733/1191 done; w2 alone reached 1190/1191 within 4 s; **exactly one** object was left `copying` and it was **not** on the destination — the killed worker's partial write never landed |
+| no re-copy | lease advanced 13:09:11 → requeued ~13:10:06 (`attempts` 0→1) → verified 13:10:12. The other **1 190 rows kept `attempts=0`** and `updated_at` between 12:59:08.100 and 12:59:15.418 — never touched again |
+| injected failure | a MinIO user booted with `readwrite` then downgraded to `readonly` **while the workers ran**: all 54 newly-enumerated objects went `attempts=1`, `last_error` *"copy failed; retrying"*, with the worker WARN naming `Access Denied. [write_denied]`. Policy restored 13:16:38 → all 54 retried on their 1-minute backoff at ~13:17:12 and verified → `synced` 13:18:08, `objects_failed` 0 |
+| abort | cancelled at 12:49:08.25 with 136/1191 verified. Source **untouched** (1 191 files). Destination copies **retained, not cleaned** — the documented choice, *"deleting them would be a destructive action taken on the way OUT of a destructive operation"*. Copying stopped at once (136 → 136 over 12 s). Authority unchanged; audit row `admin.storage.migration.cancel`, plus WARN *"storage migration cancelled"* |
+
+**What failed first, and it is the reason this row existed.** After that abort, a
+**second** campaign enumerated **zero** objects and announced itself synced:
+
+```
+storage migration enumerated the source store       campaign=e33d7808… objects=0
+storage migration is synced: every object in the source is verified in the target
+                                                    campaign=e33d7808… objects=0
+```
+
+`GET /admin/storage/migrations/{id}` agreed — `state: synced, objects_total: 0` —
+with **136 of 1 191 objects in the destination and 1 055 never copied**. That is
+the sentence an operator cuts over on. The cause is that
+`storage_migration_objects` is primary-keyed on the **storage key alone**, so a
+finished campaign's rows outlive it, and the enumeration is an `ON CONFLICT DO
+NOTHING` upsert whose rowcount *is* the answer to "did anything appear since?" —
+so it inserted nothing and the new campaign started with an empty ledger, which
+reads as "nothing left to copy". It bites a retry after an abort **and the second
+move an instance ever makes**: a bucket-to-bucket migration after a
+local-to-bucket one re-uses exactly the same keys, so the `done` campaign's rows
+swallow the whole enumeration. Fixed in
+[vidra-core #224](https://github.com/yegamble/vidra-core/pull/224) — `Start`
+clears the ledger of every campaign that is **over** before the new one
+enumerates, with the `DELETE`'s predicate on the **campaign's** state so it can
+never touch a live ledger, and not fatal, because a campaign that enumerates
+nothing is visible and cancellable while a refusal would leave an operator with a
+campaign row they did not ask for. Covered by a unit regression over the fake and
+— because the defect was a property of the *statement* — an integration test that
+runs the real `DELETE` and the real upsert against the real primary key; both RED
+before and GREEN after. The rerun campaign, against the same source **plus the
+aborted campaign's 136 leftovers**, enumerated all 1 272 and ran to `done`.
+
+**A migration target the process cannot write to is a fatal boot refusal.**
+Booting with the read-only credential produced `fatal error="storage migration
+target: storage: s3: check bucket \"vidra-a34\": Access Denied. [write_denied]"`
+and the process exited **before the listener opened** — `/healthz` answered
+nothing at all. The api does it too, not just the workers. So an operator who
+rotates or narrows the target bucket's credential cannot start **any** process,
+and the failure is a dead instance rather than a paused campaign. Recorded, not
+fixed: post-cutover the target *is* the old store and dual-read depends on it, so
+the refusal is defensible — but the probe is a **write** probe, and the reason it
+prints does not say that the whole instance is now down because of a store it
+only needs in order to finish a move.
+
+### Reads during movement, the authority switch, retention
+
+A 5 Hz loop over three media URLs (poster, CMAF chunk, HLS master) ran for the
+whole slice: **26 412 samples, 26 211 × 200, 201 × 000 (connection refused),
+zero 404s and zero 5xx.** Every one of the 201 falls inside one of five
+*deliberate* process restarts. Reads during movement are served by
+`storage.Fallback` — the HTTP media handle, and only it, tries the primary and
+falls back to the other store on a definite miss, while `mediagc`, the IPFS
+mirror, the doctor and every media tool keep the **raw** primary; presigned
+delivery is disabled outright while a target is configured (*"direct object
+delivery disabled while a storage migration target is configured"*).
+
+**The switch itself cost three requests inside one second.** Cutover is an
+operator env swap plus a restart — the campaign *reads* the swap off its two
+handles rather than being told — and at 13:18:58 the read loop logged 3 × `000`
+and nothing else: no 404 window at all, the api answering again within the same
+second, and the three URLs returning identical byte counts (8 727 / 35 179 /
+1 636) before and after. The campaign noticed 60 s later, at 13:19:58.921,
+because the sweep that observes cutover is the leader-gated 1-minute ticker:
+*"storage migration cutover observed: the api is now serving from the migration
+target … source_deleted_after=1h0m0s"*.
+
+**Retention held, and a rollback works.** With `STORAGE_MIGRATION_GRACE_HOURS=1`
+the old local store kept all 1 272 files and 302 584 KB through cutover and
+beyond. Swapping **both** env sets back at 13:20:47 restored local authority with
+**zero** read failures and identical byte counts, and the campaign said so on the
+admin surface rather than silently: `last_error` *"the api is serving from this
+migration's source again, so the cutover was undone; finish the environment swap
+or cancel this migration"*, beside ERROR *"storage migration is past cutover but
+the api is serving from the migration SOURCE again; nothing will be deleted"*.
+Source still 1 272 files. Retention is then released by an explicit operator
+step — `STORAGE_MIGRATION_GRACE_HOURS=0` and the forward swap again at 13:22:29 —
+after which `deleting_source` opened at 13:23:33 and removed **200 objects per
+leader sweep** (13:24:31, :25:31, :26:31, :27:31, :28:31, :29:31, then 72 at
+13:30:31), reaching `done` at 13:30:32 with `source_deleted` 1 272, `failed` 0,
+the local root at **0 files** and the bucket at 1 273 (1 272 + `.vidra/owner`).
+
+### The GC interlock is not silent
+
+A24 called it "wired and silent". It names itself in three places. A destructive
+`POST /admin/media/gc` **during the copy** answered:
+
+```json
+{"dry_run": true, "mode": "dry-run", "scanned": 1191, "deleted": 0,
+ "forced_dry_run": true, "forced_dry_run_reason": "storage_migration_active"}
+```
+
+the audit row reads `mode=dry-run … forced_dry_run=true
+forced_reason=storage_migration_active`, and `AdminMediaView` renders the reason
+verbatim to the operator. One subtlety worth the line: **during cutover the same
+request reported `bucket_ownership` instead**, because the ownership gate is
+evaluated first and the destination carried no marker yet (the migration writes
+it at completion) — same outcome, `deleted: 0`, but a reason that sends an
+operator to adopt the bucket. Adopting it explicitly and re-running gave
+`ownership=owned` with `forced_reason=storage_migration_active`: both rails are
+live and the first to fire is the one named.
+
+After the campaign reached `done` the interlock released and the same request ran
+for real — `mode: "delete"`, scanned 1 272, orphans 0, deleted 0. A video was
+then deleted through the API (204): the dry run listed **exactly 27 orphans, all
+of them that video's keys**, and the destructive sweep deleted **exactly those
+27** (bucket 1 300 → 1 273) while every other video's media still answered 200
+with unchanged byte counts. The orphan breaker was unaffected throughout
+(`orphan_percent` 2, `breaker_tripped` false).
+
+### No local volume split
+
+After the migration, `STORAGE_MIGRATION_TARGET_*` was removed,
+`STORAGE_LOCAL_ROOT` was pointed at a path that does not exist, and the old media
+root was renamed away and deleted. Every read still answers from the bucket with
+identical byte counts (poster 200/8 727, CMAF chunk 200/35 179, master 200/1 636,
+original 200/2 698 310), and a **fresh upload was transcoded end to end by a
+worker with no local root**, producing 27 objects in the bucket and nothing on
+disk, with its master playlist and poster both 200. The configured local path
+never came into existence. `/admin/system` reads `storage: ok`, `s3: ok`, and
+`vidra doctor --write-probe` agrees on every storage check: *storage migration ✓
+"no storage migration in flight — media is served from, and garbage-collected in,
+one store"*, *object storage ✓*, *object write ✓*, *object retention ✓
+"versioning is off"*, *bucket ownership ✓ ".vidra/owner"*, *media GC posture ✓*,
+*schema ledger ✓ 144 clean*.
+
+### Gates
+
+`make ci` on vidra-core is green (`fmt-check`, `vet`, `migrate-lint`,
+`openapi-verify`, `sqlc-verify`, `test-race`) — 82 packages `ok`, 0 failures —
+and the two build-tagged lanes this slice touches were run against the live
+PostgreSQL and MinIO: `internal/storagemigration` and `internal/leaderlock`, both
+`ok`. vidra-user and vidra-search were not changed and not run. There is no
+OpenAPI or migration change in this slice.
+
+### Findings, none blocking either verdict
+
+- **A migration target the process cannot write to is a fatal boot refusal** for
+  the api *and* the workers — a rotated or narrowed target credential takes the
+  whole instance down with no HTTP at all.
+- **An anonymous read during a PostgreSQL outage answers a bare 500**
+  `internal_error`; only the authenticated path was typed (A17 / core#180).
+- **`internal/jobloop` has no backoff ladder** — every loop retries at its fixed
+  interval for the whole outage, so the WARN rate is constant and scales with
+  workers × loops.
+- **A campaign whose objects are failing shows `objects_failed: 0` and
+  `last_error: ""`** until the attempt budget is spent. The short fixed failure
+  categories exist precisely to be projected into an operator surface, and no
+  surface projects them; the operator sees progress stall and is told nothing.
+- **The storage-migration worker WARN redacts `object_key` to `[redacted-key]`
+  and then prints the same key verbatim inside the error string** (`storage: s3:
+  put "thumbnails/<uuid>.jpg": Access Denied`) — a concrete instance of A35's
+  open item.
+- **`storage_migrations` *is* projected into `job_runs`** (a trigger on the
+  table), so A17's "does not call the job recorder yet" list is stale for this
+  queue — but the projected rows carry **empty** `correlation_id`, `request_id`
+  and `worker_id`, so a campaign cannot be tied back to the admin request that
+  started it.
+- **An aborted campaign's partial copies stay on the destination forever**;
+  nothing in the product removes them, and emptying the bucket is the operator's
+  job. After the fix, a terminal campaign's per-state object breakdown zeroes out
+  once a later campaign begins — the campaign row's own counters remain the
+  record.
+- **vidra-user cannot start or cancel a storage migration**; the admin surface is
+  a read-only campaign list.
+
+### Not run
+
+A real provider bucket (no credentials on this machine), so provider versioning,
+object lock and lifecycle remain untested exactly as STO-01 records; a genuinely
+separate host for the second worker, so a real network partition between a worker
+and the store was not exercised; a bucket-to-bucket (s3 → s3) campaign, since
+local → s3 is the direction the row names; and any browser run, because the
+storage-migration surface has no write controls in the UI.
