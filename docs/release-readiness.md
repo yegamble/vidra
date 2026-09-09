@@ -15884,7 +15884,7 @@ method says *"set a password first"*, and nothing could. Lose the Bluesky
 account or its handle and the Vidra account went with it. The owner ruled
 **session-authorised set-password plus a real email**, and this is that, in
 [core #217](https://github.com/yegamble/vidra-core/pull/217) and
-[user #185](https://github.com/yegamble/vidra-user/pull/185), with
+[user #207](https://github.com/yegamble/vidra-user/pull/207), with
 migration **0144** (`step_up_tokens`) and an `api/openapi.yaml` change, so core
 merges before the user PR's regen.
 [Evidence](evidence/auth-set-password.json).
