@@ -1,0 +1,223 @@
+{
+ "item": "v0.6.3 release",
+ "register_rows": ["REL-01", "INS-01", "INS-02", "INS-04", "INS-05"],
+ "verdict": "PASS — v0.6.3 cut in all four repositories, proved on a blank Ubuntu host against the released artefacts, and deployed to the beta instance (core 125 -> 144, search 16 -> 18)",
+ "date": "2026-09-09",
+ "section": "v0.6.3 release — cut, verified, deployed to beta — 2026-09-09",
+ "release_notes": [
+  "docs/releases/v0.6.3.md",
+  "docs/releases/v0.6.3-vidra-core.md",
+  "docs/releases/v0.6.3-vidra-user.md",
+  "docs/releases/v0.6.3-vidra-search.md"
+ ],
+ "headline": "deploy/release.sh --yes v0.6.3 tagged the meta repository and cut a GitHub release in each of the three component repositories, each release's publish-container run pushed and verified its GHCR image, and the frozen candidate manifest resolved four source SHAs, three OCI index digests, three release assets and their SHA256SUMS entries with the contract and generated-type checks green. The A02 blank-server harness passed against those exact artefacts on a fresh Ubuntu 24.04 VM; the A03 runtime harness reached a clean first-deploy core 144 / search 18 ledger and both dirty-ledger aborts, and could not certify the frontend because Node 26 under Ubuntu's qemu-user-static segfaults on this arm64 lab host. The beta instance, real amd64, upgraded 125 -> 144 and 16 -> 18 in 54 seconds with deploy/deploy.sh unmodified and every probe green.",
+
+ "release": {
+  "tag": "v0.6.3",
+  "cut_by": "./deploy/release.sh --yes v0.6.3 (all three component repos; the meta repository is tagged, never released — release.sh header)",
+  "search_tag_policy": "vidra-search is in release.sh's ALL_REPOS and follows the platform tag; its previous GitHub release was v0.6.2, so v0.6.2 -> v0.6.3 is one step, not a catch-up",
+  "meta_tag": {"repo": "yegamble/vidra", "revision": "7ecbcd3c6209c89db30bdfe3e6e19b1c65b9a189", "released": false},
+  "sources": {
+   "vidra": "7ecbcd3c6209c89db30bdfe3e6e19b1c65b9a189",
+   "vidra-core": "12bd1c757c17e59bb7492c4c27ec37845cc570e5",
+   "vidra-user": "7242885ef7a5b38263e7f899e2ce6ef2ba04fef9",
+   "vidra-search": "1f8b85425e7d4dbb039edca56850282df9b93c6d"
+  },
+  "preconditions_checked": [
+   "all four checkouts on main and identical to origin/main at cut time",
+   "zero open pull requests in all four repositories",
+   "ci-required green on each repository's main head (vidra-user's was still in_progress and was waited out to success before cutting)"
+  ]
+ },
+
+ "images": {
+  "platform": "linux/amd64 only (each tag is an OCI index carrying one linux/amd64 manifest plus the unknown/unknown attestation manifest)",
+  "vidra-core": {
+   "index_digest": "sha256:8636d5daf37674c6fa867294f47e615bbbb9b0ef6ca65984201ea32ef3f7c64e",
+   "amd64_manifest_digest": "sha256:81c0e290b8cb5f8dc3cfbadf7508a8eeb8a4b3dbf6322d43c77dfa2acb48adb5",
+   "revision_label": "12bd1c757c17e59bb7492c4c27ec37845cc570e5",
+   "runtime_facts": {
+    "alpine": "3.24.1",
+    "ffmpeg": "8.1.2",
+    "ffprobe": "8.1.2",
+    "yt-dlp": "2026.07.04 at /usr/local/bin/yt-dlp (3071553 bytes)"
+   }
+  },
+  "vidra-user": {
+   "index_digest": "sha256:083d399408b64b268ce8cef44185e5dc56ebe4e710457e5dfbcd1cd252ad680d",
+   "amd64_manifest_digest": "sha256:78a5ad67f6bebe400bbf1289a9a03fe68efb276b847815dece0f64767cbfb545",
+   "revision_label": "7242885ef7a5b38263e7f899e2ce6ef2ba04fef9",
+   "runtime_facts": {"alpine": "3.24.1", "node": "v26.8.1", "next": "16.3.0"}
+  },
+  "vidra-search": {
+   "index_digest": "sha256:fc6bdd6fcc4abc65858bb9f3394f4a1f85a4337977b2e973311fbf9769675ee9",
+   "amd64_manifest_digest": "sha256:73c8906d746c08e6c769b236b1cd77b6f8d19e12171d9b17d883818c32aa013a",
+   "revision_label": "1f8b85425e7d4dbb039edca56850282df9b93c6d",
+   "runtime_facts": {"alpine": "3.24.1"}
+  }
+ },
+
+ "assets": {
+  "SHA256SUMS": "adc5988bb58e921a3aac6dac450e8c07f65862fe90ecf48cbf9933c6d23c7a72",
+  "vidra-bundle_v0.6.3.tar.gz": "3a8dc24d5628b30797286740983573eb1992a792f51d243fbf70e53f141bdebc",
+  "vidra_v0.6.3_linux_amd64": "859a7b5ec6d954acfbbe76329360c4514ed521b671676f48742b53f96b67d671",
+  "vidra_v0.6.3_linux_arm64": "cd9103a9b834513991df5b0e5981872dcd0e953c036b4324a59600a241550087",
+  "bundle_provenance": "tag=v0.6.3, core_schema_version=0144, meta_commit=7ecbcd3, core_commit=12bd1c7"
+ },
+
+ "preflight": {
+  "command": "python3 deploy/release-preflight.py --tag v0.6.3 --out <disposable> (Node v26.8.1, npm 11.19.0, buildx v0.32.1-desktop.1)",
+  "exit": 0,
+  "status": "PASS",
+  "verifier_sha256": "7ffb428372889a5eaedb389802ca4c59cc3a5f1f74fe40207a44a6aaada46025",
+  "checks": {
+   "assets": "PASS — all three asset names present exactly once, downloaded, and matched against the release's own SHA256SUMS; the bundle's meta_commit and core_commit match the frozen sources",
+   "paths": "PASS — the frontend path/method contract guard over the released core spec",
+   "generated_types": "PASS — npm ci from the frozen lockfile then codegen produced a byte-identical lib/api/generated.ts",
+   "resolver_skew_rejected": "PASS — the same guard exits 1, naming /api/v1/videos/resolve, against a spec with the resolver removed"
+  }
+ },
+
+ "blank_server_smoke_a02": {
+  "command": "bash tests/blank-server-smoke.sh <v0.6.3 manifest> <out>",
+  "exit": 0,
+  "status": "PASS",
+  "vm": "fresh Ubuntu 24.04.4 LTS aarch64 multipass VM, 2 CPUs / 4 GiB / 20 GiB at creation, no Docker and no Vidra install tree at start",
+  "installed": {"docker": "29.8.0", "compose": "5.5.1"},
+  "checks": {
+   "corrupt-bundle": "PASS — installer exits 1, CHECKSUM MISMATCH, no bundle promoted",
+   "corrupt-cli": "PASS — installer exits 1, CHECKSUM MISMATCH, no unverified CLI installed",
+   "install": "PASS — unmodified transport install and reinstall each exit 0",
+   "native_cli_executes": "PASS — installed vidra_v0.6.3_linux_arm64 (sha256 cd9103a9...) executes; identity verified against the release SHA256SUMS",
+   "configuration_preserved": "PASS — env, rendered Caddyfile and CLI bytes identical after reinstall",
+   "production_ports": "PASS — rendered base+prod with core/frontend profiles: postgres/redis/search publish nothing; api 127.0.0.1:8080 and frontend 127.0.0.1:3000",
+   "pinned_image_pulls": "PASS — all three v0.6.3 digests pulled and inspected"
+  }
+ },
+
+ "runtime_smoke_a03": {
+  "command": "bash tests/runtime-smoke.sh <a02 out> <v0.6.3 manifest> <out>",
+  "exit": 1,
+  "status": "PARTIAL — every clause up to and including the migration gates passed; the frontend probe could not be certified on this lab host",
+  "vm": "the retained A02 VM, resized to 4 CPUs / 8 GiB before the run so the newly-default clamav service fits (recorded deviation from the 2 CPUs / 4 GiB used for v0.6.2)",
+  "emulation": "Ubuntu qemu-user-static, /proc/sys/fs/binfmt_misc/qemu-x86_64 flags POF",
+  "passed": {
+   "empty_runtime": "zero containers and zero volumes before startup",
+   "image_execution": "all three amd64 release images execute (uname -m = x86_64) under emulation",
+   "default_render": "ACME edge profile present; postgres/redis/search publish nothing; api and frontend loopback only; BOTH migrators have no volumes and use the same image as their service",
+   "setup": "vidra setup --non-interactive --yes --template env/production.env.example exit 0, then vidra setup --check exit 0",
+   "first_deploy_migrations": "deploy.sh on empty volumes: 'expected core schema 0144 (from vidra-bundle.manifest — this tree has no migrations directory)' then 'core schema OK (version 144)'; the search migrator exited 0; ledgers read back 144|f and 18|f",
+   "ordering": "3/6 migrations completed before 4/6 start in every run",
+   "scan_by_default": "the shipped default posture ran: VIDRA_COMPOSE_PROFILES included scan, clamav started and reached healthy, and the api (which depends on it service_healthy) came up healthy behind it",
+   "dirty_core_ledger": "injected dirty schema_migrations: deploy exit 1 at 'CORE MIGRATION FAILED', never printed 4/6 start, all five serving/datastore container ids + start times + restart counts unchanged, dirty bit retained (not silently repaired)",
+   "dirty_search_ledger": "injected dirty vidra_search_migrations: deploy exit 1 at 'SEARCH MIGRATION FAILED', same four assertions",
+   "recovery": "only the injected bits were cleared; the ledgers read 144|f and 18|f afterwards"
+  },
+  "not_certified_here": {
+   "frontend_probe": "deploy.sh's 6/6 frontend probe timed out at 300s. Cause measured, and it is the emulator, not the release: the container logs only 'x86_64-binfmt-P: QEMU internal SIGSEGV {code=MAPERR, addr=0x20}' in a crash loop. The IDENTICAL image digest serves HTTP 200 in 6s under Docker Desktop's emulation on the same workstation (Next.js 16.3.0, 54247 bytes), and serves the beta instance natively on amd64. v0.6.2's frontend (Node 24) did not crash under this emulator on 2026-09-05; v0.6.3's is Node 26.",
+   "internal_tls_transition": "the harness reaches it only after the plain-http deploy returns 0, so the selected internal-CA TLS mode was not re-proved for v0.6.3. It passed for v0.6.2 on 2026-09-05. The real ACME edge is proved on beta below."
+  },
+  "harness_defects_found_and_fixed": [
+   "tests/runtime_smoke.py pinned the release digests with a regex anchored on a literal 'ghcr.io/', which stopped matching when VIDRA_IMAGE_REGISTRY made the registry host interpolated. Zero matches for all three repositories; the require(count > 0) guard turned that into a refusal instead of a run that silently tested the mutable tag. Fixed to match any '<prefix>/<repo>:'.",
+   "The same platform pin did not extend to clamav, which the scan-by-default profile set now starts and which is published for linux/amd64 only — so compose pull died with 'no matching manifest for linux/arm64/v8' before anything started. Fixed by stamping the candidate's platform onto the clamav service in the disposable bundle copy. Measured affordable first: clamd healthy in 81s at 996 MiB RSS under emulation, inside its own 120s start_period."
+  ]
+ },
+
+ "beta_deploy": {
+  "host": "the beta droplet (amd64, 8 GiB RAM, 62 GiB free), Docker 29.7.2, Compose 5.5.0",
+  "run_as": "the vidra user (root trips git dubious-ownership on /opt/vidra)",
+  "command": "VIDRA_SKIP_DNS_PREFLIGHT=1 ./deploy/deploy.sh — deploy.sh itself unmodified",
+  "why_skip_dns": "the instance sits behind Cloudflare, so its A record resolves to 104.21.x / 172.67.x and not to the droplet; require_dns_points_here would refuse. The skip is printed as a WARNING by the script.",
+  "exit": 0,
+  "wall_clock_seconds": 54,
+  "preparation": [
+   "live env/production.env copied to /root/production.env.bak-v0.6.2 (0600, OUTSIDE the repo — never under env/)",
+   "/opt/vidra checked out --detach at v0.6.3 as the vidra user (deploy.sh does not advance the meta checkout; it only pins the nested components)",
+   "/opt/vidra/tests was owned root:root from an earlier root-run operation, which made the checkout fail to write 20 files; chowned to vidra:vidra and the checkout completed clean",
+   "VIDRA_{CORE,USER,SEARCH}_TAG bumped v0.6.2 -> v0.6.3 in the live env file",
+   "scan posture set explicitly (see scan_posture below)"
+  ],
+  "steps": {
+   "0/6 pre-flight": "exit 0 — compose 5.5.0, VIDRA_TLS_MODE=acme, migrator tags >= v0.2.0; nested checkouts synced to v0.6.3 (core, search, user); compose config -q passed",
+   "1/6 pre-deploy dump": "exit 0 — wrote /opt/vidra/backups/pre-deploy-2026-09-09T212458.dump.gz (72M) and pruned the oldest",
+   "2/6 pull": "exit 0",
+   "3/6 migrations": "exit 0 — core migrator logged {\"msg\":\"migrations applied\",\"from_version\":125,\"to_version\":144}; the INDEPENDENT ledger read (rule 3, expected version computed from the pinned nested checkout's migration filenames) reported 'core schema OK (version 144)'; the search migrator logged 'migrate up: version=18 dirty=false table=vidra_search_migrations'",
+   "4/6 start": "exit 0 — up -d --no-build",
+   "5/6 reload Caddy": "exit 0 — caddy reloaded (attempt 1)",
+   "6/6 health probes": "exit 0 — api /readyz OK, frontend OK, edge OK over real HTTPS"
+  },
+  "ledgers_after": {"schema_migrations": "144|f", "vidra_search_migrations": "18|f"},
+  "version_probe": "GET /version through the edge: {\"name\":\"vidra\",\"version\":\"v0.6.3\",\"commit\":\"12bd1c7\",\"build_date\":\"2026-09-09T20:17:56Z\",\"go\":\"go1.27.1\"}",
+  "rollback_command": "app-only rollback to v0.6.2 is NOT supported (the A38 floor: app-only rollback is supported FROM v0.6.3 onward, and 0142 is an accepted compat break). The undo is the restore path: ./deploy/restore.sh backups/pre-deploy-2026-09-09T212458.dump.gz with VIDRA_*_TAG back at v0.6.2 — restore.sh refuses a dirty dump and refuses a pinned image whose schema is below the dump's, both before the drop.",
+
+  "scan_posture": {
+   "decision": "MALWARE_SCAN_MODE=disabled — the documented opt-out. The scan profile was NOT enabled on beta.",
+   "why": "the droplet's env file (the operator's file, not the template) carried MALWARE_SCAN_ENABLED=false, no CLAMAV_ADDR and VIDRA_COMPOSE_PROFILES='core frontend'. Under v0.6.3 that pair is not a posture: MALWARE_SCAN_ENABLED is no longer read, and with neither an address nor the opt-out the api boots and refuses EVERY ingestion route with 503 scanner_not_configured. Leaving it would have silently broken uploads on beta.",
+   "ram_check": "free -m showed 7941 MiB total with 6720 available, so clamd's ~2 GiB would have fitted. It was still declined: beta has never scanned, and adding a new service the api waits on service_healthy (120s start_period, first-boot freshclam) inside a 19-migration upgrade lengthens the restart window for a capability the instance did not have. The opt-out is a first-class posture: the api WARNs every boot, writes one system.malware_scan.disabled audit row per boot, and /admin/system reports clamav not_configured.",
+   "verified": "GET /api/v1/instance reports features.uploads=true and features.imports=true, so ingestion is allowed rather than refused"
+  },
+
+  "doctor": {
+   "cli_note": "the droplet's /usr/local/bin/vidra was an August build. deploy.sh upgrades images, never the CLI, so the first `vidra doctor` after the upgrade reported two FALSE failures: it rejected MALWARE_SCAN_MODE=disabled as 'must be one of fail-closed, fail-open, quarantine' (a mode the running api had accepted at boot) and could not read the schema ledger ('exec: \"migrate\": executable file not found in $PATH' — the defect core #191 fixed). The CLI was reinstalled at v0.6.3 from the release asset, verified against the release SHA256SUMS (859a7b5e...), with the old binary kept at /root/vidra-cli.bak-preupgrade.",
+   "result_with_v0.6.3_cli": "21 checks pass, 7 warn, 1 fails",
+   "the_one_failure": "domain DNS — the hostname resolves to Cloudflare, not to this host. Expected and known; it is the same fact VIDRA_SKIP_DNS_PREFLIGHT exists for, and it is why ACME renewal on this instance is a standing risk.",
+   "notable_warnings": [
+    "instance owner: NO account is marked as this instance's owner. Migration 0131's marker is written only by the first-run setup claim, and this instance was claimed before it existed; the backfill needs an auth.owner_claim audit row or a claimed owner_claim_tokens row whose claimed_at matches the founding account's created_at, and neither survived here. Nothing is broken (the last-admin guard still holds) but every admin is equal.",
+    "bucket ownership: the media bucket carries no .vidra/owner marker, so media GC would report what it would delete and delete nothing",
+    "env file vs template: 16 template keys are unassigned in the live env (including CLAMAV_ADDR and CLAMAV_TIMEOUT, which the opt-out deliberately leaves unset) and 4 live keys are not in the template (API_CPUS, API_MEM_LIMIT, POSTGRES_EFFECTIVE_CACHE_SIZE, POSTGRES_SHARED_BUFFERS)"
+   ],
+   "checks_that_passed_and_matter": [
+    "configuration values: 76 variables pass the api's own boot validation (this is what accepts MALWARE_SCAN_MODE=disabled)",
+    "schema ledger: core at version 144, clean",
+    "published ports: only caddy 80 and 443 face the internet; the two others are loopback",
+    "search service answers /healthz inside the compose network",
+    "ffmpeg 8.1.2 present in the api container"
+   ]
+  },
+
+  "edge_matrix": {
+   "note": "probed on the droplet through the real Caddy over HTTPS, pinned to 127.0.0.1:443, so the answers are the instance's own and not Cloudflare's cache",
+   "GET /healthz": "200 application/json",
+   "GET /readyz": "200 application/json",
+   "GET / (frontend)": "200 text/html, 123710B",
+   "GET /runtime-config.js": "200 — self.__VIDRA_RUNTIME_CONFIG__={\"apiBaseUrl\":\"https://<the instance origin>\"}; the public origin, NOT localhost:8080",
+   "GET /api/v1/instance": "200 application/json",
+   "GET /version": "200 application/json, v0.6.3@12bd1c7",
+   "GET /v/{short_code}": "200 text/html — the watch page, <title> matching the video",
+   "GET /videos/{uuid} (legacy)": "200 text/html",
+   "GET /sitemap.xml": "200 application/xml, 513774B",
+   "GET hls master.m3u8": "200 application/vnd.apple.mpegurl, 1402B, five variant renditions plus subtitle and audio groups",
+   "media Range bytes=0-65535": "206 video/mp4, 65536B, after one redirect to storage",
+   "GET /.well-known/nodeinfo": "404 — expected, FEDERATION_ENABLED=false on this instance",
+   "GET /.well-known/webfinger": "404 — same reason",
+   "GET /feed/videos.xml": "404 — not investigated; the feed may live at a different path on this release"
+  },
+
+  "search_and_playback": {
+   "search": "GET /api/v1/videos/search?q=giantess&limit=3 -> 200 with real ranked results (the response's key is `videos`); a broader query reported total 12051",
+   "video_list": "GET /api/v1/videos?limit=3 -> 200, total 13528, each item carrying its stored 11-character short_code",
+   "playback": "the master playlist, a 1080 variant playlist (34419B, EXT-X-VERSION:7 CMAF with EXT-X-MAP byte ranges) and a real 64 KiB media range all served"
+  },
+
+  "not_verified_on_beta": [
+   "login, and therefore the TOTP second factor: no credentials for an existing beta account were available to this session, and creating an account on beta was out of scope. Every check above is anonymous.",
+   "the 'old access tokens 401 once' release-note fact, for the same reason — it needs a token minted before the deploy.",
+   "any authenticated surface: Studio, admin, messaging, notifications."
+  ]
+ },
+
+ "unchanged": [
+  "no production script, compose file, env template, migration, workflow or component source was changed by this release work",
+  "the only file changed in this repository outside docs/ is tests/runtime_smoke.py, which is test tooling"
+ ],
+
+ "residuals_recorded_in_the_notes": [
+  "MIG-01/02/04/05/06 BLOCKED and MIG-03 FAIL, all on the same missing sanitized source input",
+  "F08: the importer CLI is still not packaged in the image or built by release-assets",
+  "AUTH-04: the selected external identity provider is deferred (OIDC proved on a local Dex fixture)",
+  "INT-10: the selected CDN edge is deferred (proved against a simulator)",
+  "INT-07: no real public IPFS publication; IPFS Cluster durability open",
+  "INT-05: F8 authoring, third-instance thread parents, signed fetch, MIG-06 identity clause",
+  "the selected object-storage bucket is deferred (S3 proved on MinIO)"
+ ]
+}
