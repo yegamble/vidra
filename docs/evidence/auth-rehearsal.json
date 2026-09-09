@@ -1,0 +1,9 @@
+{
+  "slice": "Auth rehearsal — set-password, no auto-link, link flow, MFA over SSO on real providers",
+  "date": "2026-09-09",
+  "status": "LAB IN PROGRESS — this file is rewritten with measurements when the run completes",
+  "rows_under_test": {
+    "AUTH-04": "already PASS — the re-run annotates Evidence only",
+    "INT-06": "already PASS — the re-run annotates Evidence only"
+  }
+}
