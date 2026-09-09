@@ -16048,9 +16048,11 @@ signature by a key outside its JWKS, because it is correct. So the negative
 half of the matrix runs against a second fixture: a ~140-line **stdlib-only
 hostile provider** on `127.0.0.1:5599` that serves one issuer per defect under
 `/p/<mode>` — each with its own discovery document, JWKS and RS256 signer — so a
-single core boot could be pointed at all of them at once. Stated precisely: no
-OIDC traffic left loopback; what reached the network was the Homebrew install of
-Dex.
+single core boot could be pointed at all of them at once. Stated precisely: **no OIDC
+protocol traffic left loopback at any point** — every issuer, JWKS, token
+endpoint and redirect URI is a `127.0.0.1` address. What did reach the network
+was the Homebrew install of Dex and the ordinary Go and npm module fetches the
+builds needed.
 
 Core runs two processes (`VIDRA_ROLE=api` on `:8088` and a separate worker) over
 its own native postgres 16.15 on `:55477` **migrated from empty** to schema 143,
