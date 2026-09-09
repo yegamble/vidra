@@ -1,0 +1,237 @@
+{
+ "item": "A29 follow-ups",
+ "register_row": "INT-05",
+ "verdict": "IMPLEMENTED, NOT MEASURED. The three clauses rehearsal 3 left open are ruled on and built, test-first, with core `make ci` + integration on a fresh native PostgreSQL and every GitHub lane green. INT-05 does NOT move: nothing here was run against a second Vidra, and only the fourth two-instance run can flip it.",
+ "date": "2026-09-09",
+ "section": "A29 follow-ups \u2014 a block that speaks, resumed comments, validator-safe renames \u2014 2026-09-09",
+ "headline": "An instance block now answers a Follow with a signed Reject (and nothing else); comment Creates cancelled inside a block window resume on unblock when the comment is still readable; migration 0143 mints renamed channel handles in the channel-handle validator's own alphabet and re-renames what 0142 already minted, keeping the frozen ActivityPub id where it is.",
+ "what_this_builds_on": {
+  "vidra-core": "origin/main 4f74b09 \u2014 vidra-core #215 (rehearsal 3's five fixes) MERGED",
+  "vidra-user": "origin/main 806b90b \u2014 vidra-user #205 (threaded mirror rendering) MERGED",
+  "schema_before": 142,
+  "schema_after": 143
+ },
+ "ruling": [
+  "An instance block SPEAKS: a Follow refused because the sender's instance is blocked is answered with a signed Reject, the same shape a creator's manual rejection sends, so the sender ends `rejected` rather than stranded at `pending`. Notes and other activities from a blocked instance stay 202-and-dropped with the audit row, and produce no other outbound speech.",
+  "Cancelled comment Creates resume on unblock when the comment still exists, is not hidden, and its video is still public+published on an AP-enabled channel; anything else stays cancelled.",
+  "The backfill uses the channel-handle validator's alphabet: `<handle>_channel`, `<handle>_channel2`, \u2026 Existing `-channel[-N]` renames minted by 0142 get a second audited rename to the underscore form with the same alias treatment; the frozen AP id does not move."
+ ],
+ "sc1_a_block_that_speaks": {
+  "verdict": "PASS by test (unit + drain-to-a-real-inbox); UNVERIFIED live",
+  "reject_shape": {
+   "@context": "https://www.w3.org/ns/activitystreams",
+   "id": "<base>/video-channels/<handle>/activities/reject/<uuid>",
+   "type": "Reject",
+   "actor": "<base>/video-channels/<handle>",
+   "object": {
+    "id": "<the refused Follow's activity id>",
+    "type": "Follow",
+    "actor": "<the sender's actor url>",
+    "object": "<base>/video-channels/<handle>"
+   }
+  },
+  "shape_is_shared": "buildRejectFollow \u2014 the same function RejectFollowerRequest (a creator's manual rejection) and the federation_allow_channel_followers gate already use. A sender must not have to recognise two kinds of refusal.",
+  "signed_as": "the channel actor, at the id this instance PUBLISHES (the FROZEN one for a renamed channel, via channelActorHandle) \u2014 vidra has no instance-level AP actor, and an Accept and a Reject for one channel must not be signed by two actors.",
+  "wire_answer_unchanged": "202, plus one audit row federation.inbox.rejected carrying only the domain. The activity is NOT marked processed, so an unblock still lets a redelivery in.",
+  "silence_matrix": [
+   {
+    "activity": "Follow of a local channel, signer == actor",
+    "outbound": "one Reject"
+   },
+   {
+    "activity": "Create{Note}",
+    "outbound": "none"
+   },
+   {
+    "activity": "Undo",
+    "outbound": "none"
+   },
+   {
+    "activity": "Follow whose actor is not the request signer",
+    "outbound": "none \u2014 answering one would let anybody make this server sign a Reject at a third party by naming them as the follower"
+   },
+   {
+    "activity": "Follow of a channel this instance does not hold",
+    "outbound": "none"
+   },
+   {
+    "activity": "Follow of an ACCOUNT actor",
+    "outbound": "none"
+   },
+   {
+    "activity": "Follow of a channel with activitypub_enabled false (0096)",
+    "outbound": "none"
+   }
+  ],
+  "cancellation_exemption": {
+   "mechanism": "severingActivity() already returns true for Undo and Reject (A29-F5), so DrainDeliveries does not cancel them for a blocked destination. VERIFIED AND KEPT.",
+   "how_it_is_proved": "TestTheBlocksOwnRejectIsDeliveredWhileTheBlockStands drives the whole path: the Follow arrives from a blocked domain, the sender's inbox is an httptest server whose host is ALSO on the blocklist, DrainDeliveries returns delivered=1, no row carries the cancel marker, and the Reject is read back off the wire naming the refused Follow.",
+   "not_asserted_by": "re-reading severingActivity, which would prove only that the predicate agrees with itself"
+  },
+  "sender_side": "TestAnInstanceBlocksRejectEndsTheSendersRow builds the Reject with the BLOCKING instance's own buildRejectFollow and feeds it to the sender's inbox: the row goes `rejected` (terminal, creator-visible), and a re-follow re-arms it to `pending` with a NEW Follow activity id. The sender learns nothing about the block.",
+  "best_effort": "rejectFollowFromBlockedSender returns nothing and logs on failure. HandleInbox must answer ErrSenderBlocked (202 + audit row) whatever happens, because a queue error that propagated would turn the refusal into a 422 \u2014 exactly the distinguishable answer the silence exists to avoid.",
+  "tests": [
+   "internal/federation/a29_follow_ups_test.go: TestBlockedInstanceFollowIsAnsweredWithAReject",
+   "internal/federation/a29_follow_ups_test.go: TestABlockSpeaksOnlyForAFollowAndOnlyToItsOwnActor (7 sub-cases)",
+   "internal/federation/a29_follow_ups_test.go: TestTheBlocksOwnRejectIsDeliveredWhileTheBlockStands",
+   "internal/federation/a29_follow_ups_test.go: TestAnInstanceBlocksRejectEndsTheSendersRow",
+   "internal/federation/a29_parity_test.go: TestSeveringDeliveriesSurviveADestinationBlock (unchanged, still green)"
+  ]
+ },
+ "sc2_comment_creates_resume": {
+  "verdict": "PASS by unit test AND by a fresh-Postgres integration test; UNVERIFIED live",
+  "what_was_broken": "redeliverable() resolved a Create/Update's object only as <base>/videos/<uuid>. A comment's object id is <base>/comments/<uuid>, so a Create{Note} cancelled inside a block window fell to the conservative default and was left cancelled forever \u2014 a follower's mirrored thread permanently short every comment written while the block stood.",
+  "resume_predicate": {
+   "resumed": "the comment row still exists AND deleted_at IS NULL AND user_id IS NOT NULL (locally authored) AND its video is privacy='public' AND state='published' AND its channel has activitypub_enabled",
+   "left_cancelled": [
+    "the comment is gone \u2014 a removal is a hard DELETE, so the row is simply not found; sending the Create would plant a comment this instance can no longer retract, because the Delete that would retract it was cancelled by the same block and no longer resolves",
+    "the comment is tombstoned (deleted_at set by an account deletion, body emptied, row kept so the thread survives) \u2014 broadcasting the original body would un-delete it on someone else's server",
+    "the comment is remote-authored \u2014 federateComment never fans those out, and a resume path that did would be a re-broadcast by the back door",
+    "the video is no longer public+published on an AP-enabled channel \u2014 same clause, same helper as the video arm",
+    "the Note id belongs to another instance"
+   ],
+   "deliberately_not_consulted": "per-viewer blocks and mutes. Those are read filters evaluated against ONE reader, and a fan-out to a remote inbox has no reader to evaluate them for; the receiving instance applies its own readers' filters to what it stores. The only instance-wide hiding a local comment has is deletion (hard) or tombstoning, and both are refused above."
+  },
+  "bounds": "cap, window and domain prefilter are the VIDEO path's, unchanged, because it is the same loop: ListCancelledDeliveriesForRedelivery with the LIKE prefilter, maxRedeliverAfterUnblock = 500 applied after it, and hostOf() deciding membership with the same function that decided to cancel.",
+  "tests": [
+   "internal/federation/a29_follow_ups_test.go: TestRedeliverableResolvesCommentObjects (8 sub-cases)",
+   "internal/federation/a29_follow_ups_test.go: TestUnblockRequeuesCancelledCommentCreates \u2014 through the real DrainDeliveries cancellation and the real RedeliverAfterUnblock",
+   "internal/federation/a29_follow_ups_integration_test.go: TestUnblockResumesCommentCreatesForVisibleComments \u2014 seeded rows on a REAL PostgreSQL: 4 queued Create{Note}s, real BlockInstance, real drain, real unblock; requeued=1 and the other three keep the cancel marker intact"
+  ]
+ },
+ "sc3_migration_0143": {
+  "verdict": "PASS by integration test on a real PostgreSQL, including a full up/down/up cycle with seeded rows",
+  "number": 143,
+  "files": [
+   "migrations/0143_validator_safe_channel_handles.up.sql",
+   "migrations/0143_validator_safe_channel_handles.down.sql"
+  ],
+  "rule": "mint_channel_handle(base): fold the source handle to [A-Za-z0-9_], keep the whole name inside the validator's 30-character ceiling by truncating the ROOT (not the suffix), and mint <root>_channel, then <root>_channel2, <root>_channel3, \u2026 with NO separator before the number. The 3-character floor takes care of itself because '_channel' is 8 characters.",
+  "why_truncate_the_root": "a name that came out as <31 chars>_channel would be refused by the validator exactly as a hyphen is; truncating the suffix instead would collapse _channel2 back onto _channel and lose the loop's purpose.",
+  "second_rename": {
+   "detection": "a channel holding an is_actor_id alias (only 0142's backfill mints one) whose CURRENT handle still matches '-channel(-[0-9]+)?$'. Both clauses matter: the first keeps a channel a human deliberately called my-channel out of it, the second keeps the migration off channels a later validator-clean rename already fixed.",
+   "frozen_actor_id": "NOT MOVED. 0142 froze it on the ORIGINAL colliding name and peers hold that id in their follow rows, their cached actors and every activity's attributedTo. 0143 does not touch the is_actor_id alias.",
+   "interim_name": "becomes an ORDINARY second alias \u2014 is_actor_id=false, expires_at now + 365 days \u2014 so anyone who published the interim name in the window between two upgrades gets a 301 rather than a 404.",
+   "audit": "content.channel.handle_renamed, again, with reason 'from=<interim> to=<new>' and metadata {from, to, original, cause: 'handle_validator_alphabet'}"
+  },
+  "down_reverses_only_0143": "restores the interim handles, deletes the aliases 0143 minted, deletes the audit rows carrying cause=handle_validator_alphabet (a ledger must not describe a rename that has been reversed \u2014 the rows are identified exactly, by one cause written by one function), drops mint_channel_handle and rename_channel_handles_to_validator_alphabet, and restores 0142's backfill verbatim.",
+  "measured_cycle": [
+   {
+    "stage": "seeded at 142",
+    "handle": "downup-channel-2",
+    "aliases": "downup:true",
+    "rename_audit_rows": 0,
+    "reserved": "downup-channel-2"
+   },
+   {
+    "stage": "after up to 143",
+    "handle": "downup_channel",
+    "aliases": "downup:true, downup-channel-2:false",
+    "rename_audit_rows": 1,
+    "reserved": "downup_channel"
+   },
+   {
+    "stage": "after down to 142",
+    "handle": "downup-channel-2",
+    "aliases": "downup:true",
+    "rename_audit_rows": 0,
+    "reserved": "downup-channel-2"
+   },
+   {
+    "stage": "after up again",
+    "handle": "downup_channel",
+    "aliases": "downup:true, downup-channel-2:false",
+    "rename_audit_rows": 1,
+    "reserved": "downup_channel"
+   }
+  ],
+  "validator": {
+   "moved_to": "internal/channel.ValidateChannelHandle \u2014 out of internal/httpapi, because the rule stopped being an HTTP concern the moment a MIGRATION started minting handles",
+   "asserted_against_the_function": "not against a second copy of its regexp",
+   "bases_exercised": [
+    "creatora",
+    "a",
+    "(empty)",
+    "has-a-hyphen",
+    "user.name+tag@thing",
+    "40 x's",
+    "29 y's + -suffix",
+    "\u00fcn\u00efc\u00f8de"
+   ]
+  },
+  "tests": [
+   "internal/store/actor_handles_integration_test.go: TestBackfillRenamesTheChannelSideOfACollision (updated: decoy on <name>_channel, result <name>_channel2, asserted valid)",
+   "internal/store/actor_handles_integration_test.go: TestSecondRenameMovesAHyphenHandleIntoTheValidatorAlphabet \u2014 seeded on a -channel-2 row, checks handle, both aliases, the frozen id, the expiry, the audit cause, and idempotence on a second run",
+   "internal/store/actor_handles_integration_test.go: TestMintChannelHandleAlwaysPassesTheValidator"
+  ]
+ },
+ "sc4_docs_and_operator_surfaces": {
+  "core_docs": "vidra-core docs/operations.md gains '## Federation \u2014 what an instance block does, and what an unblock undoes': inbound is gone for good (202, dropped, audit row), the ONE inbound activity that gets an answer, outbound is held not lost with lazy cancellation, a table separating dead_lettered from cancelled_by_policy, the resume list, the percent-encoded unblock path, and a '### Channel handles the one-namespace migration renamed' subsection with the SQL to find out whether any of yours were renamed and what to tell those creators.",
+  "admin_system": {
+   "was": "count(*) FILTER (WHERE state = 'failed') AS dead_lettered \u2014 which included block-cancelled rows and reported them as 'N outbound deliveries exhausted their retries and were dead-lettered. The instance is serving; one or more peers did not accept what it sent.' The rehearsal watched six cancelled deliveries reported that way.",
+   "now": "FederationDeliveryHealth takes the cancel marker as a parameter (from internal/federation.DeliveryCancelledByPolicy, so the string lives once next to the code that writes it) and splits: dead_lettered EXCLUDES cancelled rows, cancelled_by_policy counts them.",
+   "status": "cancellations alone do NOT degrade the component \u2014 a blocklist doing what an admin asked for is not a degradation, and a page that went yellow for it would train operators to ignore yellow. The count rides in detail and is ABSENT when zero.",
+   "tests": [
+    "internal/httpapi/system_federation_test.go: TestBlockCancelledDeliveriesAreNotReportedAsDeadLetters",
+    "internal/httpapi/system_federation_test.go: TestNoCancellationsMeansNoCancellationLine"
+   ]
+  },
+  "user_label": {
+   "finding": "rehearsal 3, Chromium: the control's accessible name was 'Block films@peer.example' \u2014 the CHANNEL handle \u2014 on a control that sends /accounts/creatora and blocks the PERSON who owns it. Recorded there as 'a wording gap worth closing, not a behaviour one'.",
+   "fix": "the accessible name follows the URL the page is about to send: 'Block account kaisa@peer.example' when the row carries account_actor_url, and 'Block account films@peer.example' in the fallback case where the block genuinely IS against the channel actor. So the label tells the truth in both directions.",
+   "behaviour": "unchanged \u2014 same URL blocked, same URL unblocked, same visible button text ('Block account' / 'Unblock account', which it already said)."
+  }
+ },
+ "sc5_gates": {
+  "vidra-core": {
+   "make ci": "PASS \u2014 fmt-check, vet, migrate-lint (143 up migrations clean), openapi-verify, sqlc-verify, test-race",
+   "go vet -tags=integration ./...": "clean",
+   "integration": "go test -tags=integration -p 1 ./internal/federation/... ./internal/store/... PASS on a fresh native PostgreSQL 16 migrated 0\u2192143 from empty (dirty=false), and again after `migrate down 1` + `migrate up`",
+   "openapi": "api/openapi.yaml UNTOUCHED \u2014 no contract regen, no merge ordering between the two PRs",
+   "github_lanes": "ci-required, integration, build-test, openapi, prev-migrator-against-new-schema, prev-release-against-new-schema, ipfs-integration, ipfs-private-integration, GitGuardian \u2014 all pass",
+   "trap_recorded": "TestOwnerClaimTokenLifecycle fails on any database that has already run the store integration suite once (users_single_owner_idx allows exactly one owner and the test claims it). Point the suite at a database migrated from empty; on a pristine 0\u2192143 database both packages are green."
+  },
+  "vidra-user": {
+   "node": "26.8.1",
+   "typecheck": "PASS",
+   "lint": "0 errors, 2 pre-existing warnings",
+   "lint:icons": "PASS",
+   "vitest": "2595 of 2598 in 259 files. The 3 failures are 5\u20138 s timeouts in ChannelSyncSection, InstanceDocumentEditor, SearchSettingsView, AccountDataSection and ui/Modal \u2014 none of which import the changed component; the failing SET differs run to run (8, then 3), and those five files run alone are 52 of 52 in 7.6 s. Known load flakiness, not a regression.",
+   "next build": "PASS",
+   "contract lane": "pass on GitHub \u2014 confirming there is no OpenAPI change"
+  },
+  "meta": {
+   "python3 -m unittest discover -s tests -p '*_test.py'": "OK"
+  }
+ },
+ "prs": [
+  {
+   "repo": "vidra-core",
+   "number": 216,
+   "url": "https://github.com/yegamble/vidra-core/pull/216",
+   "title": "[claude] A29 follow-ups: a block that speaks, resumed comment Creates, validator-safe renames"
+  },
+  {
+   "repo": "vidra-user",
+   "number": 206,
+   "url": "https://github.com/yegamble/vidra-user/pull/206",
+   "title": "[claude] A29 follow-ups: Block account label"
+  }
+ ],
+ "unverified": {
+  "fourth_two_instance_run": "NOTHING HERE WAS MEASURED AGAINST A SECOND VIDRA. INT-05 does not move on this section.",
+  "what_that_run_must_prove": [
+   "a Follow from a blocked instance answered 202 with the federation.inbox.rejected audit row AND a Reject landing in the sender's inbox while the block still stands",
+   "the sender's remote_channel_follows row reading `rejected`, creator-visible, and re-arming to `pending` with a fresh Follow id on a re-follow",
+   "a Create{Note} cancelled inside a clean block window arriving on the follower after the unblock, with a hidden/deleted comment's and a private video's comment staying cancelled",
+   "a channel renamed by the backfill answering at a `_channel` handle that POST /channels would accept, with /channels/<old> AND /channels/<interim -channel name> both 301, and the actor id unmoved",
+   "/admin/system reporting block-cancelled deliveries as cancelled_by_policy rather than dead_lettered"
+  ]
+ },
+ "deferred_untouched": [
+  "third-instance comment re-broadcast \u2014 a reply whose parent is a THIRD instance's comment is delivered and dropped, because this instance never re-broadcasts remote-authored content. An Announce-shaped design change, not a patch.",
+  "F8 authoring \u2014 there is still no POST route for a mirrored thread, and internal/httpapi/remote_video_comments.go says why in its own words",
+  "signed fetch on the object routes",
+  "MIG-06's identity clause \u2014 source identity after a domain MIGRATION needs id continuity across hosts, key continuity or a Move, and dispatchActivity still has no arm for one"
+ ]
+}
