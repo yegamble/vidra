@@ -16287,7 +16287,8 @@ registration was exercised. Vidra implements no provider-initiated or
 back-channel logout, and persists no provider tokens, so neither was tested.
 And the set-password step-up through the OIDC callback stays **unverified**:
 core #217 was still open when this lab ran, so `purpose=step_up` was never
-exercised. It merged while this was being written — see §Auth:
-session-authorised set-password and real email for provider accounts above,
-which also supersedes the "use the password-reset flow" remedy this run measured
-for OIDC-only accounts with a first-class one.
+exercised. Both halves merged while this was being written — core #217 and
+user #207 — so see §Auth: session-authorised set-password and real email for
+provider accounts above, which gives the "use the password-reset flow" remedy
+this run measured a first-class replacement. What stays unproven is that path
+running THROUGH the OIDC callback with `purpose=step_up`.
