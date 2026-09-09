@@ -183,7 +183,7 @@
       "lint_icons": "PASS",
       "vitest": "2639 of 2643 across 264 files; the 4 failures are the known suite-interaction flake on this machine — all four pass when run alone, and three (AdminTable, Modal, ResetPasswordForm) are files this slice does not touch",
       "build": "PASS (production next build)",
-      "playwright_chromium": "627 specs PASS",
+      "playwright_chromium": "630 specs; 629 pass and one — e2e/donations.spec.ts 'deleting an address removes it from the list', a file this slice does not touch — failed once in a full run and passes when its file is run alone. Same flake class as the vitest four. Repo CI is the authority.",
       "regen": "lib/api/generated.ts regenerated from the core spec — contract-ci ordering is core, then user"
     },
     "meta": {

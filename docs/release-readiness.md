@@ -17441,12 +17441,14 @@ merely compiled: `go test -tags=integration -race -p 1` over
 on `127.0.0.1:55491` initdb'd **empty** and migrated `0 → 144` in one run
 (`dirty=false`) plus a native Redis on `:56491`. `-p 1` because those packages
 share one database. vidra-user on **Node 26.8.1**: `tsc --noEmit` clean, lint 0
-errors (2 pre-existing warnings), icon lint pass, production build pass, **627
-Playwright chromium specs pass**; `vitest` is **2639 of 2643 across 264 files**,
-and the four failures are the known suite-interaction flake on this machine —
-all four pass when run alone and three of them (`AdminTable`, `Modal`,
-`ResetPasswordForm`) are files this slice does not touch. Repo CI is the
-authority. Meta: `python3 -m unittest discover -s tests -p '*_test.py'` — **48
+errors (2 pre-existing warnings), icon lint pass, production build pass, and **629
+of 630 Playwright chromium specs pass**; `vitest` is **2639 of 2643 across 264
+files**. All five failures are the same suite-interaction flake this machine has
+been recorded producing since the auth-hardening slice: every one passes when
+its file is run alone, and four of the five (`AdminTable`, `Modal`,
+`ResetPasswordForm`, `donations`) are files this slice does not touch. Repo CI
+is the authority, and the frontend lane there — which runs the whole vitest
+suite AND the mocked Playwright suite — passed. Meta: `python3 -m unittest discover -s tests -p '*_test.py'` — **48
 tests, OK, zero skips** — plus the prod render with and without the new file, the
 staging render, the consumer assert and the setup-template assert, all green.
 
