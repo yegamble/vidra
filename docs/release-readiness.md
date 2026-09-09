@@ -100,7 +100,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | AUTH-01 Owner claim is exclusive, one-time and grants admin | C U M | `auth/ownerclaim.go`, `e2e-backed/owner-claim.spec.ts`, setup routes | UNVERIFIED | Before claim all signup methods refuse; valid boot token claims once; restart invalidates old token; race two claims; admin/system succeeds only for claimant | INS-05 → A04 |
 | AUTH-02 Registration, approval, login, logout and session refresh persist | C U | Auth service/routes; backed auth-persistence/session/registration-approval tests; approval opt-in | UNVERIFIED | Open/closed/approval registration with two users; accept/reject; expiration/refresh/revoke; reload and multi-tab/logout; rejected credentials never create sessions | AUTH-01 → A04 |
 | AUTH-03 Email verification and password recovery deliver real mail | M C U | `internal/mail/smtp.go`; live evidence `a05-mail-totp` (disposable Mailpit, capture seam OFF, browser link redemption, expiry/reuse, measured enumeration, four SMTP modes, disabled- and broken-mail UX) | PASS | Disposable SMTP sink + browser token redemption, expiry/reuse and enumeration behavior; then operator-selected SMTP delivery and disabled-mail UX | Provider-agnostic: proven over plain SMTP and over STARTTLS-required + AUTH PLAIN with a trusted CA. Two defects fixed (no redeemable link in any token message; reset was an account-existence oracle with the relay down) → A05 |
-| AUTH-04 TOTP enrollment, recovery and removal; OAuth/OIDC login/link/unlink | C U M | Core auth/MFA/OAuth routes; live evidence `a05-mail-totp` (TOTP half: KEK ciphertext at rest, enrollment, second login step in Chromium, recovery codes, limiter, password-gated removal) and `a05-oidc` (OIDC half: Dex 2.45.1 fixture, begin parameters, state/nonce/PKCE + id_token matrices, email collision, link/unlink, outage) | **PASS (TOTP + OIDC on a local Dex fixture; selected provider deferred)** | TOTP second login/recovery/revoke; local OIDC provider callback/state/PKCE, account collision and unlink-last-method policy; never substitute a precreated identity for login | OIDC half proven 2026-09-09 against Dex 2.45.1 plus a hostile-provider fixture: S256 PKCE + nonce + signed single-use state, every state/nonce/iss/foreign-key/replay case refused with no session, verified-email collision links without a second account, unverified refused, unlink-last-method 422 whose password-reset remedy actually works. No hosted IdP and no https redirect URI were exercised. Open, needing rulings: the second factor does NOT apply to a provider login (measured side by side on one account — the MFA gate lives only in the password path); any configured provider can claim any local account by asserting its email verified (a second provider signed in as the owner); there is no link-from-settings and the callback is session-blind; enabling a provider still needs a hand edit to the api compose environment map. TOTP-half notes are superseded by §Auth hardening (2026-09-07); `OAUTH_PROVIDERS` is now fully documented in the env template (verified 2026-09-09) → A05 OIDC |
+| AUTH-04 TOTP enrollment, recovery and removal; OAuth/OIDC login/link/unlink | C U M | Core auth/MFA/OAuth routes; live evidence `a05-mail-totp` (TOTP half: KEK ciphertext at rest, enrollment, second login step in Chromium, recovery codes, limiter, password-gated removal) and `a05-oidc` (OIDC half: Dex 2.45.1 fixture, begin parameters, state/nonce/PKCE + id_token matrices, email collision, link/unlink, outage) | **PASS (TOTP + OIDC on a local Dex fixture; selected provider deferred)** | TOTP second login/recovery/revoke; local OIDC provider callback/state/PKCE, account collision and unlink-last-method policy; never substitute a precreated identity for login | OIDC half proven 2026-09-09 against Dex 2.45.1 plus a hostile-provider fixture: S256 PKCE + nonce + signed single-use state, every state/nonce/iss/foreign-key/replay case refused with no session, verified-email collision links without a second account, unverified refused, unlink-last-method 422 whose password-reset remedy actually works. No hosted IdP and no https redirect URI were exercised. Open, needing rulings: the second factor does NOT apply to a provider login (measured side by side on one account — the MFA gate lives only in the password path); any configured provider can claim any local account by asserting its email verified (a second provider signed in as the owner); there is no link-from-settings and the callback is session-blind; enabling a provider still needs a hand edit to the api compose environment map. TOTP-half notes are superseded by §Auth hardening (2026-09-07); `OAUTH_PROVIDERS` is now fully documented in the env template (verified 2026-09-09); **trust model hardened 2026-09-09**: a provider-asserted email links nothing (subject-only matching, so neither the owner nor a provider-created account can be claimed by a second IdP), the second factor applies to provider sign-ins over a Path-scoped httpOnly `vidra_mfa_pending` cookie with only `?mfa=required` in the URL, link-from-settings exists (`/auth/oauth/{provider}/link/start`, `/auth/atproto/link/start`) and a login callback inside a live session links or refuses instead of switching accounts, and the per-provider variables reach api and worker through an optional `env/oauth.env` env_file — code+CI only, the Dex lab is the re-run → A05 OIDC, §Auth trust |
 | AUTH-05 Profile/privacy, email/password changes, deactivation/deletion and account archive | C U S | Backed profile-edit/deactivate/delete-account/account-export; core account and search deletion hooks; live evidence `a12-profile-archive` (profile/privacy + archive round trip), `a12-deletion` (deactivation/deletion with content, DM retention, media cleanup, search hook), `a12-password-change` (password change with re-verification, on session-bound access tokens) and `a12-email-change` (two-step email change with re-verification over real SMTP) | PASS | Mutate profile/unlisted/email/password with re-verification, export and import supported archive; delete/deactivate with content, sessions, follows and search history; verify recipient DM retention policy and media cleanup | AUTH-02, SRC-02 → A12 |
 | PUB-01 Create channel and draft; upload a real file within quota | C U M | `internal/video`, upload routes; backed upload/studio/channel-management; live browser channel/draft/real-upload/quota/durability proof (A06 evidence L560–568) | PASS | Browser-create channel/draft; upload generated audiovisual clip; inspect original metadata, owner quota accounting and durable state; deny nonowner/overquota/invalid input | AUTH-02 → A06 |
 | PUB-02 Resumable upload, cancel, draft recovery and batch publishing | C U | W2 plans; backed upload-draft-recovery/upload-cancel/upload-batch | PASS | Interrupt network and restart service between chunks; resume without duplicate files/charges; recover draft on another session; cancel cleanup; partial batch failure retained | PUB-01 → A10 |
@@ -17219,3 +17219,259 @@ function. No vidra-user change was needed, so no contract regeneration.
    now-measured lag, the runtime lever exists and works without a restart, the
    ledger and the node are compared in both directions, and an IPFS watch is
    recorded as an IPFS watch.
+## Auth trust — no auto-link, the second factor on SSO, link from settings, provider env_file — 2026-09-09
+
+**AUTH-04 stays PASS; what moves is the trust model underneath it.** A05
+measured two ways to take a Vidra account with a provider round trip and no
+local credential, and recorded four findings the owner has now ruled on. This
+is that, in [core #222](https://github.com/yegamble/vidra-core/pull/222) and
+[user #211](https://github.com/yegamble/vidra-user/pull/211). Core changes
+`api/openapi.yaml`, so the ordering is **core, then the user regen, then this**.
+**No migration**: `oauth_identities` has carried `UNIQUE (provider, subject)`
+and `UNIQUE (user_id, provider)` since 0055, and those are exactly the two
+refusals the link contract needs — core stays at schema 144.
+[Evidence](evidence/auth-trust.json).
+
+**A provider's word about an email address now links nothing.** An id_token
+whose `email` matches an existing local account is `email_conflict` — **verified
+or not**. The old rule linked on a verified claim, and A05 measured where that
+goes: a *second* configured provider asserted the instance owner's address
+`email_verified: true` and signed in as the owner, role admin, `is_owner: true`,
+having proved nothing whatsoever about the local credential. With one
+operator-chosen IdP that is the ordinary SSO trust model; with two it is a
+lateral path to the admin account, and an operator who adds a second provider is
+not told they have just handed it the first one's users.
+
+The matrix, and the row that matters is the fourth:
+
+| attempt | answer |
+|---|---|
+| known `(provider, subject)` | login, same account |
+| an existing **password** account's address, `email_verified: true` | `email_conflict` — no session, no identity row, `email_verified` untouched |
+| the same, `email_verified: false` | `email_conflict`, byte-identical, so the answer cannot be probed for what the provider asserted |
+| no local account with that address | account created (username derived and deduped, `email_verified` inherited) |
+| a **provider-created** account, re-login by the **same subject** | login, same account |
+| a **different provider** asserting that provider-created account's address | `email_conflict` |
+
+The last row is the one an email rule could never have protected: a
+provider-created account has no password to compare and holds an address the
+*first* provider put there. It is safe here because the only matching rule left
+is the subject, which is issuer-scoped and unforgeable across providers.
+Verified RED first — with the old ladder restored in a scratch copy the new test
+reports *"second provider claiming a provider account's address: err = <nil>,
+want ErrOAuthEmailConflict"* and *"identities on the provider-created account =
+2, want 1"*. A refused collision emits `auth.login failure oauth_email_conflict`
+and, asserted explicitly, **no** `auth.oauth.link success` row — the old
+behaviour's audit trail said a link had happened.
+
+**The second factor applies to a provider sign-in, and there is now one door.**
+`auth/oauth.go` reached `issueTokens` at three sites and `auth/atproto.go` at
+two, and none of the five consulted `mfaEnabled`; only `Service.Login` did. So
+an account whose password could not make a session without a code was handed one
+on a redirect, in the same minute, which A05 measured side by side. All five now
+go through `Service.providerSession`, which withholds the session and mints the
+**same** single-purpose `mfa_token` the password path mints. A gate written at
+five call sites is a gate one refactor away from being written at four.
+
+**The transport is a cookie, and the URL carries only a flag.** This is the
+design A05 said the slice needed, and the choice inside it is not the one the
+step-up made. The step-up assertion rides in `?step_up=<token>` and that is
+sound *because it is bound to the session it was minted for* — whoever can read
+that URL already holds the session it is useless without. An `mfa_token` has no
+such backstop: it **is** the first factor, standing in for a password already
+proven, and it is bound to no session at all. A query parameter would write it
+into the browser history, into the `Referer` of every same-origin subresource
+the landing page then fetches, and into the access log of the frontend server
+and of any reverse proxy in front of it — three places a password would never
+be written. So it travels in `vidra_mfa_pending`: httpOnly, `SameSite=Lax`
+(it has to survive the top-level GET back from the provider), `Path` scoped to
+`/api/v1/auth/mfa/challenge` and nothing else, `Max-Age` 300 s — equal to
+`mfaTokenTTL`, so the browser stops sending a token the server would refuse
+rather than the two disagreeing about when the challenge died. The landing URL
+carries `?mfa=required`, which is not a secret, and the success marker `?oauth=1`
+is stripped from it so a landing cannot claim both.
+
+Single use is enforced where it means something: the cookie is cleared the
+instant it authorises a session, and cleared when the token cannot be resolved
+at all (there is nothing left to spend, and leaving it would make every later
+attempt in that browser fail identically with no way to clear it). A **wrong
+code deliberately keeps it** — a typo is not a use, and the password path lets
+you retype too. `MFAChallengeRequest.mfa_token` becomes optional in the
+contract; the body still wins when both are present, so the password path is
+unchanged and never reads the cookie. Recovery codes satisfy a provider
+challenge, asserted: an account that lost its authenticator must not be locked
+out of its own sign-in method. The limiter is untouched.
+
+On the client the login page reads the flag and shows the challenge UI it
+already had, submitting with **no token in the body** — the e2e asserts the
+absence, not just the presence of the code. `completeMfaChallenge` takes
+`string | null` and *omits* the field for the cookie path, because sending
+`null` would be a supplied-and-empty token, which is a 422. The signup page
+redirects `?mfa=required` to `/login?mfa=required`: an account that needs a
+second factor already exists, so it is a sign-in, and the challenge lives in one
+place.
+
+**Linking moved to settings, which is what made the refusal survivable.** The
+email match was the product's *only* linking mechanism, so removing it without
+replacing it would have stranded every password user whose provider address
+differs from their account address — A05 recorded that they already had no path.
+`POST /auth/oauth/{provider}/link/start` and `POST /auth/atproto/link/start`
+(requireAuth, behind the strict auth limiter) seal `purpose:"link"` plus the
+caller's user and session ids **inside the signed state cookie**, the core #217
+pattern; they answer JSON rather than a 302 for the step-up's reason — the
+request must carry the bearer token a top-level navigation cannot send. The
+callback attaches the identity to the **bound** account, and:
+
+| attempt | answer |
+|---|---|
+| start, anonymous | **401** |
+| start, this account already has an identity for this provider | **422 `provider_already_linked`** — before the round trip, and **no state cookie is sealed** |
+| start, `OAUTH_PROVIDERS` unset | **503 `oauth_not_configured`** |
+| start, unknown name on an instance that HAS providers | **404** |
+| ATProto start, that handle's DID is linked to another account | **409 `identity_belongs_to_another_account`** |
+| callback, subject unlinked | 302 `?link=<provider>`, **no session minted, no refresh cookie set** |
+| callback, subject linked elsewhere | 302 `?link_error=identity_belongs_to_another_account`; the identity does **not** move |
+| callback, same subject again | idempotent success — a second click on Connect is not a mistake |
+| unlink of the last sign-in method | **422**, unchanged, still naming `POST /auth/me/password/set` |
+
+The 409 is answered at the ATProto **start** and not at the OIDC one for a
+reason worth stating rather than papering over: ATProto resolves its subject —
+the DID — at `Begin`, before the browser ever leaves, so the refusal can come
+before a consent screen; an OIDC subject is not knowable until the id_token
+comes back, so that one is a redirect code. Same machine code either way, so a
+client renders one vocabulary. And `link_error` is a separate vocabulary from
+`oauth_error` on purpose: a link is not a sign-in, and the page receiving it is
+the settings page, exactly as the step-up reasons about its own `step_up_error`.
+
+**A callback is no longer session-blind.** A05 watched a signed-in browser go
+from `newcomer` to a freshly created `mfauser` by starting an ordinary login
+flow — a silent account switch nobody asked for. A **login**-purpose callback
+arriving with a live refresh session is now a link attempt for that session if
+the subject is unlinked, and the same 409-shaped refusal otherwise; in neither
+case is a session minted or the signed-in account changed. The session is read
+by `auth.Service.SessionAccount`, which resolves the refresh cookie **without
+rotating it** — a callback that answered "is anyone signed in here?" with
+`Refresh` would rotate the caller's refresh token as a side effect of looking,
+and the bearer token cannot ride a top-level navigation from an IdP.
+
+While there: `email_verified` is now set locally when a provider-verified email
+is what authorised the link **and it is the account's own address** (A05's
+smaller observation — the fact was learned and discarded). A verified claim about
+a *different* address changes nothing. And `OAUTH_PROVIDERS` unset makes begin a
+typed **503 `oauth_not_configured`** instead of a 404, matching ATProto's
+disabled path; a mistyped name on an instance that has providers is still a 404,
+because those are different facts.
+
+In the settings section `ConnectedLogins` now lists every provider the instance
+**offers**, not only the ones already linked, with **Connect** on the rest.
+Unlinking a provider the instance still offers leaves the row as a Connect — a
+disconnection nobody could undo would be a one-way door — and an identity for a
+provider the operator has switched **off** stays listed and stays unlinkable,
+so turning a provider off strands nobody, which is the property A05 measured and
+this preserves.
+
+**The env_file, and why this one family is the exception.** vidra-core's compose
+`environment:` map is an explicit allow-list, and it is right everywhere else:
+an unsettable key is a bug somebody notices, which is how `JWT_SECRET` was
+caught. It cannot work here because the *names* of these variables are derived
+from the operator's own list — `OAUTH_PROVIDERS=okta` creates
+`OAUTH_OKTA_ISSUER`, `_CLIENT_ID`, `_CLIENT_SECRET`, `_SCOPES` — and no
+allow-list can name a key it does not yet know. A05 rendered the consequence:
+with all four in a filled env file, exactly **one** reached the container, and
+the api then refused to boot for the other three, whose only fix inside the
+allow-list was hand-editing a tracked compose file inside a checkout pinned
+**detached** at a release tag.
+
+`api` **and** `worker` now carry
+`env_file: [{path: ./env/oauth.env, required: false}]` — the Compose ≥ 2.24 long
+syntax, the same floor the production overlay's `!reset`/`!override` tags already
+assume (AGENTS.md rule 4). Worker too, because it runs the same binary through
+the same `config.Load`: a provider complete for api and incomplete for worker is
+half a split deployment refusing to boot for a reason nothing else reports.
+`required: false` is what makes it safe to ship unconditionally, and both
+directions were measured rather than argued: with **no** such file the prod
+render is `config -q` clean and unchanged; with a filled one it is `config -q`
+clean **and** the rendered `api` and `worker` environments each carry
+`OAUTH_OKTA_ISSUER`, `_CLIENT_ID`, `_CLIENT_SECRET`, `_SCOPES` and
+`OAUTH_PROVIDERS` — five keys where A05 measured one. `environment:` wins over
+`env_file:` in Compose, so nothing in the tracked file can be silently
+overridden by dropping a file beside it, and env_file values are read as literal
+`KEY=VALUE` rather than compose substitution, so a `$` in a client secret needs
+no escaping. `vidra-core/env/oauth.env.example` is committed and
+`vidra-core/.gitignore` gains `env/*.env` + `!env/*.env.example`, exactly as
+here.
+
+**The validate lane needed no change, and that was checked rather than assumed.**
+The compose-consumer assert extracts keys by regex from `config.go` —
+`getEnv*` / `p.Str` / `p.Int` / `p.Int64` / `p.Bool` / `p.Duration` followed by a
+**literal** `"[A-Z0-9_]+"`. The per-provider names are built by concatenation
+(`prefix := "OAUTH_" + strings.ToUpper(...)`), so the regex has never seen them:
+the only `OAUTH_` key it extracts is `OAUTH_PROVIDERS`, which has had a consumer
+all along. The exact CI step was re-run in the worktree — *"OK: all 176 config
+keys reach BOTH api and worker (177 entries in each map)"* — and the api-vs-worker
+equality half still holds, because env_file keys appear in both rendered maps or
+in neither. No allowlist was edited. `vidra setup --template
+env/production.env.example` still writes no `# Managed by` block, so removing the
+commented per-provider lines from the template stranded no answer.
+
+`vidra-core/docs/operations.md` gains *"Single sign-on (OIDC) — the one family
+of settings compose cannot allow-list"*, and both meta env templates move the
+per-provider variables out and point at the new file. The production template's
+**UNPROVEN** banner is replaced by the two rules an operator would otherwise
+learn the hard way: a provider's word about an email address links nothing, and
+a provider sign-in goes through the account's second factor.
+
+**Gates.** vidra-core `make ci` passes — *"ci: gate passed (fmt-check, vet,
+migrate-lint, openapi-verify, sqlc-verify, test-race)"* — and `go vet
+-tags=integration ./...` passes, exit 0. The tagged lane was **executed**, not
+merely compiled: `go test -tags=integration -race -p 1` over
+`./internal/store/...` (6.5 s), `./internal/auth/...` (10.7 s) and
+`./internal/httpapi/...` (59.1 s), all **ok**, against a native Postgres 16.15
+on `127.0.0.1:55491` initdb'd **empty** and migrated `0 → 144` in one run
+(`dirty=false`) plus a native Redis on `:56491`. `-p 1` because those packages
+share one database. vidra-user on **Node 26.8.1**: `tsc --noEmit` clean, lint 0
+errors (2 pre-existing warnings), icon lint pass, production build pass, **627
+Playwright chromium specs pass**; `vitest` is **2639 of 2643 across 264 files**,
+and the four failures are the known suite-interaction flake on this machine —
+all four pass when run alone and three of them (`AdminTable`, `Modal`,
+`ResetPasswordForm`) are files this slice does not touch. Repo CI is the
+authority. Meta: `python3 -m unittest discover -s tests -p '*_test.py'` — **48
+tests, OK, zero skips** — plus the prod render with and without the new file, the
+staging render, the consumer assert and the setup-template assert, all green.
+
+**Not lab-observed, and the OIDC/PDS lab is the re-run.** No Dex, no hostile
+provider, no browser, no containers: the proof here is unit and integration tests
+plus CI. What the A05 lab has to prove, narrowly:
+
+- the takeover is gone **against Dex** — a second configured provider asserting
+  the owner's address `email_verified` redirects `?oauth_error=email_conflict`
+  and issues no session;
+- the settings **Connect** completes a real Dex round trip and the identity
+  appears in `/me/oauth-identities`;
+- a signed-in browser starting an ordinary login flow lands `?link=dex` for an
+  unlinked identity and `?link_error=identity_belongs_to_another_account` for
+  another account's, with the session still the one it started as;
+- an MFA-enrolled account signing in through Dex lands `?mfa=required` with the
+  cookie set, and a real authenticator code at `POST /auth/mfa/challenge` issues
+  the session — and **the token appears in no access-log line, no `Referer` and
+  no history entry** on the lab's real proxy, which is the whole transport claim
+  and the one thing a unit test cannot check;
+- an operator flow end to end: `cp env/oauth.env.example env/oauth.env`, fill it,
+  and a **containerised** api boots with the provider complete. The render is
+  proven here; the boot *through* `env_file` is not;
+- `begin` answers `503 oauth_not_configured` with `OAUTH_PROVIDERS` unset against
+  the real binary.
+
+Unchanged and still unverified: no hosted IdP (Google/Okta/Entra quirks —
+audience arrays, `email_verified` as a string, id_token algorithms other than
+RS256), no https `PUBLIC_BASE_URL`, and no provider-initiated or back-channel
+logout, which vidra does not implement.
+
+**Recorded, not built.** A per-provider `trusted_email_domains` allow-list stays
+a later option: it would let an operator say *"this IdP may auto-link addresses
+at corp.example"*, which is a real convenience on a single-IdP instance and a
+second trust surface on a two-IdP one. It is not needed to close the takeover,
+so it is not here. The ATProto **Connect** control expands an inline handle field
+rather than navigating on the first click — a small asymmetry with the OIDC rows
+that is inherent to the protocol, since the instance cannot know which PDS
+account is meant until it is told.
