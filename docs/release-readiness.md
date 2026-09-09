@@ -16029,7 +16029,7 @@ this is that run. Everything A05 listed as unproven — the callback, state/PKCE
 the email collision, unlink-last-method in practice — is now measured. One
 surgical fix went in,
 [core #220](https://github.com/yegamble/vidra-core/pull/220) (+ the comment-only
-regen [user #185](https://github.com/yegamble/vidra-user/pull/185)); no
+regen [user #208](https://github.com/yegamble/vidra-user/pull/208)); no
 migration, core stays at schema 143. The launch-relevant thing this slice found
 is not in either PR: **an account's second factor does not apply to a provider
 login**, and **any configured provider can claim any local account by asserting
@@ -16229,6 +16229,22 @@ the fixture after the fix, both codes come back as written. No status code,
 redirect, cookie or session semantic changed; the OpenAPI edit only names the
 two codes in the existing 502 descriptions, which is why the user-side change is
 a comment-only regen that must merge after core.
+
+**One unrelated defect this run turned up in the gate itself.** The first CI
+attempt on the core PR failed `ci-required` on
+`TestMFAChallengeRejectsTamperedAndExpiredTokens` — "tampered token status =
+200" — while the same test passed ten times locally and main was green. It is a
+real flake with an exact mechanism: the test builds its tampered token as
+`real[:len(real)-2] + "xx"`, and golang-jwt v5 decodes without
+`WithStrictDecoding`, so the **final** base64url character of a 43-character
+(32-byte) HMAC signature carries only **four** significant bits. Replacing the
+last two characters with `xx` therefore decodes to the very same signature
+whenever the real one ended `xw`; the token verifies and the challenge answers
+200. A 300000-token probe measured **293 acceptances — 0.098%, about one run in
+a thousand — every one of them a signature ending `xw`**. Fixed in the same core
+PR by flipping a character at the *start* of the signature, which carries a full
+six bits, and asserting the token actually changed. Main was green only because
+the die had not come up yet.
 
 **SC6, no regression.** `make ci` in vidra-core: gate passed (fmt-check, vet,
 migrate-lint, openapi-verify, sqlc-verify, test-race), 82 packages ok, 0

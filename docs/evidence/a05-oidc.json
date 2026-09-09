@@ -18,7 +18,15 @@
       "what": "≈140-line stdlib-only OIDC provider written for this lab",
       "listen": "127.0.0.1:5599",
       "shape": "one issuer per mode under /p/<mode>, each with its own discovery document, JWKS and RS256 signer, so one core boot could be pointed at all of them",
-      "modes": ["ok", "badnonce", "badiss", "foreignkey", "unverified", "noemail", "takeover"],
+      "modes": [
+        "ok",
+        "badnonce",
+        "badiss",
+        "foreignkey",
+        "unverified",
+        "noemail",
+        "takeover"
+      ],
       "why": "a correct provider can never produce a wrong nonce, a foreign issuer, a foreign signing key or an unverified email"
     }
   },
@@ -34,7 +42,16 @@
   },
   "sc1_begin_parameters": {
     "status": 302,
-    "query": ["client_id", "code_challenge (43 chars)", "code_challenge_method=S256", "nonce", "redirect_uri (derived from PUBLIC_BASE_URL, never from a request parameter)", "response_type=code", "scope=openid profile email", "state"],
+    "query": [
+      "client_id",
+      "code_challenge (43 chars)",
+      "code_challenge_method=S256",
+      "nonce",
+      "redirect_uri (derived from PUBLIC_BASE_URL, never from a request parameter)",
+      "response_type=code",
+      "scope=openid profile email",
+      "state"
+    ],
     "state_cookie": "vidra_oauth_state; Path=/api/v1/auth/oauth; Max-Age=600; HttpOnly; SameSite=Lax; HMAC-SHA256 over the JWT secret (signed, not encrypted — stated in statecookie.go)"
   },
   "sc1_state_matrix": {
@@ -102,14 +119,21 @@
   },
   "compose_passthrough": {
     "render": "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file <filled> --profile core --profile frontend config",
-    "env_file_had": ["OAUTH_PROVIDERS=dex", "OAUTH_DEX_ISSUER", "OAUTH_DEX_CLIENT_ID", "OAUTH_DEX_CLIENT_SECRET"],
-    "api_service_received": ["OAUTH_PROVIDERS: dex"],
+    "env_file_had": [
+      "OAUTH_PROVIDERS=dex",
+      "OAUTH_DEX_ISSUER",
+      "OAUTH_DEX_CLIENT_ID",
+      "OAUTH_DEX_CLIENT_SECRET"
+    ],
+    "api_service_received": [
+      "OAUTH_PROVIDERS: dex"
+    ],
     "consequence": "exactly the boot refusal measured above; env/production.env.example documents the trap and the render confirms it",
     "note": "no tracked compose file was edited — the lab runs core natively"
   },
   "gates": {
     "vidra-core": "make ci — gate passed (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race); 82 packages ok, 0 failures",
-    "vidra-user": "npm run ci — see the section for the recorded result"
+    "vidra-user": "npm run ci — exit 0: typecheck, lint, icon lint, 259 test files / 2598 vitest tests passed, production build, 627 Playwright chromium specs passed"
   },
   "unverified": [
     "any hosted IdP (Google, Okta, Entra, GitHub's OIDC shim) — the fixture is Dex plus a hand-written provider",
@@ -118,5 +142,12 @@
     "id_token algorithms other than RS256",
     "refresh-token rotation against the provider — vidra persists no provider tokens by design",
     "the set-password step-up through the OIDC callback (core #217, still OPEN at the time of this run)"
-  ]
+  ],
+  "ci_flake_found": {
+    "test": "internal/httpapi TestMFAChallengeRejectsTamperedAndExpiredTokens (pre-existing on main)",
+    "symptom": "'tampered token status = 200, want 401' — a required lane failing on a tampered mfa_token being accepted",
+    "mechanism": "the test tampers with real[:len(real)-2] + \"xx\"; golang-jwt v5 decodes without WithStrictDecoding, so the final base64url character of a 43-char (32-byte) signature carries only 4 significant bits, and the substitution reproduces the same signature whenever the real one ended \"xw\"",
+    "measured": "293 acceptances in 300000 issued tokens (0.098%), every one a signature ending \"xw\"",
+    "fix": "flip a character at the START of the signature (a full 6 bits) and assert the token changed — shipped in core #220's second commit"
+  }
 }
