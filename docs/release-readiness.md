@@ -17697,3 +17697,7 @@ evaluated per request, so two reads of the same probe record five seconds apart
 report timestamps five seconds apart. Cosmetic — the age is right and the verdict
 is right — but an operator diffing two loads sees a "last pinned" time advance
 with no pin behind it. Not fixed here; recorded.
+
+## A34/A25 — api + two workers, storage migration and the GC interlock — 2026-09-09
+
+*(run in progress — this section is being written as the lab produces it)*
