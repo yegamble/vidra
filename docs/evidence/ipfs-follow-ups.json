@@ -1,0 +1,129 @@
+{
+  "acceptance": "IPFS follow-ups — the three INT-07 clauses A31 left open, plus the moderator-block ruling",
+  "date": "2026-09-09",
+  "closes": "docs/release-readiness.md § A31 IPFS — public mirror with fallback, private swarm isolation — 2026-09-09, \"What INT-07 still needs\" items 1-5",
+  "verdict": {
+    "INT-07": "NOT FLIPPED HERE. This slice is code plus tests; the row moves on an A31 re-run against a real kubo topology, not on a merged PR.",
+    "delivered": [
+      "a health-gated server-side redirect, with an `ipfs` component on /readyz and /admin/system",
+      "a runtime delivery_ipfs_enabled setting beside its two siblings",
+      "a reconcile pass that compares the ledger with the node in both directions",
+      "a moderator block that unpins and an unblock that re-publishes",
+      "a QoE event at the source switch",
+      "media_ipfs_pins on /admin/jobs"
+    ]
+  },
+  "component": {
+    "names": ["ipfs", "private_ipfs"],
+    "surfaces": ["GET /readyz", "GET /admin/system"],
+    "probe": "HEAD (GET with Range on a non-2xx) of {IPFS_GATEWAY_URL}/ipfs/{cid} for the first pinned public CID in the ledger, in object-key order",
+    "why_not_rpc": "A31 measured the daemon up with its gateway listener stopped: RPC answered, /ipfs/status read node_reachable=true, and every 307 died. They are different listeners and often different hosts.",
+    "cadence": "on boot, then every 5 minutes — internal/storage.WriteHealth's cadence; the request path reads the record, never probes",
+    "states": {
+      "not_configured": "IPFS_ENABLED false, no IPFS_GATEWAY_URL, nothing pinned yet (no CID to ask for), or delivery_ipfs_enabled switched off",
+      "ok": "the gateway served a CID this instance publishes",
+      "degraded": "the gateway serves and pin operations have dead-lettered",
+      "down": "the gateway did not serve, or the oldest due pin row is more than 2h overdue"
+    },
+    "readiness": "never fails readiness — it sets the body's top line to degraded with a 200; only PostgreSQL 503s (health.go's existing rule)",
+    "detail_keys": ["backlog", "dead_lettered", "pinned", "last_pinned_at", "probed_at", "unaccounted_node_pins"],
+    "role_note": "the probe loop is NOT gated on runWorkers — the api role issues the redirects and runs no workers, so gating it like the drain loop would leave the deciding process with no evidence"
+  },
+  "redirect_gate": {
+    "predicate": "cfg.IPFSEnabled AND delivery_ipfs_enabled AND GatewayHealth().Redirectable()",
+    "redirectable": "Probed AND state == ok — an unprobed monitor refuses, because \"we have not looked\" is not evidence a viewer sent there gets bytes",
+    "otherwise": "the api serves the authoritative bytes; no 307 is minted",
+    "setting": {
+      "key": "delivery_ipfs_enabled",
+      "page": "advanced / delivery",
+      "siblings": ["delivery_presign_enabled", "delivery_cdn_enabled"],
+      "default": "IPFS_ENABLED (not false — gateway redirects are already what an IPFS-enabled instance does; defaulting off would be a behaviour change wearing a safety default's clothes)",
+      "default_read_from": "the process's own cfg, via the new instancesettings.Overridden — so a caller that forgets Defaults.IPFSEnabled cannot silently switch delivery off",
+      "gates": ["the server-side 307", "the `ipfs` object on GET /videos/{id} that draws the watch toggle"],
+      "does_not_gate": "the card/feed ipfs_pinned badge, which is a fact about pinning rather than about delivery",
+      "worker_role": "the settings poller is role-gated, so a worker process keeps the value it booted with. That is correct here: this switch governs DELIVERY and a worker answers no media request. Pinning is governed by IPFS_ENABLED, which is env and restart-only on every role."
+    },
+    "doc_fix": "delivery.WithMirror's comment claimed the per-request read let an operator turn the mirror off without a restart. The switch it read was cfg.IPFSEnabled, an env var. The comment now describes the real lever."
+  },
+  "reconcile": {
+    "entry": "ipfsmirror.Service.VerifyPins, on the IPFS_RECONCILE_INTERVAL tick (default 5m), leader-only, beside Reconcile and SweepIneligible",
+    "algorithm": [
+      "ask the node for every recursive pin in ONE call (ipfs.Client.ListPins)",
+      "walk one keyset page of that swarm's 'pinned' rows, resuming where the last tick stopped",
+      "a row whose CID the node does not hold is re-armed to 'pending' (RearmLostIPFSPin, guarded on state AND cid)",
+      "read every CID the ledger has a LIVE claim on and report any node pin in none of them"
+    ],
+    "bounds": {
+      "rows_per_swarm_per_tick": 500,
+      "max_ledger_cids_compared": 100000,
+      "cursor": "in-memory keyset on object_key — no migration; a restart costs at most one restarted cycle"
+    },
+    "node_unreachable": "ListPins errors and the sweep ends with NO writes. IsPinned cannot tell 'not pinned' from 'the node did not answer', so a reconcile built on it would re-add the whole ledger during an outage.",
+    "strays": "REPORTED, never removed. A kubo pin carries no marker separating a Vidra pin from an operator's own — add attaches no namespace and no name that survives into pin/ls — so an unpin here would be deleting data on a guess. The count rides on the `ipfs` component's detail as unaccounted_node_pins; -1 means no comparison completed, which is deliberately not 0.",
+    "in_flight": "the stray comparison is made against 'pinned', 'pending' AND 'unpinning' rows, so a CID the worker is accounting for right now is never accused"
+  },
+  "block_lifecycle": {
+    "ruling": "2026-09-09 (owner): a moderator block, and quarantine, unpin the video's public CIDs like a privacy flip does; unblock re-arms the mirror so the CIDs are re-published.",
+    "why_a_new_fact": "BlockVideo writes a video_blocks row and changes neither videos.privacy nor videos.state, so nothing the eligibility fence already read could see a block. A31 measured the consequence: a blocked video 404'd on every Vidra surface while its CIDs stayed retrievable from the gateway.",
+    "mechanism": {
+      "fence": "ipfsmirror.Subject.VideoBlocked; Route returns NetworkNone for a blocked video-derived class on BOTH swarms — a block is a removal decision, not a visibility one, so it does not fall through to the private swarm",
+      "immediate": "POST/DELETE /admin/videos/{id}/block call Service.SyncVideoCounted — the same seam a privacy flip uses; unpins are reference-count-guarded in the worker exactly as before",
+      "backstop": "SweepIneligibleIPFSPins gained an EXISTS (SELECT 1 FROM video_blocks …) on branches 1 and 3, so the ledger converges on the next reconcile tick even if a hook was missed",
+      "unblock": "guarded on `lifted`, so a second idempotent DELETE does not re-arm a mirror nothing changed",
+      "quarantine": "entering quarantine needs no hook — 'quarantined' is not 'published' and Route already refuses it; approval publishes through the real publish transition (publish hook → SyncVideo). The terminal WITHDRAWAL, POST /admin/videos/{id}/reject, calls the seam explicitly rather than waiting on a sweep."
+    },
+    "audit": {
+      "video.block": "ipfs_unpinned = ledger rows flipped toward removal",
+      "video.unblock": "ipfs_rearmed = ledger rows armed toward publication",
+      "allowlist": "both keys added to audit.allowedMetadataKeys. Counts of ROWS only — never a CID (a public capability handle) or an object key (a media path)."
+    },
+    "best_effort": "a mirror error is logged and swallowed: the moderation decision has already landed and the sweep converges regardless, so a mirror hiccup must never fail a takedown"
+  },
+  "qoe": {
+    "gap": "A31: the client emits playback.start once per session and nothing at the source switch, so a viewer who flipped to IPFS and watched to the end contributed ONE row labelled api-proxy",
+    "fix": "usePlaybackQoE restarts its start measurement when the engine moves between delivery ORIGINS, so the next first frame emits a playback.start carrying the new source URL",
+    "classification": "server-side, unchanged — the client never names a delivery source. internal/qoe/classify.go files the gateway URL as ipfs-gateway, and api-proxy on the fallback.",
+    "no_new_event_type": "qoe_events.event_type is closed by a CHECK constraint (migration 0109), so a playback.source_switch type would need a migration. None was taken.",
+    "not_double_counting": "rollups group by (delivery_source, engine, packaging_format), so the second start lands in a different group; per-source playback counts are each right. The viewer really did wait again — hls.js is rebuilt against a different host — so the gateway TTFF is a real measurement nothing else captured.",
+    "origin_scoped": "a generation tag, a rung change and every segment change the URL without changing where the bytes come from; an hls.js decline that hands the same URL to native HLS is an engine handover, not a new source. Both pinned by tests.",
+    "no_new_viewer_read": "none — the hook already has the session it needs, so useSettledSession was not required"
+  },
+  "visibility": {
+    "admin_jobs": "media_ipfs_pins joins the overview as jobstatus.QueueIPFSPins, the treatment storage_migrations and cdn_purge_jobs already have: pending = pending+unpinning, running = 0 structurally (a claimed row keeps its state and moves next_attempt_at), done = pinned+unpinned, failed = the dead letters, oldest age measured from next_attempt_at and floored at 0",
+    "no_recent_failures_feed": "jobstatus.Failure.ID is a uuid.UUID and this queue is keyed by object_key, a storage path. Widening the shared feed to carry media paths is what RedactDetail exists to prevent, so the dead-letter COUNT rides on the queue row and on the component detail instead.",
+    "still_open": "the RUN-LEVEL projection. job_runs carries request_id / correlation_id / trace_id / worker_id and is maintained by per-queue AFTER triggers added in migration 0083; media_ipfs_pins has none, and neither do cdn_purge_jobs or storage_migrations. A mirror retry therefore still cannot be followed through the correlation chain A17 and A35 built. Closing it needs a migration and a trigger.",
+    "migration": "NONE TAKEN. 0143 is merged and the set-password slice is renumbering onto 0144; taking 0145 would have left this branch's CI red until that merged. Every column this slice needed already existed."
+  },
+  "gates": {
+    "vidra-core": {
+      "make ci": "PASS (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race)",
+      "go vet -tags=integration ./...": "PASS",
+      "make test-ipfs-integration-local": "PASS against real kubo 0.40.1 (offline, Routing.Type=none, no bootstrap) — 6 proofs including the 3 new ones",
+      "integration lane (CI, real PostgreSQL)": "the 5 new internal/store proofs PASS: ListIPFSPinsForVerify paging, ListLiveIPFSPinCIDs over in-flight rows, the guarded RearmLostIPFSPin, the block branch of the eligibility sweep, and the per-network ledger health"
+    },
+    "vidra-user": {
+      "npm run ci": "PASS on Node 26.8.1 — typecheck, lint, lint:icons, vitest, build, 627 e2e passed",
+      "red_first": "3 of the 5 new hook tests fail without the change; the two negative cases pass either way by construction, which is the point of having them"
+    },
+    "meta": {
+      "python3 -m unittest discover -s tests -p '*_test.py'": "PASS",
+      "compose": "no new env key, so no new compose consumer was needed — delivery_ipfs_enabled is an instance setting whose default is read from the existing IPFS_ENABLED"
+    }
+  },
+  "unverified": [
+    "INT-07 itself — an A31 re-run against a real kubo topology is what moves the row, not this merge",
+    "IPFS Cluster on either swarm, still: no ipfs-cluster-service binary was available, so cluster pin/unpin and the private tier's durability beyond a manually-peered pair remain untested",
+    "the gateway probe against a REMOTE or third-party gateway — the lab gateway is the same host as the RPC API, which is the configuration the probe is least needed for",
+    "the stray count against a node carrying an operator's own unrelated pins at scale",
+    "the block unpin end to end on a real node: the ledger transition and the SQL join are proved, the worker's node-side removal is the same reference-guarded path A31 already measured for a privacy flip"
+  ],
+  "a31_rerun_must_prove": [
+    "with the gateway stopped, /admin/system reads ipfs: down within one probe interval AND GET /videos/{id}/thumbnail answers 200 from the api rather than 307",
+    "flipping delivery_ipfs_enabled off stops the 307 on the next request with no restart, and removes the watch page's IPFS control",
+    "ipfs pin rm on a pinned CID, by hand, is re-armed and re-pinned within one reconcile tick",
+    "a pin the ledger never knew is COUNTED on the component and left on the node",
+    "POST /admin/videos/{id}/block removes the video's CIDs from the gateway, and DELETE puts them back, with ipfs_unpinned / ipfs_rearmed on the audit rows",
+    "a Chromium watch that flips to IPFS produces a qoe row with delivery_source = ipfs-gateway without waiting for a rebuffer",
+    "media_ipfs_pins appears on /admin/jobs with a real backlog"
+  ]
+}
