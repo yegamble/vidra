@@ -243,19 +243,24 @@
   },
   "gates": {
     "vidra-core": {
-      "make ci": "PASS (fmt-check, vet, migrate-lint 145 clean, openapi-verify, sqlc-verify, test-race) — 0 failures",
+      "make ci": "PASS (fmt-check, vet, migrate-lint — 145 up migrations clean, openapi-verify, sqlc-verify, test-race) — 82 packages, 0 failures",
       "go vet -tags=integration ./...": "PASS, clean",
       "integration -p 1": "PASS against a FRESH native PostgreSQL 16.15 (initdb from empty, schema 145) for internal/storagemigration and internal/httpapi",
       "not_run": "Locally, the S3-backed cases in internal/storagemigration self-skipped without S3_TEST_ENDPOINT — this session started no containers by instruction (another executor holds Docker for a release cut). They run in CI's `integration` lane, which stands up MinIO. The five pre-existing ones all PASS on this branch (TestLocalToObjectStoreEndToEnd, TestTamperedObjectStoreCopyFailsVerification, TestCompletedMigrationClaimsTheDestinationBucket, TestCompletedMigrationLeavesAForeignBucketMarkerAlone, TestASecondCampaignReEnumeratesAgainstTheRealLedger — run 34406117440), and this slice adds a sixth, TestAbortWithCleanupRemovesTheDestinationCopiesFromARealObjectStore, so the one new destructive path is exercised against a real bucket too"
     },
     "vidra-user": {
+      "node": "26.8.1 — the version package.json's engines field requires; an earlier pass on Node 22.14 agreed",
       "typecheck": "PASS",
       "lint": "PASS (0 errors; 3 warnings, all pre-existing on main)",
-      "vitest": "PASS — 2669 tests, 265 files",
-      "not_run": "npm run build and the Playwright lanes (npm run ci's last two steps): a production build and a browser run were out of scope for a code-only slice"
+      "vitest": "PASS — 2669 tests, 265 files, 0 failures",
+      "flake_note": "Two intermediate runs failed 7 and 13 tests, all of them 5-8 s timeouts in files this slice never touched (AdminMediaView's orphan list, markdown rendering, the live rail, history paging, federation toggles) while `go test -race` over 82 packages ran beside them. Re-run on a quiet machine: 2669/2669. Same class as the e2e load flakiness this repo already records — the suite invents timeouts under CPU competition",
+      "ci_lanes": "on the PR, `frontend`, `e2e-backed (local)`, `e2e-backed (s3)`, `channel-sync-backed` and `ipfs-backed` all PASS. `contract` FAILS BY DESIGN and is the ordering: it fetches the spec from vidra-core's MAIN, which does not carry these routes until core#226 merges — the failure names exactly the new paths",
+      "not_run": "npm run build (the production build) — out of scope for a code-only slice"
     },
     "vidra": {
-      "python3 -m unittest discover -s tests -p '*_test.py'": "see the section"
+      "python3 -m unittest discover -s tests -p '*_test.py'": "PASS — 48 tests",
+      "conflict_markers": "grep -nE '^(<{7}|={7}|>{7}|\\|{7})' docs/release-readiness.md prints nothing",
+      "ci_lanes": "boot, bundle, validate and ci-required all PASS"
     }
   },
   "unverified": [
@@ -267,5 +272,8 @@
     "note": "Both were introduced by the pause rail and caught by review before merge, and both are about a handle that means different things on either side of a cutover — the trap this package exists around. Each has a regression test that fails against the commit before its fix.",
     "1_writability_rail_above_the_topology_switch": "reconcileTargetWritability ran ABOVE the topology switch, so it fired in the SWAPPED reading too — where s.target is the OLD SOURCE, the store being decommissioned, not the one being copied into. A source that refused a write probe would have paused a campaign mid-cutover and then stalled the delete-source phase indefinitely: pausing is not legal from cutover or deleting_source, so the guarded UPDATE matched no row while the rail logged that it had paused something and told the sweep to stop. Fixed by moving it inside the forward branch. Test: TestAWriteDeniedTargetDoesNotStallTheDeleteSourcePhase",
     "2_cleanup_finished_on_a_short_batch_alone": "abortCleanupBatch finished when the batch was shorter than deleteBatch, without checking that every key in it had actually gone — so a batch some of whose deletes failed would have fallen through to 'cancelled' with objects still on the destination, the exact silence the clean-up exists to end. It now finishes only when the batch was short AND removed == len(keys); failed rows stay 'verified' and the campaign sits visibly in 'aborting', which is what deleteSourceBatch does at the other end of a successful move. Test: TestAbortWithCleanupStaysOpenWhileADeleteKeepsFailing"
+  },
+  "docs": {
+    "operations_md": "core docs/operations.md \"Moving the media store\" was updated in the same change, because the admin page now points operators AT it — leaving it describing a two-verb API would have made the page's own honesty a lie. Its phase table gains `paused` and `aborting`; a new §2a carries the control table with what each refusal means, the fact that a write-denied DESTINATION pauses the campaign rather than taking the instance down (and resumes itself), and where a stalled campaign explains itself; and the grace section points at `release` instead of editing STORAGE_MIGRATION_GRACE_HOURS and restarting"
   }
 }

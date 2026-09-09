@@ -18947,8 +18947,29 @@ migrations clean**, `openapi-verify`, `sqlc-verify`, `test-race`), 0 failures.
 against a **fresh native PostgreSQL 16.15** (`initdb` from empty, migrated to
 145) for `internal/storagemigration` and `internal/httpapi` — both `ok`.
 vidra-user: `typecheck` and `lint` clean (3 warnings, all pre-existing on main)
-and **2 669 vitest tests across 265 files** pass on Node 26, against the
-regenerated contract. Meta's own suite passes.
+and **2 669 vitest tests across 265 files** pass on **Node 26.8.1** — the
+version `engines` requires — against the regenerated contract. On the PR,
+`frontend`, both `e2e-backed` lanes, `channel-sync-backed` and `ipfs-backed`
+all pass; **`contract` fails by design and that failure IS the ordering**, since
+it fetches the spec from vidra-core's `main`, which does not carry these routes
+until core merges. Meta's own suite passes (48 tests), and its `boot`, `bundle`,
+`validate` and `ci-required` lanes are green.
+
+One note on the numbers, because two intermediate runs of the vitest suite
+reported 7 and then 13 failures. Every one was a 5-8 s timeout in a file this
+slice never touched — `AdminMediaView`'s orphan list, markdown rendering, the
+live rail, history paging, federation toggles — while `go test -race` over 82
+packages ran beside them; `environment` alone took **1 486 s**. Re-run on a
+quiet machine the suite is 2 669/2 669. It is the same class as the e2e load
+flakiness this repo already records: the suite invents timeouts under CPU
+competition, and a number taken under load is not a result.
+
+The runbook moved with the code. `docs/operations.md` §"Moving the media store"
+is what the admin page now points operators at, so leaving it describing a
+two-verb API would have made the page's own honesty a lie: its phase table gains
+`paused` and `aborting`, a new §2a carries the control table and the
+write-denied-destination behaviour, and the grace section points at `release`
+rather than at editing `STORAGE_MIGRATION_GRACE_HOURS` and restarting.
 
 No containers were started **locally** this session by instruction — another
 executor holds Docker for a release cut — so the five S3-backed cases in
