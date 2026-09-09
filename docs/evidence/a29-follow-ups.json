@@ -196,12 +196,15 @@
    "typecheck": "PASS",
    "lint": "0 errors, 2 pre-existing warnings",
    "lint:icons": "PASS",
-   "vitest": "2595 of 2598 in 259 files. The 3 failures are 5\u20138 s timeouts in ChannelSyncSection, InstanceDocumentEditor, SearchSettingsView, AccountDataSection and ui/Modal \u2014 none of which import the changed component; the failing SET differs run to run (8, then 3), and those five files run alone are 52 of 52 in 7.6 s. Known load flakiness, not a regression.",
+   "vitest": "2595 of 2598 in 259 files. The 3 failures are 5\u20138 s timeouts in ChannelSyncSection, InstanceDocumentEditor, SearchSettingsView, AccountDataSection and ui/Modal \u2014 none of which import the changed component; the failing SET differs run to run (8, then 3), and those five files run alone are 52 of 52 in 7.6 s. Known load flakiness, not a regression. GitHub's `frontend` lane, which runs the whole npm run ci on a machine not also running a PostgreSQL cluster and a Go test suite, passes.",
    "next build": "PASS",
-   "contract lane": "pass on GitHub \u2014 confirming there is no OpenAPI change"
+   "contract lane": "pass on GitHub \u2014 confirming there is no OpenAPI change",
+   "playwright": "581 passed in 27.1 minutes, exit 0, locally and unloaded",
+   "github_lanes": "ci-required, frontend, contract, channel-sync-backed, ipfs-backed, e2e-backed (local), e2e-backed (s3), GitGuardian \u2014 all pass"
   },
   "meta": {
-   "python3 -m unittest discover -s tests -p '*_test.py'": "OK"
+   "python3 -m unittest discover -s tests -p '*_test.py'": "OK",
+   "github_lanes": "ci-required, boot, bundle, validate, GitGuardian \u2014 all pass"
   }
  },
  "prs": [
@@ -209,13 +212,15 @@
    "repo": "vidra-core",
    "number": 216,
    "url": "https://github.com/yegamble/vidra-core/pull/216",
-   "title": "[claude] A29 follow-ups: a block that speaks, resumed comment Creates, validator-safe renames"
+   "title": "[claude] A29 follow-ups: a block that speaks, resumed comment Creates, validator-safe renames",
+   "state": "OPEN, ready for review, mergeable, all lanes green"
   },
   {
    "repo": "vidra-user",
    "number": 206,
    "url": "https://github.com/yegamble/vidra-user/pull/206",
-   "title": "[claude] A29 follow-ups: Block account label"
+   "title": "[claude] A29 follow-ups: Block account label",
+   "state": "OPEN, ready for review, mergeable, all lanes green"
   }
  ],
  "unverified": {

@@ -15339,8 +15339,14 @@ files**. The three failures are 5–8 s timeouts in `ChannelSyncSection`,
 `ui/Modal` — none of which import the changed component; the failing set differs
 run to run (eight, then three), and those five files run alone are **52 of 52 in
 7.6 s**. That is the load flakiness this repo has recorded before, not a
-regression. This repo: evidence only; `python3 -m unittest discover -s tests -p
-'*_test.py'` **OK**.
+regression, and the machine's own Playwright run settles it: **581 passed in
+27.1 minutes**, exit 0, unloaded. On GitHub, user #206's `ci-required`,
+`frontend`, `contract`, `channel-sync-backed`, `ipfs-backed` and both
+`e2e-backed` lanes (local and s3) all **pass** — `frontend` runs the whole
+`npm run ci`, vitest included, on a machine that is not also running a
+PostgreSQL cluster and a Go test suite. This repo: evidence only;
+`python3 -m unittest discover -s tests -p '*_test.py'` **OK (48 tests)**;
+meta #163's `ci-required`, `boot`, `bundle` and `validate` all pass.
 
 **UNVERIFIED: the fourth two-instance run.** Nothing in this section was measured
 against a second Vidra. What that run must show is short and specific: a Follow
