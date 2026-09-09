@@ -17219,6 +17219,7 @@ function. No vidra-user change was needed, so no contract regeneration.
    now-measured lag, the runtime lever exists and works without a restart, the
    ledger and the node are compared in both directions, and an IPFS watch is
    recorded as an IPFS watch.
+
 ## Auth trust — no auto-link, the second factor on SSO, link from settings, provider env_file — 2026-09-09
 
 **AUTH-04 stays PASS; what moves is the trust model underneath it.** A05
