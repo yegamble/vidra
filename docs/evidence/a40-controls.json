@@ -1,0 +1,5948 @@
+{
+ "item": "A40",
+ "row": "QLT-02",
+ "date": "2026-09-09",
+ "lab": {
+  "core": "two processes (VIDRA_ROLE=api on :8188 + VIDRA_ROLE=worker), native PostgreSQL 16 migrated 0->144 from empty, native Redis",
+  "frontend": "next build with NEXT_PUBLIC_API_BASE_URL=http://localhost:8188, served from .next/standalone on :3200",
+  "storage": "STORAGE_BACKEND=local",
+  "transcoding": "TRANSCODING_ENABLED=true (ffmpeg 8.x)",
+  "stated_seams": [
+   "RATE_LIMIT_ENABLED=false",
+   "MALWARE_SCAN_MODE=disabled",
+   "DEV_MAIL_CAPTURE_ENABLED=true",
+   "HTTP_IMPORT_ALLOW_PRIVATE_URLS=true",
+   "LIVE_INGEST_SECRET set",
+   "OWNER_CLAIM_TOKEN pinned"
+  ],
+  "browsers": "Playwright 1.62.1 Chromium and WebKit",
+  "axe": "@axe-core/playwright 4.13, tags wcag2a/wcag2aa/wcag21a/wcag21aa, serious+critical gated"
+ },
+ "counts": {
+  "routes": 75,
+  "controls_distinct": 1950,
+  "page_states_chromium": 304,
+  "page_states_webkit": 0
+ },
+ "shared_chrome": [
+  "a About s44",
+  "a History s44",
+  "a Home p56",
+  "a Home p56/s44",
+  "a Inbox (2 unread) p56",
+  "a Library p56",
+  "a Library p56/s44",
+  "a Messages s44",
+  "a Search p56",
+  "a Skip to content p37/s37",
+  "a Skip to content p37/s37 CLIPPED:html.h-full.antialiased>body.min-h-full.flex (overflow hidde",
+  "a Studio s44",
+  "a Subscriptions s44",
+  "a Trending s44",
+  "a Vidra (dev) p44/s44",
+  "button Collapse sidebar s44",
+  "button Create p56/s40",
+  "button Notifications (2 unread) p44/s44",
+  "button Open account menu p44/s44",
+  "button Search p44",
+  "button Search p44/s32",
+  "input[combobox] Search videos s20"
+ ],
+ "inventory": [
+  {
+   "route": "/",
+   "screen": "home / browse",
+   "role": "anon",
+   "rows": [
+    "SRC-03",
+    "SOC-01",
+    "PLAY-02"
+   ],
+   "backend_evidence": [
+    "A13 discovery, suggestions, trending, history controls",
+    "A12 library, continuation and history",
+    "A08 canonical/legacy links, sharing, embeds"
+   ],
+   "controls": [
+    "a A40 Lab Channel p18/s18",
+    "a A40 Public Clip One p20/s20",
+    "a A40 Public Clip Two p20/s20",
+    "a Inbox p56",
+    "a Sign in p44/s36",
+    "button Actions for A40 Public Clip One p44/s44",
+    "button Actions for A40 Public Clip Two p44/s44",
+    "button All p44/s32",
+    "button Local p44/s32",
+    "button Popular p44/s36",
+    "button Recent p44/s36",
+    "button Trending p44/s36",
+    "select Filter by category p44/s36",
+    "select Filter by language p44/s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 29,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/a40-no-such-route",
+   "screen": "404",
+   "role": "anon",
+   "rows": [
+    "QLT-02"
+   ],
+   "backend_evidence": [
+    "this section"
+   ],
+   "controls": [
+    "a Go home p44/s33",
+    "a Inbox p56",
+    "a Sign in p44/s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 18,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/about",
+   "screen": "about",
+   "role": "anon",
+   "rows": [
+    "ADM-03"
+   ],
+   "backend_evidence": [
+    "A17 runtime config, branding and capability truth"
+   ],
+   "controls": [
+    "a General p35/s35",
+    "a Inbox p56",
+    "a Moderation and code of conduct p35/s35",
+    "a Network p35/s35",
+    "a Platform p35/s35",
+    "a Sign in p44/s36",
+    "a Team p35/s35",
+    "a Technical information p35/s35",
+    "a Vidra p35/s35"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 24,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/about/instance",
+   "screen": "about instance",
+   "role": "anon",
+   "rows": [
+    "ADM-03"
+   ],
+   "backend_evidence": [
+    "A17 runtime config, branding and capability truth"
+   ],
+   "controls": [
+    "a General p35/s35",
+    "a Inbox p56",
+    "a Moderation and code of conduct p35/s35",
+    "a Network p35/s35",
+    "a Platform p35/s35",
+    "a Sign in p44/s36",
+    "a Team p35/s35",
+    "a Technical information p35/s35",
+    "a Vidra p35/s35"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 24,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/about/network",
+   "screen": "about network",
+   "role": "anon",
+   "rows": [
+    "INT-05"
+   ],
+   "backend_evidence": [
+    "A29 ActivityPub: two isolated instances"
+   ],
+   "controls": [
+    "a Inbox p56",
+    "a Network p35/s35",
+    "a Platform p35/s35",
+    "a Sign in p44/s36",
+    "a Vidra p35/s35"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 20,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/about/vidra",
+   "screen": "about vidra",
+   "role": "anon",
+   "rows": [
+    "ADM-03"
+   ],
+   "backend_evidence": [
+    "A17 runtime config, branding and capability truth"
+   ],
+   "controls": [
+    "a Inbox p56",
+    "a Network p35/s35",
+    "a Platform p35/s35",
+    "a Sign in p44/s36",
+    "a Vidra p35/s35"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 20,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/admin",
+   "screen": "admin overview",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "backend_evidence": [
+    "A17 health, jobs, audit and storage dashboards"
+   ],
+   "controls": [
+    "a Audit logThe security audit trail of admin and auth actions. p69/s69",
+    "a Details p18/s18",
+    "a FollowersApprove or reject remote accounts asking to follow local chan p89/s69",
+    "a ImportMigrate an existing PeerTube instance into this one. p89/s69",
+    "a InfrastructureHow this instance is deployed: server limits, storage, n p89/s69",
+    "a InstanceInstance identity, registration, feature toggles, and moderati p89/s69",
+    "a JobsBackground-work queue depth, stuck workers, and recent failures. p89/s69",
+    "a Media storageGarbage-collect stored media objects with no database ref p89/s69",
+    "a Moderation queue p17/s17",
+    "a Playback healthTime to first frame and rebuffering, grouped by the del p89/s69",
+    "a RegistrationReview pending signups and approve or reject them. p89/s69",
+    "a SystemBuild info, environment, uptime, and dependency health. p89/s69",
+    "a UsersSearch accounts and manage their role and active status. p89/s69",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 25,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/audit-log",
+   "screen": "admin audit log",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "backend_evidence": [
+    "A17 health, jobs, audit and storage dashboards"
+   ],
+   "controls": [
+    "button Next p44/s33",
+    "button Previous p44/s33",
+    "input Filter by action p20/s20",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44",
+    "select Rows per page p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 16,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/config",
+   "screen": "admin config",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "backend_evidence": [
+    "A17 runtime config, branding and capability truth"
+   ],
+   "controls": [
+    "a How this instance exchanges content with other instances. p36/s36",
+    "a Live streaming availability and limits. p36/s36",
+    "a Platform identity, the About page, terms and moderation, sign-up, and  p36/s36",
+    "a Public distribution and private replication mirror health and operatio p36/s36",
+    "a Search, media delivery, data portability, and low-level settings. p36/s36",
+    "a The admin-authored homepage document. p36/s36",
+    "a Theme, appearance, player defaults, and email presentation. p36/s36",
+    "a Uploads, imports, quotas, and processing for on-demand video. p36/s36",
+    "button Add p44/s32",
+    "button Default feed p47/s32",
+    "button Homepage document p47/s32",
+    "button Infinite scroll p44/s32",
+    "button Load-more button p44/s32",
+    "button Local + federated p44/s32",
+    "button Local feed p47/s32",
+    "button Local only p44/s32",
+    "button Popular p44/s32",
+    "button Preview Description p44/s32",
+    "button Recent p44/s32",
+    "button Save changes s44",
+    "button Trending p44/s32",
+    "button[switch] Allow new registrations s28",
+    "button[switch] Credit videos to the uploader, not the channel p28/s28",
+    "button[switch] Display a message on every page p28/s28",
+    "button[switch] Email me about new abuse reports p28/s28",
+    "button[switch] Enable contact form p28/s28",
+    "button[switch] Require approval for new accounts s28",
+    "input Activism p16/s16",
+    "input Add to Custom categories p44/s44",
+    "input Admin email p44/s44",
+    "input Animals p16/s16",
+    "input Arabic p16/s16",
+    "input Art p16/s16",
+    "input Avatar image p32/s32",
+    "input Banner image p32/s32",
+    "input Bengali p16/s16",
+    "input Bluesky link p44/s44",
+    "input Chinese p16/s16",
+    "input Comedy p16/s16",
+    "input Czech p16/s16",
+    "input Danish p16/s16",
+    "input Dutch p16/s16",
+    "input Education p16/s16",
+    "input English p16/s16",
+    "input Entertainment p16/s16",
+    "input External link p44/s44",
+    "input Favicon image p32/s32",
+    "input Films p16/s16",
+    "input Finnish p16/s16",
+    "input Food p16/s16",
+    "input French p16/s16",
+    "input Gaming p16/s16",
+    "input German p16/s16",
+    "input Greek p16/s16",
+    "input Header logo (square) image p32/s32",
+    "input Header logo (wide) image p32/s32",
+    "input Hebrew p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Hindi p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input How To p16/s16",
+    "input Hungarian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Indonesian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Italian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Japanese p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Kids p16/s16",
+    "input Korean p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Mastodon link p44/s44",
+    "input Max channels per user s44",
+    "input Music p16/s16",
+    "input Name p44/s44",
+    "input News & Politics p16/s16",
+    "input Norwegian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input People p16/s16",
+    "input Persian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Polish p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Portuguese p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Romanian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Russian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Science & Technology p16/s16",
+    "input Social card image image p32/s32",
+    "input Spanish p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Sports p16/s16",
+    "input Swedish p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Thai p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Travels p16/s16",
+    "input Turkish p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Ukrainian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Vehicles p16/s16",
+    "input Vietnamese p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input X (Twitter) username for link cards s44",
+    "input X link p44/s44",
+    "select Default language p44/s44",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44",
+    "select Server country p44/s44",
+    "textarea Description p118/s118",
+    "textarea Short description p78/s78"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 106,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/config/advanced",
+   "screen": "admin config advanced",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "backend_evidence": [
+    "A17 runtime config, branding and capability truth"
+   ],
+   "controls": [
+    "a How this instance exchanges content with other instances. p36/s36",
+    "a Live streaming availability and limits. p36/s36",
+    "a Platform identity, the About page, terms and moderation, sign-up, and  p36/s36",
+    "a Public distribution and private replication mirror health and operatio p36/s36",
+    "a Search, media delivery, data portability, and low-level settings. p36/s36",
+    "a The admin-authored homepage document. p36/s36",
+    "a Theme, appearance, player defaults, and email presentation. p36/s36",
+    "a Uploads, imports, quotas, and processing for on-demand video. p36/s36",
+    "button Advanced p44/s32",
+    "button Save changes p44/s44",
+    "button Save custom css p44/s32",
+    "button Save custom javascript p44/s32",
+    "button Simple p44/s32",
+    "button[switch] Account export p28/s28",
+    "button[switch] Account import p28/s28",
+    "button[switch] Autocomplete suggestions p28/s28",
+    "button[switch] CDN delivery p28/s28",
+    "button[switch] Direct object delivery p28/s28",
+    "button[switch] Personalized recommendations p28/s28",
+    "button[switch] Personalized search p28/s28",
+    "button[switch] Playback quality measurement p28/s28",
+    "button[switch] Search history p28/s28",
+    "button[switch] Smart search service p28/s28",
+    "input Behavioural event retention p44/s44",
+    "input Export link lifetime p44/s44",
+    "input Maximum export size p44/s44",
+    "input Minimum distinct users for a suggestion p44/s44",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44",
+    "textarea Custom CSS p271/s271",
+    "textarea Custom JavaScript p271/s271"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 41,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/config/customization",
+   "screen": "admin config customization",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "backend_evidence": [
+    "A17 runtime config, branding and capability truth"
+   ],
+   "controls": [
+    "a How this instance exchanges content with other instances. p36/s36",
+    "a Live streaming availability and limits. p36/s36",
+    "a Platform identity, the About page, terms and moderation, sign-up, and  p36/s36",
+    "a Public distribution and private replication mirror health and operatio p36/s36",
+    "a Search, media delivery, data portability, and low-level settings. p36/s36",
+    "a The admin-authored homepage document. p36/s36",
+    "a Theme, appearance, player defaults, and email presentation. p36/s36",
+    "a Uploads, imports, quotas, and processing for on-demand video. p36/s36",
+    "button Dark p44/s32",
+    "button Light p44/s32",
+    "button Save changes p44/s44",
+    "button System p44/s32",
+    "button[switch] Autoplay p28/s28",
+    "button[switch] Hide the instance name in the header p28/s28",
+    "input Email subject prefix p44/s44",
+    "input Primary color p44/s44",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44",
+    "textarea Email signature p78/s78"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 29,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/config/federation",
+   "screen": "admin config federation",
+   "role": "admin",
+   "rows": [
+    "ADM-03",
+    "INT-05"
+   ],
+   "backend_evidence": [
+    "A17 runtime config, branding and capability truth",
+    "A29 ActivityPub: two isolated instances"
+   ],
+   "controls": [
+    "a How this instance exchanges content with other instances. p36/s36",
+    "a Live streaming availability and limits. p36/s36",
+    "a Platform identity, the About page, terms and moderation, sign-up, and  p36/s36",
+    "a Public distribution and private replication mirror health and operatio p36/s36",
+    "a Review follower requests p33/s33",
+    "a Search, media delivery, data portability, and low-level settings. p36/s36",
+    "a The admin-authored homepage document. p36/s36",
+    "a Theme, appearance, player defaults, and email presentation. p36/s36",
+    "a Uploads, imports, quotas, and processing for on-demand video. p36/s36",
+    "button Save changes p44/s44",
+    "button[switch] Accept remote comments p28/s28",
+    "button[switch] Allow remote followers p28/s28",
+    "button[switch] Auto-follow back p28/s28",
+    "button[switch] Remote search for anonymous visitors p28/s28",
+    "button[switch] Remote search for signed-in users p28/s28",
+    "button[switch] Require follower approval p28/s28",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 28,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/config/general",
+   "screen": "admin config general",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "backend_evidence": [
+    "A17 runtime config, branding and capability truth"
+   ],
+   "controls": [
+    "a How this instance exchanges content with other instances. p36/s36",
+    "a Live streaming availability and limits. p36/s36",
+    "a Platform identity, the About page, terms and moderation, sign-up, and  p36/s36",
+    "a Public distribution and private replication mirror health and operatio p36/s36",
+    "a Search, media delivery, data portability, and low-level settings. p36/s36",
+    "a The admin-authored homepage document. p36/s36",
+    "a Theme, appearance, player defaults, and email presentation. p36/s36",
+    "a Uploads, imports, quotas, and processing for on-demand video. p36/s36",
+    "button Add p44/s32",
+    "button Default feed p47/s32",
+    "button Homepage document p47/s32",
+    "button Infinite scroll p44/s32",
+    "button Load-more button p44/s32",
+    "button Local + federated p44/s32",
+    "button Local feed p47/s32",
+    "button Local only p44/s32",
+    "button Popular p44/s32",
+    "button Preview Description p44/s32",
+    "button Recent p44/s32",
+    "button Save changes s44",
+    "button Trending p44/s32",
+    "button[switch] Allow new registrations s28",
+    "button[switch] Credit videos to the uploader, not the channel p28/s28",
+    "button[switch] Display a message on every page p28/s28",
+    "button[switch] Email me about new abuse reports p28/s28",
+    "button[switch] Enable contact form p28/s28",
+    "button[switch] Require approval for new accounts s28",
+    "input Activism p16/s16",
+    "input Add to Custom categories p44/s44",
+    "input Admin email p44/s44",
+    "input Animals p16/s16",
+    "input Arabic p16/s16",
+    "input Art p16/s16",
+    "input Avatar image p32/s32",
+    "input Banner image p32/s32",
+    "input Bengali p16/s16",
+    "input Bluesky link p44/s44",
+    "input Chinese p16/s16",
+    "input Comedy p16/s16",
+    "input Czech p16/s16",
+    "input Danish p16/s16",
+    "input Dutch p16/s16",
+    "input Education p16/s16",
+    "input English p16/s16",
+    "input Entertainment p16/s16",
+    "input External link p44/s44",
+    "input Favicon image p32/s32",
+    "input Films p16/s16",
+    "input Finnish p16/s16",
+    "input Food p16/s16",
+    "input French p16/s16",
+    "input Gaming p16/s16",
+    "input German p16/s16",
+    "input Greek p16/s16",
+    "input Header logo (square) image p32/s32",
+    "input Header logo (wide) image p32/s32",
+    "input Hebrew p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Hindi p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input How To p16/s16",
+    "input Hungarian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Indonesian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Italian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Japanese p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Kids p16/s16",
+    "input Korean p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Mastodon link p44/s44",
+    "input Max channels per user s44",
+    "input Music p16/s16",
+    "input Name p44/s44",
+    "input News & Politics p16/s16",
+    "input Norwegian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input People p16/s16",
+    "input Persian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Polish p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Portuguese p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Romanian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Russian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Science & Technology p16/s16",
+    "input Social card image image p32/s32",
+    "input Spanish p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Sports p16/s16",
+    "input Swedish p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Thai p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Travels p16/s16",
+    "input Turkish p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Ukrainian p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input Vehicles p16/s16",
+    "input Vietnamese p16/s16 CLIPPED:section#config-section-identity>div.flex.min-w-0 (overflow h",
+    "input X (Twitter) username for link cards s44",
+    "input X link p44/s44",
+    "select Default language p44/s44",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44",
+    "select Server country p44/s44",
+    "textarea Description p118/s118",
+    "textarea Short description p78/s78"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 106,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/config/homepage",
+   "screen": "admin config homepage",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "backend_evidence": [
+    "A17 runtime config, branding and capability truth"
+   ],
+   "controls": [
+    "a How this instance exchanges content with other instances. p36/s36",
+    "a Live streaming availability and limits. p36/s36",
+    "a Platform identity, the About page, terms and moderation, sign-up, and  p36/s36",
+    "a Public distribution and private replication mirror health and operatio p36/s36",
+    "a Search, media delivery, data portability, and low-level settings. p36/s36",
+    "a The admin-authored homepage document. p36/s36",
+    "a Theme, appearance, player defaults, and email presentation. p36/s36",
+    "a Uploads, imports, quotas, and processing for on-demand video. p36/s36",
+    "button Preview Homepage content p44/s32",
+    "button Save changes p44/s44",
+    "button Save homepage content p44/s32",
+    "button[switch] Show the featured banner p28/s28",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44",
+    "textarea Homepage content p218/s218"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 25,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/config/ipfs",
+   "screen": "admin config ipfs",
+   "role": "admin",
+   "rows": [
+    "ADM-03",
+    "INT-08"
+   ],
+   "backend_evidence": [
+    "A17 runtime config, branding and capability truth",
+    "A31 IPFS: public mirror with fallback, private swarm isolation"
+   ],
+   "controls": [
+    "a How this instance exchanges content with other instances. p36/s36",
+    "a Live streaming availability and limits. p36/s36",
+    "a Platform identity, the About page, terms and moderation, sign-up, and  p36/s36",
+    "a Public distribution and private replication mirror health and operatio p36/s36",
+    "a Search, media delivery, data portability, and low-level settings. p36/s36",
+    "a The admin-authored homepage document. p36/s36",
+    "a Theme, appearance, player defaults, and email presentation. p36/s36",
+    "a Uploads, imports, quotas, and processing for on-demand video. p36/s36",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 20,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/config/live",
+   "screen": "admin config live",
+   "role": "admin",
+   "rows": [
+    "ADM-03",
+    "INT-01"
+   ],
+   "backend_evidence": [
+    "A17 runtime config, branding and capability truth",
+    "A26 live RTMP: ingest, watch, moderation, replay"
+   ],
+   "controls": [
+    "a How this instance exchanges content with other instances. p36/s36",
+    "a Live streaming availability and limits. p36/s36",
+    "a Platform identity, the About page, terms and moderation, sign-up, and  p36/s36",
+    "a Public distribution and private replication mirror health and operatio p36/s36",
+    "a Search, media delivery, data portability, and low-level settings. p36/s36",
+    "a The admin-authored homepage document. p36/s36",
+    "a Theme, appearance, player defaults, and email presentation. p36/s36",
+    "a Uploads, imports, quotas, and processing for on-demand video. p36/s36",
+    "button Save changes p44/s44",
+    "button[switch] Allow replays p28/s28",
+    "button[switch] Live streaming p28/s28",
+    "button[switch] Save replays by default p28/s28",
+    "input Max concurrent live streams (instance) p44/s44",
+    "input Max concurrent live streams (per user) p44/s44",
+    "input Maximum stream duration p44/s44",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 27,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/config/vod",
+   "screen": "admin config vod",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "backend_evidence": [
+    "A17 runtime config, branding and capability truth"
+   ],
+   "controls": [
+    "a How this instance exchanges content with other instances. p36/s36",
+    "a Live streaming availability and limits. p36/s36",
+    "a Platform identity, the About page, terms and moderation, sign-up, and  p36/s36",
+    "a Public distribution and private replication mirror health and operatio p36/s36",
+    "a Search, media delivery, data portability, and low-level settings. p36/s36",
+    "a The admin-authored homepage document. p36/s36",
+    "a Theme, appearance, player defaults, and email presentation. p36/s36",
+    "a Uploads, imports, quotas, and processing for on-demand video. p36/s36",
+    "button + 1440p p22/s22",
+    "button + 144p p22/s22",
+    "button + 2160p p22/s22",
+    "button + 240p p22/s22",
+    "button Add p44/s32",
+    "button Disabled p44/s32",
+    "button Enabled p44/s32",
+    "button Private p44/s32",
+    "button Public p44/s32",
+    "button Remove 1080p p7/s7",
+    "button Remove 360p p7/s7",
+    "button Remove 480p p7/s7",
+    "button Remove 720p p7/s7",
+    "button Save changes p44/s44",
+    "button Unlisted p44/s32",
+    "button[switch] Allow additional container formats p28/s28",
+    "button[switch] Allow replacing video files p28/s28",
+    "button[switch] Automatic transcription p28/s28",
+    "button[switch] Channel sync p28/s28",
+    "button[switch] Comments p28/s28",
+    "button[switch] Downloads on new videos p28/s28",
+    "button[switch] Inline video-card previews p28/s28",
+    "button[switch] Keep an original-resolution rung p28/s28",
+    "button[switch] Seek-preview storyboards p28/s28",
+    "button[switch] Transcoding p28/s28",
+    "button[switch] URL imports p28/s28",
+    "button[switch] URL/platform imports (yt-dlp) p28/s28",
+    "button[switch] Video downloads p28/s28",
+    "button[switch] Video uploads p28/s28",
+    "input Add to Transcoding ladder p44/s44",
+    "input Daily upload quota per user p44/s44",
+    "input Default licence p44/s44",
+    "input Default storage quota per user p44/s44",
+    "input Frame-rate cap p44/s44",
+    "input Import job concurrency p44/s44",
+    "input Import resolution cap p44/s44",
+    "input Max concurrent uploads per user p44/s44",
+    "input Maximum upload size p44/s44",
+    "input Threads per job p44/s44",
+    "input Transcode job concurrency p44/s44",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 60,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/federation/follower-requests",
+   "screen": "admin follower requests",
+   "role": "admin",
+   "rows": [
+    "INT-05"
+   ],
+   "backend_evidence": [
+    "A29 ActivityPub: two isolated instances"
+   ],
+   "controls": [
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 12,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/import-peertube",
+   "screen": "admin import",
+   "role": "admin",
+   "rows": [
+    "INT-02"
+   ],
+   "backend_evidence": [
+    "A27 URL import, yt-dlp import and channel sync"
+   ],
+   "controls": [
+    "button Preview (dry run) p44/s44",
+    "button Start import p44/s44",
+    "input Final cutover run \u2014 let the source win where it and this instance have p13/s16",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44",
+    "select Server default \u2014 whatever this instance is configured forCopy \u2014 bring  p44/s44",
+    "select Skip \u2014 leave existing Vidra rows untouched (safest)Rename \u2014 import the p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 17,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/infrastructure",
+   "screen": "admin infrastructure",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "backend_evidence": [
+    "A17 health, jobs, audit and storage dashboards"
+   ],
+   "controls": [
+    "a Open settings p16/s16",
+    "a See the media store above p16/s16",
+    "button Re-check p44/s32",
+    "button Refresh p44/s33",
+    "button Send test message s44",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44",
+    "summary Optional: Creators cannot cross-post to Bluesky. More p39/s19",
+    "summary Optional: Every media byte is served by this instance, so viewer bandw p78/s39",
+    "summary Optional: Media is served only from this instance's storage. More p39/s19",
+    "summary Optional: Media is served unencrypted, which is the right default: enc p78/s39",
+    "summary Optional: Media is stored on the api container's filesystem, which is  p58/s39",
+    "summary Optional: No Prometheus metrics are exposed. More s19",
+    "summary Optional: Only H.264 is produced. More s19",
+    "summary Optional: Search falls back to a local database query: it works, but t p58/s39",
+    "summary Optional: There are no distributed traces, so a slow request can only  s39",
+    "summary Optional: This instance is not on the fediverse: nobody on Mastodon or p78/s39",
+    "summary Optional: This instance runs with MALWARE_SCAN_MODE=disabled, so every p97/s58",
+    "summary Optional: Videos get no automatic captions, so they are unsearchable b p58/s39",
+    "summary Optional: Visitors cannot sign in with a Bluesky or other atproto acco p39/s19"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 30,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/jobs",
+   "screen": "admin jobs",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "backend_evidence": [
+    "A17 health, jobs, audit and storage dashboards"
+   ],
+   "controls": [
+    "button Apply filters p44/s32",
+    "button Next p44/s33",
+    "button Previous p44/s33",
+    "button Refresh executions p44/s33",
+    "button Refresh p44/s33",
+    "button View details p51/s51",
+    "input Created after p44/s44",
+    "input Created before p44/s44",
+    "input Queue p44/s44",
+    "input Resource ID p44/s44",
+    "input Resource type p44/s44",
+    "input Type p44/s44",
+    "input Worker p44/s44",
+    "select Any outcomeFailures only p44/s44",
+    "select Any statequeuedclaimedrunningretry scheduledsucceededfaileddead letter p44/s44",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44",
+    "select Rows per page p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 28,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/media",
+   "screen": "admin media / GC",
+   "role": "admin",
+   "rows": [
+    "ADM-04",
+    "STO-02"
+   ],
+   "backend_evidence": [
+    "A17 health, jobs, audit and storage dashboards",
+    "A24 S3 storage on MinIO and reference-mode GC protection"
+   ],
+   "controls": [
+    "button Run dry run p44/s44",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 13,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/playback-health",
+   "screen": "admin playback health",
+   "role": "admin",
+   "rows": [
+    "OPS-02"
+   ],
+   "backend_evidence": [
+    "A35 correlation, QoE source truth and retention"
+   ],
+   "controls": [
+    "button Re-check p44/s33",
+    "button Refresh p44/s33",
+    "select Last 24 hoursLast 3 daysLast 7 days p44/s44",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 15,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/registration-requests",
+   "screen": "admin registration requests",
+   "role": "admin",
+   "rows": [
+    "ADM-01"
+   ],
+   "backend_evidence": [
+    "A16 users, roles, quotas and signup approval"
+   ],
+   "controls": [
+    "button All p33/s33",
+    "button Approved p33/s33",
+    "button Pending p33/s33",
+    "button Rejected p33/s33",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 16,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/system",
+   "screen": "admin system",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "backend_evidence": [
+    "A17 health, jobs, audit and storage dashboards"
+   ],
+   "controls": [
+    "button Refresh p44/s33",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 13,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/admin/users",
+   "screen": "admin users",
+   "role": "admin",
+   "rows": [
+    "ADM-01"
+   ],
+   "backend_evidence": [
+    "A16 users, roles, quotas and signup approval"
+   ],
+   "controls": [
+    "button Admin p44/s32",
+    "button All, 3 p32/s32",
+    "button Change storage quota for a40creator p44/s32",
+    "button Change storage quota for a40viewer p44/s32",
+    "button Change storage quota for e2eadmin p44/s32",
+    "button Deactivate a40creator p44/s32",
+    "button Deactivate a40viewer p44/s32",
+    "button Deactivate e2eadmin p44/s32",
+    "button Deactivated, 0 p32/s32",
+    "button Delete a40creator permanently p44/s33",
+    "button Delete a40viewer permanently p44/s33",
+    "button Delete e2eadmin permanently p44/s33",
+    "button Moderator p44/s32",
+    "button Next p44/s33",
+    "button Previous p44/s33",
+    "button Staff, 1 p32/s32",
+    "button User p44/s32",
+    "button[switch] Email verified for a40creator p28/s28",
+    "button[switch] Email verified for a40viewer p28/s28",
+    "button[switch] Email verified for e2eadmin p28/s28",
+    "button[switch] Exempt a40creator from new-upload quarantine p28/s28",
+    "button[switch] Exempt a40viewer from new-upload quarantine p28/s28",
+    "button[switch] Exempt e2eadmin from new-upload quarantine p28/s28",
+    "input Search users p20/s20",
+    "select OverviewUsersInstanceRegistrationFollowersJobsImportMedia storageAudit p44/s44",
+    "select Rows per page p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 37,
+   "shared_chrome_controls": 11
+  },
+  {
+   "route": "/channels/a40channel",
+   "screen": "channel",
+   "role": "anon",
+   "rows": [
+    "PUB-01",
+    "CRT-01"
+   ],
+   "backend_evidence": [
+    "A06 channel, draft, real upload and quota",
+    "A11 studio, chapters, storyboards"
+   ],
+   "controls": [
+    "a A40 Public Clip One p35/s17",
+    "a A40 Public Clip Two p35/s17",
+    "a Inbox p56",
+    "a Sign in p44/s36",
+    "a Sign in to follow p44/s44",
+    "button About p44/s36",
+    "button Actions for A40 Public Clip One p40/s40",
+    "button Actions for A40 Public Clip Two p40/s40",
+    "button Latest p33/s33",
+    "button Oldest p33/s33",
+    "button Videos p44/s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 26,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/email-change/confirm?token=a40-invalid",
+   "screen": "email change confirm",
+   "role": "anon",
+   "rows": [
+    "AUTH-05"
+   ],
+   "backend_evidence": [
+    "A12 profile/archive, password change, deletion"
+   ],
+   "controls": [
+    "a Inbox p56",
+    "a Sign in p17/s17"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 17,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/embed/b776b0e4-7476-4c9d-ac46-668577af656d",
+   "screen": "embed",
+   "role": "anon",
+   "rows": [
+    "PLAY-03"
+   ],
+   "backend_evidence": [
+    "A08 private media, passwords, embed and download"
+   ],
+   "controls": [
+    "a A40 Public Clip One p32/s32",
+    "button Fullscreen p44/s44",
+    "button More player options p44/s44",
+    "button Mute s44",
+    "button Play p44/s44",
+    "button Speed: 1\u00d7 s44",
+    "div[slider] Seek p44/s44",
+    "div[slider] Volume s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 9,
+   "shared_chrome_controls": 1
+  },
+  {
+   "route": "/history",
+   "screen": "history",
+   "role": "viewer",
+   "rows": [
+    "SOC-01",
+    "SRC-03"
+   ],
+   "backend_evidence": [
+    "A12 library, continuation and history",
+    "A13 discovery, suggestions, trending, history controls"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "button Notifications on for A40 Lab Channel s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 20,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/library",
+   "screen": "library",
+   "role": "viewer",
+   "rows": [
+    "SOC-01"
+   ],
+   "backend_evidence": [
+    "A12 library, continuation and history"
+   ],
+   "controls": [
+    "a A40 Lab Channel p18/s18",
+    "a A40 Lab Playlist1 video \u00b7 Public p68/s68",
+    "a A40 Public Clip One p18/s18",
+    "a New p19/s19",
+    "a Playlists p18/s18",
+    "button Actions for A40 Public Clip One p40/s40",
+    "button Notifications on for A40 Lab Channel s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 25,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/login",
+   "screen": "login",
+   "role": "anon",
+   "rows": [
+    "AUTH-02"
+   ],
+   "backend_evidence": [
+    "A04 owner claim and registration/session persistence"
+   ],
+   "controls": [
+    "a Create one p18/s18",
+    "a Forgot your password? p18/s18",
+    "button Sign in p48/s48",
+    "input Email or username p48/s48",
+    "input Password p48/s48"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 7,
+   "shared_chrome_controls": 2
+  },
+  {
+   "route": "/messages",
+   "screen": "messages list",
+   "role": "viewer",
+   "rows": [
+    "MSG-01"
+   ],
+   "backend_evidence": [
+    "A14 messaging, attachments and receipts"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a a40creator12m agoA40 seeded reply from the creator. p68",
+    "a a40creator13m agoA40 seeded reply from the creator. p68",
+    "a a40creator14m agoA40 seeded reply from the creator. s68",
+    "a a40creator15m agoA40 seeded reply from the creator. s68",
+    "button Messages p44",
+    "button New message p36/s36",
+    "button Notifications on for A40 Lab Channel s36",
+    "button Notifications p44",
+    "input Search conversations p36/s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 28,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/messages/af4f8b25-6f85-448d-8dd6-c0f415d3da5e",
+   "screen": "message thread",
+   "role": "viewer",
+   "rows": [
+    "MSG-01",
+    "MSG-02",
+    "MSG-03"
+   ],
+   "backend_evidence": [
+    "A14 messaging, attachments and receipts",
+    "A14 attachment limits and office documents",
+    "A15 E2EE device and session lifecycle"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Back to messages p44/s44",
+    "button Attach a file p44/s44",
+    "button Delete this message p16/s16",
+    "button Notifications on for A40 Lab Channel s36",
+    "button Report this message p16/s16",
+    "button Report this user p16/s16",
+    "button Send message p44/s44",
+    "textarea Write a message p42/s42"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 27,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/moderation",
+   "screen": "moderation reports",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "backend_evidence": [
+    "A16 quarantine, video blocks and report context"
+   ],
+   "controls": [
+    "a Admin s44",
+    "a Moderation s44",
+    "button All p33/s33",
+    "button Comment report by a40creator, open p84/s84",
+    "button Moderation section: Queues p44/s44",
+    "button Next p44/s33",
+    "button Open p33/s33",
+    "button Previous p44/s33",
+    "button Resolved p33/s33",
+    "button Video report by a40viewer, open p84/s84",
+    "select Rows per page p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 29,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/moderation/autosuggest",
+   "screen": "moderation autosuggest",
+   "role": "admin",
+   "rows": [
+    "SRC-03"
+   ],
+   "backend_evidence": [
+    "A13 discovery, suggestions, trending, history controls"
+   ],
+   "controls": [
+    "a Admin s44",
+    "a Moderation s44",
+    "button Ban query p44/s44",
+    "button Moderation section: Autosuggest p44/s44",
+    "button Try again p34/s34",
+    "input Ban a query from autosuggest p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 24,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/moderation/blocked",
+   "screen": "moderation blocked",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "backend_evidence": [
+    "A16 quarantine, video blocks and report context"
+   ],
+   "controls": [
+    "a Admin s44",
+    "a Local p34/s34",
+    "a Moderation s44",
+    "a Remote p34/s34",
+    "button Moderation section: Blocked videos p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 23,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/moderation/blocked/remote",
+   "screen": "moderation blocked remote",
+   "role": "admin",
+   "rows": [
+    "INT-05"
+   ],
+   "backend_evidence": [
+    "A29 ActivityPub: two isolated instances"
+   ],
+   "controls": [
+    "a Admin s44",
+    "a Local p34/s34",
+    "a Moderation s44",
+    "a Remote p34/s34",
+    "button Moderation section: Blocked videos p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 23,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/moderation/comments",
+   "screen": "moderation comments",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "backend_evidence": [
+    "A16 quarantine, video blocks and report context"
+   ],
+   "controls": [
+    "a A40 Public Clip One p16/s16",
+    "a Admin s44",
+    "a Moderation s44",
+    "button Delete p33/s33",
+    "button Moderation section: Comments p44/s44",
+    "button Next p44/s33",
+    "button Previous p44/s33",
+    "input Search comments p20/s20",
+    "select Rows per page p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 27,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/moderation/instances",
+   "screen": "moderation instances",
+   "role": "admin",
+   "rows": [
+    "INT-05"
+   ],
+   "backend_evidence": [
+    "A29 ActivityPub: two isolated instances"
+   ],
+   "controls": [
+    "a Admin s44",
+    "a Moderation s44",
+    "button Block p44/s32",
+    "button Moderation section: Instances p44/s44",
+    "input Instance domain to block p38/s38",
+    "input Reason for blocking (optional) p38/s38"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 24,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/moderation/quarantine",
+   "screen": "moderation quarantine",
+   "role": "admin",
+   "rows": [
+    "PUB-04",
+    "ADM-02"
+   ],
+   "backend_evidence": [
+    "A10 scheduling, processing and quarantine gates",
+    "A16 quarantine, video blocks and report context"
+   ],
+   "controls": [
+    "a Admin s44",
+    "a Moderation s44",
+    "button Moderation section: Quarantine p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 21,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/moderation/videos",
+   "screen": "moderation videos",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "backend_evidence": [
+    "A16 quarantine, video blocks and report context"
+   ],
+   "controls": [
+    "a (unnamed) p68/s68",
+    "a 0:04 p68/s68",
+    "a A40 Draft No File p19/s19",
+    "a A40 Lab Channel p18/s18",
+    "a A40 Private Clip p19/s19",
+    "a A40 Public Clip One p19/s19",
+    "a A40 Public Clip Two p19/s19",
+    "a Admin s44",
+    "a Moderation s44",
+    "button Actions for A40 Draft No File p40/s40",
+    "button Actions for A40 Private Clip p40/s40",
+    "button Actions for A40 Public Clip One p40/s40",
+    "button Actions for A40 Public Clip Two p40/s40",
+    "button Failed p32/s32",
+    "button Filters p34/s34",
+    "button Held for review p32/s32",
+    "button Moderation section: Content p44/s44",
+    "button Next p44/s33",
+    "button Previous p44/s33",
+    "button Transcoding p32/s32",
+    "select Rows per page p44/s44",
+    "select Sort p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 40,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/moderation/watched-word-matches",
+   "screen": "moderation word matches",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "backend_evidence": [
+    "A16 quarantine, video blocks and report context"
+   ],
+   "controls": [
+    "a Admin s44",
+    "a Moderation s44",
+    "button All p33/s33",
+    "button Dismissed p33/s33",
+    "button Moderation section: Word matches p44/s44",
+    "button Open p33/s33",
+    "button Resolved p33/s33"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 25,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/moderation/watched-words",
+   "screen": "moderation watched words",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "backend_evidence": [
+    "A16 quarantine, video blocks and report context"
+   ],
+   "controls": [
+    "a Admin s44",
+    "a Moderation s44",
+    "button Add p44/s44",
+    "button Moderation section: Watched words p44/s44",
+    "input Add a watched word p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 23,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/notifications",
+   "screen": "notifications",
+   "role": "viewer",
+   "rows": [
+    "SOC-02"
+   ],
+   "backend_evidence": [
+    "A12 comments, ratings, reports and notification prefs"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a a40creator replied to your comment on \u201cA40 Public Clip One\u201d p63/s63",
+    "a a40creator sent you a message p42/s42",
+    "button Mark all as read p35/s35",
+    "button Mark as read p16/s16",
+    "button Messages p44",
+    "button Notifications on for A40 Lab Channel s36",
+    "button Notifications p44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 26,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/playlists",
+   "screen": "playlists index",
+   "role": "anon",
+   "rows": [
+    "SOC-01"
+   ],
+   "backend_evidence": [
+    "A12 library, continuation and history"
+   ],
+   "controls": [
+    "a Inbox p56",
+    "a Sign in p17/s17"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 17,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/playlists/3694726a-bd57-4e62-94bc-788afbc7e84c",
+   "screen": "playlist detail",
+   "role": "anon",
+   "rows": [
+    "SOC-01"
+   ],
+   "backend_evidence": [
+    "A12 library, continuation and history"
+   ],
+   "controls": [
+    "a A40 Lab Channel p18/s18",
+    "a A40 Public Clip One p20/s41",
+    "a Inbox p56",
+    "a Sign in p44/s36",
+    "button Actions for A40 Public Clip One p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 20,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/reset-password",
+   "screen": "password reset request",
+   "role": "anon",
+   "rows": [
+    "AUTH-03"
+   ],
+   "backend_evidence": [
+    "A05 SMTP delivery, recovery mail and TOTP"
+   ],
+   "controls": [
+    "a Back to sign in p17/s17",
+    "button Send reset link p48/s48",
+    "input Email p48/s48"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 5,
+   "shared_chrome_controls": 2
+  },
+  {
+   "route": "/reset-password/confirm?token=a40-invalid",
+   "screen": "password reset confirm",
+   "role": "anon",
+   "rows": [
+    "AUTH-03"
+   ],
+   "backend_evidence": [
+    "A05 SMTP delivery, recovery mail and TOTP"
+   ],
+   "controls": [
+    "button Reset password p48/s48",
+    "input Confirm new password p48/s48",
+    "input New password p48/s48"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 5,
+   "shared_chrome_controls": 2
+  },
+  {
+   "route": "/search?q=A40",
+   "screen": "search results",
+   "role": "anon",
+   "rows": [
+    "SRC-01",
+    "SRC-02"
+   ],
+   "backend_evidence": [
+    "A09 outbox to index to a clicked result",
+    "A09 search privacy, retries and degraded fallback"
+   ],
+   "controls": [
+    "a A40 Lab Channel p18/s18",
+    "a A40 Public Clip One p20/s41",
+    "a A40 Public Clip Two p20/s41",
+    "a Inbox p56",
+    "a Sign in p44/s36",
+    "button Actions for A40 Public Clip One p40/s40",
+    "button Actions for A40 Public Clip Two p40/s40",
+    "button Clear search s28",
+    "button Filters p34/s34",
+    "button[tab] Accounts p38/s38",
+    "button[tab] Channels p38/s38",
+    "button[tab] Videos p38/s38",
+    "div[tabpanel] Videos p322/s372"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 28,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/settings",
+   "screen": "settings profile",
+   "role": "viewer",
+   "rows": [
+    "AUTH-05"
+   ],
+   "backend_evidence": [
+    "A12 profile/archive, password change, deletion"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Blocked accountsAccounts you have blocked. Neither of you can direct-m p87/s87",
+    "a Connected accountsConnect Bluesky to cross-post your new public videos p87/s87",
+    "a Donation addressesPublic crypto addresses shown on your profile and ch p87/s87",
+    "a Encrypted-messaging devicesDevices that can read your encrypted messag p87/s87",
+    "a MutesAccounts and federated instances whose content is hidden from you p87/s87",
+    "a NotificationsChoose which notifications you receive.Manage notificatio p68/s68",
+    "a PlaybackAutoplay, default speed and quality, captions and theater defa p87/s87",
+    "a Search & recommendationsPersonalization, and your search history.Manag p68/s68",
+    "a SecurityTwo-factor authentication, recovery codes, and signing out of  p87/s87",
+    "a Sensitive contentChoose whether flagged videos are shown, warned, blur p107/s87",
+    "button Dark p44/s36",
+    "button Deactivate account p38/s38",
+    "button Delete account permanently p36/s36",
+    "button Import archive p31/s31",
+    "button Light p44/s36",
+    "button Notifications on for A40 Lab Channel s36",
+    "button Request export p31/s31",
+    "button Resend verification email p33/s33",
+    "button Save p36/s36",
+    "button Sign out of this device p46/s46",
+    "button System p44/s36",
+    "input Archive file (JSON) p32/s32",
+    "input Avatar image p32/s32",
+    "input Banner image p32/s32",
+    "input Current password p38/s38",
+    "input Display name p38/s38",
+    "input Hide my account from discovery p13/s13",
+    "input Keep my watch history p13/s13",
+    "input Make my profile public p13/s13",
+    "input Show others when I\u2019ve read their messages p13/s13",
+    "textarea (unnamed) p98/s98"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 50,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/settings/blocks",
+   "screen": "settings blocks",
+   "role": "viewer",
+   "rows": [
+    "ADM-02"
+   ],
+   "backend_evidence": [
+    "A16 quarantine, video blocks and report context"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Accounts p34/s34",
+    "a Remote accounts p34/s34",
+    "a Settings p30/s30",
+    "button Notifications on for A40 Lab Channel s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 23,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/settings/blocks/remote",
+   "screen": "settings remote blocks",
+   "role": "viewer",
+   "rows": [
+    "INT-05"
+   ],
+   "backend_evidence": [
+    "A29 ActivityPub: two isolated instances"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Accounts p34/s34",
+    "a Remote accounts p34/s34",
+    "a Settings p30/s30",
+    "button Block p44/s32",
+    "button Notifications on for A40 Lab Channel s36",
+    "input Block a remote account p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 25,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/settings/connections",
+   "screen": "settings connections",
+   "role": "viewer",
+   "rows": [
+    "AUTH-04",
+    "INT-06"
+   ],
+   "backend_evidence": [
+    "A05 SMTP delivery, recovery mail and TOTP; A05 OIDC",
+    "A30 ATProto login, linking, cross-posting and donations"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Settings p30/s30",
+    "button Notifications on for A40 Lab Channel s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 21,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/settings/content",
+   "screen": "settings content",
+   "role": "viewer",
+   "rows": [
+    "PLAY-03",
+    "ADM-02"
+   ],
+   "backend_evidence": [
+    "A08 private media, passwords, embed and download",
+    "A16 quarantine, video blocks and report context"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Settings p30/s30",
+    "button Notifications on for A40 Lab Channel s36",
+    "select Use instance default (Hide from browse)ShowWarn before playingBlur pre p37/s37"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 22,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/settings/devices",
+   "screen": "settings devices",
+   "role": "viewer",
+   "rows": [
+    "MSG-03"
+   ],
+   "backend_evidence": [
+    "A15 E2EE device and session lifecycle"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Settings p30/s30",
+    "button Notifications on for A40 Lab Channel s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 21,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/settings/donations",
+   "screen": "settings donations",
+   "role": "viewer",
+   "rows": [
+    "INT-11"
+   ],
+   "backend_evidence": [
+    "A30 ATProto login, linking, cross-posting and donations"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Settings p30/s30",
+    "button Add address p44/s44",
+    "button Notifications on for A40 Lab Channel s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 22,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/settings/mutes",
+   "screen": "settings mutes",
+   "role": "viewer",
+   "rows": [
+    "ADM-02"
+   ],
+   "backend_evidence": [
+    "A16 quarantine, video blocks and report context"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Accounts p34/s34",
+    "a Instances p34/s34",
+    "a Settings p30/s30",
+    "button Notifications on for A40 Lab Channel s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 23,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/settings/mutes/instances",
+   "screen": "settings instance mutes",
+   "role": "viewer",
+   "rows": [
+    "ADM-02",
+    "INT-05"
+   ],
+   "backend_evidence": [
+    "A16 quarantine, video blocks and report context",
+    "A29 ActivityPub: two isolated instances"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Accounts p34/s34",
+    "a Instances p34/s34",
+    "a Settings p30/s30",
+    "button Notifications on for A40 Lab Channel s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 23,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/settings/notifications",
+   "screen": "settings notifications",
+   "role": "viewer",
+   "rows": [
+    "SOC-02"
+   ],
+   "backend_evidence": [
+    "A12 comments, ratings, reports and notification prefs"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Settings p30/s30",
+    "button Notifications on for A40 Lab Channel s36",
+    "button[switch] Blocked videos notifications p28/s28",
+    "button[switch] Captions ready notifications p28/s28",
+    "button[switch] Comments notifications p28/s28",
+    "button[switch] Direct messages notifications p28/s28",
+    "button[switch] New abuse reports notifications p28/s28",
+    "button[switch] New followers notifications p28/s28",
+    "button[switch] New videos notifications p28/s28",
+    "button[switch] Rejected uploads notifications p28/s28",
+    "button[switch] Replies notifications p28/s28",
+    "button[switch] Report outcomes notifications p28/s28",
+    "button[switch] Restored videos notifications p28/s28"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 32,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/settings/playback",
+   "screen": "settings playback",
+   "role": "viewer",
+   "rows": [
+    "PLAY-01"
+   ],
+   "backend_evidence": [
+    "A07 playback (before/after)"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Settings p30/s30",
+    "button Notifications on for A40 Lab Channel s36",
+    "button[switch] Autoplay next p28/s28",
+    "button[switch] Captions on by default p28/s28",
+    "button[switch] Inline video previews p28/s28",
+    "button[switch] Theater mode by default p28/s28",
+    "select Default quality p44/s44",
+    "select Default speed p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 27,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/settings/search",
+   "screen": "settings search",
+   "role": "viewer",
+   "rows": [
+    "SRC-03"
+   ],
+   "backend_evidence": [
+    "A13 discovery, suggestions, trending, history controls"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Settings p30/s30",
+    "button Notifications on for A40 Lab Channel s36",
+    "button Try again p34/s34",
+    "input Keep my search history p13/s13",
+    "input Personalize my recommendations p13/s13",
+    "input Personalize my search results p13/s13"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 25,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/settings/security",
+   "screen": "settings security",
+   "role": "viewer",
+   "rows": [
+    "AUTH-04"
+   ],
+   "backend_evidence": [
+    "A05 SMTP delivery, recovery mail and TOTP; A05 OIDC"
+   ],
+   "controls": [
+    "a A40 Lab Channel s44",
+    "a Settings p30/s30",
+    "button Change password p36/s36",
+    "button Notifications on for A40 Lab Channel s36",
+    "button Send confirmation p36/s36",
+    "button Sign out of all devices p38/s38",
+    "button Turn on two-factor authentication p36/s36",
+    "input Confirm new password p38/s38",
+    "input Current password p38/s38",
+    "input New email address p38/s38",
+    "input New password p38/s38"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 29,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/signup",
+   "screen": "signup",
+   "role": "anon",
+   "rows": [
+    "AUTH-02"
+   ],
+   "backend_evidence": [
+    "A04 owner claim and registration/session persistence"
+   ],
+   "controls": [
+    "a Sign in p18/s18",
+    "button Create account p48/s48",
+    "input Email p48/s48",
+    "input Password p48/s48",
+    "input Username p48/s48"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 7,
+   "shared_chrome_controls": 2
+  },
+  {
+   "route": "/studio",
+   "screen": "studio dashboard",
+   "role": "creator",
+   "rows": [
+    "CRT-02"
+   ],
+   "backend_evidence": [
+    "A11 creator and channel statistics"
+   ],
+   "controls": [
+    "a A40 Draft No File p17/s17",
+    "a Analytics p44/s44",
+    "a Channel p44/s44 CLIPPED:div#main-content>main.mx-auto.w-full (overflow clip/visible,",
+    "a Content p44/s44",
+    "a Dashboard p44/s44",
+    "a Followers1 p110/s110",
+    "a Go live p44/s44",
+    "a Inbox (4 unread) p56",
+    "a Live p44/s44",
+    "a Manage p19/s19",
+    "a Upload video p44/s44",
+    "a Videos4 p110/s110",
+    "a Views \u00b7 28d1 p110/s110",
+    "button Notifications (4 unread) p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 30,
+   "shared_chrome_controls": 16
+  },
+  {
+   "route": "/studio/analytics",
+   "screen": "studio analytics",
+   "role": "creator",
+   "rows": [
+    "CRT-02"
+   ],
+   "backend_evidence": [
+    "A11 creator and channel statistics"
+   ],
+   "controls": [
+    "a Analytics p44/s44",
+    "a Channel p44/s44 CLIPPED:div#main-content>main.mx-auto.w-full (overflow clip/visible,",
+    "a Content p44/s44",
+    "a Dashboard p44/s44",
+    "a Inbox (4 unread) p56",
+    "a Live p44/s44",
+    "button All my channels1 p44/s36",
+    "button Notifications (4 unread) p44/s44",
+    "button This channel p44/s36",
+    "select Stats video p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 26,
+   "shared_chrome_controls": 16
+  },
+  {
+   "route": "/studio/channel",
+   "screen": "studio channel",
+   "role": "creator",
+   "rows": [
+    "PUB-01",
+    "CRT-01"
+   ],
+   "backend_evidence": [
+    "A06 channel, draft, real upload and quota",
+    "A11 studio, chapters, storyboards"
+   ],
+   "controls": [
+    "a Analytics p44/s44",
+    "a Channel p44/s44 CLIPPED:div#main-content>main.mx-auto.w-full (overflow clip/visible,",
+    "a Content p44/s44",
+    "a Dashboard p44/s44",
+    "a Inbox (4 unread) p56",
+    "a Live p44/s44",
+    "a View public page p19/s19",
+    "button Add editor p44/s44",
+    "button Create another channel p44/s32",
+    "button Delete a40channel p44/s33",
+    "button Notifications (4 unread) p44/s44",
+    "button Remove channel avatar p26/s26",
+    "button Remove channel banner p26/s26",
+    "button Save changes p44/s32",
+    "button[switch] Federate this channel over ActivityPub p28/s28",
+    "input Channel avatar image p32/s32",
+    "input Channel banner image p32/s32",
+    "input Collaborator handle p44/s44",
+    "input Edit channel name p44/s44",
+    "textarea Edit channel description p78/s78"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 36,
+   "shared_chrome_controls": 16
+  },
+  {
+   "route": "/studio/content",
+   "screen": "studio content",
+   "role": "creator",
+   "rows": [
+    "PUB-01",
+    "PUB-02",
+    "CRT-01"
+   ],
+   "backend_evidence": [
+    "A06 channel, draft, real upload and quota",
+    "A10 resumable upload, cancel, draft recovery, batch",
+    "A11 studio, chapters, storyboards"
+   ],
+   "controls": [
+    "a A40 Draft No File p17/s17",
+    "a A40 Private Clip p17/s17",
+    "a A40 Public Clip One p17/s17 CLIPPED:ul.flex.flex-col>li.flex.items-center>div.min-w-0.flex-1>p.t",
+    "a A40 Public Clip Two p17/s17 CLIPPED:ul.flex.flex-col>li.flex.items-center>div.min-w-0.flex-1>p.t",
+    "a Analytics p44/s44",
+    "a Channel p44/s44 CLIPPED:div#main-content>main.mx-auto.w-full (overflow clip/visible,",
+    "a Content p44/s44",
+    "a Dashboard p44/s44",
+    "a Inbox (4 unread) p56",
+    "a Live p44/s44",
+    "button Delete p30/s30",
+    "button Edit p30/s30",
+    "button Notifications (4 unread) p44/s44",
+    "button Refresh p44/s33",
+    "button Upload video p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 31,
+   "shared_chrome_controls": 16
+  },
+  {
+   "route": "/studio/live",
+   "screen": "studio live",
+   "role": "creator",
+   "rows": [
+    "INT-01"
+   ],
+   "backend_evidence": [
+    "A26 live RTMP: ingest, watch, moderation, replay"
+   ],
+   "controls": [
+    "a Analytics p44/s44",
+    "a Channel p44/s44 CLIPPED:div#main-content>main.mx-auto.w-full (overflow clip/visible,",
+    "a Content p44/s44",
+    "a Dashboard p44/s44",
+    "a Inbox (4 unread) p56",
+    "a Live p44/s44",
+    "button Delete p30/s30",
+    "button Go live p44/s32",
+    "button Notifications (4 unread) p44/s44",
+    "button Regenerate key p30/s30",
+    "button Reload p44/s33",
+    "input Save replay as a video for A40 Lab Live p13/s13"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 28,
+   "shared_chrome_controls": 16
+  },
+  {
+   "route": "/subscriptions",
+   "screen": "subscriptions",
+   "role": "viewer",
+   "rows": [
+    "SOC-01"
+   ],
+   "backend_evidence": [
+    "A12 library, continuation and history"
+   ],
+   "controls": [
+    "a A40 Lab Channel p18/s18",
+    "a A40 Public Clip One p20/s41",
+    "a A40 Public Clip Two p20/s41",
+    "button Actions for A40 Public Clip One p44/s44",
+    "button Actions for A40 Public Clip Two p44/s44",
+    "button Follow p44/s44",
+    "button Notifications on for A40 Lab Channel s36",
+    "input Follow a remote channel p38/s38"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 26,
+   "shared_chrome_controls": 18
+  },
+  {
+   "route": "/trending",
+   "screen": "trending",
+   "role": "anon",
+   "rows": [
+    "SRC-03"
+   ],
+   "backend_evidence": [
+    "A13 discovery, suggestions, trending, history controls"
+   ],
+   "controls": [
+    "a A40 Lab Channel p18/s18",
+    "a A40 Public Clip One p20/s41",
+    "a A40 Public Clip Two p20/s41",
+    "a Inbox p56",
+    "a Sign in p44/s36",
+    "button Actions for A40 Public Clip One p44/s44",
+    "button Actions for A40 Public Clip Two p44/s44",
+    "button All p44/s32",
+    "button Local p44/s32",
+    "button Popular p44/s36",
+    "button Recent p44/s36",
+    "button Trending p44/s36",
+    "select Filter by category p44/s36",
+    "select Filter by language p44/s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 29,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/users/a40creator",
+   "screen": "public profile",
+   "role": "anon",
+   "rows": [
+    "AUTH-05"
+   ],
+   "backend_evidence": [
+    "A12 profile/archive, password change, deletion"
+   ],
+   "controls": [
+    "a Go home p44/s33",
+    "a Inbox p56",
+    "a Sign in p44/s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 18,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/verify-email/confirm?token=a40-invalid",
+   "screen": "verify email confirm",
+   "role": "anon",
+   "rows": [
+    "AUTH-03"
+   ],
+   "backend_evidence": [
+    "A05 SMTP delivery, recovery mail and TOTP"
+   ],
+   "controls": [
+    "a Sign in p17/s17"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 3,
+   "shared_chrome_controls": 2
+  },
+  {
+   "route": "/videos/b776b0e4-7476-4c9d-ac46-668577af656d",
+   "screen": "watch",
+   "role": "anon",
+   "rows": [
+    "PLAY-01",
+    "SOC-02"
+   ],
+   "backend_evidence": [
+    "A07 playback (before/after)",
+    "A12 comments, ratings, reports and notification prefs"
+   ],
+   "controls": [
+    "a A40 Lab Channel p16",
+    "a A40 Lab Channel1 followers p40/s40",
+    "a A40 Public Clip Two p17/s84",
+    "a Inbox p56",
+    "a Sign in p17/s17",
+    "a Sign in to follow p44/s44",
+    "a Sign in to rate p19/s19",
+    "a Sign in to report p35/s35",
+    "a Sign in to save p35/s35",
+    "a Sign in to save to a playlist p35/s35",
+    "button Actions for A40 Public Clip One p44/s44",
+    "button Actions for A40 Public Clip Two p40/s40",
+    "button Dislike p35/s35",
+    "button Download p35/s35",
+    "button Fullscreen p44/s44",
+    "button Keyboard shortcuts s28",
+    "button Like p35/s35",
+    "button More player options p44/s44",
+    "button Play p44/s44",
+    "button Reply p16/s16",
+    "button Share p35/s35",
+    "button View 1 reply p16/s16",
+    "div[slider] Seek p44/s44"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 38,
+   "shared_chrome_controls": 15
+  },
+  {
+   "route": "/videos/cf7c0f71-e511-4a73-bd0c-bc6975789ece",
+   "screen": "private video (denied)",
+   "role": "anon",
+   "rows": [
+    "PLAY-03"
+   ],
+   "backend_evidence": [
+    "A08 private media, passwords, embed and download"
+   ],
+   "controls": [
+    "a Inbox p56",
+    "a Sign in p44/s36"
+   ],
+   "measured": [
+    "phone390",
+    "stage640",
+    "light",
+    "dark"
+   ],
+   "control_count": 17,
+   "shared_chrome_controls": 15
+  }
+ ],
+ "keyboard": [
+  {
+   "route": "/",
+   "role": "anon",
+   "rows": [
+    "SRC-03",
+    "SOC-01",
+    "PLAY-02"
+   ],
+   "tabStops": 80,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/trending",
+   "role": "anon",
+   "rows": [
+    "SRC-03"
+   ],
+   "tabStops": 80,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/search?q=A40",
+   "role": "anon",
+   "rows": [
+    "SRC-01",
+    "SRC-02"
+   ],
+   "tabStops": 26,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/channels/a40channel",
+   "role": "anon",
+   "rows": [
+    "PUB-01",
+    "CRT-01"
+   ],
+   "tabStops": 25,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/users/a40creator",
+   "role": "anon",
+   "rows": [
+    "AUTH-05"
+   ],
+   "tabStops": 15,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/videos/b776b0e4-7476-4c9d-ac46-668577af656d",
+   "role": "anon",
+   "rows": [
+    "PLAY-01",
+    "SOC-02"
+   ],
+   "tabStops": 39,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/embed/b776b0e4-7476-4c9d-ac46-668577af656d",
+   "role": "anon",
+   "rows": [
+    "PLAY-03"
+   ],
+   "tabStops": 11,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 0,
+   "noFocusRingNames": []
+  },
+  {
+   "route": "/playlists",
+   "role": "anon",
+   "rows": [
+    "SOC-01"
+   ],
+   "tabStops": 15,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/playlists/3694726a-bd57-4e62-94bc-788afbc7e84c",
+   "role": "anon",
+   "rows": [
+    "SOC-01"
+   ],
+   "tabStops": 18,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/login",
+   "role": "anon",
+   "rows": [
+    "AUTH-02"
+   ],
+   "tabStops": 7,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 0,
+   "noFocusRingNames": []
+  },
+  {
+   "route": "/signup",
+   "role": "anon",
+   "rows": [
+    "AUTH-02"
+   ],
+   "tabStops": 7,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 0,
+   "noFocusRingNames": []
+  },
+  {
+   "route": "/reset-password",
+   "role": "anon",
+   "rows": [
+    "AUTH-03"
+   ],
+   "tabStops": 5,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 0,
+   "noFocusRingNames": []
+  },
+  {
+   "route": "/reset-password/confirm?token=a40-invalid",
+   "role": "anon",
+   "rows": [
+    "AUTH-03"
+   ],
+   "tabStops": 5,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 0,
+   "noFocusRingNames": []
+  },
+  {
+   "route": "/verify-email/confirm?token=a40-invalid",
+   "role": "anon",
+   "rows": [
+    "AUTH-03"
+   ],
+   "tabStops": 3,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 0,
+   "noFocusRingNames": []
+  },
+  {
+   "route": "/email-change/confirm?token=a40-invalid",
+   "role": "anon",
+   "rows": [
+    "AUTH-05"
+   ],
+   "tabStops": 16,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/about",
+   "role": "anon",
+   "rows": [
+    "ADM-03"
+   ],
+   "tabStops": 21,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/about/instance",
+   "role": "anon",
+   "rows": [
+    "ADM-03"
+   ],
+   "tabStops": 21,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/about/vidra",
+   "role": "anon",
+   "rows": [
+    "ADM-03"
+   ],
+   "tabStops": 17,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/about/network",
+   "role": "anon",
+   "rows": [
+    "INT-05"
+   ],
+   "tabStops": 17,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/a40-no-such-route",
+   "role": "anon",
+   "rows": [
+    "QLT-02"
+   ],
+   "tabStops": 15,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/videos/cf7c0f71-e511-4a73-bd0c-bc6975789ece",
+   "role": "anon",
+   "rows": [
+    "PLAY-03"
+   ],
+   "tabStops": 14,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/subscriptions",
+   "role": "viewer",
+   "rows": [
+    "SOC-01"
+   ],
+   "tabStops": 26,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/history",
+   "role": "viewer",
+   "rows": [
+    "SOC-01",
+    "SRC-03"
+   ],
+   "tabStops": 17,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/library",
+   "role": "viewer",
+   "rows": [
+    "SOC-01"
+   ],
+   "tabStops": 24,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/notifications",
+   "role": "viewer",
+   "rows": [
+    "SOC-02"
+   ],
+   "tabStops": 22,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/messages",
+   "role": "viewer",
+   "rows": [
+    "MSG-01"
+   ],
+   "tabStops": 20,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/messages/af4f8b25-6f85-448d-8dd6-c0f415d3da5e",
+   "role": "viewer",
+   "rows": [
+    "MSG-01",
+    "MSG-02",
+    "MSG-03"
+   ],
+   "tabStops": 26,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings",
+   "role": "viewer",
+   "rows": [
+    "AUTH-05"
+   ],
+   "tabStops": 46,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings/security",
+   "role": "viewer",
+   "rows": [
+    "AUTH-04"
+   ],
+   "tabStops": 35,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings/connections",
+   "role": "viewer",
+   "rows": [
+    "AUTH-04",
+    "INT-06"
+   ],
+   "tabStops": 28,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings/devices",
+   "role": "viewer",
+   "rows": [
+    "MSG-03"
+   ],
+   "tabStops": 28,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings/content",
+   "role": "viewer",
+   "rows": [
+    "PLAY-03",
+    "ADM-02"
+   ],
+   "tabStops": 29,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings/notifications",
+   "role": "viewer",
+   "rows": [
+    "SOC-02"
+   ],
+   "tabStops": 39,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings/playback",
+   "role": "viewer",
+   "rows": [
+    "PLAY-01"
+   ],
+   "tabStops": 34,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings/search",
+   "role": "viewer",
+   "rows": [
+    "SRC-03"
+   ],
+   "tabStops": 30,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings/donations",
+   "role": "viewer",
+   "rows": [
+    "INT-11"
+   ],
+   "tabStops": 29,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings/mutes",
+   "role": "viewer",
+   "rows": [
+    "ADM-02"
+   ],
+   "tabStops": 30,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings/mutes/instances",
+   "role": "viewer",
+   "rows": [
+    "ADM-02",
+    "INT-05"
+   ],
+   "tabStops": 30,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings/blocks",
+   "role": "viewer",
+   "rows": [
+    "ADM-02"
+   ],
+   "tabStops": 30,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/settings/blocks/remote",
+   "role": "viewer",
+   "rows": [
+    "INT-05"
+   ],
+   "tabStops": 31,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/studio",
+   "role": "creator",
+   "rows": [
+    "CRT-02"
+   ],
+   "tabStops": 28,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/studio/content",
+   "role": "creator",
+   "rows": [
+    "PUB-01",
+    "PUB-02",
+    "CRT-01"
+   ],
+   "tabStops": 34,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/studio/channel",
+   "role": "creator",
+   "rows": [
+    "PUB-01",
+    "CRT-01"
+   ],
+   "tabStops": 12,
+   "trapped": false,
+   "offscreenFocus": 0,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 0,
+   "noFocusRingNames": []
+  },
+  {
+   "route": "/studio/analytics",
+   "role": "creator",
+   "rows": [
+    "CRT-02"
+   ],
+   "tabStops": 23,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/studio/live",
+   "role": "creator",
+   "rows": [
+    "INT-01"
+   ],
+   "tabStops": 25,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/live/071c989c-f507-499e-ac67-5ae383424978",
+   "role": "creator",
+   "rows": [
+    "INT-01"
+   ],
+   "tabStops": 16,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "tabStops": 33,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/users",
+   "role": "admin",
+   "rows": [
+    "ADM-01"
+   ],
+   "tabStops": 37,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 2,
+   "noFocusRingNames": [
+    "input:Search users",
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/system",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "tabStops": 21,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/jobs",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "tabStops": 32,
+   "trapped": true,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/audit-log",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "tabStops": 24,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 2,
+   "noFocusRingNames": [
+    "input:Filter by action",
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/media",
+   "role": "admin",
+   "rows": [
+    "ADM-04",
+    "STO-02"
+   ],
+   "tabStops": 21,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/infrastructure",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "tabStops": 44,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/playback-health",
+   "role": "admin",
+   "rows": [
+    "OPS-02"
+   ],
+   "tabStops": 25,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/registration-requests",
+   "role": "admin",
+   "rows": [
+    "ADM-01"
+   ],
+   "tabStops": 24,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/federation/follower-requests",
+   "role": "admin",
+   "rows": [
+    "INT-05"
+   ],
+   "tabStops": 20,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/import-peertube",
+   "role": "admin",
+   "rows": [
+    "INT-02"
+   ],
+   "tabStops": 25,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/config",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "tabStops": 80,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/config/general",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "tabStops": 80,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/config/customization",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "tabStops": 40,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/config/homepage",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "tabStops": 33,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/config/vod",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "tabStops": 75,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/config/live",
+   "role": "admin",
+   "rows": [
+    "ADM-03",
+    "INT-01"
+   ],
+   "tabStops": 37,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/config/federation",
+   "role": "admin",
+   "rows": [
+    "ADM-03",
+    "INT-05"
+   ],
+   "tabStops": 38,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/config/ipfs",
+   "role": "admin",
+   "rows": [
+    "ADM-03",
+    "INT-08"
+   ],
+   "tabStops": 28,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/admin/config/advanced",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "tabStops": 51,
+   "trapped": false,
+   "offscreenFocus": 2,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/moderation",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "tabStops": 36,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/moderation/videos",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "tabStops": 76,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 2,
+   "noFocusRingNames": [
+    "input:Search videos",
+    "input:Search videos by title"
+   ]
+  },
+  {
+   "route": "/moderation/comments",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "tabStops": 36,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 2,
+   "noFocusRingNames": [
+    "input:Search comments",
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/moderation/quarantine",
+   "role": "admin",
+   "rows": [
+    "PUB-04",
+    "ADM-02"
+   ],
+   "tabStops": 27,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/moderation/blocked",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "tabStops": 29,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/moderation/blocked/remote",
+   "role": "admin",
+   "rows": [
+    "INT-05"
+   ],
+   "tabStops": 29,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/moderation/instances",
+   "role": "admin",
+   "rows": [
+    "INT-05"
+   ],
+   "tabStops": 29,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/moderation/watched-words",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "tabStops": 28,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/moderation/watched-word-matches",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "tabStops": 31,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  },
+  {
+   "route": "/moderation/autosuggest",
+   "role": "admin",
+   "rows": [
+    "SRC-03"
+   ],
+   "tabStops": 29,
+   "trapped": false,
+   "offscreenFocus": 1,
+   "invisibleFocusCount": 0,
+   "noFocusRingCount": 1,
+   "noFocusRingNames": [
+    "input:Search videos"
+   ]
+  }
+ ],
+ "errors_not_found": [
+  {
+   "route": "/videos/00000000-0000-4000-8000-000000000000",
+   "name": "watch \u2014 unknown id",
+   "role": "anon",
+   "rows": [
+    "PLAY-02"
+   ],
+   "mode": "notfound",
+   "httpStatus": 200,
+   "text": "Video not found This video does not exist, or it is private.",
+   "len": 60,
+   "hasErrorWord": true,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/videos/00000000-0000-4000-8000-000000000000"
+  },
+  {
+   "route": "/channels/a40-no-such-channel",
+   "name": "channel \u2014 unknown handle",
+   "role": "anon",
+   "rows": [
+    "PUB-01"
+   ],
+   "mode": "notfound",
+   "httpStatus": 200,
+   "text": "Channel not found No channel @a40-no-such-channel exists.",
+   "len": 57,
+   "hasErrorWord": true,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/channels/a40-no-such-channel"
+  },
+  {
+   "route": "/users/a40nosuchuser",
+   "name": "profile \u2014 unknown user",
+   "role": "anon",
+   "rows": [
+    "AUTH-05"
+   ],
+   "mode": "notfound",
+   "httpStatus": 404,
+   "text": "404 Page not found The page you're looking for doesn't exist or may have been moved. Go home",
+   "len": 92,
+   "hasErrorWord": true,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/users/a40nosuchuser"
+  },
+  {
+   "route": "/playlists/00000000-0000-4000-8000-000000000000",
+   "name": "playlist \u2014 unknown id",
+   "role": "anon",
+   "rows": [
+    "SOC-01"
+   ],
+   "mode": "notfound",
+   "httpStatus": 200,
+   "text": "Playlist not found This playlist does not exist, or it is private.",
+   "len": 66,
+   "hasErrorWord": true,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/playlists/00000000-0000-4000-8000-000000000000"
+  },
+  {
+   "route": "/v/aaaaaaaaaaa",
+   "name": "short code \u2014 unknown",
+   "role": "anon",
+   "rows": [
+    "PLAY-02"
+   ],
+   "mode": "notfound",
+   "httpStatus": 200,
+   "text": "Video not found This video does not exist, or it is private.",
+   "len": 60,
+   "hasErrorWord": true,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/v/aaaaaaaaaaa"
+  },
+  {
+   "route": "/a40-no-such-route",
+   "name": "404 route",
+   "role": "anon",
+   "rows": [
+    "QLT-02"
+   ],
+   "mode": "notfound",
+   "httpStatus": 404,
+   "text": "404 Page not found The page you're looking for doesn't exist or may have been moved. Go home",
+   "len": 92,
+   "hasErrorWord": true,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/a40-no-such-route"
+  },
+  {
+   "route": "/videos/cf7c0f71-e511-4a73-bd0c-bc6975789ece",
+   "name": "private video \u2014 anonymous",
+   "role": "anon",
+   "rows": [
+    "PLAY-03"
+   ],
+   "mode": "notfound",
+   "httpStatus": 200,
+   "text": "Video not found This video does not exist, or it is private.",
+   "len": 60,
+   "hasErrorWord": true,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/videos/cf7c0f71-e511-4a73-bd0c-bc6975789ece"
+  },
+  {
+   "route": "/messages/00000000-0000-4000-8000-000000000000",
+   "name": "conversation \u2014 unknown id",
+   "role": "viewer",
+   "rows": [
+    "MSG-01"
+   ],
+   "mode": "notfound",
+   "httpStatus": 200,
+   "text": "Messages a40creator 1h ago A40 seeded reply from the creator. C Conversation Conversation not found This conversation doesn't exist, or you're not a participant.",
+   "len": 161,
+   "hasErrorWord": true,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/messages/00000000-0000-4000-8000-000000000000"
+  },
+  {
+   "route": "/admin/users",
+   "name": "admin \u2014 not an admin",
+   "role": "viewer",
+   "rows": [
+    "ADM-01"
+   ],
+   "mode": "notfound",
+   "httpStatus": 200,
+   "text": "Users Search accounts and manage their role and active status. Administrators only This page is for administrators. Sign in with an admin account to manage users.",
+   "len": 162,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/users"
+  },
+  {
+   "route": "/moderation",
+   "name": "moderation \u2014 not a moderator",
+   "role": "viewer",
+   "rows": [
+    "ADM-02"
+   ],
+   "mode": "notfound",
+   "httpStatus": 200,
+   "text": "Queues Review and resolve abuse reports filed by viewers. Moderators only This page is for moderators and administrators. Sign in with a moderator account to review reports.",
+   "len": 173,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/moderation"
+  },
+  {
+   "route": "/settings",
+   "name": "settings \u2014 signed out",
+   "role": "anon",
+   "rows": [
+    "AUTH-02"
+   ],
+   "mode": "notfound",
+   "httpStatus": 200,
+   "text": "Sign in to manage your account Your session has ended. Sign in to edit your profile. Appearance Light System Dark",
+   "len": 113,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings"
+  },
+  {
+   "route": "/studio",
+   "name": "studio \u2014 signed out",
+   "role": "anon",
+   "rows": [
+    "PUB-01"
+   ],
+   "mode": "notfound",
+   "httpStatus": 200,
+   "text": "Studio Sign in to use the studio Sign in to create a channel and publish videos.",
+   "len": 80,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/studio"
+  }
+ ],
+ "errors_api_down": [
+  {
+   "route": "/",
+   "name": "home / browse",
+   "role": "anon",
+   "rows": [
+    "SRC-03",
+    "SOC-01",
+    "PLAY-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Recent videos Fresh releases from creators across your community. Recent Popular Trending Local All Category All Language All Something went wrong Could not load videos. The backend may be unavailable. Try again",
+   "len": 211,
+   "hasErrorWord": true,
+   "hasRetry": true,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/"
+  },
+  {
+   "route": "/trending",
+   "name": "trending",
+   "role": "anon",
+   "rows": [
+    "SRC-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "EXPLORE Trending videos What viewers are discovering right now. Recent Popular Trending Local All Category All Language All Something went wrong Could not load videos. The backend may be unavailable. Try again",
+   "len": 209,
+   "hasErrorWord": true,
+   "hasRetry": true,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/trending"
+  },
+  {
+   "route": "/search?q=A40",
+   "name": "search results",
+   "role": "anon",
+   "rows": [
+    "SRC-01",
+    "SRC-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Search results for \u201cA40\u201d Videos Channels Accounts Filters Something went wrong Search failed. Please try again. Try again",
+   "len": 121,
+   "hasErrorWord": true,
+   "hasRetry": true,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/search?q=A40"
+  },
+  {
+   "route": "/channels/a40channel",
+   "name": "channel",
+   "role": "anon",
+   "rows": [
+    "PUB-01",
+    "CRT-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Something went wrong Could not load this channel. Try again",
+   "len": 59,
+   "hasErrorWord": true,
+   "hasRetry": true,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/channels/a40channel"
+  },
+  {
+   "route": "/users/a40creator",
+   "name": "public profile",
+   "role": "anon",
+   "rows": [
+    "AUTH-05"
+   ],
+   "mode": "down",
+   "httpStatus": 404,
+   "text": "404 Page not found The page you're looking for doesn't exist or may have been moved. Go home",
+   "len": 92,
+   "hasErrorWord": true,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/users/a40creator"
+  },
+  {
+   "route": "/videos/b776b0e4-7476-4c9d-ac46-668577af656d",
+   "name": "watch",
+   "role": "anon",
+   "rows": [
+    "PLAY-01",
+    "SOC-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Something went wrong Could not load this video. Try again",
+   "len": 57,
+   "hasErrorWord": true,
+   "hasRetry": true,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/videos/b776b0e4-7476-4c9d-ac46-668577af656d"
+  },
+  {
+   "route": "/embed/b776b0e4-7476-4c9d-ac46-668577af656d",
+   "name": "embed",
+   "role": "anon",
+   "rows": [
+    "PLAY-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Skip to content Could not load this video.",
+   "len": 42,
+   "hasErrorWord": true,
+   "hasRetry": false,
+   "hasAlert": false,
+   "spinners": 0,
+   "finalPath": "/embed/b776b0e4-7476-4c9d-ac46-668577af656d"
+  },
+  {
+   "route": "/playlists",
+   "name": "playlists index",
+   "role": "anon",
+   "rows": [
+    "SOC-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Playlists Sign in to see your playlists Sign in to create playlists and organise videos.",
+   "len": 88,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/playlists"
+  },
+  {
+   "route": "/playlists/3694726a-bd57-4e62-94bc-788afbc7e84c",
+   "name": "playlist detail",
+   "role": "anon",
+   "rows": [
+    "SOC-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Something went wrong Could not load this playlist. Try again",
+   "len": 60,
+   "hasErrorWord": true,
+   "hasRetry": true,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/playlists/3694726a-bd57-4e62-94bc-788afbc7e84c"
+  },
+  {
+   "route": "/login",
+   "name": "login",
+   "role": "anon",
+   "rows": [
+    "AUTH-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Vidra (dev) Sign in to Vidra (dev) Email or username Password Forgot your password? Sign in No account? Create one Powered by Vidra",
+   "len": 131,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": false,
+   "spinners": 0,
+   "finalPath": "/login"
+  },
+  {
+   "route": "/signup",
+   "name": "signup",
+   "role": "anon",
+   "rows": [
+    "AUTH-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Vidra (dev) Create your Vidra (dev) account Username Email Password Create account Already have an account? Sign in Powered by Vidra",
+   "len": 132,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": false,
+   "spinners": 0,
+   "finalPath": "/signup"
+  },
+  {
+   "route": "/reset-password",
+   "name": "password reset request",
+   "role": "anon",
+   "rows": [
+    "AUTH-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Vidra (dev) Reset your password Enter your account email and we'll send you a link to reset your password. Email Send reset link Remembered it? Back to sign in Powered by Vidra",
+   "len": 176,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": false,
+   "spinners": 0,
+   "finalPath": "/reset-password"
+  },
+  {
+   "route": "/reset-password/confirm?token=a40-invalid",
+   "name": "password reset confirm",
+   "role": "anon",
+   "rows": [
+    "AUTH-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Vidra (dev) Choose a new password New password Confirm new password Reset password Powered by Vidra",
+   "len": 99,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": false,
+   "spinners": 0,
+   "finalPath": "/reset-password/confirm?token=a40-invalid"
+  },
+  {
+   "route": "/verify-email/confirm?token=a40-invalid",
+   "name": "verify email confirm",
+   "role": "anon",
+   "rows": [
+    "AUTH-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Vidra (dev) Verify your email Something went wrong verifying your email. Please try again. Sign in Powered by Vidra",
+   "len": 115,
+   "hasErrorWord": true,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/verify-email/confirm?token=a40-invalid"
+  },
+  {
+   "route": "/email-change/confirm?token=a40-invalid",
+   "name": "email change confirm",
+   "role": "anon",
+   "rows": [
+    "AUTH-05"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Vidra (dev) Confirm email change Sign in to the account you are moving, then open this link again \u2014 confirming needs both the link and the account. Sign in Powered by Vidra",
+   "len": 172,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/email-change/confirm?token=a40-invalid"
+  },
+  {
+   "route": "/about",
+   "name": "about",
+   "role": "anon",
+   "rows": [
+    "ADM-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Something went wrong Could not load this instance's details. Try again",
+   "len": 70,
+   "hasErrorWord": true,
+   "hasRetry": true,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/about/instance/home"
+  },
+  {
+   "route": "/about/instance",
+   "name": "about instance",
+   "role": "anon",
+   "rows": [
+    "ADM-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Something went wrong Could not load this instance's details. Try again",
+   "len": 70,
+   "hasErrorWord": true,
+   "hasRetry": true,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/about/instance/home"
+  },
+  {
+   "route": "/about/vidra",
+   "name": "about vidra",
+   "role": "anon",
+   "rows": [
+    "ADM-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Something went wrong Could not load this instance's details. Try again",
+   "len": 70,
+   "hasErrorWord": true,
+   "hasRetry": true,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/about/vidra"
+  },
+  {
+   "route": "/about/network",
+   "name": "about network",
+   "role": "anon",
+   "rows": [
+    "INT-05"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Something went wrong Could not load this instance's details. Try again",
+   "len": 70,
+   "hasErrorWord": true,
+   "hasRetry": true,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/about/network"
+  },
+  {
+   "route": "/a40-no-such-route",
+   "name": "404",
+   "role": "anon",
+   "rows": [
+    "QLT-02"
+   ],
+   "mode": "down",
+   "httpStatus": 404,
+   "text": "404 Page not found The page you're looking for doesn't exist or may have been moved. Go home",
+   "len": 92,
+   "hasErrorWord": true,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/a40-no-such-route"
+  },
+  {
+   "route": "/videos/cf7c0f71-e511-4a73-bd0c-bc6975789ece",
+   "name": "private video (denied)",
+   "role": "anon",
+   "rows": [
+    "PLAY-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Something went wrong Could not load this video. Try again",
+   "len": 57,
+   "hasErrorWord": true,
+   "hasRetry": true,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/videos/cf7c0f71-e511-4a73-bd0c-bc6975789ece"
+  },
+  {
+   "route": "/subscriptions",
+   "name": "subscriptions",
+   "role": "viewer",
+   "rows": [
+    "SOC-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Subscriptions Sign in to see your subscriptions Sign in to follow channels and watch their latest videos here.",
+   "len": 110,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/subscriptions"
+  },
+  {
+   "route": "/history",
+   "name": "history",
+   "role": "viewer",
+   "rows": [
+    "SOC-01",
+    "SRC-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "History Sign in to see your history Sign in to keep track of what you have watched.",
+   "len": 83,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/history"
+  },
+  {
+   "route": "/library",
+   "name": "library",
+   "role": "viewer",
+   "rows": [
+    "SOC-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Library Playlists Sign in to see your library Sign in to save videos, build playlists, and pick up where you left off.",
+   "len": 118,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/library"
+  },
+  {
+   "route": "/notifications",
+   "name": "notifications",
+   "role": "viewer",
+   "rows": [
+    "SOC-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Inbox Sign in to see your notifications Sign in to see when people follow your channel, comment on your videos, or reply to you.",
+   "len": 128,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/notifications"
+  },
+  {
+   "route": "/messages",
+   "name": "messages list",
+   "role": "viewer",
+   "rows": [
+    "MSG-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Messages Sign in to see your messages Sign in to read and send direct messages. Your messages Pick a conversation, or start a new one.",
+   "len": 134,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/messages"
+  },
+  {
+   "route": "/messages/af4f8b25-6f85-448d-8dd6-c0f415d3da5e",
+   "name": "message thread",
+   "role": "viewer",
+   "rows": [
+    "MSG-01",
+    "MSG-02",
+    "MSG-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Messages Sign in to see your messages Sign in to read and send direct messages. Sign in to see this conversation Sign in to read and send direct messages.",
+   "len": 154,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/messages/af4f8b25-6f85-448d-8dd6-c0f415d3da5e"
+  },
+  {
+   "route": "/settings",
+   "name": "settings profile",
+   "role": "viewer",
+   "rows": [
+    "AUTH-05"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Sign in to manage your account Your session has ended. Sign in to edit your profile. Appearance Light System Dark",
+   "len": 113,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings"
+  },
+  {
+   "route": "/settings/security",
+   "name": "settings security",
+   "role": "viewer",
+   "rows": [
+    "AUTH-04"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Security Your email address, password, two-factor authentication and signed-in devices. Sign in to manage security settings Your session has ended. Sign in to manage two-factor authentication.",
+   "len": 192,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings/security"
+  },
+  {
+   "route": "/settings/connections",
+   "name": "settings connections",
+   "role": "viewer",
+   "rows": [
+    "AUTH-04",
+    "INT-06"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Connected accounts Accounts on other networks that Vidra can post to on your behalf. Cross-posting is outbound only and happens automatically when you publish a public video. Sign in to manage connected accounts Sign in ",
+   "len": 267,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings/connections"
+  },
+  {
+   "route": "/settings/devices",
+   "name": "settings devices",
+   "role": "viewer",
+   "rows": [
+    "MSG-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Encrypted-messaging devices Each device you use encrypted messaging on has its own keys. Compare a device\u2019s safety number with the other person out of band to verify no one is intercepting. Sign in to manage your devices",
+   "len": 313,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings/devices"
+  },
+  {
+   "route": "/settings/content",
+   "name": "settings content",
+   "role": "viewer",
+   "rows": [
+    "PLAY-03",
+    "ADM-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Sensitive content Control how videos flagged as sensitive are shown to you across this instance. Sign in to manage your content settings Your session has ended. Sign in to change how sensitive content is shown to you.",
+   "len": 217,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings/content"
+  },
+  {
+   "route": "/settings/notifications",
+   "name": "settings notifications",
+   "role": "viewer",
+   "rows": [
+    "SOC-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Notification preferences Choose which notifications you receive. Changes apply to new notifications immediately. Sign in to manage notifications Sign in to choose which notifications you receive.",
+   "len": 195,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings/notifications"
+  },
+  {
+   "route": "/settings/playback",
+   "name": "settings playback",
+   "role": "viewer",
+   "rows": [
+    "PLAY-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Playback Your default player preferences. Changes apply to videos you open next. Sign in to manage playback Sign in to set your default playback preferences.",
+   "len": 157,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings/playback"
+  },
+  {
+   "route": "/settings/search",
+   "name": "settings search",
+   "role": "viewer",
+   "rows": [
+    "SRC-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Search & recommendations Control how your searches and viewing shape suggestions, results, and recommendations \u2014 and review or clear your search history. Sign in to manage your search settings Your session has ended. Sig",
+   "len": 278,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings/search"
+  },
+  {
+   "route": "/settings/donations",
+   "name": "settings donations",
+   "role": "viewer",
+   "rows": [
+    "INT-11"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Donation addresses Public crypto addresses shown on your profile and channels. Display only \u2014 Vidra never holds funds or processes payments. Sign in to manage donation addresses Sign in to add the crypto addresses shown ",
+   "len": 249,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings/donations"
+  },
+  {
+   "route": "/settings/mutes",
+   "name": "settings mutes",
+   "role": "viewer",
+   "rows": [
+    "ADM-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Muted accounts Accounts you have muted. Their videos and comments are hidden from you. Accounts Instances Sign in to manage muted accounts Your session has ended. Sign in to see the accounts you have muted.",
+   "len": 206,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings/mutes"
+  },
+  {
+   "route": "/settings/mutes/instances",
+   "name": "settings instance mutes",
+   "role": "viewer",
+   "rows": [
+    "ADM-02",
+    "INT-05"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Muted instances Federated instances you have muted. Their videos and comments are hidden from you. Accounts Instances Sign in to manage muted instances Your session has ended. Sign in to see the instances you have muted.",
+   "len": 220,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings/mutes/instances"
+  },
+  {
+   "route": "/settings/blocks",
+   "name": "settings blocks",
+   "role": "viewer",
+   "rows": [
+    "ADM-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Blocked accounts Accounts you have blocked. Their videos and comments are hidden from you, and neither of you can send the other a direct message. Accounts Remote accounts Sign in to manage blocked accounts Your session ",
+   "len": 276,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings/blocks"
+  },
+  {
+   "route": "/settings/blocks/remote",
+   "name": "settings remote blocks",
+   "role": "viewer",
+   "rows": [
+    "INT-05"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Blocked remote accounts Federated accounts you have blocked. Their videos are hidden from you, their replies stay off your videos, and their follows of your channels are refused \u2014 without blocking everyone else on their ",
+   "len": 376,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/settings/blocks/remote"
+  },
+  {
+   "route": "/studio",
+   "name": "studio dashboard",
+   "role": "creator",
+   "rows": [
+    "CRT-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Studio Sign in to use the studio Sign in to create a channel and publish videos.",
+   "len": 80,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/studio"
+  },
+  {
+   "route": "/studio/content",
+   "name": "studio content",
+   "role": "creator",
+   "rows": [
+    "PUB-01",
+    "PUB-02",
+    "CRT-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Studio Sign in to use the studio Sign in to create a channel and publish videos.",
+   "len": 80,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/studio/content"
+  },
+  {
+   "route": "/studio/channel",
+   "name": "studio channel",
+   "role": "creator",
+   "rows": [
+    "PUB-01",
+    "CRT-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Studio Sign in to use the studio Sign in to create a channel and publish videos.",
+   "len": 80,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/studio/channel"
+  },
+  {
+   "route": "/studio/analytics",
+   "name": "studio analytics",
+   "role": "creator",
+   "rows": [
+    "CRT-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Studio Sign in to use the studio Sign in to create a channel and publish videos.",
+   "len": 80,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/studio/analytics"
+  },
+  {
+   "route": "/studio/live",
+   "name": "studio live",
+   "role": "creator",
+   "rows": [
+    "INT-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Studio Sign in to use the studio Sign in to create a channel and publish videos.",
+   "len": 80,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/studio/live"
+  },
+  {
+   "route": "/live/071c989c-f507-499e-ac67-5ae383424978",
+   "name": "live watch",
+   "role": "creator",
+   "rows": [
+    "INT-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Something went wrong Could not load this live stream. Try again",
+   "len": 63,
+   "hasErrorWord": true,
+   "hasRetry": true,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/live/071c989c-f507-499e-ac67-5ae383424978"
+  },
+  {
+   "route": "/admin",
+   "name": "admin overview",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Overview Instance administration at a glance. Administrators only This page is for administrators. Sign in with an admin account to view the overview.",
+   "len": 150,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin"
+  },
+  {
+   "route": "/admin/users",
+   "name": "admin users",
+   "role": "admin",
+   "rows": [
+    "ADM-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Users Search accounts and manage their role and active status. Administrators only This page is for administrators. Sign in with an admin account to manage users.",
+   "len": 162,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/users"
+  },
+  {
+   "route": "/admin/system",
+   "name": "admin system",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "System status Build info, runtime environment, uptime, and dependency health. Administrators only This page is for administrators. Sign in with an admin account to view system status.",
+   "len": 183,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/system"
+  },
+  {
+   "route": "/admin/jobs",
+   "name": "admin jobs",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Jobs Queue health plus individual, correlated background-work execution history. Administrators only This page is for administrators. Sign in with an admin account to view job status.",
+   "len": 183,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/jobs"
+  },
+  {
+   "route": "/admin/audit-log",
+   "name": "admin audit log",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Audit log The durable trail of security-sensitive actions (auth, moderation, admin, registration). Filter by action; newest first. Administrators only This page is for administrators. Sign in with an admin account to vie",
+   "len": 236,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/audit-log"
+  },
+  {
+   "route": "/admin/media",
+   "name": "admin media / GC",
+   "role": "admin",
+   "rows": [
+    "ADM-04",
+    "STO-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Media storage Garbage-collect stored media objects with no database reference. Administrators only This page is for administrators. Sign in with an admin account to run media garbage collection.",
+   "len": 194,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/media"
+  },
+  {
+   "route": "/admin/infrastructure",
+   "name": "admin infrastructure",
+   "role": "admin",
+   "rows": [
+    "ADM-04"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Infrastructure How this instance is deployed: server limits, storage, networking, backups, and the optional features you have switched on. Administrators only This page is for administrators. Sign in with an admin accoun",
+   "len": 245,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/infrastructure"
+  },
+  {
+   "route": "/admin/playback-health",
+   "name": "admin playback health",
+   "role": "admin",
+   "rows": [
+    "OPS-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Playback health What playback actually felt like: time to first frame and rebuffering, grouped by the delivery source that served the bytes. Administrators only This page is for administrators. Sign in with an admin acco",
+   "len": 248,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/playback-health"
+  },
+  {
+   "route": "/admin/registration-requests",
+   "name": "admin registration requests",
+   "role": "admin",
+   "rows": [
+    "ADM-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Registration requests Review signups awaiting approval: approving creates the account, rejecting records an optional internal note. Administrators only This page is for administrators. Sign in with an admin account to re",
+   "len": 247,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/registration-requests"
+  },
+  {
+   "route": "/admin/federation/follower-requests",
+   "name": "admin follower requests",
+   "role": "admin",
+   "rows": [
+    "INT-05"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Follower requests Review remote accounts asking to follow local channels: approving sends the Accept the remote has been waiting on, rejecting removes the pending follow. Applies to ActivityPub only, and only while follo",
+   "len": 379,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/federation/follower-requests"
+  },
+  {
+   "route": "/admin/import-peertube",
+   "name": "admin import",
+   "role": "admin",
+   "rows": [
+    "INT-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Import from PeerTube Migrate an existing PeerTube instance into Vidra. Preview with a dry run, then launch and monitor the one-way import. The source connection comes from the server configuration. Administrators only Th",
+   "len": 305,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/import-peertube"
+  },
+  {
+   "route": "/admin/config",
+   "name": "admin config",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Instance configuration Platform information, feature toggles, moderation gates, media distribution, and public page content. Administrators only This page is for administrators. Sign in with an admin account to configure",
+   "len": 234,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/config/general"
+  },
+  {
+   "route": "/admin/config/general",
+   "name": "admin config general",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Instance configuration Platform information, feature toggles, moderation gates, media distribution, and public page content. Administrators only This page is for administrators. Sign in with an admin account to configure",
+   "len": 234,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/config/general"
+  },
+  {
+   "route": "/admin/config/customization",
+   "name": "admin config customization",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Instance configuration Platform information, feature toggles, moderation gates, media distribution, and public page content. Administrators only This page is for administrators. Sign in with an admin account to configure",
+   "len": 234,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/config/customization"
+  },
+  {
+   "route": "/admin/config/homepage",
+   "name": "admin config homepage",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Instance configuration Platform information, feature toggles, moderation gates, media distribution, and public page content. Administrators only This page is for administrators. Sign in with an admin account to configure",
+   "len": 234,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/config/homepage"
+  },
+  {
+   "route": "/admin/config/vod",
+   "name": "admin config vod",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Instance configuration Platform information, feature toggles, moderation gates, media distribution, and public page content. Administrators only This page is for administrators. Sign in with an admin account to configure",
+   "len": 234,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/config/vod"
+  },
+  {
+   "route": "/admin/config/live",
+   "name": "admin config live",
+   "role": "admin",
+   "rows": [
+    "ADM-03",
+    "INT-01"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Instance configuration Platform information, feature toggles, moderation gates, media distribution, and public page content. Administrators only This page is for administrators. Sign in with an admin account to configure",
+   "len": 234,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/config/live"
+  },
+  {
+   "route": "/admin/config/federation",
+   "name": "admin config federation",
+   "role": "admin",
+   "rows": [
+    "ADM-03",
+    "INT-05"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Instance configuration Platform information, feature toggles, moderation gates, media distribution, and public page content. Administrators only This page is for administrators. Sign in with an admin account to configure",
+   "len": 406,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/config/federation"
+  },
+  {
+   "route": "/admin/config/ipfs",
+   "name": "admin config ipfs",
+   "role": "admin",
+   "rows": [
+    "ADM-03",
+    "INT-08"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Instance configuration Platform information, feature toggles, moderation gates, media distribution, and public page content. Administrators only This page is for administrators. Sign in with an admin account to configure",
+   "len": 236,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/config/ipfs"
+  },
+  {
+   "route": "/admin/config/advanced",
+   "name": "admin config advanced",
+   "role": "admin",
+   "rows": [
+    "ADM-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Instance configuration Platform information, feature toggles, moderation gates, media distribution, and public page content. Administrators only This page is for administrators. Sign in with an admin account to configure",
+   "len": 234,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/admin/config/advanced"
+  },
+  {
+   "route": "/moderation",
+   "name": "moderation reports",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Queues Review and resolve abuse reports filed by viewers. Moderators only This page is for moderators and administrators. Sign in with a moderator account to review reports.",
+   "len": 173,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/moderation"
+  },
+  {
+   "route": "/moderation/videos",
+   "name": "moderation videos",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "All videos Local and federated video inventory, media details, recovery jobs, and moderation actions. Moderators only This page is for moderators and administrators. Sign in with a moderator account to manage videos.",
+   "len": 216,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/moderation/videos"
+  },
+  {
+   "route": "/moderation/comments",
+   "name": "moderation comments",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Comments Every comment on the instance. Delete any that violate the rules. Moderators only This page is for moderators and administrators. Sign in with a moderator account to review comments.",
+   "len": 191,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/moderation/comments"
+  },
+  {
+   "route": "/moderation/quarantine",
+   "name": "moderation quarantine",
+   "role": "admin",
+   "rows": [
+    "PUB-04",
+    "ADM-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Quarantine New uploads held for review, newest first. Approving publishes the video; rejecting fails it and notifies the owner. Moderators only This page is for moderators and administrators. Sign in with a moderator acc",
+   "len": 248,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/moderation/quarantine"
+  },
+  {
+   "route": "/moderation/blocked",
+   "name": "moderation blocked",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Blocked videos Videos blocked by moderators are hidden from public surfaces and listed here. Moderators only This page is for moderators and administrators. Sign in with a moderator account to review blocked videos.",
+   "len": 215,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/moderation/blocked"
+  },
+  {
+   "route": "/moderation/blocked/remote",
+   "name": "moderation blocked remote",
+   "role": "admin",
+   "rows": [
+    "INT-05"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Blocked videos Federated videos blocked by moderators are hidden from all local surfaces (feeds, search, and the remote watch page) and listed here. Moderators only This page is for moderators and administrators. Sign in",
+   "len": 271,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/moderation/blocked/remote"
+  },
+  {
+   "route": "/moderation/instances",
+   "name": "moderation instances",
+   "role": "admin",
+   "rows": [
+    "INT-05"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Instances Federated instances blocked on this server: inbound activity is dropped, their content is hidden everywhere, and deliveries to them are cancelled. Moderators only This page is for moderators and administrators.",
+   "len": 287,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/moderation/instances"
+  },
+  {
+   "route": "/moderation/watched-words",
+   "name": "moderation watched words",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Watched words Instance-wide watched words. Content containing a watched term can be flagged for review. Moderators only This page is for moderators and administrators. Sign in with a moderator account to manage watched w",
+   "len": 225,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/moderation/watched-words"
+  },
+  {
+   "route": "/moderation/watched-word-matches",
+   "name": "moderation word matches",
+   "role": "admin",
+   "rows": [
+    "ADM-02"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Word matches Comments and videos flagged by the watched-words list when they were posted or edited, newest first. Flagging records a match for review \u2014 it does not hide the content. Moderators only This page is for moder",
+   "len": 305,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/moderation/watched-word-matches"
+  },
+  {
+   "route": "/moderation/autosuggest",
+   "name": "moderation autosuggest",
+   "role": "admin",
+   "rows": [
+    "SRC-03"
+   ],
+   "mode": "down",
+   "httpStatus": 200,
+   "text": "Autosuggest Queries suppressed from instance-wide search suggestions. Bans are global \u2014 nothing here is per-viewer. Moderators only This page is for moderators and administrators. Sign in with a moderator account to mana",
+   "len": 240,
+   "hasErrorWord": false,
+   "hasRetry": false,
+   "hasAlert": true,
+   "spinners": 0,
+   "finalPath": "/moderation/autosuggest"
+  }
+ ],
+ "persistence": {
+  "themeKeysBefore": {
+   "before": {
+    "attr": null,
+    "stored": null
+   },
+   "keys": [
+    "vidra:home-shelves-count"
+   ]
+  },
+  "player": {
+   "speedLabelAfterSet": "Speed: 1.5\u00d7",
+   "volumeAfterSet": 0.95,
+   "storageAfterSet": {
+    "vidra.player.volume": "0.95",
+    "vidra.player.muted": "false",
+    "vidra:hls-bandwidth-estimate:v1": "{\"bitsPerSecond\":2000000,\"measuredAt\":1788956915310}"
+   },
+   "speedLabelAfterReload": "Speed: 1.5\u00d7",
+   "volumeAfterReload": 0.95,
+   "speedLabelNewTab": "Speed: 1\u00d7",
+   "volumeNewTab": 0.95
+  },
+  "watchPosition": {
+   "positionBefore": 2.511205,
+   "positionAfterReload": 2.876368
+  },
+  "signOutIsolation": {
+   "viewerHistoryText": "History\nClear all history\nA40 Public Clip Two\n0:04\nA40 Public Clip Two\nA40 Lab Channel\n1 views \u00b7 2h ago\nWatched \u00b7 just now\nRemove",
+   "signOutFound": true,
+   "afterSignOutStorage": {},
+   "creatorHistoryText": "History\n\nNo watch history yet\n\nVideos you watch will show up here so you can pick up where you left off."
+  }
+ },
+ "object_store_outage": {
+  "chromium": {
+   "browser": "chromium",
+   "healthy": {
+    "readyState": 4,
+    "currentTime": 4,
+    "duration": 4,
+    "mediaError": null,
+    "alertText": null,
+    "retryButton": false,
+    "timeReadout": null,
+    "mediaRequests": [
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/thumbnail",
+     "206 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original",
+     "200 /api/v1/videos/bb91e9f1-bab5-4212-b661-4a432b324581/thumbnail",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/master.m3u8?v=dlapm2f56q14",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/media_0.m3u8?v=dlapm2f56q14",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/init-0.mp4?v=dlapm2f56q14",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/chunk-0-00001.m4s?v=dlapm2f56q14"
+    ]
+   },
+   "storeDown": {
+    "readyState": 0,
+    "currentTime": 0,
+    "duration": null,
+    "mediaError": {
+     "code": 4,
+     "message": ""
+    },
+    "alertText": "This video could not be played. The media may be temporarily unavailable on this instance.Try again",
+    "retryButton": true,
+    "timeReadout": null,
+    "mediaRequests": [
+     "404 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original",
+     "404 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/master.m3u8?v=dlapm2f56q14",
+     "404 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original"
+    ]
+   },
+   "recovered": {
+    "readyState": 4,
+    "currentTime": 4,
+    "duration": 4,
+    "mediaError": null,
+    "alertText": null,
+    "retryButton": false,
+    "timeReadout": null,
+    "mediaRequests": [
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/thumbnail",
+     "206 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original",
+     "200 /api/v1/videos/bb91e9f1-bab5-4212-b661-4a432b324581/thumbnail",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/master.m3u8?v=dlapm2f56q14",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/media_0.m3u8?v=dlapm2f56q14",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/init-0.mp4?v=dlapm2f56q14",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/chunk-0-00001.m4s?v=dlapm2f56q14"
+    ]
+   }
+  },
+  "webkit": {
+   "browser": "webkit",
+   "healthy": {
+    "readyState": 2,
+    "currentTime": 4,
+    "duration": 4,
+    "mediaError": null,
+    "alertText": null,
+    "retryButton": false,
+    "timeReadout": null,
+    "mediaRequests": [
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/thumbnail",
+     "206 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original",
+     "206 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original",
+     "200 /api/v1/videos/bb91e9f1-bab5-4212-b661-4a432b324581/thumbnail",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/master.m3u8?v=dlapm2f56q14",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/media_0.m3u8?v=dlapm2f56q14",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/chunk-0-00001.m4s?v=dlapm2f56q14",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/init-0.mp4?v=dlapm2f56q14"
+    ]
+   },
+   "storeDown": {
+    "readyState": 0,
+    "currentTime": 0,
+    "duration": null,
+    "mediaError": {
+     "code": 4,
+     "message": ""
+    },
+    "alertText": "This video could not be played. The media may be temporarily unavailable on this instance.Try again",
+    "retryButton": true,
+    "timeReadout": null,
+    "mediaRequests": [
+     "404 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/thumbnail",
+     "404 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/thumbnail",
+     "404 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original",
+     "404 /api/v1/videos/bb91e9f1-bab5-4212-b661-4a432b324581/thumbnail",
+     "404 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/master.m3u8?v=dlapm2f56q14",
+     "404 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original"
+    ]
+   },
+   "recovered": {
+    "readyState": 2,
+    "currentTime": 4,
+    "duration": 4,
+    "mediaError": null,
+    "alertText": null,
+    "retryButton": false,
+    "timeReadout": null,
+    "mediaRequests": [
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/thumbnail",
+     "206 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original",
+     "206 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/master.m3u8?v=dlapm2f56q14",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/media_0.m3u8?v=dlapm2f56q14",
+     "200 /api/v1/videos/bb91e9f1-bab5-4212-b661-4a432b324581/thumbnail",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/chunk-0-00001.m4s?v=dlapm2f56q14",
+     "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/init-0.mp4?v=dlapm2f56q14"
+    ]
+   }
+  }
+ },
+ "live_polling": {
+  "offline": {
+   "pollsIn20s": 1,
+   "urls": [
+    "/api/v1/live/071c989c-f507-499e-ac67-5ae383424978"
+   ],
+   "intervalsMs": [],
+   "main": "Not live yet This stream hasn't started. It will begin playing here automatically once it goes live. A40 Lab Live A40 Lab Channel",
+   "hasVideo": 0
+  },
+  "ingestStart": 200,
+  "live": {
+   "pollsIn20s": 2,
+   "urls": [
+    "/api/v1/live/071c989c-f507-499e-ac67-5ae383424978"
+   ],
+   "intervalsMs": [
+    10001
+   ],
+   "main": "Live now This stream is live, but its video feed isn't available yet. Try refreshing in a moment. Refresh LIVE A40 Lab Live A40 Lab Channel",
+   "hasVideo": 0
+  },
+  "ingestStop": 204
+ },
+ "contrast_per_theme": [
+  {
+   "route": "/admin/config",
+   "theme": "light",
+   "mode": "prefers",
+   "bodyBg": "rgb(245, 245, 247)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 11,
+     "msgs": [
+      "Element has insufficient color contrast of 2.35 (foreground color: #a1a1aa, background color: #f5f5f7, font size: 9.0pt (12px), font weight: bold). Ex"
+     ],
+     "html": [
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Platform</h2>",
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Administrators &amp; contact</h2>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/config",
+   "theme": "light",
+   "mode": "attr",
+   "bodyBg": "rgb(245, 245, 247)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 11,
+     "msgs": [
+      "Element has insufficient color contrast of 2.35 (foreground color: #a1a1aa, background color: #f5f5f7, font size: 9.0pt (12px), font weight: bold). Ex"
+     ],
+     "html": [
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Platform</h2>",
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Administrators &amp; contact</h2>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/config",
+   "theme": "dark",
+   "mode": "prefers",
+   "bodyBg": "rgb(10, 10, 10)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 11,
+     "msgs": [
+      "Element has insufficient color contrast of 4.09 (foreground color: #71717a, background color: #0a0a0a, font size: 9.0pt (12px), font weight: bold). Ex"
+     ],
+     "html": [
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Platform</h2>",
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Administrators &amp; contact</h2>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/config",
+   "theme": "dark",
+   "mode": "attr",
+   "bodyBg": "rgb(10, 10, 10)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 11,
+     "msgs": [
+      "Element has insufficient color contrast of 4.09 (foreground color: #71717a, background color: #0a0a0a, font size: 9.0pt (12px), font weight: bold). Ex"
+     ],
+     "html": [
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Platform</h2>",
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Administrators &amp; contact</h2>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/config/general",
+   "theme": "light",
+   "mode": "prefers",
+   "bodyBg": "rgb(245, 245, 247)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 11,
+     "msgs": [
+      "Element has insufficient color contrast of 2.35 (foreground color: #a1a1aa, background color: #f5f5f7, font size: 9.0pt (12px), font weight: bold). Ex"
+     ],
+     "html": [
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Platform</h2>",
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Administrators &amp; contact</h2>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/config/general",
+   "theme": "light",
+   "mode": "attr",
+   "bodyBg": "rgb(245, 245, 247)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 11,
+     "msgs": [
+      "Element has insufficient color contrast of 2.35 (foreground color: #a1a1aa, background color: #f5f5f7, font size: 9.0pt (12px), font weight: bold). Ex"
+     ],
+     "html": [
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Platform</h2>",
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Administrators &amp; contact</h2>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/config/general",
+   "theme": "dark",
+   "mode": "prefers",
+   "bodyBg": "rgb(10, 10, 10)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 11,
+     "msgs": [
+      "Element has insufficient color contrast of 4.09 (foreground color: #71717a, background color: #0a0a0a, font size: 9.0pt (12px), font weight: bold). Ex"
+     ],
+     "html": [
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Platform</h2>",
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Administrators &amp; contact</h2>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/config/general",
+   "theme": "dark",
+   "mode": "attr",
+   "bodyBg": "rgb(10, 10, 10)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 11,
+     "msgs": [
+      "Element has insufficient color contrast of 4.09 (foreground color: #71717a, background color: #0a0a0a, font size: 9.0pt (12px), font weight: bold). Ex"
+     ],
+     "html": [
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Platform</h2>",
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Administrators &amp; contact</h2>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/config/vod",
+   "theme": "light",
+   "mode": "prefers",
+   "bodyBg": "rgb(245, 245, 247)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 9,
+     "msgs": [
+      "Element has insufficient color contrast of 2.35 (foreground color: #a1a1aa, background color: #f5f5f7, font size: 9.0pt (12px), font weight: bold). Ex"
+     ],
+     "html": [
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Uploads</h2>",
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Imports</h2>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/config/vod",
+   "theme": "light",
+   "mode": "attr",
+   "bodyBg": "rgb(245, 245, 247)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 9,
+     "msgs": [
+      "Element has insufficient color contrast of 2.35 (foreground color: #a1a1aa, background color: #f5f5f7, font size: 9.0pt (12px), font weight: bold). Ex"
+     ],
+     "html": [
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Uploads</h2>",
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Imports</h2>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/config/vod",
+   "theme": "dark",
+   "mode": "prefers",
+   "bodyBg": "rgb(10, 10, 10)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 9,
+     "msgs": [
+      "Element has insufficient color contrast of 4.09 (foreground color: #71717a, background color: #0a0a0a, font size: 9.0pt (12px), font weight: bold). Ex"
+     ],
+     "html": [
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Uploads</h2>",
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Imports</h2>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/config/vod",
+   "theme": "dark",
+   "mode": "attr",
+   "bodyBg": "rgb(10, 10, 10)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 9,
+     "msgs": [
+      "Element has insufficient color contrast of 4.09 (foreground color: #71717a, background color: #0a0a0a, font size: 9.0pt (12px), font weight: bold). Ex"
+     ],
+     "html": [
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Uploads</h2>",
+      "<h2 class=\"text-[12px] font-bold uppercase tracking-[0.06em] text-fg-subtle\">Imports</h2>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/infrastructure",
+   "theme": "light",
+   "mode": "prefers",
+   "bodyBg": "rgb(245, 245, 247)",
+   "findings": []
+  },
+  {
+   "route": "/admin/infrastructure",
+   "theme": "light",
+   "mode": "attr",
+   "bodyBg": "rgb(245, 245, 247)",
+   "findings": []
+  },
+  {
+   "route": "/admin/infrastructure",
+   "theme": "dark",
+   "mode": "prefers",
+   "bodyBg": "rgb(10, 10, 10)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 21,
+     "msgs": [
+      "Element has insufficient color contrast of 3.36 (foreground color: #5e5ce6, background color: #1c1c1e, font size: 9.8pt (13px), font weight: normal). "
+     ],
+     "html": [
+      "<span class=\"font-medium text-accent group-open:hidden\">More</span>",
+      "<a class=\"font-medium text-accent hover:underline\" href=\"/admin/infrastructure\">See the media store above</a>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/admin/infrastructure",
+   "theme": "dark",
+   "mode": "attr",
+   "bodyBg": "rgb(10, 10, 10)",
+   "findings": [
+    {
+     "id": "color-contrast",
+     "n": 21,
+     "msgs": [
+      "Element has insufficient color contrast of 3.36 (foreground color: #5e5ce6, background color: #1c1c1e, font size: 9.8pt (13px), font weight: normal). "
+     ],
+     "html": [
+      "<span class=\"font-medium text-accent group-open:hidden\">More</span>",
+      "<a class=\"font-medium text-accent hover:underline\" href=\"/admin/infrastructure\">See the media store above</a>"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/moderation/videos",
+   "theme": "light",
+   "mode": "prefers",
+   "bodyBg": "rgb(245, 245, 247)",
+   "findings": [
+    {
+     "id": "link-name",
+     "n": 1,
+     "msgs": [
+      "Element does not have text that is visible to screen readers"
+     ],
+     "html": [
+      "<a class=\"relative h-[4.3rem] w-[7.5rem] shrink-0 overflow-hidden rounded-lg bg-surface-muted\" href=\"/videos/7c178946-b464-4cfd-b1"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/moderation/videos",
+   "theme": "light",
+   "mode": "attr",
+   "bodyBg": "rgb(245, 245, 247)",
+   "findings": [
+    {
+     "id": "link-name",
+     "n": 1,
+     "msgs": [
+      "Element does not have text that is visible to screen readers"
+     ],
+     "html": [
+      "<a class=\"relative h-[4.3rem] w-[7.5rem] shrink-0 overflow-hidden rounded-lg bg-surface-muted\" href=\"/videos/7c178946-b464-4cfd-b1"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/moderation/videos",
+   "theme": "dark",
+   "mode": "prefers",
+   "bodyBg": "rgb(10, 10, 10)",
+   "findings": [
+    {
+     "id": "link-name",
+     "n": 1,
+     "msgs": [
+      "Element does not have text that is visible to screen readers"
+     ],
+     "html": [
+      "<a class=\"relative h-[4.3rem] w-[7.5rem] shrink-0 overflow-hidden rounded-lg bg-surface-muted\" href=\"/videos/7c178946-b464-4cfd-b1"
+     ]
+    }
+   ]
+  },
+  {
+   "route": "/moderation/videos",
+   "theme": "dark",
+   "mode": "attr",
+   "bodyBg": "rgb(10, 10, 10)",
+   "findings": [
+    {
+     "id": "link-name",
+     "n": 1,
+     "msgs": [
+      "Element does not have text that is visible to screen readers"
+     ],
+     "html": [
+      "<a class=\"relative h-[4.3rem] w-[7.5rem] shrink-0 overflow-hidden rounded-lg bg-surface-muted\" href=\"/videos/7c178946-b464-4cfd-b1"
+     ]
+    }
+   ]
+  }
+ ],
+ "theme_persistence": {
+  "before": {
+   "attr": null,
+   "bg": "rgb(245, 245, 247)",
+   "stored": {}
+  },
+  "control": 1,
+  "afterClick": {
+   "attr": "dark",
+   "bg": "rgb(10, 10, 10)",
+   "stored": {
+    "vidra.theme": "dark"
+   }
+  },
+  "afterReload": {
+   "attr": "dark",
+   "bg": "rgb(10, 10, 10)"
+  },
+  "newTab": {
+   "attr": "dark",
+   "bg": "rgb(10, 10, 10)"
+  }
+ },
+ "playback_engine_by_browser": {
+  "chromium": {
+   "currentTime": 4,
+   "readyState": 4,
+   "duration": 4,
+   "srcAttr": "blob:http://localhost:3200/71f03abf-c276-46e9-88aa-f7902f656474",
+   "currentSrc": "blob:http://localhost:3200/71f03abf-c276-46e9-88aa-f7902f656474",
+   "usesMse": true,
+   "textTracks": 0,
+   "pipSupported": true,
+   "hasWebkitPresentationMode": false,
+   "qualityMenu": [
+    "Quality: Auto (16p)"
+   ],
+   "pipButton": [
+    "Picture-in-picture"
+   ],
+   "speedButton": [
+    "Speed: 1\u00d7"
+   ],
+   "captionsButton": [],
+   "controls": 26,
+   "mediaRequests": [
+    "206 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original",
+    "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/master.m3u8?v=dlapm2f56q14",
+    "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/media_0.m3u8?v=dlapm2f56q14",
+    "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/init-0.mp4?v=dlapm2f56q14",
+    "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/chunk-0-00001.m4s?v=dlapm2f56"
+   ]
+  },
+  "webkit": {
+   "currentTime": 4,
+   "readyState": 2,
+   "duration": 4,
+   "srcAttr": "blob:http://localhost:3200/8f0dc5e4-f3c5-487f-8837-d936472e225e",
+   "currentSrc": "blob:http://localhost:3200/8f0dc5e4-f3c5-487f-8837-d936472e225e",
+   "usesMse": true,
+   "textTracks": 0,
+   "pipSupported": true,
+   "hasWebkitPresentationMode": true,
+   "qualityMenu": [
+    "Quality: Auto (16p)"
+   ],
+   "pipButton": [
+    "Picture-in-picture"
+   ],
+   "speedButton": [
+    "Speed: 1\u00d7"
+   ],
+   "captionsButton": [],
+   "controls": 26,
+   "mediaRequests": [
+    "206 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original",
+    "206 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/original",
+    "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/master.m3u8?v=dlapm2f56q14",
+    "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/media_0.m3u8?v=dlapm2f56q14",
+    "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/init-0.mp4?v=dlapm2f56q14",
+    "200 /api/v1/videos/b776b0e4-7476-4c9d-ac46-668577af656d/hls/cmaf/chunk-0-00001.m4s?v=dlapm2f56"
+   ]
+  }
+ },
+ "walk_totals": {
+  "before": {
+   "page_states": 304,
+   "routes": 75,
+   "panning_page_states": [
+    [
+     "/admin/jobs",
+     "phone390"
+    ],
+    [
+     "/admin/jobs",
+     "stage640"
+    ],
+    [
+     "/moderation/videos",
+     "phone390"
+    ],
+    [
+     "/moderation/videos",
+     "stage640"
+    ]
+   ],
+   "axe_page_states": 42,
+   "axe_nodes": 246,
+   "axe_by_id": {
+    "color-contrast": 38,
+    "link-name": 4
+   },
+   "axe_detail": [
+    [
+     "color-contrast",
+     "/admin/config"
+    ],
+    [
+     "color-contrast",
+     "/admin/config/advanced"
+    ],
+    [
+     "color-contrast",
+     "/admin/config/customization"
+    ],
+    [
+     "color-contrast",
+     "/admin/config/federation"
+    ],
+    [
+     "color-contrast",
+     "/admin/config/general"
+    ],
+    [
+     "color-contrast",
+     "/admin/config/homepage"
+    ],
+    [
+     "color-contrast",
+     "/admin/config/ipfs"
+    ],
+    [
+     "color-contrast",
+     "/admin/config/live"
+    ],
+    [
+     "color-contrast",
+     "/admin/config/vod"
+    ],
+    [
+     "color-contrast",
+     "/admin/infrastructure"
+    ],
+    [
+     "link-name",
+     "/moderation/videos"
+    ]
+   ],
+   "nav_errors": []
+  },
+  "after": {
+   "page_states": 304,
+   "routes": 76,
+   "panning_page_states": [],
+   "axe_page_states": 4,
+   "axe_nodes": 4,
+   "axe_by_id": {
+    "scrollable-region-focusable": 4
+   },
+   "axe_detail": [
+    [
+     "scrollable-region-focusable",
+     "/admin/playback-health"
+    ]
+   ],
+   "nav_errors": []
+  },
+  "final_admin_moderation": {
+   "page_states": 120,
+   "routes": 30,
+   "panning_page_states": [],
+   "axe_page_states": 0,
+   "axe_nodes": 0,
+   "axe_by_id": {},
+   "axe_detail": [],
+   "nav_errors": []
+  }
+ },
+ "webkit_summary": []
+}
