@@ -104,7 +104,17 @@ def guest(stage):
         prod = root / 'docker-compose.prod.yml'
         content = prod.read_text()
         for repo, image in candidate['images'].items():
-            pattern = r'(?m)^(\s*)image: ghcr.io/[^\n]*/' + repo + r':[^\n]+$'
+            # The registry host is INTERPOLATED, not literal: the overlay's line
+            # reads `image: ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/...`
+            # since VIDRA_IMAGE_REGISTRY landed. Anchoring this on a literal
+            # `ghcr.io/` matched nothing from that commit onward, which the
+            # count>0 guard below turned into a loud refusal rather than a run
+            # that quietly tested the tag instead of the frozen digest. Match any
+            # `<prefix>/<repo>:` — the prefix is one unspaced token in every
+            # form the overlay can take, while the TAG half legitimately
+            # contains spaces (the `${VAR:?message}` text), so only the prefix
+            # may be \S.
+            pattern = r'(?m)^(\s*)image: \S*/' + repo + r':[^\n]+$'
             content, count = re.subn(pattern, lambda m: m[1] + 'image: ' + image['reference']
                                     + '\n' + m[1] + 'platform: ' + image['platform'], content)
             require(count > 0, f'{repo}: could not pin bundle image')
