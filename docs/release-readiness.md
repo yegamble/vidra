@@ -19327,7 +19327,7 @@ track, transcoded by this lab's own worker into a real CMAF ladder — **1080p,
 | clause | Safari 26.5, `native-hls` | Chromium 151.0.7922.34, `hls-js` |
 |---|---|---|
 | `currentTime` advance | **0 → 21.28 s** over 22.2 s of wall clock, `readyState` 4 throughout, **620** total video frames, **2** dropped | **0 → 21.87 s**, **735** frames, **2** dropped |
-| audible track | **1** audio track (`audio`, kind `main`, `enabled`), `muted` false, `volume` 1, and the audio rendition's own segments arriving throughout (`chunk-4-*` 6 → 12 during the run). The source tone decodes off `/original` to **peak 0.153**, 30.0 s, 48 kHz | `webkitAudioDecodedByteCount` **48 735 → 442 479** |
+| audible track | **1** audio track (`audio`, kind `main`, `enabled`), `muted` false, `volume` 1, and the audio rendition's own CMAF segments fetched — `chunk-4-*` **6 → 12 inside the first second**, then flat, because on a loopback origin Safari buffers the whole 30 s clip up front. The source tone decodes off `/original` to **peak 0.153**, 30.0 s mono, 48 kHz | `webkitAudioDecodedByteCount` **48 735 → 442 479**, still climbing at the last sample |
 | seek | 20 → **20.014** (1 `seeked`), then 5 → **5.658** (2 `seeked`), `seeking` false, `readyState` 4; and through the app's own control, ArrowRight on `role="slider"` *Seek* moved **5.66 → 16.04** | 20 → **20.007**, 5 → **5.000**, 2 `seeked` |
 | quality | **no Quality control exists on this path** (see below). Safari's own ABR moved the ladder: **1080p → 720p** under a 600 kB/s shaper and **stayed at 720p** after it lifted at t = 32.3 s; `media_0`, `media_1` and `media_4` playlists fetched | *Quality: Auto (480p)* with **Auto / 1080p / 720p / 480p / 360p**; selecting **360p** reaches **640×360 in 3 s** and the button reads *Quality: 360p* |
 | speed | the 12-rung menu (0.25× … 4×), **1.5×** applied, `playbackRate` **1.5**, button *Speed: 1.5×* | identical: `playbackRate` **1.5** |
@@ -19404,11 +19404,22 @@ re-measured live: with the fix, the native path comes up **English (lab)
 
 ### Gates
 
-`vidra-user`: `npm run ci` — **GATE_PLACEHOLDER**. The three new
-`VideoPlayer.test.tsx` cases ran RED first (one failing on exactly the defect
-above) and green after. **No core, search or meta code changed**, so there is no
-contract regen and no merge ordering between the two PRs; `api/openapi.yaml` is
-untouched.
+`vidra-user`: `npm run ci` (typecheck, eslint, the icon lint, vitest, a
+production build and the mocked Chromium suite) **PASS** on Node 26.8.1 —
+**266 test files / 2 674 vitest tests** and **630 of 630** mocked Chromium
+tests, exit 0. Repo CI on [user #215](https://github.com/yegamble/vidra-user/pull/215)
+is green on every check: `ci-required`, `frontend`, `contract`,
+**`e2e-backed (local)` and `e2e-backed (s3)`**, `channel-sync-backed`,
+`ipfs-backed` and GitGuardian. The three new `VideoPlayer.test.tsx` cases ran
+RED first (one failing on exactly the defect above: `expected 'disabled' to be
+'showing'`) and green after. **No core, search or meta code changed**, so there
+is no contract regen and no merge ordering between the two PRs;
+`api/openapi.yaml` is untouched.
+
+Not run here: vidra-core's and vidra-search's own suites (this slice touches
+neither), and the `e2e-backed` lanes locally — the runner ran both, once per
+storage backend. Screenshots were taken at every step of the Safari walk and
+are **not committed**; the evidence is the measured values, as A40 left it.
 
 ### Recorded, not blocking a row
 

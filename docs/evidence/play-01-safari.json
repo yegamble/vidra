@@ -88,7 +88,7 @@
       "audio_segments_first": 6,
       "audio_segments_last": 12,
       "webkitAudioDecodedByteCount": null,
-      "note": "Safari 26.5 no longer exposes webkitAudioDecodedByteCount (null here), and a MediaElementSource tap on a natively-played HLS element reads RMS 0 in WebKit whether or not there is sound, so neither is usable as an audible-track proof on this path. What IS measured: the audio rendition's own segments arriving throughout playback, one enabled audio track, unmuted, full volume.",
+      "note": "Safari 26.5 no longer exposes webkitAudioDecodedByteCount (null here), and a MediaElementSource tap on a natively-played HLS element reads RMS 0 in WebKit whether or not there is sound, so neither is usable as an audible-track proof on this path. What IS measured: one enabled audio track, unmuted at full volume, the audio rendition's own CMAF segments fetched (chunk-4-*, 6 -> 12 inside the first second and then flat, because on a loopback origin Safari buffers the whole 30 s clip up front), and the source tone decoding off /original to peak 0.153. Physical speaker output is not certified.",
       "pass": true,
       "original_decode": {
         "status": 200,
