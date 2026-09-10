@@ -1,6 +1,6 @@
 # Vidra v0.6.4 release verification — 2026-09-10
 
-**NO-GO. The requested deployment and migration rehearsal is BLOCKED.** No clean disposable server matching Ubuntu 24.04 / Linux AMD64 was available. No application workflow was executed in this rehearsal; no production deployment, traffic switch, source shutdown, public federation action or shared-lab mutation occurred.
+**NO-GO. The requested deployment and migration rehearsal is BLOCKED.** No clean disposable server matching Ubuntu 24.04 / Linux AMD64 was supplied or identified. No application workflow was executed in this rehearsal; no production deployment, traffic switch, source shutdown, public federation action or shared-lab mutation occurred.
 
 The current published component release is **v0.6.4**, discovered during live registry/release inspection (published September 10, 12:08–12:14 UTC). The checklist's last release-image record names v0.6.3, which was checked first and is retained only as the previous-release baseline. v0.6.4 includes the subsequent authentication, HLS/private-copy and signer fixes. Their absence in v0.6.3 is **not** reported as a defect in v0.6.4.
 
@@ -53,7 +53,7 @@ Search `rollback-floor.yml` runs **34475622088, 34402189473 and 34195814588** re
 ## Blocking inputs and unperformed work
 
 - **B1** — No available clean disposable Ubuntu 24.04 linux/amd64 server. Local host and Docker Engine are ARM64; existing test-runner VM inspection fails with No route to host. Existing machines and shared lab containers are not a blank acceptance host.
-- **B2** — No representative sanitized operator PeerTube source/inventory or acceptance of the located seven-video generated fixture for this release rehearsal. The retained fixture has no actor images, custom categories, plugins or preexisting remote followers. Source layout/scale/privacy coverage and retention/domain decisions remain needed.
+- **B2** — A prior generated PeerTube fixture and retained archive were located, but representativeness for all required source families and target scale is not established. It has seven short videos and no actor images, custom categories, plugins or preexisting remote followers. No operator source inventory, scale, source layout, retention or domain plan was supplied; no current import was executed.
 - **B3** — Selected external integration endpoints and locally configured test credentials were not supplied: object bucket/presigned delivery, CDN, offsite retrieval, SMTP and identity provider. Local fixtures and simulator results do not establish selected-provider behavior.
 - **B4** — No separate disposable restoration destination or agreed RPO/RTO, catalogue size/upload concurrency, and source/domain recovery plan. No fault injection, restart, backup/restore, upgrade or rollback was performed.
 - **B5** — SCP-01 through SCP-10 retain their documented decisions; no additional family was silently waived or approved. Any launch-required undecided facet is BLOCKED.
