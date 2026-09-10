@@ -12,7 +12,18 @@ import sys
 import tempfile
 
 
-ENV_BACKUP = re.compile(r'\.env(?:\.(?:bak|old|orig|save)(?:$|[.-])|~$)')
+# A copy of an env file holds the same secrets as the original. Match on the
+# SHAPE of a copy rather than a short list of suffixes: the previous pattern
+# read .env.bak but not .env.backup, .env.bak2, a vim .env.swp or a
+# date-stamped .env.2026-09-10, all of which a human types and all of which
+# hold live credentials. Templates and framework config are not copies --
+# .env.example, .env.template and Next.js's .env.local must stay legal -- so a
+# copy word must end the name or be followed by a separator: .env.template is
+# not a "temp" copy.
+ENV_COPY = r'bak|backup|old|orig|save|saved|copy|prev|previous|tmp|temp'
+ENV_BACKUP = re.compile(
+    rf'\.env(?:~$|\.sw[a-z]$|\.(?:{ENV_COPY})\d*(?:[.-][\w.-]*)?$|\.\d[\w.-]*$)',
+    re.IGNORECASE)
 
 
 def check(root, env_backups='fatal'):
@@ -56,10 +67,21 @@ def check(root, env_backups='fatal'):
             foreign = [p for p in paths if p.lstat().st_uid != owner]
             if foreign:
                 fatal.append(describe_owner(foreign, user, metadata))
-    strays = []
-    for directory, children, files in os.walk(root, onerror=fail_walk):
+    strays, unreadable = [], []
+    # NOT fail_walk. A directory this user cannot read is a gap in the scan, not
+    # a reason to abort: refusing to roll back because some unrelated directory
+    # is mode 000 is the same inversion as refusing over a stray file. The gap
+    # is reported at the severity of the scan it belongs to, so a deploy still
+    # stops and a rollback still runs.
+    for directory, children, files in os.walk(root, onerror=unreadable.append):
         children[:] = [n for n in children if n not in ('.git', 'node_modules')]
         strays.extend(Path(directory) / n for n in files if ENV_BACKUP.search(n))
+    if unreadable:
+        listed = ', '.join(str(error.filename) for error in unreadable)
+        (warnings if env_backups == 'warn' else fatal).append(
+            f'Could not scan for stray environment backups: {listed}. '
+            'A directory the deploy user cannot read may hide one. '
+            'Make it readable, or move it outside the checkout.')
     if strays:
         # Paths only. These files hold secrets and this message is printed.
         listed = ', '.join(str(p) for p in strays)
@@ -84,7 +106,11 @@ def describe_owner(foreign, user, metadata):
 
 
 def fail_walk(error):
-    raise error
+    """Git metadata is different: what cannot be read cannot be verified, and
+    the fetch both scripts perform would fail on it anyway."""
+    raise ValueError(f'Cannot read Git metadata at {error.filename}: {error.strerror}. '
+                     'The component fetch needs this tree; repair its permissions '
+                     'as the checkout owner and never fetch as root.')
 
 
 def snapshot(root, source, destination):

@@ -218,3 +218,69 @@ class SeverityTests(unittest.TestCase):
         combined = result.stdout + result.stderr
         self.assertIn('Stray environment backup', combined)
         self.assertNotIn('checkout hygiene preflight failed', combined)
+
+
+class ScanHardeningTests(unittest.TestCase):
+    """The scan must not miss a secret, nor die on a directory it cannot read."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name) / 'checkout'
+        self.root.mkdir()
+
+    def test_plausible_copies_are_caught(self):
+        for name in ('production.env.backup', 'production.env.bak2',
+                     'production.env.swp', 'production.env.2026-09-10',
+                     'production.env.copy', 'production.env.old.1',
+                     'staging.env.orig', '.env.saved', 'production.env.1'):
+            with self.subTest(name=name):
+                path = self.root / name
+                path.write_text('SECRET_MUST_NOT_APPEAR')
+                try:
+                    with self.assertRaises(ValueError) as caught:
+                        hygiene.check(self.root)
+                    self.assertIn(name, str(caught.exception))
+                    self.assertNotIn('SECRET_MUST_NOT_APPEAR', str(caught.exception))
+                finally:
+                    path.unlink()
+
+    def test_real_config_and_templates_are_not_flagged(self):
+        # Next.js keeps .env.local and friends; a template is not a copy.
+        for name in ('production.env', '.env', '.env.example', '.env.template',
+                     '.env.sample', '.env.dist', '.env.local', '.env.production',
+                     '.env.development', '.env.test', 'production.env.example'):
+            with self.subTest(name=name):
+                path = self.root / name
+                path.touch()
+                try:
+                    hygiene.check(self.root)
+                finally:
+                    path.unlink()
+
+    def test_unreadable_directory_does_not_stop_a_rollback(self):
+        blocked = self.root / 'unreadable'
+        blocked.mkdir()
+        blocked.chmod(0o000)
+        self.addCleanup(blocked.chmod, 0o755)
+        warnings = hygiene.check(self.root, env_backups='warn')
+        self.assertTrue(any('unreadable' in w for w in warnings), warnings)
+
+    def test_unreadable_directory_is_reported_not_swallowed(self):
+        blocked = self.root / 'unreadable'
+        blocked.mkdir()
+        blocked.chmod(0o000)
+        self.addCleanup(blocked.chmod, 0o755)
+        with self.assertRaises(ValueError) as caught:
+            hygiene.check(self.root)
+        self.assertIn('unreadable', str(caught.exception))
+
+    def test_unreadable_git_metadata_stays_fatal(self):
+        subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
+        blocked = self.root / '.git/objects/blocked'
+        blocked.mkdir()
+        blocked.chmod(0o000)
+        self.addCleanup(blocked.chmod, 0o755)
+        with self.assertRaises(ValueError) as caught:
+            hygiene.check(self.root, env_backups='warn')
+        self.assertIn('blocked', str(caught.exception))
