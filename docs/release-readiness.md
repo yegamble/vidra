@@ -4,6 +4,69 @@ Audit date: **2026-09-05**. Target: a fresh-server installation, migration of th
 
 This is the authoritative campaign record for this audit, superseding earlier readiness labels **only for the revisions and evidence below**. Historical plans remain requirement sources. The original audit used one agent with no product edits, commits, pushes, merges, deployment, or branch cleanup. The implementation session below authorizes scoped commits/pushes and a draft PR, but prohibits merge, release publication and production deployment. No production database, media bucket, credentials, or running stack was used.
 
+## Current close-out — 2026-09-10
+
+**34 of 40 acceptance items are merged and closed: A01–A17 and A24–A40.**
+The remaining six are **A18–A23**, mapped to **MIG-01–MIG-06** below.
+The workflow register still contains **59 rows: 53 PASS, 5 BLOCKED, 1 FAIL,
+0 UNVERIFIED**. Item closure and a PASS with a deferred provider facet do not
+establish readiness to migrate the operator's instance.
+
+This reconciliation checked meta `8cb3265`, the register Status cells, the
+migration guide and importer, and the recorded provider/restore evidence.
+The closed-item disposition is confirmed by the operator's current handoff;
+this is not a new execution of those acceptances. Historical sections below
+retain their original revision boundaries and session restrictions. This
+section supersedes their earlier open-item summaries, not their evidence.
+
+### Remaining migration chain and input needed
+
+| Item / row | Status | Required input and next acceptance |
+|---|---|---|
+| A18 / MIG-01 | BLOCKED | Operator supplies a sanitized source snapshot with representative media, or a read-only source DB connection plus media access; include PeerTube version, schema, storage layout and local-host asset inventory. Run preflight and dry-run against a disposable destination; record conflicts, unsupported families, counts and destination probe writes. A DB connection alone cannot supply host-local images or instance configuration. |
+| A19 / MIG-02 | BLOCKED | After A18, use representative admin/moderator/user/suspended and collision cases, with synthetic known-password accounts. Verify login, roles, channel/actor identity and rerun preservation of Vidra-owned edits without publishing hashes or private keys. |
+| A20 / MIG-03 | FAIL | After A18, reproduce HLS-only copy mode with representative progressive/HLS-only and split-audio media. Implement and verify independent media acquisition plus bounded resumable backfill; disconnect the source and decode the selected catalogue with zero unexplained no-media rows. Source access unblocks the acceptance but does not resolve the defect. |
+| A21 / MIG-04 | BLOCKED | After A19/A20, reconcile source-derived expected counts and relationships, import crash/resume/repeat, privacy and ordering, view deltas and search readback. |
+| A22 / MIG-05 | BLOCKED | Operator supplies a per-family retention disposition for omitted safety/user data and host-local instance settings: migrate, retain an accessible archive/manual conversion, or explicitly approve omission. Name archive owner, location, retention period and deletion condition; implement each required missing family and reconcile against A18's inventory. |
+| A23 / MIG-06 | BLOCKED | After A19–A22, operator supplies source/target domains, actor and old-link continuity policy, DNS/TLS control, write-freeze/cutover window, rollback authority and retained-source plan, plus RPO (maximum acceptable data loss) and RTO (maximum acceptable downtime). Time full/delta import and isolated continuity/rollback rehearsal before any cutover. |
+
+**Input handoff:** provide local paths to the snapshot, media and credential
+configuration rather than credentials in this document or chat. Include a
+consistent capture time and media manifest, source version and enabled plugins,
+and a separate sanitized inventory of host-local configuration. Keep source
+password hashes and actor private keys out of committed evidence. A
+representative fixture must preserve the schema/media relationships needed by
+the acceptance, including restricted videos and HLS-only/split-audio cases.
+
+The migration guide's suggestion that copy mode relies on the pipeline is not
+proof of automatic recovery: `internal/peertubeimport/importer.go` explicitly
+reports that copy mode carries only a progressive original, copies no HLS tree,
+and schedules no automatic transcode. An HLS-only source therefore has nothing
+to play. MIG-03 remains **FAIL**, not BLOCKED or PASS; choosing reference mode
+alone does not satisfy its source-independent catalogue criterion.
+
+No migration acceptance or production action ran during this reconciliation.
+No retention, domain/cutover or recovery decision has been inferred. Resume
+with A18, then A19/A20 and A22, then A21, then A23 once their inputs and
+prerequisites are satisfied. Each promotion still needs the revision, command,
+exit status, measured assertions and sanitized artifacts required below.
+
+### Four deferred provider facets on closed items
+
+These facets **block no workflow register row** and do not reopen their parent
+items. The current handoff reports their required credentials unavailable on
+this machine; fixture evidence is not selected-provider evidence.
+
+| Closed item | Deferred facet | Input and completion evidence |
+|---|---|---|
+| A24 | Real-provider bucket run | Selected provider/endpoint, region, test bucket and locally configured credentials; verify creation/write/Range/content types, persistence, CORS and versioning/retention behavior. Existing [MinIO evidence](evidence/a24-s3-minio.json) retains its scope. |
+| A32 | Selected bucket presigned delivery | Selected bucket configuration and locally configured credentials; repeat presigned playback, expiry, CORS and denial checks against that provider. Existing [delivery evidence](evidence/a32-a33-delivery.json) uses MinIO. |
+| A33 | Selected CDN edge | Selected zone/hostname, origin and purge configuration with locally configured credentials; repeat cache/privacy, invalidation/retry and outage/fallback assertions against the actual edge. Existing [rehearsal evidence](evidence/a33-rehearsal.json) uses a caching simulator. |
+| A37 | Offsite wire download | Selected offsite endpoint, backup object/version and locally configured read credentials; download over the actual remote transport, verify integrity/decryption and restore on a disposable replacement host. The [restore close-out](evidence/a37-close-out.json) remains PASS within its recorded scope; it does not certify this missing download. |
+
+The separate SCP-01–SCP-10 scope register remains decision-dependent; these
+families are not additional open A-items and are not silently approved here.
+
 ## Revision boundary and evidence rules
 
 | Repository | Audited HEAD | Checkout state at start |
@@ -85,7 +148,7 @@ Raw local scratch evidence: `/tmp/vidra-readiness-*.log` and the `vidra-readines
 
 ## Workflow readiness register
 
-Owners: **M** meta-repo; **C** core; **S** search; **U** user. Relative source paths below are rooted in the named owner unless prefixed otherwise. Recounted from the Status cells on 2026-09-09, after the v0.6.3 release flipped REL-01 and INS-01/02/04/05, there are **59 workflow rows: 53 PASS, 0 UNVERIFIED, 5 BLOCKED and 1 FAIL** (recounted again on 2026-09-09 after section "AUTH-01/02 and PLAY-01 residuals — provider pre-claim and registration paths; native-HLS Safari — 2026-09-09" flipped AUTH-01 and AUTH-02, and again after section "PLAY-01 — native-HLS Safari via safaridriver — 2026-09-09" flipped PLAY-01, the last UNVERIFIED row: the owner enabled Develop ▸ Allow Remote Automation, so the OS refusal that blocked it is gone and real Safari 26.5 was driven through `safaridriver`). **No workflow row is UNVERIFIED.** The 5 BLOCKED and the 1 FAIL are the six MIG rows, every one of them waiting on the same missing input, a sanitized copy of the operator's source instance. AUTH-04 is no longer a split row: A05 passed its OIDC half on a local Dex fixture, with the selected external provider named as a residual in its own cell. A PASS carrying a parenthesised residual is still counted as a PASS, and the residual is written out in the row rather than in this total; the 10 scope families below are additionally BLOCKED on decisions. These are workflow statuses, not test counts. All required workflows are retained. “Conditional” means required if that capability is selected; disabling it does not prove it. Decision-dependent extensions remain visible in the scope register after this table.
+Owners: **M** meta-repo; **C** core; **S** search; **U** user. Relative source paths below are rooted in the named owner unless prefixed otherwise. Recounted from the Status cells on 2026-09-09, after the v0.6.3 release flipped REL-01 and INS-01/02/04/05, there are **59 workflow rows: 53 PASS, 0 UNVERIFIED, 5 BLOCKED and 1 FAIL** (recounted again on 2026-09-09 after section "AUTH-01/02 and PLAY-01 residuals — provider pre-claim and registration paths; native-HLS Safari — 2026-09-09" flipped AUTH-01 and AUTH-02, and again after section "PLAY-01 — native-HLS Safari via safaridriver — 2026-09-09" flipped PLAY-01, the last UNVERIFIED row: the owner enabled Develop ▸ Allow Remote Automation, so the OS refusal that blocked it is gone and real Safari 26.5 was driven through `safaridriver`). **No workflow row is UNVERIFIED.** The 5 BLOCKED and the 1 FAIL are the six MIG rows, all depending on a sanitized copy of the operator's source instance; the chain additionally requires source-data retention, domain/cutover and recovery decisions (see the current close-out above). AUTH-04 is no longer a split row: A05 passed its OIDC half on a local Dex fixture, with the selected external provider named as a residual in its own cell. A PASS carrying a parenthesised residual is still counted as a PASS, and the residual is written out in the row rather than in this total; the 10 scope families below are additionally BLOCKED on decisions. These are workflow statuses, not test counts. All required workflows are retained. “Conditional” means required if that capability is selected; disabling it does not prove it. Decision-dependent extensions remain visible in the scope register after this table.
 
 Every procedure involving a mutation includes independent API/DB readback and UI reload, even where abbreviated below. For all media paths include owner, ordinary user and anonymous visibility, failed jobs, retries, and deletion/revocation. Dependency IDs are gates, not reasons to omit a row.
 
