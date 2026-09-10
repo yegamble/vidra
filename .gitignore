@@ -30,23 +30,19 @@
 # `cp env/production.env.example env/production.env` and then paste real
 # secrets (JWT_SECRET, POSTGRES_PASSWORD, the envelope KEKs) into it, so the
 # concrete *.env files must never be committable. Only the *.example templates
-# — which carry placeholders and generation recipes — stay tracked.
-env/*.env
+# are tracked.
+#
+# EVERYTHING under env/ except the templates. This used to be two patterns,
+# `env/*.env` and `env/*.env.bak`, and the gap between them is where beta's
+# `production.env.bak-2026-08-25T154747` and `production.env.bak-bodylimit`
+# sat for two weeks: byte-for-byte copies of every production secret that no
+# rule matched, one `git add -A` from a commit. A copy of an env file can be
+# named anything — .backup, .bak2, .old, a date, an editor's .swp — so the
+# rule is the directory, and the negation names the only files that belong in
+# it. `vidra setup`'s atomic-write temp files (`env/.production.env.tmpNNNNN`)
+# are covered by the same line.
+env/*
 !env/*.env.example
-# ...and their backups. `deploy/rollback.sh` does `cp "$ENV_FILE" "$ENV_FILE.bak"`
-# before it rewrites the image tags, producing `env/production.env.bak` — a
-# byte-for-byte copy of every production secret that the `env/*.env` glob above
-# does NOT match (the name does not end in `.env`). Listed after the
-# `.env.example` negation so the ordering is explicit; `.env.example` files are
-# unaffected because they do not end in `.env.bak`.
-env/*.env.bak
-# ...and the setup engine's atomic-write temp files. `vidra setup` writes an env
-# file through `os.CreateTemp(dir, "."+base+".tmp*")` + rename (vidra-core
-# internal/setup/setup.go), i.e. `env/.production.env.tmpNNNNN`. A crash between
-# create and rename leaves that file behind holding every generated secret, and
-# neither `env/*.env` nor the global `*.tmp` rule above matches the name (the
-# random suffix comes AFTER `.tmp`). Ignore the shape, not one instance.
-env/.*.tmp*
 
 # The GENERATED reverse-proxy config. `vidra setup` renders
 # deploy/Caddyfile.local from the committed deploy/Caddyfile template plus the

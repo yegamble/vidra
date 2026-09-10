@@ -324,4 +324,4 @@ EOF
 fi
 
 log "released ${TAG} in: ${REPOS[*]}"
-log "to ship it: set VIDRA_CORE_TAG/VIDRA_USER_TAG/VIDRA_SEARCH_TAG=${TAG} in env/production.env, then ./deploy/deploy.sh"
+log "to ship it, on the host AS THE DEPLOY USER: ./deploy/pin-release.sh ${TAG} && ./deploy/deploy.sh"

@@ -125,14 +125,28 @@ edits, because those still succeed:
 sed -i 's/^VIDRA_CORE_TAG=.*/VIDRA_CORE_TAG=v0.3.0/' env/production.env
 git checkout v0.3.0            # fatal: dubious ownership
 
-# RIGHT
-sudo -u vidra git -C /opt/vidra fetch --tags origin
-sudo -u vidra git -C /opt/vidra checkout v0.3.0
+# RIGHT — one command, as the owner, does both halves in the safe order
+sudo -u vidra ./deploy/pin-release.sh v0.3.0
 ```
 
 The first form leaves the env file naming a release the tree is not on. `vidra
 deploy` will happily pull those images and run them against the previous
-revision's compose files.
+revision's compose files. [`pin-release.sh`](./pin-release.sh) moves the tree
+first and rewrites the pins second, so a refused checkout leaves the pins
+alone; it snapshots the env file outside the checkout before touching it; and
+it **refuses to run as root** before its first git command.
+
+**Do not switch the refusal off.** Adding `safe.directory` for root makes
+root's `git fetch` succeed in a checkout it does not own, and every object it
+writes is one the deploy user cannot — the next `deploy.sh` then dies inside
+its own `git fetch` with "insufficient permission for adding an object", one
+shell and one day away from the command that caused it. That is how beta
+accumulated 74 such objects. If a root `~/.gitconfig` on your host has the
+entry, remove it:
+
+```bash
+sudo git config --global --unset safe.directory /opt/vidra
+```
 
 ### Nothing publishes a Postgres port, so host tooling cannot use `postgres:5432`
 
@@ -709,9 +723,8 @@ https-only by design and will not work here.
 ## Everyday operations
 
 ```bash
-# UPGRADE — tag a release in the component repo, wait for GHCR, then:
-cd /opt/vidra && git pull --ff-only            # compose + Caddyfile only; CHECKOUT TREES ONLY
-$EDITOR env/production.env                     # VIDRA_CORE_TAG=v0.2.0
+# UPGRADE — tag a release in the component repo, wait for GHCR, then, AS vidra:
+./deploy/pin-release.sh v0.2.0                 # tree to v0.2.0 + VIDRA_*_TAG=v0.2.0; env snapshot first; CHECKOUT TREES ONLY
 ./deploy/deploy.sh                             # dump -> pull -> gated migrate -> up -> probe
 
 # ROLLBACK — app only; fine across an ADDITIVE migration (one-release rule below):
@@ -850,8 +863,9 @@ overlay pulls from — so cutting the release *is* building the image. `deploy/r
 conclusion, and then verifies the image is really in GHCR
 (`docker manifest inspect`, falling back to the GitHub packages API and saying
 which check it used). It exits non-zero with a per-image summary if any repo
-fails, and it does **not** deploy anything — bump `VIDRA_*_TAG` and run
-`./deploy/deploy.sh` when you want the release live.
+fails, and it does **not** deploy anything — on the host, as the deploy user,
+`./deploy/pin-release.sh <tag>` then `./deploy/deploy.sh` when you want the
+release live.
 
 **Release the three repos at the same version.** Nothing enforces it, but
 `./deploy/rollback.sh v0.2.0` sets all three `VIDRA_*_TAG` values from one

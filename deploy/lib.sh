@@ -252,3 +252,28 @@ env_snapshot() {
     done
   fi
 }
+
+# Set KEY=VAL in $ENV_FILE, in place, via a temp file + cat rather than `sed -i`,
+# whose syntax differs between GNU and BSD sed. Appends the key when it is not
+# already present, so this also works on an env file that inherited its tags
+# from the shell. Lived in rollback.sh until pin-release.sh needed the same
+# rewrite; one copy, so the two can never disagree about what a pin looks like.
+# Uses the caller's log() and ENV_FILE, per the contract above.
+# shellcheck disable=SC2154
+env_set_key() {
+  local key="$1" val="$2" tmp
+  [ -n "$val" ] || return 0
+  tmp="$(mktemp)"
+  if grep -qE "^[[:space:]]*${key}[[:space:]]*=" "$ENV_FILE"; then
+    awk -v k="$key" -v v="$val" '
+      $0 ~ "^[[:space:]]*" k "[[:space:]]*=" { print k "=" v; next }
+      { print }
+    ' "$ENV_FILE" > "$tmp"
+  else
+    cat "$ENV_FILE" > "$tmp"
+    printf '%s=%s\n' "$key" "$val" >> "$tmp"
+  fi
+  cat "$tmp" > "$ENV_FILE"
+  rm -f "$tmp"
+  log "set ${key}=${val}"
+}

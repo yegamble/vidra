@@ -229,23 +229,6 @@ log "current: core=$(env_get VIDRA_CORE_TAG '(unset)') user=$(env_get VIDRA_USER
 # Keep it after success too: a second rollback must not overwrite this recovery.
 ENV_SNAPSHOT="$(ENV_FILE="$ENV_FILE" bash "$REPO_ROOT/deploy/backup-env.sh")" || die "env snapshot failed"
 log "env snapshot: $ENV_SNAPSHOT"
-set_key() {
-  local key="$1" val="$2" tmp
-  [ -n "$val" ] || return 0
-  tmp="$(mktemp)"
-  if grep -qE "^[[:space:]]*${key}[[:space:]]*=" "$ENV_FILE"; then
-    awk -v k="$key" -v v="$val" '
-      $0 ~ "^[[:space:]]*" k "[[:space:]]*=" { print k "=" v; next }
-      { print }
-    ' "$ENV_FILE" > "$tmp"
-  else
-    cat "$ENV_FILE" > "$tmp"
-    printf '%s=%s\n' "$key" "$val" >> "$tmp"
-  fi
-  cat "$tmp" > "$ENV_FILE"
-  rm -f "$tmp"
-  log "set ${key}=${val}"
-}
 
 # EVERY refusal between here and `up -d` puts the env file back (A38 rehearsal,
 # 2026-09-08, finding A38R-2). Above this line the file still holds the tags you
@@ -270,9 +253,9 @@ restore_env_and_die() {
   die "$*"
 }
 
-set_key VIDRA_CORE_TAG   "$CORE_TAG"
-set_key VIDRA_USER_TAG   "$USER_TAG"
-set_key VIDRA_SEARCH_TAG "$SEARCH_TAG"
+env_set_key VIDRA_CORE_TAG   "$CORE_TAG"
+env_set_key VIDRA_USER_TAG   "$USER_TAG"
+env_set_key VIDRA_SEARCH_TAG "$SEARCH_TAG"
 
 # An unpacked release bundle has no .git anywhere and nothing to sync — see the
 # same block in deploy.sh for the reasoning. It matters more here than there:
