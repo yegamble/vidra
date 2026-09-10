@@ -85,7 +85,7 @@ Raw local scratch evidence: `/tmp/vidra-readiness-*.log` and the `vidra-readines
 
 ## Workflow readiness register
 
-Owners: **M** meta-repo; **C** core; **S** search; **U** user. Relative source paths below are rooted in the named owner unless prefixed otherwise. Recounted from the Status cells on 2026-09-09, after the v0.6.3 release flipped REL-01 and INS-01/02/04/05, there are **59 workflow rows: 52 PASS, 1 UNVERIFIED, 5 BLOCKED and 1 FAIL** (recounted again on 2026-09-09 after section "AUTH-01/02 and PLAY-01 residuals — provider pre-claim and registration paths; native-HLS Safari — 2026-09-09" flipped AUTH-01 and AUTH-02). The 1 UNVERIFIED is PLAY-01, whose residual is native-HLS Safari and which is blocked on an OS refusal, not on the product: macOS will not permit WebDriver or Apple-Events automation of Safari without an interactive admin password (`sudo safaridriver --enable`, or Develop ▸ Allow Remote Automation); the 5 BLOCKED and the 1 FAIL are the six MIG rows, every one of them waiting on the same missing input, a sanitized copy of the operator's source instance. AUTH-04 is no longer a split row: A05 passed its OIDC half on a local Dex fixture, with the selected external provider named as a residual in its own cell. A PASS carrying a parenthesised residual is still counted as a PASS, and the residual is written out in the row rather than in this total; the 10 scope families below are additionally BLOCKED on decisions. These are workflow statuses, not test counts. All required workflows are retained. “Conditional” means required if that capability is selected; disabling it does not prove it. Decision-dependent extensions remain visible in the scope register after this table.
+Owners: **M** meta-repo; **C** core; **S** search; **U** user. Relative source paths below are rooted in the named owner unless prefixed otherwise. Recounted from the Status cells on 2026-09-09, after the v0.6.3 release flipped REL-01 and INS-01/02/04/05, there are **59 workflow rows: 53 PASS, 0 UNVERIFIED, 5 BLOCKED and 1 FAIL** (recounted again on 2026-09-09 after section "AUTH-01/02 and PLAY-01 residuals — provider pre-claim and registration paths; native-HLS Safari — 2026-09-09" flipped AUTH-01 and AUTH-02, and again after section "PLAY-01 — native-HLS Safari via safaridriver — 2026-09-09" flipped PLAY-01, the last UNVERIFIED row: the owner enabled Develop ▸ Allow Remote Automation, so the OS refusal that blocked it is gone and real Safari 26.5 was driven through `safaridriver`). **No workflow row is UNVERIFIED.** The 5 BLOCKED and the 1 FAIL are the six MIG rows, every one of them waiting on the same missing input, a sanitized copy of the operator's source instance. AUTH-04 is no longer a split row: A05 passed its OIDC half on a local Dex fixture, with the selected external provider named as a residual in its own cell. A PASS carrying a parenthesised residual is still counted as a PASS, and the residual is written out in the row rather than in this total; the 10 scope families below are additionally BLOCKED on decisions. These are workflow statuses, not test counts. All required workflows are retained. “Conditional” means required if that capability is selected; disabling it does not prove it. Decision-dependent extensions remain visible in the scope register after this table.
 
 Every procedure involving a mutation includes independent API/DB readback and UI reload, even where abbreviated below. For all media paths include owner, ordinary user and anonymous visibility, failed jobs, retries, and deletion/revocation. Dependency IDs are gates, not reasons to omit a row.
 
@@ -106,7 +106,7 @@ Every procedure involving a mutation includes independent API/DB readback and UI
 | PUB-02 Resumable upload, cancel, draft recovery and batch publishing | C U | W2 plans; backed upload-draft-recovery/upload-cancel/upload-batch | PASS | Interrupt network and restart service between chunks; resume without duplicate files/charges; recover draft on another session; cancel cleanup; partial batch failure retained | PUB-01 → A10 |
 | PUB-03 Transcode durable jobs into playable CMAF/HLS ladder | C M U | `internal/media/hls.go`, CMAF packager, transcode jobs; backed hls-playback; A07 proved the pipeline and playback clauses; the residual **retry-crash** clause is closed by live evidence [`a34-a25-ops-storage`](evidence/a34-a25-ops-storage.json) (section "A34/A25 …"): a real ffmpeg transcode of a 1280×720 300 s source was SIGKILLed at `progress_percent` 48 on one of two workers, requeued by the leader's lease sweep 116.9 s after the 30-minute lease clock was advanced, retried **once** on the other worker, and promoted **exactly one** generation — `videos.transcode_generation` 1, one `streaming_playlists` row on `…/r1/master.m3u8`, one `transcode_jobs` row (`done`, `attempts=1`), `r1` and nothing else under both prefixes, and **345 stored objects, byte-for-byte the count an uninterrupted run of the same fixture produced** — with the api's `POST /videos/{id}/file` request id carried onto the run row the SECOND worker finished | PASS | Real ffmpeg job: source→processing→ready; fetch advertised master, audio/video variants, init/segments; decode audio and video; retry crash without duplicate promotion | PUB-01 → A07 for source→processing→ready, the advertised master and its variants, init/segments and decoded audio and video; A34 for the retry clause A07 left open. Not re-measured here: browser decode, which PLAY-01 and A07 own |
 | PUB-04 Schedule/quarantine/privacy gates survive processing and replacement | C U S | Schedule/quarantine backed specs; replace handlers; instance gates | PASS | Publish-after-transcode and schedule, quarantine approve/reject, replacement preserving URL/metadata; no premature discovery; concurrent old/new playback; failed replacement retains prior usable generation | PUB-03, SRC-02 → A10 |
-| PLAY-01 Watch, seek, quality, speed, resume, PiP/theater and mobile/native playback | C U | `components/player`, HLS hook, backed hls-playback/player-settings/history | UNVERIFIED | Browser actual currentTime advance and audible track, seek, quality change and saved preferences; Chromium plus native-HLS Safari on representative ladder; original fallback when appropriate | PUB-03 → A07 |
+| PLAY-01 Watch, seek, quality, speed, resume, PiP/theater and mobile/native playback | C U M | `components/player`, HLS hook, backed hls-playback/player-settings/history; the residual native-HLS clause proved live in section "PLAY-01 — native-HLS Safari via safaridriver — 2026-09-09" (evidence [`play-01-safari`](evidence/play-01-safari.json)) | PASS | Browser actual currentTime advance and audible track, seek, quality change and saved preferences; Chromium plus native-HLS Safari on representative ladder; original fallback when appropriate | PUB-03 → A07 for the pipeline; **Chromium: A07/A40; native-HLS Safari 26.5 via safaridriver: this slice — mechanism: both MSE spellings deleted from the document, then the watch page reached by an in-app soft navigation, with the branch asserted in-page (`src` = the master playlist, not `blob:`; `window.Hls` undefined; the hls.js chunk never fetched)**. On that engine `currentTime` runs 0 → 21.28 s (620 frames, 2 dropped, `readyState` 4) with one enabled audio track unmuted at full volume and the audio rendition's segments arriving throughout; seek 20 → 20.014 and 5 → 5.658 with `seeked` events, and ArrowRight on the app's Seek slider 5.66 → 16.04; **the app has NO quality control on this path** (the level menu is filled inside the hls-js effect only) while Safari's own ABR moves 1080p → 720p under a 600 kB/s shaper; speed 1.5× through the menu; captions `showing` with a rendered cue; PiP enters and exits through the app's control (`webkitPresentationMode` `picture-in-picture`, and it needs a REAL gesture); theater 1128 → 1156 px; volume 0.35 survives a reload and a new tab and speed 1.5× survives the reload (sessionStorage resets it in a new tab, by design); "Resume from 0:14" moves 3.95 → 16.60 s; a 404 master lands on `/original` at 5.67 s. The Chromium column is the same clip on hls.js. RESIDUALS: no shipped Apple browser reaches this engine (hls.js 1.7.1 claims `ManagedMediaSource`, so iOS Safari takes MSE too), so this is a latent path; iOS Safari itself, physical speaker output, CDN/presign delivery and live/federated playback are not covered. **The PASS is on the FIXED build** — this slice found "Captions on by default" silently lost on the native engine and fixed it ([user #215](https://github.com/yegamble/vidra-user/pull/215)); every other clause passed against unmodified code |
 | PLAY-02 Canonical/legacy links, sharing, embeds, oEmbed/feed/sitemap | C U M | F01 resolved at final snapshot; resolver and imported UUID mapping now present; canonical/legacy/short/source-UUID links, timestamps, share/embed, oEmbed/feed/sitemap all proven in a real browser (A08 evidence L729–734, L901–929) | PASS | Run path guard first; follow canonical and old PeerTube/UUID/short links through edge with timestamps; verify privacy/password unlock and embed origin rules, metadata and downloadable file | REL-01, PLAY-01 → A01 then A08 |
 | PLAY-03 Private, unlisted, password, embed and download revocation | C U S | Backed video-password/embed; HTTP media auth and purge helpers; 15 copied media paths, token expiry, download-policy switch and unlisted/account-unlisted transitions proven live (A08 evidence L968–981, L917–921); native Safari, CDN-edge revocation and cached-metadata immediacy remain uncertified (L996–998) | PASS | Copy all manifest/segment/original/caption/storyboard URLs to unauthorized session; enforce token expiry, unlisted discovery exclusion and changed download policy; test account-unlisted transition | PLAY-01, SRC-02 → A08 |
 | CRT-01 Studio edit/delete/taxonomy/tags/thumbnails/chapters/storyboards | C U S | Studio/channel/taxonomy/tag/upload-thumbnail backed specs; core chapters and storyboard handlers; live evidence `a11-a12-close-out` closes the physical-deletion clause (Studio delete in Chromium, then the shipped media-GC collector deleted all 20 of the deleted video's stored objects and none of the other video's 19, byte-identical by sha256) | PASS | Edit every supported field and reorder chapters; real frame extraction and hover sprite; fresh detail/UI fetch; delete and verify bytes/discovery vanish; source replacement retains identity | PUB-03, SRC-02 → A11 |
@@ -19227,3 +19227,234 @@ returned the generic fallback).
   the approval queue, which is exactly what a direct create would have stored.
   A reviewer therefore sees a handle and a placeholder address, never a routable
   one — worth knowing before an operator tries to mail an applicant back.
+
+## PLAY-01 — native-HLS Safari via safaridriver — 2026-09-09
+
+**PLAY-01 moves to PASS, and the register's last UNVERIFIED row closes.** Its
+residual was never the product: A07 and A40 proved watch, seek, quality, speed,
+resume, PiP/theater and the original fallback in Chromium and in Playwright
+WebKit, and both of those take MSE, so the `native-hls` engine had never been
+run by a browser. The previous slice could not reach it — macOS refused
+WebDriver automation of Safari without an admin password — and left the exact
+list of unmeasured clauses. With **Develop ▸ Allow Remote Automation** now on,
+real **Safari 26.5** was driven through `safaridriver` over raw W3C WebDriver
+(Playwright cannot drive it) and every one of those clauses was measured on the
+native engine, beside a Chromium hls.js column on the same clip and the same
+origin. [Sanitized evidence](evidence/play-01-safari.json). The slice also found
+and fixed one real defect that only this engine can expose —
+[user #215](https://github.com/yegamble/vidra-user/pull/215).
+
+### SC1 — forcing the native branch honestly
+
+`lib/player-engine.ts` gates the `hls-js` engine on
+`probeSupport().mseSupported`, which is
+`"MediaSource" in window || "ManagedMediaSource" in window`. Safari 26.5 has
+**both**, so hls.js wins selection exactly as the previous slice deduced from
+reading. There is **no shipped or documented override** — no query parameter, no
+instance setting, no admin knob, no build flag names an engine; selection is
+capability-only. So option (a) does not exist and option (b) has nothing to
+read. The mechanism used is **(c)**: `delete window.MediaSource; delete
+window.ManagedMediaSource` executed through WebDriver, then the watch page
+reached by an **in-app soft navigation** so the player mounts and
+`probeSupport()` runs against the patched window. Option (d), a lab-only
+`NEXT_PUBLIC_PLAYER_ENGINE_ORDER`, was **not added**: (c) worked, and it leaves
+the shipped default order untouched, which (d) would not.
+
+**The limitation, stated.** safaridriver exposes no pre-document-script hook, so
+the deletion cannot happen before the page's own scripts run. It happens before
+the *player* mounts, which is what selection reads: the home feed loads, both
+globals go, and a Next.js `<Link>` click reaches the watch page inside one
+document. Every measurement below re-asserts on the watch page that both
+spellings are still absent, and a run that arrived as a NEW document — a click
+that hard-navigated before hydration — is **discarded and retried**, because
+that run would have taken the hls.js path while claiming not to. That guard is
+not theoretical: an earlier run — before the assertion existed — read back
+`usesBlob: true` with the hls.js chunk fetched after a reload, which is exactly
+the lie it now catches. In the runs that produced this evidence it never fired.
+
+The branch is then asserted in-page, not assumed:
+
+| assertion | measured |
+|---|---|
+| `video` element's `src` | `…/hls/master.m3u8?v=…` — the master playlist itself |
+| `currentSrc.startsWith("blob:")` | **false** |
+| `window.Hls` | `undefined` |
+| the built hls.js chunk (`_next/static/chunks/3q9j09qok5cw5.js`, 575 047 bytes) | **never fetched** in this document |
+| `"MediaSource" in window` / `"ManagedMediaSource" in window` | **false / false** |
+| `performance.getEntriesByType("navigation")` | one entry, `http://127.0.0.1:8100/` — the watch page was a soft navigation |
+| `readyState` / `duration` | **4** / **30.016** |
+
+**The honesty caveat that matters more than the mechanism.** The shipped default
+order was exercised — nothing in the app was changed to reach `native-hls` — but
+the *browser* was. **No shipped Apple browser reaches this engine today.**
+hls.js 1.7.1 prefers `ManagedMediaSource` (`getMediaSource()` takes it over
+`MediaSource`), so iOS Safari — the MSE-partial browser the A07/A08 carry-in was
+really about — answers `isSupported()` true as well. `native-hls` is reachable
+in production only where hls.js's own `isSupported()` declines at import time.
+This is therefore a measurement of a **latent path**, and the register cell says
+so.
+
+### The lab
+
+One origin, `http://127.0.0.1:8100`: a pipe-only proxy splitting
+`deploy/Caddyfile`'s own `@api` path set to core and everything else to the
+frontend, `Accept-Encoding` dropped, bodies never transformed (a range request
+on media must survive). `vidra_refresh` is `SameSite=Lax`, `Path=/api/v1/auth`,
+so one origin is not a convenience. The one deliberate exception is a **lab
+bandwidth shaper on HLS responses only**, armed by writing a bytes-per-second
+number into a file: it paces writes and rewrites no byte, and it exists because
+a loopback origin never gives Safari's ABR a reason to move.
+
+Core is two processes from `main` — `VIDRA_ROLE=api` on `127.0.0.1:8188` and a
+separate `VIDRA_ROLE=worker` — over a native postgres 16.15 on `:55701`
+**migrated 0 → 146 from an EMPTY initdb** (`dirty=false`), and a native redis on
+`:56701`, flushed. `STORAGE_BACKEND=local` + `STORAGE_LOCAL_ROOT`.
+`MALWARE_SCAN_MODE=disabled` and `RATE_LIMIT_ENABLED=false` — both stated,
+because both change what a negative means — plus `TRANSCODING_ENABLED=true` and
+`TRANSCODING_MIN_FREE_SCRATCH_MB=512`. The frontend is a production
+`next build` standalone (`node .next/standalone/server.js`, never `next start`)
+built with `NEXT_PUBLIC_API_BASE_URL`. **Registration was never reopened**: the
+owner claim created the only account, and that account is also the creator, so
+no signup path was touched.
+
+The fixture is a 30 s 1920×1080 30 fps ffmpeg `testsrc2` with a 440 Hz `sine`
+track, transcoded by this lab's own worker into a real CMAF ladder — **1080p,
+720p, 480p, 360p**, an audio rendition and four i-frame playlists — with one
+4-cue WebVTT caption track attached, published public. Node 26.8.1.
+
+### SC2 — the clauses, on the native engine, beside Chromium
+
+| clause | Safari 26.5, `native-hls` | Chromium 151.0.7922.34, `hls-js` |
+|---|---|---|
+| `currentTime` advance | **0 → 21.28 s** over 22.2 s of wall clock, `readyState` 4 throughout, **620** total video frames, **2** dropped | **0 → 21.87 s**, **735** frames, **2** dropped |
+| audible track | **1** audio track (`audio`, kind `main`, `enabled`), `muted` false, `volume` 1, and the audio rendition's own CMAF segments fetched — `chunk-4-*` **6 → 12 inside the first second**, then flat, because on a loopback origin Safari buffers the whole 30 s clip up front. The source tone decodes off `/original` to **peak 0.153**, 30.0 s mono, 48 kHz | `webkitAudioDecodedByteCount` **48 735 → 442 479**, still climbing at the last sample |
+| seek | 20 → **20.014** (1 `seeked`), then 5 → **5.658** (2 `seeked`), `seeking` false, `readyState` 4; and through the app's own control, ArrowRight on `role="slider"` *Seek* moved **5.66 → 16.04** | 20 → **20.007**, 5 → **5.000**, 2 `seeked` |
+| quality | **no Quality control exists on this path** (see below). Safari's own ABR moved the ladder: **1080p → 720p** under a 600 kB/s shaper and **stayed at 720p** after it lifted at t = 32.3 s; `media_0`, `media_1` and `media_4` playlists fetched | *Quality: Auto (480p)* with **Auto / 1080p / 720p / 480p / 360p**; selecting **360p** reaches **640×360 in 3 s** and the button reads *Quality: 360p* |
+| speed | the 12-rung menu (0.25× … 4×), **1.5×** applied, `playbackRate` **1.5**, button *Speed: 1.5×* | identical: `playbackRate` **1.5** |
+| captions | the app's Captions control shows the `<track>`: **English (lab)**, `mode` `showing`, **4 cues**, active cue *"Lab caption one: native HLS acceptance."* rendered by Safari's own cue renderer (screenshot); a second click disables it | **English (lab)** `showing` with the same active cue |
+| picture-in-picture | the app's control enters PiP: `document.pictureInPictureElement === video` **true**, `webkitPresentationMode` **`picture-in-picture`**, `aria-pressed` **true**, playback continued (`paused` false at 6.43 s); clicking again returns to **`inline`** | `pipElement` **true**, `aria-pressed` **true**, exit returns false |
+| theater | **1128 → 1156 px** stage, `aria-pressed` **true**, restored to **1128** | **1128 → 1156 px**, identical |
+| saved preferences | volume **0.35** survives a reload **and a new tab** (set on the element with its `volumechange` dispatched — the same seam `lib/player-volume.ts` listens on; the slider itself was not dragged, and A40 owns that control); speed **1.5×** survives the reload and correctly resets to **1×** in a new tab (`vidra.player.volume` is localStorage, `vidra.player.speed` sessionStorage — the split is a decision, and both halves hold natively) | volume **0.35** both; speed **1.5×** reload, **1×** new tab |
+| resume | **"Resume from 0:14"** appears after the reload and the click moves **3.95 s → 16.60 s** — resume is opt-in through a control, not an automatic seek | **"Resume from 0:16"**, **0 → 18.99 s** |
+| original fallback | master renamed out from under the api → **404**; the next mount lands on **`/api/v1/videos/{id}/original`**, not a blob, advancing to **5.67 s** with **176** frames and no error surface; restoring the file answers **200** again | with the HTTP cache disabled, the same 404 lands on **`/original`**, **5.70 s**, **177** frames, 97 981 audio bytes |
+
+**PiP needs a real gesture, and that is a harness lesson worth keeping.** Safari
+refuses `requestPictureInPicture()` without transient activation, so a
+script-dispatched click on the app's button does nothing and the promise is
+swallowed by the shell's `.catch(() => {})`. Measured properly it is a WebDriver
+pointer move over the player (which is also what reveals the control bar)
+followed by a WebDriver click. Both readings above are from that.
+
+### The quality menu on the native path, truthfully
+
+**There is no quality control at all** — not an "Auto"-only menu, no control.
+The player bar on this engine is *Seek, Pause, Mute, Volume, Autoplay next,
+Captions, Speed, Theater, Picture-in-picture, More player options, Fullscreen*;
+Chromium's bar carries *Quality: Auto (480p)* between Speed and Theater. The
+reason is in `lib/use-playback-engine.ts`: the level menu is filled inside the
+`hls-js` effect and nowhere else, so on native HLS `levels` is `[]` and
+`QualityMenu` renders nothing. That is defensible — hls.js is the only engine
+with a level handle and the browser owns variant selection here — but it means a
+viewer on this path **cannot cap or pin a rendition**, and the ABR measurement
+above is the browser's choice, not the app's.
+
+### QoE classification
+
+The beacons classify the engine correctly, and one gap falls out of the numbers:
+
+| engine | format | source | `playback.start` | with `rendition_height` | TTFF ms | `bitrate_switch` |
+|---|---|---|---|---|---|---|
+| `native-hls` | cmaf | api-proxy | **23** | **0** | 248 – 850 | **0** |
+| `hls-js` | cmaf | api-proxy | 16 | 2 | 100 – 1 327 | 16 |
+| `progressive` | progressive | api-proxy | 2 | 2 | 81 – 338 | — |
+
+`native-hls` reporting **no** rendition height is exactly what
+`internal/qoe/qoe.go` requires ("the browser owns variant selection and exposes
+no hook"), and it emits **no `bitrate_switch` either** — so the rung change this
+slice measured in the browser, 1080p → 720p under load, produces **no telemetry
+at all**. The admin surface is already honest about that rather than printing a
+misleading zero: `AdminPlaybackHealthView` renders the native-HLS row's switch
+count as *"Not reportable"* and warns that a merged source row under-counts
+switches when Safari contributed. What this run adds is the confirmation from
+the other side of the glass: the switch really did happen, and really was not
+reported. `session_verified` is false on every row: this video needs no playback
+token, so no attested session id is minted.
+
+### The defect this engine exposed, and its fix
+
+**With the account's "Captions on by default" ON, captions never came on
+natively.** Both text tracks read `disabled` and the toggle read
+`aria-pressed=false` — while the same account, clip and build turned them on
+every time through hls.js, in Safari *and* in Chromium, and on Chromium's
+progressive `/original` path too. So it is neither a Safari-wide failure nor a
+`<video src>` failure: it is this engine's.
+
+The mechanism is which engine owns the element's `src`. hls.js attaches through
+MSE, so the element has no resource of its own to load and the mode the
+`captions_default` effect sets is never disturbed. Native HLS points
+`<video src>` straight at the master playlist, so the element runs its **own**
+load *after* that effect, attaches the stream's in-band text tracks, and comes
+back with every mode reset. `components/player/VideoPlayer.tsx` applied once and
+latched, so the reset was final. It now re-asserts on the element's own load
+milestones and on a text-track list change, and stops as soon as the viewer
+operates the captions control — a default that re-arms must not fight someone
+who turned it off. RED first (`expected 'disabled' to be 'showing'`), and
+re-measured live: with the fix, the native path comes up **English (lab)
+`showing`, button `aria-pressed=true`**.
+
+### Gates
+
+`vidra-user`: `npm run ci` (typecheck, eslint, the icon lint, vitest, a
+production build and the mocked Chromium suite) **PASS** on Node 26.8.1 —
+**266 test files / 2 674 vitest tests** and **630 of 630** mocked Chromium
+tests, exit 0. Repo CI on [user #215](https://github.com/yegamble/vidra-user/pull/215)
+is green on every check: `ci-required`, `frontend`, `contract`,
+**`e2e-backed (local)` and `e2e-backed (s3)`**, `channel-sync-backed`,
+`ipfs-backed` and GitGuardian. The three new `VideoPlayer.test.tsx` cases ran
+RED first (one failing on exactly the defect above: `expected 'disabled' to be
+'showing'`) and green after. **No core, search or meta code changed**, so there
+is no contract regen and no merge ordering between the two PRs;
+`api/openapi.yaml` is untouched.
+
+Not run here: vidra-core's and vidra-search's own suites (this slice touches
+neither), and the `e2e-backed` lanes locally — the runner ran both, once per
+storage backend. Screenshots were taken at every step of the Safari walk and
+are **not committed**; the evidence is the measured values, as A40 left it.
+
+### Recorded, not blocking a row
+
+- **Safari brings its own captions preference, and its own empty track.** On the
+  native path the element carries **two** text tracks: the app's `<track>`
+  (English, 4 cues) and a second, **empty** in-band one with no label and no
+  language. Safari remembers a per-site "captions on" choice and auto-selects a
+  track on load — twice in this lab it selected the *empty* one, so the player
+  opened with the Captions button **pressed** and nothing rendered, and the
+  viewer's first click turned captions *off*. The app's toggle always picks
+  index 0, which is its own track, so a second click reaches the real captions.
+  Nothing here is wrong in the app; it is worth knowing before someone reads a
+  "captions do not work in Safari" report.
+- **`immutable` HLS caching hides the fallback.** Chromium's first fallback
+  attempt kept playing a `master.m3u8` it had already cached, so the 404 never
+  reached it; the measurement above needed `Network.setCacheDisabled` +
+  `clearBrowserCache`. For an operator this cuts both ways: a viewer already
+  watching does not fall over when the object disappears, and a viewer with a
+  warm cache will not fall back either.
+- **`webkitAudioDecodedByteCount` is gone in Safari 26.5** (null), and a
+  `MediaElementSource` tap on a natively-played HLS element reads RMS **0**
+  whether or not there is sound — a known WebKit limitation, not silence. Any
+  future audio assertion on this path must use the audio rendition's segments
+  and the track list, as this one does.
+
+### What this run does NOT prove
+
+- **Physical speaker output**, for the reason above. The audible-track clause
+  rests on one enabled audio track, unmuted at full volume, the audio
+  rendition's segments arriving throughout playback, and the source tone
+  decoding to peak 0.153 off `/original`.
+- **iOS Safari.** The MSE-partial Apple browser the carry-in was really about
+  was not driven; this is desktop Safari with both MSE spellings removed. And as
+  SC1 records, hls.js 1.7.1 would claim `ManagedMediaSource` there anyway.
+- **Any CDN edge or presigned delivery.** Every byte came from the api through
+  the loopback proxy — `delivery_source api-proxy` on every beacon.
+- **Live or federated playback.** This is VOD only; both other surfaces run the
+  same lifecycle but neither was opened.
