@@ -1,5 +1,1186 @@
 {
-  "slice": "PLAY-01 native-HLS Safari via safaridriver",
-  "status": "in progress",
-  "date": "2026-09-09"
+  "slice": "PLAY-01 — native-HLS Safari via safaridriver",
+  "date": "2026-09-09",
+  "rows": {
+    "PLAY-01": "UNVERIFIED -> PASS (Chromium: A07/A40; native-HLS Safari 26.5 via safaridriver: this slice)"
+  },
+  "mechanism": {
+    "used": "(c) a WebDriver-injected script that removes both MSE spellings from the document, followed by an in-app (soft) navigation to the watch page",
+    "script": "delete window.MediaSource; delete window.ManagedMediaSource",
+    "why": "lib/player-engine.ts gates the hls-js engine on probeSupport().mseSupported = \"MediaSource\" in window || \"ManagedMediaSource\" in window. Safari 26.5 has BOTH, so hls.js wins selection; with both absent the next candidate is native-hls, whose gate is video.canPlayType(\"application/vnd.apple.mpegurl\") — \"maybe\" in Safari.",
+    "options_not_used": {
+      "(a) a shipped or documented override": "NONE EXISTS. Selection in lib/player-engine.ts is capability-only: no query parameter, no instance setting, no admin knob, no build flag names an engine.",
+      "(b) a lab-only flag the player already reads": "none — the same absence as (a).",
+      "(d) a lab-only NEXT_PUBLIC_PLAYER_ENGINE_ORDER override": "not needed, and therefore not added: (c) worked, and it leaves the shipped default order untouched, which (d) would not."
+    },
+    "limitation": "safaridriver exposes no pre-document-script hook (no Page.addScriptToEvaluateOnNewDocument equivalent), so the deletion cannot happen before the page's own scripts run. It happens before the PLAYER mounts, which is what selection reads: the home feed is loaded, both globals are deleted, and the watch page is reached by clicking a Next.js <Link> — one document, no reload. Every measurement below asserts on the watch page that MediaSource and ManagedMediaSource are still absent; a run that arrived as a NEW document (a click that hard-navigated before hydration) is discarded and retried, because that run would have taken the hls.js path while claiming not to.",
+    "honesty_caveat": "The shipped default engine order WAS exercised — nothing in the app was changed to reach native-hls — but the browser was. No shipped Apple browser reaches this engine today: hls.js 1.7.1 prefers ManagedMediaSource (getMediaSource() takes it over MediaSource), so iOS Safari, which exposes ManagedMediaSource, answers isSupported() true as well. native-hls is therefore reachable in production only where hls.js's own isSupported() declines at import time. That makes this a measurement of a latent path, and the register cell says so."
+  },
+  "lab": {
+    "origin": "http://127.0.0.1:8100 — one origin, a pipe-only proxy splitting deploy/Caddyfile's own @api path set to core and everything else to the frontend, Accept-Encoding dropped, bodies never transformed. vidra_refresh is SameSite=Lax with Path=/api/v1/auth, so one origin is not a convenience.",
+    "lab_only_exception": "an HLS-only bandwidth shaper in that proxy, armed by writing a bytes-per-second number to a file. It paces writes and rewrites no byte; it exists because a loopback origin never gives Safari's ABR a reason to move.",
+    "core": "two processes built from vidra-core main (schema 146, migrated 0 -> 146 from an EMPTY initdb, dirty=false): VIDRA_ROLE=api on 127.0.0.1:8188 and a separate VIDRA_ROLE=worker",
+    "database": "native postgres 16.15 on 127.0.0.1:55701 (private socket dir), database play01",
+    "redis": "native redis on 127.0.0.1:56701, flushed at start",
+    "frontend": "production next build standalone (node .next/standalone/server.js, never next start) built with NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8100, on 127.0.0.1:3201",
+    "seams_stated": {
+      "MALWARE_SCAN_MODE": "disabled",
+      "RATE_LIMIT_ENABLED": "false",
+      "TRANSCODING_ENABLED": "true",
+      "TRANSCODING_MIN_FREE_SCRATCH_MB": "512",
+      "ALLOW_PLAIN_HTTP": "true",
+      "REGISTRATION_ENABLED": "false"
+    },
+    "registration": "never reopened. The owner claim created the only account and that account is also the creator, so no signup path was touched.",
+    "clip": "30 s, 1920x1080, 30 fps ffmpeg testsrc2 with a 440 Hz sine track, transcoded by the lab's own worker into a real CMAF ladder: 1080p, 720p, 480p, 360p (4 rungs) plus an audio rendition and 4 i-frame playlists. One WebVTT caption track (4 cues, en) uploaded and attached. Published, public.",
+    "browsers": {
+      "safari": "26.5 (safari:platformVersion 26.5.1, build 25F80) driven by /usr/bin/safaridriver over raw W3C WebDriver, one session at a time, webkit:alwaysAllowAutoplay true",
+      "chromium": "151.0.7922.34"
+    },
+    "node": "26.8.1",
+    "disk_free_gib_at_start": 11
+  },
+  "SC1_native_branch": {
+    "deleted": {
+      "deletedMediaSource": true,
+      "deletedManagedMediaSource": true,
+      "ms": false,
+      "mms": false,
+      "attempt": 1
+    },
+    "video_src": "http://127.0.0.1:8100/api/v1/videos/f321b429-c2f7-48d0-98a6-f8b8843d98e5/hls/master.m3u8?v=dlb6mog9psxc",
+    "usesBlob": false,
+    "window_Hls": "undefined",
+    "hls_js_chunk_fetched": false,
+    "hls_js_chunk_name": "_next/static/chunks/3q9j09qok5cw5.js (575 047 bytes, the built chunk carrying hls.js 1.7.1)",
+    "MediaSource_in_window": false,
+    "ManagedMediaSource_in_window": false,
+    "navigation_entries": [
+      {
+        "name": "http://127.0.0.1:8100/",
+        "type": "navigate"
+      }
+    ],
+    "readyState": 4,
+    "duration": 30.016,
+    "verdict": "native"
+  },
+  "SC2_safari_native": {
+    "currentTime_advance": {
+      "from": 0,
+      "to": 21.28039833265349,
+      "wall_seconds": 22.2,
+      "total_video_frames": 620,
+      "dropped": 2,
+      "readyState": 4,
+      "pass": true
+    },
+    "audible_track": {
+      "audioTracks": [
+        {
+          "label": "audio",
+          "kind": "main",
+          "enabled": true
+        }
+      ],
+      "muted": false,
+      "volume": 1,
+      "audio_segments_first": 6,
+      "audio_segments_last": 12,
+      "webkitAudioDecodedByteCount": null,
+      "note": "Safari 26.5 no longer exposes webkitAudioDecodedByteCount (null here), and a MediaElementSource tap on a natively-played HLS element reads RMS 0 in WebKit whether or not there is sound, so neither is usable as an audible-track proof on this path. What IS measured: the audio rendition's own segments arriving throughout playback, one enabled audio track, unmuted, full volume.",
+      "pass": true,
+      "original_decode": {
+        "status": 200,
+        "channels": 1,
+        "duration": 30,
+        "sampleRate": 48000,
+        "peak": 0.15276721119880676
+      }
+    },
+    "seek": {
+      "forward": {
+        "target": 20,
+        "readback": 20.014338916662382,
+        "seeking": false,
+        "readyState": 4,
+        "seekedEvents": 1
+      },
+      "backward": {
+        "target": 5,
+        "readback": 5.657851418218343,
+        "seeking": false,
+        "readyState": 4,
+        "seekedEvents": 2
+      },
+      "app_control": {
+        "control": "role=\"slider\" aria-label=\"Seek\"",
+        "key": "ArrowRight",
+        "before": 5.657851418218343,
+        "after": 16.036070607666396
+      },
+      "pass": true
+    },
+    "quality_menu_on_this_path": {
+      "player_controls": [
+        "Seek",
+        "Pause",
+        "Mute",
+        "Volume",
+        "Autoplay next is on",
+        "Captions",
+        "Speed: 1×",
+        "Theater mode",
+        "Picture-in-picture",
+        "More player options",
+        "Fullscreen"
+      ],
+      "quality_control_present": false,
+      "note": "hls.js is the only engine with a level handle; the lifecycle fills the level menu inside the hls-js effect only, so on native HLS levels is [] and QualityMenu renders nothing at all — not an Auto-only menu, no control."
+    },
+    "abr": {
+      "shaper_bytes_per_second": 600000,
+      "shaper_lifted_at_s": 32.3,
+      "heights_throttled": [
+        1080,
+        720
+      ],
+      "heights_unthrottled": [
+        720
+      ],
+      "playlists_fetched": [
+        "media_0.m3u8",
+        "media_4.m3u8",
+        "media_1.m3u8"
+      ],
+      "rung_changed": true,
+      "note": "the shaper paces HLS response bodies in the one-origin proxy; it rewrites no byte"
+    },
+    "abr_series": [
+      {
+        "t": 0,
+        "throttled": true,
+        "currentTime": 0,
+        "w": 1920,
+        "h": 1080,
+        "frames": 1,
+        "dropped": 0,
+        "playlists": 2
+      },
+      {
+        "t": 1,
+        "throttled": true,
+        "currentTime": 0,
+        "w": 1920,
+        "h": 1080,
+        "frames": 1,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 2,
+        "throttled": true,
+        "currentTime": 0,
+        "w": 1280,
+        "h": 720,
+        "frames": 0,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 3,
+        "throttled": true,
+        "currentTime": 0,
+        "w": 1280,
+        "h": 720,
+        "frames": 0,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 4.1,
+        "throttled": true,
+        "currentTime": 0,
+        "w": 1280,
+        "h": 720,
+        "frames": 0,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 5.1,
+        "throttled": true,
+        "currentTime": 0.27,
+        "w": 1280,
+        "h": 720,
+        "frames": 11,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 6.1,
+        "throttled": true,
+        "currentTime": 1.28,
+        "w": 1280,
+        "h": 720,
+        "frames": 11,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 7.1,
+        "throttled": true,
+        "currentTime": 2.29,
+        "w": 1280,
+        "h": 720,
+        "frames": 55,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 8.1,
+        "throttled": true,
+        "currentTime": 3.3,
+        "w": 1280,
+        "h": 720,
+        "frames": 55,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 9.1,
+        "throttled": true,
+        "currentTime": 4.3,
+        "w": 1280,
+        "h": 720,
+        "frames": 120,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 10.1,
+        "throttled": true,
+        "currentTime": 5.31,
+        "w": 1280,
+        "h": 720,
+        "frames": 162,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 11.1,
+        "throttled": true,
+        "currentTime": 6.32,
+        "w": 1280,
+        "h": 720,
+        "frames": 162,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 12.1,
+        "throttled": true,
+        "currentTime": 7.33,
+        "w": 1280,
+        "h": 720,
+        "frames": 162,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 13.1,
+        "throttled": true,
+        "currentTime": 8.34,
+        "w": 1280,
+        "h": 720,
+        "frames": 238,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 14.1,
+        "throttled": true,
+        "currentTime": 9.34,
+        "w": 1280,
+        "h": 720,
+        "frames": 238,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 15.1,
+        "throttled": true,
+        "currentTime": 10.35,
+        "w": 1280,
+        "h": 720,
+        "frames": 296,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 16.1,
+        "throttled": true,
+        "currentTime": 11.36,
+        "w": 1280,
+        "h": 720,
+        "frames": 296,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 17.2,
+        "throttled": true,
+        "currentTime": 12.37,
+        "w": 1280,
+        "h": 720,
+        "frames": 356,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 18.2,
+        "throttled": true,
+        "currentTime": 13.37,
+        "w": 1280,
+        "h": 720,
+        "frames": 356,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 19.2,
+        "throttled": true,
+        "currentTime": 14.38,
+        "w": 1280,
+        "h": 720,
+        "frames": 416,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 20.2,
+        "throttled": true,
+        "currentTime": 15.39,
+        "w": 1280,
+        "h": 720,
+        "frames": 416,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 21.2,
+        "throttled": true,
+        "currentTime": 16.4,
+        "w": 1280,
+        "h": 720,
+        "frames": 474,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 22.2,
+        "throttled": true,
+        "currentTime": 17.42,
+        "w": 1280,
+        "h": 720,
+        "frames": 474,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 23.2,
+        "throttled": true,
+        "currentTime": 18.43,
+        "w": 1280,
+        "h": 720,
+        "frames": 533,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 24.2,
+        "throttled": true,
+        "currentTime": 19.44,
+        "w": 1280,
+        "h": 720,
+        "frames": 533,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 25.2,
+        "throttled": true,
+        "currentTime": 20.44,
+        "w": 1280,
+        "h": 720,
+        "frames": 593,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 26.2,
+        "throttled": true,
+        "currentTime": 21.45,
+        "w": 1280,
+        "h": 720,
+        "frames": 593,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 27.2,
+        "throttled": true,
+        "currentTime": 22.46,
+        "w": 1280,
+        "h": 720,
+        "frames": 653,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 28.2,
+        "throttled": true,
+        "currentTime": 23.47,
+        "w": 1280,
+        "h": 720,
+        "frames": 653,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 29.3,
+        "throttled": true,
+        "currentTime": 24.47,
+        "w": 1280,
+        "h": 720,
+        "frames": 714,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 30.3,
+        "throttled": true,
+        "currentTime": 25.48,
+        "w": 1280,
+        "h": 720,
+        "frames": 714,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 31.3,
+        "throttled": true,
+        "currentTime": 26.49,
+        "w": 1280,
+        "h": 720,
+        "frames": 780,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 32.3,
+        "throttled": true,
+        "currentTime": 27.5,
+        "w": 1280,
+        "h": 720,
+        "frames": 780,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 33.3,
+        "throttled": false,
+        "currentTime": 28.51,
+        "w": 1280,
+        "h": 720,
+        "frames": 837,
+        "dropped": 0,
+        "playlists": 3
+      },
+      {
+        "t": 34.3,
+        "throttled": false,
+        "currentTime": 29.52,
+        "w": 1280,
+        "h": 720,
+        "frames": 837,
+        "dropped": 0,
+        "playlists": 3
+      }
+    ],
+    "speed": {
+      "menu": [
+        "0.25×",
+        "0.5×",
+        "0.75×",
+        "1×",
+        "1.25×",
+        "1.5×",
+        "1.75×",
+        "2×",
+        "2.5×",
+        "3×",
+        "3.5×",
+        "4×"
+      ],
+      "playbackRate": 1.5,
+      "button_after": "Speed: 1.5×",
+      "pass": true
+    },
+    "captions": {
+      "notes": [],
+      "before": {
+        "usesBlob": false,
+        "hlsJsChunkLoaded": false,
+        "currentTime": 2.321001415677909,
+        "readyState": 4,
+        "capBtn": "true",
+        "trackEls": [
+          {
+            "src": "blob:http://",
+            "lang": "en",
+            "label": "English (lab)"
+          }
+        ],
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "lang": "en",
+            "kind": "captions",
+            "mode": "disabled",
+            "cues": null,
+            "active": null
+          },
+          {
+            "label": "",
+            "lang": "",
+            "kind": "captions",
+            "mode": "showing",
+            "cues": 0,
+            "active": null
+          }
+        ]
+      },
+      "normalised_off": {
+        "usesBlob": false,
+        "hlsJsChunkLoaded": false,
+        "currentTime": 4.671978499978067,
+        "readyState": 4,
+        "capBtn": "false",
+        "trackEls": [
+          {
+            "src": "blob:http://",
+            "lang": "en",
+            "label": "English (lab)"
+          }
+        ],
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "lang": "en",
+            "kind": "captions",
+            "mode": "disabled",
+            "cues": null,
+            "active": null
+          },
+          {
+            "label": "",
+            "lang": "",
+            "kind": "captions",
+            "mode": "disabled",
+            "cues": null,
+            "active": null
+          }
+        ]
+      },
+      "after_toggle": {
+        "usesBlob": false,
+        "hlsJsChunkLoaded": false,
+        "currentTime": 6.1899351659963004,
+        "readyState": 4,
+        "capBtn": "true",
+        "trackEls": [
+          {
+            "src": "blob:http://",
+            "lang": "en",
+            "label": "English (lab)"
+          }
+        ],
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "lang": "en",
+            "kind": "captions",
+            "mode": "showing",
+            "cues": 4,
+            "active": "Lab caption one: native HLS acceptance."
+          },
+          {
+            "label": "",
+            "lang": "",
+            "kind": "captions",
+            "mode": "disabled",
+            "cues": null,
+            "active": null
+          }
+        ]
+      },
+      "playing": {
+        "usesBlob": false,
+        "hlsJsChunkLoaded": false,
+        "currentTime": 4.052211875330289,
+        "readyState": 4,
+        "capBtn": "true",
+        "trackEls": [
+          {
+            "src": "blob:http://",
+            "lang": "en",
+            "label": "English (lab)"
+          }
+        ],
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "lang": "en",
+            "kind": "captions",
+            "mode": "showing",
+            "cues": 4,
+            "active": "Lab caption one: native HLS acceptance."
+          },
+          {
+            "label": "",
+            "lang": "",
+            "kind": "captions",
+            "mode": "disabled",
+            "cues": null,
+            "active": null
+          }
+        ]
+      },
+      "after_off": {
+        "usesBlob": false,
+        "hlsJsChunkLoaded": false,
+        "currentTime": 5.4190832910120275,
+        "readyState": 4,
+        "capBtn": "false",
+        "trackEls": [
+          {
+            "src": "blob:http://",
+            "lang": "en",
+            "label": "English (lab)"
+          }
+        ],
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "lang": "en",
+            "kind": "captions",
+            "mode": "disabled",
+            "cues": null,
+            "active": null
+          },
+          {
+            "label": "",
+            "lang": "",
+            "kind": "captions",
+            "mode": "disabled",
+            "cues": null,
+            "active": null
+          }
+        ]
+      }
+    },
+    "picture_in_picture": {
+      "notes": [],
+      "engine": {
+        "src": "http://127.0.0.1:8100/api/v1/videos/f321b429-c2f7-48d0-98a6-f8b8843d98e5/hls/master.m3u8?v=dlb6mog9psxc",
+        "usesBlob": false,
+        "windowHls": "undefined"
+      },
+      "button_rect": {
+        "y": 663.5,
+        "x": 1236,
+        "width": 44,
+        "height": 44
+      },
+      "before": {
+        "pipElement": false,
+        "webkitPresentationMode": "inline",
+        "paused": false,
+        "currentTime": 3.396791457685669
+      },
+      "after_click": {
+        "pipElement": true,
+        "webkitPresentationMode": "picture-in-picture",
+        "ariaPressed": "true",
+        "paused": false,
+        "currentTime": 6.433500790665077
+      },
+      "exit_button_label": "Exit picture-in-picture",
+      "after_exit": {
+        "pipElement": false,
+        "webkitPresentationMode": "inline"
+      }
+    },
+    "theater": {
+      "before": {
+        "w": 1128,
+        "h": 635,
+        "pressed": "false",
+        "stored": null
+      },
+      "after": {
+        "w": 1156,
+        "h": 650,
+        "pressed": "true",
+        "stored": null
+      },
+      "pass": true,
+      "restored": {
+        "w": 1128,
+        "h": 635,
+        "pressed": "false",
+        "stored": null
+      }
+    },
+    "saved_preferences": {
+      "before": {
+        "playbackRate": 1.5,
+        "volume": 0.35,
+        "muted": false,
+        "currentTime": 24.358908770481015,
+        "usesBlob": false,
+        "src": "/api/v1/videos/f321b429-c2f7-48d0-98a6-f8b8843d98e5/hls/master.m3u8",
+        "hlsJsChunkLoaded": false,
+        "captions": [],
+        "speedButton": "Speed: 1.5×"
+      },
+      "after_reload": {
+        "playbackRate": 1.5,
+        "volume": 0.35,
+        "muted": false,
+        "currentTime": 6.262600499509631,
+        "usesBlob": false,
+        "src": "/api/v1/videos/f321b429-c2f7-48d0-98a6-f8b8843d98e5/hls/master.m3u8",
+        "hlsJsChunkLoaded": false,
+        "captions": [
+          ""
+        ],
+        "speedButton": "Speed: 1.5×"
+      },
+      "new_tab": {
+        "playbackRate": 1,
+        "volume": 0.35,
+        "muted": false,
+        "currentTime": 4.423648166012178,
+        "usesBlob": false,
+        "src": "/api/v1/videos/f321b429-c2f7-48d0-98a6-f8b8843d98e5/hls/master.m3u8",
+        "hlsJsChunkLoaded": false,
+        "captions": [
+          ""
+        ],
+        "speedButton": "Speed: 1×"
+      },
+      "stores": {
+        "local": {
+          "vidra.player.muted": "false",
+          "vidra:home-shelves-count": "1",
+          "vidra.player.volume": "0.35"
+        },
+        "session": {
+          "vidra.search-session": "9e752b8d-fb9b-460e-89e2-d63520975dbb",
+          "vidra.player.speed": "1.5"
+        }
+      },
+      "notes": [
+        "ArrowDown on the focused player did not move volume from WebDriver's key actions; the volume was set on the element and its volumechange dispatched instead, which is the same seam lib/player-volume.ts listens on"
+      ]
+    },
+    "resume": {
+      "server_position": {
+        "status": 401,
+        "body": {
+          "error": {
+            "code": "unauthorized",
+            "message": "missing or malformed authorization header",
+            "request_id": "BmiBExvDAfeivYfbPSRiJSmNbYLTLKyk"
+          }
+        }
+      },
+      "position_before_reload": 14.258321874994504,
+      "button": "Resume from 0:14",
+      "time_before_click": 3.9529952300084488,
+      "time_after_click": 16.595718250005383,
+      "engine_native": true
+    },
+    "original_fallback": {
+      "master_renamed_to": "/tmp/vidra-play01/storage/streaming-playlists/f321b429-c2f7-48d0-98a6-f8b8843d98e5/r1/master.m3u8.away",
+      "master_http": {
+        "status": 404
+      },
+      "after": {
+        "src": "/api/v1/videos/f321b429-c2f7-48d0-98a6-f8b8843d98e5/original",
+        "currentSrc": "/api/v1/videos/f321b429-c2f7-48d0-98a6-f8b8843d98e5/original",
+        "currentTime": 5.6769967493319236,
+        "usesBlob": false,
+        "frames": 182,
+        "videoWidth": 1920,
+        "videoHeight": 1080,
+        "error": null,
+        "alert": []
+      },
+      "master_restored_http": {
+        "status": 200
+      },
+      "pass": true
+    }
+  },
+  "SC3_chromium_contrast": {
+    "engine": {
+      "src": "blob:/8ae5e247-dfd9-40b1-8970-b74a30f281b2",
+      "usesBlob": true,
+      "hlsJsChunkLoaded": true,
+      "readyState": 4,
+      "duration": 30.015999,
+      "videoWidth": 854,
+      "videoHeight": 480
+    },
+    "currentTime_advance": {
+      "t": 22.1,
+      "currentTime": 21.870114,
+      "w": 1280,
+      "h": 720,
+      "frames": 735,
+      "dropped": 2,
+      "audioBytes": 442479
+    },
+    "audio_decoded_bytes": {
+      "first": 48735,
+      "last": 442479,
+      "tracks": null,
+      "muted": false,
+      "volume": 1
+    },
+    "seek": {
+      "forward": {
+        "target": 20,
+        "readback": 20.007479,
+        "seekedEvents": 1
+      },
+      "backward": {
+        "target": 5,
+        "readback": 5,
+        "seekedEvents": 2
+      }
+    },
+    "quality_menu": {
+      "control": "Quality: Auto (480p)",
+      "menu": [
+        "Auto",
+        "1080p",
+        "720p",
+        "480p",
+        "360p"
+      ],
+      "selected_360p": {
+        "t": 3,
+        "h": 360,
+        "w": 640,
+        "label": "Quality: 360p"
+      },
+      "switch_series": [
+        {
+          "t": 0,
+          "h": 480,
+          "w": 854,
+          "label": "Quality: 360p…"
+        },
+        {
+          "t": 1,
+          "h": 480,
+          "w": 854,
+          "label": "Quality: 360p…"
+        },
+        {
+          "t": 2,
+          "h": 480,
+          "w": 854,
+          "label": "Quality: 360p…"
+        },
+        {
+          "t": 3,
+          "h": 360,
+          "w": 640,
+          "label": "Quality: 360p"
+        }
+      ]
+    },
+    "speed": {
+      "playbackRate": 1.5,
+      "button": "Speed: 1.5×"
+    },
+    "captions": {
+      "menu": [],
+      "textTracks": [
+        {
+          "label": "English (lab)",
+          "mode": "showing",
+          "cue": "Lab caption one: native HLS acceptance."
+        }
+      ],
+      "showing": {
+        "label": "English (lab)",
+        "mode": "showing",
+        "cue": "Lab caption one: native HLS acceptance."
+      }
+    },
+    "captions_default": {
+      "toggle_on": {
+        "before": "false",
+        "after": "true"
+      },
+      "with_default_on": [
+        {
+          "label": "English (lab)",
+          "mode": "showing",
+          "cue": null
+        }
+      ],
+      "toggle_off": {
+        "before": "true",
+        "after": "false"
+      }
+    },
+    "picture_in_picture": {
+      "api": {
+        "pictureInPictureEnabled": true,
+        "requestPictureInPicture": "function"
+      },
+      "after_click": {
+        "pipElement": true,
+        "ariaPressed": "true"
+      },
+      "after_exit": {
+        "pipElement": false
+      }
+    },
+    "theater": {
+      "before": {
+        "w": 1128,
+        "pressed": "false"
+      },
+      "after": {
+        "w": 1156,
+        "pressed": "true"
+      },
+      "restored": {
+        "w": 1128,
+        "pressed": "false"
+      }
+    },
+    "saved_preferences": {
+      "before": {
+        "playbackRate": 1,
+        "volume": 0.35,
+        "currentTime": 16.239895
+      },
+      "after_reload": {
+        "playbackRate": 1.5,
+        "volume": 0.35,
+        "currentTime": 0
+      },
+      "new_tab": {
+        "playbackRate": 1,
+        "volume": 0.35,
+        "currentTime": 3.649086
+      }
+    },
+    "resume": {
+      "button": "Resume from 0:16",
+      "before_click": 0,
+      "after_click": 18.991518
+    },
+    "original_fallback_cache_disabled": {
+      "currentTime": 5.701985,
+      "videoWidth": 1920,
+      "videoHeight": 1080,
+      "usesBlob": false,
+      "src": "http://127.0.0.1:8100/api/v1/videos/f321b429-c2f7-48d0-98a6-f8b8843d98e5/original",
+      "frames": 177,
+      "audioDecodedBytes": 97981,
+      "error": null,
+      "alert": [],
+      "quality": null
+    },
+    "original_fallback_first_attempt": {
+      "src": "blob:/56d26e60-f9de-4dad-b9e3-7ed3186fce05",
+      "usesBlob": true,
+      "note": "inconclusive: the browser kept playing a master.m3u8 it had already cached, so the 404 never reached it. Re-measured with Network.setCacheDisabled + clearBrowserCache."
+    }
+  },
+  "defect_found_and_fixed": {
+    "what": "With the account setting \"Captions on by default\" ON, captions never came on on the native-HLS engine.",
+    "before_fix": {
+      "toggle": "true",
+      "hlsjs": {
+        "src": "dfa94c2f-be1f-4a93-9b28-d57bc5abff73",
+        "usesBlob": true,
+        "ready": 4,
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "mode": "showing"
+          }
+        ],
+        "capBtn": "true"
+      },
+      "progressive": {
+        "src": "99435444-938e-47a6-84dc-5ee2024e22cd",
+        "usesBlob": true,
+        "ready": 4,
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "mode": "showing"
+          }
+        ],
+        "capBtn": "true"
+      },
+      "native": {
+        "src": "master.m3u8",
+        "usesBlob": false,
+        "ready": 4,
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "mode": "disabled"
+          },
+          {
+            "label": "",
+            "mode": "disabled"
+          }
+        ],
+        "capBtn": "false"
+      },
+      "restored": "false"
+    },
+    "after_fix": {
+      "toggle": "true",
+      "hlsjs": {
+        "src": "6f14d5bf-0cd8-4fc4-952e-72e638ccc1c2",
+        "usesBlob": true,
+        "ready": 4,
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "mode": "showing"
+          }
+        ],
+        "capBtn": "true"
+      },
+      "progressive": {
+        "src": "dd5b7b39-7ade-44d1-8f29-488cd8699a34",
+        "usesBlob": true,
+        "ready": 4,
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "mode": "showing"
+          }
+        ],
+        "capBtn": "true"
+      },
+      "native": {
+        "src": "master.m3u8",
+        "usesBlob": false,
+        "ready": 4,
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "mode": "showing"
+          },
+          {
+            "label": "",
+            "mode": "disabled"
+          }
+        ],
+        "capBtn": "true"
+      },
+      "restored": "true"
+    },
+    "chromium_control": {
+      "toggle": "true",
+      "progressive": {
+        "src": "http://127.0.0.1:8100/api/v1/videos/f321b429-c2f7-48d0-98a6-f8b8843d98e5/original",
+        "usesBlob": false,
+        "ready": 4,
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "mode": "showing"
+          }
+        ],
+        "capBtn": "true"
+      },
+      "hlsjs": {
+        "src": "blob:http://127.0.0.1:8100/29c15e16-5daf-4681-a6d1-81861aa08620",
+        "usesBlob": true,
+        "ready": 4,
+        "tracks": [
+          {
+            "label": "English (lab)",
+            "mode": "showing"
+          }
+        ],
+        "capBtn": "true"
+      }
+    },
+    "mechanism": "hls.js attaches through MSE, so the media element has no resource of its own to load and the mode the captions_default effect set is never disturbed. Native HLS points <video src> at the master playlist, so the element runs its own load AFTER that effect, attaches the stream's in-band text tracks and comes back with every mode reset. components/player/VideoPlayer.tsx applied once and latched, so the reset was final.",
+    "fix": "vidra-user #215 — re-assert on the element's own load milestones and on a text-track list change, and stop as soon as the viewer operates the captions control.",
+    "tdd": "RED first: the re-apply test failed against the unpatched effect (expected 'disabled' to be 'showing'); a third test pins the don't-fight-the-viewer half."
+  },
+  "qoe_classification": {
+    "source": "qoe_events in the lab database, grouped by engine",
+    "rows": [
+      {
+        "engine": "native-hls",
+        "packaging_format": "cmaf",
+        "delivery_source": "api-proxy",
+        "playback.start": 23,
+        "with_rendition_height": 0,
+        "ttff_ms_min": 248,
+        "ttff_ms_max": 850,
+        "playback.error": 1,
+        "bitrate_switch": 0
+      },
+      {
+        "engine": "hls-js",
+        "packaging_format": "cmaf",
+        "delivery_source": "api-proxy",
+        "playback.start": 16,
+        "with_rendition_height": 2,
+        "ttff_ms_min": 100,
+        "ttff_ms_max": 1327,
+        "playback.error": 1,
+        "bitrate_switch": 16,
+        "rebuffer": 2
+      },
+      {
+        "engine": "progressive",
+        "packaging_format": "progressive",
+        "delivery_source": "api-proxy",
+        "playback.start": 2,
+        "with_rendition_height": 2
+      }
+    ],
+    "note": "native-hls reports NO rendition height, exactly as internal/qoe/qoe.go says it must (the browser owns variant selection and exposes no hook) — and it emits no bitrate_switch either, so the rung change measured above (1080p -> 720p) is invisible to an operator reading playback health. session_verified is false on every row: this lab's video needs no playback token, so no attested session id is minted.",
+    "beacons_are_fire_and_forget": true
+  },
+  "not_proven": [
+    "Physical speaker output. Safari 26.5 exposes no webkitAudioDecodedByteCount, and a MediaElementSource tap on a natively-played HLS element reads RMS 0 in WebKit regardless of sound, so the audible-track clause rests on the audio rendition's segments arriving, one enabled audio track, unmuted at full volume, and the source tone decoding to peak 0.153 off /original.",
+    "iOS Safari. The MSE-partial Apple browser the A07/A08 carry-in was really about was not driven; this is desktop Safari with both MSE spellings removed.",
+    "Anything at a CDN edge or behind presign. Every byte came from the api through the loopback proxy (delivery_source api-proxy on every beacon).",
+    "A cold-cache Safari fallback. Safari's own progressive-fallback attempt kept playing a cached master; the fallback measured here is the one taken by the native engine after the master 404'd on a fresh mount.",
+    "Live and federated surfaces. This is VOD only."
+  ]
 }
