@@ -179,8 +179,14 @@ importer does and does not carry across.
 Python 3 is required by the checkout hygiene preflight. Before any component
 fetch, `deploy.sh` and `rollback.sh` refuse an invoking user other than the
 checkout owner, foreign-owned Git metadata (including nested checkouts and
-worktree common metadata), and stray `.env.bak*`, `.env.old`, `.env.orig`,
-`.env.save` or `.env~` files. These checks report paths, never secret contents,
+worktree common metadata), and stray copies of environment files. A copy is
+matched by shape, not by a fixed suffix list: `.env.bak`, `.env.backup`,
+`.env.bak2`, `.env.old`, `.env.orig`, `.env.save`, `.env.copy`, an editor's
+`.env~` or `.env.swp`, and date- or number-stamped forms like
+`.env.2026-09-10`. Templates and framework config are not copies and stay
+legal, including `.env.example`, `.env.template` and Next.js's `.env.local`.
+A directory the deploy user cannot read is reported as a gap in the scan
+rather than aborting it, at the same severity as a stray file. These checks report paths, never secret contents,
 and do not change ownership or delete files. Run Git updates as the deploy user,
 for example `sudo -H -u vidra git -C /opt/vidra fetch origin`. Every finding in
 a run is reported together, with one repair command that covers the whole
