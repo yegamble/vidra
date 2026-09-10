@@ -257,7 +257,7 @@ class RollbackEnvRestoreTests(unittest.TestCase):
 
     HARNESS = (
         'set -euo pipefail\n'
-        'ENV_FILE="$1"\n'
+        'ENV_FILE="$1"\nENV_SNAPSHOT="$1.snapshot"\n'
         "log() { printf '[rollback] %s\\n' \"$*\"; }\n"
         "die() { printf '[rollback] ERROR: %s\\n' \"$*\" >&2; exit 1; }\n"
     )
@@ -270,7 +270,7 @@ class RollbackEnvRestoreTests(unittest.TestCase):
             env = Path(tmp) / 'production.env'
             env.write_text(self.AFTER)          # already rewritten to the target
             if with_bak:
-                Path(str(env) + '.bak').write_text(self.BEFORE)
+                Path(str(env) + '.snapshot').write_text(self.BEFORE)
             script = (self.HARNESS
                       + extract('rollback.sh', 'restore_env_and_die')
                       + '\nrestore_env_and_die "pull failed"\n')
@@ -293,7 +293,7 @@ class RollbackEnvRestoreTests(unittest.TestCase):
         self.assertNotEqual(code, 0, out)
         self.assertEqual(content, self.AFTER)
         self.assertIn('could not restore', out)
-        self.assertIn('backups/env-history/', out)
+        self.assertIn('recovery snapshot', out)
 
     def test_every_refusal_after_the_rewrite_goes_through_the_helper(self):
         """Counted over the CODE so the explanatory comments do not inflate it:
@@ -315,9 +315,9 @@ class RollbackEnvRestoreTests(unittest.TestCase):
         source = (DEPLOY / 'rollback.sh').read_text()
         code = '\n'.join(l for l in source.splitlines()
                          if l.strip() and not l.lstrip().startswith('#'))
-        self.assertLess(code.index('cp "$ENV_FILE" "${ENV_FILE}.bak"'),
+        self.assertLess(code.index('ENV_SNAPSHOT='),
                         code.index('restore_env_and_die() {'),
-                        'the .bak must exist before anything can restore from it')
+                        'the snapshot must exist before anything can restore from it')
         self.assertLess(code.index('restore_env_and_die "pull failed'),
                         code.index('log "restarting"'),
                         'every path the helper guards must come before `up -d`')

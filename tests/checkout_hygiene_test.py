@@ -1,0 +1,130 @@
+"""Exercise filesystem guards without root access or a running stack."""
+import importlib.util
+import os
+from pathlib import Path
+import stat
+import subprocess
+import shutil
+import tempfile
+import unittest
+from unittest.mock import patch
+
+SPEC = importlib.util.spec_from_file_location(
+    'hygiene', Path(__file__).resolve().parents[1] / 'deploy/checkout-hygiene.py')
+hygiene = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(hygiene)
+
+
+class CheckoutHygieneTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name) / 'checkout'
+        self.root.mkdir()
+
+    def init_git(self, root=None):
+        root = root or self.root
+        subprocess.run(['git', 'init', '-q', str(root)], check=True)
+
+    def test_clean_bundle_and_checkout_pass(self):
+        hygiene.check(self.root)
+        self.init_git()
+        hygiene.check(self.root)
+
+    def test_wrong_invoking_user_refused_before_git(self):
+        self.init_git()
+        with patch.object(hygiene.os, 'geteuid', return_value=os.getuid() + 1):
+            with patch.object(hygiene.subprocess, 'check_output') as git:
+                with self.assertRaisesRegex(ValueError, 'Run deployment as checkout owner'):
+                    hygiene.check(self.root)
+                git.assert_not_called()
+
+    def test_foreign_owned_object_in_nested_checkout_refused(self):
+        nested = self.root / 'vidra-core'
+        self.init_git(nested)
+        bad = (nested / '.git/objects/foreign').resolve()
+        bad.write_text('object')
+        original = Path.lstat
+
+        def lstat(path, *args, **kwargs):
+            result = original(path, *args, **kwargs)
+            if path == bad:
+                fields = list(result)
+                fields[4] = os.getuid() + 1
+                return os.stat_result(fields)
+            return result
+
+        with patch.object(Path, 'lstat', lstat):
+            with self.assertRaisesRegex(ValueError, 'sudo chown -h'):
+                hygiene.check(self.root)
+
+    def test_stray_backup_patterns_refused_without_reading_secrets(self):
+        for name in ('production.env.bak', '.env.bak-prestorage',
+                     'staging.env.old', '.env~', 'production.env.save.1'):
+            with self.subTest(name=name):
+                path = self.root / name
+                path.write_text('SECRET_MUST_NOT_APPEAR')
+                try:
+                    with self.assertRaises(ValueError) as caught:
+                        hygiene.check(self.root)
+                    self.assertNotIn('SECRET_MUST_NOT_APPEAR', str(caught.exception))
+                finally:
+                    path.unlink()
+
+    def test_live_env_and_templates_allowed(self):
+        for name in ('production.env', '.env.example', 'production.env.example'):
+            (self.root / name).touch()
+        hygiene.check(self.root)
+
+    def test_snapshots_unique_private_and_exact(self):
+        source = self.root / 'production.env'
+        source.write_bytes(b'KEY=secret\n')
+        destination = Path(self.temp.name) / 'history'
+        first = Path(hygiene.snapshot(self.root, source, destination))
+        source.write_bytes(b'KEY=next\n')
+        second = Path(hygiene.snapshot(self.root, source, destination))
+        self.assertNotEqual(first, second)
+        self.assertEqual(first.read_bytes(), b'KEY=secret\n')
+        self.assertEqual(second.read_bytes(), b'KEY=next\n')
+        self.assertEqual(stat.S_IMODE(first.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(destination.stat().st_mode), 0o700)
+
+    def test_inside_checkout_and_symlink_into_checkout_refused(self):
+        source = self.root / 'production.env'
+        source.touch()
+        alias = Path(self.temp.name) / 'alias'
+        alias.symlink_to(self.root, target_is_directory=True)
+        for destination in (self.root, self.root / 'backups', alias / 'backups'):
+            with self.assertRaisesRegex(ValueError, 'outside the checkout'):
+                hygiene.snapshot(self.root, source, destination)
+
+    def test_failed_copy_leaves_no_snapshot(self):
+        destination = Path(self.temp.name) / 'history'
+        with self.assertRaises(FileNotFoundError):
+            hygiene.snapshot(self.root, self.root / 'missing.env', destination)
+        self.assertEqual(list(destination.iterdir()), [])
+
+    def test_deploy_refuses_stray_backup_before_docker(self):
+        deploy = self.root / 'deploy'
+        deploy.mkdir()
+        source = Path(__file__).resolve().parents[1] / 'deploy'
+        for name in ('deploy.sh', 'lib.sh', 'checkout-hygiene.py'):
+            shutil.copyfile(source / name, deploy / name)
+        (self.root / 'env').mkdir()
+        (self.root / 'env/production.env').write_text('VIDRA_TLS_MODE=plain-http\n')
+        (self.root / 'env/production.env.bak').write_text('secret')
+        commands = Path(self.temp.name) / 'bin'
+        commands.mkdir()
+        docker = commands / 'docker'
+        docker.write_text('#!/bin/sh\necho DOCKER_WAS_CALLED >&2\nexit 99\n')
+        docker.chmod(0o755)
+        result = subprocess.run(['bash', str(deploy / 'deploy.sh')],
+                                env={**os.environ, 'PATH': str(commands) + ':' + os.environ['PATH']},
+                                capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Stray environment backup', result.stderr)
+        self.assertNotIn('DOCKER_WAS_CALLED', result.stderr)
+
+
+if __name__ == '__main__':
+    unittest.main()
