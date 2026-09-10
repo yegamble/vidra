@@ -8,11 +8,34 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 
 
-def check(root):
+ENV_BACKUP = re.compile(r'\.env(?:\.(?:bak|old|orig|save)(?:$|[.-])|~$)')
+
+
+def check(root, env_backups='fatal'):
+    """Report every finding at once, and only stop what is actually stopped.
+
+    Severity is not a style choice, it is which failure the finding predicts:
+
+    * Metadata the invoking user cannot write is always fatal. deploy.sh AND
+      rollback.sh both fetch and check out the nested repositories, so such a
+      tree fails the run anyway -- naming the repair here beats a raw git error
+      half-way through a rollback that has already rewritten the tag pins.
+    * A stray environment backup cannot affect a rollback, which commits
+      nothing. rollback.sh therefore passes 'warn': a hygiene lint must never
+      be the reason an operator cannot restore service. deploy.sh keeps it
+      fatal, because a deploy is the moment to fix the host.
+
+    Every finding is collected rather than raised on sight. A tree with 74
+    foreign-owned objects should cost one repair, not 74 preflight runs.
+    """
+    if env_backups not in ('fatal', 'warn'):
+        raise ValueError(f"env_backups must be 'fatal' or 'warn', not {env_backups!r}")
     root = Path(root).resolve()
+    fatal, warnings = [], []
     # Inspect every checkout before fetching ANY of them. Root can otherwise
     # fetch successfully and leave the next deployment unable to write objects.
     for repo in [root, *(root / n for n in ('vidra-core', 'vidra-user', 'vidra-search'))]:
@@ -30,19 +53,34 @@ def check(root):
             paths = [Path(metadata)]
             for directory, children, files in os.walk(metadata, onerror=fail_walk):
                 paths.extend(Path(directory) / n for n in children + files)
-            for path in paths:
-                if path.lstat().st_uid != owner:
-                    raise ValueError(f'Git metadata has the wrong owner: {path}. '
-                                     f'Administrator repair for this entry: sudo chown -h '
-                                     f'{shlex.quote(user)} -- {shlex.quote(str(path))}. '
-                                     'Rerun preflight to find any remaining entries; never fetch as root.')
+            foreign = [p for p in paths if p.lstat().st_uid != owner]
+            if foreign:
+                fatal.append(describe_owner(foreign, user, metadata))
+    strays = []
     for directory, children, files in os.walk(root, onerror=fail_walk):
         children[:] = [n for n in children if n not in ('.git', 'node_modules')]
-        for name in files:
-            if re.search(r'\.env(?:\.(?:bak|old|orig|save)(?:$|[.-])|~$)', name):
-                raise ValueError(f'Stray environment backup: {Path(directory) / name}. '
-                                 'Move it outside the checkout into a private directory. '
-                                 'Use deploy/backup-env.sh for future snapshots.')
+        strays.extend(Path(directory) / n for n in files if ENV_BACKUP.search(n))
+    if strays:
+        # Paths only. These files hold secrets and this message is printed.
+        listed = ', '.join(str(p) for p in strays)
+        finding = (f'Stray environment backup: {listed}. '
+                   'Move it outside the checkout into a private directory. '
+                   'Use deploy/backup-env.sh for future snapshots.')
+        (warnings if env_backups == 'warn' else fatal).append(finding)
+    if fatal:
+        raise ValueError('\n'.join(fatal))
+    return warnings
+
+
+def describe_owner(foreign, user, metadata):
+    """One repair for the whole tree, plus enough paths to see the shape."""
+    shown = ' '.join(shlex.quote(str(p)) for p in foreign[:5])
+    more = '' if len(foreign) <= 5 else f' (and {len(foreign) - 5} more)'
+    return (f'Git metadata has the wrong owner: {len(foreign)} path(s) under {metadata}{more}. '
+            f'Administrator repair for these entries: sudo chown -h '
+            f'{shlex.quote(user)} -- {shown}. '
+            f'Repair the whole tree in one step: sudo chown -R {shlex.quote(user)} -- '
+            f'{shlex.quote(str(metadata))}. Never fetch as root.')
 
 
 def fail_walk(error):
@@ -77,10 +115,13 @@ def main():
     parser.add_argument('root')
     parser.add_argument('--env-file')
     parser.add_argument('--directory', default=str(Path.home() / '.local/state/vidra/env-history'))
+    parser.add_argument('--env-backups', choices=('fatal', 'warn'), default='fatal',
+                        help="'warn' keeps a hygiene lint from blocking a rollback")
     args = parser.parse_args()
     try:
         if args.command == 'check':
-            check(args.root)
+            for warning in check(args.root, env_backups=args.env_backups):
+                print(f'[checkout-hygiene] WARNING: {warning}', file=sys.stderr)
         else:
             if not args.env_file:
                 parser.error('snapshot requires --env-file')

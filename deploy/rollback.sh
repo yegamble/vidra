@@ -155,7 +155,14 @@ require_embedded_migrate_tag VIDRA_SEARCH_TAG "$SEARCH_TAG"
 # shellcheck source=deploy/lib.sh
 . "$REPO_ROOT/deploy/lib.sh"
 command -v python3 >/dev/null 2>&1 || die "Python 3 is required for checkout preflight; install python3 before deploying"
-python3 "$REPO_ROOT/deploy/checkout-hygiene.py" check "$REPO_ROOT" || die "checkout hygiene preflight failed"
+# --env-backups warn, and ONLY here. A rollback runs mid-incident and commits
+# nothing, so a file whose NAME looks like an env backup cannot affect it —
+# refusing on one would mean a hygiene lint decides how long the outage lasts.
+# It is still printed, loudly, so the finding is not lost. Metadata ownership
+# stays fatal: the component fetch below genuinely cannot write such a tree,
+# and failing here beats failing after the tag pins have been rewritten. Same
+# reasoning as the bundle branch further down — see its comment.
+python3 "$REPO_ROOT/deploy/checkout-hygiene.py" check "$REPO_ROOT" --env-backups warn || die "checkout hygiene preflight failed"
 
 # Same key, same default as deploy/lib.sh's edge_profile() and deploy.sh's
 # pre-flight. `external` means the operator's own proxy terminates TLS and this
