@@ -8,6 +8,23 @@ This is the authoritative campaign record for this audit, superseding earlier re
 
 **v0.6.4: NO-GO; deployed rehearsal BLOCKED.** The [independent verification](release-verification-v0.6.4-2026-09-10.md) freezes four revisions and immutable image digests, checks actual CI execution, and assesses every workflow/acceptance item. Its result is 1 static PASS, 57 BLOCKED and 1 UNVERIFIED workflow rows. No matching disposable AMD64 server or representative-source/provider/recovery inputs were available for execution. The historical fixture closure below is not certification of this exact release on the declared target environment.
 
+## Current-release runtime continuation — 2026-09-10
+
+**First v0.6.4 runtime milestone: BLOCKED on fresh AMD64 host access; executable
+handoff prepared.** The [host procedure and runner](runtime-acceptance-v0.6.4.md)
+continue PR #185 using its frozen sources/digests, existing A02/A03 assertions
+and adapted owner/upload/playback/search drivers. They require one new run from
+blank installation through actual browser playback advancement and the same
+uploaded UUID's outbox → vidra-search → UI result, including `source=search`.
+[Preparation evidence](evidence/release-v0.6.4-verification/runtime-preparation.json)
+records local gates only. No loaded image, ledger or browser result is claimed.
+Missing access is a new Ubuntu 24.04 AMD64 host's SSH destination, login identity
+and passwordless sudo; local ARM64 and retained VMs are unsuitable. B2–B5/U1 and
+all scope decisions remain attached to their dependent criteria. The historical
+close-out below remains historical; this preparation changes no release verdict
+or workflow/A-item count. The scoped changes remain open — awaiting review and
+merge; this session explicitly prohibits merging.
+
 ## Current close-out — 2026-09-10
 
 **A18–A23 now pass the operator-authorized generated PeerTube rehearsal.**

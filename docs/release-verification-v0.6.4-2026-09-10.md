@@ -157,6 +157,16 @@ B1–B5/U1 are defined above. Exact verification procedures are preserved in the
 
 ## Reproduction and continuation
 
+**First runtime milestone follow-up, September 10:** the
+[executable handoff](runtime-acceptance-v0.6.4.md) now supplies a native-host
+runner and browser driver for fresh install → owner claim/login → real upload/
+transcode → advancing playback → real search indexing. It reuses this exact
+manifest. [Local preparation checks](evidence/release-v0.6.4-verification/runtime-preparation.json)
+passed; the host run remains BLOCKED on B1 (new AMD64 host SSH/login/sudo access).
+No current runtime row or A-item is promoted by this preparation. Provider and
+representative-source inputs block only their dependent checks; existing scope
+decisions and historical evidence boundaries are unchanged.
+
 The manifest and assessment are durable sanitized evidence. Raw logs, downloaded assets, detached snapshots and the read-only collection scripts remain at `/tmp/vidra-release-verification-20260910/v0.6.4`; v0.6.3 baseline evidence is its parent directory. GitHub run/job/artifact URLs, expiry dates and raw-log SHA-256s are in the assessment. CI artifacts currently exist with 14-day retention; preserve them before expiry if full traces are needed. Individual raw logs may contain synthetic test credentials and must not be published unreviewed.
 
 Re-run the preflight with installed Node 26 and a new output directory:
