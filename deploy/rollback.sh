@@ -7,8 +7,7 @@
 #   ./deploy/rollback.sh --core v0.2.1 --user v0.2.0 --search v0.2.0
 #
 # Rewrites VIDRA_CORE_TAG / VIDRA_USER_TAG / VIDRA_SEARCH_TAG in the env file
-# (snapshotting it to backups/env-history/ first — ten generations — and keeping
-# a .bak of the newest), pulls, restarts and re-probes.
+# (snapshotting it outside the checkout first), pulls, restarts and re-probes.
 #
 # It REFUSES a core/search tag below MIN_EMBEDDED_MIGRATE_TAG (set below): those
 # images have no embedded `migrate` subcommand, so the migration one-shots `up -d`
@@ -155,6 +154,8 @@ require_embedded_migrate_tag VIDRA_SEARCH_TAG "$SEARCH_TAG"
 # matters here, and it is unchanged.
 # shellcheck source=deploy/lib.sh
 . "$REPO_ROOT/deploy/lib.sh"
+command -v python3 >/dev/null 2>&1 || die "Python 3 is required for checkout preflight; install python3 before deploying"
+python3 "$REPO_ROOT/deploy/checkout-hygiene.py" check "$REPO_ROOT" || die "checkout hygiene preflight failed"
 
 # Same key, same default as deploy/lib.sh's edge_profile() and deploy.sh's
 # pre-flight. `external` means the operator's own proxy terminates TLS and this
@@ -217,21 +218,10 @@ log "current: core=$(env_get VIDRA_CORE_TAG '(unset)') user=$(env_get VIDRA_USER
 # present, so this also works on an env file that inherited its tags from the
 # shell.
 #
-# TWO RECORDS OF THE PREVIOUS STATE, and they are not redundant:
-#
-#   backups/env-history/<basename>.<UTC stamp>   ten generations (lib.sh)
-#   ${ENV_FILE}.bak                              the newest one, twice
-#
-# The .bak stays because every refusal path below restores from it by name
-# (restore_env_and_die) and because that filename is quoted in this script's own
-# error messages and in deploy/README.md — but it is now only the newest
-# generation's twin. The
-# history is what survives a SECOND rollback: the .bak after `rollback.sh v0.2.1;
-# rollback.sh v0.2.0` holds v0.2.1, which is the release you were running for
-# ninety seconds and never want back, while the tags you served before the
-# incident are two generations deep and only in the history directory.
-env_snapshot "$ENV_FILE" "$REPO_ROOT"
-cp "$ENV_FILE" "${ENV_FILE}.bak"
+# Preserve the pre-rollback state outside the checkout, at a unique 0600 path.
+# Keep it after success too: a second rollback must not overwrite this recovery.
+ENV_SNAPSHOT="$(ENV_FILE="$ENV_FILE" bash "$REPO_ROOT/deploy/backup-env.sh")" || die "env snapshot failed"
+log "env snapshot: $ENV_SNAPSHOT"
 set_key() {
   local key="$1" val="$2" tmp
   [ -n "$val" ] || return 0
@@ -260,15 +250,15 @@ set_key() {
 # operator types reads tags that were never deployed.
 #
 # It used to be uneven. `config -q` restored the .bak; `pull` did not, and its
-# message — "($ENV_FILE restored from ${ENV_FILE}.bak if you need to undo)" —
+# message — "($ENV_FILE restored from $ENV_SNAPSHOT if you need to undo)" —
 # reads mid-incident like a statement that it HAD been, which is exactly the
 # sentence an operator should not have to parse twice. One helper now, so the
 # paths cannot drift apart again.
 restore_env_and_die() {
-  if [ -f "${ENV_FILE}.bak" ] && cat "${ENV_FILE}.bak" > "$ENV_FILE"; then
-    log "restored ${ENV_FILE} from ${ENV_FILE}.bak — the tags in it are the ones you were serving before this run"
+  if [ -f "$ENV_SNAPSHOT" ] && cat "$ENV_SNAPSHOT" > "$ENV_FILE"; then
+    log "restored ${ENV_FILE} from $ENV_SNAPSHOT — the tags in it are the ones you were serving before this run"
   else
-    log "WARNING: could not restore ${ENV_FILE} from ${ENV_FILE}.bak; ${ENV_FILE} still pins the ROLLBACK TARGET tags and the ten-generation history is under backups/env-history/"
+    log "WARNING: could not restore ${ENV_FILE} from $ENV_SNAPSHOT; ${ENV_FILE} still pins the ROLLBACK TARGET tags and the recovery snapshot is $ENV_SNAPSHOT"
   fi
   die "$*"
 }

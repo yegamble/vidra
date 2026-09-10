@@ -434,6 +434,8 @@ TLS_MODE="$(env_get VIDRA_TLS_MODE acme)"
 vidra_compose_chain
 
 step "0/6 pre-flight"
+command -v python3 >/dev/null 2>&1 || die "Python 3 is required for checkout preflight; install python3 before deploying"
+python3 "$REPO_ROOT/deploy/checkout-hygiene.py" check "$REPO_ROOT" || die "checkout hygiene preflight failed"
 require_compose_version
 require_known_tls_mode
 # Order matters: the mounted Caddyfile must EXIST before it can be checked for a

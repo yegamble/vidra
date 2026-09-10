@@ -176,6 +176,44 @@ importer does and does not carry across.
 
 ## Host prerequisites
 
+Python 3 is required by the checkout hygiene preflight. Before any component
+fetch, `deploy.sh` and `rollback.sh` refuse an invoking user other than the
+checkout owner, foreign-owned Git metadata (including nested checkouts and
+worktree common metadata), and stray `.env.bak*`, `.env.old`, `.env.orig`,
+`.env.save` or `.env~` files. These checks report paths, never secret contents,
+and do not change ownership or delete files. Run Git updates as the deploy user,
+for example `sudo -H -u vidra git -C /opt/vidra fetch origin`. For a mismatched
+entry, the diagnostic prints an administrator repair command; rerun the check
+after repairing ownership:
+
+```bash
+python3 deploy/checkout-hygiene.py check "$PWD"
+```
+
+Before manually editing environment settings, create a protected copy with:
+
+```bash
+bash deploy/backup-env.sh
+# For another env file or a dedicated backup volume:
+ENV_FILE=env/staging.env VIDRA_ENV_BACKUP_DIR=/srv/vidra-env-history bash deploy/backup-env.sh
+```
+
+The command prints its unique snapshot path. It defaults to
+`$HOME/.local/state/vidra/env-history`, requires a location outside the checkout,
+and creates files with mode 0600 in a directory with mode 0700 owned by the
+invoking user. Rollback uses this same command and restores that exact snapshot
+if pre-restart validation or image pulls fail. Snapshots are retained after
+success, without automatic pruning; include this directory in the operator's
+secret backup and retention policy. Move old stray env copies to private storage
+outside the checkout before deploying. Existing `backups/env-history` produced
+by the Go CLI is a separate legacy history format and is not migrated or pruned
+by this command. This does not change the database/config archive backup policy.
+
+These guards cannot prevent an operator from manually running root-owned Git
+commands or copying secrets afterward. They stop the next deploy before it
+fetches components or touches the running stack. Media persistence and catalogue
+reconciliation belong to `vidra-core`; these host checks do not certify playback.
+
 `ufw`, `unattended-upgrades` and SSH hardening are not mentioned anywhere else in
 this repo, and one of the items below (the DOCKER-USER warning) is the reason a
 host firewall will *not* save you.
