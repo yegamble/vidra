@@ -1,0 +1,50 @@
+[test] Testing compose_at_least_2_24 function...
+PASS: compose_at_least_2_24 '2.24.0' -> 0
+PASS: compose_at_least_2_24 'v2.24.0' -> 0
+PASS: compose_at_least_2_24 '2.25.0' -> 0
+PASS: compose_at_least_2_24 '2.30.1' -> 0
+PASS: compose_at_least_2_24 '3.0.0' -> 0
+PASS: compose_at_least_2_24 '3.0' -> 0
+PASS: compose_at_least_2_24 'v10.0.0' -> 0
+PASS: compose_at_least_2_24 '2.24' -> 0
+PASS: compose_at_least_2_24 'v2.24' -> 0
+PASS: compose_at_least_2_24 '2.24.0-rc1' -> 0
+PASS: compose_at_least_2_24 '2.24-rc1' -> 0
+PASS: compose_at_least_2_24 '2.24-alpha' -> 0
+PASS: compose_at_least_2_24 '2.25.0-beta.1' -> 0
+PASS: compose_at_least_2_24 '2.23.9' -> 1
+PASS: compose_at_least_2_24 '2.23.0' -> 1
+PASS: compose_at_least_2_24 '2.0.0' -> 1
+PASS: compose_at_least_2_24 '1.29.2' -> 1
+PASS: compose_at_least_2_24 'v1.29.2' -> 1
+PASS: compose_at_least_2_24 '2.1.5' -> 1
+PASS: compose_at_least_2_24 '2.9.9' -> 1
+PASS: compose_at_least_2_24 '2.23' -> 1
+PASS: compose_at_least_2_24 '1.30' -> 1
+PASS: compose_at_least_2_24 'abc' -> 2
+PASS: compose_at_least_2_24 'v.2.24' -> 2
+PASS: compose_at_least_2_24 '' -> 2
+PASS: compose_at_least_2_24 '..' -> 2
+PASS: compose_at_least_2_24 '.' -> 2
+PASS: compose_at_least_2_24 'v2.x' -> 2
+PASS: compose_at_least_2_24 '2.a' -> 2
+PASS: compose_at_least_2_24 'a.24' -> 2
+PASS: compose_at_least_2_24 'v2.24x' -> 2
+[test] Testing unpack_bundle error paths...
+PASS: unpack_bundle [release carries no bundle asset -> 44 for the clone fallback] -> 44
+PASS: unpack_bundle [members not ./-relative are refused] -> 9
+PASS: unpack_bundle [absolute member names are refused] -> 9
+PASS: unpack_bundle [../ traversal members are refused] -> 9
+PASS: unpack_bundle [no manifest at the root -> not a deployment bundle] -> 9
+PASS: unpack_bundle [manifest listed but not a regular file after extract] -> 9
+PASS: unpack_bundle [corrupt tarball] -> 1 (failed loudly, no clone fallback, no directory)
+PASS: unpack_bundle [happy path] -> tree + manifest in place, TREE_MODE=bundle
+[test] Testing the release pins in the env templates...
+PASS: install.sh pins 'vidra setup' to the release it resolved
+PASS: env template release pins name one release above the v0.2.0 floor, and install.sh does not defer to them
+[test] Testing the migration one-shots' lock-wait bound...
+PASS: docker-compose.prod.yml bounds migrate's lock wait
+PASS: docker-compose.prod.yml bounds search-migrate's lock wait
+PASS: env/production.env.example documents VIDRA_MIGRATE_LOCK_TIMEOUT=5s
+PASS: both migration one-shots bound their lock WAIT (not their work) from one documented knob
+[test] All tests passed!
