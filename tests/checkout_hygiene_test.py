@@ -128,3 +128,93 @@ class CheckoutHygieneTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class SeverityTests(unittest.TestCase):
+    """A rollback runs mid-incident: only findings that stop it may stop it."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name) / 'checkout'
+        self.root.mkdir()
+
+    def foreign_metadata(self, repo):
+        """Make one object in repo's metadata look owned by somebody else."""
+        subprocess.run(['git', 'init', '-q', str(repo)], check=True)
+        bad = (repo / '.git/objects/foreign').resolve()
+        bad.write_text('object')
+        original = Path.lstat
+
+        def lstat(path, *args, **kwargs):
+            result = original(path, *args, **kwargs)
+            if path == bad:
+                fields = list(result)
+                fields[4] = os.getuid() + 1
+                return os.stat_result(fields)
+            return result
+
+        return patch.object(Path, 'lstat', lstat)
+
+    def test_stray_backup_warns_instead_of_refusing_for_rollback(self):
+        (self.root / 'production.env.bak').write_text('SECRET_MUST_NOT_APPEAR')
+        warnings = hygiene.check(self.root, env_backups='warn')
+        self.assertTrue(any('Stray environment backup' in w for w in warnings))
+        self.assertFalse(any('SECRET_MUST_NOT_APPEAR' in w for w in warnings))
+
+    def test_stray_backup_still_fatal_by_default(self):
+        (self.root / 'production.env.bak').write_text('secret')
+        with self.assertRaisesRegex(ValueError, 'Stray environment backup'):
+            hygiene.check(self.root)
+
+    def test_unwritable_metadata_stays_fatal_even_for_rollback(self):
+        # Rollback fetches and checks out the nested repositories, so metadata
+        # it cannot write fails the run regardless. Warning would only move the
+        # failure later and make it less readable.
+        with self.foreign_metadata(self.root / 'vidra-core'):
+            with self.assertRaisesRegex(ValueError, 'wrong owner'):
+                hygiene.check(self.root, env_backups='warn')
+
+    def test_every_finding_reported_in_one_run(self):
+        for name in ('production.env.bak', 'staging.env.old'):
+            (self.root / name).write_text('secret')
+        with self.assertRaises(ValueError) as caught:
+            hygiene.check(self.root)
+        for name in ('production.env.bak', 'staging.env.old'):
+            self.assertIn(name, str(caught.exception))
+
+    def test_repair_command_covers_every_bad_path_at_once(self):
+        with self.foreign_metadata(self.root):
+            with self.assertRaises(ValueError) as caught:
+                hygiene.check(self.root)
+        message = str(caught.exception)
+        self.assertIn('sudo chown -h', message)
+        self.assertIn('chown -R', message)
+
+    def test_clean_checkout_warns_about_nothing(self):
+        self.assertEqual(hygiene.check(self.root, env_backups='warn'), [])
+
+    def test_rollback_continues_past_a_stray_backup(self):
+        repo = self.root
+        (repo / 'deploy').mkdir()
+        source = Path(__file__).resolve().parents[1] / 'deploy'
+        for name in ('rollback.sh', 'lib.sh', 'checkout-hygiene.py', 'backup-env.sh'):
+            shutil.copyfile(source / name, repo / 'deploy' / name)
+        (repo / 'env').mkdir()
+        (repo / 'env/production.env').write_text('VIDRA_TLS_MODE=acme\n')
+        (repo / 'env/production.env.bak').write_text('secret')
+        commands = Path(self.temp.name) / 'bin'
+        commands.mkdir()
+        docker = commands / 'docker'
+        docker.write_text('#!/bin/sh\ncase "$*" in\n'
+                          '"compose version --short") echo "v2.30.0" ;;\n'
+                          '*) echo DOCKER_CALLED >&2; exit 99 ;;\nesac\n')
+        docker.chmod(0o755)
+        result = subprocess.run(
+            ['bash', str(repo / 'deploy/rollback.sh'), 'v9.9.9'],
+            env={**os.environ, 'PATH': str(commands) + ':' + os.environ['PATH'],
+                 'HOME': self.temp.name},
+            capture_output=True, text=True)
+        combined = result.stdout + result.stderr
+        self.assertIn('Stray environment backup', combined)
+        self.assertNotIn('checkout hygiene preflight failed', combined)

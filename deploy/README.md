@@ -182,12 +182,26 @@ checkout owner, foreign-owned Git metadata (including nested checkouts and
 worktree common metadata), and stray `.env.bak*`, `.env.old`, `.env.orig`,
 `.env.save` or `.env~` files. These checks report paths, never secret contents,
 and do not change ownership or delete files. Run Git updates as the deploy user,
-for example `sudo -H -u vidra git -C /opt/vidra fetch origin`. For a mismatched
-entry, the diagnostic prints an administrator repair command; rerun the check
-after repairing ownership:
+for example `sudo -H -u vidra git -C /opt/vidra fetch origin`. Every finding in
+a run is reported together, with one repair command that covers the whole
+metadata tree, so a checkout with many foreign-owned objects costs one repair
+rather than one preflight run per object:
 
 ```bash
 python3 deploy/checkout-hygiene.py check "$PWD"
+```
+
+**A stray environment backup does not stop `rollback.sh`.** It is printed as a
+warning there and nowhere else. The severity split follows what each finding
+actually predicts: unwritable Git metadata breaks the component fetch both
+scripts perform, so it stays fatal everywhere and fails before the tag pins are
+rewritten; a rollback commits nothing, so a file whose *name* matches a backup
+pattern cannot affect it, and a hygiene lint must never decide how long an
+outage lasts. A deploy is the moment to fix the host, so `deploy.sh` keeps
+every finding fatal. To see what a rollback would tolerate:
+
+```bash
+python3 deploy/checkout-hygiene.py check "$PWD" --env-backups warn
 ```
 
 Before manually editing environment settings, create a protected copy with:
