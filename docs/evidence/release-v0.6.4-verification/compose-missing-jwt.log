@@ -1,0 +1,1 @@
+error while interpolating services.worker.environment.JWT_SECRET: required variable JWT_SECRET is missing a value: JWT_SECRET is required in production - generate with `openssl rand -base64 48` and put it in env/production.env (>=32 bytes; the dev default is rejected at api boot)

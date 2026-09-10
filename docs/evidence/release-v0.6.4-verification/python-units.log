@@ -1,0 +1,69 @@
+$ python3 -c raise SystemExit(7)
+
+test_archives_and_plaintext_verification_are_private_from_creation (backup_test.BackupTest) ... ok
+test_failed_dump_never_publishes_or_advances_success (backup_test.BackupTest) ... ok
+test_empty_profile_render_cannot_pass (blank_server_smoke_test.SmokeTests) ... ok
+test_exact_loopback_ports_and_no_datastore_publication (blank_server_smoke_test.SmokeTests) ... ok
+test_existing_output_refused_before_any_vm_operation (blank_server_smoke_test.SmokeTests) ... ok
+test_moving_image_tag_is_rejected (blank_server_smoke_test.SmokeTests) ... ok
+test_native_cli_checksum_is_selected_exactly_once (blank_server_smoke_test.SmokeTests) ... ok
+test_only_complete_a01_candidate_can_create_vm (blank_server_smoke_test.SmokeTests) ... ok
+test_recreate_failure_is_fatal (caddy_reload_test.CaddyReloadTests) ... ok
+test_replaced_file_recreates_only_caddy_before_reload (caddy_reload_test.CaddyReloadTests) ... ok
+test_unchanged_file_only_reloads (caddy_reload_test.CaddyReloadTests) ... ok
+test_asset_names_are_explicit_linux_and_bundle (release_preflight_test.PreflightTests) ... ok
+test_checksum_missing_duplicate_or_corrupt_never_passes (release_preflight_test.PreflightTests) ... ok
+test_command_failure_is_not_accepted (release_preflight_test.PreflightTests) ... ok
+test_existing_evidence_cannot_be_overwritten (release_preflight_test.PreflightTests) ... ok
+test_failed_dependency_preserves_manifest_and_nonzero_exit (release_preflight_test.PreflightTests) ... [preflight] ERROR: registry unavailable
+ok
+test_image_requires_digest_platform_and_matching_source (release_preflight_test.PreflightTests) ... ok
+test_resolver_regression_removes_only_resolver (release_preflight_test.PreflightTests) ... ok
+test_unsupported_node_rejected_before_network (release_preflight_test.PreflightTests) ... ok
+test_a_corrupt_gz_prints_the_scripts_own_error (rollback_floor_test.RestoreArchiveDecompressionTests) ... ok
+test_a_file_that_is_not_gzip_at_all_lands_in_the_same_branch (rollback_floor_test.RestoreArchiveDecompressionTests) ... ok
+test_a_valid_gz_decompresses_without_complaint (rollback_floor_test.RestoreArchiveDecompressionTests) ... ok
+test_a_dirty_dump_ledger_is_refused (rollback_floor_test.RestorePreflightTests)
+Both migrators refuse a dirty ledger, and they run AFTER the drop. ... ok
+test_a_ledger_absent_from_the_dump_is_skipped (rollback_floor_test.RestorePreflightTests) ... ok
+test_an_image_that_cannot_answer_is_reported_as_not_checked (rollback_floor_test.RestorePreflightTests)
+Every release cut before `migrate embedded-max` lands here. It must ... ok
+test_dump_ahead_of_the_pinned_image_is_refused_before_the_drop (rollback_floor_test.RestorePreflightTests)
+A38 run 13: dump at 137, pinned v0.6.2 embeds 125. ... ok
+test_dump_behind_the_image_is_the_documented_forward_path (rollback_floor_test.RestorePreflightTests) ... ok
+test_dump_equal_to_the_image_passes (rollback_floor_test.RestorePreflightTests) ... ok
+test_nothing_stops_the_site_until_every_validation_has_passed (rollback_floor_test.RestorePreflightTests)
+A37-3: the stop used to be the FIRST thing the script did, so a ... ok
+test_the_override_downgrades_the_refusal_to_a_warning (rollback_floor_test.RestorePreflightTests) ... ok
+test_the_preflight_runs_before_the_drop (rollback_floor_test.RestorePreflightTests)
+Ordering is the whole point: a refusal must mean nothing happened. ... ok
+test_the_search_ledger_is_read_from_its_own_table (rollback_floor_test.RestorePreflightTests) ... ok
+test_a_missing_bak_says_so_instead_of_claiming_a_restore (rollback_floor_test.RollbackEnvRestoreTests)
+The one thing worse than not restoring is saying you did. ... ok
+test_a_refusal_puts_the_env_file_back (rollback_floor_test.RollbackEnvRestoreTests) ... ok
+test_every_refusal_after_the_rewrite_goes_through_the_helper (rollback_floor_test.RollbackEnvRestoreTests)
+Counted over the CODE so the explanatory comments do not inflate it: ... ok
+test_the_helper_sits_between_the_rewrite_and_up_d (rollback_floor_test.RollbackEnvRestoreTests) ... ok
+test_a_failing_up_still_prints_the_trailer (rollback_floor_test.RollbackTrailerTests)
+A38 run 4: `set -e` used to kill the script here, so the operator got ... ok
+test_a_successful_up_prints_no_trailer (rollback_floor_test.RollbackTrailerTests) ... ok
+test_the_probe_path_uses_the_same_trailer (rollback_floor_test.RollbackTrailerTests)
+One trailer, two failure paths — counted over the CODE so the ... ok
+test_abort_requires_real_failure_and_no_start_or_container_change (runtime_smoke_test.RuntimeTests) ... ok
+test_ledger_requires_exact_version_and_clean_single_row (runtime_smoke_test.RuntimeTests) ... ok
+test_runtime_ports_examine_actual_bindings (runtime_smoke_test.RuntimeTests) ... ok
+test_bundled_clamd_without_the_scan_profile_is_refused (scanner_profile_test.ScannerProfileGuard)
+The `vidra setup --scan=false` shape: address kept, profile dropped. ... ok
+test_external_clamd_is_never_second_guessed (scanner_profile_test.ScannerProfileGuard)
+An external daemon is the operator's own host: this project neither ... ok
+test_no_address_is_not_this_guards_business (scanner_profile_test.ScannerProfileGuard)
+Unset CLAMAV_ADDR is the opt-out (or the unconfigured refusal the api ... ok
+test_scan_profile_present_passes (scanner_profile_test.ScannerProfileGuard) ... ok
+test_scan_via_extra_profiles_also_passes (scanner_profile_test.ScannerProfileGuard)
+EXTRA_COMPOSE_PROFILES is the operator-owned half of the same list. ... ok
+test_the_refusal_quotes_the_mode_actually_in_force (scanner_profile_test.ScannerProfileGuard) ... ok
+
+----------------------------------------------------------------------
+Ran 48 tests in 1.068s
+
+OK

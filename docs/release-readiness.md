@@ -4,6 +4,10 @@ Audit date: **2026-09-05**. Target: a fresh-server installation, migration of th
 
 This is the authoritative campaign record for this audit, superseding earlier readiness labels **only for the revisions and evidence below**. Historical plans remain requirement sources. The original audit used one agent with no product edits, commits, pushes, merges, deployment, or branch cleanup. The implementation session below authorizes scoped commits/pushes and a draft PR, but prohibits merge, release publication and production deployment. No production database, media bucket, credentials, or running stack was used.
 
+## Independent current-release verification — 2026-09-10
+
+**v0.6.4: NO-GO; deployed rehearsal BLOCKED.** The [independent verification](release-verification-v0.6.4-2026-09-10.md) freezes four revisions and immutable image digests, checks actual CI execution, and assesses every workflow/acceptance item. Its result is 1 static PASS, 57 BLOCKED and 1 UNVERIFIED workflow rows. No matching disposable AMD64 server or representative-source/provider/recovery inputs were available for execution. The historical fixture closure below is not certification of this exact release on the declared target environment.
+
 ## Current close-out — 2026-09-10
 
 **A18–A23 now pass the operator-authorized generated PeerTube rehearsal.**
