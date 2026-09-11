@@ -223,7 +223,7 @@ print(sum(float(s.rsplit(' ',1)[1]) for s in lines if s.startswith('vidra_search
       let end;
       await expect(async () => { end = await sample(); assert.ok(end.time - start.time >= 2 && end.frames > start.frames && end.audio_bytes > start.audio_bytes); assert.equal(end.error, null); }).toPass({ timeout: 60000 });
       result.playback.push({ id: item.id, title: item.title, start, end }); save();
-      await page.screenshot({ path: join(stage, `${item.title.split(' ').at(-1)}.png`) });
+      await page.screenshot({ path: join(stage, `${label}-${item.title.split(' ').at(-1)}.png`) });
     }
     assert.equal(result.playback.length, 3);
     result.checks[phase] = 'PASS';
