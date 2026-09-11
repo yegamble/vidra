@@ -1,0 +1,92 @@
+"""Dedicated Backblaze test storage only; no account-wide object access."""
+import base64
+import hashlib
+import json
+import re
+import time
+import urllib.request
+
+from blank_server_smoke import require
+
+CAPABILITIES = {'listBuckets', 'readBuckets', 'listFiles', 'readFiles', 'writeFiles', 'deleteFiles'}
+
+
+def validate_spec(spec):
+    require(set(spec) == {'bucket', 'bucket_id', 'region', 'endpoint'}, 'bucket spec must contain only nonsecret fields')
+    require(re.fullmatch(r'vidra-acceptance-v064-[0-9]{8}-[a-z0-9-]+', spec['bucket']) is not None,
+            'requires a new dedicated v0.6.4 acceptance bucket; existing/shared buckets forbidden')
+    require('sizetube' not in spec['bucket'], 'Sizetube buckets are forbidden')
+    require(re.fullmatch(r'[0-9a-f]{24}', spec['bucket_id']) is not None, 'invalid test bucket ID')
+    require(re.fullmatch(r'[a-z]{2}-[a-z]+-[0-9]{3}', spec['region']) is not None, 'invalid B2 region')
+    require(spec['endpoint'] == f's3.{spec["region"]}.backblazeb2.com', 'requires regional B2 TLS endpoint')
+
+
+def validate_scope(spec, storage):
+    validate_spec(spec)
+    allowed = storage['allowed']
+    require(allowed.get('buckets') == [{'id': spec['bucket_id'], 'name': spec['bucket']}],
+            'key must be restricted by Backblaze to exactly the dedicated test bucket')
+    require(set(allowed['capabilities']) == CAPABILITIES and not allowed.get('namePrefix'),
+            'key must have only test-bucket read/write/delete capabilities; no account or policy management')
+    require(storage['s3ApiUrl'] == 'https://' + spec['endpoint'], 'credential belongs to another region')
+
+
+class TestBucket:
+    def __init__(self, spec, credentials):
+        validate_spec(spec)
+        require(set(credentials) == {'access_key', 'secret_key'} and all(credentials.values()), 'invalid dedicated key file')
+        self.spec = spec
+        self.commands = []
+        basic = base64.b64encode((credentials['access_key'] + ':' + credentials['secret_key']).encode()).decode()
+        auth = self.request('https://api.backblazeb2.com/b2api/v4/b2_authorize_account', {}, 'Basic ' + basic)
+        storage = auth['apiInfo']['storageApi']
+        validate_scope(spec, storage)  # before any bucket request or host mutation
+        self.api = storage['apiUrl']
+        require(re.fullmatch(r'https://api[0-9]+\.backblazeb2\.com', self.api) is not None, 'unexpected B2 API host')
+        self.token = auth['authorizationToken']
+        self.proof = {'provider': 'Backblaze B2', **spec, 'authorized_scope': storage['allowed']}
+
+    def request(self, url, body, token):
+        entry = {'url': url, 'body': body, 'started_at': time.time()}
+        self.commands.append(entry)
+        request = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                        headers={'Authorization': token, 'Content-Type': 'application/json'})
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                entry['http_status'] = response.status
+                return json.load(response)
+        finally:
+            entry['finished_at'] = time.time()
+
+    def call(self, method, **values):
+        return self.request(self.api + '/b2api/v4/' + method, values, self.token)
+
+    def inventory(self):
+        # Deliberately no generic bucket argument, pagination or account listing.
+        # A tiny, new acceptance bucket cannot legitimately exceed this bound.
+        result = self.call('b2_list_file_versions', bucketId=self.spec['bucket_id'], maxFileCount=1000)
+        require(result.get('nextFileName') is None, 'test bucket exceeded bounded inventory')
+        return [{key: row.get(key) for key in ('fileId', 'fileName', 'action', 'contentLength',
+                'contentType', 'contentSha1', 'uploadTimestamp')} for row in result['files']]
+
+    def require_empty(self):
+        files = self.inventory()
+        require(not files, 'test bucket is not empty, including versions; never clean or reuse it automatically')
+        self.proof['before'] = files
+        self.proof['preflight'] = 'PASS'
+        return self.proof
+
+    def verify_media(self, video_id, fixture):
+        files = self.inventory()
+        uploads = [row for row in files if row['action'] == 'upload']
+        require(any(row['fileName'] == '.vidra/owner' for row in uploads), 'missing test bucket ownership marker')
+        video = [row for row in uploads if video_id in row['fileName']]
+        source_sha1 = hashlib.sha1(fixture.read_bytes()).hexdigest()
+        require(any(row['contentSha1'] == source_sha1 and row['contentLength'] == fixture.stat().st_size
+                    for row in video), 'B2 does not attest the uploaded original bytes')
+        for suffix in ('.m3u8', '.m4s'):
+            require(any(row['fileName'].endswith(suffix) and row['contentLength'] > 0 for row in video),
+                    'transcoded objects missing from B2: ' + suffix)
+        self.proof.update(after=files, fixture_sha1=source_sha1, video_id=video_id,
+                          provider_objects='PASS', requests=self.commands)
+        return self.proof

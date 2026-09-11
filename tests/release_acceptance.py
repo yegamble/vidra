@@ -22,6 +22,7 @@ import time
 import blank_server_smoke as blank
 from blank_server_smoke import require, sha, validate_candidate, check_ports
 from runtime_smoke import check_ledger, check_runtime_ports
+from release_acceptance_b2 import TestBucket, validate_spec
 
 ROOT = Path(__file__).resolve().parent.parent
 SERVICES = {'api': 'vidra-core', 'migrate': 'vidra-core', 'worker': 'vidra-core',
@@ -83,7 +84,9 @@ def minimal_browser_lock(lock):
                      'requires': True, 'packages': {'': package, **packages}}
 
 
-def prepare(frozen, out, node_archive, node_sums):
+def prepare(frozen, out, node_archive, node_sums, b2_spec=None):
+    if b2_spec:
+        validate_spec(b2_spec)
     candidate_path = ROOT / 'docs/evidence/release-v0.6.4-verification/manifest.json'
     candidate = json.loads(candidate_path.read_text())
     validate_candidate(candidate)
@@ -112,7 +115,7 @@ def prepare(frozen, out, node_archive, node_sums):
     out.mkdir(mode=0o700)  # never overwrite evidence, even a failed attempt
     shutil.copyfile(candidate_path, out / 'candidate.json')
     shutil.copyfile(sources / 'vidra/install.sh', out / 'install.sh')
-    for filename in ('release_acceptance.py', 'release-acceptance.mjs', 'blank_server_smoke.py', 'runtime_smoke.py', 'owner-auth-smoke.mjs'):
+    for filename in ('release_acceptance.py', 'release_acceptance_b2.py', 'release-acceptance.mjs', 'blank_server_smoke.py', 'runtime_smoke.py', 'owner-auth-smoke.mjs'):
         shutil.copyfile(ROOT / 'tests' / filename, out / filename)
     browser = out / 'browser'
     browser.mkdir()
@@ -134,6 +137,7 @@ def prepare(frozen, out, node_archive, node_sums):
     prod = sources / 'vidra/docker-compose.prod.yml'
     (out / 'pinned-prod.yml').write_text(pin_images(prod.read_text(), candidate))
     save(out / 'frozen-deploy-hashes.json', source_hashes)
+    save(out / 'storage.json', {'backend': 'b2', 'spec': b2_spec} if b2_spec else {'backend': 'local'})
     files = {str(p.relative_to(out)): sha(p) for p in out.rglob('*') if p.is_file()}
     save(out / 'handoff.json', {'status': 'PREPARED_NOT_EXECUTED', 'files': files,
                               'candidate_sha256': sha(candidate_path), 'node_version': '26.8.1',
@@ -156,6 +160,9 @@ class Recorder:
         logfile = self.private / f'{self.sequence:03d}-{label}.log'
         record = {'argv': [str(a) for a in args], 'cwd': str(cwd), 'label': label,
                   'started_at': time.time(), 'log': logfile.name}
+        # Secret values never belong in an exported command transcript.
+        if '--s3-access-key' in record['argv']:
+            record['argv'][record['argv'].index('--s3-access-key') + 1] = '<redacted test-bucket access key>'
         print(f'[release-acceptance] {label}', flush=True)
         try:
             with logfile.open('w') as stream:
@@ -243,7 +250,7 @@ def runtime_snapshot(run, candidate):
     return {'images': rows, 'ports': ports}
 
 
-def execute(stage, approval):
+def execute(stage, approval, b2_credentials=None):
     require(approval == 'fresh-disposable-host', 'explicit disposable-host acknowledgement required')
     # A failed before-state produces evidence too, but never creates /opt/vidra.
     require(not (stage / 'result.json').exists() and not (stage / 'private').exists(), 'use a new host/stage; retain failed evidence')
@@ -261,6 +268,18 @@ def execute(stage, approval):
         evidence.update(candidate_sha256=sha(stage / 'candidate.json'), handoff_sha256=sha(stage / 'handoff.json'),
                         before=host_facts())
         check_host(evidence['before'])
+        storage = json.loads((stage / 'storage.json').read_text())
+        bucket, credentials = None, None
+        require(storage['backend'] in ('local', 'b2'), 'unknown storage mode')
+        if storage['backend'] == 'b2':
+            require(b2_credentials is not None and b2_credentials.is_file(), 'missing dedicated B2 key file')
+            require(b2_credentials.stat().st_mode & 0o077 == 0, 'B2 key file must be private (0600)')
+            credentials = json.loads(b2_credentials.read_text())
+            bucket = TestBucket(storage['spec'], credentials)
+            evidence['storage'] = bucket.require_empty()
+        else:
+            require(b2_credentials is None, 'B2 key supplied to a local-storage run; refusing silent fallback')
+            evidence['storage'] = {'backend': 'local'}
         run = Recorder(stage)
         run.run(['ss', '-lntup'], 'before-listeners', cwd=stage)
         run.run(['df', '-h'], 'before-disk', cwd=stage)
@@ -281,14 +300,31 @@ def execute(stage, approval):
             require(sha(INSTALL / name) == expected, f'installed deployment source differs: {name}')
         shutil.copyfile(stage / 'pinned-prod.yml', INSTALL / 'docker-compose.prod.yml')
         evidence['deployment_adaptation'] = 'Only six application image references replaced with frozen digests and linux/amd64; scripts unchanged.'
+        storage_args, setup_env = ['--storage', 'local'], run.env.copy()
+        if bucket:
+            spec = bucket.spec
+            storage_args = ['--storage', 's3', '--s3-endpoint', spec['endpoint'], '--s3-region', spec['region'],
+                            '--s3-bucket', spec['bucket'], '--s3-access-key', credentials['access_key']]
+            setup_env['VIDRA_SETUP_S3_SECRET_KEY'] = credentials['secret_key']
         run.run(['vidra', 'setup', '--non-interactive', '--yes', '--domain', ORIGIN,
                  '--instance-name', 'v0.6.4 disposable acceptance', '--registration', 'closed',
-                 '--tls-mode', 'internal', '--storage', 'local', '--release-tag', candidate['tag'],
-                 '--template', 'env/production.env.example'], 'setup-internal')
+                 '--tls-mode', 'internal', *storage_args, '--release-tag', candidate['tag'],
+                 '--template', 'env/production.env.example'], 'setup-internal', env=setup_env)
         run.run(['vidra', 'setup', '--check', 'env/production.env'], 'setup-check')
         model = json.loads(run.compose('config', '--format', 'json'))
         check_ports(model)
         api_env = model['services']['api']['environment']
+        if bucket:
+            for service in ('api', 'worker'):
+                actual = model['services'][service]['environment']
+                for key, value in {'STORAGE_BACKEND': 's3', 'STORAGE_S3_BUCKET': bucket.spec['bucket'],
+                                   'STORAGE_S3_ENDPOINT': bucket.spec['endpoint'],
+                                   'STORAGE_S3_REGION': bucket.spec['region'],
+                                   'STORAGE_S3_ACCESS_KEY': credentials['access_key'],
+                                   'STORAGE_S3_SECRET_KEY': credentials['secret_key'],
+                                   'STORAGE_S3_USE_SSL': 'true', 'STORAGE_S3_FORCE_PATH_STYLE': 'false'}.items():
+                    require(str(actual.get(key)).lower() == value if value in ('true', 'false')
+                            else actual.get(key) == value, f'{service}: wrong test storage {key}')
         require(str(api_env['TRANSCODING_ENABLED']).lower() == 'true'
                 and api_env['TRANSCODING_PACKAGER'] == 'cmaf', 'real CMAF transcoding required')
         require(api_env['SEARCH_SERVICE_URL'] == 'http://search:8080'
@@ -358,6 +394,8 @@ def execute(stage, approval):
         browser = json.loads((stage / 'browser-result.json').read_text())
         require(browser['status'] == 'PASS', 'browser milestone did not pass')
         evidence['browser'] = browser
+        if bucket:
+            evidence['storage'] = bucket.verify_media(browser['video_id'], stage / 'fixture.mp4')
         evidence['runtime_after_browser'] = runtime_snapshot(run, candidate)
         evidence['checks']['browser_upload_transcode_playback_search'] = 'PASS'
         evidence['status'] = 'PASS'
@@ -387,16 +425,19 @@ if __name__ == '__main__':
     prep.add_argument('--node-archive', type=Path, required=True)
     prep.add_argument('--node-sums', type=Path, required=True)
     prep.add_argument('--out', type=Path, required=True)
+    prep.add_argument('--b2-spec', type=Path, help='nonsecret dedicated test bucket/ID/endpoint/region JSON')
     modes.add_parser('check-host')
     execute_parser = modes.add_parser('run')
     execute_parser.add_argument('stage', type=Path)
     execute_parser.add_argument('--acknowledge', required=True, choices=['fresh-disposable-host'])
+    execute_parser.add_argument('--b2-credentials', type=Path, help='0600 JSON with only access_key and secret_key')
     args = parser.parse_args()
     if args.mode == 'prepare':
-        prepare(args.frozen.resolve(), args.out.resolve(), args.node_archive.resolve(), args.node_sums.resolve())
+        prepare(args.frozen.resolve(), args.out.resolve(), args.node_archive.resolve(), args.node_sums.resolve(),
+                json.loads(args.b2_spec.read_text()) if args.b2_spec else None)
     elif args.mode == 'check-host':
         facts = host_facts()
         print(json.dumps(facts, indent=2))
         check_host(facts)
     else:
-        sys.exit(execute(args.stage.resolve(), args.acknowledge))
+        sys.exit(execute(args.stage.resolve(), args.acknowledge, args.b2_credentials))

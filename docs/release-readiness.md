@@ -15,6 +15,14 @@ representative-source, provider and recovery requirements remain.
 
 ## Current-release runtime continuation — 2026-09-10
 
+**Storage requirement added by the operator:** use dedicated Backblaze B2 test
+buckets; never access or modify Sizetube's live or backup buckets. The run below
+used local storage. Its PASS remains valid within that scope; the
+[B2 continuation](runtime-acceptance-b2-v0.6.4.md) records separate provider
+execution and isolation evidence. The older A36 recovery bucket and shared-lab
+archives also remain untouched. Backblaze B2 falls under provider blocker B3;
+the unrelated blocker named B2 still means representative-source inputs.
+
 **First v0.6.4 runtime milestone: PASS on the published immutable images.**
 The operator authorized replacement of beta `104.236.27.225`. A clean Ubuntu
 24.04.4 AMD64 replacement at `159.65.249.255` completed the released installer,

@@ -1,7 +1,10 @@
-# v0.6.4 first runtime milestone — demonstrated
+# v0.6.4 first runtime milestone — local storage demonstrated
 
 **PASS for this bounded milestone on the published v0.6.4 images. Full release
-readiness remains NO-GO.** One agent continued
+readiness remains NO-GO.** This completed run used **local canonical storage**.
+The operator subsequently required Backblaze B2 test storage with all Sizetube
+live and backup buckets excluded. The separate [B2 continuation](runtime-acceptance-b2-v0.6.4.md)
+retains that requirement; this local pass does not certify B2. One agent continued
 [PR #185](https://github.com/yegamble/vidra/pull/185) with its unchanged
 [frozen manifest](evidence/release-v0.6.4-verification/manifest.json).
 The operator authorized deleting beta `104.236.27.225` and starting fresh.

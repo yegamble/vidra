@@ -8,6 +8,13 @@ Its [current disposition](evidence/release-v0.6.4-verification/native-runtime/di
 resolves B1 and records newly completed criteria. No production promotion or
 shared-lab mutation occurred.
 
+The passing run used local storage. The operator subsequently required
+**Backblaze B2 test storage, excluding every Sizetube live and backup bucket**.
+The [B2 continuation](runtime-acceptance-b2-v0.6.4.md) records its separate
+status; historical local/MinIO/backup passes cannot certify this selected
+provider run. This is the object-storage facet of B3, not representative-source
+blocker B2, and does not waive other provider, recovery or scope requirements.
+
 **Initial PR #185 assessment below is historical:** at that inspection no
 authorized clean AMD64 server was available and no deployed application workflow
 ran. Its counts, tables, CI findings and raw assessment remain unchanged as an
