@@ -1,0 +1,439 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-11T13:55:54.513067+00:00",
+  "baseline_assessment": "../assessment.json",
+  "baseline_sha256": "495c82bd9c02b39151acf595589fe12759cf53de0865e7d3f9802a2ce07ad9c8",
+  "baseline_is_historical": true,
+  "release_verdict": "NO-GO",
+  "first_runtime_milestone": "PASS on both native local and dedicated Backblaze B2 runs",
+  "resolved_blockers": {
+    "B1": "Authorized disposable native Ubuntu AMD64 host provisioned and the first runtime milestone executed."
+  },
+  "retained_requirements": "All 59 original verification procedures, all 40 acceptance criteria and all ten scope families remain authoritative. Missing providers, representative source, recovery inputs and scope decisions apply only to dependent criteria.",
+  "workflow_counts": {
+    "UNVERIFIED": 45,
+    "PASS": 2,
+    "BLOCKED": 12
+  },
+  "workflows": [
+    {
+      "id": "REL-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INS-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Initial static PASS retained."
+    },
+    {
+      "id": "INS-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INS-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PUB-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PUB-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PUB-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PUB-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PLAY-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PLAY-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PLAY-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "CRT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "CRT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "SRC-01",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Same-upload outbox/inbox, eligible document, internal search, UI response/counter and click demonstrated."
+    },
+    {
+      "id": "SRC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "SRC-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "SOC-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "SOC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MSG-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MSG-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MSG-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "ADM-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "ADM-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "ADM-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "ADM-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-05",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-06",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "STO-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established. The canonical-media subset passed; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "STO-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established. The canonical-media subset passed; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "STO-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established. The canonical-media subset passed; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "INT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-06",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-07",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-08",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-09",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established. The canonical-media subset passed; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "INT-10",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-11",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "OPS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "OPS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "REC-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B4"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "REC-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B4"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "REC-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B4"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "QLT-01",
+      "status": "UNVERIFIED",
+      "blockers": [
+        "U1"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "QLT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    }
+  ],
+  "acceptance_delta": {
+    "A02": "PASS: blank installer/native CLI/images, corruption refusal, config-preserving reinstall and port checks executed.",
+    "A03-A40": "No blanket promotion. Measured subsets below do not close unexecuted negative, role, fallback, provider, recovery, scale or source criteria.",
+    "A18-A23": "Generated packaged-path subsets measured, but full required procedures and representative-source input remain outstanding.",
+    "A36-A38": "Host restart subset only; replacement restore, backup/upgrade/rollback and approved recovery objectives remain outstanding."
+  },
+  "measured_subsets": [
+    "Released setup and first deploy; clean ledgers and edge readiness",
+    "Owner claim/login/logout/refresh and admin readback",
+    "Browser channel/draft/upload/publication; original hash readback",
+    "Real CMAF transcode and advancing Chromium HLS decode/audio/seek",
+    "Same-upload outbox/index/browser result and service routing",
+    "Fresh native installation with released S3 setup and private dedicated Backblaze B2 canonical storage",
+    "Backblaze key restricted to the exact new bucket; empty version inventory before application deployment",
+    "Actual loaded API storage identity/key match before and after browser; direct B2 original download matches fixture/browser SHA-256 and the bucket contains real transcode outputs",
+    "Packaged admin preview/import/repeat with schema 970, explicit 1040 marker refusal, thirteen-table repeat/refusal fingerprints and displayed persisted report cells",
+    "Seven per-video mappings/privacy and thirty B2 object hashes; import reconciliation events delivered through real search; browser query/click/reload",
+    "COPY source database stopped and read-only media mount removed; Chromium advancing frames/audio for progressive/HLS-only/split-audio",
+    "Actual host reboot; thirteen tables and both clean ledgers preserved; post-readiness browser procedures recorded separately"
+  ],
+  "historical_acceptance": "Earlier 59-PASS/40-closed fixture record and original PR #185 assessment retain their revision/fixture boundaries.",
+  "prior_disposition": "../b2-runtime/disposition.json",
+  "prior_disposition_sha256": "faf4d53dc8850cb3feb256f86e18324f06d1e34954b29981b106e064ab70b9c3",
+  "resolved_provider_input": "B3 object bucket/endpoint/scoped test credentials are now available. B3 still blocks other selected-provider inputs; no blanket provider certification.",
+  "provider_facets": {
+    "A24 selected provider bucket": "UNVERIFIED: canonical B2 media subset passed; full storage/retention/GC procedure remains.",
+    "A32 provider presign": "UNVERIFIED: provider test bucket available; cross-origin/presigned browser checks not run.",
+    "A33 selected CDN": "BLOCKED B3: selected CDN integration inputs absent.",
+    "A37 offsite recovery": "BLOCKED B3/B4: independent recovery provider/destination/objectives remain required; test-media key does not grant backup-bucket access."
+  },
+  "migration_milestone": "PASS: generated seven-video COPY through published v0.6.4 setup/deploy/admin/worker/B2/search; selected source-disconnected playback. Not representative migration acceptance.",
+  "acceptance_completion_counts": {
+    "PASS": 2,
+    "NOT_FULLY_CLOSED": 38,
+    "total": 40,
+    "note": "A01 static PASS and A02 installer PASS retained; no additional full item is promoted by this slice."
+  },
+  "backlog_report": "../../runtime-acceptance-migration-v0.6.4.md",
+  "authorization": "Scoped feature branch/draft PR and disposable acceptance operations. No merge, stable publication, tag moves, production action, public DNS/federation, new infrastructure spend, rebuild or evidence deletion."
+}

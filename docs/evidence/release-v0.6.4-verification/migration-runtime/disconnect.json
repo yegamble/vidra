@@ -1,0 +1,1049 @@
+{
+  "status": "PASS",
+  "action": "disconnect",
+  "started_at": 1789133989.532024,
+  "checks": {
+    "source_disconnected": "PASS"
+  },
+  "images_before": {
+    "images": {
+      "api": {
+        "container_id": "18d69946cf33f0dda2f6d720e3661500bd22bdd2f809c2ed0aabf32ff4334be1",
+        "reference": "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "image_id": "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+        ],
+        "platform": "linux/amd64",
+        "revision": "ed55a6d946dad3f2e72a47b2518ac095352c795d",
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 528769,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T13:13:07.980413755Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T13:38:38.663074792Z",
+                "End": "2026-09-11T13:38:38.729338395Z",
+                "ExitCode": 0,
+                "output_sha256": "26f8dcd772820696ea8dcc5706ad31df34763febd2680ef89db5ef2ab69e4224"
+              },
+              {
+                "Start": "2026-09-11T13:38:53.730915635Z",
+                "End": "2026-09-11T13:38:53.803871154Z",
+                "ExitCode": 0,
+                "output_sha256": "26f8dcd772820696ea8dcc5706ad31df34763febd2680ef89db5ef2ab69e4224"
+              },
+              {
+                "Start": "2026-09-11T13:39:08.80653356Z",
+                "End": "2026-09-11T13:39:08.890994243Z",
+                "ExitCode": 0,
+                "output_sha256": "26f8dcd772820696ea8dcc5706ad31df34763febd2680ef89db5ef2ab69e4224"
+              },
+              {
+                "Start": "2026-09-11T13:39:23.892516974Z",
+                "End": "2026-09-11T13:39:23.962637928Z",
+                "ExitCode": 0,
+                "output_sha256": "26f8dcd772820696ea8dcc5706ad31df34763febd2680ef89db5ef2ab69e4224"
+              },
+              {
+                "Start": "2026-09-11T13:39:38.964040851Z",
+                "End": "2026-09-11T13:39:39.032314693Z",
+                "ExitCode": 0,
+                "output_sha256": "26f8dcd772820696ea8dcc5706ad31df34763febd2680ef89db5ef2ab69e4224"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "caddy": {
+        "container_id": "d341b590948868b3adf438d371717c06cc75fd311937567c8f7117b550ffb6d1",
+        "reference": "caddy:2.11.4-alpine",
+        "image_id": "sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648",
+        "repo_digests": [
+          "caddy@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 12604,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:16:10.279217671Z",
+          "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "restart_count": 0
+      },
+      "clamav": {
+        "container_id": "c818137f6238f84547aa9a1235337b58be5a6151e03376db0694a38e4e0e5da5",
+        "reference": "clamav/clamav:1.5",
+        "image_id": "sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422",
+        "repo_digests": [
+          "clamav/clamav@sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 11349,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:33.475668548Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T13:38:44.729545909Z",
+                "End": "2026-09-11T13:38:44.796219197Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              },
+              {
+                "Start": "2026-09-11T13:38:59.798198809Z",
+                "End": "2026-09-11T13:38:59.874532716Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              },
+              {
+                "Start": "2026-09-11T13:39:14.876212566Z",
+                "End": "2026-09-11T13:39:14.933931708Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              },
+              {
+                "Start": "2026-09-11T13:39:29.935489646Z",
+                "End": "2026-09-11T13:39:29.998033203Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              },
+              {
+                "Start": "2026-09-11T13:39:44.99892016Z",
+                "End": "2026-09-11T13:39:45.076554529Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "frontend": {
+        "container_id": "5dd0d7e9b5a5782d273e4d4e07234d224b4d1ef1551ca76c474bc8e012a0ce25",
+        "reference": "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3",
+        "image_id": "sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3"
+        ],
+        "platform": "linux/amd64",
+        "revision": "e584069ee724b49af3d3f3d944efc34d3be6da75",
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 12504,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:16:10.033650795Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T13:38:49.261708038Z",
+                "End": "2026-09-11T13:38:49.357365177Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              {
+                "Start": "2026-09-11T13:39:04.359950432Z",
+                "End": "2026-09-11T13:39:04.475780994Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              {
+                "Start": "2026-09-11T13:39:19.476912764Z",
+                "End": "2026-09-11T13:39:19.590419077Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              {
+                "Start": "2026-09-11T13:39:34.591888797Z",
+                "End": "2026-09-11T13:39:34.662525313Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              {
+                "Start": "2026-09-11T13:39:49.664214744Z",
+                "End": "2026-09-11T13:39:49.807302694Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "migrate": {
+        "container_id": "891dc43352fc0eec56f9a099ebd438c465a7d7d091d72d258102156129376132",
+        "reference": "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "image_id": "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+        ],
+        "platform": "linux/amd64",
+        "revision": "ed55a6d946dad3f2e72a47b2518ac095352c795d",
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T13:13:07.201161215Z",
+          "FinishedAt": "2026-09-11T13:13:07.558438752Z"
+        },
+        "restart_count": 0
+      },
+      "postgres": {
+        "container_id": "82ddc56a8c3a1faee84e325dbbb2825c21517d4fbc1ee0c8e415a65833bcdce2",
+        "reference": "postgres:18-alpine",
+        "image_id": "sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2",
+        "repo_digests": [
+          "postgres@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 10710,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:17.919836103Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T13:39:30.025604123Z",
+                "End": "2026-09-11T13:39:30.150908559Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              },
+              {
+                "Start": "2026-09-11T13:39:35.152722703Z",
+                "End": "2026-09-11T13:39:35.224391234Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              },
+              {
+                "Start": "2026-09-11T13:39:40.225540656Z",
+                "End": "2026-09-11T13:39:40.29710758Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              },
+              {
+                "Start": "2026-09-11T13:39:45.298387499Z",
+                "End": "2026-09-11T13:39:45.369365663Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              },
+              {
+                "Start": "2026-09-11T13:39:50.370385799Z",
+                "End": "2026-09-11T13:39:50.443328451Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "prep-volumes": {
+        "container_id": "7a17146902f6fa14026be5c4215b70c7c806657f519352d20cc403718ec51396",
+        "reference": "alpine:3.24",
+        "image_id": "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+        "repo_digests": [
+          "alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T13:13:06.699517099Z",
+          "FinishedAt": "2026-09-11T13:13:06.97660034Z"
+        },
+        "restart_count": 0
+      },
+      "redis": {
+        "container_id": "d35a15140e843f4c4dddb9b899ddb18a92cd92dc917b9459ed2ab1ec2c4cb6b5",
+        "reference": "redis:8-alpine",
+        "image_id": "sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576",
+        "repo_digests": [
+          "redis@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 11247,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:33.237036901Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T13:39:27.951050273Z",
+                "End": "2026-09-11T13:39:28.010963298Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              },
+              {
+                "Start": "2026-09-11T13:39:33.012175157Z",
+                "End": "2026-09-11T13:39:33.070243084Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              },
+              {
+                "Start": "2026-09-11T13:39:38.071854688Z",
+                "End": "2026-09-11T13:39:38.149816377Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              },
+              {
+                "Start": "2026-09-11T13:39:43.150728761Z",
+                "End": "2026-09-11T13:39:43.217894448Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              },
+              {
+                "Start": "2026-09-11T13:39:48.219014051Z",
+                "End": "2026-09-11T13:39:48.27866717Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "search": {
+        "container_id": "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76",
+        "reference": "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+        "image_id": "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+        ],
+        "platform": "linux/amd64",
+        "revision": "1f8b85425e7d4dbb039edca56850282df9b93c6d",
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 11760,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:38.727972606Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T13:39:28.933931782Z",
+                "End": "2026-09-11T13:39:29.001606115Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              },
+              {
+                "Start": "2026-09-11T13:39:34.00341307Z",
+                "End": "2026-09-11T13:39:34.076430374Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              },
+              {
+                "Start": "2026-09-11T13:39:39.077553633Z",
+                "End": "2026-09-11T13:39:39.142699424Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              },
+              {
+                "Start": "2026-09-11T13:39:44.144076761Z",
+                "End": "2026-09-11T13:39:44.214189672Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              },
+              {
+                "Start": "2026-09-11T13:39:49.216052329Z",
+                "End": "2026-09-11T13:39:49.288388544Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "search-migrate": {
+        "container_id": "9a1758684cac23faf3471d9baa282a9d0c734c7648928c94339a1ae6aeca3ad0",
+        "reference": "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+        "image_id": "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+        ],
+        "platform": "linux/amd64",
+        "revision": "1f8b85425e7d4dbb039edca56850282df9b93c6d",
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T13:13:07.487923439Z",
+          "FinishedAt": "2026-09-11T13:13:07.897509359Z",
+          "Health": {
+            "Status": "unhealthy",
+            "FailingStreak": 0,
+            "Log": []
+          }
+        },
+        "restart_count": 0
+      }
+    },
+    "ports": {
+      "api": {
+        "8080/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "8080"
+          }
+        ]
+      },
+      "caddy": {
+        "2019/tcp": null,
+        "443/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "443"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "443"
+          }
+        ],
+        "443/udp": null,
+        "80/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "80"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "80"
+          }
+        ]
+      },
+      "clamav": {
+        "3310/tcp": null,
+        "7357/tcp": null
+      },
+      "frontend": {
+        "3000/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "3000"
+          }
+        ]
+      },
+      "migrate": {},
+      "postgres": {
+        "5432/tcp": null
+      },
+      "prep-volumes": {},
+      "redis": {
+        "6379/tcp": null
+      },
+      "search": {
+        "8080/tcp": null
+      },
+      "search-migrate": {}
+    }
+  },
+  "cli_sha256": "7897dea17c25b35f5edfe06846582ed59cd62716f4cc914a4bc26f64653831fa",
+  "shipped_files": {
+    "deploy/Caddyfile": "c5bb177d9794b4e8617029439dbfa67b0af5d8dd6e69557cea5ea396747d4c02",
+    "deploy/README.md": "87cbb99e54cdea06bb9422e69376843455a0fb00c54565375fb31921aca01660",
+    "deploy/backup.sh": "52b832686ac604dfbfb61230338352ec2c639c389a15eac06005fd704e32d702",
+    "deploy/cloud-init.yaml.example": "436b661a64b715ba8655ad4014c4fe773ed48e1395e377df729d1e4e6fd1ad5b",
+    "deploy/compose.sh": "54404c8680556143ba8f7c87b28d0cd9bc800305a820a13b92c26abb17c6a20e",
+    "deploy/deploy.sh": "f5fbe5b708dbf60ddbfa14e9449f926f83f6ca07f244cd298684d270afd5f55a",
+    "deploy/lib.sh": "4b27b2224f73a3607dc3bb02b8472e136447360788299d5cd9e500c4722b7f3a",
+    "deploy/provision.sh": "23d7b3595beaa5975cd781b902bac03c6e0657bb1c9851131b1bec37bb6abca4",
+    "deploy/release-preflight.py": "7ffb428372889a5eaedb389802ca4c59cc3a5f1f74fe40207a44a6aaada46025",
+    "deploy/release.sh": "a5a42580a5d8594d9f8b48f0b1e88d29f5b425874836b7fca7777c29c282aa29",
+    "deploy/restore.sh": "6e5f3aa166910d3a647a611ba344e24c171425b26a98612cdfc23448500ab21e",
+    "deploy/rollback.sh": "6297db485b87c983112f4cb28dbd36f72f0aefc6e6b4a38820e684f29829add9",
+    "deploy/vidra-backup.service": "ce7d6982fbc6301755288f1aa464b260b92404a945a64657b994cf3b9cb17408",
+    "deploy/vidra-backup.timer": "9dbef6bc36e689ce6bdedc20f81030ab0e68646c294d908404943c98a0cf2c70"
+  },
+  "images_after": {
+    "images": {
+      "api": {
+        "container_id": "10dddbf5cc5a6461faeb5c7368efb710f276abc3b494eff61fceb44101a04ea2",
+        "reference": "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "image_id": "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+        ],
+        "platform": "linux/amd64",
+        "revision": "ed55a6d946dad3f2e72a47b2518ac095352c795d",
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 593249,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T13:40:11.345899036Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T13:40:16.917632903Z",
+                "End": "2026-09-11T13:40:17.021998704Z",
+                "ExitCode": 0,
+                "output_sha256": "26f8dcd772820696ea8dcc5706ad31df34763febd2680ef89db5ef2ab69e4224"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "caddy": {
+        "container_id": "d341b590948868b3adf438d371717c06cc75fd311937567c8f7117b550ffb6d1",
+        "reference": "caddy:2.11.4-alpine",
+        "image_id": "sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648",
+        "repo_digests": [
+          "caddy@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 12604,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:16:10.279217671Z",
+          "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "restart_count": 0
+      },
+      "clamav": {
+        "container_id": "c818137f6238f84547aa9a1235337b58be5a6151e03376db0694a38e4e0e5da5",
+        "reference": "clamav/clamav:1.5",
+        "image_id": "sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422",
+        "repo_digests": [
+          "clamav/clamav@sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 11349,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:33.475668548Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T13:39:14.876212566Z",
+                "End": "2026-09-11T13:39:14.933931708Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              },
+              {
+                "Start": "2026-09-11T13:39:29.935489646Z",
+                "End": "2026-09-11T13:39:29.998033203Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              },
+              {
+                "Start": "2026-09-11T13:39:44.99892016Z",
+                "End": "2026-09-11T13:39:45.076554529Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              },
+              {
+                "Start": "2026-09-11T13:40:00.077975396Z",
+                "End": "2026-09-11T13:40:00.239132845Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              },
+              {
+                "Start": "2026-09-11T13:40:15.241071455Z",
+                "End": "2026-09-11T13:40:15.303575862Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "frontend": {
+        "container_id": "5dd0d7e9b5a5782d273e4d4e07234d224b4d1ef1551ca76c474bc8e012a0ce25",
+        "reference": "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3",
+        "image_id": "sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3"
+        ],
+        "platform": "linux/amd64",
+        "revision": "e584069ee724b49af3d3f3d944efc34d3be6da75",
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 12504,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:16:10.033650795Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T13:39:19.476912764Z",
+                "End": "2026-09-11T13:39:19.590419077Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              {
+                "Start": "2026-09-11T13:39:34.591888797Z",
+                "End": "2026-09-11T13:39:34.662525313Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              {
+                "Start": "2026-09-11T13:39:49.664214744Z",
+                "End": "2026-09-11T13:39:49.807302694Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              {
+                "Start": "2026-09-11T13:40:04.809362238Z",
+                "End": "2026-09-11T13:40:05.015116069Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              {
+                "Start": "2026-09-11T13:40:20.016376963Z",
+                "End": "2026-09-11T13:40:20.131220493Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "migrate": {
+        "container_id": "891dc43352fc0eec56f9a099ebd438c465a7d7d091d72d258102156129376132",
+        "reference": "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "image_id": "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+        ],
+        "platform": "linux/amd64",
+        "revision": "ed55a6d946dad3f2e72a47b2518ac095352c795d",
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T13:40:10.215783622Z",
+          "FinishedAt": "2026-09-11T13:40:10.721120639Z"
+        },
+        "restart_count": 0
+      },
+      "postgres": {
+        "container_id": "82ddc56a8c3a1faee84e325dbbb2825c21517d4fbc1ee0c8e415a65833bcdce2",
+        "reference": "postgres:18-alpine",
+        "image_id": "sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2",
+        "repo_digests": [
+          "postgres@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 10710,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:17.919836103Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T13:39:55.444383192Z",
+                "End": "2026-09-11T13:39:55.518621894Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              },
+              {
+                "Start": "2026-09-11T13:40:00.520669807Z",
+                "End": "2026-09-11T13:40:00.659656328Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              },
+              {
+                "Start": "2026-09-11T13:40:05.663104299Z",
+                "End": "2026-09-11T13:40:05.824209009Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              },
+              {
+                "Start": "2026-09-11T13:40:10.82608619Z",
+                "End": "2026-09-11T13:40:10.999677608Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              },
+              {
+                "Start": "2026-09-11T13:40:16.001916022Z",
+                "End": "2026-09-11T13:40:16.075547919Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "prep-volumes": {
+        "container_id": "7a17146902f6fa14026be5c4215b70c7c806657f519352d20cc403718ec51396",
+        "reference": "alpine:3.24",
+        "image_id": "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+        "repo_digests": [
+          "alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T13:40:09.653922677Z",
+          "FinishedAt": "2026-09-11T13:40:10.134126088Z"
+        },
+        "restart_count": 0
+      },
+      "redis": {
+        "container_id": "d35a15140e843f4c4dddb9b899ddb18a92cd92dc917b9459ed2ab1ec2c4cb6b5",
+        "reference": "redis:8-alpine",
+        "image_id": "sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576",
+        "repo_digests": [
+          "redis@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 11247,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:33.237036901Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T13:39:58.393954883Z",
+                "End": "2026-09-11T13:39:58.500356431Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              },
+              {
+                "Start": "2026-09-11T13:40:03.502209335Z",
+                "End": "2026-09-11T13:40:03.612580205Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              },
+              {
+                "Start": "2026-09-11T13:40:08.613498786Z",
+                "End": "2026-09-11T13:40:08.746318555Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              },
+              {
+                "Start": "2026-09-11T13:40:13.748459223Z",
+                "End": "2026-09-11T13:40:13.835356045Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              },
+              {
+                "Start": "2026-09-11T13:40:18.837013722Z",
+                "End": "2026-09-11T13:40:18.919819443Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "search": {
+        "container_id": "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76",
+        "reference": "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+        "image_id": "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+        ],
+        "platform": "linux/amd64",
+        "revision": "1f8b85425e7d4dbb039edca56850282df9b93c6d",
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 11760,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:38.727972606Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T13:39:59.432818907Z",
+                "End": "2026-09-11T13:39:59.551546344Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              },
+              {
+                "Start": "2026-09-11T13:40:04.553068184Z",
+                "End": "2026-09-11T13:40:04.755539257Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              },
+              {
+                "Start": "2026-09-11T13:40:09.757280468Z",
+                "End": "2026-09-11T13:40:09.847491931Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              },
+              {
+                "Start": "2026-09-11T13:40:14.849895965Z",
+                "End": "2026-09-11T13:40:14.933950008Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              },
+              {
+                "Start": "2026-09-11T13:40:19.934992663Z",
+                "End": "2026-09-11T13:40:20.023279727Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "search-migrate": {
+        "container_id": "9a1758684cac23faf3471d9baa282a9d0c734c7648928c94339a1ae6aeca3ad0",
+        "reference": "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+        "image_id": "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+        ],
+        "platform": "linux/amd64",
+        "revision": "1f8b85425e7d4dbb039edca56850282df9b93c6d",
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T13:40:10.690461448Z",
+          "FinishedAt": "2026-09-11T13:40:11.363928676Z",
+          "Health": {
+            "Status": "unhealthy",
+            "FailingStreak": 0,
+            "Log": []
+          }
+        },
+        "restart_count": 0
+      }
+    },
+    "ports": {
+      "api": {
+        "8080/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "8080"
+          }
+        ]
+      },
+      "caddy": {
+        "2019/tcp": null,
+        "443/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "443"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "443"
+          }
+        ],
+        "443/udp": null,
+        "80/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "80"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "80"
+          }
+        ]
+      },
+      "clamav": {
+        "3310/tcp": null,
+        "7357/tcp": null
+      },
+      "frontend": {
+        "3000/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "3000"
+          }
+        ]
+      },
+      "migrate": {},
+      "postgres": {
+        "5432/tcp": null
+      },
+      "prep-volumes": {},
+      "redis": {
+        "6379/tcp": null
+      },
+      "search": {
+        "8080/tcp": null
+      },
+      "search-migrate": {}
+    }
+  },
+  "finished_at": 1789134021.7615573,
+  "tool_sha256": "99475cb92737f79fc4f1f692887caa23e6e9e682342cc2ace96eb4c996459871"
+}

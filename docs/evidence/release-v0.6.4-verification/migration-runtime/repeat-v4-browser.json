@@ -1,0 +1,2201 @@
+{
+  "status": "PASS",
+  "started_at": "2026-09-11T13:34:56.026Z",
+  "mode": "repeat",
+  "checks": {
+    "anonymous_denied": "PASS",
+    "worker-completion": "PASS",
+    "persisted-ui-report": "PASS"
+  },
+  "requests": [
+    {
+      "path": "/api/v1/admin/peertube-import",
+      "method": "GET",
+      "status": 401,
+      "retry_after": null
+    },
+    {
+      "path": "/api/v1/admin/peertube-import",
+      "method": "POST",
+      "status": 401,
+      "retry_after": null
+    },
+    {
+      "path": "/api/v1/admin/peertube-import/89c7e202-154b-4939-8f4f-6076d2d6411e",
+      "method": "GET",
+      "status": 200,
+      "retry_after": null
+    },
+    {
+      "path": "/api/v1/admin/peertube-import/89c7e202-154b-4939-8f4f-6076d2d6411e",
+      "method": "GET",
+      "status": 200,
+      "retry_after": null
+    },
+    {
+      "path": "/api/v1/admin/peertube-import/89c7e202-154b-4939-8f4f-6076d2d6411e",
+      "method": "GET",
+      "status": 200,
+      "retry_after": null
+    },
+    {
+      "path": "/api/v1/admin/peertube-import/89c7e202-154b-4939-8f4f-6076d2d6411e",
+      "method": "GET",
+      "status": 200,
+      "retry_after": null
+    },
+    {
+      "path": "/api/v1/admin/peertube-import/89c7e202-154b-4939-8f4f-6076d2d6411e",
+      "method": "GET",
+      "status": 200,
+      "retry_after": null
+    }
+  ],
+  "commands": [
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "api"
+      ],
+      "started_at": "2026-09-11T13:34:56.859Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "18d69946cf33f0dda2f6d720e3661500bd22bdd2f809c2ed0aabf32ff4334be1"
+      ],
+      "started_at": "2026-09-11T13:34:57.234Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+      ],
+      "started_at": "2026-09-11T13:34:57.291Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "frontend"
+      ],
+      "started_at": "2026-09-11T13:34:57.385Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "5dd0d7e9b5a5782d273e4d4e07234d224b4d1ef1551ca76c474bc8e012a0ce25"
+      ],
+      "started_at": "2026-09-11T13:34:57.892Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3"
+      ],
+      "started_at": "2026-09-11T13:34:57.951Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "search"
+      ],
+      "started_at": "2026-09-11T13:34:58.058Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76"
+      ],
+      "started_at": "2026-09-11T13:34:58.439Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+      ],
+      "started_at": "2026-09-11T13:34:58.487Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM users"
+      ],
+      "started_at": "2026-09-11T13:35:00.038Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM channels"
+      ],
+      "started_at": "2026-09-11T13:35:00.668Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM videos"
+      ],
+      "started_at": "2026-09-11T13:35:01.059Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM comments"
+      ],
+      "started_at": "2026-09-11T13:35:01.434Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM playlists"
+      ],
+      "started_at": "2026-09-11T13:35:01.850Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM playlist_items"
+      ],
+      "started_at": "2026-09-11T13:35:02.251Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM channel_follows"
+      ],
+      "started_at": "2026-09-11T13:35:02.777Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_ratings"
+      ],
+      "started_at": "2026-09-11T13:35:03.270Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_tags"
+      ],
+      "started_at": "2026-09-11T13:35:03.797Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_chapters"
+      ],
+      "started_at": "2026-09-11T13:35:04.195Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM streaming_playlists"
+      ],
+      "started_at": "2026-09-11T13:35:04.601Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_files"
+      ],
+      "started_at": "2026-09-11T13:35:04.998Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM captions"
+      ],
+      "started_at": "2026-09-11T13:35:05.442Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM users"
+      ],
+      "started_at": "2026-09-11T13:35:05.833Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM channels"
+      ],
+      "started_at": "2026-09-11T13:35:06.365Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM videos"
+      ],
+      "started_at": "2026-09-11T13:35:06.840Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM comments"
+      ],
+      "started_at": "2026-09-11T13:35:07.238Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM playlists"
+      ],
+      "started_at": "2026-09-11T13:35:07.766Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM playlist_items"
+      ],
+      "started_at": "2026-09-11T13:35:08.203Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM channel_follows"
+      ],
+      "started_at": "2026-09-11T13:35:08.622Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_ratings"
+      ],
+      "started_at": "2026-09-11T13:35:09.087Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_tags"
+      ],
+      "started_at": "2026-09-11T13:35:09.472Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_chapters"
+      ],
+      "started_at": "2026-09-11T13:35:09.834Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM streaming_playlists"
+      ],
+      "started_at": "2026-09-11T13:35:10.232Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_files"
+      ],
+      "started_at": "2026-09-11T13:35:10.613Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM captions"
+      ],
+      "started_at": "2026-09-11T13:35:10.907Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM users t) s"
+      ],
+      "started_at": "2026-09-11T13:35:11.243Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM channels t) s"
+      ],
+      "started_at": "2026-09-11T13:35:11.643Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM videos t) s"
+      ],
+      "started_at": "2026-09-11T13:35:12.012Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM comments t) s"
+      ],
+      "started_at": "2026-09-11T13:35:12.501Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM playlists t) s"
+      ],
+      "started_at": "2026-09-11T13:35:12.904Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM playlist_items t) s"
+      ],
+      "started_at": "2026-09-11T13:35:13.229Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM channel_follows t) s"
+      ],
+      "started_at": "2026-09-11T13:35:13.558Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM video_ratings t) s"
+      ],
+      "started_at": "2026-09-11T13:35:13.901Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM video_tags t) s"
+      ],
+      "started_at": "2026-09-11T13:35:14.231Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM video_chapters t) s"
+      ],
+      "started_at": "2026-09-11T13:35:14.569Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM streaming_playlists t) s"
+      ],
+      "started_at": "2026-09-11T13:35:14.893Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM video_files t) s"
+      ],
+      "started_at": "2026-09-11T13:35:15.214Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM captions t) s"
+      ],
+      "started_at": "2026-09-11T13:35:15.578Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM users"
+      ],
+      "started_at": "2026-09-11T13:35:27.821Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM channels"
+      ],
+      "started_at": "2026-09-11T13:35:28.190Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM videos"
+      ],
+      "started_at": "2026-09-11T13:35:28.517Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM comments"
+      ],
+      "started_at": "2026-09-11T13:35:28.826Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM playlists"
+      ],
+      "started_at": "2026-09-11T13:35:29.187Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM playlist_items"
+      ],
+      "started_at": "2026-09-11T13:35:29.520Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM channel_follows"
+      ],
+      "started_at": "2026-09-11T13:35:29.832Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_ratings"
+      ],
+      "started_at": "2026-09-11T13:35:30.221Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_tags"
+      ],
+      "started_at": "2026-09-11T13:35:30.640Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_chapters"
+      ],
+      "started_at": "2026-09-11T13:35:30.974Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM streaming_playlists"
+      ],
+      "started_at": "2026-09-11T13:35:31.307Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_files"
+      ],
+      "started_at": "2026-09-11T13:35:31.697Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM captions"
+      ],
+      "started_at": "2026-09-11T13:35:32.022Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM users"
+      ],
+      "started_at": "2026-09-11T13:35:32.315Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM channels"
+      ],
+      "started_at": "2026-09-11T13:35:32.698Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM videos"
+      ],
+      "started_at": "2026-09-11T13:35:33.053Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM comments"
+      ],
+      "started_at": "2026-09-11T13:35:33.341Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM playlists"
+      ],
+      "started_at": "2026-09-11T13:35:33.667Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM playlist_items"
+      ],
+      "started_at": "2026-09-11T13:35:33.981Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM channel_follows"
+      ],
+      "started_at": "2026-09-11T13:35:34.266Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_ratings"
+      ],
+      "started_at": "2026-09-11T13:35:34.621Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_tags"
+      ],
+      "started_at": "2026-09-11T13:35:34.951Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_chapters"
+      ],
+      "started_at": "2026-09-11T13:35:35.255Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM streaming_playlists"
+      ],
+      "started_at": "2026-09-11T13:35:35.548Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM video_files"
+      ],
+      "started_at": "2026-09-11T13:35:35.830Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM captions"
+      ],
+      "started_at": "2026-09-11T13:35:36.096Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM users t) s"
+      ],
+      "started_at": "2026-09-11T13:35:36.368Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM channels t) s"
+      ],
+      "started_at": "2026-09-11T13:35:36.653Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM videos t) s"
+      ],
+      "started_at": "2026-09-11T13:35:36.968Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM comments t) s"
+      ],
+      "started_at": "2026-09-11T13:35:37.323Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM playlists t) s"
+      ],
+      "started_at": "2026-09-11T13:35:37.622Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM playlist_items t) s"
+      ],
+      "started_at": "2026-09-11T13:35:37.957Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM channel_follows t) s"
+      ],
+      "started_at": "2026-09-11T13:35:38.267Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM video_ratings t) s"
+      ],
+      "started_at": "2026-09-11T13:35:38.577Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM video_tags t) s"
+      ],
+      "started_at": "2026-09-11T13:35:38.868Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM video_chapters t) s"
+      ],
+      "started_at": "2026-09-11T13:35:39.214Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM streaming_playlists t) s"
+      ],
+      "started_at": "2026-09-11T13:35:39.578Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM video_files t) s"
+      ],
+      "started_at": "2026-09-11T13:35:39.869Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM captions t) s"
+      ],
+      "started_at": "2026-09-11T13:35:40.194Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "api"
+      ],
+      "started_at": "2026-09-11T13:35:41.910Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "18d69946cf33f0dda2f6d720e3661500bd22bdd2f809c2ed0aabf32ff4334be1"
+      ],
+      "started_at": "2026-09-11T13:35:42.268Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+      ],
+      "started_at": "2026-09-11T13:35:42.317Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "frontend"
+      ],
+      "started_at": "2026-09-11T13:35:42.396Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "5dd0d7e9b5a5782d273e4d4e07234d224b4d1ef1551ca76c474bc8e012a0ce25"
+      ],
+      "started_at": "2026-09-11T13:35:42.737Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3"
+      ],
+      "started_at": "2026-09-11T13:35:42.788Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "search"
+      ],
+      "started_at": "2026-09-11T13:35:42.872Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76"
+      ],
+      "started_at": "2026-09-11T13:35:43.246Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+      ],
+      "started_at": "2026-09-11T13:35:43.309Z",
+      "exit_code": 0
+    }
+  ],
+  "images_before": {
+    "api": {
+      "container_id": "18d69946cf33f0dda2f6d720e3661500bd22bdd2f809c2ed0aabf32ff4334be1",
+      "image_id": "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+      "reference": "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+      "revision": "ed55a6d946dad3f2e72a47b2518ac095352c795d"
+    },
+    "frontend": {
+      "container_id": "5dd0d7e9b5a5782d273e4d4e07234d224b4d1ef1551ca76c474bc8e012a0ce25",
+      "image_id": "sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3",
+      "reference": "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3",
+      "revision": "e584069ee724b49af3d3f3d944efc34d3be6da75"
+    },
+    "search": {
+      "container_id": "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76",
+      "image_id": "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+      "reference": "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+      "revision": "1f8b85425e7d4dbb039edca56850282df9b93c6d"
+    }
+  },
+  "tool_sha256": "03007c8b75edb3e52a6c85f40f4dc20202a823213795a3bb533cbd3187c256ce",
+  "node": "v26.8.1",
+  "browser": "153.0.8010.12",
+  "catalogue_before": {
+    "users": 7,
+    "channels": 7,
+    "videos": 8,
+    "comments": 4,
+    "playlists": 1,
+    "playlist_items": 2,
+    "channel_follows": 1,
+    "video_ratings": 1,
+    "video_tags": 12,
+    "video_chapters": 2,
+    "streaming_playlists": 7,
+    "video_files": 31,
+    "captions": 1
+  },
+  "content_before": {
+    "users": "c7ddbddbdfa9f5284d8ef238eb354728",
+    "channels": "b10e714c8795c74c33c4422a4fb628fc",
+    "videos": "1e46488877e88f741ef05931bddf6c91",
+    "comments": "ed3299a4da627c848a488cfffbdf8d2d",
+    "playlists": "3d19e5395ad48ef6fb37b39639a0c6f9",
+    "playlist_items": "7d9f16190a494e198f3faceba225782a",
+    "channel_follows": "e6d9dadc5f3352c2092a0e24e1971334",
+    "video_ratings": "94937096f16ea151b8fe797a85ef4255",
+    "video_tags": "1d70b3b56447f31e702361017790562c",
+    "video_chapters": "84eacd57117631a653d5ffd5863d9de9",
+    "streaming_playlists": "b5b56b4c03c56f57866752bcaa0db753",
+    "video_files": "3ef2339b1a08be002369455c49dcf209",
+    "captions": "de45d66f944e653bff1be1f5f0587a6b"
+  },
+  "run_id": "89c7e202-154b-4939-8f4f-6076d2d6411e",
+  "run": {
+    "id": "89c7e202-154b-4939-8f4f-6076d2d6411e",
+    "state": "done",
+    "mode": "run",
+    "media_mode": "copy",
+    "source_version": 970,
+    "acknowledged_schema_version": null,
+    "error_code": null,
+    "entities": {
+      "actor_avatar": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "actor_banner": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "caption": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "category_taxonomy": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "channel": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 6,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "chapter": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 2,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "comment": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 4,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "follow": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 1,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "hls_playlist": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "playlist": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 1,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "playlist_item": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "rating": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 1,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "rendition": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 6,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "storyboard": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 7,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "tag": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "thumbnail": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 7,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "user": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 6,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "user_quota_unlimited": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "user_suspension": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "video": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 7,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "video_block": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "video_file": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "video_no_media": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "video_original_date": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 6,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "video_sensitive": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "unsupported": 0
+      },
+      "view_count": {
+        "planned": 0,
+        "imported": 0,
+        "updated": 0,
+        "skipped": 1,
+        "failed": 0,
+        "unsupported": 0
+      }
+    },
+    "conflict_count": 0,
+    "started_at": "2026-09-11T13:35:23.672561Z",
+    "finished_at": "2026-09-11T13:35:24.384614Z"
+  },
+  "catalogue_after": {
+    "users": 7,
+    "channels": 7,
+    "videos": 8,
+    "comments": 4,
+    "playlists": 1,
+    "playlist_items": 2,
+    "channel_follows": 1,
+    "video_ratings": 1,
+    "video_tags": 12,
+    "video_chapters": 2,
+    "streaming_playlists": 7,
+    "video_files": 31,
+    "captions": 1
+  },
+  "content_after": {
+    "users": "c7ddbddbdfa9f5284d8ef238eb354728",
+    "channels": "b10e714c8795c74c33c4422a4fb628fc",
+    "videos": "1e46488877e88f741ef05931bddf6c91",
+    "comments": "ed3299a4da627c848a488cfffbdf8d2d",
+    "playlists": "3d19e5395ad48ef6fb37b39639a0c6f9",
+    "playlist_items": "7d9f16190a494e198f3faceba225782a",
+    "channel_follows": "e6d9dadc5f3352c2092a0e24e1971334",
+    "video_ratings": "94937096f16ea151b8fe797a85ef4255",
+    "video_tags": "1d70b3b56447f31e702361017790562c",
+    "video_chapters": "84eacd57117631a653d5ffd5863d9de9",
+    "streaming_playlists": "b5b56b4c03c56f57866752bcaa0db753",
+    "video_files": "3ef2339b1a08be002369455c49dcf209",
+    "captions": "de45d66f944e653bff1be1f5f0587a6b"
+  },
+  "images_after": {
+    "api": {
+      "container_id": "18d69946cf33f0dda2f6d720e3661500bd22bdd2f809c2ed0aabf32ff4334be1",
+      "image_id": "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+      "reference": "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+      "revision": "ed55a6d946dad3f2e72a47b2518ac095352c795d"
+    },
+    "frontend": {
+      "container_id": "5dd0d7e9b5a5782d273e4d4e07234d224b4d1ef1551ca76c474bc8e012a0ce25",
+      "image_id": "sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3",
+      "reference": "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3",
+      "revision": "e584069ee724b49af3d3f3d944efc34d3be6da75"
+    },
+    "search": {
+      "container_id": "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76",
+      "image_id": "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+      "reference": "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+      "revision": "1f8b85425e7d4dbb039edca56850282df9b93c6d"
+    }
+  },
+  "finished_at": "2026-09-11T13:35:43.443Z"
+}

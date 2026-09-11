@@ -172,21 +172,49 @@ docker inspect vidra-postgres-1 \
 Prefer the first: it uses the same env parsing as the stack, and the address is
 not stable across recreates.
 
-### `peertube-import` is not shipped anywhere
+### Run the shipped PeerTube importer from the admin page
 
-`Dockerfile` builds only `./cmd/api`, and the release assets carry only the
-`vidra` CLI. An operator migrating from PeerTube therefore has no supported way
-to run the importer — it has to be built from the source tree with a Go
-toolchain and copied to the host:
+The release API image contains the importer and its worker. The standalone
+`peertube-import` executable is not distributed; no Go build or copied binary
+is needed for the supported operator path. Configure the source with the
+released `vidra` CLI, then launch the import at `/admin/import-peertube`:
 
 ```bash
-cd vidra-core
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o peertube-import ./cmd/peertube-import
-scp peertube-import root@<host>:/opt/vidra/
+vidra setup --template env/production.env.example --output env/production.env \
+  --non-interactive --yes --no-caddy --peertube \
+  --peertube-source-url @/secure/path/peertube-readonly-dsn \
+  --peertube-source-storage local --peertube-source-local-root /peertube-source \
+  --peertube-media-mode copy
 ```
 
-See [vidra-core's migration notes](../vidra-core/docs/operations.md) for what the
-importer does and does not carry across.
+The DSN file must be private and name a least-privilege source role with SELECT
+access only. Use an approved source snapshot/replica and retain its database,
+configuration and media. For local media, add the source mount to
+`x-core-prod-volumes` in `docker-compose.prod.yml`, alongside its existing
+volumes, so both the API and optional split worker can read it:
+
+```yaml
+  - /absolute/path/to/source-media:/peertube-source:ro
+```
+
+Keep the original media/scratch volumes and migration guards. Run
+`./deploy/deploy.sh`, sign in as admin, choose **Copy** and the intended conflict
+policy, and click **Preview (dry run)** before **Start import**. Preview persists
+its run/report and temporarily probes destination storage; it does not import
+catalogue rows. Review conflicts, unsupported families, failed counts and
+no-media counts: a run reaching `done` alone does not establish success.
+Reload the page to verify the persisted report; repeat after reconciliation.
+
+An unsupported or undetectable source schema is a prerequisite to resolve,
+not a reason to compile a separate importer or automatically override a guard.
+COPY independence requires reconciling counts/IDs/media hashes and successfully
+playing the required samples after disconnecting the disposable source database
+and unmounting its media. Reference mode keeps the canonical source store as a
+permanent playback dependency.
+
+The [environment template](../env/production.env.example) documents source S3,
+media modes and conflict policies. Preserve the source inventory, omitted-data
+dispositions and cutover decisions required by the release-readiness record.
 
 ## Host prerequisites
 

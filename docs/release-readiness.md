@@ -13,6 +13,27 @@ available. Those counts are historical. The runtime continuation below resolves
 host access and demonstrates the first milestone; full release acceptance,
 representative-source, provider and recovery requirements remain.
 
+## Packaged migration and restart continuation — 2026-09-11
+
+**Full v0.6.4 remains NO-GO: 2 PASS, 45 UNVERIFIED, 12 BLOCKED workflows.**
+The [new execution record](runtime-acceptance-migration-v0.6.4.md) follows the
+published CLI/deploy/admin path on the retained B2 host, without rebuilding
+images or wiping the host. Generated-source preview/import/repeat, schema
+refusal, per-video mapping and thirty B2 hashes, real search/browser results,
+and selected source-disconnected decode passed. A real host reboot preserved
+thirteen catalogue/media tables and both migration ledgers after readiness.
+Only A01/A02 are fully passed for the current release; no generated subset
+automatically closes another item. The [current disposition](evidence/release-v0.6.4-verification/migration-runtime/disposition.json)
+retains every required procedure and records the remaining inputs/execution.
+
+PR #186 is merged at `67840abed3c7181703d7bd17b1b7800cf78a9702`.
+Current component mains, published artifacts and acceptance-tool revisions
+are distinct in the new record. Failed harness/export/early-restart attempts
+remain preserved. The documentation fix is on a draft branch; it is not yet
+part of a newly qualified published bundle. Representative migration,
+replacement recovery, full browser/provider/security and release gates remain
+required. No production or stable-publication action was authorized.
+
 ## Dedicated Backblaze B2 continuation — 2026-09-11
 
 **Requested runtime milestone demonstrated on published v0.6.4 with B2 media.**
@@ -32,7 +53,8 @@ checks; their remaining procedures are UNVERIFIED, not automatically passed.
 Current counts are **2 PASS, 45 UNVERIFIED, 12 BLOCKED**; full release remains
 **NO-GO**. Provider presign/CDN, retention/GC, recovery, representative source and
 other scope decisions remain required. The older local-run disposition below
-is historical at its timestamp. Draft PR #186 remains unmerged.
+is historical at its timestamp. PR #186 was subsequently merged; the newer
+migration continuation above supplies the current disposition.
 
 ## Current-release runtime continuation — 2026-09-10
 
@@ -62,8 +84,8 @@ dependent criteria. The 59 workflow requirements, 40 acceptance criteria,
 provider deferrals and scope decisions are preserved. Earlier failed harness
 attempts and diagnostics are retained; the passing run followed a fresh OS
 rebuild and used no application modification. Historical fixture closure below
-remains historical. [Draft PR #186](https://github.com/yegamble/vidra/pull/186)
-is open — awaiting review and merge; merging is prohibited in this session.
+remains historical. [PR #186](https://github.com/yegamble/vidra/pull/186)
+was subsequently merged; this session does not authorize another merge.
 
 ## Historical fixture close-out — 2026-09-10
 
