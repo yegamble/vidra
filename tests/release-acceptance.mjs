@@ -252,13 +252,28 @@ print(sum(values))
   // service around the unmodified UI request; a local SQL fallback cannot
   // increment vidra-search's successful /internal/v1/search request counter.
   result.ui_search = { service_requests_before: searchRequests() };
-  const pendingSearch = watch.waitForResponse(r => {
+  const waitForSearch = () => watch.waitForResponse(r => {
     const url = new URL(r.url());
     return url.pathname === '/api/v1/videos/search' && url.searchParams.get('q') === title;
   });
+  let pendingSearch = waitForSearch();
   const box = watch.getByRole('combobox', { name: /Search/ });
   await box.fill(title); await box.press('Enter');
-  const uiResponse = await pendingSearch; assert.equal(uiResponse.status(), 200);
+  let uiResponse;
+  result.ui_search.attempts = [];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    uiResponse = await pendingSearch;
+    const retryAfter = await uiResponse.headerValue('retry-after');
+    result.ui_search.attempts.push({ status: uiResponse.status(), retry_after: retryAfter }); checkpoint();
+    if (uiResponse.status() !== 429 || attempt === 2) break;
+    const seconds = Number(retryAfter);
+    assert.ok(Number.isFinite(seconds) && seconds >= 1 && seconds <= 120, 'invalid Retry-After');
+    // The entire fresh-owner/upload/media audit can exhaust one IP's minute
+    // budget. Preserve the 429 and obey its wait; never disable/reset limits.
+    await new Promise(resolve => setTimeout(resolve, (seconds + 1) * 1000));
+    pendingSearch = waitForSearch(); await watch.reload();
+  }
+  assert.equal(uiResponse.status(), 200);
   result.ui_search.video_ids = (await uiResponse.json()).videos.map(v => v.id);
   assert.ok(result.ui_search.video_ids.includes(id));
   await expect(watch).toHaveURL(/\/search\?q=/);
