@@ -288,10 +288,20 @@ print(sum(values))
   // additional browser fetch without that declaration for source=search proof;
   // the counter above independently proves the actual UI request used search.
   const queryMarker = Number(sql('SELECT COALESCE(max(id),0) FROM search_outbox'));
-  result.routed_search = await watch.evaluate(async query => {
-    const r = await fetch(`/api/v1/videos/search?q=${encodeURIComponent(query)}`);
-    return { status: r.status, video_ids: (await r.json()).videos.map(v => v.id) };
-  }, title);
+  result.routed_search_attempts = [];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    result.routed_search = await watch.evaluate(async query => {
+      const r = await fetch(`/api/v1/videos/search?q=${encodeURIComponent(query)}`);
+      const body = await r.json();
+      return { status: r.status, retry_after: r.headers.get('retry-after'),
+        video_ids: body.videos?.map(v => v.id) ?? [], error_code: body.error?.code ?? null };
+    }, title);
+    result.routed_search_attempts.push(result.routed_search); checkpoint();
+    if (result.routed_search.status !== 429 || attempt === 2) break;
+    const seconds = Number(result.routed_search.retry_after);
+    assert.ok(Number.isFinite(seconds) && seconds >= 1 && seconds <= 120, 'invalid Retry-After');
+    await new Promise(resolve => setTimeout(resolve, (seconds + 1) * 1000));
+  }
   assert.equal(result.routed_search.status, 200); assert.ok(result.routed_search.video_ids.includes(id));
   await poll(() => {
     const row = sql(`SELECT row_to_json(e) FROM (SELECT id,event_id,payload->>'source' AS source FROM search_outbox WHERE id>${queryMarker} AND event_type='search.submitted' AND payload->>'query'='${title}' AND payload->>'source' IS NOT NULL ORDER BY id DESC LIMIT 1) e`);
