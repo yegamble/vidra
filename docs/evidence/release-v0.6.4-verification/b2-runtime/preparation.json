@@ -1,0 +1,252 @@
+{
+  "status": "BLOCKED_KEY_TRANSFER_APPROVAL",
+  "recorded_at": 1789099147.321954,
+  "candidate_manifest_sha256": "d07ab79eb005fae705c4d56a33e61e4ad2cd9a95cdc36c4f1387d3d6d938de17",
+  "harness_revision": "c589d3d9dc3f07bfe01898f3b16c84da424a69c6",
+  "user_requirement": "Backblaze B2 test media only; no access or changes to any Sizetube live/backup bucket.",
+  "isolation": {
+    "provider": "Backblaze B2",
+    "bucket": "vidra-acceptance-v064-20260911-media",
+    "bucket_id": "e565124b996984e8a7070215",
+    "endpoint": "s3.us-east-005.backblazeb2.com",
+    "region": "us-east-005",
+    "authorized_scope": {
+      "buckets": [
+        {
+          "id": "e565124b996984e8a7070215",
+          "name": "vidra-acceptance-v064-20260911-media"
+        }
+      ],
+      "capabilities": [
+        "readBuckets",
+        "deleteFiles",
+        "listBuckets",
+        "writeFiles",
+        "readFiles",
+        "listFiles"
+      ],
+      "namePrefix": null
+    },
+    "before": [],
+    "preflight": "PASS",
+    "requests": [
+      {
+        "url": "https://api.backblazeb2.com/b2api/v4/b2_authorize_account",
+        "body": {},
+        "started_at": 1789098818.8613062,
+        "http_status": 200,
+        "finished_at": 1789098819.416595
+      },
+      {
+        "url": "https://api005.backblazeb2.com/b2api/v4/b2_list_file_versions",
+        "body": {
+          "bucketId": "e565124b996984e8a7070215",
+          "maxFileCount": 1000
+        },
+        "started_at": 1789098819.417145,
+        "http_status": 200,
+        "finished_at": 1789098819.5504682
+      }
+    ]
+  },
+  "bucket_creation": {
+    "bucketId": "e565124b996984e8a7070215",
+    "bucketName": "vidra-acceptance-v064-20260911-media",
+    "bucketType": "allPrivate",
+    "defaultServerSideEncryption": {
+      "algorithm": "AES256",
+      "mode": "SSE-B2"
+    },
+    "lifecycleRules": [],
+    "corsRules": [],
+    "bucketInfo": {
+      "protected-buckets": "no-existing-bucket-access",
+      "purpose": "vidra-v064-disposable-runtime-acceptance"
+    }
+  },
+  "key_lifetime_seconds": 604800,
+  "existing_buckets_accessed": false,
+  "excluded_resources": "All existing buckets, including Sizetube live/backup and retained vidra-acceptance-20260905-a36 recovery evidence.",
+  "test_host": {
+    "id": 599531580,
+    "name": "vidra-beta-v064-b2-acceptance",
+    "created_at": "2026-09-11T03:50:54Z",
+    "status": "active",
+    "networks": {
+      "v4": [
+        {
+          "ip_address": "159.203.118.182",
+          "netmask": "255.255.240.0",
+          "gateway": "159.203.112.1",
+          "type": "public"
+        },
+        {
+          "ip_address": "10.108.0.3",
+          "netmask": "255.255.240.0",
+          "gateway": "10.108.0.1",
+          "type": "private"
+        }
+      ]
+    },
+    "memory": 16384,
+    "vcpus": 8,
+    "disk": 320,
+    "image": {
+      "id": 235153036,
+      "name": "24.04 (LTS) x64",
+      "type": "base",
+      "distribution": "Ubuntu",
+      "slug": "ubuntu-24-04-x64",
+      "public": true,
+      "regions": [
+        "nyc3",
+        "ams2",
+        "ams3",
+        "atl1",
+        "blr1",
+        "fra1",
+        "lon1",
+        "mem1",
+        "mkc1",
+        "nyc1",
+        "nyc2",
+        "ric1",
+        "sfo1",
+        "sfo2",
+        "sfo3",
+        "sgp1",
+        "syd1",
+        "tor1"
+      ],
+      "min_disk_size": 7,
+      "size_gigabytes": 3.76,
+      "created_at": "2026-07-01T16:38:32Z",
+      "description": "Ubuntu 24.04 (LTS) x64",
+      "status": "available"
+    },
+    "tags": [
+      "vidra-v064-acceptance-20260910"
+    ]
+  },
+  "firewall": {
+    "id": "3d6093d4-1e07-45cd-89a8-099c2f76b8dc",
+    "name": "vidra-v064-acceptance-20260910",
+    "status": "succeeded",
+    "inbound_rules": [
+      {
+        "protocol": "tcp",
+        "ports": "22",
+        "sources": {
+          "addresses": [
+            "68.173.116.147/32"
+          ]
+        }
+      }
+    ],
+    "outbound_rules": [
+      {
+        "protocol": "icmp",
+        "ports": "0",
+        "destinations": {
+          "addresses": [
+            "0.0.0.0/0"
+          ]
+        }
+      },
+      {
+        "protocol": "tcp",
+        "ports": "0",
+        "destinations": {
+          "addresses": [
+            "0.0.0.0/0"
+          ]
+        }
+      },
+      {
+        "protocol": "udp",
+        "ports": "0",
+        "destinations": {
+          "addresses": [
+            "0.0.0.0/0"
+          ]
+        }
+      }
+    ],
+    "droplet_ids": [],
+    "tags": [
+      "vidra-v064-acceptance-20260910"
+    ],
+    "created_at": "2026-09-11T02:24:17Z",
+    "pending_changes": []
+  },
+  "handoff": {
+    "archive_sha256": "ce19ec2bdccea21e882c8f72158e4a2e1b6d3bcd6e99470539f7cdcca01d9ce4",
+    "manifest_sha256": "b65238af8f6fa07ddf2573e5f281be516bab38e40e0209c95e680cf5632f5d92",
+    "remote_stage": "root@159.203.118.182:/root/vidra-v064-runtime",
+    "transferred": "Nonsecret harness only; matching archive SHA-256 and blank native Ubuntu 24.04 AMD64 host check passed.",
+    "credential_transferred": false,
+    "runtime_started": false
+  },
+  "local_checks": {
+    "total": 52,
+    "failed": 0,
+    "python": {
+      "name": "python-units",
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "*_test.py",
+        "-v"
+      ],
+      "cwd": "/Users/yosefgamble/.codex/worktrees/8e04/vidra",
+      "exit_code": 0,
+      "expected_exit": 0,
+      "status": "PASS",
+      "log": "local/harness/python-units.log",
+      "sha256": "be1795c5b939448e1906cb92bf50266e15c78b47e7381f312c6bf87892a1b47c",
+      "test_count": 89,
+      "skip_count": 0
+    }
+  },
+  "automatic_approval_review": {
+    "action": "Transfer the newly created dedicated-bucket B2 key over SSH to root@159.203.118.182:/root/vidra-v064-b2-key.json",
+    "outcome": "REJECTED",
+    "reason": "Explicit user authorization required for exporting this credential to this specific destination.",
+    "safe_preparation": "Only nonsecret harness transferred; no workaround; scope proof and empty bucket recorded locally.",
+    "remaining_input": "Explicit approval for that restricted test-key transfer. No production credential or bucket access is requested."
+  },
+  "prior_result": "Local-storage milestone remains PASS only within its measured scope; no B2 runtime result is claimed.",
+  "retained_requirements": "All other provider, representative-source, recovery and launch-scope requirements remain unchanged; only dependent B2 object-storage execution is blocked.",
+  "harness_ci": [
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34560335132/job/103141561089",
+      "name": "ci-required",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34560335130/job/103141561240",
+      "name": "validate",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34560335130/job/103141561091",
+      "name": "bundle",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34560335130/job/103141561178",
+      "name": "boot",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://dashboard.gitguardian.com",
+      "name": "GitGuardian Security Checks",
+      "state": "SUCCESS"
+    }
+  ]
+}

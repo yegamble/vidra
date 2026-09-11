@@ -1,0 +1,306 @@
+{
+  "status": "PASS_BOUNDED_B2_MILESTONE",
+  "authorization": "User explicitly approved transfer of the seven-day single-bucket test key to 159.203.118.182 after the initial review rejection; beta reset/rebuild already authorized.",
+  "historical_preparation": "preparation.json",
+  "historical_preparation_sha256": "68c768934986331986ed12f72b0cc8e534bb24399c40390dffb7eaf265263d87",
+  "test_host": {
+    "id": 599531580,
+    "name": "vidra-beta-v064-b2-acceptance",
+    "created_at": "2026-09-11T03:50:54Z",
+    "status": "active",
+    "networks": {
+      "v4": [
+        {
+          "ip_address": "159.203.118.182",
+          "netmask": "255.255.240.0",
+          "gateway": "159.203.112.1",
+          "type": "public"
+        },
+        {
+          "ip_address": "10.108.0.3",
+          "netmask": "255.255.240.0",
+          "gateway": "10.108.0.1",
+          "type": "private"
+        }
+      ]
+    },
+    "memory": 16384,
+    "vcpus": 8,
+    "disk": 320,
+    "image": {
+      "id": 235153036,
+      "name": "24.04 (LTS) x64",
+      "type": "base",
+      "distribution": "Ubuntu",
+      "slug": "ubuntu-24-04-x64",
+      "public": true,
+      "regions": [
+        "nyc3",
+        "ams2",
+        "ams3",
+        "atl1",
+        "blr1",
+        "fra1",
+        "lon1",
+        "mem1",
+        "mkc1",
+        "nyc1",
+        "nyc2",
+        "ric1",
+        "sfo1",
+        "sfo2",
+        "sfo3",
+        "sgp1",
+        "syd1",
+        "tor1"
+      ],
+      "min_disk_size": 7,
+      "size_gigabytes": 3.76,
+      "created_at": "2026-07-01T16:38:32Z",
+      "description": "Ubuntu 24.04 (LTS) x64",
+      "status": "available"
+    },
+    "tags": [
+      "vidra-v064-acceptance-20260910"
+    ]
+  },
+  "firewall": {
+    "id": "3d6093d4-1e07-45cd-89a8-099c2f76b8dc",
+    "name": "vidra-v064-acceptance-20260910",
+    "status": "succeeded",
+    "inbound_rules": [
+      {
+        "protocol": "tcp",
+        "ports": "22",
+        "sources": {
+          "addresses": [
+            "68.173.116.147/32"
+          ]
+        }
+      }
+    ],
+    "outbound_rules": [
+      {
+        "protocol": "icmp",
+        "ports": "0",
+        "destinations": {
+          "addresses": [
+            "0.0.0.0/0"
+          ]
+        }
+      },
+      {
+        "protocol": "tcp",
+        "ports": "0",
+        "destinations": {
+          "addresses": [
+            "0.0.0.0/0"
+          ]
+        }
+      },
+      {
+        "protocol": "udp",
+        "ports": "0",
+        "destinations": {
+          "addresses": [
+            "0.0.0.0/0"
+          ]
+        }
+      }
+    ],
+    "droplet_ids": [],
+    "tags": [
+      "vidra-v064-acceptance-20260910"
+    ],
+    "created_at": "2026-09-11T02:24:17Z",
+    "pending_changes": []
+  },
+  "rebuild": {
+    "id": 3400296223,
+    "type": "rebuild",
+    "status": "completed",
+    "started_at": "2026-09-11T04:11:28Z",
+    "completed_at": "2026-09-11T04:11:55Z",
+    "resource_id": 599531580
+  },
+  "prior_failed_attempt": "attempt-1.json",
+  "prior_failed_attempt_sha256": "36dccd6141b73127da3f7aab035583d93673416147e3c7b0439ea7df56da0837",
+  "completion_raw_retention": "Original attempt-2 FAIL and raw browser PASS remain unchanged on host; separately completed only direct B2 GET and read-only image/ledger observations.",
+  "failed_attempt_raw_retention": "Pre-deploy failure observations, exact redacted commands and raw-log hashes retained; raw logs/config were retired by the authorized OS rebuild. No deployed containers/volumes or uploaded media existed in that failed attempt.",
+  "application_sequence_attempt": 2,
+  "original_recorder_status": "FAIL (retained checksum metadata assumption)",
+  "completion_status": "PASS",
+  "completion_harness_revision": "467d3778d746831a476bff4d287273b2f2773742",
+  "completion_helper_sha256": "21c0fad9c1d27eb0336049160540c33d60325f697aec429c076bdab50a418e0d",
+  "completion_finished_at": 1789100572.9337647,
+  "application_modifications": "None; published v0.6.4 images and released deployment scripts unchanged.",
+  "transfer_archive_sha256": "5c66fb3af5e00f64496fadab25c75e69da94b35484297b02cc5b8dd58db2b117",
+  "handoff_manifest_sha256": "70b542d0c2febdef62b96375271119f80db9d37be012963dbe496826b7de7c68",
+  "candidate_manifest_sha256": "d07ab79eb005fae705c4d56a33e61e4ad2cd9a95cdc36c4f1387d3d6d938de17",
+  "raw_evidence_location": "root@159.203.118.182:/root/vidra-v064-runtime",
+  "sanitized_export_sha256": "c7ab04ae5561a6cae276eaa4e6e7c0a4861e7bd27277e7fa980505a27b8f0294",
+  "exporter_sha256": "f2c3ec25cfbfbf675bbc7ad288d149fc94b07df6147b02cbdaefe78ebd411d5e",
+  "export": {
+    "raw_result_sha256": "4dbaf8fdb670a78f068b23897e0bf8cbde695ea294f28a98803822391d5e13ae",
+    "raw_browser_sha256": "7a9183670d6e2c96439075352096ad77008077bc09b4620e7fdfe0999b41dd31",
+    "raw_commands_sha256": "2ab8c27e0c93ce238b7785748f7c340076b5c1aecec6fd119fd7c7d4742f8f32",
+    "raw_evidence_location": "/root/vidra-v064-runtime",
+    "runtime_configuration": {
+      "VIDRA_ENV": "production",
+      "TRANSCODING_ENABLED": "true",
+      "TRANSCODING_PACKAGER": "cmaf",
+      "SEARCH_SERVICE_URL": "http://search:8080",
+      "CLAMAV_ADDR": "clamav:3310",
+      "MALWARE_SCAN_MODE": "fail-closed",
+      "RATE_LIMIT_ENABLED": "true",
+      "RATE_LIMIT_REQUESTS": "120",
+      "MEDIA_RATE_LIMIT_REQUESTS": "3000",
+      "STORAGE_BACKEND": "s3",
+      "STORAGE_S3_ENDPOINT": "s3.us-east-005.backblazeb2.com",
+      "STORAGE_S3_REGION": "us-east-005",
+      "STORAGE_S3_BUCKET": "vidra-acceptance-v064-20260911-media",
+      "STORAGE_S3_USE_SSL": "true",
+      "STORAGE_S3_FORCE_PATH_STYLE": "false"
+    },
+    "actual_runtime_storage": [
+      {
+        "service": "api",
+        "container_id": "0585bf39a45e582d623a00aba03d3e4a929f80ce1b3a7aa24f3f15755d78756a",
+        "observed_at": 1789100177.91816,
+        "configuration": {
+          "STORAGE_BACKEND": "s3",
+          "STORAGE_S3_ENDPOINT": "s3.us-east-005.backblazeb2.com",
+          "STORAGE_S3_REGION": "us-east-005",
+          "STORAGE_S3_BUCKET": "vidra-acceptance-v064-20260911-media",
+          "STORAGE_S3_USE_SSL": "true",
+          "STORAGE_S3_FORCE_PATH_STYLE": "false"
+        },
+        "credential_matches_verified_single_bucket_key": true
+      },
+      {
+        "service": "api",
+        "container_id": "0585bf39a45e582d623a00aba03d3e4a929f80ce1b3a7aa24f3f15755d78756a",
+        "observed_at": 1789100570.6615226,
+        "configuration": {
+          "STORAGE_BACKEND": "s3",
+          "STORAGE_S3_ENDPOINT": "s3.us-east-005.backblazeb2.com",
+          "STORAGE_S3_REGION": "us-east-005",
+          "STORAGE_S3_BUCKET": "vidra-acceptance-v064-20260911-media",
+          "STORAGE_S3_USE_SSL": "true",
+          "STORAGE_S3_FORCE_PATH_STYLE": "false"
+        },
+        "credential_matches_verified_single_bucket_key": true
+      }
+    ],
+    "completion_raw_sha256": "880320118ff03d48e785336da4dea48b93b63715af5b91cbcc4a73527346e54f",
+    "original_failure_preserved": true,
+    "scope": "Sanitized result/browser measurements, command arguments and raw-log hashes, four requested browser screenshots. No raw logs, generated environment, credentials, database or application storage exported."
+  },
+  "harness_ci": [
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34561315676/job/103144444261",
+      "name": "ci-required",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34561315693/job/103144444223",
+      "name": "validate",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34561315693/job/103144444487",
+      "name": "bundle",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34561315693/job/103144444452",
+      "name": "boot",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://dashboard.gitguardian.com",
+      "name": "GitGuardian Security Checks",
+      "state": "SUCCESS"
+    }
+  ],
+  "local_validation": {
+    "checks": 52,
+    "failed": 0,
+    "python_tests": 92,
+    "skips": 0,
+    "python_log_sha256": "7aa72a5eb9721a4b73e8a57c596e3aeedc62f5d77225bd822c764e6305c1a715"
+  },
+  "storage": "Private SSE-B2 test bucket only, with provider-verified single-bucket key; no existing bucket object/policy changes.",
+  "excluded_resources": "All Sizetube live/backup buckets and production hosts; retained A36 bucket and shared lab data; previous native local-pass host.",
+  "delivery_scope": "Canonical B2 media, proxied through the Vidra API. Presigned/CDN delivery, version-retention billing, destructive GC and recovery not certified.",
+  "worker_topology": "Released default: inline workers in API process; optional separate worker profile was not selected. No claim of a split-worker resilience test.",
+  "release_verdict": "NO-GO; bounded native local and B2 runtime milestones only.",
+  "disposable_hosts_retained": {
+    "159.65.249.255": "native local-pass evidence",
+    "159.203.118.182": "native B2-pass evidence"
+  },
+  "hourly_host_price_total_usd": 0.28572,
+  "test_key_lifetime_seconds": 604800,
+  "application_sequence_invocation_id": "7272a157cdd14ce5a1a5adbb52280361",
+  "application_sequence_harness_revision": "c82c8061cf3832bde42f356b8cadde2cc0151637",
+  "browser_screenshots_reviewed": true,
+  "visual_observation": "Watch screenshot has a broken default channel-avatar placeholder; uninvestigated, does not prevent bounded playback/search milestone.",
+  "exporter_diagnostic": "First sanitizer attempt failed parsing an unset Docker Env entry; no archive created. Corrected representation handling and secret-scan/export then passed.",
+  "bucket_provisioning_commands": [
+    [
+      "b2",
+      "bucket",
+      "create",
+      "vidra-acceptance-v064-20260911-media",
+      "allPrivate",
+      "--default-server-side-encryption",
+      "SSE-B2",
+      "--bucket-info",
+      "{\"purpose\": \"vidra-v064-disposable-runtime-acceptance\", \"protected-buckets\": \"no-existing-bucket-access\"}"
+    ],
+    [
+      "b2",
+      "bucket",
+      "get",
+      "vidra-acceptance-v064-20260911-media"
+    ],
+    [
+      "b2",
+      "key",
+      "create",
+      "--bucket",
+      "vidra-acceptance-v064-20260911-media",
+      "--duration",
+      "604800",
+      "vidra-v064-media-acceptance",
+      "listBuckets,readBuckets,listFiles,readFiles,writeFiles,deleteFiles"
+    ]
+  ],
+  "completion_tooling_ci": [
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34562184290/job/103147031256",
+      "name": "validate",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34562184290/job/103147031258",
+      "name": "bundle",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34562184290/job/103147031363",
+      "name": "boot",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34562184300/job/103147031113",
+      "name": "ci-required",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://dashboard.gitguardian.com",
+      "name": "GitGuardian Security Checks",
+      "state": "SUCCESS"
+    }
+  ]
+}

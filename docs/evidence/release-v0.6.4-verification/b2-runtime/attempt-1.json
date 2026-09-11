@@ -1,0 +1,571 @@
+{
+  "status": "FAIL",
+  "error": "'worker'",
+  "checks": {
+    "blank_native_host": "PASS",
+    "corrupt-bundle": "PASS",
+    "corrupt-cli": "PASS",
+    "install": "PASS",
+    "native_cli_executes": "PASS (help; binary identity verified by checksum)",
+    "configuration_preserved": "PASS",
+    "production_ports": "PASS (Compose render; runtime ports belong to A03)",
+    "pinned_image_pulls": "PASS"
+  },
+  "candidate_sha256": "d07ab79eb005fae705c4d56a33e61e4ad2cd9a95cdc36c4f1387d3d6d938de17",
+  "handoff_sha256": "b65238af8f6fa07ddf2573e5f281be516bab38e40e0209c95e680cf5632f5d92",
+  "before": {
+    "system": "Linux",
+    "architecture": "x86_64",
+    "hostname": "vidra-beta-v064-b2-acceptance",
+    "os": {
+      "PRETTY_NAME": "Ubuntu 24.04.4 LTS",
+      "NAME": "Ubuntu",
+      "VERSION_ID": "24.04",
+      "VERSION": "24.04.4 LTS (Noble Numbat)",
+      "VERSION_CODENAME": "noble",
+      "ID": "ubuntu",
+      "ID_LIKE": "debian",
+      "HOME_URL": "https://www.ubuntu.com/",
+      "SUPPORT_URL": "https://help.ubuntu.com/",
+      "BUG_REPORT_URL": "https://bugs.launchpad.net/ubuntu/",
+      "PRIVACY_POLICY_URL": "https://www.ubuntu.com/legal/terms-and-policies/privacy-policy",
+      "UBUNTU_CODENAME": "noble",
+      "LOGO": "ubuntu-logo"
+    },
+    "root": true,
+    "systemd": true,
+    "container": false,
+    "existing": []
+  },
+  "storage": {
+    "provider": "Backblaze B2",
+    "bucket": "vidra-acceptance-v064-20260911-media",
+    "bucket_id": "e565124b996984e8a7070215",
+    "endpoint": "s3.us-east-005.backblazeb2.com",
+    "region": "us-east-005",
+    "authorized_scope": {
+      "buckets": [
+        {
+          "id": "e565124b996984e8a7070215",
+          "name": "vidra-acceptance-v064-20260911-media"
+        }
+      ],
+      "capabilities": [
+        "readBuckets",
+        "listFiles",
+        "listBuckets",
+        "readFiles",
+        "writeFiles",
+        "deleteFiles"
+      ],
+      "namePrefix": null
+    },
+    "before": [],
+    "preflight": "PASS"
+  },
+  "started_at": 1789099573.3207424,
+  "finished_at": 1789099658.6165612,
+  "classification": "Harness expected optional split worker in released default profile. No application deployment occurred.",
+  "commands": [
+    {
+      "argv": [
+        "ss",
+        "-lntup"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "before-listeners",
+      "started_at": 1789099573.8771653,
+      "log": "001-before-listeners.log",
+      "exit_code": 0,
+      "finished_at": 1789099573.9433713,
+      "raw_log_sha256": "c7d713653b100fd787e2030ee2fdf923301008e322bf1623ca3c76e9e8d861d1"
+    },
+    {
+      "argv": [
+        "df",
+        "-h"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "before-disk",
+      "started_at": 1789099573.9438584,
+      "log": "002-before-disk.log",
+      "exit_code": 0,
+      "finished_at": 1789099573.9488711,
+      "raw_log_sha256": "31eb8cdf21588e88c19f82022e3ad644488bf4cf15434ee8478c9f9208182bf6"
+    },
+    {
+      "argv": [
+        "sh",
+        "/root/vidra-v064-runtime/install.sh",
+        "--yes",
+        "--ref",
+        "v0.6.4",
+        "--dir",
+        "/opt/vidra"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-corrupt-bundle",
+      "started_at": 1789099573.9505959,
+      "log": "003-install-corrupt-bundle.log",
+      "exit_code": 1,
+      "finished_at": 1789099641.0289936,
+      "raw_log_sha256": "e2fd05a3e24731488a5dfa27fc3fd49c3e18f3f86b2dd0075f007432486e486a"
+    },
+    {
+      "argv": [
+        "sh",
+        "/root/vidra-v064-runtime/install.sh",
+        "--yes",
+        "--ref",
+        "v0.6.4",
+        "--dir",
+        "/opt/vidra"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-corrupt-cli",
+      "started_at": 1789099641.0298042,
+      "log": "004-install-corrupt-cli.log",
+      "exit_code": 1,
+      "finished_at": 1789099642.5556872,
+      "raw_log_sha256": "4af0fc476959591c8810aaacf347aa4d59d8293a88512ff69c94e5a6868bde6d"
+    },
+    {
+      "argv": [
+        "sh",
+        "/root/vidra-v064-runtime/install.sh",
+        "--yes",
+        "--ref",
+        "v0.6.4",
+        "--dir",
+        "/opt/vidra"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-install",
+      "started_at": 1789099642.5562832,
+      "log": "005-install-install.log",
+      "exit_code": 0,
+      "finished_at": 1789099643.3244731,
+      "raw_log_sha256": "c6b3e6231bc6067265584799ede84b76eea882d032b20c30e08fe2fbf26f835b"
+    },
+    {
+      "argv": [
+        "curl",
+        "-fsSL",
+        "https://github.com/yegamble/vidra-core/releases/download/v0.6.4/SHA256SUMS",
+        "-o",
+        "/root/vidra-v064-runtime/private/installer/SHA256SUMS"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-download-sums",
+      "started_at": 1789099643.3250632,
+      "log": "006-install-download-sums.log",
+      "exit_code": 0,
+      "finished_at": 1789099643.4905066,
+      "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "vidra",
+        "help"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-cli-help",
+      "started_at": 1789099643.5724769,
+      "log": "007-install-cli-help.log",
+      "exit_code": 0,
+      "finished_at": 1789099643.5896504,
+      "raw_log_sha256": "346dc8eb464adee676b56af851899fe5a7adff337a9344ef7049b80ac4dea279"
+    },
+    {
+      "argv": [
+        "vidra",
+        "setup",
+        "--non-interactive",
+        "--domain",
+        "http://video.test",
+        "--instance-name",
+        "A02 disposable test",
+        "--registration",
+        "closed",
+        "--tls-mode",
+        "plain-http",
+        "--storage",
+        "local",
+        "--release-tag",
+        "v0.6.4",
+        "--template",
+        "env/production.env.example"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "install-setup",
+      "started_at": 1789099643.5900419,
+      "log": "008-install-setup.log",
+      "exit_code": 0,
+      "finished_at": 1789099643.6230917,
+      "raw_log_sha256": "4790e4f25aad77474211b13e457e5b85186828a54eb53f285e41a31ff9ad2574"
+    },
+    {
+      "argv": [
+        "sh",
+        "/root/vidra-v064-runtime/install.sh",
+        "--yes",
+        "--ref",
+        "v0.6.4",
+        "--dir",
+        "/opt/vidra"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-reinstall",
+      "started_at": 1789099643.642236,
+      "log": "009-install-reinstall.log",
+      "exit_code": 0,
+      "finished_at": 1789099644.4604256,
+      "raw_log_sha256": "af8985f4078f17427582f3e6e0dc150d44f73fd852a60be7972ddc2380845b33"
+    },
+    {
+      "argv": [
+        "vidra",
+        "setup",
+        "--check",
+        "env/production.env"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "install-setup-check",
+      "started_at": 1789099644.5063665,
+      "log": "010-install-setup-check.log",
+      "exit_code": 0,
+      "finished_at": 1789099644.5233405,
+      "raw_log_sha256": "6e6b1578ca8ef8403d41e1c0acf89986c25663f46c1ea3619dec9bd786aa7c88"
+    },
+    {
+      "argv": [
+        "docker",
+        "--version"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-docker-version",
+      "started_at": 1789099644.5238104,
+      "log": "011-install-docker-version.log",
+      "exit_code": 0,
+      "finished_at": 1789099644.589052,
+      "raw_log_sha256": "d17d4494135d5749568d3967685ddff66428bc09b11975986c6f761aaab4123a"
+    },
+    {
+      "argv": [
+        "docker",
+        "compose",
+        "version",
+        "--short"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-compose-version",
+      "started_at": 1789099644.589683,
+      "log": "012-install-compose-version.log",
+      "exit_code": 0,
+      "finished_at": 1789099644.7048337,
+      "raw_log_sha256": "db74d0caf81f43029fa28ce9888695d0b54d0a99003e6042823c9bc914897865"
+    },
+    {
+      "argv": [
+        "systemctl",
+        "is-active",
+        "--quiet",
+        "docker"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-docker-active",
+      "started_at": 1789099644.70529,
+      "log": "013-install-docker-active.log",
+      "exit_code": 0,
+      "finished_at": 1789099644.7219536,
+      "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "systemctl",
+        "is-enabled",
+        "--quiet",
+        "docker"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-docker-enabled",
+      "started_at": 1789099644.7223856,
+      "log": "014-install-docker-enabled.log",
+      "exit_code": 0,
+      "finished_at": 1789099644.7392008,
+      "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "docker",
+        "compose",
+        "-f",
+        "docker-compose.yml",
+        "-f",
+        "docker-compose.prod.yml",
+        "--env-file",
+        "env/production.env",
+        "--profile",
+        "core",
+        "--profile",
+        "frontend",
+        "config",
+        "--format",
+        "json"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "install-compose",
+      "started_at": 1789099644.7396247,
+      "log": "015-install-compose.log",
+      "exit_code": 0,
+      "finished_at": 1789099645.1064847,
+      "raw_log_sha256": "c68065a23e84c44693cb549bd90c255820d1305188fbef3d4f43c7577d2d85c4"
+    },
+    {
+      "argv": [
+        "docker",
+        "pull",
+        "--platform",
+        "linux/amd64",
+        "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-pull-vidra-core",
+      "started_at": 1789099645.1075115,
+      "log": "016-install-pull-vidra-core.log",
+      "exit_code": 0,
+      "finished_at": 1789099650.1056597,
+      "raw_log_sha256": "c2020786205d161120fcb6659cee3d0396516edc6707cc04280f29cc872f31ab"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-inspect-vidra-core",
+      "started_at": 1789099650.1061532,
+      "log": "017-install-inspect-vidra-core.log",
+      "exit_code": 0,
+      "finished_at": 1789099650.2815797,
+      "raw_log_sha256": "846f1f04f247751a429a206fdf9c97650365d34bdd0210f07de6d97d4c4a9ee2"
+    },
+    {
+      "argv": [
+        "docker",
+        "pull",
+        "--platform",
+        "linux/amd64",
+        "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-pull-vidra-user",
+      "started_at": 1789099650.28209,
+      "log": "018-install-pull-vidra-user.log",
+      "exit_code": 0,
+      "finished_at": 1789099655.9011831,
+      "raw_log_sha256": "b5419600ebb06c3e167d2c7745543d0b545493ce14d2a83817162f29b744c968"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-inspect-vidra-user",
+      "started_at": 1789099655.9016495,
+      "log": "019-install-inspect-vidra-user.log",
+      "exit_code": 0,
+      "finished_at": 1789099656.0169983,
+      "raw_log_sha256": "6ac7e0029af0f8cc012be713912b3d7f6d546222e8e8ead7ac3d6770405db82c"
+    },
+    {
+      "argv": [
+        "docker",
+        "pull",
+        "--platform",
+        "linux/amd64",
+        "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-pull-vidra-search",
+      "started_at": 1789099656.0175798,
+      "log": "020-install-pull-vidra-search.log",
+      "exit_code": 0,
+      "finished_at": 1789099657.191372,
+      "raw_log_sha256": "80e2af406c7a21c8c67841be6040aadb577940dfe9f7c7f3db2500eb30168140"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-inspect-vidra-search",
+      "started_at": 1789099657.191923,
+      "log": "021-install-inspect-vidra-search.log",
+      "exit_code": 0,
+      "finished_at": 1789099657.361563,
+      "raw_log_sha256": "30e6e75a5e00ad6a8ac1dcb6555b430548ad0eb45d1d10141d61268d7bda219f"
+    },
+    {
+      "argv": [
+        "docker",
+        "ps",
+        "-aq"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-no-containers",
+      "started_at": 1789099657.3622327,
+      "log": "022-install-no-containers.log",
+      "exit_code": 0,
+      "finished_at": 1789099657.429645,
+      "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "docker",
+        "info",
+        "--format",
+        "{{.OSType}}/{{.Architecture}}"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "engine-platform",
+      "started_at": 1789099657.4347687,
+      "log": "023-engine-platform.log",
+      "exit_code": 0,
+      "finished_at": 1789099657.6028872,
+      "raw_log_sha256": "71888e1918e6c6c70ea2c4520d8bdc63c7b4649e50626cef452d83f8a29f6ee6"
+    },
+    {
+      "argv": [
+        "docker",
+        "volume",
+        "ls",
+        "-q"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "empty-volumes",
+      "started_at": 1789099657.6033068,
+      "log": "024-empty-volumes.log",
+      "exit_code": 0,
+      "finished_at": 1789099657.6685145,
+      "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "vidra",
+        "setup",
+        "--non-interactive",
+        "--yes",
+        "--domain",
+        "https://secure.video.test",
+        "--instance-name",
+        "v0.6.4 disposable acceptance",
+        "--registration",
+        "closed",
+        "--tls-mode",
+        "internal",
+        "--storage",
+        "s3",
+        "--s3-endpoint",
+        "s3.us-east-005.backblazeb2.com",
+        "--s3-region",
+        "us-east-005",
+        "--s3-bucket",
+        "vidra-acceptance-v064-20260911-media",
+        "--s3-access-key",
+        "<redacted test-bucket access key>",
+        "--release-tag",
+        "v0.6.4",
+        "--template",
+        "env/production.env.example"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "setup-internal",
+      "started_at": 1789099657.6723669,
+      "log": "025-setup-internal.log",
+      "exit_code": 0,
+      "finished_at": 1789099657.705863,
+      "raw_log_sha256": "0fb177ed926c1a3bb199bb38aac4545f799e3170300b6f472fe1bdd59dcfef23"
+    },
+    {
+      "argv": [
+        "vidra",
+        "setup",
+        "--check",
+        "env/production.env"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "setup-check",
+      "started_at": 1789099657.7062662,
+      "log": "026-setup-check.log",
+      "exit_code": 0,
+      "finished_at": 1789099657.7231152,
+      "raw_log_sha256": "d08496156f4906f8bd5f10e30eed3743e1dd5513de7f539d457a538bcedc4615"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "config",
+        "--format",
+        "json"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-config",
+      "started_at": 1789099657.7236485,
+      "log": "027-compose-config.log",
+      "exit_code": 0,
+      "finished_at": 1789099658.1406126,
+      "raw_log_sha256": "5b2c3637fdf4ade6672975f08241133a3826e5461ebd7b7291de49da255255fb"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "logs",
+        "--no-color",
+        "--timestamps"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-logs",
+      "started_at": 1789099658.1418388,
+      "log": "028-compose-logs.log",
+      "exit_code": 0,
+      "finished_at": 1789099658.6160593,
+      "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "rendered_services": [
+    "api",
+    "caddy",
+    "clamav",
+    "frontend",
+    "migrate",
+    "postgres",
+    "prep-volumes",
+    "redis",
+    "search",
+    "search-migrate"
+  ],
+  "api_storage": {
+    "STORAGE_BACKEND": "s3",
+    "STORAGE_S3_ENDPOINT": "s3.us-east-005.backblazeb2.com",
+    "STORAGE_S3_REGION": "us-east-005",
+    "STORAGE_S3_BUCKET": "vidra-acceptance-v064-20260911-media",
+    "STORAGE_S3_USE_SSL": "true",
+    "STORAGE_S3_FORCE_PATH_STYLE": "false"
+  },
+  "raw_result_sha256": "c6fa089cdabeb1765d08da87e9efc5e662b4bf47cca0c63f1d2c7a83bfdebec4",
+  "raw_commands_sha256": "09df071a1eea3b3465967efc09871520cacb77e1afed32af06e7e51b19c22f65",
+  "no_containers": true,
+  "no_volumes": true,
+  "raw_retention": "Reviewed failure fields, exact redacted commands and all raw-log hashes retained; raw pre-deploy logs/config stay on the disposable host until its authorized rebuild. No broad secret archive exported."
+}

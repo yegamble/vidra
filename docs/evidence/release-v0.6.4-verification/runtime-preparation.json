@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-10",
+  "continuation_of": "https://github.com/yegamble/vidra/pull/185",
+  "preparation_status": "PASS",
+  "runtime_status": "BLOCKED",
+  "release_verdict": "NO-GO",
+  "agent_count": 1,
+  "scope": "First runtime milestone only: fresh install, owner claim/login, browser upload/publish, real CMAF transcode, advancing browser playback, outbox-to-vidra-search-to-browser result.",
+  "candidate_manifest": "docs/evidence/release-v0.6.4-verification/manifest.json",
+  "candidate_sha256": "d07ab79eb005fae705c4d56a33e61e4ad2cd9a95cdc36c4f1387d3d6d938de17",
+  "frozen_source_revisions": {
+    "vidra": {
+      "remote": "https://github.com/yegamble/vidra.git",
+      "tag": "v0.6.4",
+      "revision": "0da18462b009b3710ceac7e60d2e88653bebbc37"
+    },
+    "vidra-core": {
+      "remote": "https://github.com/yegamble/vidra-core.git",
+      "tag": "v0.6.4",
+      "revision": "ed55a6d946dad3f2e72a47b2518ac095352c795d"
+    },
+    "vidra-user": {
+      "remote": "https://github.com/yegamble/vidra-user.git",
+      "tag": "v0.6.4",
+      "revision": "e584069ee724b49af3d3f3d944efc34d3be6da75"
+    },
+    "vidra-search": {
+      "remote": "https://github.com/yegamble/vidra-search.git",
+      "tag": "v0.6.4",
+      "revision": "1f8b85425e7d4dbb039edca56850282df9b93c6d"
+    }
+  },
+  "host_access": {
+    "status": "UNAVAILABLE",
+    "workstation": "Darwin arm64",
+    "docker_engine": "linux/aarch64",
+    "inspection_commands": [
+      [
+        "uname",
+        "-sm"
+      ],
+      [
+        "docker",
+        "info",
+        "--format",
+        "{{.OSType}}/{{.Architecture}}"
+      ],
+      [
+        "multipass",
+        "list",
+        "--format",
+        "json"
+      ]
+    ],
+    "ssh_config_observation": "Only GitHub alias configured; no supplied disposable acceptance host or usable login/sudo identity.",
+    "vm_inventory_observation": "Existing test-runner and four retained A02 VMs; none accepted as a clean native AMD64 host.",
+    "missing": [
+      "New Ubuntu 24.04 AMD64 host/VM SSH address or alias",
+      "Login user and working locally configured SSH identity",
+      "Passwordless sudo and confirmation the allocated host is disposable and freshly provisioned"
+    ],
+    "required_host_sizing": "4 vCPUs, 16 GiB RAM, 80 GiB disk; at least 30 GiB free",
+    "requested_during_session": true,
+    "host_run_attempted": false
+  },
+  "actual_loaded_images": null,
+  "actual_migration_ledgers": null,
+  "browser_evidence": null,
+  "runtime_results": null,
+  "expected_ledgers_from_frozen_sources": {
+    "schema_migrations": 146,
+    "vidra_search_migrations": 18
+  },
+  "local_validation": {
+    "command_checks": 52,
+    "passed": 52,
+    "failed": 0,
+    "python_tests": 81,
+    "python_skips": 0,
+    "focused_new_regressions": 6,
+    "npm_ci": "PASS; three packages installed from reduced frozen Playwright 1.63.0 lockfile with original npm integrities",
+    "target_host_refusal": "PASS; check-host exited 1 on Darwin ARM64 before any installation",
+    "prepared_bundle_render": {
+      "status": "PASS",
+      "command": [
+        "bash",
+        "deploy/compose.sh",
+        "config",
+        "--format",
+        "json"
+      ],
+      "exit_code": 0,
+      "harness_sha256": "83c3cecc35c9093d41b3860084994e17d5b10a3d34fe9bff144067250a515f20",
+      "checks": [
+        "packaged-source-hashes",
+        "immutable-application-images",
+        "linux-amd64-platforms",
+        "volume-free-migrators",
+        "transcoding-cmaf",
+        "real-search",
+        "fail-closed-scanner",
+        "edge-present"
+      ]
+    },
+    "runtime_acceptance_executed": false,
+    "raw_logs_private_directory": "/tmp/vidra-v064-preparation-gates/local/harness",
+    "commands": [
+      {"name":"bash-bootstrap.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/bootstrap.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-bootstrap.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-bootstrap.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/bootstrap.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-bootstrap.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-install.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/install.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-install.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-install.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/install.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-install.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-blank-server-smoke.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/blank-server-smoke.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-blank-server-smoke.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-blank-server-smoke.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/blank-server-smoke.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-blank-server-smoke.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-install_test.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/install_test.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-install_test.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-install_test.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/install_test.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-install_test.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-runtime-smoke.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/runtime-smoke.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-runtime-smoke.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-runtime-smoke.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/runtime-smoke.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-runtime-smoke.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-backup-env.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/backup-env.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-backup-env.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-backup-env.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/backup-env.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-backup-env.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-backup.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/backup.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-backup.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-backup.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/backup.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-backup.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-compose.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/compose.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-compose.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-compose.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/compose.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-compose.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-deploy.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/deploy.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-deploy.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-deploy.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/deploy.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-deploy.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-lib.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/lib.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-lib.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-lib.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/lib.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-lib.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-make-bundle.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/make-bundle.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-make-bundle.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-make-bundle.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/make-bundle.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-make-bundle.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-pin-release.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/pin-release.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-pin-release.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-pin-release.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/pin-release.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-pin-release.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-provision.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/provision.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-provision.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-provision.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/provision.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-provision.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-release.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/release.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-release.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-release.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/release.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-release.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-restore.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/restore.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-restore.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-restore.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/restore.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-restore.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-rollback.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/rollback.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-rollback.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-rollback.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/deploy/rollback.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-rollback.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"bash-a24-plant-foreign-media.sh","command":["bash","-n","/Users/yosefgamble/.codex/worktrees/8e04/vidra/docs/evidence/a24-plant-foreign-media.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/bash-a24-plant-foreign-media.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"shellcheck-a24-plant-foreign-media.sh","command":["shellcheck","-x","/Users/yosefgamble/.codex/worktrees/8e04/vidra/docs/evidence/a24-plant-foreign-media.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/shellcheck-a24-plant-foreign-media.sh.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-auth-expiry-smoke.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/auth-expiry-smoke.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-auth-expiry-smoke.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-auth-policies-smoke.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/auth-policies-smoke.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-auth-policies-smoke.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-discovery-links-smoke.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/discovery-links-smoke.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-discovery-links-smoke.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-download-embed-smoke.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/download-embed-smoke.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-download-embed-smoke.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-links-smoke.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/links-smoke.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-links-smoke.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-media-access-smoke.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/media-access-smoke.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-media-access-smoke.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-owner-auth-smoke.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/owner-auth-smoke.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-owner-auth-smoke.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-owner_auth_smoke_test.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/owner_auth_smoke_test.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-owner_auth_smoke_test.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-password-links-smoke.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/password-links-smoke.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-password-links-smoke.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-playback-smoke.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/playback-smoke.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-playback-smoke.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-release-acceptance.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/release-acceptance.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-release-acceptance.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-search-smoke.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/search-smoke.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-search-smoke.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"node-upload-smoke.mjs","command":["/Users/yosefgamble/.nvm/versions/node/v26.8.1/bin/node","--check","/Users/yosefgamble/.codex/worktrees/8e04/vidra/tests/upload-smoke.mjs"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/node-upload-smoke.mjs.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"installer-units","command":["bash","tests/install_test.sh"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/installer-units.log","sha256":"ecb49972434e3557cb6f271360a80beec8d3f9af28ba63e88d626f18093b1baa"},
+      {"name":"python-units","command":["python3","-m","unittest","discover","-s","tests","-p","*_test.py","-v"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/python-units.log","sha256":"cb5784c7ecba781ee34b9f76ffde1b3eec596163a39e440145586aa106d2532e","test_count":81,"skip_count":0},
+      {"name":"compose-quiet","command":["docker","compose","-f","docker-compose.yml","-f","docker-compose.prod.yml","--env-file","/tmp/vidra-v064-preparation-gates/local/harness/check.env","config","-q"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/compose-quiet.log","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"name":"compose-render","command":["docker","compose","-f","docker-compose.yml","-f","docker-compose.prod.yml","--env-file","/tmp/vidra-v064-preparation-gates/local/harness/check.env","--profile","core","--profile","frontend","--profile","edge","config","--format","json"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":0,"expected_exit":0,"status":"PASS","log":"local/harness/compose-render.log","sha256":"381a88328a59b921064c173da94471735482acd81568d0db8129c7451fa6b393","assertions":{"postgres_closed":true,"redis_closed":true,"search_closed":true,"api_loopback":true,"frontend_loopback":true,"migrate_no_volumes":true,"migrate_same_image":true,"search-migrate_no_volumes":true,"search-migrate_same_image":true}},
+      {"name":"compose-missing-jwt","command":["docker","compose","-f","docker-compose.yml","-f","docker-compose.prod.yml","--env-file","/tmp/vidra-v064-preparation-gates/local/harness/missing-jwt.env","config","-q"],"cwd":"/Users/yosefgamble/.codex/worktrees/8e04/vidra","exit_code":1,"expected_exit":1,"status":"PASS","log":"local/harness/compose-missing-jwt.log","sha256":"38dbc9c26c23826145b049e6422b16917efce1ec25bc7fe3a52a60f13603a94f"}
+    ],
+    "final_python_recheck": {
+      "exit_code": 0,
+      "test_count": 81,
+      "skip_count": 0,
+      "sha256": "cb5784c7ecba781ee34b9f76ffde1b3eec596163a39e440145586aa106d2532e"
+    },
+    "secret_scanner_followup": "Initial GitGuardian check misclassified a runtime-generated password template at the original draft head. Password now uses randomBytes(24).toString(base64url) with a variable reference; no real credential existed or was revoked. Only this task draft history was rewritten with an explicit remote lease."
+  },
+  "handoff": {
+    "directory": "/tmp/vidra-v064-runtime-handoff-ready",
+    "archive": "/tmp/vidra-v064-runtime-handoff-ready.tar.gz",
+    "archive_sha256": "b0a5e4ff7f89725ade627e984e443220359add3a99d2f74bd409191101074150",
+    "manifest_sha256": "b9fa2012327596648f3d4980b85ddab4856017685426ebd58372b48d56502a40",
+    "node_archive_sha256": "3e301118d7df53d563b7e96c1617545f26e2f76f9724be668d6cab65c15dda5d",
+    "instructions": "docs/runtime-acceptance-v0.6.4.md",
+    "helper_sha256": {
+      "tests/release_acceptance.py": "b0eb31b39fcd2c0be27a6aaa292d71f219161ae24e080beeada650cf8cf6ed17",
+      "tests/release-acceptance.mjs": "df50a02fa0d7e420e2d691857204d03156cbf4ce31aca40134a3e2e3d004f094",
+      "tests/release_acceptance_test.py": "30089dccb98bf66f18b3b87314b63577a0692eddf89725a762156685d9e12a54"
+    },
+    "dependencies": "Existing frozen preflight/source/assets plus Node 26.8.1 linux-x64 with official SHA256SUMS; browser lock derived from frozen frontend.",
+    "mutations_on_execution": "Only a confirmed new disposable host; keeps fail-closed ClamAV and real transcoding/search. No app builds, SQL seeding/repair, shared-lab data or production changes."
+  },
+  "preserved_requirements": {
+    "workflow_rows": 59,
+    "acceptance_items": 40,
+    "scope_families": 10,
+    "statuses_changed": false,
+    "historical_passes": "Retain original revisions, fixtures and provider boundaries.",
+    "other_blockers": "B2 source, B3 providers, B4 recovery, B5 scope and U1 CI remain for their dependent checks; they do not block this milestone preparation."
+  },
+  "application_defects": {
+    "reproduced": false,
+    "modified_build_tested": false,
+    "harness_findings": [
+      "Released UploadSection holds completion until Publish; historical A06 sequence must be adapted.",
+      "Packaged deployment inventory excludes make-bundle.sh; prepared attestation compares actual bundled files with frozen source."
+    ]
+  },
+  "delivery_status": "Scoped draft PR; open awaiting review/merge. Merge prohibited in this session."
+}

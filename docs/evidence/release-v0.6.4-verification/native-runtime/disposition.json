@@ -1,0 +1,420 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-11 03:32:39 UTC",
+  "baseline_assessment": "../assessment.json",
+  "baseline_sha256": "495c82bd9c02b39151acf595589fe12759cf53de0865e7d3f9802a2ce07ad9c8",
+  "baseline_is_historical": true,
+  "release_verdict": "NO-GO",
+  "first_runtime_milestone": "PASS",
+  "resolved_blockers": {
+    "B1": "Authorized disposable native Ubuntu AMD64 host provisioned and the first runtime milestone executed."
+  },
+  "retained_requirements": "All 59 original verification procedures, all 40 acceptance criteria and all ten scope families remain authoritative. Missing providers, representative source, recovery inputs and scope decisions apply only to dependent criteria.",
+  "workflow_counts": {
+    "UNVERIFIED": 41,
+    "PASS": 2,
+    "BLOCKED": 16
+  },
+  "workflows": [
+    {
+      "id": "REL-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INS-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Initial static PASS retained."
+    },
+    {
+      "id": "INS-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INS-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PUB-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PUB-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PUB-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PUB-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PLAY-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PLAY-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "PLAY-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "CRT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "CRT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "SRC-01",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Same-upload outbox/inbox, eligible document, internal search, UI response/counter and click demonstrated."
+    },
+    {
+      "id": "SRC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "SRC-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "SOC-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "SOC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MSG-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MSG-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MSG-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "ADM-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "ADM-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "ADM-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "ADM-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-05",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-06",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "STO-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "STO-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "STO-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-06",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-07",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-08",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-09",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-10",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-11",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "OPS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "OPS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "REC-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B4"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "REC-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B4"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "REC-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B4"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "QLT-01",
+      "status": "UNVERIFIED",
+      "blockers": [
+        "U1"
+      ],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "QLT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Full original verification procedure remains required; first milestone does not close its remaining cases."
+    }
+  ],
+  "acceptance_delta": {
+    "A02": "PASS: blank installer/native CLI/images, corruption refusal, config-preserving reinstall and port checks executed.",
+    "A03-A40": "No blanket promotion. Measured subsets below do not close unexecuted negative, role, fallback, provider, recovery, scale or source criteria."
+  },
+  "measured_subsets": [
+    "Released setup and first deploy; clean ledgers and edge readiness",
+    "Owner claim/login/logout/refresh and admin readback",
+    "Browser channel/draft/upload/publication; original hash readback",
+    "Real CMAF transcode and advancing Chromium HLS decode/audio/seek",
+    "Same-upload outbox/index/browser result and service routing"
+  ],
+  "historical_acceptance": "Earlier 59-PASS/40-closed fixture record and original PR #185 assessment retain their revision/fixture boundaries."
+}

@@ -1,0 +1,361 @@
+{
+  "status": "PASS",
+  "checks": {
+    "owner-claim": "PASS",
+    "owner-login-and-session": "PASS",
+    "browser-channel-upload-publish": "PASS",
+    "real-transcoding-and-advertised-tree": "PASS",
+    "browser-playback-advances": "PASS",
+    "same-upload-through-vidra-search": "PASS"
+  },
+  "node": "v26.8.1",
+  "media_requests": [
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/thumbnail",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/original",
+      "status": 206
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/playback-session",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/captions",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/rating",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/comments",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/recommendations",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/view",
+      "status": 204
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/original",
+      "status": 206
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/master.m3u8",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/media_0.m3u8",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/media_1.m3u8",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/init-1.mp4",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/chunk-1-00001.m4s",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/chunk-0-00001.m4s",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/init-0.mp4",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/chunk-1-00002.m4s",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/chunk-0-00002.m4s",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/chunk-1-00003.m4s",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/thumbnail",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/thumbnail",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/playback-session",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/captions",
+      "status": 200
+    }
+  ],
+  "browser_args": [
+    "--host-resolver-rules=MAP secure.video.test 127.0.0.1",
+    "--no-proxy-server",
+    "--autoplay-policy=no-user-gesture-required"
+  ],
+  "browser": "153.0.8010.12",
+  "owner_id": "03bc7310-61c8-49b4-8259-273b47c5ecbc",
+  "query": "Releaseacceptance08248cc266b3",
+  "channel_id": "04d2ad21-2450-4f01-9145-67441aaf1b59",
+  "video_id": "24ed6a83-18fd-44bc-8bc7-4229b7ba042d",
+  "upload_id": "3bb52382-0ea5-4015-96f8-96ded506f70e",
+  "original": {
+    "status": 200,
+    "bytes": 1311662,
+    "type": "video/mp4",
+    "sha256": "47e46fdf11a5f3851cd87ab7ea02cb12a5db4f679bef5ee846fad4d6fa74923a"
+  },
+  "jobs": [
+    {
+      "id": "df9723dd-9341-4358-8919-aae4f23ec669",
+      "state": "running",
+      "attempts": 0,
+      "updated_at": "2026-09-11T04:17:39.705988+00:00"
+    },
+    {
+      "id": "df9723dd-9341-4358-8919-aae4f23ec669",
+      "state": "running",
+      "attempts": 0,
+      "updated_at": "2026-09-11T04:17:39.705988+00:00"
+    },
+    {
+      "id": "df9723dd-9341-4358-8919-aae4f23ec669",
+      "state": "running",
+      "attempts": 0,
+      "updated_at": "2026-09-11T04:17:39.705988+00:00"
+    },
+    {
+      "id": "df9723dd-9341-4358-8919-aae4f23ec669",
+      "state": "running",
+      "attempts": 0,
+      "updated_at": "2026-09-11T04:17:39.705988+00:00"
+    },
+    {
+      "id": "df9723dd-9341-4358-8919-aae4f23ec669",
+      "state": "running",
+      "attempts": 0,
+      "updated_at": "2026-09-11T04:17:39.705988+00:00"
+    },
+    {
+      "id": "df9723dd-9341-4358-8919-aae4f23ec669",
+      "state": "running",
+      "attempts": 0,
+      "updated_at": "2026-09-11T04:17:39.705988+00:00"
+    },
+    {
+      "id": "df9723dd-9341-4358-8919-aae4f23ec669",
+      "state": "done",
+      "attempts": 0,
+      "updated_at": "2026-09-11T04:17:48.450596+00:00"
+    }
+  ],
+  "renditions": [
+    {
+      "height": 360,
+      "width": 640
+    }
+  ],
+  "assets": [
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/master.m3u8",
+      "status": 200,
+      "bytes": 476,
+      "type": "application/vnd.apple.mpegurl"
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/media_0.m3u8",
+      "status": 200,
+      "bytes": 258,
+      "type": "application/vnd.apple.mpegurl"
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/chunk-0-00001.m4s",
+      "status": 200,
+      "bytes": 647803,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/chunk-0-00002.m4s",
+      "status": 200,
+      "bytes": 605588,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/init-0.mp4",
+      "status": 200,
+      "bytes": 828,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/media_1.m3u8",
+      "status": 200,
+      "bytes": 309,
+      "type": "application/vnd.apple.mpegurl"
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/chunk-1-00001.m4s",
+      "status": 200,
+      "bytes": 71878,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/chunk-1-00002.m4s",
+      "status": 200,
+      "bytes": 66168,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/chunk-1-00003.m4s",
+      "status": 200,
+      "bytes": 832,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/init-1.mp4",
+      "status": 200,
+      "bytes": 765,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/iframe-0.m3u8",
+      "status": 200,
+      "bytes": 1096,
+      "type": "application/vnd.apple.mpegurl"
+    },
+    {
+      "path": "/api/v1/videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/hls/cmaf/iframe-0.mp4",
+      "status": 200,
+      "bytes": 146059,
+      "type": "video/mp4"
+    }
+  ],
+  "playback_start": {
+    "time": 0,
+    "frames": 8,
+    "audio_bytes": 6258,
+    "width": 640,
+    "height": 360,
+    "ready": 4,
+    "paused": true,
+    "muted": false,
+    "error": null
+  },
+  "playback_end": {
+    "time": 3.763359,
+    "frames": 122,
+    "audio_bytes": 53549,
+    "width": 640,
+    "height": 360,
+    "ready": 4,
+    "paused": false,
+    "muted": false,
+    "error": null
+  },
+  "seek": {
+    "time": 7,
+    "frames": 134,
+    "audio_bytes": 59413,
+    "width": 640,
+    "height": 360,
+    "ready": 4,
+    "paused": true,
+    "muted": false,
+    "error": null
+  },
+  "upsert_events": [
+    {
+      "id": 4,
+      "event_id": "516f339c-f3d4-4da2-8654-c7b7b93c80e5",
+      "state": "delivered",
+      "attempts": 0,
+      "received": true
+    },
+    {
+      "id": 5,
+      "event_id": "8f7d589e-96f7-4c58-8303-8485b2958283",
+      "state": "delivered",
+      "attempts": 0,
+      "received": true
+    }
+  ],
+  "document": {
+    "video_id": "24ed6a83-18fd-44bc-8bc7-4229b7ba042d",
+    "title": "Releaseacceptance08248cc266b3",
+    "eligible": true
+  },
+  "internal_search": {
+    "query": "Releaseacceptance08248cc266b3",
+    "ids": [
+      {
+        "video_id": "24ed6a83-18fd-44bc-8bc7-4229b7ba042d",
+        "score": 0.8999992440795933
+      }
+    ],
+    "model_version": "simple-v1",
+    "total": 1,
+    "total_is_lower_bound": false,
+    "has_more": false
+  },
+  "ui_search": {
+    "service_requests_before": 1,
+    "attempts": [
+      {
+        "status": 429,
+        "retry_after": "26"
+      },
+      {
+        "status": 200,
+        "retry_after": null
+      }
+    ],
+    "video_ids": [
+      "24ed6a83-18fd-44bc-8bc7-4229b7ba042d"
+    ],
+    "service_requests_after": 2
+  },
+  "search_href": "/v/rtoEFPnn2Jc",
+  "routed_search_attempts": [
+    {
+      "status": 200,
+      "retry_after": null,
+      "video_ids": [
+        "24ed6a83-18fd-44bc-8bc7-4229b7ba042d"
+      ],
+      "error_code": null
+    }
+  ],
+  "routed_search": {
+    "status": 200,
+    "retry_after": null,
+    "video_ids": [
+      "24ed6a83-18fd-44bc-8bc7-4229b7ba042d"
+    ],
+    "error_code": null
+  },
+  "search_route": {
+    "id": 7,
+    "event_id": "7e6a59e4-eb30-4ae9-9f4a-931c161d9bc3",
+    "source": "search"
+  },
+  "screenshots": {
+    "owner-claimed.png": "be5cc3545cd6702928ac0cf8e8447bed35ad0ae65cc04eb69d6d61a710d0d509",
+    "upload-published.png": "dfe533ddda163083e0726cb9ebb46ddd2aa926a89aea541167649df1283a4534",
+    "playback-advancing.png": "dbe0722a058df99e41965a57c7232617a3d6663b45aa541c37355f5767b0ca43",
+    "search-result.png": "275cb7590296c75b3a90f7c47cfa0767b012190d071bc4633481a39feeb8bff0"
+  }
+}

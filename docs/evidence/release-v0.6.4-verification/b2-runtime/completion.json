@@ -1,0 +1,899 @@
+{
+  "status": "PASS",
+  "started_at": 1789100569.5191386,
+  "original_result_sha256": "4dbaf8fdb670a78f068b23897e0bf8cbde695ea294f28a98803822391d5e13ae",
+  "original_browser_sha256": "7a9183670d6e2c96439075352096ad77008077bc09b4620e7fdfe0999b41dd31",
+  "original_run_status": "FAIL",
+  "original_error": "B2 does not attest the uploaded original bytes",
+  "scope": "Only provider GET/list/auth and read-only container/ledger observations; no application mutation or rebuild.",
+  "storage": {
+    "provider": "Backblaze B2",
+    "bucket": "vidra-acceptance-v064-20260911-media",
+    "bucket_id": "e565124b996984e8a7070215",
+    "endpoint": "s3.us-east-005.backblazeb2.com",
+    "region": "us-east-005",
+    "authorized_scope": {
+      "buckets": [
+        {
+          "id": "e565124b996984e8a7070215",
+          "name": "vidra-acceptance-v064-20260911-media"
+        }
+      ],
+      "capabilities": [
+        "readFiles",
+        "writeFiles",
+        "listBuckets",
+        "readBuckets",
+        "deleteFiles",
+        "listFiles"
+      ],
+      "namePrefix": null
+    },
+    "after": [
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f40795f6e472b04b3_d20260911_m041605_c005_v0501000_t0036_u01789100165148",
+        "fileName": ".vidra/owner",
+        "action": "upload",
+        "contentLength": 36,
+        "contentType": "application/octet-stream",
+        "contentSha1": "unverified:e471e1fbefbf229f6ab31e234e0547c0254919e7",
+        "uploadTimestamp": 1789100165148
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f49788b02f3eff4ea_d20260911_m042105_c005_v7007000_t0000_u01789100465881",
+        "fileName": ".vidra/write-probe/7VH4FAXO7IOT7WSH3AYDJLXV6Y",
+        "action": "hide",
+        "contentLength": 0,
+        "contentType": "application/x-bz-hide-marker",
+        "contentSha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "uploadTimestamp": 1789100465881
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f108bb6622f993b7f_d20260911_m042105_c005_v0501047_t0036_u01789100465300",
+        "fileName": ".vidra/write-probe/7VH4FAXO7IOT7WSH3AYDJLXV6Y",
+        "action": "upload",
+        "contentLength": 62,
+        "contentType": "application/octet-stream",
+        "contentSha1": "unverified:2e2e018763a941041be9cc97369e15d5ff0781de",
+        "uploadTimestamp": 1789100465300
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f495c92657dc64ba9_d20260911_m041605_c005_v7007000_t0000_u01789100165097",
+        "fileName": ".vidra/write-probe/AV3J2BUVFRP4ENMIXRDO77MEM7",
+        "action": "hide",
+        "contentLength": 0,
+        "contentType": "application/x-bz-hide-marker",
+        "contentSha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "uploadTimestamp": 1789100165097
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f104723a00990a18d_d20260911_m041604_c005_v0501021_t0056_u01789100164667",
+        "fileName": ".vidra/write-probe/AV3J2BUVFRP4ENMIXRDO77MEM7",
+        "action": "upload",
+        "contentLength": 62,
+        "contentType": "application/octet-stream",
+        "contentSha1": "unverified:2e2e018763a941041be9cc97369e15d5ff0781de",
+        "uploadTimestamp": 1789100164667
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f1012ecf76f0d209e_d20260911_m041737_c005_v0501030_t0026_u01789100257385",
+        "fileName": "storyboards/24ed6a83-18fd-44bc-8bc7-4229b7ba042d.jpg",
+        "action": "upload",
+        "contentLength": 39042,
+        "contentType": "image/jpeg",
+        "contentSha1": "unverified:6d0e2598ec6a44dc61e33adde288939e9b1fafd6",
+        "uploadTimestamp": 1789100257385
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f104723a00990a8a1_d20260911_m041737_c005_v0501021_t0030_u01789100257568",
+        "fileName": "storyboards/24ed6a83-18fd-44bc-8bc7-4229b7ba042d.vtt",
+        "action": "upload",
+        "contentLength": 777,
+        "contentType": "text/vtt; charset=utf-8",
+        "contentSha1": "unverified:106856c69a7e8a192d4b86d120f718c2c124f828",
+        "uploadTimestamp": 1789100257568
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f445e32ca033b8c1a_d20260911_m041740_c005_v7007000_t0000_u01789100260064",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1",
+        "action": "hide",
+        "contentLength": 0,
+        "contentType": "application/x-bz-hide-marker",
+        "contentSha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "uploadTimestamp": 1789100260064
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f108b22f707ffbcfc_d20260911_m041744_c005_v0501045_t0022_u01789100264082",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/360p/video-only.mp4",
+        "action": "upload",
+        "contentLength": 1255063,
+        "contentType": "video/mp4",
+        "contentSha1": "unverified:5c56b061950949955c2c76bbc27f7ab56535e281",
+        "uploadTimestamp": 1789100264082
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f117e96167971843a_d20260911_m041744_c005_v0501010_t0002_u01789100264510",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/360p/video.mp4",
+        "action": "upload",
+        "contentLength": 1400534,
+        "contentType": "video/mp4",
+        "contentSha1": "unverified:fcf5dbdc21b53fc23d83d1f26e1a5f1289a8e55d",
+        "uploadTimestamp": 1789100264510
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f119396d520bd791a_d20260911_m041747_c005_v0501049_t0043_u01789100267984",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/audio.m4a",
+        "action": "upload",
+        "contentLength": 139113,
+        "contentType": "audio/mp4",
+        "contentSha1": "unverified:a49e6e1cf2203a8d201e8599fad031d84bb4a2e1",
+        "uploadTimestamp": 1789100267984
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f116f599054c461a2_d20260911_m041744_c005_v0501037_t0051_u01789100264725",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/cmaf/chunk-0-00001.m4s",
+        "action": "upload",
+        "contentLength": 647803,
+        "contentType": "video/mp4",
+        "contentSha1": "unverified:9b49726f4ef0445c0aac4e7bd62b55046cdb8b95",
+        "uploadTimestamp": 1789100264725
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f10146152823d82a1_d20260911_m041744_c005_v0501045_t0019_u01789100264782",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/cmaf/chunk-0-00002.m4s",
+        "action": "upload",
+        "contentLength": 605588,
+        "contentType": "video/mp4",
+        "contentSha1": "unverified:30ece95ebafaa3599a6417b11005ee58d874b8ad",
+        "uploadTimestamp": 1789100264782
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f117a5273491c720f_d20260911_m041744_c005_v0501048_t0056_u01789100264885",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/cmaf/chunk-1-00001.m4s",
+        "action": "upload",
+        "contentLength": 71878,
+        "contentType": "video/mp4",
+        "contentSha1": "unverified:e8335a88e3a5c0c2bb02b7495ff71278e4f1204e",
+        "uploadTimestamp": 1789100264885
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f1149926f6d5a91a0_d20260911_m041745_c005_v0501046_t0044_u01789100265121",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/cmaf/chunk-1-00002.m4s",
+        "action": "upload",
+        "contentLength": 66168,
+        "contentType": "video/mp4",
+        "contentSha1": "unverified:cac0096b3ffb72b611442899db6ab1dc95ea0ad0",
+        "uploadTimestamp": 1789100265121
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f118615ee39932f84_d20260911_m041745_c005_v0501034_t0052_u01789100265174",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/cmaf/chunk-1-00003.m4s",
+        "action": "upload",
+        "contentLength": 832,
+        "contentType": "video/mp4",
+        "contentSha1": "unverified:1837d1a6dad5fde26df86182d1374fdd5cee04e7",
+        "uploadTimestamp": 1789100265174
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f1143f46e33438c47_d20260911_m041745_c005_v0501002_t0053_u01789100265937",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/cmaf/iframe-0.m3u8",
+        "action": "upload",
+        "contentLength": 901,
+        "contentType": "application/vnd.apple.mpegurl",
+        "contentSha1": "unverified:ffaeca557ce8450397a15745fad1f4f68d33f4ab",
+        "uploadTimestamp": 1789100265937
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f108bdf3c4963baa3_d20260911_m041746_c005_v0501010_t0001_u01789100266169",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/cmaf/iframe-0.mp4",
+        "action": "upload",
+        "contentLength": 146059,
+        "contentType": "video/mp4",
+        "contentSha1": "unverified:52a88d855220a3358dff372ec1e2df69d53f6cc0",
+        "uploadTimestamp": 1789100266169
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f1185385f37006dcc_d20260911_m041746_c005_v0501050_t0005_u01789100266243",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/cmaf/init-0.mp4",
+        "action": "upload",
+        "contentLength": 828,
+        "contentType": "video/mp4",
+        "contentSha1": "unverified:1f82ca45b0a2c82bef31fd966d5f1e26027ec4de",
+        "uploadTimestamp": 1789100266243
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f1007fa55775c2bbe_d20260911_m041746_c005_v0501024_t0028_u01789100266661",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/cmaf/init-1.mp4",
+        "action": "upload",
+        "contentLength": 765,
+        "contentType": "video/mp4",
+        "contentSha1": "unverified:ce535c1500e0d58267eb4ad5309595b7f99f09db",
+        "uploadTimestamp": 1789100266661
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f112c87a9a9bb6802_d20260911_m041746_c005_v0501049_t0028_u01789100266795",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/cmaf/media_0.m3u8",
+        "action": "upload",
+        "contentLength": 213,
+        "contentType": "application/vnd.apple.mpegurl",
+        "contentSha1": "unverified:7c246efecff46d76d886ce349e522cf50ac941f4",
+        "uploadTimestamp": 1789100266795
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f1053afb66af2d071_d20260911_m041747_c005_v0501031_t0012_u01789100267366",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/cmaf/media_1.m3u8",
+        "action": "upload",
+        "contentLength": 249,
+        "contentType": "application/vnd.apple.mpegurl",
+        "contentSha1": "unverified:c47f2153a4f170c50356664ebf4923689dc54ba1",
+        "uploadTimestamp": 1789100267366
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f11576f7b7ec8399a_d20260911_m041747_c005_v0501041_t0057_u01789100267439",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/cmaf/stream.mpd",
+        "action": "upload",
+        "contentLength": 1900,
+        "contentType": "application/dash+xml",
+        "contentSha1": "unverified:66949cd7c922a9a514c972b12b566b13ab01f0ee",
+        "uploadTimestamp": 1789100267439
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f100ea944b1f9eace_d20260911_m041748_c005_v0501041_t0013_u01789100268090",
+        "fileName": "streaming-playlists/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/master.m3u8",
+        "action": "upload",
+        "contentLength": 431,
+        "contentType": "application/vnd.apple.mpegurl",
+        "contentSha1": "unverified:80f00fed68e3a0f9cfe7605d0008b4e62537fc1f",
+        "uploadTimestamp": 1789100268090
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f11989697266d6eeb_d20260911_m041736_c005_v0501038_t0038_u01789100256492",
+        "fileName": "thumbnails/24ed6a83-18fd-44bc-8bc7-4229b7ba042d.jpg",
+        "action": "upload",
+        "contentLength": 19423,
+        "contentType": "image/jpeg",
+        "contentSha1": "unverified:fe2ea225d1ca1ea92c50da4a45224f4a287b350f",
+        "uploadTimestamp": 1789100256492
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f445e32ca033b8c15_d20260911_m041737_c005_v7007000_t0000_u01789100257715",
+        "fileName": "uploads/3bb52382-0ea5-4015-96f8-96ded506f70e",
+        "action": "hide",
+        "contentLength": 0,
+        "contentType": "application/x-bz-hide-marker",
+        "contentSha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "uploadTimestamp": 1789100257715
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f445e32ca033b8c14_d20260911_m041737_c005_v7007000_t0000_u01789100257699",
+        "fileName": "uploads/3bb52382-0ea5-4015-96f8-96ded506f70e/0",
+        "action": "hide",
+        "contentLength": 0,
+        "contentType": "application/x-bz-hide-marker",
+        "contentSha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "uploadTimestamp": 1789100257699
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f200452ca033b8bf0_d20260911_m041730_c005_v0501043_t0046_u01789100250698",
+        "fileName": "uploads/3bb52382-0ea5-4015-96f8-96ded506f70e/0",
+        "action": "upload",
+        "contentLength": 1311662,
+        "contentType": "application/octet-stream",
+        "contentSha1": "none",
+        "uploadTimestamp": 1789100250698
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f200452ca033b8c0c_d20260911_m041734_c005_v0501050_t0039_u01789100254712",
+        "fileName": "web-videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d.mp4",
+        "action": "upload",
+        "contentLength": 1311662,
+        "contentType": "video/mp4",
+        "contentSha1": "none",
+        "uploadTimestamp": 1789100254712
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f445e32ca033b8c21_d20260911_m041743_c005_v7007000_t0000_u01789100263327",
+        "fileName": "web-videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1",
+        "action": "hide",
+        "contentLength": 0,
+        "contentType": "application/x-bz-hide-marker",
+        "contentSha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "uploadTimestamp": 1789100263327
+      },
+      {
+        "fileId": "4_ze565124b996984e8a7070215_f107181883b341e44_d20260911_m041743_c005_v0501044_t0023_u01789100263804",
+        "fileName": "web-videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d/r1/360p.mp4",
+        "action": "upload",
+        "contentLength": 1400534,
+        "contentType": "video/mp4",
+        "contentSha1": "unverified:fcf5dbdc21b53fc23d83d1f26e1a5f1289a8e55d",
+        "uploadTimestamp": 1789100263804
+      }
+    ],
+    "fixture_sha256": "47e46fdf11a5f3851cd87ab7ea02cb12a5db4f679bef5ee846fad4d6fa74923a",
+    "original_download": {
+      "url": "https://vidra-acceptance-v064-20260911-media.s3.us-east-005.backblazeb2.com/web-videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d.mp4",
+      "status": 200,
+      "type": "video/mp4",
+      "bytes": 1311662,
+      "sha256": "47e46fdf11a5f3851cd87ab7ea02cb12a5db4f679bef5ee846fad4d6fa74923a"
+    },
+    "native_original_sha1_field": "none",
+    "video_id": "24ed6a83-18fd-44bc-8bc7-4229b7ba042d",
+    "provider_objects": "PASS",
+    "requests": [
+      {
+        "url": "https://api.backblazeb2.com/b2api/v4/b2_authorize_account",
+        "body": {},
+        "started_at": 1789100569.520257,
+        "http_status": 200,
+        "finished_at": 1789100569.8732316
+      },
+      {
+        "url": "https://api005.backblazeb2.com/b2api/v4/b2_list_file_versions",
+        "body": {
+          "bucketId": "e565124b996984e8a7070215",
+          "maxFileCount": 1000
+        },
+        "started_at": 1789100569.875385,
+        "http_status": 200,
+        "finished_at": 1789100569.9479392
+      },
+      {
+        "argv": [
+          "curl",
+          "--silent",
+          "--show-error",
+          "--fail",
+          "--max-time",
+          "90",
+          "--proto",
+          "=https",
+          "--aws-sigv4",
+          "aws:amz:us-east-005:s3",
+          "--config",
+          "-",
+          "--output",
+          "/root/vidra-v064-b2-completion/private/b2-original-readback.mp4",
+          "--write-out",
+          "%{json}",
+          "https://vidra-acceptance-v064-20260911-media.s3.us-east-005.backblazeb2.com/web-videos/24ed6a83-18fd-44bc-8bc7-4229b7ba042d.mp4"
+        ],
+        "authorization": "single-bucket key via private stdin; omitted",
+        "started_at": 1789100569.9532309,
+        "exit_code": 0,
+        "finished_at": 1789100570.1871815
+      }
+    ],
+    "before": []
+  },
+  "runtime_after_browser": {
+    "images": {
+      "api": {
+        "container_id": "0585bf39a45e582d623a00aba03d3e4a929f80ce1b3a7aa24f3f15755d78756a",
+        "reference": "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "image_id": "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+        ],
+        "platform": "linux/amd64",
+        "revision": "ed55a6d946dad3f2e72a47b2518ac095352c795d",
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 12311,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:16:04.170720641Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T04:21:41.384057981Z",
+                "End": "2026-09-11T04:21:41.456904908Z",
+                "ExitCode": 0,
+                "output_sha256": "26f8dcd772820696ea8dcc5706ad31df34763febd2680ef89db5ef2ab69e4224"
+              },
+              {
+                "Start": "2026-09-11T04:21:56.459218263Z",
+                "End": "2026-09-11T04:21:56.536545254Z",
+                "ExitCode": 0,
+                "output_sha256": "26f8dcd772820696ea8dcc5706ad31df34763febd2680ef89db5ef2ab69e4224"
+              },
+              {
+                "Start": "2026-09-11T04:22:11.539071133Z",
+                "End": "2026-09-11T04:22:11.610754617Z",
+                "ExitCode": 0,
+                "output_sha256": "26f8dcd772820696ea8dcc5706ad31df34763febd2680ef89db5ef2ab69e4224"
+              },
+              {
+                "Start": "2026-09-11T04:22:26.613198556Z",
+                "End": "2026-09-11T04:22:26.682662745Z",
+                "ExitCode": 0,
+                "output_sha256": "26f8dcd772820696ea8dcc5706ad31df34763febd2680ef89db5ef2ab69e4224"
+              },
+              {
+                "Start": "2026-09-11T04:22:41.684214619Z",
+                "End": "2026-09-11T04:22:41.742938882Z",
+                "ExitCode": 0,
+                "output_sha256": "26f8dcd772820696ea8dcc5706ad31df34763febd2680ef89db5ef2ab69e4224"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "caddy": {
+        "container_id": "d341b590948868b3adf438d371717c06cc75fd311937567c8f7117b550ffb6d1",
+        "reference": "caddy:2.11.4-alpine",
+        "image_id": "sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648",
+        "repo_digests": [
+          "caddy@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 12604,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:16:10.279217671Z",
+          "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "restart_count": 0
+      },
+      "clamav": {
+        "container_id": "c818137f6238f84547aa9a1235337b58be5a6151e03376db0694a38e4e0e5da5",
+        "reference": "clamav/clamav:1.5",
+        "image_id": "sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422",
+        "repo_digests": [
+          "clamav/clamav@sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 11349,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:33.475668548Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T04:21:50.593001288Z",
+                "End": "2026-09-11T04:21:50.656512018Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              },
+              {
+                "Start": "2026-09-11T04:22:05.658169122Z",
+                "End": "2026-09-11T04:22:05.716424682Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              },
+              {
+                "Start": "2026-09-11T04:22:20.718113531Z",
+                "End": "2026-09-11T04:22:20.777719248Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              },
+              {
+                "Start": "2026-09-11T04:22:35.778688092Z",
+                "End": "2026-09-11T04:22:35.833177168Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              },
+              {
+                "Start": "2026-09-11T04:22:50.833786201Z",
+                "End": "2026-09-11T04:22:50.928589468Z",
+                "ExitCode": 0,
+                "output_sha256": "6f8d8ceffec7430fc44246e39ba70a42b56e30c3ecbe36f7ef90c44fb753d68d"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "frontend": {
+        "container_id": "5dd0d7e9b5a5782d273e4d4e07234d224b4d1ef1551ca76c474bc8e012a0ce25",
+        "reference": "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3",
+        "image_id": "sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3"
+        ],
+        "platform": "linux/amd64",
+        "revision": "e584069ee724b49af3d3f3d944efc34d3be6da75",
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 12504,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:16:10.033650795Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T04:21:47.364679607Z",
+                "End": "2026-09-11T04:21:47.442764842Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              {
+                "Start": "2026-09-11T04:22:02.444441737Z",
+                "End": "2026-09-11T04:22:02.535328229Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              {
+                "Start": "2026-09-11T04:22:17.536232291Z",
+                "End": "2026-09-11T04:22:17.603878246Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              {
+                "Start": "2026-09-11T04:22:32.605655336Z",
+                "End": "2026-09-11T04:22:32.668552681Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              },
+              {
+                "Start": "2026-09-11T04:22:47.670216012Z",
+                "End": "2026-09-11T04:22:47.737130445Z",
+                "ExitCode": 0,
+                "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "migrate": {
+        "container_id": "891dc43352fc0eec56f9a099ebd438c465a7d7d091d72d258102156129376132",
+        "reference": "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "image_id": "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+        ],
+        "platform": "linux/amd64",
+        "revision": "ed55a6d946dad3f2e72a47b2518ac095352c795d",
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:34.217749713Z",
+          "FinishedAt": "2026-09-11T04:15:34.694304111Z"
+        },
+        "restart_count": 0
+      },
+      "postgres": {
+        "container_id": "82ddc56a8c3a1faee84e325dbbb2825c21517d4fbc1ee0c8e415a65833bcdce2",
+        "reference": "postgres:18-alpine",
+        "image_id": "sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2",
+        "repo_digests": [
+          "postgres@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 10710,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:17.919836103Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T04:22:30.002086978Z",
+                "End": "2026-09-11T04:22:30.074910945Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              },
+              {
+                "Start": "2026-09-11T04:22:35.076660333Z",
+                "End": "2026-09-11T04:22:35.138182482Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              },
+              {
+                "Start": "2026-09-11T04:22:40.140466743Z",
+                "End": "2026-09-11T04:22:40.20365771Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              },
+              {
+                "Start": "2026-09-11T04:22:45.205411142Z",
+                "End": "2026-09-11T04:22:45.269501031Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              },
+              {
+                "Start": "2026-09-11T04:22:50.271049561Z",
+                "End": "2026-09-11T04:22:50.34227733Z",
+                "ExitCode": 0,
+                "output_sha256": "6e168fc3b5a0662104b5e5da92e87b870e8b7c65fec827d267115b5123d18614"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "prep-volumes": {
+        "container_id": "7a17146902f6fa14026be5c4215b70c7c806657f519352d20cc403718ec51396",
+        "reference": "alpine:3.24",
+        "image_id": "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+        "repo_digests": [
+          "alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:33.701318293Z",
+          "FinishedAt": "2026-09-11T04:15:33.901101152Z"
+        },
+        "restart_count": 0
+      },
+      "redis": {
+        "container_id": "d35a15140e843f4c4dddb9b899ddb18a92cd92dc917b9459ed2ab1ec2c4cb6b5",
+        "reference": "redis:8-alpine",
+        "image_id": "sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576",
+        "repo_digests": [
+          "redis@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576"
+        ],
+        "platform": "linux/amd64",
+        "revision": null,
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 11247,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:33.237036901Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T04:22:29.447371949Z",
+                "End": "2026-09-11T04:22:29.50541779Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              },
+              {
+                "Start": "2026-09-11T04:22:34.506274419Z",
+                "End": "2026-09-11T04:22:34.559263763Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              },
+              {
+                "Start": "2026-09-11T04:22:39.560843333Z",
+                "End": "2026-09-11T04:22:39.616603917Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              },
+              {
+                "Start": "2026-09-11T04:22:44.618391082Z",
+                "End": "2026-09-11T04:22:44.676681223Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              },
+              {
+                "Start": "2026-09-11T04:22:49.678589402Z",
+                "End": "2026-09-11T04:22:49.736812327Z",
+                "ExitCode": 0,
+                "output_sha256": "9597e5d74f44f182ebb56b65a79c6b1b84829735af1ff583d44c3384d8a0a45e"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "search": {
+        "container_id": "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76",
+        "reference": "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+        "image_id": "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+        ],
+        "platform": "linux/amd64",
+        "revision": "1f8b85425e7d4dbb039edca56850282df9b93c6d",
+        "state": {
+          "Status": "running",
+          "Running": true,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 11760,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:38.727972606Z",
+          "FinishedAt": "0001-01-01T00:00:00Z",
+          "Health": {
+            "Status": "healthy",
+            "FailingStreak": 0,
+            "Log": [
+              {
+                "Start": "2026-09-11T04:22:30.332156992Z",
+                "End": "2026-09-11T04:22:30.39918825Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              },
+              {
+                "Start": "2026-09-11T04:22:35.40011963Z",
+                "End": "2026-09-11T04:22:35.462585117Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              },
+              {
+                "Start": "2026-09-11T04:22:40.463676653Z",
+                "End": "2026-09-11T04:22:40.531703998Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              },
+              {
+                "Start": "2026-09-11T04:22:45.533305286Z",
+                "End": "2026-09-11T04:22:45.596575758Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              },
+              {
+                "Start": "2026-09-11T04:22:50.597395781Z",
+                "End": "2026-09-11T04:22:50.655691532Z",
+                "ExitCode": 0,
+                "output_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5"
+              }
+            ]
+          }
+        },
+        "restart_count": 0
+      },
+      "search-migrate": {
+        "container_id": "9a1758684cac23faf3471d9baa282a9d0c734c7648928c94339a1ae6aeca3ad0",
+        "reference": "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+        "image_id": "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc",
+        "repo_digests": [
+          "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+        ],
+        "platform": "linux/amd64",
+        "revision": "1f8b85425e7d4dbb039edca56850282df9b93c6d",
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-11T04:15:33.92209972Z",
+          "FinishedAt": "2026-09-11T04:15:34.249870903Z",
+          "Health": {
+            "Status": "unhealthy",
+            "FailingStreak": 0,
+            "Log": []
+          }
+        },
+        "restart_count": 0
+      }
+    },
+    "ports": {
+      "api": {
+        "8080/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "8080"
+          }
+        ]
+      },
+      "caddy": {
+        "2019/tcp": null,
+        "443/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "443"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "443"
+          }
+        ],
+        "443/udp": null,
+        "80/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "80"
+          },
+          {
+            "HostIp": "::",
+            "HostPort": "80"
+          }
+        ]
+      },
+      "clamav": {
+        "3310/tcp": null,
+        "7357/tcp": null
+      },
+      "frontend": {
+        "3000/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "3000"
+          }
+        ]
+      },
+      "migrate": {},
+      "postgres": {
+        "5432/tcp": null
+      },
+      "prep-volumes": {},
+      "redis": {
+        "6379/tcp": null
+      },
+      "search": {
+        "8080/tcp": null
+      },
+      "search-migrate": {}
+    }
+  },
+  "ledgers": {
+    "schema_migrations": "146|f",
+    "vidra_search_migrations": "18|f"
+  },
+  "finished_at": 1789100572.9337647,
+  "helper_sha256": "21c0fad9c1d27eb0336049160540c33d60325f697aec429c076bdab50a418e0d"
+}
