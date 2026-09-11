@@ -1,0 +1,330 @@
+{
+  "status": "PASS_BOUNDED_MILESTONE",
+  "authorization": "User authorized deletion of beta 104.236.27.225 and starting fresh for the release-acceptance milestone.",
+  "old_beta": {
+    "id": 594493429,
+    "name": "vidra-beta",
+    "created_at": "2026-08-23T06:51:03Z",
+    "volume_ids": []
+  },
+  "old_beta_public_ipv4": "104.236.27.225",
+  "delete": {
+    "command": [
+      "doctl",
+      "compute",
+      "droplet",
+      "delete",
+      "594493429",
+      "--force"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "replacement": {
+    "id": 599514574,
+    "name": "vidra-beta-v064-acceptance",
+    "created_at": "2026-09-11T02:24:25Z",
+    "size_slug": "s-8vcpu-16gb",
+    "memory": 16384,
+    "vcpus": 8,
+    "disk": 320,
+    "volume_ids": []
+  },
+  "replacement_public_ipv4": "159.65.249.255",
+  "image": {
+    "id": 235153036,
+    "name": "24.04 (LTS) x64",
+    "slug": "ubuntu-24-04-x64",
+    "created_at": "2026-07-01T16:38:32Z",
+    "distribution": "Ubuntu"
+  },
+  "hourly_price_usd": 0.14286,
+  "monthly_price_usd": 96,
+  "firewall": {
+    "id": "3d6093d4-1e07-45cd-89a8-099c2f76b8dc",
+    "inbound": "SSH only from current operator IPv4 /32",
+    "outbound": "TCP/UDP/ICMP egress allowed"
+  },
+  "ssh_key_fingerprint": "MD5:ce:d2:be:d2:10:93:71:f2:64:cd:d3:e0:33:79:d5:bf",
+  "before_host_log_sha256": "a219182889cee036750056b8c31cc6efe84c69ddb257f816551974a003c46713",
+  "before_host": "Ubuntu 24.04.4 LTS; Linux x86_64; provider metadata ID 599514574; no Docker/containerd/Vidra installation",
+  "transfer_archive_sha256": "ea0d46779e469466ccd0c9ea5853505040a3477c6002b2cf809643427728fe2f",
+  "archive_manifest_sha256": "eeac2bfa76d591a9731b6239f6fc505874dd86e882164b961f8c1fead34360af",
+  "runtime_origin": "https://secure.video.test (inside guest only)",
+  "source_and_image_manifest": "docs/evidence/release-v0.6.4-verification/manifest.json",
+  "production_modified": false,
+  "shared_labs_modified": false,
+  "scope_decisions_changed": false,
+  "rebuilds": [
+    {
+      "id": 3400155512,
+      "type": "rebuild",
+      "status": "completed",
+      "started_at": "2026-09-11T02:35:51Z",
+      "completed_at": "2026-09-11T02:36:16Z",
+      "resource_id": 599514574
+    },
+    {
+      "id": 3400164223,
+      "type": "rebuild",
+      "status": "completed",
+      "started_at": "2026-09-11T02:44:11Z",
+      "completed_at": "2026-09-11T02:44:37Z",
+      "resource_id": 599514574
+    },
+    {
+      "id": 3400191178,
+      "type": "rebuild",
+      "status": "completed",
+      "started_at": "2026-09-11T03:04:55Z",
+      "completed_at": "2026-09-11T03:05:26Z",
+      "resource_id": 599514574
+    },
+    {
+      "id": 3400202924,
+      "type": "rebuild",
+      "status": "completed",
+      "started_at": "2026-09-11T03:14:46Z",
+      "completed_at": "2026-09-11T03:15:15Z",
+      "resource_id": 599514574
+    },
+    {
+      "id": 3400216372,
+      "type": "rebuild",
+      "status": "completed",
+      "started_at": "2026-09-11T03:25:26Z",
+      "completed_at": "2026-09-11T03:25:54Z",
+      "resource_id": 599514574
+    }
+  ],
+  "attempts": [
+    {
+      "attempt": 1,
+      "status": "FAIL",
+      "started_at": 1789093656.6567163,
+      "finished_at": 1789093806.6055822,
+      "checks": {
+        "blank_native_host": "PASS",
+        "corrupt-bundle": "PASS",
+        "corrupt-cli": "PASS",
+        "install": "PASS",
+        "native_cli_executes": "PASS (help; binary identity verified by checksum)",
+        "configuration_preserved": "PASS",
+        "production_ports": "PASS (Compose render; runtime ports belong to A03)",
+        "pinned_image_pulls": "PASS"
+      },
+      "error": "frontend: unhealthy",
+      "classification": "acceptance harness failure",
+      "description": "Frontend Docker health still starting six seconds after container start, with zero failed probes; HTTP readiness had passed. Frontend became healthy without application intervention.",
+      "correction": "Bounded Docker-health polling; commit 5221d77.",
+      "raw_result_sha256": "a3866f4f96fdcaa5664788262e70b43a04a865bb1bcba9451c5f4b4733188cd8",
+      "private_archive": "/tmp/vidra-v064-digitalocean-run/attempt-1-private.tar.gz",
+      "private_archive_sha256": "ff7626a794b25cf2290e19b4785f2cd3f0da411c1284fd73cdd99780ea74b4a9"
+    },
+    {
+      "attempt": 2,
+      "status": "FAIL",
+      "started_at": 1789094313.6766968,
+      "finished_at": 1789094474.8850205,
+      "checks": {
+        "blank_native_host": "PASS",
+        "corrupt-bundle": "PASS",
+        "corrupt-cli": "PASS",
+        "install": "PASS",
+        "native_cli_executes": "PASS (help; binary identity verified by checksum)",
+        "configuration_preserved": "PASS",
+        "production_ports": "PASS (Compose render; runtime ports belong to A03)",
+        "pinned_image_pulls": "PASS",
+        "installed_migrated_serving": "PASS"
+      },
+      "error": "browser-dependencies: exit 127; see 066-browser-dependencies.log",
+      "classification": "acceptance harness failure",
+      "description": "Frozen installation and serving stack passed; npm exited 127 because stock Ubuntu lacked libatomic.so.1. Browser never started and no owner/video was created.",
+      "correction": "Install test-only libatomic1 after installation proof and before Node/npm; commit a757fc8.",
+      "raw_result_sha256": "0277c4e3c67e1bf53740a77289ee44d6c9602ff2703e00edafd9802e4c3b5c65",
+      "private_archive": "/tmp/vidra-v064-digitalocean-run/attempt-2-private.tar.gz",
+      "private_archive_sha256": "662e7b4fd9d549eff81fb4a5031a6f703befe92e9be7c2e3888752daedaf901f"
+    },
+    {
+      "attempt": 3,
+      "status": "FAIL",
+      "started_at": 1789094738.9704788,
+      "finished_at": 1789094977.0091624,
+      "checks": {
+        "blank_native_host": "PASS",
+        "corrupt-bundle": "PASS",
+        "corrupt-cli": "PASS",
+        "install": "PASS",
+        "native_cli_executes": "PASS (help; binary identity verified by checksum)",
+        "configuration_preserved": "PASS",
+        "production_ports": "PASS (Compose render; runtime ports belong to A03)",
+        "pinned_image_pulls": "PASS",
+        "installed_migrated_serving": "PASS"
+      },
+      "error": "browser-milestone: exit 1; see 074-browser-milestone.log",
+      "classification": "acceptance harness failure",
+      "description": "Owner claim, login and refresh succeeded. The harness then read identity with the revoked pre-refresh access token. Focused diagnostic observed old token 401 and new token 200/admin.",
+      "correction": "Follow refreshed sessions for readback; d8806cd. Retained-host diagnostics also corrected retry-counter semantics and used real-service request metrics plus a separate routed fetch for deduplicated search telemetry; 017a15e.",
+      "raw_result_sha256": "3b01d91ee733820c3c0f825a6a917614b80471615762cb2e78b6055f84c00656",
+      "private_archive": "/tmp/vidra-v064-digitalocean-run/attempt-3-private.tar.gz",
+      "private_archive_sha256": "a88e23909f1b880e68107f639cf9d8d63a19a2f11e73a684d51eed973c086c4c"
+    },
+    {
+      "attempt": 4,
+      "status": "FAIL",
+      "started_at": 1789096027.9218578,
+      "finished_at": 1789096308.0476546,
+      "checks": {
+        "blank_native_host": "PASS",
+        "corrupt-bundle": "PASS",
+        "corrupt-cli": "PASS",
+        "install": "PASS",
+        "native_cli_executes": "PASS (help; binary identity verified by checksum)",
+        "configuration_preserved": "PASS",
+        "production_ports": "PASS (Compose render; runtime ports belong to A03)",
+        "pinned_image_pulls": "PASS",
+        "installed_migrated_serving": "PASS"
+      },
+      "error": "browser-milestone: exit 1; see 074-browser-milestone.log",
+      "classification": "acceptance harness failure",
+      "description": "Fresh owner/login/upload/transcode/advancing-playback all passed, but rapid checks exhausted the published per-IP request budget: the UI search returned 429.",
+      "correction": "Preserve 429 and retry browser page load only after its Retry-After, at most three attempts; ba2f5ff. Rate limiting stays enabled and unchanged.",
+      "raw_result_sha256": "abb4353d68121b6eac43d7d853d1987bcec4a8703a61afce3b0d802d57ce3b11",
+      "private_archive": "/tmp/vidra-v064-digitalocean-run/attempt-4-private.tar.gz",
+      "private_archive_sha256": "1241a046abeecb1d89da0b83f9225de5596adfef998a27180b650beecd09f99c"
+    },
+    {
+      "attempt": 5,
+      "status": "FAIL",
+      "started_at": 1789096637.447927,
+      "finished_at": 1789096913.767678,
+      "checks": {
+        "blank_native_host": "PASS",
+        "corrupt-bundle": "PASS",
+        "corrupt-cli": "PASS",
+        "install": "PASS",
+        "native_cli_executes": "PASS (help; binary identity verified by checksum)",
+        "configuration_preserved": "PASS",
+        "production_ports": "PASS (Compose render; runtime ports belong to A03)",
+        "pinned_image_pulls": "PASS",
+        "installed_migrated_serving": "PASS"
+      },
+      "error": "browser-milestone: exit 1; see 076-browser-milestone.log",
+      "classification": "acceptance harness failure",
+      "description": "The actual UI search returned the video and increased vidra-search successful requests from 1 to 2. The subsequent supplemental routed fetch hit 429; its response parser assumed videos existed. The server request log confirms 429.",
+      "correction": "Record the supplemental response status/error and honor Retry-After before bounded retries; 6d77592.",
+      "raw_result_sha256": "1de4766dc2472bbd892e87c2ed3638a2903c9112ff0db6ff233001ec7ef8bfcd",
+      "private_archive": "/tmp/vidra-v064-digitalocean-run/attempt-5-private.tar.gz",
+      "private_archive_sha256": "33ef056542b74ee0e81b9a576be02bc306a52f9df6c338881fa48dfdf6383f5d"
+    }
+  ],
+  "passing_attempt": 6,
+  "passing_invocation_id": "d8120efd4f2348dbb8a991e4ee1d500d",
+  "passing_harness_revision": "6d775923b6208ef53ac743011bdebbb9b45455bb",
+  "raw_evidence_location": "root@159.65.249.255:/root/vidra-v064-runtime (raw logs and credentials retained on host)",
+  "sanitized_export_sha256": "85bed9422e26a94a7e093370f85a647f1d871fb436bebdaecd1bd27899158286",
+  "raw_result_sha256": "435aff1b83b1ec3aa11b1e4be5e46c771e4094af1dec1f7eea1d65c7fbe49532",
+  "raw_browser_sha256": "9052724c274371a3e78336d3e5f09833ceaf821571d2bd45c1bc1ef10739b6e0",
+  "export_scope": "Sanitized result/browser measurements, command arguments and raw-log hashes, four requested browser screenshots. No raw logs, generated environment, credentials, database or application storage exported.",
+  "export_review": "Automatic approval review rejected a broad raw archive due to possible generated secrets. A strict allowlist was sanitized and secret-scanned on the host; only requested evidence was then exported.",
+  "harness_local_gates": {
+    "passed": 52,
+    "failed": 0,
+    "python_tests": 83,
+    "python_skips": 0,
+    "record_sha256": "7545a281bba8f3e1f7ea9f5860a4fbfa4df0a83d37ab3e244fb240b54fe25bbb"
+  },
+  "application_modifications": "None; published v0.6.4 application images and released deployment scripts unchanged.",
+  "harness_ci": [
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34558378119/job/103135812816",
+      "name": "ci-required",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34558378081/job/103135812502",
+      "name": "validate",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://dashboard.gitguardian.com",
+      "name": "GitGuardian Security Checks",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34558378081/job/103135812652",
+      "name": "bundle",
+      "state": "SUCCESS"
+    },
+    {
+      "link": "https://github.com/yegamble/vidra/actions/runs/34558378081/job/103135812713",
+      "name": "boot",
+      "state": "SUCCESS"
+    }
+  ],
+  "provider_final": {
+    "id": 599514574,
+    "name": "vidra-beta-v064-acceptance",
+    "status": "active",
+    "created_at": "2026-09-11T02:24:25Z",
+    "vcpus": 8,
+    "memory": 16384,
+    "disk": 320,
+    "size_slug": "s-8vcpu-16gb",
+    "volume_ids": []
+  },
+  "runtime_configuration": {
+    "VIDRA_ENV": "production",
+    "TRANSCODING_ENABLED": "true",
+    "TRANSCODING_PACKAGER": "cmaf",
+    "SEARCH_SERVICE_URL": "http://search:8080",
+    "CLAMAV_ADDR": "clamav:3310",
+    "MALWARE_SCAN_MODE": "fail-closed",
+    "RATE_LIMIT_ENABLED": "true",
+    "RATE_LIMIT_REQUESTS": "120",
+    "MEDIA_RATE_LIMIT_REQUESTS": "3000"
+  },
+  "runner_environment": {
+    "COMPOSE_PROJECT_NAME": "vidra-release-acceptance",
+    "API_CPUS": "2.0",
+    "API_MEM_LIMIT": "4096m",
+    "READY_TIMEOUT": "600",
+    "EDGE_TIMEOUT": "180",
+    "DEBIAN_FRONTEND": "noninteractive"
+  },
+  "health_semantics": "Services with Docker healthchecks were healthy; Caddy has no Docker healthcheck and is verified by the CA-validated edge requests. One-shot migrators exited zero; inherited one-shot health state is not serving health.",
+  "diagnostics": {
+    "session_rotation": {
+      "login_status": 200,
+      "before": {
+        "status": 200,
+        "id": "eaf8d904-4eab-451a-a382-dd51c02ead70",
+        "role": "admin"
+      },
+      "refresh_status": 200,
+      "old_token_after": {
+        "status": 401,
+        "error": {
+          "code": "unauthorized",
+          "message": "invalid or expired token",
+          "request_id": "DbcuzuIJWtKeemcyGLQKDVEpvMvTRrpk"
+        }
+      },
+      "new_token_after": {
+        "status": 200,
+        "id": "eaf8d904-4eab-451a-a382-dd51c02ead70",
+        "role": "admin"
+      }
+    },
+    "retained_host_tail": "PASS diagnostic only before final clean rebuild; archive attempt 3 retains interrupted retry-counter poll, failed source-field assumption and corrected passing tail. None replaces the uninterrupted attempt 6."
+  },
+  "release_verdict": "NO-GO; only the first runtime milestone is demonstrated.",
+  "remaining_scope": "B1 host access resolved. B2 representative source, B3 selected providers, B4 recovery destination/objectives, B5 decisions and U1 CI limitations remain dependent-only. All unexecuted criteria remain required; historical passes remain historical.",
+  "export_helper": {
+    "path": "tests/release_acceptance_export.py",
+    "sha256": "49c9ca44b70ecaa0b73ee1d4595640ad8af35cfc1b41bb45726833e3efbe8827",
+    "validation": "Executed on the passing native host; strict allowlist and generated-secret scan PASS. The committed helper is byte-identical to that execution."
+  },
+  "agent_count": 1
+}

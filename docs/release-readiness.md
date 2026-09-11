@@ -6,26 +6,37 @@ This is the authoritative campaign record for this audit, superseding earlier re
 
 ## Independent current-release verification — 2026-09-10
 
-**v0.6.4: NO-GO; deployed rehearsal BLOCKED.** The [independent verification](release-verification-v0.6.4-2026-09-10.md) freezes four revisions and immutable image digests, checks actual CI execution, and assesses every workflow/acceptance item. Its result is 1 static PASS, 57 BLOCKED and 1 UNVERIFIED workflow rows. No matching disposable AMD64 server or representative-source/provider/recovery inputs were available for execution. The historical fixture closure below is not certification of this exact release on the declared target environment.
+**v0.6.4: NO-GO.** The [initial independent verification](release-verification-v0.6.4-2026-09-10.md)
+froze four revisions and immutable image digests and recorded 1 static PASS,
+57 BLOCKED and 1 UNVERIFIED workflow rows while no authorized AMD64 host was
+available. Those counts are historical. The runtime continuation below resolves
+host access and demonstrates the first milestone; full release acceptance,
+representative-source, provider and recovery requirements remain.
 
 ## Current-release runtime continuation — 2026-09-10
 
-**First v0.6.4 runtime milestone: BLOCKED on fresh AMD64 host access; executable
-handoff prepared.** The [host procedure and runner](runtime-acceptance-v0.6.4.md)
-continue PR #185 using its frozen sources/digests, existing A02/A03 assertions
-and adapted owner/upload/playback/search drivers. They require one new run from
-blank installation through actual browser playback advancement and the same
-uploaded UUID's outbox → vidra-search → UI result, including `source=search`.
-[Preparation evidence](evidence/release-v0.6.4-verification/runtime-preparation.json)
-records local gates only. No loaded image, ledger or browser result is claimed.
-Missing access is a new Ubuntu 24.04 AMD64 host's SSH destination, login identity
-and passwordless sudo; local ARM64 and retained VMs are unsuitable. B2–B5/U1 and
-all scope decisions remain attached to their dependent criteria. The historical
-close-out below remains historical; this preparation changes no release verdict
-or workflow/A-item count. The scoped changes remain open — awaiting review and
-merge; this session explicitly prohibits merging.
+**First v0.6.4 runtime milestone: PASS on the published immutable images.**
+The operator authorized replacement of beta `104.236.27.225`. A clean Ubuntu
+24.04.4 AMD64 replacement at `159.65.249.255` completed the released installer,
+owner claim/login/session refresh, real browser upload and CMAF transcoding,
+advancing Chromium playback/audio/seek, and the same video's real vidra-search
+indexing and browser search/click. The actual UI query increased the search
+service's successful-request counter; a separate routed fetch recorded
+`source=search`. Both migration ledgers, loaded image IDs/digests/revisions,
+commands, measurements and screenshots are in the
+[runtime record](runtime-acceptance-v0.6.4.md).
 
-## Current close-out — 2026-09-10
+The [current disposition](evidence/release-v0.6.4-verification/native-runtime/disposition.json)
+closes SRC-01 and A02's installer procedure and resolves B1. Unexecuted cases
+with no remaining input blocker are UNVERIFIED; B2–B5/U1 block only their
+dependent criteria. The 59 workflow requirements, 40 acceptance criteria,
+provider deferrals and scope decisions are preserved. Earlier failed harness
+attempts and diagnostics are retained; the passing run followed a fresh OS
+rebuild and used no application modification. Historical fixture closure below
+remains historical. [Draft PR #186](https://github.com/yegamble/vidra/pull/186)
+is open — awaiting review and merge; merging is prohibited in this session.
+
+## Historical fixture close-out — 2026-09-10
 
 **A18–A23 now pass the operator-authorized generated PeerTube rehearsal.**
 The register contains **59 rows: 59 PASS, 0 BLOCKED, 0 FAIL, 0 UNVERIFIED**,

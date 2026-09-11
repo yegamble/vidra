@@ -1,19 +1,68 @@
-# v0.6.4 first runtime milestone — executable handoff
+# v0.6.4 first runtime milestone — demonstrated
 
-**Runtime BLOCKED; handoff prepared, not executed on the target.** This continues
-[PR #185](https://github.com/yegamble/vidra/pull/185) and its
-[frozen verification](release-verification-v0.6.4-2026-09-10.md).
-One agent prepared this on September 10, 2026. No release image was executed,
-owner claimed, video uploaded, or shared lab changed in this continuation.
-[Preparation evidence](evidence/release-v0.6.4-verification/runtime-preparation.json)
-separates local checks from the missing deployed observations.
+**PASS for this bounded milestone on the published v0.6.4 images. Full release
+readiness remains NO-GO.** One agent continued
+[PR #185](https://github.com/yegamble/vidra/pull/185) with its unchanged
+[frozen manifest](evidence/release-v0.6.4-verification/manifest.json).
+The operator authorized deleting beta `104.236.27.225` and starting fresh.
+That droplet was deleted; replacement **159.65.249.255**, DigitalOcean ID
+**599514574**, ran native Ubuntu **24.04.4 LTS / x86_64**, 8 vCPUs, 16 GiB RAM
+and 320 GiB disk. Its firewall permits only operator SSH; the browser used
+`https://secure.video.test` inside the guest. Production and shared labs were
+untouched. No application source, image or released deployment script changed.
 
-The precise missing access is an **authorized new Ubuntu 24.04 AMD64 VM/host's
-SSH destination, login user and working locally configured SSH identity with
-passwordless sudo**. This workstation is Darwin ARM64 and its Docker Engine is
-Linux aarch64. The configured SSH file supplies no acceptance host; the listed
-Multipass machines are existing labs/rehearsals. No existing machine is accepted
-as a blank installation, and no emulation is used to meet this target.
+The uninterrupted passing run lasted from **2026-09-11 03:27:56 UTC** to
+**2026-09-11 03:32:39 UTC** (September 10 in the operator's timezone).
+[Runtime observations](evidence/release-v0.6.4-verification/native-runtime/result.json),
+[browser measurements](evidence/release-v0.6.4-verification/native-runtime/browser.json),
+[exact commands and raw-log hashes](evidence/release-v0.6.4-verification/native-runtime/commands.json)
+and [host/attempt provenance](evidence/release-v0.6.4-verification/native-runtime/provenance.json)
+record the actual execution. The original
+[blocked preparation](evidence/release-v0.6.4-verification/runtime-preparation.json)
+is retained as historical evidence; B1 host access is now resolved.
+
+| Required step | Actual result |
+|---|---|
+| Fresh installation | Blank native host, released installer/CLI/bundle checksums, corruption refusal and configuration-preserving reinstall PASS; Docker 29.8.0, Compose 5.5.1 |
+| Deployment | Published immutable core/user/search images inspected before and after the browser; released deploy script unchanged; core **146\|f**, search **18\|f**; edge health/readiness/version/runtime origin PASS |
+| Owner | Browser claim, logout, login, refresh and persisted admin identity PASS; owner `9f464732-bc11-4ee4-8ddd-e5a67c044d3c` |
+| Real upload | Browser-created channel/draft, file selection, metadata/public privacy and Publish; video `b2f9216a-559d-479b-aa5d-21913c8c0dbc`; downloaded original **1311662 bytes**, SHA-256 matches source |
+| Real transcode | Durable job `9c7edcbd-7098-4594-b87a-595d00e14a92` **done**, retry counter **0**; CMAF renditions and **12** advertised playlists/init/fragments fetched successfully |
+| Browser playback | Chromium **153.0.8010.12** HLS blob source; time **0.00 → 3.69 s**, decoded frames **23 → 135**, decoded audio bytes **13907 → 60419**; unmuted, no media error; seek **7.00 s** |
+| Real search | Same UUID in delivered outbox + search inbox + eligible document + signed internal result; unchanged UI query returned it and opened it; vidra-search successful query counter **1 → 2**; additional routed browser fetch recorded **source=search**, event `6fb621b6-581b-4d11-81bc-8d189a128b9f` |
+
+Actual screenshots: [claimed owner](evidence/release-v0.6.4-verification/native-runtime/owner-claimed.png),
+[published upload](evidence/release-v0.6.4-verification/native-runtime/upload-published.png),
+[advancing playback](evidence/release-v0.6.4-verification/native-runtime/playback-advancing.png),
+[search result](evidence/release-v0.6.4-verification/native-runtime/search-result.png).
+Hashes are in the browser record and
+[artifact inventory](evidence/release-v0.6.4-verification/native-runtime/artifact-hashes.json).
+
+Earlier fresh attempts stopped on harness assumptions: Docker frontend
+health was still starting after HTTP readiness, Node needed Ubuntu's `libatomic1`,
+identity readback reused the access token revoked by session refresh, and
+rapid test bursts met the published request limit at UI search or its subsequent
+supplemental routing fetch. The runner records any 429 and obeys its Retry-After
+before a bounded browser reload or supplemental request retry;
+no limiter is disabled or reset. The passing run's UI request attempts were
+`[{"status": 429, "retry_after": "32"}, {"status": 200, "retry_after": null}]`. Supplemental request attempts are
+recorded separately in the browser evidence.
+Retained-host diagnostics additionally established that transcode `attempts`
+counts retries (zero is valid first-run success) and UI-owned search telemetry
+deliberately suppresses the server's duplicate routing event. The corrected
+driver measures the actual UI's successful vidra-search request counter, then
+uses A09's separate routed fetch for `source=search`. All failed/interrupted
+observations remain in private archives. A fresh OS rebuild followed the
+diagnostics; none of those partial runs is substituted for this passing run.
+No application defect or modified-build result was required.
+
+[Current disposition](evidence/release-v0.6.4-verification/native-runtime/disposition.json)
+closes SRC-01 and the A02 installer procedure. It removes B1 from remaining
+workflow blockers: unexecuted cases become UNVERIFIED, while B2–B5/U1 stay
+attached to dependent requirements. All other criteria, historical passes and
+scope decisions are preserved. This change remains **open — awaiting review and
+merge** in [draft PR #186](https://github.com/yegamble/vidra/pull/186); this
+session prohibits merging, release publication and production deployment.
 
 ## Scope and acceptance
 
@@ -38,7 +87,8 @@ Success requires all of these in **one new run**:
 
 1. Native Ubuntu 24.04/x86_64, root/systemd, no container runtime/data/install
    tree; real released installer and checksum-verified native CLI/bundle.
-   Test Node/Playwright tooling is installed only after application installation.
+   Test Node/Playwright tooling and Ubuntu `libatomic1` are installed only after
+   application installation.
 2. Released setup engine, local storage, internal test TLS, closed registration,
    enabled CMAF transcoding and real search. Default ClamAV/fail-closed scanning
    stays enabled. Frozen deploy executes its pre-dump/pull/gated-migration/start/
@@ -53,7 +103,8 @@ Success requires all of these in **one new run**:
    640×360 H.264/AAC moving-pattern/sine file, set a unique title/public privacy,
    press Publish, observe real completion and fresh UI readback. Downloaded
    original SHA-256 must equal the uploaded file. No API-only publication.
-5. The same video's durable transcode job completes with a real attempt. Its
+5. The same video's durable transcode job completes; the retry counter is recorded
+   (zero means success without a retry). Its
    advertised CMAF/HLS tree and referenced playlists/init/fragments return
    nonempty 200 responses. The actual Chromium HLS player advances at least
    two seconds while decoded video frames and decoded audio bytes increase;
@@ -64,14 +115,17 @@ Success requires all of these in **one new run**:
    search inbox event, an eligible search document, and the signed internal
    vidra-search response. Anonymous browser search renders the title/link and
    opens it; a **new** `search.submitted` event must report **source=search**.
-   A SQL fallback, old event, seeded document or mocked response cannot pass.
+   The unchanged UI's successful vidra-search request counter must also increase.
+   A separate browser fetch obtains the routed event because the shipped UI owns
+   its query telemetry and suppresses that duplicate event. A SQL fallback, old
+   event, seeded document or mocked response cannot pass.
 
-This is a bounded milestone across INS/AUTH/PUB/PLAY/SRC, **not full closure of
-those workflow rows or A02–A09**. Ordinary-user/approval/claim-race cases, playback
+This closes SRC-01 and A02's installer procedure. It supplies measured parts of
+the broader INS/AUTH/PUB/PLAY workflows and A03–A09. Ordinary-user/approval/claim-race cases, playback
 fallback/ABR/native/mobile controls, privacy/deletion/search outages, other user
 and admin controls, recovery, scale and migration remain separate requirements.
-No current count in the 59-workflow/40-item verification is promoted by preparing
-a script. All historical passes keep their original revision/fixture boundaries.
+The remaining cases are tracked in the current disposition. All historical
+passes keep their original revision/fixture boundaries.
 
 ## Provision the host
 
@@ -93,8 +147,9 @@ signatures must be diagnosed, not worked around by disabling scanning.
 
 Configure an SSH alias `vidra-acceptance` with the newly allocated address,
 login user (normally `ubuntu`), and its test key. Verify its host-key fingerprint
-against the provisioning record. These are the missing values; no placeholder
-is a usable host. Test access without installing anything:
+against the provisioning record. For the retained run the destination is `root@159.65.249.255` with the
+operator's existing configured SSH identity. That host is now populated; a new
+blank-run attempt requires another authorized clean host or OS rebuild. Test access without installing anything:
 
 ```bash
 ssh -o BatchMode=yes -o ConnectTimeout=10 vidra-acceptance \
@@ -163,9 +218,12 @@ for a complete rerun; retain a failed host for diagnosis until explicit cleanup.
 ```bash
 ssh vidra-acceptance 'sudo -n cat /root/vidra-v064-runtime/result.json'
 ssh vidra-acceptance 'sudo -n cat /root/vidra-v064-runtime/browser-result.json'
-# Export the whole run privately, preserving diagnostics for failures too.
-ssh vidra-acceptance 'sudo -n tar -C /root -czf - vidra-v064-runtime' \
-  > /tmp/vidra-v064-runtime-private-results.tar.gz
+# After PASS, export only the reviewed evidence allowlist. Raw logs and generated
+# credentials/configuration stay on the host. The helper refuses existing output.
+scp tests/release_acceptance_export.py vidra-acceptance:/tmp/vidra-export.py
+ssh vidra-acceptance 'sudo -n python3 /tmp/vidra-export.py'
+scp vidra-acceptance:/root/vidra-v064-reviewed-evidence.tar.gz /tmp/
+shasum -a 256 /tmp/vidra-v064-reviewed-evidence.tar.gz
 ```
 
 `result.json` reports each completed phase, loaded images and both ledgers;
@@ -175,8 +233,14 @@ HLS asset requests, playback samples, search events and screenshot hashes.
 the corresponding log file, including all A02 installer invocations. Frozen
 deploy output and container events establish sequencing. Raw logs can contain
 owner-claim tokens, generated setup secrets, or browser diagnostics; the owner
-password is only in `private/owner.json`. Keep the export private and review it
-before committing sanitized observations. Review the four actual screenshots:
+password is only in `private/owner.json`. The
+[export helper](../tests/release_acceptance_export.py) hashes raw logs, removes
+health-command output, includes only named evidence files and checks text
+against generated secrets on the host before export. Compare the printed archive
+hash with the downloaded file. Automatic approval review rejected the broad raw
+archive in this session because it could contain generated secrets; the limited
+export passed. Raw evidence remains at `root@159.65.249.255:/root/vidra-v064-runtime`.
+Review the four actual screenshots:
 `owner-claimed.png`, `upload-published.png`, `playback-advancing.png`, and
 `search-result.png`. Do not substitute images from an earlier rehearsal.
 

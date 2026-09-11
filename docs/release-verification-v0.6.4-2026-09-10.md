@@ -1,6 +1,18 @@
 # Vidra v0.6.4 release verification — 2026-09-10
 
-**NO-GO. The requested deployment and migration rehearsal is BLOCKED.** No clean disposable server matching Ubuntu 24.04 / Linux AMD64 was supplied or identified. No application workflow was executed in this rehearsal; no production deployment, traffic switch, source shutdown, public federation action or shared-lab mutation occurred.
+**NO-GO for full release readiness. The first runtime milestone now passes on
+the frozen published v0.6.4 images.** The [runtime continuation](runtime-acceptance-v0.6.4.md)
+records a clean authorized Ubuntu 24.04 AMD64 beta replacement, owner/login,
+real upload/transcode, advancing browser playback and real vidra-search routing.
+Its [current disposition](evidence/release-v0.6.4-verification/native-runtime/disposition.json)
+resolves B1 and records newly completed criteria. No production promotion or
+shared-lab mutation occurred.
+
+**Initial PR #185 assessment below is historical:** at that inspection no
+authorized clean AMD64 server was available and no deployed application workflow
+ran. Its counts, tables, CI findings and raw assessment remain unchanged as an
+audit trail. Remaining procedures still apply; absence of runtime evidence after
+B1 resolution means UNVERIFIED unless another identified input blocks that case.
 
 The current published component release is **v0.6.4**, discovered during live registry/release inspection (published September 10, 12:08–12:14 UTC). The checklist's last release-image record names v0.6.3, which was checked first and is retained only as the previous-release baseline. v0.6.4 includes the subsequent authentication, HLS/private-copy and signer fixes. Their absence in v0.6.3 is **not** reported as a defect in v0.6.4.
 
@@ -50,7 +62,7 @@ Each main browser lane skips ATProto, owner claim, PeerTube preview, channel syn
 
 Search `rollback-floor.yml` runs **34475622088, 34402189473 and 34195814588** report **failure with zero jobs**, and their log retrieval fails. The conditional previous-migrator check never ran on this SHA. This is a recorded workflow failure and a recovery-evidence gap; its root cause was not established here. Successful required jobs do not certify a v0.6.3 → v0.6.4 upgrade or rollback.
 
-## Blocking inputs and unperformed work
+## Initial blocking inputs and unperformed work (historical)
 
 - **B1** — No available clean disposable Ubuntu 24.04 linux/amd64 server. Local host and Docker Engine are ARM64; existing test-runner VM inspection fails with No route to host. Existing machines and shared lab containers are not a blank acceptance host.
 - **B2** — A prior generated PeerTube fixture and retained archive were located, but representativeness for all required source families and target scale is not established. It has seven short videos and no actor images, custom categories, plugins or preexisting remote followers. No operator source inventory, scale, source layout, retention or domain plan was supplied; no current import was executed.
@@ -78,7 +90,7 @@ These are source/runbook findings, not measured elimination of dependencies:
 - Actor keys, domain/old links, preexisting remote followers and cutover/rollback need an isolated same-origin or explicit domain-move plan. This rehearsal made no DNS, traffic or public federation changes.
 - The release Dockerfile ships `/app/api`, not the standalone `peertube-import` binary; the release assets also omit that executable. The documented CLI rehearsal therefore retains a source/toolchain dependency. The packaged admin/API import path must be exercised if it is the chosen operator procedure; no locally built replacement was represented as a release image.
 
-## Full workflow disposition
+## Initial full workflow disposition (historical)
 
 B1–B5/U1 are defined above. Exact verification procedures are preserved in the JSON, so no control or rejection case is dropped by this compact table.
 
@@ -157,15 +169,26 @@ B1–B5/U1 are defined above. Exact verification procedures are preserved in the
 
 ## Reproduction and continuation
 
-**First runtime milestone follow-up, September 10:** the
-[executable handoff](runtime-acceptance-v0.6.4.md) now supplies a native-host
-runner and browser driver for fresh install → owner claim/login → real upload/
-transcode → advancing playback → real search indexing. It reuses this exact
-manifest. [Local preparation checks](evidence/release-v0.6.4-verification/runtime-preparation.json)
-passed; the host run remains BLOCKED on B1 (new AMD64 host SSH/login/sudo access).
-No current runtime row or A-item is promoted by this preparation. Provider and
-representative-source inputs block only their dependent checks; existing scope
-decisions and historical evidence boundaries are unchanged.
+**First runtime milestone follow-up, September 10 (September 11 UTC): PASS.**
+The [executed procedure](runtime-acceptance-v0.6.4.md) and
+[native evidence](evidence/release-v0.6.4-verification/native-runtime/result.json)
+use this exact manifest. The operator authorized replacement of the beta
+droplet; the passing run began on a blank native Ubuntu 24.04 AMD64 OS image.
+Core/search ledgers are 146|f and 18|f. Actual image identities, commands,
+owner/upload/transcode results, increasing playback time/video/audio, search
+outbox/inbox/document, UI response/service-counter proof and screenshots are
+recorded. The harness was corrected for readiness timing, a test-tool library,
+session rotation, retry-counter semantics and deduplicated search telemetry;
+application images and released deployment scripts stayed unchanged.
+
+SRC-01 and A02's installer procedure are now demonstrated. Other full workflow
+and A-item criteria remain required, including ordinary users/denials, approval,
+playback fallback/controls/mobile, privacy/delete/search outages, restart and
+recovery, source/scale and selected providers. B1 is resolved; B2–B5/U1 apply
+only to dependent checks. The original
+[preparation record](evidence/release-v0.6.4-verification/runtime-preparation.json)
+and initial assessment retain their historical status. No full-release GO or
+change to provider deferrals or scope decisions is made.
 
 The manifest and assessment are durable sanitized evidence. Raw logs, downloaded assets, detached snapshots and the read-only collection scripts remain at `/tmp/vidra-release-verification-20260910/v0.6.4`; v0.6.3 baseline evidence is its parent directory. GitHub run/job/artifact URLs, expiry dates and raw-log SHA-256s are in the assessment. CI artifacts currently exist with 14-day retention; preserve them before expiry if full traces are needed. Individual raw logs may contain synthetic test credentials and must not be published unreviewed.
 
