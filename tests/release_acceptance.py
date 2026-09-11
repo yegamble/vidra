@@ -333,6 +333,10 @@ def execute(stage, approval):
                 require(ORIGIN in body and 'localhost:8080' not in body, 'wrong frontend runtime origin')
         evidence['checks']['installed_migrated_serving'] = 'PASS'
         # Test-only tools arrive AFTER the no-developer-tool installation proof.
+        # The stock Ubuntu cloud image lacks Node 26's libatomic dependency;
+        # install it before npm/Playwright can bootstrap their own dependencies.
+        run.run(['apt-get', 'update'], 'test-prerequisites-index')
+        run.run(['apt-get', 'install', '-y', '--no-install-recommends', 'libatomic1'], 'test-prerequisites')
         node_dir = stage / 'node'
         node_dir.mkdir()
         run.run(['tar', '-xJf', str(stage / 'node-v26.8.1-linux-x64.tar.xz'), '--strip-components=1', '-C', str(node_dir)], 'test-node')
