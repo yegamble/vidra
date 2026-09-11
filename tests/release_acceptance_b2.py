@@ -31,6 +31,23 @@ def validate_scope(spec, storage):
     require(storage['s3ApiUrl'] == 'https://' + spec['endpoint'], 'credential belongs to another region')
 
 
+def validate_runtime_config(services, spec, credentials):
+    require('api' in services, 'missing API service')
+    # The released default runs queues in the API process. A separate worker
+    # is optional and absent from a render unless its profile is selected.
+    for service in ('api', 'worker'):
+        if service not in services:
+            continue
+        actual = services[service]['environment']
+        for key, value in {'STORAGE_BACKEND': 's3', 'STORAGE_S3_BUCKET': spec['bucket'],
+                           'STORAGE_S3_ENDPOINT': spec['endpoint'], 'STORAGE_S3_REGION': spec['region'],
+                           'STORAGE_S3_ACCESS_KEY': credentials['access_key'],
+                           'STORAGE_S3_SECRET_KEY': credentials['secret_key'],
+                           'STORAGE_S3_USE_SSL': 'true', 'STORAGE_S3_FORCE_PATH_STYLE': 'false'}.items():
+            require(str(actual.get(key)).lower() == value if value in ('true', 'false')
+                    else actual.get(key) == value, f'{service}: wrong test storage {key}')
+
+
 class TestBucket:
     def __init__(self, spec, credentials):
         validate_spec(spec)

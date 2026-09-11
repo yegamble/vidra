@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from release_acceptance_b2 import CAPABILITIES, TestBucket, validate_scope, validate_spec
+from release_acceptance_b2 import CAPABILITIES, TestBucket, validate_scope, validate_spec, validate_runtime_config
 
 SPEC = {'bucket': 'vidra-acceptance-v064-20260911-media', 'bucket_id': 'a' * 24,
         'region': 'us-east-005', 'endpoint': 's3.us-east-005.backblazeb2.com'}
@@ -18,6 +18,25 @@ def authorization():
 
 
 class B2AcceptanceTests(unittest.TestCase):
+    def test_default_inline_worker_and_optional_split_worker_storage(self):
+        credentials = {'access_key': 'test-access', 'secret_key': 'test-secret'}
+        env = {'STORAGE_BACKEND': 's3', 'STORAGE_S3_ENDPOINT': SPEC['endpoint'],
+               'STORAGE_S3_REGION': SPEC['region'], 'STORAGE_S3_BUCKET': SPEC['bucket'],
+               'STORAGE_S3_ACCESS_KEY': credentials['access_key'], 'STORAGE_S3_SECRET_KEY': credentials['secret_key'],
+               'STORAGE_S3_USE_SSL': True, 'STORAGE_S3_FORCE_PATH_STYLE': False}
+        services = {'api': {'environment': env}}
+        validate_runtime_config(services, SPEC, credentials)
+        services['worker'] = {'environment': env.copy()}
+        validate_runtime_config(services, SPEC, credentials)
+        for service in ('api', 'worker'):
+            for key, wrong in [('STORAGE_BACKEND', 'local'), ('STORAGE_S3_BUCKET', 'sizetube'),
+                               ('STORAGE_S3_SECRET_KEY', 'different-key')]:
+                bad = copy.deepcopy(services); bad[service]['environment'][key] = wrong
+                with self.subTest(service=service, key=key), self.assertRaises(ValueError):
+                    validate_runtime_config(bad, SPEC, credentials)
+        with self.assertRaisesRegex(ValueError, 'missing API'):
+            validate_runtime_config({}, SPEC, credentials)
+
     def test_shared_historical_or_secret_bearing_spec_refused(self):
         validate_spec(SPEC)
         for change in ({'bucket': 'sizetube'}, {'bucket': 'sizetube-backup'},

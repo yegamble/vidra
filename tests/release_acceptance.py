@@ -22,7 +22,7 @@ import time
 import blank_server_smoke as blank
 from blank_server_smoke import require, sha, validate_candidate, check_ports
 from runtime_smoke import check_ledger, check_runtime_ports
-from release_acceptance_b2 import TestBucket, validate_spec
+from release_acceptance_b2 import TestBucket, validate_spec, validate_runtime_config
 
 ROOT = Path(__file__).resolve().parent.parent
 SERVICES = {'api': 'vidra-core', 'migrate': 'vidra-core', 'worker': 'vidra-core',
@@ -315,16 +315,7 @@ def execute(stage, approval, b2_credentials=None):
         check_ports(model)
         api_env = model['services']['api']['environment']
         if bucket:
-            for service in ('api', 'worker'):
-                actual = model['services'][service]['environment']
-                for key, value in {'STORAGE_BACKEND': 's3', 'STORAGE_S3_BUCKET': bucket.spec['bucket'],
-                                   'STORAGE_S3_ENDPOINT': bucket.spec['endpoint'],
-                                   'STORAGE_S3_REGION': bucket.spec['region'],
-                                   'STORAGE_S3_ACCESS_KEY': credentials['access_key'],
-                                   'STORAGE_S3_SECRET_KEY': credentials['secret_key'],
-                                   'STORAGE_S3_USE_SSL': 'true', 'STORAGE_S3_FORCE_PATH_STYLE': 'false'}.items():
-                    require(str(actual.get(key)).lower() == value if value in ('true', 'false')
-                            else actual.get(key) == value, f'{service}: wrong test storage {key}')
+            validate_runtime_config(model['services'], bucket.spec, credentials)
         require(str(api_env['TRANSCODING_ENABLED']).lower() == 'true'
                 and api_env['TRANSCODING_PACKAGER'] == 'cmaf', 'real CMAF transcoding required')
         require(api_env['SEARCH_SERVICE_URL'] == 'http://search:8080'

@@ -22,13 +22,41 @@ model_log=next(row['log'] for row in commands if row['label']=='compose-config')
 model=json.loads((stage/'private'/model_log).read_text())
 configuration={k:model['services']['api']['environment'].get(k) for k in (
  'VIDRA_ENV','TRANSCODING_ENABLED','TRANSCODING_PACKAGER','SEARCH_SERVICE_URL','CLAMAV_ADDR','MALWARE_SCAN_MODE',
- 'RATE_LIMIT_ENABLED','RATE_LIMIT_REQUESTS','MEDIA_RATE_LIMIT_REQUESTS')}
+ 'RATE_LIMIT_ENABLED','RATE_LIMIT_REQUESTS','MEDIA_RATE_LIMIT_REQUESTS','STORAGE_BACKEND',
+ 'STORAGE_S3_ENDPOINT','STORAGE_S3_REGION','STORAGE_S3_BUCKET','STORAGE_S3_USE_SSL','STORAGE_S3_FORCE_PATH_STYLE')}
+# A rendered model alone does not prove the live API/worker use that store.
+# Inspect logs were captured on both sides of the browser run; export only
+# storage identity, checking the actual credential privately against the key
+# whose single-bucket provider authorization the runner already validated.
+runtime_storage=[]
+if result.get('storage',{}).get('provider')=='Backblaze B2':
+ spec=result['storage']
+ key=json.loads(Path('/root/vidra-v064-b2-key.json').read_text())
+ expected={'STORAGE_BACKEND':'s3','STORAGE_S3_ENDPOINT':spec['endpoint'],
+  'STORAGE_S3_REGION':spec['region'],'STORAGE_S3_BUCKET':spec['bucket'],
+  'STORAGE_S3_USE_SSL':'true','STORAGE_S3_FORCE_PATH_STYLE':'false'}
+ for entry in commands:
+  if entry['label']!='inspect-container':continue
+  container=json.loads((stage/'private'/entry['log']).read_text())[0]
+  service=container['Config']['Labels']['com.docker.compose.service']
+  if service not in ('api','worker'):continue
+  env=dict(value.split('=',1) for value in container['Config']['Env'])
+  assert all(env.get(name)==value for name,value in expected.items()),'live storage identity differs'
+  assert env['STORAGE_S3_ACCESS_KEY']==key['access_key'],'live storage access key differs'
+  assert env['STORAGE_S3_SECRET_KEY']==key['secret_key'],'live storage secret differs'
+  runtime_storage.append({'service':service,'container_id':container['Id'],
+   'observed_at':entry['started_at'],'configuration':expected,
+   'credential_matches_verified_single_bucket_key':True})
+ assert sum(row['service']=='api' for row in runtime_storage)>=2
+ if 'worker' in model['services']:
+  assert sum(row['service']=='worker' for row in runtime_storage)>=2
 save('result.json',result)
 save('browser-result.json',browser)
 save('host-commands.json',commands)
 save('export-provenance.json',{'raw_result_sha256':sha(stage/'result.json'),
  'raw_browser_sha256':sha(stage/'browser-result.json'),'raw_commands_sha256':sha(stage/'private/commands.jsonl'),
  'raw_evidence_location':str(stage),'runtime_configuration':configuration,
+ 'actual_runtime_storage':runtime_storage,
  'scope':'Sanitized result/browser measurements, command arguments and raw-log hashes, four requested browser screenshots. No raw logs, generated environment, credentials, database or application storage exported.'})
 for name,expected in browser['screenshots'].items():
  assert name in ('owner-claimed.png','upload-published.png','playback-advancing.png','search-result.png')
