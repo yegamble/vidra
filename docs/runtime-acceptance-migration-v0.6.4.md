@@ -1,6 +1,7 @@
 # Packaged v0.6.4 migration and restart execution — 2026-09-11
 
-**NO-GO for the unchanged full release scope.** The generated-source COPY
+**NO-GO for the unchanged full release scope.** [Draft PR #187](https://github.com/yegamble/vidra/pull/187)
+contains this continuation and remains open for review. The generated-source COPY
 milestone passed through the released setup CLI, deployment scripts, admin UI,
 import worker and real B2/search services. No application binary was rebuilt or
 replaced. This extends [PR #186](https://github.com/yegamble/vidra/pull/186), which
@@ -111,7 +112,8 @@ None of these failed attempts was overwritten or relabelled PASS:
    It later became healthy with no configuration change; the separate ready
    snapshot proves data preservation. No recovery target was invented.
 
-A fresh-context verifier reviewed the harness and operator path, independently
+A [fresh-context verifier](evidence/release-v0.6.4-verification/migration-runtime/fresh-context-review.json)
+reviewed the harness and operator path, independently
 ran local syntax/unit checks, and identified weak aggregate/media-association,
 report/UI, repeat-table and disconnect-prerequisite assertions. These were
 strengthened before the corresponding supplementary runs. The verifier did
