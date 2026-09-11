@@ -83,12 +83,19 @@ try {
   const pendingLogin = page.waitForResponse(r => r.url().endsWith('/api/v1/auth/login') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   const login = await pendingLogin; assert.equal(login.status(), 200);
-  const auth = await login.json(); checkCookieSession(auth, owner.username, 'admin');
+  let auth = await login.json(); checkCookieSession(auth, owner.username, 'admin');
   await expect(page.getByRole('button', { name: 'Open account menu' })).toBeVisible();
-  const refresh = page.waitForResponse(r => r.url().endsWith('/api/v1/auth/refresh'));
-  await page.reload(); assert.equal((await refresh).status(), 200);
-  await expect(page.getByRole('button', { name: 'Open account menu' })).toBeVisible();
-  checkIdentity((await api('/api/v1/auth/me', auth.token)).body, owner.username, 'admin');
+  const reloadSession = async () => {
+    const pending = page.waitForResponse(r => r.url().endsWith('/api/v1/auth/refresh'));
+    await page.reload(); const response = await pending; assert.equal(response.status(), 200);
+    // Refresh revokes the old session, including its access token. Readback
+    // must use the newly rotated token, just as the released browser does.
+    auth = await response.json(); checkCookieSession(auth, owner.username, 'admin');
+    await expect(page.getByRole('button', { name: 'Open account menu' })).toBeVisible();
+  };
+  await reloadSession();
+  const identity = await api('/api/v1/auth/me', auth.token);
+  assert.equal(identity.status, 200); checkIdentity(identity.body, owner.username, 'admin');
   const cookie = (await context.cookies()).find(c => c.name === 'vidra_refresh');
   assert.ok(cookie?.secure && cookie?.httpOnly);
   result.checks[phase] = 'PASS';
@@ -142,7 +149,7 @@ try {
   }, id);
   assert.equal(original.status, 200); assert.equal(original.type, 'video/mp4');
   assert.equal(original.sha256, hash(readFileSync(join(stage, 'fixture.mp4'))));
-  result.original = original; await page.reload();
+  result.original = original; await reloadSession();
   await expect(page.getByText(title, { exact: true }).first()).toBeVisible();
   await page.screenshot({ path: join(stage, 'upload-published.png') });
   result.checks[phase] = 'PASS';
