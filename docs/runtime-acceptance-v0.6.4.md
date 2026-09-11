@@ -4,7 +4,7 @@
 readiness remains NO-GO.** This completed run used **local canonical storage**.
 The operator subsequently required Backblaze B2 test storage with all Sizetube
 live and backup buckets excluded. The separate [B2 continuation](runtime-acceptance-b2-v0.6.4.md)
-retains that requirement; this local pass does not certify B2. One agent continued
+now demonstrates that separate provider run; this earlier local pass does not certify B2. One agent continued
 [PR #185](https://github.com/yegamble/vidra/pull/185) with its unchanged
 [frozen manifest](evidence/release-v0.6.4-verification/manifest.json).
 The operator authorized deleting beta `104.236.27.225` and starting fresh.
@@ -59,7 +59,7 @@ observations remain in private archives. A fresh OS rebuild followed the
 diagnostics; none of those partial runs is substituted for this passing run.
 No application defect or modified-build result was required.
 
-[Current disposition](evidence/release-v0.6.4-verification/native-runtime/disposition.json)
+[Local-run disposition](evidence/release-v0.6.4-verification/native-runtime/disposition.json)
 closes SRC-01 and the A02 installer procedure. It removes B1 from remaining
 workflow blockers: unexecuted cases become UNVERIFIED, while B2–B5/U1 stay
 attached to dependent requirements. All other criteria, historical passes and

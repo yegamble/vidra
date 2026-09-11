@@ -1,0 +1,2284 @@
+{
+  "host": [
+    {
+      "argv": [
+        "ss",
+        "-lntup"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "before-listeners",
+      "started_at": 1789100043.4492352,
+      "log": "001-before-listeners.log",
+      "exit_code": 0,
+      "finished_at": 1789100043.5486186,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "9a9220e5a7ca335df87712a2c9fec6dda2d3e081911fe955088276aef0f86ea8",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "df",
+        "-h"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "before-disk",
+      "started_at": 1789100043.5490625,
+      "log": "002-before-disk.log",
+      "exit_code": 0,
+      "finished_at": 1789100043.5575554,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "31eb8cdf21588e88c19f82022e3ad644488bf4cf15434ee8478c9f9208182bf6",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "sh",
+        "/root/vidra-v064-runtime/install.sh",
+        "--yes",
+        "--ref",
+        "v0.6.4",
+        "--dir",
+        "/opt/vidra"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-corrupt-bundle",
+      "started_at": 1789100043.5587075,
+      "log": "003-install-corrupt-bundle.log",
+      "exit_code": 1,
+      "finished_at": 1789100090.006456,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "e2fd05a3e24731488a5dfa27fc3fd49c3e18f3f86b2dd0075f007432486e486a",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "sh",
+        "/root/vidra-v064-runtime/install.sh",
+        "--yes",
+        "--ref",
+        "v0.6.4",
+        "--dir",
+        "/opt/vidra"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-corrupt-cli",
+      "started_at": 1789100090.0072284,
+      "log": "004-install-corrupt-cli.log",
+      "exit_code": 1,
+      "finished_at": 1789100091.2266767,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "4af0fc476959591c8810aaacf347aa4d59d8293a88512ff69c94e5a6868bde6d",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "sh",
+        "/root/vidra-v064-runtime/install.sh",
+        "--yes",
+        "--ref",
+        "v0.6.4",
+        "--dir",
+        "/opt/vidra"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-install",
+      "started_at": 1789100091.2272768,
+      "log": "005-install-install.log",
+      "exit_code": 0,
+      "finished_at": 1789100091.9951293,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "c6b3e6231bc6067265584799ede84b76eea882d032b20c30e08fe2fbf26f835b",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "curl",
+        "-fsSL",
+        "https://github.com/yegamble/vidra-core/releases/download/v0.6.4/SHA256SUMS",
+        "-o",
+        "/root/vidra-v064-runtime/private/installer/SHA256SUMS"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-download-sums",
+      "started_at": 1789100091.9956715,
+      "log": "006-install-download-sums.log",
+      "exit_code": 0,
+      "finished_at": 1789100092.1850162,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "vidra",
+        "help"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-cli-help",
+      "started_at": 1789100092.2795548,
+      "log": "007-install-cli-help.log",
+      "exit_code": 0,
+      "finished_at": 1789100092.2970486,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "346dc8eb464adee676b56af851899fe5a7adff337a9344ef7049b80ac4dea279",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "vidra",
+        "setup",
+        "--non-interactive",
+        "--domain",
+        "http://video.test",
+        "--instance-name",
+        "A02 disposable test",
+        "--registration",
+        "closed",
+        "--tls-mode",
+        "plain-http",
+        "--storage",
+        "local",
+        "--release-tag",
+        "v0.6.4",
+        "--template",
+        "env/production.env.example"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "install-setup",
+      "started_at": 1789100092.2975047,
+      "log": "008-install-setup.log",
+      "exit_code": 0,
+      "finished_at": 1789100092.330483,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "4790e4f25aad77474211b13e457e5b85186828a54eb53f285e41a31ff9ad2574",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "sh",
+        "/root/vidra-v064-runtime/install.sh",
+        "--yes",
+        "--ref",
+        "v0.6.4",
+        "--dir",
+        "/opt/vidra"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-reinstall",
+      "started_at": 1789100092.352315,
+      "log": "009-install-reinstall.log",
+      "exit_code": 0,
+      "finished_at": 1789100093.1708329,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "af8985f4078f17427582f3e6e0dc150d44f73fd852a60be7972ddc2380845b33",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "vidra",
+        "setup",
+        "--check",
+        "env/production.env"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "install-setup-check",
+      "started_at": 1789100093.1952367,
+      "log": "010-install-setup-check.log",
+      "exit_code": 0,
+      "finished_at": 1789100093.2121682,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "6e6b1578ca8ef8403d41e1c0acf89986c25663f46c1ea3619dec9bd786aa7c88",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "--version"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-docker-version",
+      "started_at": 1789100093.2125545,
+      "log": "011-install-docker-version.log",
+      "exit_code": 0,
+      "finished_at": 1789100093.277621,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "d17d4494135d5749568d3967685ddff66428bc09b11975986c6f761aaab4123a",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "compose",
+        "version",
+        "--short"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-compose-version",
+      "started_at": 1789100093.2780652,
+      "log": "012-install-compose-version.log",
+      "exit_code": 0,
+      "finished_at": 1789100093.3934472,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "db74d0caf81f43029fa28ce9888695d0b54d0a99003e6042823c9bc914897865",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "systemctl",
+        "is-active",
+        "--quiet",
+        "docker"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-docker-active",
+      "started_at": 1789100093.3938859,
+      "log": "013-install-docker-active.log",
+      "exit_code": 0,
+      "finished_at": 1789100093.411034,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "systemctl",
+        "is-enabled",
+        "--quiet",
+        "docker"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-docker-enabled",
+      "started_at": 1789100093.411362,
+      "log": "014-install-docker-enabled.log",
+      "exit_code": 0,
+      "finished_at": 1789100093.4282632,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "compose",
+        "-f",
+        "docker-compose.yml",
+        "-f",
+        "docker-compose.prod.yml",
+        "--env-file",
+        "env/production.env",
+        "--profile",
+        "core",
+        "--profile",
+        "frontend",
+        "config",
+        "--format",
+        "json"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "install-compose",
+      "started_at": 1789100093.42863,
+      "log": "015-install-compose.log",
+      "exit_code": 0,
+      "finished_at": 1789100093.7444851,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "8298ddc9f1110ccea680f4e86b5a4f4b7430a76d0826a1da580b8debef65fe95",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "pull",
+        "--platform",
+        "linux/amd64",
+        "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-pull-vidra-core",
+      "started_at": 1789100093.7454915,
+      "log": "016-install-pull-vidra-core.log",
+      "exit_code": 0,
+      "finished_at": 1789100097.2766328,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "8842420102ca4a8517344ccbb1c49dddb80967d9ba57948f5df545ac7e784d5a",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-inspect-vidra-core",
+      "started_at": 1789100097.2770169,
+      "log": "017-install-inspect-vidra-core.log",
+      "exit_code": 0,
+      "finished_at": 1789100097.3933644,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "c732dc9d845c5177db765cb39416b63532c8fac03158c1192f2d902c0ea47e30",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "pull",
+        "--platform",
+        "linux/amd64",
+        "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-pull-vidra-user",
+      "started_at": 1789100097.3939662,
+      "log": "018-install-pull-vidra-user.log",
+      "exit_code": 0,
+      "finished_at": 1789100102.7920682,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "624c51a77f0872757810732a5f7c5ddfe5f98caa96576704f02d8745def340d4",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-inspect-vidra-user",
+      "started_at": 1789100102.792492,
+      "log": "019-install-inspect-vidra-user.log",
+      "exit_code": 0,
+      "finished_at": 1789100102.9195232,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "083aade9dab4b41570731950333281c99ce82d0ddbc62d819387c30a6821f153",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "pull",
+        "--platform",
+        "linux/amd64",
+        "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-pull-vidra-search",
+      "started_at": 1789100102.9200644,
+      "log": "020-install-pull-vidra-search.log",
+      "exit_code": 0,
+      "finished_at": 1789100104.20571,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "42188e224b7fcbe3bfb25ef4a1403ebdb946a1f757b5b4e506448b60c147ff52",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-inspect-vidra-search",
+      "started_at": 1789100104.2061381,
+      "log": "021-install-inspect-vidra-search.log",
+      "exit_code": 0,
+      "finished_at": 1789100104.3723538,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "8a678c5dde7bfa1d6a3e4f54bba09e52233808dcde731896dc79bde34cd7a508",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "ps",
+        "-aq"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "install-no-containers",
+      "started_at": 1789100104.3729498,
+      "log": "022-install-no-containers.log",
+      "exit_code": 0,
+      "finished_at": 1789100104.4386353,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "info",
+        "--format",
+        "{{.OSType}}/{{.Architecture}}"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "engine-platform",
+      "started_at": 1789100104.4451208,
+      "log": "023-engine-platform.log",
+      "exit_code": 0,
+      "finished_at": 1789100104.610621,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "71888e1918e6c6c70ea2c4520d8bdc63c7b4649e50626cef452d83f8a29f6ee6",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "volume",
+        "ls",
+        "-q"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "empty-volumes",
+      "started_at": 1789100104.6112838,
+      "log": "024-empty-volumes.log",
+      "exit_code": 0,
+      "finished_at": 1789100104.6764328,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "vidra",
+        "setup",
+        "--non-interactive",
+        "--yes",
+        "--domain",
+        "https://secure.video.test",
+        "--instance-name",
+        "v0.6.4 disposable acceptance",
+        "--registration",
+        "closed",
+        "--tls-mode",
+        "internal",
+        "--storage",
+        "s3",
+        "--s3-endpoint",
+        "s3.us-east-005.backblazeb2.com",
+        "--s3-region",
+        "us-east-005",
+        "--s3-bucket",
+        "vidra-acceptance-v064-20260911-media",
+        "--s3-access-key",
+        "<redacted test-bucket access key>",
+        "--release-tag",
+        "v0.6.4",
+        "--template",
+        "env/production.env.example"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "setup-internal",
+      "started_at": 1789100104.6805995,
+      "log": "025-setup-internal.log",
+      "exit_code": 0,
+      "finished_at": 1789100104.7137036,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "0fb177ed926c1a3bb199bb38aac4545f799e3170300b6f472fe1bdd59dcfef23",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "vidra",
+        "setup",
+        "--check",
+        "env/production.env"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "setup-check",
+      "started_at": 1789100104.7141829,
+      "log": "026-setup-check.log",
+      "exit_code": 0,
+      "finished_at": 1789100104.7310855,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "d08496156f4906f8bd5f10e30eed3743e1dd5513de7f539d457a538bcedc4615",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "config",
+        "--format",
+        "json"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-config",
+      "started_at": 1789100104.731421,
+      "log": "027-compose-config.log",
+      "exit_code": 0,
+      "finished_at": 1789100105.1487668,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "2af5bea366fbcccc672538b4dd82b430bbb3b19141a9f02ebffa08bee6bde220",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/deploy.sh"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "frozen-deploy",
+      "started_at": 1789100105.149628,
+      "log": "028-frozen-deploy.log",
+      "exit_code": 0,
+      "finished_at": 1789100171.9801338,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "09c9c3d5bcd565d9848f5dddd488bed78ee697e52cafcbbbc5eb23c1fb6f4637",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "events",
+        "--since",
+        "1789100105",
+        "--until",
+        "1789100172",
+        "--filter",
+        "type=container",
+        "--filter",
+        "label=com.docker.compose.project=vidra-release-acceptance",
+        "--format",
+        "{{json .}}"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "deployment-container-events",
+      "started_at": 1789100171.9805293,
+      "log": "029-deployment-container-events.log",
+      "exit_code": 0,
+      "finished_at": 1789100172.045313,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "17de25e4f22bfb427fe65d443367703d91902b241d3f869f2e49486e2da40228",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "api",
+        "frontend",
+        "search",
+        "postgres",
+        "redis",
+        "caddy",
+        "clamav"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-ps",
+      "started_at": 1789100172.046773,
+      "log": "030-compose-ps.log",
+      "exit_code": 0,
+      "finished_at": 1789100172.463892,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "084b28d4ccffc676a83945ab068df715cc4b048b1b3cd1397f6a9c9da0fc73fd",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "0585bf39a45e582d623a00aba03d3e4a929f80ce1b3a7aa24f3f15755d78756a",
+        "d341b590948868b3adf438d371717c06cc75fd311937567c8f7117b550ffb6d1",
+        "c818137f6238f84547aa9a1235337b58be5a6151e03376db0694a38e4e0e5da5",
+        "5dd0d7e9b5a5782d273e4d4e07234d224b4d1ef1551ca76c474bc8e012a0ce25",
+        "82ddc56a8c3a1faee84e325dbbb2825c21517d4fbc1ee0c8e415a65833bcdce2",
+        "d35a15140e843f4c4dddb9b899ddb18a92cd92dc917b9459ed2ab1ec2c4cb6b5",
+        "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "runtime-health",
+      "started_at": 1789100172.464327,
+      "log": "031-runtime-health.log",
+      "exit_code": 0,
+      "finished_at": 1789100172.5294194,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "47a1af45300b87bd51a804c0ae5bfea73da471407d58fed67736e8e2c8cbb3c0",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "api",
+        "frontend",
+        "search",
+        "postgres",
+        "redis",
+        "caddy",
+        "clamav"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-ps",
+      "started_at": 1789100174.531719,
+      "log": "032-compose-ps.log",
+      "exit_code": 0,
+      "finished_at": 1789100174.94844,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "084b28d4ccffc676a83945ab068df715cc4b048b1b3cd1397f6a9c9da0fc73fd",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "0585bf39a45e582d623a00aba03d3e4a929f80ce1b3a7aa24f3f15755d78756a",
+        "d341b590948868b3adf438d371717c06cc75fd311937567c8f7117b550ffb6d1",
+        "c818137f6238f84547aa9a1235337b58be5a6151e03376db0694a38e4e0e5da5",
+        "5dd0d7e9b5a5782d273e4d4e07234d224b4d1ef1551ca76c474bc8e012a0ce25",
+        "82ddc56a8c3a1faee84e325dbbb2825c21517d4fbc1ee0c8e415a65833bcdce2",
+        "d35a15140e843f4c4dddb9b899ddb18a92cd92dc917b9459ed2ab1ec2c4cb6b5",
+        "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "runtime-health",
+      "started_at": 1789100174.9489145,
+      "log": "033-runtime-health.log",
+      "exit_code": 0,
+      "finished_at": 1789100175.0142741,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "c13648130067970a5ae117c5f362b7eb1a2a7ad904de4e363fb0839c16106238",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "api",
+        "frontend",
+        "search",
+        "postgres",
+        "redis",
+        "caddy",
+        "clamav"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-ps",
+      "started_at": 1789100177.016229,
+      "log": "034-compose-ps.log",
+      "exit_code": 0,
+      "finished_at": 1789100177.4327095,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "084b28d4ccffc676a83945ab068df715cc4b048b1b3cd1397f6a9c9da0fc73fd",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "0585bf39a45e582d623a00aba03d3e4a929f80ce1b3a7aa24f3f15755d78756a",
+        "d341b590948868b3adf438d371717c06cc75fd311937567c8f7117b550ffb6d1",
+        "c818137f6238f84547aa9a1235337b58be5a6151e03376db0694a38e4e0e5da5",
+        "5dd0d7e9b5a5782d273e4d4e07234d224b4d1ef1551ca76c474bc8e012a0ce25",
+        "82ddc56a8c3a1faee84e325dbbb2825c21517d4fbc1ee0c8e415a65833bcdce2",
+        "d35a15140e843f4c4dddb9b899ddb18a92cd92dc917b9459ed2ab1ec2c4cb6b5",
+        "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "runtime-health",
+      "started_at": 1789100177.433135,
+      "log": "035-runtime-health.log",
+      "exit_code": 0,
+      "finished_at": 1789100177.4980917,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "feb6684a1825c22926b3e1a01e6f630d3ab430a845ecb3fe4e4f4c8f97da7ce2",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-aq"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-ps",
+      "started_at": 1789100177.500134,
+      "log": "036-compose-ps.log",
+      "exit_code": 0,
+      "finished_at": 1789100177.9176788,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "7b3df2f32b0414bd83d5e24ac4da4f87905ae9b7eb0728fcb6d6158ec1ba74e1",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "0585bf39a45e582d623a00aba03d3e4a929f80ce1b3a7aa24f3f15755d78756a"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100177.91816,
+      "log": "037-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100177.982917,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "83fbf0566a01f8b7d40a9a2a72a71922c027f7b14995049bc2f38b0edee5987c",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100177.9836142,
+      "log": "038-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100178.048434,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "f07d4d7f8281daf3d7067f009302b772fca287f066335af3581d8cc219d6139d",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "d341b590948868b3adf438d371717c06cc75fd311937567c8f7117b550ffb6d1"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100178.0489168,
+      "log": "039-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100178.1139479,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "0aebaa4c12163646e87bccc4f4a7471f442bfe42ea42250c7aa1fbaf0e2117ef",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100178.1146185,
+      "log": "040-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100178.2298439,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "3d9c784851f4f2cfbbc029cb2d5440662f30327be13b45379c43ee35a3d4099c",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "c818137f6238f84547aa9a1235337b58be5a6151e03376db0694a38e4e0e5da5"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100178.2302592,
+      "log": "041-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100178.2964096,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "d2fcc6272e09085bfc1de8e727e79a34d5c108400087245512e6cd817521c029",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100178.2970166,
+      "log": "042-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100178.4118032,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "6a3f4a8f73e8ecd7fcfdf32538d4b333b5aa060eaf18ea370143e18e9133ff7e",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "5dd0d7e9b5a5782d273e4d4e07234d224b4d1ef1551ca76c474bc8e012a0ce25"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100178.4121487,
+      "log": "043-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100178.477114,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "567b9237a88604ba31a848c52a11b565c116456b42fc7bff4e9f1d8e24a4ee3c",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100178.4777346,
+      "log": "044-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100178.593097,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "a01145823326f6e0480b8e52958dde7069a039233457547fe4b69bafe2d27f50",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "891dc43352fc0eec56f9a099ebd438c465a7d7d091d72d258102156129376132"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100178.5935845,
+      "log": "045-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100178.6584663,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "42c09cc1b74c62a5691e354c1dc3537d79623daec49987ea2cec4f4d1c35fa6e",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100178.658989,
+      "log": "046-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100178.7238214,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "f07d4d7f8281daf3d7067f009302b772fca287f066335af3581d8cc219d6139d",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "82ddc56a8c3a1faee84e325dbbb2825c21517d4fbc1ee0c8e415a65833bcdce2"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100178.7242336,
+      "log": "047-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100178.788871,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "427eedce9983a5a0a0a84b6897692d428c5252478b2e1df64e17684ba06085de",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100178.7893565,
+      "log": "048-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100178.9045677,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "cd4f1a92e906adbcb478c3a621f00d95a71bacb692e53bf503c6b72c45fa8d5a",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "7a17146902f6fa14026be5c4215b70c7c806657f519352d20cc403718ec51396"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100178.9050517,
+      "log": "049-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100178.9698267,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "1323a4d3036ea2478656345416c4e069ff4089ad5874ca9e95b66f75b0b8842b",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100178.970349,
+      "log": "050-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100179.0853076,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "c80ebe362f7322d51d9c3906ea2402b265c9e80152b79c78a876e7aeaec5a679",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "d35a15140e843f4c4dddb9b899ddb18a92cd92dc917b9459ed2ab1ec2c4cb6b5"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100179.0857966,
+      "log": "051-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100179.1506147,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "b223a02159ab915d01cd91ea87d7d082417712a1864050fe494a68c2a15ec5d1",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100179.1511517,
+      "log": "052-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100179.2662535,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "0f5388b23725cdf9c05694ccd9275b5c4dd311093888f5c53c41e33ed58195f2",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100179.266706,
+      "log": "053-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100179.3316793,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "9639856be9b3949e499dc19ce95ea8833d4eb9f7a677a2d36c4a1a9e6e4d3218",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100179.3322673,
+      "log": "054-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100179.4476116,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "d0d7e460698975da5022427fd03771464d97a0d7d4fc5eb7b008abacd4141300",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "9a1758684cac23faf3471d9baa282a9d0c734c7648928c94339a1ae6aeca3ad0"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100179.4481375,
+      "log": "055-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100179.513192,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "9068d96fb53b433aa7b981225c43854b5bc3959ee687b5fc0df41d9690f4cb66",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100179.51369,
+      "log": "056-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100179.6290185,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "d0d7e460698975da5022427fd03771464d97a0d7d4fc5eb7b008abacd4141300",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT version, dirty FROM schema_migrations"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-exec",
+      "started_at": 1789100179.6297226,
+      "log": "057-compose-exec.log",
+      "exit_code": 0,
+      "finished_at": 1789100179.8956244,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "df5c2cea16f8be1a8ff0a73df71f4c1166d45b87216d92c0b2375229715077e6",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT version, dirty FROM vidra_search_migrations"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-exec",
+      "started_at": 1789100179.8960943,
+      "log": "058-compose-exec.log",
+      "exit_code": 0,
+      "finished_at": 1789100180.2119014,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "87b93b2e88a072cd58f6ce0ed8b561f1c293ec26228df548f52c6f9ea66944c8",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM users"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-exec",
+      "started_at": 1789100180.212284,
+      "log": "059-compose-exec.log",
+      "exit_code": 0,
+      "finished_at": 1789100180.4778223,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "caddy"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-ps",
+      "started_at": 1789100180.478248,
+      "log": "060-compose-ps.log",
+      "exit_code": 0,
+      "finished_at": 1789100180.8943334,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "0edf82a01b9b9d8a3acace084fbfc628bcbd5462d1cdc3a729edbaf927063af4",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "cp",
+        "d341b590948868b3adf438d371717c06cc75fd311937567c8f7117b550ffb6d1:/data/caddy/pki/authorities/local/root.crt",
+        "/root/vidra-v064-runtime/root.crt"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "copy-test-ca",
+      "started_at": 1789100180.8947215,
+      "log": "061-copy-test-ca.log",
+      "exit_code": 0,
+      "finished_at": 1789100180.9595633,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "curl",
+        "-fsS",
+        "--max-time",
+        "30",
+        "--cacert",
+        "/root/vidra-v064-runtime/root.crt",
+        "--resolve",
+        "secure.video.test:443:127.0.0.1",
+        "https://secure.video.test/healthz"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "edge-healthz",
+      "started_at": 1789100180.9599888,
+      "log": "062-edge-healthz.log",
+      "exit_code": 0,
+      "finished_at": 1789100180.992596,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "6489d6d7a33c5d40e18fc61eeb6c34c341279ee61816394dde5189aa4ad8fae5",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "curl",
+        "-fsS",
+        "--max-time",
+        "30",
+        "--cacert",
+        "/root/vidra-v064-runtime/root.crt",
+        "--resolve",
+        "secure.video.test:443:127.0.0.1",
+        "https://secure.video.test/readyz"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "edge-readyz",
+      "started_at": 1789100180.993098,
+      "log": "063-edge-readyz.log",
+      "exit_code": 0,
+      "finished_at": 1789100181.0507262,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "26f8dcd772820696ea8dcc5706ad31df34763febd2680ef89db5ef2ab69e4224",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "curl",
+        "-fsS",
+        "--max-time",
+        "30",
+        "--cacert",
+        "/root/vidra-v064-runtime/root.crt",
+        "--resolve",
+        "secure.video.test:443:127.0.0.1",
+        "https://secure.video.test/version"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "edge-version",
+      "started_at": 1789100181.051107,
+      "log": "064-edge-version.log",
+      "exit_code": 0,
+      "finished_at": 1789100181.083973,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "f86c337f7883c1962896b82616691c21290c7b6ad7acca677426415c678a2281",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "curl",
+        "-fsS",
+        "--max-time",
+        "30",
+        "--cacert",
+        "/root/vidra-v064-runtime/root.crt",
+        "--resolve",
+        "secure.video.test:443:127.0.0.1",
+        "https://secure.video.test/"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "edge-",
+      "started_at": 1789100181.0846508,
+      "log": "065-edge-.log",
+      "exit_code": 0,
+      "finished_at": 1789100181.19984,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "df6f0494df687d90769b73a1d0a1d47c2026e804839556e713f271364767e800",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "curl",
+        "-fsS",
+        "--max-time",
+        "30",
+        "--cacert",
+        "/root/vidra-v064-runtime/root.crt",
+        "--resolve",
+        "secure.video.test:443:127.0.0.1",
+        "https://secure.video.test/runtime-config.js"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "edge-runtime-config.js",
+      "started_at": 1789100181.2007878,
+      "log": "066-edge-runtime-config.js.log",
+      "exit_code": 0,
+      "finished_at": 1789100181.265963,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "5b26a6d63a4d0a044625233afdfb4f10c7ca045c505886bad57317e970dc517c",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "apt-get",
+        "update"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "test-prerequisites-index",
+      "started_at": 1789100181.2664077,
+      "log": "067-test-prerequisites-index.log",
+      "exit_code": 0,
+      "finished_at": 1789100184.5451221,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "68d3c688e4d2b1feba79e4880a5c18323dc90c403fea7915e417c4d18dee5f82",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "apt-get",
+        "install",
+        "-y",
+        "--no-install-recommends",
+        "libatomic1"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "test-prerequisites",
+      "started_at": 1789100184.5455096,
+      "log": "068-test-prerequisites.log",
+      "exit_code": 0,
+      "finished_at": 1789100190.5851667,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "821fd91f109ddc84fea7818b66b9f14321ddca5b9c9a1c3b3838bf93a864fff7",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "tar",
+        "-xJf",
+        "/root/vidra-v064-runtime/node-v26.8.1-linux-x64.tar.xz",
+        "--strip-components=1",
+        "-C",
+        "/root/vidra-v064-runtime/node"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "test-node",
+      "started_at": 1789100190.5857062,
+      "log": "069-test-node.log",
+      "exit_code": 0,
+      "finished_at": 1789100194.7179468,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "npm",
+        "ci",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund"
+      ],
+      "cwd": "/root/vidra-v064-runtime/browser",
+      "label": "browser-dependencies",
+      "started_at": 1789100194.71853,
+      "log": "070-browser-dependencies.log",
+      "exit_code": 0,
+      "finished_at": 1789100196.1889184,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "c0a52d79d642c53d7175a60f53ce8e254694c76e4d2aa4c2b72356e5d70f97c6",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "node",
+        "node_modules/playwright/cli.js",
+        "install",
+        "--with-deps",
+        "chromium"
+      ],
+      "cwd": "/root/vidra-v064-runtime/browser",
+      "label": "browser-install",
+      "started_at": 1789100196.1893144,
+      "log": "071-browser-install.log",
+      "exit_code": 0,
+      "finished_at": 1789100239.3245513,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "2e668faa6c4fbce5d14325a1b6e597a56876ecbc8afc0fed0bf2b1fd7f181774",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "api"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-ps",
+      "started_at": 1789100239.3251069,
+      "log": "072-compose-ps.log",
+      "exit_code": 0,
+      "finished_at": 1789100239.7413993,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "d6c90302533030f647575fc89c533631aa7b0dc96c8cda6923fb2565e71231c9",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "0585bf39a45e582d623a00aba03d3e4a929f80ce1b3a7aa24f3f15755d78756a",
+        "ffmpeg",
+        "-hide_banner",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=640x360:rate=30",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=880:sample_rate=48000",
+        "-t",
+        "12",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-movflags",
+        "+faststart",
+        "/tmp/release-acceptance.mp4"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "make-source-fixture",
+      "started_at": 1789100239.7418196,
+      "log": "073-make-source-fixture.log",
+      "exit_code": 0,
+      "finished_at": 1789100243.182431,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "63d922c5a41cc76e61c16d82d25faccca08d984b41cecd7da2d8bc37979bc6d5",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "exec",
+        "0585bf39a45e582d623a00aba03d3e4a929f80ce1b3a7aa24f3f15755d78756a",
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_format",
+        "-show_streams",
+        "-of",
+        "json",
+        "/tmp/release-acceptance.mp4"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "probe-source-fixture",
+      "started_at": 1789100243.1828947,
+      "log": "074-probe-source-fixture.log",
+      "exit_code": 0,
+      "finished_at": 1789100243.3982918,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "1dd4262195289c93826233a1243210a8df4574db32939a30b4fa85015fe0896a",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "cp",
+        "0585bf39a45e582d623a00aba03d3e4a929f80ce1b3a7aa24f3f15755d78756a:/tmp/release-acceptance.mp4",
+        "/root/vidra-v064-runtime/fixture.mp4"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "copy-fixture",
+      "started_at": 1789100243.3986583,
+      "log": "075-copy-fixture.log",
+      "exit_code": 0,
+      "finished_at": 1789100243.463452,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "node",
+        "/root/vidra-v064-runtime/release-acceptance.mjs",
+        "/root/vidra-v064-runtime"
+      ],
+      "cwd": "/root/vidra-v064-runtime",
+      "label": "browser-milestone",
+      "started_at": 1789100243.4689708,
+      "log": "076-browser-milestone.log",
+      "exit_code": 0,
+      "finished_at": 1789100308.2688522,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "fd0ad7a2632e7940c3cd845b7b128ae49a5a54d9f9451b8e97615c293cfd6937",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "logs",
+        "--no-color",
+        "--timestamps"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-logs",
+      "started_at": 1789100308.320612,
+      "log": "077-compose-logs.log",
+      "exit_code": 0,
+      "finished_at": 1789100308.787292,
+      "evidence_directory": "/root/vidra-v064-runtime",
+      "log_sha256": "3da156f2c62952b802053e4c529355337cbc1dfc7a0a5627f2177d449f907079",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-aq"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-ps",
+      "started_at": 1789100570.192299,
+      "log": "001-compose-ps.log",
+      "exit_code": 0,
+      "finished_at": 1789100570.6610994,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "7b3df2f32b0414bd83d5e24ac4da4f87905ae9b7eb0728fcb6d6158ec1ba74e1",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "0585bf39a45e582d623a00aba03d3e4a929f80ce1b3a7aa24f3f15755d78756a"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100570.6615226,
+      "log": "002-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100570.7263768,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "09a3ad6be41b39dc803a90da40a50eba60600afecf0ee09701d5843c5e5d8c20",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100570.7273355,
+      "log": "003-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100570.7920654,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "f07d4d7f8281daf3d7067f009302b772fca287f066335af3581d8cc219d6139d",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "d341b590948868b3adf438d371717c06cc75fd311937567c8f7117b550ffb6d1"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100570.7925332,
+      "log": "004-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100570.8576415,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "0aebaa4c12163646e87bccc4f4a7471f442bfe42ea42250c7aa1fbaf0e2117ef",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100570.8582344,
+      "log": "005-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100571.002892,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "3d9c784851f4f2cfbbc029cb2d5440662f30327be13b45379c43ee35a3d4099c",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "c818137f6238f84547aa9a1235337b58be5a6151e03376db0694a38e4e0e5da5"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100571.0032523,
+      "log": "006-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100571.068132,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "1a9c2aa98d2bd28e794d556dd56973e971b4cbba66cc4d5322511955acab4f4f",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100571.0686836,
+      "log": "007-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100571.183685,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "6a3f4a8f73e8ecd7fcfdf32538d4b333b5aa060eaf18ea370143e18e9133ff7e",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "5dd0d7e9b5a5782d273e4d4e07234d224b4d1ef1551ca76c474bc8e012a0ce25"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100571.184139,
+      "log": "008-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100571.2489061,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "6863935632b8218014fed4534943fef6a93032d5f465bd2c0f0a5560a1ef0c09",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100571.2494345,
+      "log": "009-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100571.3644166,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "a01145823326f6e0480b8e52958dde7069a039233457547fe4b69bafe2d27f50",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "891dc43352fc0eec56f9a099ebd438c465a7d7d091d72d258102156129376132"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100571.3649702,
+      "log": "010-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100571.4299145,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "42c09cc1b74c62a5691e354c1dc3537d79623daec49987ea2cec4f4d1c35fa6e",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100571.4304357,
+      "log": "011-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100571.5463314,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "f07d4d7f8281daf3d7067f009302b772fca287f066335af3581d8cc219d6139d",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "82ddc56a8c3a1faee84e325dbbb2825c21517d4fbc1ee0c8e415a65833bcdce2"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100571.5470135,
+      "log": "012-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100571.611873,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "259cf87d9668753a6dacf07eb0075eec2448be022cfd22de95732c1a6b177cda",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100571.6122847,
+      "log": "013-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100571.7273533,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "cd4f1a92e906adbcb478c3a621f00d95a71bacb692e53bf503c6b72c45fa8d5a",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "7a17146902f6fa14026be5c4215b70c7c806657f519352d20cc403718ec51396"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100571.7278936,
+      "log": "014-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100571.7926247,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "1323a4d3036ea2478656345416c4e069ff4089ad5874ca9e95b66f75b0b8842b",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100571.7931821,
+      "log": "015-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100571.9080367,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "c80ebe362f7322d51d9c3906ea2402b265c9e80152b79c78a876e7aeaec5a679",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "d35a15140e843f4c4dddb9b899ddb18a92cd92dc917b9459ed2ab1ec2c4cb6b5"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100571.9084814,
+      "log": "016-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100571.973431,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "d28bc957711fb9b83331141148904f11b0cc2c2557ac1a2e105601e0d5b239ef",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100571.9740198,
+      "log": "017-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100572.0891783,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "0f5388b23725cdf9c05694ccd9275b5c4dd311093888f5c53c41e33ed58195f2",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100572.0896537,
+      "log": "018-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100572.1547873,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "d92e8593a5917b03b98bf6801d4de55fd1bdd80ef0835df445e630b0dea986a7",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100572.1554027,
+      "log": "019-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100572.27035,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "d0d7e460698975da5022427fd03771464d97a0d7d4fc5eb7b008abacd4141300",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "9a1758684cac23faf3471d9baa282a9d0c734c7648928c94339a1ae6aeca3ad0"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-container",
+      "started_at": 1789100572.271037,
+      "log": "020-inspect-container.log",
+      "exit_code": 0,
+      "finished_at": 1789100572.3359568,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "9068d96fb53b433aa7b981225c43854b5bc3959ee687b5fc0df41d9690f4cb66",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "docker",
+        "image",
+        "inspect",
+        "sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "inspect-image",
+      "started_at": 1789100572.3365166,
+      "log": "021-inspect-image.log",
+      "exit_code": 0,
+      "finished_at": 1789100572.4011903,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "d0d7e460698975da5022427fd03771464d97a0d7d4fc5eb7b008abacd4141300",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT version, dirty FROM schema_migrations"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-exec",
+      "started_at": 1789100572.4019275,
+      "log": "022-compose-exec.log",
+      "exit_code": 0,
+      "finished_at": 1789100572.6673098,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "df5c2cea16f8be1a8ff0a73df71f4c1166d45b87216d92c0b2375229715077e6",
+      "log_visibility": "retained privately on host; output not exported"
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT version, dirty FROM vidra_search_migrations"
+      ],
+      "cwd": "/opt/vidra",
+      "label": "compose-exec",
+      "started_at": 1789100572.6677074,
+      "log": "023-compose-exec.log",
+      "exit_code": 0,
+      "finished_at": 1789100572.9333487,
+      "evidence_directory": "/root/vidra-v064-b2-completion",
+      "log_sha256": "87b93b2e88a072cd58f6ce0ed8b561f1c293ec26228df548f52c6f9ea66944c8",
+      "log_visibility": "retained privately on host; output not exported"
+    }
+  ],
+  "browser": [
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM users"
+      ],
+      "started_at": "2026-09-11T04:17:24.244Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "logs",
+        "--no-color",
+        "api"
+      ],
+      "started_at": "2026-09-11T04:17:24.500Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM users WHERE role='admin'"
+      ],
+      "started_at": "2026-09-11T04:17:26.443Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT owner_id FROM channels WHERE id='04d2ad21-2450-4f01-9145-67441aaf1b59'"
+      ],
+      "started_at": "2026-09-11T04:17:29.371Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT COALESCE(max(id),0) FROM search_outbox"
+      ],
+      "started_at": "2026-09-11T04:17:29.945Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT channel_id FROM videos WHERE id='24ed6a83-18fd-44bc-8bc7-4229b7ba042d'"
+      ],
+      "started_at": "2026-09-11T04:17:30.545Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,updated_at FROM transcode_jobs WHERE video_id='24ed6a83-18fd-44bc-8bc7-4229b7ba042d' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-11T04:17:39.930Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,updated_at FROM transcode_jobs WHERE video_id='24ed6a83-18fd-44bc-8bc7-4229b7ba042d' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-11T04:17:40.495Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,updated_at FROM transcode_jobs WHERE video_id='24ed6a83-18fd-44bc-8bc7-4229b7ba042d' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-11T04:17:41.350Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,updated_at FROM transcode_jobs WHERE video_id='24ed6a83-18fd-44bc-8bc7-4229b7ba042d' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-11T04:17:42.667Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,updated_at FROM transcode_jobs WHERE video_id='24ed6a83-18fd-44bc-8bc7-4229b7ba042d' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-11T04:17:44.983Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,updated_at FROM transcode_jobs WHERE video_id='24ed6a83-18fd-44bc-8bc7-4229b7ba042d' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-11T04:17:47.252Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,updated_at FROM transcode_jobs WHERE video_id='24ed6a83-18fd-44bc-8bc7-4229b7ba042d' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-11T04:17:49.577Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT COALESCE(json_agg(e),'[]') FROM (SELECT o.id,o.event_id,o.state,o.attempts,(i.event_id IS NOT NULL) AS received FROM search_outbox o LEFT JOIN search.events_inbox i USING(event_id) WHERE o.id>3 AND o.event_type='video.upsert' AND o.payload::text LIKE '%24ed6a83-18fd-44bc-8bc7-4229b7ba042d%' ORDER BY o.id) e"
+      ],
+      "started_at": "2026-09-11T04:17:57.671Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(d) FROM (SELECT video_id,title,eligible FROM search.documents WHERE video_id='24ed6a83-18fd-44bc-8bc7-4229b7ba042d') d"
+      ],
+      "started_at": "2026-09-11T04:17:57.955Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "search"
+      ],
+      "started_at": "2026-09-11T04:17:58.199Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "python3",
+        "-c",
+        "\nimport hashlib,hmac,json,subprocess,sys,time,urllib.parse,urllib.request\nc=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]]))[0]\nenv=dict(v.split('=',1) for v in c['Config']['Env'])\nip=next(v['IPAddress'] for v in c['NetworkSettings']['Networks'].values() if v['IPAddress'])\np='/internal/v1/search'; ts=str(int(time.time()))\nsig=hmac.new(env['INTERNAL_SECRET'].encode(),(ts+'\\nGET\\n'+p).encode(),hashlib.sha256).hexdigest()\nu='http://'+ip+':8080'+p+'?'+urllib.parse.urlencode({'q':sys.argv[2],'limit':20,'offset':0,'mode':'simple','personalized':'false'})\nwith urllib.request.urlopen(urllib.request.Request(u,headers={'X-Vidra-Internal-Auth':'v1:'+ts+':'+sig}),timeout=15) as r: print(r.read().decode())\n",
+        "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76",
+        "Releaseacceptance08248cc266b3"
+      ],
+      "started_at": "2026-09-11T04:17:58.531Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "python3",
+        "-c",
+        "\nimport json,subprocess,sys,urllib.request\nc=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]]))[0]\nip=next(v['IPAddress'] for v in c['NetworkSettings']['Networks'].values() if v['IPAddress'])\nwith urllib.request.urlopen('http://'+ip+':8080/metrics',timeout=15) as r:\n lines=r.read().decode().splitlines()\nvalues=[float(line.rsplit(' ',1)[1]) for line in lines if line.startswith('vidra_search_http_requests_total{') and 'method=\"GET\"' in line and 'route=\"/internal/v1/search\"' in line and 'status_class=\"2xx\"' in line]\nprint(sum(values))\n",
+        "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76"
+      ],
+      "started_at": "2026-09-11T04:17:58.910Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "python3",
+        "-c",
+        "\nimport json,subprocess,sys,urllib.request\nc=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]]))[0]\nip=next(v['IPAddress'] for v in c['NetworkSettings']['Networks'].values() if v['IPAddress'])\nwith urllib.request.urlopen('http://'+ip+':8080/metrics',timeout=15) as r:\n lines=r.read().decode().splitlines()\nvalues=[float(line.rsplit(' ',1)[1]) for line in lines if line.startswith('vidra_search_http_requests_total{') and 'method=\"GET\"' in line and 'route=\"/internal/v1/search\"' in line and 'status_class=\"2xx\"' in line]\nprint(sum(values))\n",
+        "f4e1df12db29f50a09a0f3ec3192e3811911888c11a0b78c1da51720a1790e76"
+      ],
+      "started_at": "2026-09-11T04:18:26.756Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT COALESCE(max(id),0) FROM search_outbox"
+      ],
+      "started_at": "2026-09-11T04:18:27.031Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(e) FROM (SELECT id,event_id,payload->>'source' AS source FROM search_outbox WHERE id>6 AND event_type='search.submitted' AND payload->>'query'='Releaseacceptance08248cc266b3' AND payload->>'source' IS NOT NULL ORDER BY id DESC LIMIT 1) e"
+      ],
+      "started_at": "2026-09-11T04:18:27.378Z",
+      "exit_code": 0
+    }
+  ]
+}

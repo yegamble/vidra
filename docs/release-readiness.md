@@ -13,6 +13,27 @@ available. Those counts are historical. The runtime continuation below resolves
 host access and demonstrates the first milestone; full release acceptance,
 representative-source, provider and recovery requirements remain.
 
+## Dedicated Backblaze B2 continuation — 2026-09-11
+
+**Requested runtime milestone demonstrated on published v0.6.4 with B2 media.**
+A new private bucket and provider-verified single-bucket key isolated the fresh
+Ubuntu AMD64 run from every Sizetube live/backup bucket and all retained lab data.
+Owner/login, browser upload, real CMAF transcode, advancing video/audio and real
+vidra-search passed. Direct B2 original download matched the fixture/browser
+SHA-256. Actual images, storage identity and both ledgers were checked before
+and after the browser. The original recorder's final native-SHA-1 assumption
+failed; it remains FAIL, with separate read-only completion evidence PASS.
+No application source/image modification was needed.
+
+The [B2 report](runtime-acceptance-b2-v0.6.4.md) and
+[current disposition](evidence/release-v0.6.4-verification/b2-runtime/disposition.json)
+retain all prior criteria. Bucket access is resolved for dependent storage
+checks; their remaining procedures are UNVERIFIED, not automatically passed.
+Current counts are **2 PASS, 45 UNVERIFIED, 12 BLOCKED**; full release remains
+**NO-GO**. Provider presign/CDN, retention/GC, recovery, representative source and
+other scope decisions remain required. The older local-run disposition below
+is historical at its timestamp. Draft PR #186 remains unmerged.
+
 ## Current-release runtime continuation — 2026-09-10
 
 **Storage requirement added by the operator:** use dedicated Backblaze B2 test

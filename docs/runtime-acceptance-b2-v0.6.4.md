@@ -1,71 +1,130 @@
-# v0.6.4 Backblaze B2 runtime continuation
+# v0.6.4 Backblaze B2 runtime milestone — demonstrated
 
-**Executable handoff ready; runtime blocked on test-key transfer approval.
-Full release remains NO-GO.** The operator requires
-Backblaze B2 for test media and excludes all Sizetube live and backup buckets.
-The [completed local-storage run](runtime-acceptance-v0.6.4.md) is retained as
-historical, bounded evidence. No B2 result is inferred from that run or MinIO CI.
+**PASS for the requested milestone on published, unmodified v0.6.4 images.
+Full release readiness remains NO-GO.** Fresh native installation, owner
+claim/login, browser upload, real CMAF transcoding, advancing playback/audio
+and real vidra-search indexing were demonstrated using a dedicated private
+Backblaze B2 bucket. Sizetube's live and backup buckets were untouched.
 
-[Preparation evidence](evidence/release-v0.6.4-verification/b2-runtime/preparation.json)
-records the actual B2 scope/empty-version inventory, bucket configuration,
-new host/firewall, prepared input hashes and 52 local checks (89 Python tests,
-zero skips). Harness commit `c589d3d9dc3f07bfe01898f3b16c84da424a69c6` is pushed
-to draft PR #186. The nonsecret archive is staged on the new host; its local
-and remote SHA-256 match, and native blank-host preflight passes.
+The original recorder's final checksum-metadata assertion exited **1** and is
+preserved as **FAIL** in [result.json](evidence/release-v0.6.4-verification/b2-runtime/result.json).
+The [browser sequence](evidence/release-v0.6.4-verification/b2-runtime/browser.json)
+had already passed every step. A separate
+[read-only completion](evidence/release-v0.6.4-verification/b2-runtime/completion.json)
+then downloaded the original directly from B2, verified its bytes, and captured
+the post-browser image/ledger snapshot. It passed without changing application
+state or rebuilding an application image. This is a completed evidence chain,
+not a claim that the original recorder exited zero.
 
-Automatic approval review rejected sending the new scoped key to
-`159.203.118.182`, because it requires explicit user authorization for that
-credential transfer to that specific destination. The key has **not** been
-transferred, the installer/runtime has **not** started, and no workaround was
-used. The precise remaining input is approval to copy this seven-day key,
-restricted to the named new test bucket, to this disposable host. This blocks
-only B2-dependent runtime execution; all independent preparation is complete.
+## Actual results
 
-## Storage isolation
+The fresh application sequence ran **2026-09-11 04:14:02–04:18:28 UTC** on
+DigitalOcean droplet **599531580**, `159.203.118.182`, after an authorized clean
+OS rebuild. It used Ubuntu **24.04.4 LTS / x86_64**, 8 vCPUs, 16 GiB RAM and
+320 GiB disk. Read-only completion ran **04:22:49–04:22:52 UTC**.
+The firewall permits operator SSH only; Chromium used the internal origin
+`https://secure.video.test` inside the guest. No production DNS/traffic changed.
 
-Only a newly created, empty private bucket is used:
-`vidra-acceptance-v064-20260911-media`, ID `e565124b996984e8a7070215`, endpoint
-`s3.us-east-005.backblazeb2.com`, region `us-east-005`. Creation enabled SSE-B2
-encryption. A seven-day key is restricted to exactly this bucket with
-`listBuckets,readBuckets,listFiles,readFiles,writeFiles,deleteFiles` only.
-It cannot manage keys, bucket policies, encryption, retention or other buckets.
-The account credential stays on the operator workstation; only the restricted
-test key goes to the disposable application host. Backblaze's own authorization
-response confirmed the exact bucket ID/name and capabilities, and its version
-inventory was empty before deployment.
+| Check | Actual evidence |
+|---|---|
+| Fresh installation | Blank-host guard, released installer/CLI/bundle checksums, deliberate corruption refusal, configuration-preserving reinstall and native CLI PASS |
+| Frozen deployment | Same four source revisions and immutable core/user/search digests in the [unchanged manifest](evidence/release-v0.6.4-verification/manifest.json); released deployment scripts unchanged; actual loaded image IDs/digests/revisions captured before and after browser |
+| Ledgers | Core **146\|f**, search **18\|f**, verified after deployment and after provider completion |
+| Owner | Browser claim/logout/login/refresh and admin readback PASS; owner `03bc7310-61c8-49b4-8259-273b47c5ecbc` |
+| Upload | Browser channel/draft/file/metadata/Publish; video `24ed6a83-18fd-44bc-8bc7-4229b7ba042d`, title `Releaseacceptance08248cc266b3` |
+| Canonical B2 original | Browser original download and independent signed S3 GET both **200**, `video/mp4`, **1311662 bytes**, SHA-256 **47e46fdf11a5f3851cd87ab7ea02cb12a5db4f679bef5ee846fad4d6fa74923a**, identical to generated source |
+| Real transcoding | Job `df9723dd-9341-4358-8919-aae4f23ec669` observed running then **done**, retry count **0**; CMAF 360p; all **12** advertised playlists/init/fragments fetched successfully |
+| Browser playback | Chromium **153.0.8010.12**: time **0 → 3.763359 s**, frames **8 → 122**, decoded audio bytes **6258 → 53549**, unmuted, readyState 4, no media error; seek **7 s** |
+| Real search | Same UUID in delivered outbox, search inbox, eligible document and signed internal result; actual UI query raised vidra-search success counter **1 → 2** and opened the result; separate routed fetch recorded `source=search` |
+| Actual storage | Same API container inspected before/after; `STORAGE_BACKEND=s3`, exact test bucket/endpoint/region, TLS true/path-style false; live credential privately compared with the provider-verified single-bucket key |
+| Provider objects | Empty version inventory before deployment; final inventory **31 version entries: 25 upload versions and 6 hide markers**, including original, ownership marker, thumbnails/storyboards and real transcode files |
 
-All existing buckets are excluded, including Sizetube live/backup and the
-historical `vidra-acceptance-20260905-a36` recovery evidence. A prefix inside an
-existing bucket is not acceptable isolation. No existing bucket's objects,
-versions, lifecycle, retention, CORS or policy were changed. No deletion probe
-against an excluded bucket is needed or authorized: validate the provider's
-key scope before any bucket operation.
+The UI search first received **429 / Retry-After 26**; the driver waited and
+retried successfully. Request limits and fail-closed ClamAV remained enabled.
+The release's default inline worker topology was retained; no separate worker
+profile or split-worker resilience result is claimed.
 
-The [B2 guard](../tests/release_acceptance_b2.py) rejects broad or multiple-bucket
-keys, unexpected capabilities, mismatched IDs/endpoints, old bucket names and
-nonempty buckets including hidden versions. It does not clean a bucket for
-reuse. After the browser run, it requires B2's original-file SHA-1/length to
-match the fixture and real playlists/fragments plus Vidra's ownership marker
-to exist in this same bucket. The original downloaded through Vidra must still
-match SHA-256 and Chromium must decode advancing video/audio. These checks
-establish canonical B2 media with API-proxied delivery; presigned/CDN delivery,
-version-retention billing, destructive GC and recovery are separate requirements.
+Reviewed screenshots: [owner](evidence/release-v0.6.4-verification/b2-runtime/owner-claimed.png),
+[published upload](evidence/release-v0.6.4-verification/b2-runtime/upload-published.png),
+[advancing playback](evidence/release-v0.6.4-verification/b2-runtime/playback-advancing.png),
+[search result](evidence/release-v0.6.4-verification/b2-runtime/search-result.png).
+The watch screenshot also shows a broken default channel-avatar placeholder;
+that visual issue was not investigated and did not prevent this milestone.
+[Commands](evidence/release-v0.6.4-verification/b2-runtime/commands.json),
+[provenance](evidence/release-v0.6.4-verification/b2-runtime/provenance.json) and
+[artifact hashes](evidence/release-v0.6.4-verification/b2-runtime/artifact-hashes.json)
+retain exact observations, source/tool hashes, commands, exits and raw-log hashes.
 
-Provider semantics: [Backblaze application-key restrictions](https://www.backblaze.com/docs/cloud-storage-application-keys)
-and [S3-compatible API](https://www.backblaze.com/docs/cloud-storage-s3-compatible-api).
+## Test-bucket isolation
 
-## Reproduce on a fresh host
+Only `vidra-acceptance-v064-20260911-media`, bucket ID
+`e565124b996984e8a7070215`, endpoint `s3.us-east-005.backblazeb2.com`, region
+`us-east-005`, was used. It was newly created **allPrivate**, with default
+**SSE-B2 / AES256**. The seven-day application key grants only
+`listBuckets,readBuckets,listFiles,readFiles,writeFiles,deleteFiles` for this
+exact bucket. Backblaze's authorization response was checked on the host
+before installation. The account credential stayed on the operator workstation.
 
-Use the same frozen manifest, native Ubuntu 24.04 AMD64 host preparation and
-SSH-only firewall from the [local runbook](runtime-acceptance-v0.6.4.md#provision-the-host).
-The new B2 host is DigitalOcean `599531580`, `159.203.118.182`, Ubuntu 24.04
-AMD64, 8 vCPUs/16 GiB/320 GiB, created `2026-09-11T03:50:54Z`. The earlier
-local run and private evidence remain on `159.65.249.255`. No production
-host, shared lab or mounted production disk is involved. Each disposable host
-costs approximately $0.14286/hour while retained.
+Every existing bucket is excluded, including all Sizetube live/backup buckets
+and retained `vidra-acceptance-20260905-a36` recovery evidence. No existing
+bucket's contents, versions, lifecycle, retention, CORS or policy changed.
+Isolation uses a dedicated bucket and restricted key, not a production prefix.
+The initial transfer-review rejection remains in
+[historical preparation](evidence/release-v0.6.4-verification/b2-runtime/preparation.json);
+the user then explicitly approved the restricted key's transfer to this host.
 
-For a subsequent run, create another **new** acceptance bucket and restricted
-key; never reuse/empty this bucket automatically. On the operator workstation:
+This proves canonical B2 storage with API-proxied playback. It does not certify
+presigned/CDN delivery, destructive GC, recovery, provider version-retention
+policy or billing. Hidden staging/probe versions remain visible in the actual
+inventory, and no lifecycle rule was added; the recorded retention/billing
+risk remains open. See [Backblaze file-version behavior](https://www.backblaze.com/docs/cloud-storage-file-versions)
+and [application-key restrictions](https://www.backblaze.com/docs/cloud-storage-application-keys).
+
+## Recorder corrections and evidence boundaries
+
+1. [Attempt 1](evidence/release-v0.6.4-verification/b2-runtime/attempt-1.json)
+   stopped before application deployment because the harness assumed the optional
+   separate `worker` service was selected. Frozen setup and B2 configuration
+   were correct. The correction and regression test are in `c82c806`; only the
+   disposable host was rebuilt. Reviewed failure facts, redacted commands and
+   raw-log hashes were retained; raw pre-deploy logs/config retired with that
+   authorized rebuild. There were no deployed containers/volumes or uploaded media.
+2. Attempt 2, harness `c82c8061cf3832bde42f356b8cadde2cc0151637`, completed all
+   fresh application/browser steps, then compared B2's original `contentSha1`
+   value **`none`** with a SHA-1. B2 documents that multipart/large files can
+   lack a native SHA-1; other observed entries carry `unverified:` values.
+   Neither should be treated as a checksum attestation.
+   [Provider API semantics](https://www.backblaze.com/apidocs/b2-get-file-info).
+3. [Read-only completion helper](../tests/release_acceptance_complete_b2.py),
+   with corrected [B2 verification](../tests/release_acceptance_b2.py), requires
+   the exact known recorder failure, an already passing fresh install/browser
+   sequence, unchanged original handoff and matching fixture hash. It performs
+   a direct signed S3 GET, compares SHA-256, and inspects actual images/ledgers.
+   The original FAIL is never overwritten. Commands and completion evidence
+   explicitly identify this supplementary step. No application defect or
+   modified-build result was required.
+
+All **52 local checks** pass, including **92 Python tests / zero skips**.
+The sanitizer exports only named evidence files and checks them against real
+host secrets before transfer. Its first attempt encountered an unset Docker
+Env entry; handling that representation was corrected before the successful
+export. No incomplete archive was transferred. The reviewed archive SHA-256 is
+`c7ab04ae5561a6cae276eaa4e6e7c0a4861e7bd27277e7fa980505a27b8f0294`.
+Raw attempt-2 outputs/config/credentials stay on the test host under
+`/root/vidra-v064-runtime`; supplementary raw evidence is in
+`/root/vidra-v064-b2-completion`.
+
+## Reproduce
+
+Use the [native-host preparation](runtime-acceptance-v0.6.4.md#provision-the-host),
+the same frozen manifest and a new blank Ubuntu 24.04 AMD64 host. Both current
+hosts are now populated. Do not erase/reuse their evidence or any existing
+bucket automatically. The current test-media key expires after seven days.
+
+Create a new private `vidra-acceptance-v064-YYYYMMDD-media-NONCE` bucket and a
+new key restricted to it. Put only `bucket`, `bucket_id`, `region`, `endpoint`
+in a nonsecret `storage-spec.json`; keep `access_key` and `secret_key` in a
+separate mode-0600 JSON file. Use an actual date and lowercase nonce. Example:
 
 ```bash
 umask 077
@@ -76,30 +135,22 @@ b2 key create --bucket vidra-acceptance-v064-YYYYMMDD-media-NONCE \
   --duration 604800 vidra-v064-media-acceptance \
   listBuckets,readBuckets,listFiles,readFiles,writeFiles,deleteFiles \
   > /tmp/vidra-v064-b2-next/key.txt
-```
-
-Use an actual date/lowercase nonce. Convert the two whitespace-separated key
-values into a mode-0600 JSON file with `access_key` and `secret_key` fields;
-never print it, put it in Git, or include it in the public handoff archive.
-Put only `bucket`, `bucket_id`, `region`, `endpoint` in `storage-spec.json`.
-For this run these private inputs are in `/tmp/vidra-v064-b2-test/`.
-
-```bash
 python3 tests/release_acceptance.py prepare \
   --frozen /tmp/vidra-release-verification-20260910/v0.6.4/preflight \
   --node-archive /tmp/vidra-v064-acceptance-toolchain/node-v26.8.1-linux-x64.tar.xz \
   --node-sums /tmp/vidra-v064-acceptance-toolchain/SHASUMS256.txt \
-  --b2-spec /tmp/vidra-v064-b2-test/storage-spec.json \
-  --out /tmp/vidra-v064-b2-handoff
-tar -C /tmp/vidra-v064-b2-handoff -czf /tmp/vidra-v064-b2-handoff.tar.gz .
+  --b2-spec /tmp/vidra-v064-b2-next/storage-spec.json \
+  --out /tmp/vidra-v064-b2-next/handoff
 ```
 
-Transfer the archive and separately the scoped key via SSH to the **new B2
-host**. Compare archive hashes, extract into a new mode-0700
-`/root/vidra-v064-runtime`, and keep the key at
-`/root/vidra-v064-b2-key.json` mode 0600. The same host preflight applies. Then:
+Convert the two key values privately into JSON; never print, commit, or include
+credentials in the nonsecret handoff archive. Transfer the verified archive
+and separately the scoped key to the selected disposable host. Extract into
+`/root/vidra-v064-runtime` mode 0700 and store the key at
+`/root/vidra-v064-b2-key.json` mode 0600. Then execute on the host:
 
 ```bash
+python3 /root/vidra-v064-runtime/release_acceptance.py check-host
 systemd-run --unit=vidra-v064-acceptance \
   /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
   LANG=C.UTF-8 /usr/bin/python3 /root/vidra-v064-runtime/release_acceptance.py run \
@@ -109,43 +160,32 @@ journalctl -u vidra-v064-acceptance --no-pager -n 30
 systemctl show vidra-v064-acceptance -p ActiveState -p ExecMainStatus
 ```
 
-The harness uses the released `vidra setup --storage s3` engine and checks
-both API and worker configuration. Credentials are omitted from command
-evidence; the setup secret uses the released environment-input mechanism.
-Deployment scripts, migrations, application digests, fail-closed scanner,
-transcoding and request limits remain unchanged. Apply the same on-host
-sanitized evidence export after PASS. Keep raw outputs/credentials private.
-
-Only dependent object-storage checks gain evidence here. All other provider,
-representative-source, recovery and launch-scope decisions remain as recorded.
-The draft PR remains unmerged by explicit instruction.
-
-## Resume the already staged run after approval
-
-The archive already on `159.203.118.182` has SHA-256
-`ce19ec2bdccea21e882c8f72158e4a2e1b6d3bcd6e99470539f7cdcca01d9ce4`;
-`handoff.json` has SHA-256
-`b65238af8f6fa07ddf2573e5f281be516bab38e40e0209c95e680cf5632f5d92`.
-Do not recreate the bucket, regenerate inputs or extract over this stage.
-The only pending transfer and launch, from the operator workstation, are:
+The updated fresh runner performs the direct S3 download itself. The one-time
+completion command used for the preserved historical attempt was:
 
 ```bash
-scp -F /dev/null -i /Users/yosefgamble/.ssh/id_rsa \
-  -o IdentitiesOnly=yes -o BatchMode=yes \
-  -o UserKnownHostsFile=/tmp/vidra-v064-b2-test/known_hosts \
-  /tmp/vidra-v064-b2-test/scoped-key.json \
-  root@159.203.118.182:/root/vidra-v064-b2-key.json
-ssh -F /dev/null -i /Users/yosefgamble/.ssh/id_rsa \
-  -o IdentitiesOnly=yes -o BatchMode=yes \
-  -o UserKnownHostsFile=/tmp/vidra-v064-b2-test/known_hosts root@159.203.118.182 \
-  'chmod 600 /root/vidra-v064-b2-key.json &&
-   systemd-run --unit=vidra-v064-acceptance \
-   /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-   LANG=C.UTF-8 /usr/bin/python3 /root/vidra-v064-runtime/release_acceptance.py run \
-   /root/vidra-v064-runtime --acknowledge fresh-disposable-host \
-   --b2-credentials /root/vidra-v064-b2-key.json'
+python3 /root/vidra-v064-b2-completion-tools/release_acceptance_complete_b2.py \
+  /root/vidra-v064-runtime /root/vidra-v064-b2-completion \
+  --b2-credentials /root/vidra-v064-b2-key.json
+python3 /tmp/vidra-export.py /root/vidra-v064-b2-completion
 ```
 
-Key expiry, later bucket contents or changed host prerequisites must produce
-a new explicit blocker or new isolated run, never a broader credential or
-automatic cleanup of retained evidence.
+For a future uninterrupted runner PASS, invoke the
+[export helper](../tests/release_acceptance_export.py) without a completion
+argument. Original and supplementary tool revisions/hashes are recorded in
+provenance; neither changes the frozen application candidate.
+
+[Current disposition](evidence/release-v0.6.4-verification/b2-runtime/disposition.json)
+retains all 59 workflow procedures, 40 acceptance criteria and ten scope
+families. Provider access is now available for STO-01/02/03 and INT-09, so
+unexecuted remaining cases are UNVERIFIED rather than blocked on missing bucket
+credentials. Counts: **2 PASS, 45 UNVERIFIED, 12 BLOCKED**. No blanket storage,
+provider or recovery acceptance is claimed. Missing other providers,
+representative-source/recovery inputs and scope decisions block only dependent
+checks. Historical local/fixture results remain historical.
+
+[Draft PR #186](https://github.com/yegamble/vidra/pull/186) remains **open —
+awaiting review and merge**; merging, releases and production deployment are
+prohibited in this session. The local-pass host `159.65.249.255` and B2-pass
+host `159.203.118.182` retain private evidence, at approximately **$0.28572/hour
+combined** while retained.

@@ -8,12 +8,16 @@ Its [current disposition](evidence/release-v0.6.4-verification/native-runtime/di
 resolves B1 and records newly completed criteria. No production promotion or
 shared-lab mutation occurred.
 
-The passing run used local storage. The operator subsequently required
-**Backblaze B2 test storage, excluding every Sizetube live and backup bucket**.
-The [B2 continuation](runtime-acceptance-b2-v0.6.4.md) records its separate
-status; historical local/MinIO/backup passes cannot certify this selected
-provider run. This is the object-storage facet of B3, not representative-source
-blocker B2, and does not waive other provider, recovery or scope requirements.
+The initial passing runtime run used local storage. The subsequent
+[dedicated Backblaze B2 run](runtime-acceptance-b2-v0.6.4.md) now demonstrates
+this milestone with real provider storage, excluding all Sizetube live/backup
+buckets. Its original recorder FAIL remains visible beside the successful
+browser sequence and read-only direct-download/image/ledger completion.
+No application build changed. The [latest disposition](evidence/release-v0.6.4-verification/b2-runtime/disposition.json)
+is **2 PASS, 45 UNVERIFIED, 12 BLOCKED**: provider test-bucket access is resolved
+for dependent storage cases; no remaining procedure is waived. Other B3
+provider inputs, representative-source B2, recovery and scope decisions remain
+dependent-only blockers.
 
 **Initial PR #185 assessment below is historical:** at that inspection no
 authorized clean AMD64 server was available and no deployed application workflow
