@@ -1,11 +1,14 @@
 """Wrong bucket or key scope must fail before any bucket request or install."""
 import copy
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from release_acceptance_b2 import CAPABILITIES, TestBucket, validate_scope, validate_spec, validate_runtime_config
+from release_acceptance_complete_b2 import complete
 
 SPEC = {'bucket': 'vidra-acceptance-v064-20260911-media', 'bucket_id': 'a' * 24,
         'region': 'us-east-005', 'endpoint': 's3.us-east-005.backblazeb2.com'}
@@ -18,6 +21,25 @@ def authorization():
 
 
 class B2AcceptanceTests(unittest.TestCase):
+    def test_completion_cannot_promote_an_unrelated_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stage = Path(directory)
+            (stage / 'result.json').write_text(json.dumps({'status': 'FAIL', 'error': 'deployment failed'}))
+            (stage / 'browser-result.json').write_text('{}')
+            with self.assertRaisesRegex(ValueError, 'only the known'):
+                complete(stage, stage / 'completion', stage / 'key.json')
+            self.assertFalse((stage / 'completion').exists())
+
+    def test_completion_cannot_promote_a_failed_browser(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stage = Path(directory)
+            browser = {'status': 'FAIL'}
+            (stage / 'result.json').write_text(json.dumps({'status': 'FAIL', 'error': 'B2 does not attest the uploaded original bytes', 'browser': browser}))
+            (stage / 'browser-result.json').write_text(json.dumps(browser))
+            with self.assertRaisesRegex(ValueError, 'browser sequence did not pass'):
+                complete(stage, stage / 'completion', stage / 'key.json')
+            self.assertFalse((stage / 'completion').exists())
+
     def test_default_inline_worker_and_optional_split_worker_storage(self):
         credentials = {'access_key': 'test-access', 'secret_key': 'test-secret'}
         env = {'STORAGE_BACKEND': 's3', 'STORAGE_S3_ENDPOINT': SPEC['endpoint'],
@@ -82,21 +104,25 @@ class B2AcceptanceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'not empty'):
                 bucket.require_empty()
 
-    def test_media_requires_attested_original_and_real_transcoded_objects(self):
+    def test_media_requires_direct_original_download_and_real_transcoded_objects(self):
         bucket = TestBucket.__new__(TestBucket); bucket.proof = {}; bucket.commands = []
         with tempfile.TemporaryDirectory() as directory:
             fixture = Path(directory) / 'fixture.mp4'; fixture.write_bytes(b'abc')
             rows = [{'fileName': '.vidra/owner', 'action': 'upload'},
-                    {'fileName': 'originals/video-id.mp4', 'action': 'upload', 'contentLength': 3,
-                     'contentSha1': 'a9993e364706816aba3e25717850c26c9cd0d89d'},
+                    {'fileName': 'web-videos/video-id.mp4', 'action': 'upload', 'contentLength': 3,
+                     'contentSha1': 'none'},
                     {'fileName': 'hls/video-id/master.m3u8', 'action': 'upload', 'contentLength': 20},
                     {'fileName': 'hls/video-id/chunk.m4s', 'action': 'upload', 'contentLength': 30}]
             for row in rows:
                 row.setdefault('contentSha1', None)
-            with patch.object(bucket, 'inventory', return_value=rows):
+            downloaded = {'sha256': hashlib.sha256(b'abc').hexdigest(), 'bytes': 3, 'type': 'video/mp4'}
+            with patch.object(bucket, 'inventory', return_value=rows), patch.object(bucket, 'download_original', return_value=downloaded):
                 self.assertEqual(bucket.verify_media('video-id', fixture)['provider_objects'], 'PASS')
+            with patch.object(bucket, 'inventory', return_value=rows), patch.object(bucket, 'download_original', return_value=dict(downloaded, sha256='wrong')):
+                with self.assertRaisesRegex(ValueError, 'direct B2 original differs'):
+                    bucket.verify_media('video-id', fixture)
             for missing in range(len(rows)):
-                with self.subTest(missing=missing), patch.object(bucket, 'inventory', return_value=rows[:missing] + rows[missing+1:]):
+                with self.subTest(missing=missing), patch.object(bucket, 'inventory', return_value=rows[:missing] + rows[missing+1:]), patch.object(bucket, 'download_original', return_value=downloaded):
                     with self.assertRaises(ValueError):
                         bucket.verify_media('video-id', fixture)
 

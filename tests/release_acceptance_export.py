@@ -1,5 +1,5 @@
 """Explicitly limited release evidence; never export raw logs or credentials."""
-import hashlib,json,shutil,tarfile
+import hashlib,json,shutil,sys,tarfile
 from pathlib import Path
 
 stage=Path('/root/vidra-v064-runtime')
@@ -9,15 +9,29 @@ sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
 save=lambda name,value:(out/name).write_text(json.dumps(value,indent=2)+'\n')
 result=json.loads((stage/'result.json').read_text())
 browser=result.pop('browser')
-assert result['status']==browser['status']=='PASS'
-for field in ('runtime_before_browser','runtime_after_browser'):
- for row in result[field]['images'].values():
+assert browser['status']=='PASS'
+completion=None
+completion_stage=Path(sys.argv[1]) if len(sys.argv)==2 else None
+if result['status']!='PASS':
+ assert completion_stage is not None
+ completion=json.loads((completion_stage/'completion.json').read_text())
+ assert result['status']=='FAIL' and result['error']=='B2 does not attest the uploaded original bytes'
+ assert completion['status']=='PASS' and completion['original_result_sha256']==sha(stage/'result.json')
+ assert completion['original_browser_sha256']==sha(stage/'browser-result.json')
+snapshots=[result[field] for field in ('runtime_before_browser','runtime_after_browser') if field in result]
+if completion:snapshots.append(completion['runtime_after_browser'])
+for snapshot in snapshots:
+ for row in snapshot['images'].values():
   for entry in row['state'].get('Health',{}).get('Log',[]):
    entry['output_sha256']=hashlib.sha256(entry.pop('Output').encode()).hexdigest()
-commands=[json.loads(line) for line in (stage/'private/commands.jsonl').read_text().splitlines()]
-for row in commands:
- row['log_sha256']=sha(stage/'private'/row['log'])
- row['log_visibility']='retained privately on host; output not exported'
+commands=[]
+for location in ([stage,completion_stage] if completion else [stage]):
+ for line in (location/'private/commands.jsonl').read_text().splitlines():
+  row=json.loads(line)
+  row['evidence_directory']=str(location)
+  row['log_sha256']=sha(location/'private'/row['log'])
+  row['log_visibility']='retained privately on host; output not exported'
+  commands.append(row)
 model_log=next(row['log'] for row in commands if row['label']=='compose-config')
 model=json.loads((stage/'private'/model_log).read_text())
 configuration={k:model['services']['api']['environment'].get(k) for k in (
@@ -37,10 +51,10 @@ if result.get('storage',{}).get('provider')=='Backblaze B2':
   'STORAGE_S3_USE_SSL':'true','STORAGE_S3_FORCE_PATH_STYLE':'false'}
  for entry in commands:
   if entry['label']!='inspect-container':continue
-  container=json.loads((stage/'private'/entry['log']).read_text())[0]
+  container=json.loads((Path(entry['evidence_directory'])/'private'/entry['log']).read_text())[0]
   service=container['Config']['Labels']['com.docker.compose.service']
   if service not in ('api','worker'):continue
-  env=dict(value.split('=',1) for value in container['Config']['Env'])
+  env=dict(value.split('=',1) for value in container['Config']['Env'] if '=' in value)
   assert all(env.get(name)==value for name,value in expected.items()),'live storage identity differs'
   assert env['STORAGE_S3_ACCESS_KEY']==key['access_key'],'live storage access key differs'
   assert env['STORAGE_S3_SECRET_KEY']==key['secret_key'],'live storage secret differs'
@@ -53,10 +67,13 @@ if result.get('storage',{}).get('provider')=='Backblaze B2':
 save('result.json',result)
 save('browser-result.json',browser)
 save('host-commands.json',commands)
+if completion:save('completion.json',completion)
 save('export-provenance.json',{'raw_result_sha256':sha(stage/'result.json'),
  'raw_browser_sha256':sha(stage/'browser-result.json'),'raw_commands_sha256':sha(stage/'private/commands.jsonl'),
  'raw_evidence_location':str(stage),'runtime_configuration':configuration,
  'actual_runtime_storage':runtime_storage,
+ 'completion_raw_sha256':sha(completion_stage/'completion.json') if completion else None,
+ 'original_failure_preserved':bool(completion),
  'scope':'Sanitized result/browser measurements, command arguments and raw-log hashes, four requested browser screenshots. No raw logs, generated environment, credentials, database or application storage exported.'})
 for name,expected in browser['screenshots'].items():
  assert name in ('owner-claimed.png','upload-published.png','playback-advancing.png','search-result.png')

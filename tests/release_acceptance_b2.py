@@ -3,7 +3,9 @@ import base64
 import hashlib
 import json
 import re
+import subprocess
 import time
+import urllib.parse
 import urllib.request
 
 from blank_server_smoke import require
@@ -53,6 +55,7 @@ class TestBucket:
         validate_spec(spec)
         require(set(credentials) == {'access_key', 'secret_key'} and all(credentials.values()), 'invalid dedicated key file')
         self.spec = spec
+        self.credentials = credentials
         self.commands = []
         basic = base64.b64encode((credentials['access_key'] + ':' + credentials['secret_key']).encode()).decode()
         auth = self.request('https://api.backblazeb2.com/b2api/v4/b2_authorize_account', {}, 'Basic ' + basic)
@@ -93,17 +96,41 @@ class TestBucket:
         self.proof['preflight'] = 'PASS'
         return self.proof
 
+    def download_original(self, name, destination):
+        # Native metadata can say "none" (multipart) or "unverified:<sha1>".
+        # Neither is a checksum attestation. Download the canonical S3 object
+        # and hash actual bytes independently of Vidra's browser download.
+        url = 'https://' + self.spec['bucket'] + '.' + self.spec['endpoint'] + '/' + urllib.parse.quote(name, safe='/')
+        args = ['curl', '--silent', '--show-error', '--fail', '--max-time', '90',
+                '--proto', '=https', '--aws-sigv4', f'aws:amz:{self.spec["region"]}:s3',
+                '--config', '-', '--output', str(destination), '--write-out', '%{json}', url]
+        config = 'user = ' + json.dumps(self.credentials['access_key'] + ':' + self.credentials['secret_key']) + '\n'
+        entry = {'argv': args, 'authorization': 'single-bucket key via private stdin; omitted', 'started_at': time.time()}
+        self.commands.append(entry)
+        response = subprocess.run(args, input=config, text=True, capture_output=True, timeout=100)
+        entry.update(exit_code=response.returncode, finished_at=time.time())
+        require(response.returncode == 0, 'direct B2 S3 download failed')
+        metadata = json.loads(response.stdout)
+        require(metadata['http_code'] == 200, 'direct B2 S3 download did not return 200')
+        return {'url': url, 'status': metadata['http_code'], 'type': metadata['content_type'],
+                'bytes': destination.stat().st_size, 'sha256': hashlib.sha256(destination.read_bytes()).hexdigest()}
+
     def verify_media(self, video_id, fixture):
         files = self.inventory()
         uploads = [row for row in files if row['action'] == 'upload']
         require(any(row['fileName'] == '.vidra/owner' for row in uploads), 'missing test bucket ownership marker')
         video = [row for row in uploads if video_id in row['fileName']]
-        source_sha1 = hashlib.sha1(fixture.read_bytes()).hexdigest()
-        require(any(row['contentSha1'] == source_sha1 and row['contentLength'] == fixture.stat().st_size
-                    for row in video), 'B2 does not attest the uploaded original bytes')
+        originals = [row for row in video if row['fileName'] == f'web-videos/{video_id}.mp4']
+        require(len(originals) == 1 and originals[0]['contentLength'] == fixture.stat().st_size,
+                'canonical original missing or ambiguous in B2')
+        source_sha256 = hashlib.sha256(fixture.read_bytes()).hexdigest()
+        downloaded = self.download_original(originals[0]['fileName'], fixture.parent / 'private/b2-original-readback.mp4')
+        require(downloaded['sha256'] == source_sha256 and downloaded['bytes'] == fixture.stat().st_size
+                and downloaded['type'] == 'video/mp4', 'direct B2 original differs from uploaded fixture')
         for suffix in ('.m3u8', '.m4s'):
             require(any(row['fileName'].endswith(suffix) and row['contentLength'] > 0 for row in video),
                     'transcoded objects missing from B2: ' + suffix)
-        self.proof.update(after=files, fixture_sha1=source_sha1, video_id=video_id,
+        self.proof.update(after=files, fixture_sha256=source_sha256, original_download=downloaded,
+                          native_original_sha1_field=originals[0]['contentSha1'], video_id=video_id,
                           provider_objects='PASS', requests=self.commands)
         return self.proof
