@@ -188,6 +188,37 @@ def verify_image(info, image, container):
             'container is not running the inspected immutable image')
 
 
+def wait_for_health(probe, timeout=180, clock=time.monotonic, pause=time.sleep):
+    deadline = clock() + timeout
+    while True:
+        states = probe()
+        require(states, 'no running-service health observations')
+        if all(state == 'healthy' for state in states.values()):
+            return states
+        require(clock() < deadline, f'runtime health timeout: {states}')
+        pause(2)
+
+
+def wait_for_runtime(run):
+    services = ('api', 'frontend', 'search', 'postgres', 'redis', 'caddy', 'clamav')
+
+    def probe():
+        ids = run.compose('ps', '-q', *services).split()
+        require(ids, 'no running containers')
+        containers = json.loads(run.run(['docker', 'inspect', *ids], 'runtime-health'))
+        observed = {}
+        for container in containers:
+            name = container['Config']['Labels']['com.docker.compose.service']
+            state = container['State']
+            observed[name] = state.get('Health', {}).get('Status', 'healthy') if state['Running'] else 'stopped'
+        return {name: observed.get(name, 'missing') for name in services}
+
+    # deploy.sh's HTTP probe can pass before Docker has run the frontend's
+    # first healthcheck. Record and wait for it; never accept a timed-out or
+    # persistently unhealthy service as a passing runtime snapshot.
+    return wait_for_health(probe)
+
+
 def runtime_snapshot(run, candidate):
     rows, ports = {}, {}
     ids = run.compose('ps', '-aq').split()
@@ -275,6 +306,7 @@ def execute(stage, approval):
             run.run(['docker', 'events', '--since', deploy_started, '--until', str(int(time.time()) + 1),
                      '--filter', 'type=container', '--filter', f'label=com.docker.compose.project={PROJECT}',
                      '--format', '{{json .}}'], 'deployment-container-events')
+        evidence['initial_health'] = wait_for_runtime(run)
         evidence['runtime_before_browser'] = runtime_snapshot(run, candidate)
         ledgers = json.loads((stage / 'expected-ledgers.json').read_text())
         evidence['ledgers'] = {}

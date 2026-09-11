@@ -6,7 +6,7 @@ import re
 import tempfile
 import unittest
 
-from release_acceptance import check_host, execute, minimal_browser_lock, pin_images, verify_image
+from release_acceptance import check_host, execute, minimal_browser_lock, pin_images, verify_image, wait_for_health
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -83,6 +83,22 @@ class ReleaseAcceptanceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 execute(Path(directory), 'existing-shared-lab')
             self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_health_waits_for_first_docker_probe_after_http_is_ready(self):
+        observations = iter([{'frontend': 'starting', 'api': 'healthy'},
+                             {'frontend': 'healthy', 'api': 'healthy'}])
+        pauses = []
+        self.assertEqual(wait_for_health(lambda: next(observations), clock=lambda: 0,
+                                         pause=pauses.append)['frontend'], 'healthy')
+        self.assertEqual(pauses, [2])
+
+    def test_health_timeout_and_empty_observations_cannot_pass(self):
+        ticks = iter([0, 0, 2])
+        with self.assertRaisesRegex(ValueError, 'runtime health timeout'):
+            wait_for_health(lambda: {'frontend': 'unhealthy'}, timeout=1,
+                            clock=lambda: next(ticks), pause=lambda seconds: None)
+        with self.assertRaisesRegex(ValueError, 'no running-service'):
+            wait_for_health(lambda: {}, clock=lambda: 0)
 
 
 if __name__ == '__main__':
