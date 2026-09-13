@@ -209,9 +209,12 @@ def source_loss(run, candidate, result):
 
 def restore(run, candidate, stage, handoff, source_loss_result, result):
     installer = BASELINE / 'install.sh'
-    require(not INSTALL.exists(), 'replacement host already has a deployment tree')
-    require(not run.run(['sh', '-c', 'command -v docker >/dev/null && docker ps -aq || true'], 'before-containers').strip(),
-            'replacement host already runs containers')
+    # The same blank-host guard the runtime milestone used: native Ubuntu 24.04
+    # AMD64, root in a systemd VM, and no deployment tree, CLI or container
+    # runtime. A populated original destination can never pass as a replacement.
+    result['before'] = runtime.host_facts()
+    runtime.check_host(result['before'])
+    run.run(['ss', '-lntup'], 'before-listeners', cwd=stage)
     files = {p.name: p for p in handoff.iterdir()}
     dumps = [n for n in files if n.endswith('.dump.gz')]
     configs = [n for n in files if n.startswith('vidra-config-')]
