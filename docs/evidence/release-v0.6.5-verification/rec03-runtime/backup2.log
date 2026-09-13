@@ -1,0 +1,13 @@
+[rec03 backup2 15:02:21] backup.sh at v0.6.5 (post-upgrade dump) + a post-backup marker write
+[backup] dumping database 'vidra' as 'vidra' from container fc449f1df9bb
+[backup] verifying archive
+[backup] wrote /opt/vidra/backups/vidra-20260913T150221Z.dump.gz (64K)
+[backup] wrote /opt/vidra/backups/vidra-config-20260913T150221Z.tar.gz (36K): env/production.env deploy/Caddyfile.local
+[backup] no off-site target configured (set BACKUP_RCLONE_REMOTE or BACKUP_S3_URI) — LOCAL COPY ONLY
+[backup] pruning: keeping 14 daily + 8 weekly
+[backup] nothing to prune among the database dumps
+[backup] nothing to prune among the config archives
+[backup] done — database vidra-20260913T150221Z.dump.gz, config vidra-config-20260913T150221Z.tar.gz
+[rec03 backup2 15:02:22] dump146=/opt/vidra/backups/vidra-20260913T150221Z.dump.gz exit=0
+[rec03 backup2 15:02:22] marker PATCH http=200
+users=1 channels=1 videos=1 titles=REC-03 fixture RENAMED after the 146 backup

@@ -1,0 +1,123 @@
+[rec03 restore-ok 15:03:14] restore.sh of the pre-upgrade dump under v0.6.5 pins — the documented forward path; the marker rename must be gone
+[restore] decompressing vidra-20260913T150102Z.dump.gz
+[restore] copying archive into the postgres container
+[restore] checking that the pinned images can reach this dump's schema
+[restore] core: dump schema 146 matches what VIDRA_CORE_TAG=v0.6.5 carries — nothing to apply.
+[restore] search: dump schema 18 matches what VIDRA_SEARCH_TAG=v0.6.5 carries — nothing to apply.
+[restore] stopping api, search and frontend
+ Container vidra-frontend-1 Stopping 
+ Container vidra-search-1 Stopping 
+ Container vidra-search-1 Stopped 
+ Container vidra-frontend-1 Stopped 
+ Container vidra-api-1 Stopping 
+ Container vidra-api-1 Stopped 
+[restore] dropping and recreating 'vidra'
+[restore] restoring with 4 parallel jobs
+[restore] running core migrations
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-run-8d998e1ede75 Creating 
+ Container vidra-migrate-run-8d998e1ede75 Created 
+{"time":"2026-09-13T15:03:23.195973167Z","level":"INFO","msg":"schema already up to date","version":146,"dirty":false}
+[restore] running search migrations
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-search-migrate-run-e8c1d9232f69 Creating 
+ Container vidra-search-migrate-run-e8c1d9232f69 Created 
+migrate up: version=18 dirty=false table=vidra_search_migrations
+[restore] verifying that the restored database's media is present
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Container vidra-postgres-1 Running 
+ Container vidra-redis-1 Running 
+ Container vidra-prep-volumes-1 Starting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Started 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-1 Starting 
+ Container vidra-migrate-1 Started 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-migrate-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-migrate-1 Exited 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-redis-1 Healthy 
+ Container vidra-api-run-e8166370a837 Creating 
+ Container vidra-api-run-e8166370a837 Created 
+media store (local disk): local:/app/data/media
+checked 8 referenced object(s) — existence only
+  present:        8
+  MISSING:        0
+  MISMATCHED:     0
+  known missing:  0 (rows the hash backfill already recorded as dangling)
+  unreadable:     0
+  skipped:        0 (streaming playlists whose transcode produced no master)
+
+consistent: every object the database references is in the store.
+[restore] media consistency: every object the restored database references is present
+[restore] starting api, search and frontend
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-user:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulled 
+ Image ghcr.io/yegamble/vidra-user:v0.6.5 Pulled 
+ Container vidra-postgres-1 Running 
+ Container vidra-redis-1 Running 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Starting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Started 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-search-migrate-1 Starting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-1 Starting 
+ Container vidra-search-migrate-1 Started 
+ Container vidra-search-migrate-1 Waiting 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-migrate-1 Started 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-migrate-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-search-migrate-1 Exited 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-redis-1 Healthy 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-search-1 Starting 
+ Container vidra-search-1 Started 
+ Container vidra-migrate-1 Exited 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-redis-1 Healthy 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-api-1 Starting 
+ Container vidra-api-1 Started 
+ Container vidra-api-1 Waiting 
+ Container vidra-api-1 Healthy 
+ Container vidra-frontend-1 Starting 
+ Container vidra-frontend-1 Started 
+[restore] waiting up to 120s for http://127.0.0.1:8080/readyz
+[restore] restore complete; /readyz is 200
+[rec03 restore-ok 15:03:38] restore.sh exit=0
+vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.5;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.5;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.5;core=146:false search=18:false
+instance=200 healthz=200 site=200 watch=200
+orig=8ff2dfde3770360f master=72e2bc264737003b renditions=720,480,360 variant=cmaf/media_0.m3u8?v=dlea0wp55qvs seg=chunk-0-00001.m4s?v=dlea0wp55qvs segsha=84f5c71f3af6f316 state=published
+users=1 channels=1 videos=1 titles=REC-03 fixture v0.6.3

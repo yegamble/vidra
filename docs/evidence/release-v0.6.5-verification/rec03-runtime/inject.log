@@ -1,0 +1,6 @@
+[rec03 inject 15:00:01] inject: mark the core ledger DIRTY at its current version (this pair ships no new migration, so the failure the migrator must refuse is a dirty ledger)
+UPDATE 1
+core=146:true search=18:false
+[rec03 inject 15:01:03] inject: mark the core ledger DIRTY at its current version (this pair ships no new migration, so the failure the migrator must refuse is a dirty ledger)
+UPDATE 1
+core=146:true search=18:false

@@ -28,19 +28,26 @@ step). Nothing is deployed on it; beta stays on v0.6.4.
   libdovi 3.3.2 crate advisories (no Alpine v3.24 fix — owner risk decision),
   a glib false positive, and a new pytest advisory in vidra-search's
   `training/uv.lock` that is not shipped in any image.
-- **Runtime acceptance: NOT RUN on the v0.6.5 digests.** Every workflow row
-  except the security facet keeps the v0.6.4 disposition's UNVERIFIED /
-  BLOCKED state for this candidate. What carries over as evidence for the
-  mechanism, not for this candidate: REC-03 PASS on the published v0.6.3 →
-  v0.6.4 images (section below, meta#194).
-- **Next executable, in order:** (1) REC-03 on the v0.6.4 → v0.6.5 pair on a
-  rebuilt disposable host — this pair ships no new migration, so the injected
-  failure is a dirty ledger, and the upgrade path is the README's one-time
-  tree move plus `pin-release.sh v0.6.5`, i.e. exactly beta's procedure
-  (driver: `tests/rec03-upgrade-rollback.sh` with the release pair overridden);
-  (2) the A02/A03 runtime acceptance harness on a blank host against the
-  frozen manifest; (3) the migration, B2 and recovery drills on the digests;
-  (4) the owner inputs B2/B3/B4 and the remaining OPS-01 clauses.
+- **REC-03: PASS on the published v0.6.4 → v0.6.5 images**
+  ([record](runtime-acceptance-rec03-v0.6.5.md), evidence
+  `docs/evidence/release-v0.6.5-verification/rec03-runtime/`): on a host the
+  operator rebuilt blank at 14:51 UTC, v0.6.4 installed with data, then the
+  exact beta procedure — the README's one-time tree move and
+  `pin-release.sh v0.6.5` (snapshot first, exit 0) — and `deploy.sh`, whose
+  new release-mapping preflight warned for the tree's own release and
+  continued; a dirty ledger at 146 made the v0.6.5 migrator refuse at 3/6 with
+  v0.6.4 still serving; `migrate force 146 --yes-i-know` recovered it; the
+  app-only rollback to v0.6.4 kept every fingerprint; the forward restore of
+  the pre-upgrade dump under v0.6.5 reloaded with 8/8 media objects; the split
+  topology deployed and its worker did the transcode. The ahead-of-binary
+  restore refusal has no input for this pair (same schema) and stands on the
+  v0.6.3 → v0.6.4 run. OPS-01 stays UNVERIFIED (subset recorded).
+- **Everything else: NOT RUN on the v0.6.5 digests.** Every other workflow row
+  keeps the v0.6.4 disposition's UNVERIFIED / BLOCKED state for this candidate.
+- **Next executable, in order:** (1) the A02/A03 runtime acceptance harness on
+  a blank host against the frozen manifest; (2) the migration, B2 and recovery
+  drills on the digests; (3) the owner inputs B2/B3/B4 and the remaining OPS-01
+  clauses.
 
 ## REC-03 / A38 on published v0.6.4 — 2026-09-13
 

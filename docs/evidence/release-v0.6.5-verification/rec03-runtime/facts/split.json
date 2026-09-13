@@ -1,0 +1,9 @@
+{
+ "deploy_exit": "0",
+ "images": "vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.5;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.5;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.5;",
+ "video2_state": "published",
+ "probe": "instance=200 healthz=200 site=200 watch=200",
+ "counts": "users=1 channels=1 videos=2 titles=REC-03 fixture v0.6.3|REC-03 split-topology upload",
+ "api_ffmpeg_mentions": "3",
+ "workers": "1"
+}

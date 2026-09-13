@@ -1,0 +1,6 @@
+{
+ "backup_exit": "0",
+ "dump146": "/opt/vidra/backups/vidra-20260913T150221Z.dump.gz",
+ "marker_http": "200",
+ "counts": "users=1 channels=1 videos=1 titles=REC-03 fixture RENAMED after the 146 backup"
+}

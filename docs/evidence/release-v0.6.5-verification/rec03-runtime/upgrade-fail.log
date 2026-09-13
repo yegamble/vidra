@@ -1,0 +1,179 @@
+[rec03 upgrade-fail 15:01:07] README procedure for a pre-v0.6.5 tree: one-time move to v0.6.5 as the deploy user, then pin-release.sh v0.6.5
+v0.6.5
+[pin] fetching tags from origin
+[pin] env snapshot: /home/vidra/.local/state/vidra/env-history/production.env.l1y5yqbp
+[pin] checking out v0.6.5
+[pin] checkout: v0.6.5
+[pin] set VIDRA_CORE_TAG=v0.6.5
+[pin] set VIDRA_USER_TAG=v0.6.5
+[pin] set VIDRA_SEARCH_TAG=v0.6.5
+[pin] pinned v0.6.5: core=v0.6.5 user=v0.6.5 search=v0.6.5
+[pin] next: ./deploy/deploy.sh
+[rec03 upgrade-fail 15:01:07] pin-release.sh exit=0
+fatal: detected dubious ownership in repository at '/opt/vidra'
+To add an exception for this directory, call:
+
+	git config --global --add safe.directory /opt/vidra
+VIDRA_CORE_TAG=v0.6.5
+VIDRA_USER_TAG=v0.6.5
+VIDRA_SEARCH_TAG=v0.6.5
+[rec03 upgrade-fail 15:01:07] deploy.sh (expected: abort at 3/6 migrations, no restart)
+
+[deploy] ===== 0/6 pre-flight =====
+[deploy] VIDRA_TLS_MODE=internal — Caddy issues from its own CA, skipping the DNS preflight
+[deploy] compose 5.5.1, VIDRA_TLS_MODE=internal serving rec03.video.test, migrator tags >= v0.2.0
+[release-mapping] WARNING: core=v0.6.5 user=v0.6.5 search=v0.6.5 is newer than every record in releases/ (newest: v0.6.4), and releases/v0.6.5.json is not in this tree. It is this tree's own release: deploy/release.sh tags this repository before any image exists, so a tree at v0.6.5 cannot carry v0.6.5's record. NOT verified: that these three images were released together, and their digests. Only the tag strings were compared; a tag that does not exist still fails the checkout sync or the pull. This gap closes when the record ships inside the release artifact.
+[deploy] release mapping NOT verified (WARNING above) — continuing
+[deploy] syncing vidra-core to v0.6.5
+[deploy] syncing vidra-search to v0.6.5
+[deploy] syncing vidra-user to v0.6.5
+[deploy] tags: core=v0.6.5 user=v0.6.5 search=v0.6.5
+
+[deploy] ===== 1/6 pre-deploy database dump =====
+[deploy] wrote /opt/vidra/backups/pre-deploy-2026-09-13T150110.dump.gz (60K)
+
+[deploy] ===== 2/6 pull images =====
+ Image alpine:3.24 Pulling 
+ Image postgres:18-alpine Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image redis:8-alpine Pulling 
+ Image ghcr.io/yegamble/vidra-user:v0.6.5 Pulling 
+ Image caddy:2.11.4-alpine Pulling 
+ 44136fa355b3 Already exists 0B
+ bc3f406b364a Pulling fs layer 0B
+ fb6f9385109f Pulling fs layer 0B
+ 517571c0adb7 Pulling fs layer 0B
+ 0b073f9e1cc8 Pulling fs layer 0B
+ f4500254aff0 Pulling fs layer 0B
+ 6be06a402db5 Pulling fs layer 0B
+ fa49b6a7e2f1 Pulling fs layer 0B
+ 44136fa355b3 Already exists 0B
+ 44136fa355b3 Already exists 0B
+ 5c264b7f5823 Downloading 27.43kB
+ 517571c0adb7 Download complete 0B
+ b0f640d0c830 Downloading 32.6kB
+ 5c264b7f5823 Download complete 0B
+ bc3f406b364a Downloading 5.243MB
+ fb6f9385109f Downloading 1.049MB
+ 3bad8b262de9 Pulling fs layer 0B
+ 60487f982111 Pulling fs layer 0B
+ 0effd32cc8c3 Pulling fs layer 0B
+ 63b13c46d908 Pulling fs layer 0B
+ fb7fc3f2aa8c Pulling fs layer 0B
+ c7377b742b80 Downloading 31.14kB
+ b0f640d0c830 Download complete 0B
+ bc3f406b364a Download complete 0B
+ c7377b742b80 Download complete 0B
+ fa49b6a7e2f1 Downloading 2.097MB
+ fb6f9385109f Download complete 0B
+ fb6f9385109f Extracting 1B
+ Image alpine:3.24 Pulled 
+ Image caddy:2.11.4-alpine Pulled 
+ 6be06a402db5 Downloading 3.146MB
+ 0b073f9e1cc8 Download complete 0B
+ f4500254aff0 Downloading 5.243MB
+ fa49b6a7e2f1 Downloading 8.389MB
+ fb6f9385109f Extracting 1B
+ 6be06a402db5 Downloading 8.389MB
+ f4500254aff0 Downloading 10.49MB
+ fa49b6a7e2f1 Downloading 13.63MB
+ fb6f9385109f Extracting 1B
+ 6be06a402db5 Downloading 12.58MB
+ f4500254aff0 Downloading 17.4MB
+ fa49b6a7e2f1 Downloading 20.97MB
+ 517571c0adb7 Extracting 1B
+ fb6f9385109f Pull complete 0B
+ 6be06a402db5 Download complete 0B
+ f4500254aff0 Download complete 0B
+ fa49b6a7e2f1 Downloading 25.17MB
+ 517571c0adb7 Pull complete 0B
+ fa49b6a7e2f1 Downloading 32.51MB
+ 3bad8b262de9 Download complete 0B
+ bc3f406b364a Extracting 1B
+ Image redis:8-alpine Pulled 
+ Image postgres:18-alpine Pulled 
+ 60487f982111 Download complete 0B
+ 63b13c46d908 Downloading 5.321MB
+ fa49b6a7e2f1 Downloading 39.85MB
+ bc3f406b364a Extracting 1B
+ 0effd32cc8c3 Download complete 0B
+ 63b13c46d908 Downloading 13.63MB
+ fb7fc3f2aa8c Download complete 0B
+ fa49b6a7e2f1 Downloading 48.23MB
+ bc3f406b364a Extracting 1B
+ fb7fc3f2aa8c Pull complete 0B
+ fa49b6a7e2f1 Downloading 55.75MB
+ 63b13c46d908 Download complete 0B
+ 60487f982111 Extracting 1B
+ fa49b6a7e2f1 Downloading 55.75MB
+ bc3f406b364a Pull complete 0B
+ 60487f982111 Extracting 1B
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulled 
+ fa49b6a7e2f1 Download complete 0B
+ 60487f982111 Pull complete 0B
+ 0effd32cc8c3 Pull complete 0B
+ 63b13c46d908 Extracting 1B
+ fa49b6a7e2f1 Extracting 1B
+ 63b13c46d908 Extracting 1B
+ fa49b6a7e2f1 Extracting 1B
+ 63b13c46d908 Extracting 1B
+ fa49b6a7e2f1 Extracting 1B
+ 63b13c46d908 Extracting 1B
+ fa49b6a7e2f1 Extracting 1B
+ 63b13c46d908 Extracting 1B
+ fa49b6a7e2f1 Extracting 1B
+ 63b13c46d908 Extracting 1B
+ fa49b6a7e2f1 Extracting 1B
+ 63b13c46d908 Extracting 1B
+ fa49b6a7e2f1 Extracting 1B
+ 63b13c46d908 Extracting 1B
+ fa49b6a7e2f1 Extracting 1B
+ 63b13c46d908 Extracting 1B
+ fa49b6a7e2f1 Extracting 1B
+ 63b13c46d908 Extracting 1B
+ fa49b6a7e2f1 Extracting 1B
+ 63b13c46d908 Extracting 1B
+ fa49b6a7e2f1 Extracting 2B
+ 63b13c46d908 Extracting 2B
+ fa49b6a7e2f1 Extracting 2B
+ 3bad8b262de9 Extracting 1B
+ 63b13c46d908 Pull complete 0B
+ fa49b6a7e2f1 Extracting 2B
+ 3bad8b262de9 Pull complete 0B
+ Image ghcr.io/yegamble/vidra-user:v0.6.5 Pulled 
+ fa49b6a7e2f1 Extracting 2B
+ fa49b6a7e2f1 Extracting 2B
+ f4500254aff0 Extracting 1B
+ fa49b6a7e2f1 Pull complete 0B
+ f4500254aff0 Extracting 1B
+ f4500254aff0 Extracting 1B
+ f4500254aff0 Extracting 1B
+ f4500254aff0 Extracting 1B
+ f4500254aff0 Extracting 1B
+ f4500254aff0 Extracting 1B
+ 0b073f9e1cc8 Pull complete 0B
+ f4500254aff0 Pull complete 0B
+ 6be06a402db5 Extracting 1B
+ 6be06a402db5 Extracting 1B
+ 6be06a402db5 Extracting 1B
+ 6be06a402db5 Extracting 1B
+ 6be06a402db5 Pull complete 0B
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+
+[deploy] ===== 3/6 migrations =====
+[deploy] core schema (schema_migrations)
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-run-f64ed81272d2 Creating 
+ Container vidra-migrate-run-f64ed81272d2 Created 
+{"time":"2026-09-13T15:01:19.371449335Z","level":"ERROR","msg":"migrate failed","error":"dbmigrate: apply migrations: Dirty database version 146. Fix and force version."}
+
+[deploy] ERROR: CORE MIGRATION FAILED (exit 1). The stack has NOT been restarted; the previous release is still serving. See 'Migration failed mid-deploy' in deploy/README.md.
+[rec03 upgrade-fail 15:01:19] deploy.sh exit=1
+vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.4;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.4;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.4;core=146:true search=18:false
+instance=200 healthz=200 site=200 watch=200
+orig=8ff2dfde3770360f master=72e2bc264737003b renditions=720,480,360 variant=cmaf/media_0.m3u8?v=dlea0wp55qvs seg=chunk-0-00001.m4s?v=dlea0wp55qvs segsha=84f5c71f3af6f316 state=published

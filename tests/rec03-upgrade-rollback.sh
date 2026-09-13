@@ -2,6 +2,9 @@
 # REC-03 / A38 drill driver — runs ON the disposable host as root:
 #   ssh root@HOST 'bash -s -- <phase>' < rec03.sh
 # Phases: install | data | fp <label> | backup | inject | upgrade-fail | recover | backup2 | rollback | restore-refuse | repin | restore-ok | split | report
+# Release pair and variant: REC03_OLD / REC03_NEW (default v0.6.3 / v0.6.4); REC03_INJECT=column|dirty (a pair with no new
+# migration cannot conflict on a column, so inject a dirty ledger); REC03_SAME_SCHEMA=1 skips the refusal phase that needs
+# a dump ahead of the pinned binary. The v0.6.4 -> v0.6.5 run used REC03_OLD=v0.6.4 REC03_NEW=v0.6.5 REC03_INJECT=dirty REC03_SAME_SCHEMA=1.
 # Every phase appends to /root/rec03/<phase>.log and writes facts to /root/rec03/facts/<phase>.json.
 # Deliberately no `set -e`: a phase's whole point is to capture a non-zero exit
 # (a refused deploy, a refused restore) as a fact rather than to stop on it.
@@ -11,7 +14,7 @@ R=/root/rec03; mkdir -p "$R/facts"; F="$R/facts/$PHASE.json"
 DOMAIN=rec03.video.test
 API=http://127.0.0.1:8080/api/v1
 DIR=/opt/vidra
-OLD=v0.6.3; NEW=v0.6.4
+OLD="${REC03_OLD:-v0.6.3}"; NEW="${REC03_NEW:-v0.6.4}"   # override per candidate, e.g. REC03_OLD=v0.6.4 REC03_NEW=v0.6.5
 exec > >(tee -a "$R/$PHASE.log") 2>&1
 log() { printf '[rec03 %s %s] %s\n' "$PHASE" "$(date -u +%H:%M:%S)" "$*"; }
 asv() { su - vidra -c "cd $DIR && VIDRA_SKIP_DNS_PREFLIGHT=1 $*"; }   # run as the checkout owner
@@ -49,15 +52,16 @@ install)
   [ -e "$DIR" ] && { log "$DIR exists — not blank"; exit 1; }
   grep -q "$DOMAIN" /etc/hosts || echo "127.0.0.1 $DOMAIN" >> /etc/hosts
   log "released installer $OLD (git path)"
-  curl -fsSL "https://raw.githubusercontent.com/yegamble/vidra/$OLD/install.sh" -o /root/install-$OLD.sh
-  sha256sum /root/install-$OLD.sh
-  sh /root/install-$OLD.sh --git --ref $OLD --yes </dev/null; rc=$?; log "install.sh exit=$rc"
+  curl -fsSL "https://raw.githubusercontent.com/yegamble/vidra/$OLD/install.sh" -o "/root/install-$OLD.sh"
+  sha256sum "/root/install-$OLD.sh"
+  sh "/root/install-$OLD.sh" --git --ref "$OLD" --yes </dev/null; rc=$?; log "install.sh exit=$rc"
   vidra --help 2>&1 | head -2; find "$DIR" -maxdepth 1 -mindepth 1 | sort | head; git -C "$DIR" describe --tags --always; for c in vidra-core vidra-user vidra-search; do echo "$c $(git -C $DIR/$c describe --tags --always)"; done
   log "vidra setup --non-interactive"
-  ( cd $DIR && vidra setup --non-interactive --yes --domain $DOMAIN --instance-name "REC-03 drill" --registration closed --tls-mode internal --storage local --scan=false --release-tag $OLD --template env/production.env.example ); log "setup exit=$?"
+  ( cd $DIR && vidra setup --non-interactive --yes --domain $DOMAIN --instance-name "REC-03 drill" --registration closed --tls-mode internal --storage local --scan=false --release-tag "$OLD" --template env/production.env.example ); log "setup exit=$?"
   ( cd $DIR && vidra setup --check env/production.env ); log "setup --check exit=$?"
   grep -E '^(VIDRA_[A-Z_]*TAG|VIDRA_TLS_MODE|VIDRA_COMPOSE_PROFILES|STORAGE_BACKEND|MALWARE_SCAN_MODE|HTTP_PORT|PUBLIC_BASE_URL)=' $DIR/env/production.env || true
-  grep -q '^MALWARE_SCAN_MODE=' $DIR/env/production.env || echo 'MALWARE_SCAN_MODE=disabled' >> $DIR/env/production.env   # beta posture: scan disabled explicitly
+  python3 "$(dirname "$0")/rec03-envfix.py" 2>/dev/null || python3 /root/rec03-envfix.py   # F2: setup --scan=false leaves CLAMAV_ADDR + fail-closed; apply beta's posture before the first deploy
+  grep -nE '^MALWARE_SCAN_MODE=|CLAMAV_ADDR unset' "$DIR/env/production.env"
   log "provision.sh --yes (vidra user, chown, docker group)"
   ( cd $DIR && ./deploy/provision.sh --yes ); log "provision exit=$?"
   id vidra; stat -c '%U %n' $DIR $DIR/env/production.env
@@ -68,7 +72,7 @@ install)
   ;;
 data)
   log "fixture via the api image's ffmpeg"; mkdir -p $R/fx; chmod 777 $R/fx
-  docker run --rm --entrypoint ffmpeg -v $R/fx:/out ghcr.io/yegamble/vidra-core:$OLD -y -loglevel error -f lavfi -i testsrc2=duration=12:size=1280x720:rate=25 -f lavfi -i sine=frequency=440:duration=12 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest /out/fixture.mp4
+  docker run --rm --entrypoint ffmpeg -v $R/fx:/out "ghcr.io/yegamble/vidra-core:$OLD" -y -loglevel error -f lavfi -i testsrc2=duration=12:size=1280x720:rate=25 -f lavfi -i sine=frequency=440:duration=12 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest /out/fixture.mp4
   ls -la $R/fx/fixture.mp4; sha256sum $R/fx/fixture.mp4 | tee $R/fixture.sha
   log "owner claim"
   tok="$(su - vidra -c "cd $DIR && ./deploy/compose.sh logs --no-color api" | grep -oE 'owner_claim_required until claimed\): [A-Za-z0-9_-]+' | tail -1 | awk '{print $NF}')"
@@ -88,19 +92,31 @@ fp)
   facts "fp=$(cat "$R/fp.$2")" "counts=$(counts)" "ledger=$(ledger)" "probe=$(probe)"
   ;;
 backup)
-  log "backup.sh at $OLD (schema 144 dump)"; asv ./deploy/backup.sh; rc=$?; find "$DIR/backups" -maxdepth 1 -type f -newer "$R/fixture.sha" | sort
+  log "backup.sh at $OLD (pre-upgrade dump)"; asv ./deploy/backup.sh; rc=$?; find "$DIR/backups" -maxdepth 1 -type f -newer "$R/fixture.sha" | sort
   d=$(find "$DIR/backups" -maxdepth 1 -name "vidra-*.dump.gz" -newer "$R/fixture.sha" | sort | tail -1); echo "$d" > "$R/dump144"; log "dump144=$d exit=$rc"
   facts "backup_exit=$rc" "dump144=$d"
   ;;
 inject)
-  log "inject: pre-create the column migration 0145 adds (ALTER TABLE ... ADD COLUMN paused_reason has no IF NOT EXISTS)"
-  psq "ALTER TABLE storage_migrations ADD COLUMN paused_reason TEXT NOT NULL DEFAULT ''"; ledger
-  facts injected=paused_reason "ledger=$(ledger)"
+  if [ "${REC03_INJECT:-column}" = dirty ]; then
+    log "inject: mark the core ledger DIRTY at its current version (this pair ships no new migration, so the failure the migrator must refuse is a dirty ledger)"
+    psq "UPDATE schema_migrations SET dirty = true"; ledger
+    facts injected=dirty_ledger "ledger=$(ledger)"
+  else
+    log "inject: pre-create the column migration 0145 adds (ALTER TABLE ... ADD COLUMN paused_reason has no IF NOT EXISTS)"
+    psq "ALTER TABLE storage_migrations ADD COLUMN paused_reason TEXT NOT NULL DEFAULT ''"; ledger
+    facts injected=paused_reason "ledger=$(ledger)"
+  fi
   ;;
 upgrade-fail)
-  log "tree -> origin/main (to obtain pin-release.sh), then pin-release.sh $NEW"
-  su - vidra -c "git -C $DIR fetch --tags --force origin && git -C $DIR checkout --detach --quiet origin/main && git -C $DIR describe --tags --always"
-  asv ./deploy/pin-release.sh $NEW; prc=$?; log "pin-release.sh exit=$prc"; git -C $DIR describe --tags --always; grep -E '^VIDRA_[A-Z_]*TAG=' $DIR/env/production.env
+  su - vidra -c "git -C $DIR fetch --tags --force origin"
+  if su - vidra -c "git -C $DIR cat-file -e $NEW:deploy/pin-release.sh" 2>/dev/null; then
+    log "README procedure for a pre-v0.6.5 tree: one-time move to $NEW as the deploy user, then pin-release.sh $NEW"
+    su - vidra -c "git -C $DIR checkout --detach --quiet $NEW && git -C $DIR describe --tags --always"
+  else
+    log "tree -> origin/main (to obtain pin-release.sh), then pin-release.sh $NEW"
+    su - vidra -c "git -C $DIR checkout --detach --quiet origin/main && git -C $DIR describe --tags --always"
+  fi
+  asv ./deploy/pin-release.sh "$NEW"; prc=$?; log "pin-release.sh exit=$prc"; su - vidra -c "git -C $DIR describe --tags --always"; grep -E '^VIDRA_[A-Z_]*TAG=' $DIR/env/production.env
   if [ $prc -ne 0 ]; then
     log "pin-release.sh failed — falling back to the v0.6.4-era runbook: tree at tag + rewrite pins as vidra"
     su - vidra -c "git -C $DIR checkout --detach --quiet $NEW && cd $DIR && python3 - <<'PY'
@@ -119,26 +135,32 @@ PY"
 recover)
   log "runbook: migrate version, undo partial effect, force N-1, rerun"
   asv "./deploy/compose.sh run --rm migrate migrate version"
-  psq "ALTER TABLE storage_migrations DROP COLUMN paused_reason"
-  asv "./deploy/compose.sh run --rm migrate migrate force 144 --yes-i-know"; log "force exit=$?"
+  if [ "${REC03_INJECT:-column}" = dirty ]; then
+    cur=$(psq "SELECT version FROM schema_migrations"); log "dirty at $cur: nothing partial to undo; force the ledger clean at the SAME version"
+    asv "./deploy/compose.sh run --rm migrate migrate force $cur --yes-i-know"; log "force exit=$?"
+  else
+    psq "ALTER TABLE storage_migrations DROP COLUMN paused_reason"
+    asv "./deploy/compose.sh run --rm migrate migrate force 144 --yes-i-know"; log "force exit=$?"
+  fi
   asv ./deploy/deploy.sh; rc=$?; log "deploy.sh exit=$rc"
   imgs; ledger; probe; fingerprint | tee $R/fp.recover; counts
   facts deploy_exit=$rc "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)" "fp=$(cat $R/fp.recover)" "counts=$(counts)"
   ;;
 backup2)
-  log "backup.sh at $NEW (schema 146 dump) + a post-backup marker write"
+  log "backup.sh at $NEW (post-upgrade dump) + a post-backup marker write"
   asv ./deploy/backup.sh; rc=$?; d=$(find "$DIR/backups" -maxdepth 1 -name "vidra-*.dump.gz" -newer "$(cat "$R/dump144")" | sort | tail -1); echo "$d" > "$R/dump146"; log "dump146=$d exit=$rc"
   t="$(token)"; vid=$(cat $R/video_id)
   code=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH "$API/videos/$vid" -H "Authorization: Bearer $t" -H 'content-type: application/json' -d '{"title":"REC-03 fixture RENAMED after the 146 backup"}'); log "marker PATCH http=$code"; counts
   facts "backup_exit=$rc" "dump146=$d" "marker_http=$code" "counts=$(counts)"
   ;;
 rollback)
-  log "rollback.sh $OLD (app-only, schema stays 146)"; asv ./deploy/rollback.sh $OLD; rc=$?; log "rollback.sh exit=$rc"
+  log "rollback.sh $OLD (app-only; the schema stays where the upgrade left it)"; asv ./deploy/rollback.sh "$OLD"; rc=$?; log "rollback.sh exit=$rc"
   imgs; ledger; probe; fingerprint | tee $R/fp.rollback; counts; grep -E '^VIDRA_[A-Z_]*TAG=' $DIR/env/production.env
   facts rollback_exit=$rc "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)" "fp=$(cat $R/fp.rollback)" "counts=$(counts)"
   ;;
 restore-refuse)
-  log "restore.sh of the 146 dump under $OLD pins — expected refusal BEFORE dropdb"; before="$(counts)"
+  if [ "${REC03_SAME_SCHEMA:-0}" = 1 ]; then log "not applicable: $OLD and $NEW carry the same schema, so no dump can be ahead of the pinned binary"; facts not_applicable=same_schema; exit 0; fi
+  log "restore.sh of the newer-schema dump under $OLD pins — expected refusal BEFORE dropdb"; before="$(counts)"
   asv "./deploy/restore.sh --yes $(cat $R/dump146)"; rc=$?; log "restore.sh exit=$rc"
   imgs; ledger; probe; after="$(counts)"; if [ "$before" = "$after" ]; then log "counts unchanged"; else log "COUNTS CHANGED: $before -> $after"; fi
   facts restore_exit=$rc "counts_before=$before" "counts_after=$after" "ledger=$(ledger)" "probe=$(probe)"
@@ -156,7 +178,7 @@ PY"
   facts deploy_exit=$rc "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)"
   ;;
 restore-ok)
-  log "restore.sh of the 144 dump under $NEW pins — supported: reload then migrate up to 146; the marker rename must be gone"
+  log "restore.sh of the pre-upgrade dump under $NEW pins — the documented forward path; the marker rename must be gone"
   asv "./deploy/restore.sh --yes $(cat $R/dump144)"; rc=$?; log "restore.sh exit=$rc"
   imgs; ledger; probe; fingerprint | tee $R/fp.restore; counts
   facts restore_exit=$rc "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)" "fp=$(cat $R/fp.restore)" "counts=$(counts)"

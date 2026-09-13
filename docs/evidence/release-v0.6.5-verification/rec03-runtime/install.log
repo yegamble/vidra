@@ -1,0 +1,1176 @@
+[rec03 install 14:57:29] blank-host check
+[rec03 install 14:57:29] released installer v0.6.4 (git path)
+6b7a6152015dd404c2d3b8410a1de70a8911ecad0a68e468aed9bb92c0572674  /root/install-v0.6.4.sh
+
+[install] ===== 1/7 platform =====
+[install] linux/amd64
+
+[install] ===== 2/7 privileges =====
+[install] running as root
+
+[install] ===== 3/7 what is already here =====
+[install] curl: present
+[install] git: present
+[install] docker: MISSING - will install Docker Engine + the Compose plugin from Docker's own apt repository
+[install] /opt/vidra: will be created
+[install] release: v0.6.4 (pinned with --ref)
+[install] --yes given - not prompting.
+
+[install] ===== 4/7 docker and curl =====
+[install] adding Docker's apt repository for ubuntu noble
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 75067 files and directories currently installed.)
+Preparing to unpack .../curl_8.5.0-2ubuntu10.13_amd64.deb ...
+Unpacking curl (8.5.0-2ubuntu10.13) over (8.5.0-2ubuntu10.9) ...
+Preparing to unpack .../libcurl4t64_8.5.0-2ubuntu10.13_amd64.deb ...
+Unpacking libcurl4t64:amd64 (8.5.0-2ubuntu10.13) over (8.5.0-2ubuntu10.9) ...
+Preparing to unpack .../libcurl3t64-gnutls_8.5.0-2ubuntu10.13_amd64.deb ...
+Unpacking libcurl3t64-gnutls:amd64 (8.5.0-2ubuntu10.13) over (8.5.0-2ubuntu10.9) ...
+Setting up libcurl4t64:amd64 (8.5.0-2ubuntu10.13) ...
+Setting up libcurl3t64-gnutls:amd64 (8.5.0-2ubuntu10.13) ...
+Setting up curl (8.5.0-2ubuntu10.13) ...
+Processing triggers for man-db (2.12.0-4build2) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.7) ...
+
+Running kernel seems to be up-to-date.
+
+Restarting services...
+ systemctl restart packagekit.service
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+[install] installing Docker Engine and the Compose plugin
+Selecting previously unselected package containerd.io.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 75067 files and directories currently installed.)
+Preparing to unpack .../0-containerd.io_2.3.5-1~ubuntu.24.04~noble_amd64.deb ...
+Unpacking containerd.io (2.3.5-1~ubuntu.24.04~noble) ...
+Selecting previously unselected package docker-ce-cli.
+Preparing to unpack .../1-docker-ce-cli_5%3a29.8.0-1~ubuntu.24.04~noble_amd64.deb ...
+Unpacking docker-ce-cli (5:29.8.0-1~ubuntu.24.04~noble) ...
+Selecting previously unselected package docker-ce.
+Preparing to unpack .../2-docker-ce_5%3a29.8.0-1~ubuntu.24.04~noble_amd64.deb ...
+Unpacking docker-ce (5:29.8.0-1~ubuntu.24.04~noble) ...
+Selecting previously unselected package pigz.
+Preparing to unpack .../3-pigz_2.8-1_amd64.deb ...
+Unpacking pigz (2.8-1) ...
+Selecting previously unselected package docker-buildx-plugin.
+Preparing to unpack .../4-docker-buildx-plugin_0.37.1-1~ubuntu.24.04~noble_amd64.deb ...
+Unpacking docker-buildx-plugin (0.37.1-1~ubuntu.24.04~noble) ...
+Selecting previously unselected package docker-ce-rootless-extras.
+Preparing to unpack .../5-docker-ce-rootless-extras_5%3a29.8.0-1~ubuntu.24.04~noble_amd64.deb ...
+Unpacking docker-ce-rootless-extras (5:29.8.0-1~ubuntu.24.04~noble) ...
+Selecting previously unselected package docker-compose-plugin.
+Preparing to unpack .../6-docker-compose-plugin_5.5.1-1~ubuntu.24.04~noble_amd64.deb ...
+Unpacking docker-compose-plugin (5.5.1-1~ubuntu.24.04~noble) ...
+Setting up docker-buildx-plugin (0.37.1-1~ubuntu.24.04~noble) ...
+Setting up containerd.io (2.3.5-1~ubuntu.24.04~noble) ...
+Created symlink /etc/systemd/system/multi-user.target.wants/containerd.service → /usr/lib/systemd/system/containerd.service.
+Setting up docker-compose-plugin (5.5.1-1~ubuntu.24.04~noble) ...
+Setting up docker-ce-cli (5:29.8.0-1~ubuntu.24.04~noble) ...
+Setting up pigz (2.8-1) ...
+Setting up docker-ce-rootless-extras (5:29.8.0-1~ubuntu.24.04~noble) ...
+Setting up docker-ce (5:29.8.0-1~ubuntu.24.04~noble) ...
+Created symlink /etc/systemd/system/multi-user.target.wants/docker.service → /usr/lib/systemd/system/docker.service.
+Created symlink /etc/systemd/system/sockets.target.wants/docker.socket → /usr/lib/systemd/system/docker.socket.
+Processing triggers for man-db (2.12.0-4build2) ...
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+Synchronizing state of docker.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+Executing: /usr/lib/systemd/systemd-sysv-install enable docker
+[install] docker compose 5.5.1
+
+[install] ===== 5/7 the deployment tree =====
+[install] --git given - cloning instead of unpacking the release bundle.
+[install] cloning yegamble/vidra into /opt/vidra
+Cloning into '/opt/vidra'...
+[install] bootstrapping the component checkouts at v0.6.4
+==> cloning vidra-core
+Cloning into 'vidra-core'...
+==> pinning vidra-core to v0.6.4
+HEAD is now at ed55a6d [codex] federation: sign with imported PeerTube PKCS1 keys (#231)
+==> cloning vidra-user
+Cloning into 'vidra-user'...
+==> pinning vidra-user to v0.6.4
+HEAD is now at e584069 [claude] player: app-rendered captions that stay above the controls (#216)
+==> cloning vidra-search
+Cloning into 'vidra-search'...
+==> pinning vidra-search to v0.6.4
+HEAD is now at 1f8b854 [claude] A39: CI gates — supported toolchain, exact manifest, zero silent skips (#41)
+
+Done. Next:
+  docker compose --profile core up --build                         # backend + search on http://localhost:8080 (search :8081)
+  cd vidra-user && npm ci && NEXT_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
+
+[install] ===== 6/7 the vidra CLI =====
+[install] downloading vidra_v0.6.4_linux_amd64
+[install] checksum verified: vidra_v0.6.4_linux_amd64
+[install] installed /usr/local/bin/vidra (v0.6.4)
+
+[install] ===== 7/7 setup =====
+[install] env/production.env is git-ignored, by this rule:
+.gitignore:44:env/*	env/production.env
+
+[install] The deployment tree and the CLI are installed, but the setup interview
+needs a terminal and there is none here (no /dev/tty). It is not skipped - it is
+yours to run, either way:
+
+  On a terminal:
+      cd /opt/vidra && vidra setup --template env/production.env.example
+
+  Unattended, with the answers as flags:
+      cd /opt/vidra && vidra setup --template env/production.env.example \
+          --non-interactive \
+          --domain video.example.org --instance-name "Example Video" \
+          --registration closed --tls-mode acme --acme-email you@example.org \
+          --storage local
+
+  Or from an answers file ("flag-name = value" lines, no dashes):
+      cd /opt/vidra && vidra setup --template env/production.env.example \
+          --non-interactive --answers answers.txt
+
+  'vidra setup -h' lists every flag, including the @file / $VIDRA_SETUP_*
+  indirections that keep secrets out of argv (and out of your shell history).
+
+[rec03 install 14:58:24] install.sh exit=0
+vidra — operator CLI for a Vidra deployment
+
+/opt/vidra/AGENTS.md
+/opt/vidra/bootstrap.sh
+/opt/vidra/.claude
+/opt/vidra/CLAUDE.md
+/opt/vidra/deploy
+/opt/vidra/docker-compose.dev.yml
+/opt/vidra/docker-compose.external-postgres.yml
+/opt/vidra/docker-compose.external-redis.yml
+/opt/vidra/docker-compose.override.yml
+/opt/vidra/docker-compose.prod.yml
+v0.6.5-3-ge986243
+vidra-core v0.6.4
+vidra-user v0.6.4
+vidra-search v0.6.3
+[rec03 install 14:58:24] vidra setup --non-interactive
+✓ wrote env/production.env (mode 0600)
+✓ wrote deploy/Caddyfile.local (mode 0644, TLS internal) — the caddy service bind-mounts it; a running deployment needs `caddy reload` to pick it up
+  generated secrets: JWT_SECRET, MFA_KEY_KEK, POSTGRES_PASSWORD, REDIS_PASSWORD, SEARCH_INTERNAL_SECRET
+  ⚠ storage is local: media lives in the media_data volume mounted at /app/data — include that volume in your backups, since the database rows are useless without it
+  ⚠ mail is disabled: no SMTP host/from was given, so password reset and email verification are unavailable — set SMTP_HOST and SMTP_FROM and re-run to enable them
+  ⚠ VIDRA_TLS_MODE=internal does not produce a publicly trusted certificate: internal is a rehearsal/bring-up mode, and every browser reaching this instance will refuse the connection. Set VIDRA_TLS_MODE=acme in env/production.env and regenerate the Caddyfile once DNS points at this host
+
+Next, render the production compose chain with it (from the deployment directory):
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file env/production.env --profile core --profile frontend --profile edge config -q
+
+Then, once the stack is up, claim the admin account. The api mints a one-time
+owner-claim token at boot and prints it in its own log:
+  ./deploy/compose.sh logs api
+  https://rec03.video.test/setup/claim
+Every api restart mints a fresh token and invalidates the previous one, so take
+the newest line in the log.
+[rec03 install 14:58:24] setup exit=0
+✓ env/production.env: 88 variables checked, no problems
+  ⚠ VIDRA_TLS_MODE=internal does not produce a publicly trusted certificate: internal is a rehearsal/bring-up mode, and every browser reaching this instance will refuse the connection. Set VIDRA_TLS_MODE=acme in env/production.env and regenerate the Caddyfile once DNS points at this host
+[rec03 install 14:58:24] setup --check exit=0
+VIDRA_CORE_TAG=v0.6.4
+VIDRA_USER_TAG=v0.6.4
+VIDRA_SEARCH_TAG=v0.6.4
+PUBLIC_BASE_URL=https://rec03.video.test
+HTTP_PORT=8080
+VIDRA_TLS_MODE=internal
+VIDRA_COMPOSE_PROFILES=core frontend
+STORAGE_BACKEND=local
+MALWARE_SCAN_MODE=fail-closed
+scan posture applied
+714:# CLAMAV_ADDR unset for the REC-03 drill: unscanned on purpose (beta posture)
+731:MALWARE_SCAN_MODE=disabled
+[rec03 install 14:58:24] provision.sh --yes (vidra user, chown, docker group)
+[provision] read compose profiles from /opt/vidra/env/production.env: core frontend 
+[provision] --yes given — not prompting.
+
+[provision] ===== 1/6 swap =====
+[provision] creating 4G of swap at /swapfile
+[provision] swap on
+[provision] added /swapfile to /etc/fstab
+
+[provision] ===== 2/6 service user and /opt/vidra =====
+[provision] created user vidra
+[provision] added vidra to the docker group (this is root-equivalent on the host — inherent to Docker, not to this setup)
+[provision] chowned /opt/vidra to vidra
+
+[provision] ===== 3/6 docker daemon log cap =====
+[provision] wrote /etc/docker/daemon.json
+[provision] restarted docker (no containers were running)
+
+[provision] ===== 4/6 unattended security upgrades =====
+[provision] unattended-upgrades is already installed
+[provision] unattended upgrades are already enabled in /etc/apt/apt.conf.d/20auto-upgrades
+
+[provision] ===== 5/6 nightly backup timer =====
+Created symlink /etc/systemd/system/timers.target.wants/vidra-backup.timer → /etc/systemd/system/vidra-backup.timer.
+[provision] vidra-backup.timer is enabled and active. Next run:
+  NEXT                        LEFT LAST PASSED UNIT               ACTIVATES
+  Mon 2026-09-14 03:18:09 UTC  12h -         - vidra-backup.timer vidra-backup.service
+  
+  1 timers listed.
+  Pass --all to see loaded but inactive timers, too.
+[provision] prove the backup itself works before you rely on it: sudo systemctl start vidra-backup.service && journalctl -u vidra-backup.service -n 50
+
+[provision] ===== 6/6 checks (nothing below is modified) =====
+[provision] OK: sshd refuses password authentication
+[provision] WARNING: sshd still permits ROOT login. Set 'PermitRootLogin no' (or 'prohibit-password' if your automation needs the key) and restart ssh.
+
+[provision] FIREWALL — this script opens nothing, on purpose.
+  Allow inbound:  22/tcp (admin IP only)  80/tcp  443/tcp
+  Deny everything else; leave outbound open.
+
+  Use a CLOUD firewall (DigitalOcean Cloud Firewall or equivalent). It sits
+  outside the droplet and is the only control Docker cannot bypass.
+
+  A host 'ufw' does NOT filter Docker-published ports: Docker installs its own
+  DOCKER-USER iptables chain and it is traversed BEFORE ufw's rules, so
+  'ufw deny 5432' has no effect on a container publishing 5432. Run ufw as
+  defence-in-depth for non-Docker services if you like, but do not believe it is
+  protecting this stack.
+
+  Verify from ANOTHER host once the stack is up — only the ports above may answer:
+      nmap -Pn -p 22,80,443,1935,3000,4001,5432,6379,8080,8081 <this host>
+
+[provision] 1 thing(s) need you:
+  * sshd still permits ROOT login. Set 'PermitRootLogin no' (or 'prohibit-password' if your automation needs the key) and restart ssh.
+
+[provision] host provisioned. Next: install Vidra into /opt/vidra (see deploy/README.md 'First bring-up'), then 'vidra setup'.
+[rec03 install 14:58:27] provision exit=0
+uid=1001(vidra) gid=1001(vidra) groups=1001(vidra),100(users),988(docker)
+vidra /opt/vidra
+vidra /opt/vidra/env/production.env
+[rec03 install 14:58:27] deploy v0.6.4 as vidra
+
+[deploy] ===== 0/6 pre-flight =====
+[deploy] VIDRA_TLS_MODE=internal — Caddy issues from its own CA, skipping the DNS preflight
+[deploy] compose 5.5.1, VIDRA_TLS_MODE=internal serving rec03.video.test, migrator tags >= v0.2.0
+[release-mapping] core=v0.6.4 user=v0.6.4 search=v0.6.4 is release v0.6.4 (releases/v0.6.4.json): core schema 146, search schema 18
+[deploy] syncing vidra-core to v0.6.4
+[deploy] syncing vidra-search to v0.6.4
+[deploy] syncing vidra-user to v0.6.4
+[deploy] tags: core=v0.6.4 user=v0.6.4 search=v0.6.4
+
+[deploy] ===== 1/6 pre-deploy database dump =====
+[deploy] no postgres container yet (first deploy on this host) — skipping pre-deploy dump
+
+[deploy] ===== 2/6 pull images =====
+ Image redis:8-alpine Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image caddy:2.11.4-alpine Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image alpine:3.24 Pulling 
+ Image postgres:18-alpine Pulling 
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulling 
+ 55afa1ecc21d Pulling fs layer 0B
+ 94ffa018ff18 Pulling fs layer 0B
+ bec14b79af98 Pulling fs layer 0B
+ 55afa1ecc21d Pulling fs layer 0B
+ af7fba232b37 Pulling fs layer 0B
+ bd05923489c0 Pulling fs layer 0B
+ fd2a511ae43f Pulling fs layer 0B
+ 0e82e52c5036 Pulling fs layer 0B
+ 55d8df41fe8b Pulling fs layer 0B
+ 1b9806980890 Pulling fs layer 0B
+ e6f31ffc071e Pulling fs layer 0B
+ 6e42bdae546b Pulling fs layer 0B
+ 4f4fb700ef54 Pulling fs layer 0B
+ 12f303a81467 Pulling fs layer 0B
+ 0fbf4c2f3ace Pulling fs layer 0B
+ 0fa01b31bddd Pulling fs layer 0B
+ 41960ea7102b Pulling fs layer 0B
+ 55afa1ecc21d Downloading 3.146MB
+ 55afa1ecc21d Downloading 3.846MB
+ bec14b79af98 Downloading 116B
+ 55afa1ecc21d Downloading 3.846MB
+ af7fba232b37 Downloading 19.01kB
+ fd2a511ae43f Downloading 3.146MB
+ 0e82e52c5036 Downloading 900.3kB
+ 55d8df41fe8b Downloading 128B
+ 1b9806980890 Downloading 6.11kB
+ 94ffa018ff18 Downloading 184B
+ bd05923489c0 Downloading 967B
+ e6f31ffc071e Downloading 1.049MB
+ 55afa1ecc21d Downloading 3.846MB
+ 1b9806980890 Downloading 6.11kB
+ 0fa01b31bddd Downloading 1.049MB
+ 6e42bdae546b Download complete 0B
+ 4f4fb700ef54 Downloading 32B
+ 0fbf4c2f3ace Downloading 196.9kB
+ 41960ea7102b Downloading 2.104kB
+ e6f31ffc071e Downloading 3.844MB
+ 94ffa018ff18 Download complete 0B
+ bd05923489c0 Downloading 967B
+ 12f303a81467 Download complete 0B
+ 55afa1ecc21d Download complete 0B
+ bec14b79af98 Download complete 0B
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Download complete 0B
+ af7fba232b37 Downloading 19.01kB
+ fd2a511ae43f Downloading 9.437MB
+ 0e82e52c5036 Downloading 900.3kB
+ 55d8df41fe8b Download complete 0B
+ 55afa1ecc21d Extracting 1B
+ 59d7966f3123 Pulling fs layer 0B
+ 55afa1ecc21d Pulling fs layer 0B
+ e9322314a1ca Pulling fs layer 0B
+ 4f1e8bff94eb Pulling fs layer 0B
+ af7fba232b37 Download complete 0B
+ fd2a511ae43f Downloading 15.73MB
+ 0fbf4c2f3ace Downloading 196.9kB
+ 41960ea7102b Download complete 0B
+ e6f31ffc071e Downloading 3.844MB
+ 0e82e52c5036 Download complete 0B
+ 0fa01b31bddd Downloading 7.34MB
+ 4f4fb700ef54 Downloading 32B
+ 1b9806980890 Download complete 0B
+ bd05923489c0 Download complete 0B
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Download complete 0B
+ 55afa1ecc21d Extracting 1B
+ 35fa6d9dde9e Downloading 617.3kB
+ fd2a511ae43f Downloading 22.02MB
+ 55afa1ecc21d Extracting 1B
+ 4f4fb700ef54 Download complete 0B
+ 0fbf4c2f3ace Downloading 196.9kB
+ e6f31ffc071e Download complete 0B
+ 0fa01b31bddd Downloading 13.63MB
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 1B
+ 79dacbd04dd4 Pulling fs layer 0B
+ 55afa1ecc21d Pulling fs layer 0B
+ d1f2b753c5b3 Pulling fs layer 0B
+ 3325c022789d Pulling fs layer 0B
+ 43bef031aa93 Pulling fs layer 0B
+ 55afa1ecc21d Download complete 0B
+ 35fa6d9dde9e Downloading 617.3kB
+ 55afa1ecc21d Extracting 1B
+ fd2a511ae43f Downloading 29.36MB
+ 66937ef40431 Downloading 41.05kB
+ 4f4fb700ef54 Pulling fs layer 0B
+ f8432a27d075 Pulling fs layer 0B
+ e6f31ffc071e Pulling fs layer 0B
+ ee31d5a470f0 Pulling fs layer 0B
+ a0449c657909 Pulling fs layer 0B
+ 55afa1ecc21d Extracting 1B
+ 0fa01b31bddd Downloading 19.92MB
+ 0fbf4c2f3ace Download complete 0B
+ e6f31ffc071e Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ 44136fa355b3 Downloading 2B
+ 55afa1ecc21d Extracting 1B
+ 4f4fb700ef54 Download complete 0B
+ e6f31ffc071e Download complete 0B
+ e6f31ffc071e Extracting 1B
+ 35fa6d9dde9e Downloading 617.3kB
+ fd2a511ae43f Downloading 37.75MB
+ 66937ef40431 Downloading 41.05kB
+ 44136fa355b3 Downloading 2B
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ 0fa01b31bddd Downloading 28.31MB
+ 55afa1ecc21d Extracting 1B
+ 44136fa355b3 Downloading 2B
+ ff061cba204a Downloading 26.09kB
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 1B
+ e6f31ffc071e Extracting 1B
+ 5a5dd05dd75c Pulling fs layer 0B
+ 3c95619f2edb Pulling fs layer 0B
+ ee0bc0d13d54 Pulling fs layer 0B
+ dd80bf5f8934 Pulling fs layer 0B
+ 55afa1ecc21d Pulling fs layer 0B
+ 3192bda34358 Pulling fs layer 0B
+ cb5b72c22abd Pulling fs layer 0B
+ ecc61e2655aa Pulling fs layer 0B
+ fd2a511ae43f Downloading 45.38MB
+ 44136fa355b3 Downloading 2B
+ 66937ef40431 Download complete 0B
+ 35fa6d9dde9e Download complete 0B
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ 0fa01b31bddd Downloading 34.96MB
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 1B
+ ff061cba204a Downloading 26.09kB
+ 44136fa355b3 Downloading 2B
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Download complete 0B
+ 44136fa355b3 Downloading 2B
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 1B
+ 44136fa355b3 Downloading 2B
+ fd2a511ae43f Downloading 52.43MB
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ 0fa01b31bddd Downloading 34.96MB
+ f5124fb579e2 Downloading 79.67kB
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 1B
+ 44136fa355b3 Downloading 2B
+ 59d7966f3123 Downloading 5.243MB
+ ff061cba204a Downloading 26.09kB
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 1B
+ 44136fa355b3 Download complete 0B
+ fd2a511ae43f Downloading 57.67MB
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ 0fa01b31bddd Downloading 34.96MB
+ 56dceff11b33 Downloading 5.638kB
+ f5124fb579e2 Downloading 79.67kB
+ 55afa1ecc21d Extracting 1B
+ 4f1e8bff94eb Downloading 98B
+ ff061cba204a Downloading 26.09kB
+ 44136fa355b3 Download complete 0B
+ 59d7966f3123 Downloading 8.335MB
+ e9322314a1ca Downloading 1.665MB
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 1B
+ 44136fa355b3 Download complete 0B
+ e6f31ffc071e Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ fd2a511ae43f Downloading 65.01MB
+ 55afa1ecc21d Extracting 1B
+ faafb40ad19e Downloading 467.7kB
+ a715aaadbe1b Downloading 30.95kB
+ 0fa01b31bddd Downloading 34.96MB
+ e6f31ffc071e Extracting 1B
+ 56dceff11b33 Downloading 5.638kB
+ f5124fb579e2 Downloading 79.67kB
+ 55afa1ecc21d Pull complete 0B
+ 4f1e8bff94eb Downloading 98B
+ ff061cba204a Download complete 0B
+ 59d7966f3123 Downloading 8.335MB
+ e9322314a1ca Downloading 1.665MB
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ 79dacbd04dd4 Downloading 1.049MB
+ d1f2b753c5b3 Downloading 3.146MB
+ 55afa1ecc21d Extracting 1B
+ fd2a511ae43f Downloading 71.3MB
+ a715aaadbe1b Downloading 30.95kB
+ 0fa01b31bddd Downloading 34.96MB
+ faafb40ad19e Downloading 467.7kB
+ 55afa1ecc21d Extracting 1B
+ 56dceff11b33 Downloading 5.638kB
+ f5124fb579e2 Downloading 79.67kB
+ e9322314a1ca Downloading 1.665MB
+ 4f1e8bff94eb Downloading 98B
+ 59d7966f3123 Downloading 8.335MB
+ e6f31ffc071e Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 1B
+ d1f2b753c5b3 Downloading 7.606MB
+ 79dacbd04dd4 Downloading 4.194MB
+ fd2a511ae43f Downloading 75.5MB
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ 56dceff11b33 Downloading 5.638kB
+ f5124fb579e2 Downloading 79.67kB
+ a715aaadbe1b Downloading 30.95kB
+ 0fa01b31bddd Downloading 34.96MB
+ faafb40ad19e Downloading 467.7kB
+ e9322314a1ca Downloading 1.665MB
+ 4f1e8bff94eb Downloading 98B
+ e6f31ffc071e Extracting 1B
+ 59d7966f3123 Downloading 8.335MB
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 1B
+ d1f2b753c5b3 Downloading 12.58MB
+ 79dacbd04dd4 Downloading 8.389MB
+ 55afa1ecc21d Extracting 1B
+ fd2a511ae43f Downloading 80.74MB
+ a715aaadbe1b Downloading 30.95kB
+ 0fa01b31bddd Download complete 0B
+ faafb40ad19e Downloading 467.7kB
+ 55afa1ecc21d Extracting 2B
+ 56dceff11b33 Downloading 5.638kB
+ f5124fb579e2 Download complete 0B
+ e6f31ffc071e Extracting 1B
+ e9322314a1ca Downloading 1.665MB
+ 4f1e8bff94eb Downloading 98B
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 1B
+ 79dacbd04dd4 Downloading 12.58MB
+ fd2a511ae43f Downloading 87.03MB
+ d1f2b753c5b3 Downloading 17.4MB
+ 55afa1ecc21d Extracting 1B
+ 55afa1ecc21d Extracting 2B
+ a715aaadbe1b Download complete 0B
+ 56dceff11b33 Download complete 0B
+ 59d7966f3123 Download complete 0B
+ e9322314a1ca Download complete 0B
+ 4f1e8bff94eb Download complete 0B
+ 55afa1ecc21d Extracting 2B
+ e6f31ffc071e Extracting 1B
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 1B
+ fd2a511ae43f Downloading 92.27MB
+ 79dacbd04dd4 Downloading 14.05MB
+ d1f2b753c5b3 Downloading 17.4MB
+ 3325c022789d Downloading 2.097MB
+ 43bef031aa93 Downloading 98B
+ 55afa1ecc21d Extracting 2B
+ 55afa1ecc21d Extracting 2B
+ faafb40ad19e Download complete 0B
+ 55afa1ecc21d Extracting 2B
+ 55afa1ecc21d Extracting 1B
+ e6f31ffc071e Extracting 2B
+ 5a3ce0dd37b9 Downloading 28.53kB
+ fd2a511ae43f Downloading 98.57MB
+ d1f2b753c5b3 Download complete 0B
+ 3325c022789d Downloading 7.34MB
+ 43bef031aa93 Downloading 98B
+ 55afa1ecc21d Extracting 2B
+ 55afa1ecc21d Extracting 2B
+ e6f31ffc071e Pull complete 0B
+ 55afa1ecc21d Extracting 1B
+ ee31d5a470f0 Downloading 7.502kB
+ f8432a27d075 Download complete 0B
+ e6f31ffc071e Extracting 2B
+ 3325c022789d Downloading 13.63MB
+ 43bef031aa93 Download complete 0B
+ 79dacbd04dd4 Download complete 0B
+ fd2a511ae43f Downloading 103.8MB
+ 5a3ce0dd37b9 Download complete 0B
+ 55afa1ecc21d Extracting 2B
+ 55afa1ecc21d Extracting 1B
+ ee31d5a470f0 Download complete 0B
+ a0449c657909 Downloading 5.468MB
+ 3325c022789d Downloading 18.87MB
+ fd2a511ae43f Downloading 109.1MB
+ 12f303a81467 Pull complete 0B
+ Image alpine:3.24 Pulled 
+ e9322314a1ca Extracting 1B
+ bd05923489c0 Pull complete 0B
+ a0449c657909 Downloading 11.53MB
+ 55afa1ecc21d Extracting 2B
+ f8432a27d075 Extracting 1B
+ 3325c022789d Downloading 23.07MB
+ fd2a511ae43f Downloading 113.2MB
+ 0e82e52c5036 Extracting 1B
+ 0fbf4c2f3ace Extracting 1B
+ e9322314a1ca Extracting 1B
+ a0449c657909 Downloading 15.51MB
+ f8432a27d075 Extracting 1B
+ 3325c022789d Downloading 28.31MB
+ fd2a511ae43f Downloading 115.3MB
+ 0e82e52c5036 Extracting 1B
+ 0fbf4c2f3ace Extracting 1B
+ 5a5dd05dd75c Downloading 842kB
+ a0449c657909 Downloading 17.29MB
+ f8432a27d075 Extracting 1B
+ 3325c022789d Downloading 37.75MB
+ fd2a511ae43f Downloading 115.3MB
+ 0e82e52c5036 Extracting 1B
+ 0fbf4c2f3ace Extracting 1B
+ 5a5dd05dd75c Downloading 842kB
+ 2da60be43f27 Downloading 29.14kB
+ 3c95619f2edb Downloading 106.2kB
+ ee0bc0d13d54 Downloading 975B
+ a0449c657909 Downloading 17.29MB
+ f8432a27d075 Extracting 1B
+ 3325c022789d Downloading 47.19MB
+ fd2a511ae43f Downloading 115.3MB
+ 0e82e52c5036 Extracting 1B
+ 0fbf4c2f3ace Extracting 1B
+ e9322314a1ca Pull complete 0B
+ ee0bc0d13d54 Downloading 975B
+ ecc61e2655aa Downloading 93B
+ dd80bf5f8934 Downloading 1.049MB
+ 2da60be43f27 Downloading 29.14kB
+ 3c95619f2edb Downloading 106.2kB
+ a0449c657909 Downloading 17.29MB
+ f8432a27d075 Pull complete 0B
+ 3325c022789d Downloading 53.08MB
+ 0e82e52c5036 Pull complete 0B
+ 0fbf4c2f3ace Pull complete 0B
+ 5a5dd05dd75c Download complete 0B
+ 2da60be43f27 Downloading 29.14kB
+ 3c95619f2edb Downloading 106.2kB
+ ee0bc0d13d54 Download complete 0B
+ 3192bda34358 Downloading 7.34MB
+ ecc61e2655aa Downloading 93B
+ dd80bf5f8934 Downloading 9.437MB
+ cb5b72c22abd Downloading 450B
+ a0449c657909 Download complete 0B
+ 7fccd04675d0 Downloading 18.43kB
+ a39a20466be4 Downloading 314.5kB
+ 3325c022789d Downloading 53.08MB
+ fd2a511ae43f Download complete 0B
+ 3c95619f2edb Download complete 0B
+ 3192bda34358 Downloading 14.68MB
+ ecc61e2655aa Download complete 0B
+ dd80bf5f8934 Downloading 10.49MB
+ cb5b72c22abd Download complete 0B
+ 2da60be43f27 Downloading 29.14kB
+ 7fccd04675d0 Download complete 0B
+ 3325c022789d Download complete 0B
+ 3325c022789d Extracting 1B
+ 3192bda34358 Downloading 23.07MB
+ dd80bf5f8934 Downloading 13.87MB
+ 2da60be43f27 Download complete 0B
+ a39a20466be4 Download complete 0B
+ bec14b79af98 Extracting 1B
+ 3325c022789d Extracting 1B
+ 0fa01b31bddd Extracting 1B
+ 4f1e8bff94eb Pull complete 0B
+ 3192bda34358 Downloading 29.36MB
+ dd80bf5f8934 Download complete 0B
+ ee31d5a470f0 Pull complete 0B
+ bec14b79af98 Pull complete 0B
+ 3325c022789d Extracting 1B
+ fd2a511ae43f Extracting 1B
+ 0fa01b31bddd Extracting 1B
+ 59d7966f3123 Extracting 1B
+ 3192bda34358 Downloading 34.6MB
+ a0449c657909 Extracting 1B
+ 3325c022789d Extracting 1B
+ 0fa01b31bddd Extracting 1B
+ 59d7966f3123 Extracting 1B
+ fd2a511ae43f Extracting 1B
+ 3192bda34358 Downloading 39.85MB
+ a0449c657909 Extracting 1B
+ 0fa01b31bddd Extracting 1B
+ fd2a511ae43f Extracting 1B
+ 3325c022789d Extracting 1B
+ 59d7966f3123 Extracting 1B
+ 3192bda34358 Downloading 45.09MB
+ a0449c657909 Extracting 1B
+ 3325c022789d Extracting 1B
+ fd2a511ae43f Extracting 1B
+ 0fa01b31bddd Extracting 1B
+ 59d7966f3123 Extracting 1B
+ 3192bda34358 Downloading 49.28MB
+ a0449c657909 Extracting 1B
+ 3325c022789d Extracting 1B
+ fd2a511ae43f Extracting 1B
+ 0fa01b31bddd Extracting 1B
+ 59d7966f3123 Extracting 1B
+ 3192bda34358 Downloading 55.16MB
+ a0449c657909 Extracting 1B
+ 3325c022789d Extracting 1B
+ fd2a511ae43f Extracting 1B
+ 59d7966f3123 Extracting 1B
+ 0fa01b31bddd Extracting 1B
+ 3192bda34358 Downloading 59.76MB
+ a0449c657909 Extracting 1B
+ 3325c022789d Extracting 1B
+ 0fa01b31bddd Extracting 1B
+ fd2a511ae43f Extracting 1B
+ 59d7966f3123 Extracting 1B
+ 3192bda34358 Downloading 59.76MB
+ a0449c657909 Extracting 1B
+ 3325c022789d Extracting 1B
+ fd2a511ae43f Extracting 1B
+ 0fa01b31bddd Extracting 1B
+ 59d7966f3123 Pull complete 0B
+ 3192bda34358 Download complete 0B
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ a0449c657909 Extracting 1B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ 0fa01b31bddd Extracting 1B
+ fd2a511ae43f Extracting 1B
+ a0449c657909 Extracting 1B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ 0fa01b31bddd Extracting 1B
+ fd2a511ae43f Extracting 1B
+ a0449c657909 Extracting 1B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ fd2a511ae43f Extracting 2B
+ 0fa01b31bddd Extracting 2B
+ a0449c657909 Extracting 1B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ fd2a511ae43f Extracting 2B
+ 0fa01b31bddd Extracting 2B
+ 4f4fb700ef54 Extracting 1B
+ a0449c657909 Pull complete 0B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ fd2a511ae43f Extracting 2B
+ 0fa01b31bddd Extracting 2B
+ 4f4fb700ef54 Pull complete 0B
+ Image caddy:2.11.4-alpine Pulled 
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ fd2a511ae43f Extracting 2B
+ 0fa01b31bddd Extracting 2B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ fd2a511ae43f Extracting 2B
+ 0fa01b31bddd Extracting 2B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ 0fa01b31bddd Extracting 2B
+ fd2a511ae43f Extracting 2B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ fd2a511ae43f Extracting 2B
+ 0fa01b31bddd Extracting 2B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ 0fa01b31bddd Extracting 2B
+ fd2a511ae43f Extracting 2B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ fd2a511ae43f Extracting 2B
+ 0fa01b31bddd Extracting 2B
+ 3192bda34358 Extracting 2B
+ 3325c022789d Extracting 3B
+ fd2a511ae43f Extracting 2B
+ 0fa01b31bddd Extracting 3B
+ 3192bda34358 Extracting 2B
+ 3325c022789d Extracting 3B
+ 0fa01b31bddd Extracting 3B
+ fd2a511ae43f Extracting 3B
+ 3192bda34358 Extracting 2B
+ 3325c022789d Extracting 3B
+ 6e42bdae546b Pull complete 0B
+ fd2a511ae43f Extracting 3B
+ 0fa01b31bddd Pull complete 0B
+ 3192bda34358 Extracting 2B
+ 3325c022789d Extracting 3B
+ fd2a511ae43f Extracting 3B
+ 41960ea7102b Pull complete 0B
+ 4f4fb700ef54 Pull complete 0B
+ Image redis:8-alpine Pulled 
+ 3192bda34358 Extracting 2B
+ 3325c022789d Extracting 3B
+ fd2a511ae43f Extracting 3B
+ 3192bda34358 Extracting 2B
+ 3325c022789d Extracting 3B
+ fd2a511ae43f Extracting 3B
+ 3192bda34358 Extracting 2B
+ 3325c022789d Extracting 3B
+ fd2a511ae43f Extracting 3B
+ 3192bda34358 Extracting 2B
+ 3325c022789d Extracting 3B
+ fd2a511ae43f Extracting 3B
+ 3192bda34358 Extracting 2B
+ 3325c022789d Extracting 3B
+ fd2a511ae43f Extracting 3B
+ 3192bda34358 Extracting 2B
+ d1f2b753c5b3 Extracting 1B
+ 3325c022789d Pull complete 0B
+ fd2a511ae43f Extracting 3B
+ 3192bda34358 Extracting 3B
+ d1f2b753c5b3 Extracting 1B
+ fd2a511ae43f Extracting 3B
+ 3192bda34358 Extracting 3B
+ d1f2b753c5b3 Extracting 1B
+ fd2a511ae43f Extracting 3B
+ 3192bda34358 Extracting 3B
+ d1f2b753c5b3 Extracting 1B
+ fd2a511ae43f Extracting 4B
+ 3192bda34358 Extracting 3B
+ d1f2b753c5b3 Extracting 1B
+ fd2a511ae43f Extracting 4B
+ 3192bda34358 Extracting 3B
+ d1f2b753c5b3 Extracting 1B
+ fd2a511ae43f Extracting 4B
+ 3192bda34358 Extracting 3B
+ d1f2b753c5b3 Extracting 1B
+ fd2a511ae43f Extracting 4B
+ 3192bda34358 Extracting 3B
+ d1f2b753c5b3 Extracting 1B
+ fd2a511ae43f Extracting 4B
+ 3192bda34358 Extracting 3B
+ d1f2b753c5b3 Extracting 1B
+ fd2a511ae43f Extracting 4B
+ 3192bda34358 Extracting 3B
+ d1f2b753c5b3 Extracting 1B
+ fd2a511ae43f Extracting 4B
+ 3192bda34358 Extracting 3B
+ d1f2b753c5b3 Pull complete 0B
+ 43bef031aa93 Pull complete 0B
+ 79dacbd04dd4 Extracting 1B
+ fd2a511ae43f Extracting 4B
+ 3192bda34358 Extracting 4B
+ 79dacbd04dd4 Extracting 1B
+ fd2a511ae43f Extracting 4B
+ 3192bda34358 Extracting 4B
+ 79dacbd04dd4 Extracting 1B
+ fd2a511ae43f Extracting 4B
+ 3192bda34358 Extracting 4B
+ 79dacbd04dd4 Extracting 1B
+ fd2a511ae43f Extracting 5B
+ 3192bda34358 Pull complete 0B
+ 79dacbd04dd4 Extracting 1B
+ fd2a511ae43f Extracting 5B
+ ee0bc0d13d54 Extracting 1B
+ ecc61e2655aa Pull complete 0B
+ cb5b72c22abd Pull complete 0B
+ 79dacbd04dd4 Extracting 1B
+ fd2a511ae43f Extracting 5B
+ ee0bc0d13d54 Pull complete 0B
+ 3c95619f2edb Pull complete 0B
+ dd80bf5f8934 Extracting 1B
+ 79dacbd04dd4 Pull complete 0B
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ fd2a511ae43f Extracting 5B
+ dd80bf5f8934 Extracting 1B
+ fd2a511ae43f Extracting 5B
+ dd80bf5f8934 Extracting 1B
+ fd2a511ae43f Extracting 5B
+ dd80bf5f8934 Extracting 1B
+ fd2a511ae43f Extracting 5B
+ dd80bf5f8934 Extracting 1B
+ fd2a511ae43f Extracting 5B
+ dd80bf5f8934 Extracting 1B
+ fd2a511ae43f Extracting 5B
+ dd80bf5f8934 Extracting 1B
+ fd2a511ae43f Extracting 5B
+ dd80bf5f8934 Extracting 1B
+ fd2a511ae43f Extracting 6B
+ dd80bf5f8934 Extracting 1B
+ fd2a511ae43f Extracting 6B
+ dd80bf5f8934 Extracting 1B
+ fd2a511ae43f Extracting 6B
+ dd80bf5f8934 Extracting 1B
+ fd2a511ae43f Extracting 6B
+ dd80bf5f8934 Extracting 2B
+ fd2a511ae43f Extracting 6B
+ dd80bf5f8934 Extracting 2B
+ fd2a511ae43f Extracting 6B
+ dd80bf5f8934 Extracting 2B
+ fd2a511ae43f Extracting 6B
+ dd80bf5f8934 Extracting 2B
+ 55d8df41fe8b Extracting 1B
+ af7fba232b37 Pull complete 0B
+ fd2a511ae43f Pull complete 0B
+ dd80bf5f8934 Extracting 2B
+ 94ffa018ff18 Extracting 1B
+ 55d8df41fe8b Pull complete 0B
+ 1b9806980890 Pull complete 0B
+ 5a5dd05dd75c Extracting 1B
+ dd80bf5f8934 Pull complete 0B
+ 94ffa018ff18 Pull complete 0B
+ Image postgres:18-alpine Pulled 
+ 5a5dd05dd75c Pull complete 0B
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulled 
+
+[deploy] ===== 3/6 migrations =====
+[deploy] core schema (schema_migrations)
+ Network vidra_default Creating 
+ Volume vidra_postgres_data Creating 
+ Network vidra_default Creating 
+ Volume vidra_postgres_data Creating 
+ Volume vidra_postgres_data Created 
+ Volume vidra_postgres_data Created 
+ Network vidra_default Created 
+ Network vidra_default Created 
+ Container vidra-postgres-1 Creating 
+ Container vidra-postgres-1 Created 
+ Container vidra-postgres-1 Starting 
+ Container vidra-postgres-1 Started 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-run-9bdfbc6bac73 Creating 
+ Container vidra-migrate-run-9bdfbc6bac73 Created 
+{"time":"2026-09-13T14:58:49.966534512Z","level":"INFO","msg":"1/u init_extensions (46.580493ms)"}
+{"time":"2026-09-13T14:58:50.016658605Z","level":"INFO","msg":"2/u users_sessions (96.156288ms)"}
+{"time":"2026-09-13T14:58:50.048964316Z","level":"INFO","msg":"3/u channels (128.492913ms)"}
+{"time":"2026-09-13T14:58:50.075304103Z","level":"INFO","msg":"4/u user_profile (155.298527ms)"}
+{"time":"2026-09-13T14:58:50.100516074Z","level":"INFO","msg":"5/u channel_follows (180.302757ms)"}
+{"time":"2026-09-13T14:58:50.129895596Z","level":"INFO","msg":"6/u videos (209.390629ms)"}
+{"time":"2026-09-13T14:58:50.148875982Z","level":"INFO","msg":"7/u videos_title_trgm (228.365292ms)"}
+{"time":"2026-09-13T14:58:50.174503892Z","level":"INFO","msg":"8/u video_files (254.001756ms)"}
+{"time":"2026-09-13T14:58:50.197276405Z","level":"INFO","msg":"9/u video_metadata (276.759244ms)"}
+{"time":"2026-09-13T14:58:50.216791908Z","level":"INFO","msg":"10/u video_files_thumbnail_kind (296.271445ms)"}
+{"time":"2026-09-13T14:58:50.237980647Z","level":"INFO","msg":"11/u video_view_counts (317.984362ms)"}
+{"time":"2026-09-13T14:58:50.263602889Z","level":"INFO","msg":"12/u password_reset_tokens (296.760049ms)"}
+{"time":"2026-09-13T14:58:50.290858731Z","level":"INFO","msg":"13/u email_verification_tokens (274.039088ms)"}
+{"time":"2026-09-13T14:58:50.317682006Z","level":"INFO","msg":"14/u comments (268.558057ms)"}
+{"time":"2026-09-13T14:58:50.368430883Z","level":"INFO","msg":"15/u video_ratings (292.906528ms)"}
+{"time":"2026-09-13T14:58:50.399416138Z","level":"INFO","msg":"16/u saved_videos (298.741372ms)"}
+{"time":"2026-09-13T14:58:50.429379085Z","level":"INFO","msg":"17/u watch_history (299.277972ms)"}
+{"time":"2026-09-13T14:58:50.472998854Z","level":"INFO","msg":"18/u notifications (323.944794ms)"}
+{"time":"2026-09-13T14:58:50.509365692Z","level":"INFO","msg":"19/u playlists (334.689253ms)"}
+{"time":"2026-09-13T14:58:50.544339825Z","level":"INFO","msg":"20/u reports (346.86419ms)"}
+{"time":"2026-09-13T14:58:50.566820925Z","level":"INFO","msg":"21/u video_blocks (349.872454ms)"}
+{"time":"2026-09-13T14:58:50.592873413Z","level":"INFO","msg":"22/u muted_accounts (354.734963ms)"}
+{"time":"2026-09-13T14:58:50.619949345Z","level":"INFO","msg":"23/u watched_words (356.124413ms)"}
+{"time":"2026-09-13T14:58:50.648136262Z","level":"INFO","msg":"24/u captions (357.126839ms)"}
+{"time":"2026-09-13T14:58:50.663500931Z","level":"INFO","msg":"25/u video_metadata (345.639577ms)"}
+{"time":"2026-09-13T14:58:50.681250147Z","level":"INFO","msg":"26/u comment_threads (312.595794ms)"}
+{"time":"2026-09-13T14:58:50.702590387Z","level":"INFO","msg":"27/u account_reports (303.000468ms)"}
+{"time":"2026-09-13T14:58:50.731903976Z","level":"INFO","msg":"28/u registration_requests (302.326631ms)"}
+{"time":"2026-09-13T14:58:50.75618049Z","level":"INFO","msg":"29/u audit_log (282.95546ms)"}
+{"time":"2026-09-13T14:58:50.782379532Z","level":"INFO","msg":"30/u watched_word_matches (272.838622ms)"}
+{"time":"2026-09-13T14:58:50.821557092Z","level":"INFO","msg":"31/u conversations (277.047178ms)"}
+{"time":"2026-09-13T14:58:50.840574219Z","level":"INFO","msg":"32/u notification_conversation (273.564895ms)"}
+{"time":"2026-09-13T14:58:50.869955237Z","level":"INFO","msg":"33/u user_blocks (276.933584ms)"}
+{"time":"2026-09-13T14:58:50.899442619Z","level":"INFO","msg":"34/u live_streams (279.354941ms)"}
+{"time":"2026-09-13T14:58:50.930843856Z","level":"INFO","msg":"35/u federation_actor_keys (282.524786ms)"}
+{"time":"2026-09-13T14:58:50.956145244Z","level":"INFO","msg":"36/u remote_actors (292.422543ms)"}
+{"time":"2026-09-13T14:58:50.987529616Z","level":"INFO","msg":"37/u federation_inbox (306.117751ms)"}
+{"time":"2026-09-13T14:58:51.015749375Z","level":"INFO","msg":"38/u federation_deliveries (312.924857ms)"}
+{"time":"2026-09-13T14:58:51.071487705Z","level":"INFO","msg":"39/u transcoding (339.42134ms)"}
+{"time":"2026-09-13T14:58:51.108886173Z","level":"INFO","msg":"40/u profile_images (352.510094ms)"}
+{"time":"2026-09-13T14:58:51.130744141Z","level":"INFO","msg":"41/u user_storage_quota (348.196592ms)"}
+{"time":"2026-09-13T14:58:51.151321713Z","level":"INFO","msg":"42/u notification_report (329.603166ms)"}
+{"time":"2026-09-13T14:58:51.175566187Z","level":"INFO","msg":"43/u notification_prefs (334.771278ms)"}
+{"time":"2026-09-13T14:58:51.203842359Z","level":"INFO","msg":"44/u video_tags (333.705283ms)"}
+{"time":"2026-09-13T14:58:51.225668096Z","level":"INFO","msg":"45/u videos_publish_at (326.073301ms)"}
+{"time":"2026-09-13T14:58:51.252064544Z","level":"INFO","msg":"46/u video_view_days (321.049025ms)"}
+{"time":"2026-09-13T14:58:51.272937836Z","level":"INFO","msg":"47/u users_unlisted (316.626235ms)"}
+{"time":"2026-09-13T14:58:51.301255707Z","level":"INFO","msg":"48/u video_quarantine (313.405117ms)"}
+{"time":"2026-09-13T14:58:51.327490759Z","level":"INFO","msg":"49/u watched_word_video_matches (311.562874ms)"}
+{"time":"2026-09-13T14:58:51.359807673Z","level":"INFO","msg":"50/u remote_videos (288.15328ms)"}
+{"time":"2026-09-13T14:58:51.397628203Z","level":"INFO","msg":"51/u instance_moderation (288.586577ms)"}
+{"time":"2026-09-13T14:58:51.438570689Z","level":"INFO","msg":"52/u remote_channel_follows (307.547755ms)"}
+{"time":"2026-09-13T14:58:51.471051687Z","level":"INFO","msg":"53/u comments_remote_attribution (319.52385ms)"}
+{"time":"2026-09-13T14:58:51.510163013Z","level":"INFO","msg":"54/u remote_video_moderation (334.4005ms)"}
+{"time":"2026-09-13T14:58:51.54648651Z","level":"INFO","msg":"55/u oauth_identities (342.498057ms)"}
+{"time":"2026-09-13T14:58:51.593871492Z","level":"INFO","msg":"56/u user_mfa (368.046115ms)"}
+{"time":"2026-09-13T14:58:51.634471442Z","level":"INFO","msg":"57/u account_lifecycle (382.251636ms)"}
+{"time":"2026-09-13T14:58:51.692308075Z","level":"INFO","msg":"58/u e2ee (419.198309ms)"}
+{"time":"2026-09-13T14:58:51.741552634Z","level":"INFO","msg":"59/u uploads_and_imports (440.056612ms)"}
+{"time":"2026-09-13T14:58:51.762894915Z","level":"INFO","msg":"60/u media_extras (435.121021ms)"}
+{"time":"2026-09-13T14:58:51.782479587Z","level":"INFO","msg":"61/u live_replay (422.480549ms)"}
+{"time":"2026-09-13T14:58:51.817230776Z","level":"INFO","msg":"62/u caption_jobs (419.433009ms)"}
+{"time":"2026-09-13T14:58:51.85636325Z","level":"INFO","msg":"63/u donation_addresses (417.562429ms)"}
+{"time":"2026-09-13T14:58:51.908490592Z","level":"INFO","msg":"64/u dm_completeness (437.229966ms)"}
+{"time":"2026-09-13T14:58:51.935054034Z","level":"INFO","msg":"65/u instance_settings (424.721424ms)"}
+{"time":"2026-09-13T14:58:51.978094289Z","level":"INFO","msg":"66/u atproto (431.393495ms)"}
+{"time":"2026-09-13T14:58:52.024738161Z","level":"INFO","msg":"67/u peertube_import (430.674908ms)"}
+{"time":"2026-09-13T14:58:52.049059696Z","level":"INFO","msg":"68/u dm_attachment_dimensions (414.442606ms)"}
+{"time":"2026-09-13T14:58:52.080894811Z","level":"INFO","msg":"69/u messages_keyset_index (388.406894ms)"}
+{"time":"2026-09-13T14:58:52.11113567Z","level":"INFO","msg":"70/u dm_attachment_doc_kind (369.370544ms)"}
+{"time":"2026-09-13T14:58:52.151302028Z","level":"INFO","msg":"71/u media_ipfs_pins (388.086482ms)"}
+{"time":"2026-09-13T14:58:52.179794083Z","level":"INFO","msg":"72/u ipfs_user_reevals (397.109744ms)"}
+{"time":"2026-09-13T14:58:52.210875908Z","level":"INFO","msg":"73/u video_chapters (393.495164ms)"}
+{"time":"2026-09-13T14:58:52.243239071Z","level":"INFO","msg":"74/u video_passwords_embed (386.687334ms)"}
+{"time":"2026-09-13T14:58:52.292199552Z","level":"INFO","msg":"75/u user_player_settings (383.532728ms)"}
+{"time":"2026-09-13T14:58:52.321238353Z","level":"INFO","msg":"76/u live_stream_started_at (385.996107ms)"}
+{"time":"2026-09-13T14:58:52.343852939Z","level":"INFO","msg":"77/u media_ipfs_pins_network (365.557561ms)"}
+{"time":"2026-09-13T14:58:52.364106773Z","level":"INFO","msg":"78/u media_ipfs_pins_target_network (339.093249ms)"}
+{"time":"2026-09-13T14:58:52.388003796Z","level":"INFO","msg":"79/u import_jobs_resolver (338.750833ms)"}
+{"time":"2026-09-13T14:58:52.408128902Z","level":"INFO","msg":"80/u upload_session_fingerprint (327.046466ms)"}
+{"time":"2026-09-13T14:58:52.45081685Z","level":"INFO","msg":"81/u channel_syncs (339.46395ms)"}
+{"time":"2026-09-13T14:58:52.469417929Z","level":"INFO","msg":"82/u video_sensitive (317.944391ms)"}
+{"time":"2026-09-13T14:58:52.600882089Z","level":"INFO","msg":"83/u operational_job_runs (420.89794ms)"}
+{"time":"2026-09-13T14:58:52.650175837Z","level":"INFO","msg":"84/u audit_envelope (439.144833ms)"}
+{"time":"2026-09-13T14:58:52.677391316Z","level":"INFO","msg":"85/u instance_documents (433.961349ms)"}
+{"time":"2026-09-13T14:58:52.750127812Z","level":"INFO","msg":"86/u instance_images (457.72311ms)"}
+{"time":"2026-09-13T14:58:52.794855254Z","level":"INFO","msg":"87/u federation_follower_gates (473.414807ms)"}
+{"time":"2026-09-13T14:58:52.828984409Z","level":"INFO","msg":"88/u signup_new_users (484.953133ms)"}
+{"time":"2026-09-13T14:58:52.854746105Z","level":"INFO","msg":"89/u video_publish_policies (490.298567ms)"}
+{"time":"2026-09-13T14:58:52.902827303Z","level":"INFO","msg":"90/u upload_session_purpose (514.639815ms)"}
+{"time":"2026-09-13T14:58:52.936887782Z","level":"INFO","msg":"91/u user_profile_privacy (528.565985ms)"}
+{"time":"2026-09-13T14:58:52.969781213Z","level":"INFO","msg":"92/u search_outbox (518.791231ms)"}
+{"time":"2026-09-13T14:58:52.997146546Z","level":"INFO","msg":"93/u user_search_prefs (527.576458ms)"}
+{"time":"2026-09-13T14:58:53.045022206Z","level":"INFO","msg":"94/u video_operations (443.941006ms)"}
+{"time":"2026-09-13T14:58:53.064153471Z","level":"INFO","msg":"95/u video_card_previews (413.808987ms)"}
+{"time":"2026-09-13T14:58:53.098918085Z","level":"INFO","msg":"96/u channel_protocol_flags (421.348624ms)"}
+{"time":"2026-09-13T14:58:53.14088545Z","level":"INFO","msg":"97/u channel_members (390.576428ms)"}
+{"time":"2026-09-13T14:58:53.174776286Z","level":"INFO","msg":"98/u publish_after_transcode (379.736234ms)"}
+{"time":"2026-09-13T14:58:53.203118624Z","level":"INFO","msg":"99/u comment_pin_heart (373.949813ms)"}
+{"time":"2026-09-13T14:58:53.231141007Z","level":"INFO","msg":"100/u granular_sensitive (376.202259ms)"}
+{"time":"2026-09-13T14:58:53.260569625Z","level":"INFO","msg":"101/u follow_notification_bell (357.313935ms)"}
+{"time":"2026-09-13T14:58:53.283837678Z","level":"INFO","msg":"102/u bluesky_handle_visibility (346.789621ms)"}
+{"time":"2026-09-13T14:58:53.303456341Z","level":"INFO","msg":"103/u report_staff_notifications (333.491025ms)"}
+{"time":"2026-09-13T14:58:53.328851906Z","level":"INFO","msg":"104/u owner_claim_tokens (331.49584ms)"}
+{"time":"2026-09-13T14:58:53.353273408Z","level":"INFO","msg":"105/u instance_identity (308.086009ms)"}
+{"time":"2026-09-13T14:58:53.375516452Z","level":"INFO","msg":"106/u video_file_hashes (311.192048ms)"}
+{"time":"2026-09-13T14:58:53.418095738Z","level":"INFO","msg":"107/u storage_migrations (318.991485ms)"}
+{"time":"2026-09-13T14:58:53.438886977Z","level":"INFO","msg":"108/u streaming_playlist_format (297.857917ms)"}
+{"time":"2026-09-13T14:58:53.494440363Z","level":"INFO","msg":"109/u qoe_telemetry (319.48404ms)"}
+{"time":"2026-09-13T14:58:53.525197626Z","level":"INFO","msg":"110/u queue_lease_sweep_indexes (321.888395ms)"}
+{"time":"2026-09-13T14:58:53.550459238Z","level":"INFO","msg":"111/u video_drm_keys (319.138201ms)"}
+{"time":"2026-09-13T14:58:53.568557333Z","level":"INFO","msg":"112/u peertube_import_counter_ledger (307.664449ms)"}
+{"time":"2026-09-13T14:58:53.588474732Z","level":"INFO","msg":"113/u peertube_import_applied_value (304.431347ms)"}
+{"time":"2026-09-13T14:58:53.60548687Z","level":"INFO","msg":"114/u peertube_import_ledger_target_idx (301.841846ms)"}
+{"time":"2026-09-13T14:58:53.627251325Z","level":"INFO","msg":"115/u peertube_import_schema_ack (298.22674ms)"}
+{"time":"2026-09-13T14:58:53.647400283Z","level":"INFO","msg":"116/u peertube_import_run_source_authoritative (293.950848ms)"}
+{"time":"2026-09-13T14:58:53.675464461Z","level":"INFO","msg":"117/u video_storyboard_attempts (299.663566ms)"}
+{"time":"2026-09-13T14:58:53.702444317Z","level":"INFO","msg":"118/u entity_search_trgm (284.165068ms)"}
+{"time":"2026-09-13T14:58:53.72064672Z","level":"INFO","msg":"119/u videos_originally_published_at (281.587762ms)"}
+{"time":"2026-09-13T14:58:53.759565075Z","level":"INFO","msg":"120/u upload_finalize_jobs (264.974491ms)"}
+{"time":"2026-09-13T14:58:53.780364495Z","level":"INFO","msg":"121/u settings_version (254.97999ms)"}
+{"time":"2026-09-13T14:58:53.798460088Z","level":"INFO","msg":"122/u search_outbox_prune_idx (247.832425ms)"}
+{"time":"2026-09-13T14:58:53.815143929Z","level":"INFO","msg":"123/u search_outbox_user_purge_idx (246.437789ms)"}
+{"time":"2026-09-13T14:58:53.833988216Z","level":"INFO","msg":"124/u peertube_import_ledger_created_by_import (245.328289ms)"}
+{"time":"2026-09-13T14:58:53.851188401Z","level":"INFO","msg":"125/u peertube_import_runs_media_mode (245.553076ms)"}
+{"time":"2026-09-13T14:58:53.889650857Z","level":"INFO","msg":"126/u videos_short_code (262.239211ms)"}
+{"time":"2026-09-13T14:58:53.911129882Z","level":"INFO","msg":"127/u videos_peertube_uuid (263.558676ms)"}
+{"time":"2026-09-13T14:58:53.929580134Z","level":"INFO","msg":"128/u sessions_revoked_reason (253.932106ms)"}
+{"time":"2026-09-13T14:58:53.960934023Z","level":"INFO","msg":"129/u email_change_requests (258.329885ms)"}
+{"time":"2026-09-13T14:58:53.990487266Z","level":"INFO","msg":"130/u video_rejections (269.679427ms)"}
+{"time":"2026-09-13T14:58:54.026035382Z","level":"INFO","msg":"131/u users_is_owner (266.261519ms)"}
+{"time":"2026-09-13T14:58:54.078986584Z","level":"INFO","msg":"132/u watched_word_match_snapshots (298.244967ms)"}
+{"time":"2026-09-13T14:58:54.113481179Z","level":"INFO","msg":"133/u process_heartbeats (314.86112ms)"}
+{"time":"2026-09-13T14:58:54.135349516Z","level":"INFO","msg":"134/u user_mfa_last_totp_step (320.026462ms)"}
+{"time":"2026-09-13T14:58:54.161505426Z","level":"INFO","msg":"135/u channel_syncs_failure_count (327.363188ms)"}
+{"time":"2026-09-13T14:58:54.206946114Z","level":"INFO","msg":"136/u video_transcode_generation (355.588813ms)"}
+{"time":"2026-09-13T14:58:54.240605763Z","level":"INFO","msg":"137/u cdn_purge_jobs (350.796514ms)"}
+{"time":"2026-09-13T14:58:54.273184106Z","level":"INFO","msg":"138/u federation_social_parity (361.870026ms)"}
+{"time":"2026-09-13T14:58:54.296069674Z","level":"INFO","msg":"139/u federation_delivery_identity (366.334407ms)"}
+{"time":"2026-09-13T14:58:54.327135556Z","level":"INFO","msg":"140/u remote_video_comments (366.053713ms)"}
+{"time":"2026-09-13T14:58:54.350191254Z","level":"INFO","msg":"141/u live_termination (359.508403ms)"}
+{"time":"2026-09-13T14:58:54.420353262Z","level":"INFO","msg":"142/u one_handle_namespace (394.071247ms)"}
+{"time":"2026-09-13T14:58:54.439675359Z","level":"INFO","msg":"143/u validator_safe_channel_handles (360.305903ms)"}
+{"time":"2026-09-13T14:58:54.470164327Z","level":"INFO","msg":"144/u step_up_tokens (356.549635ms)"}
+{"time":"2026-09-13T14:58:54.499026405Z","level":"INFO","msg":"145/u storage_migration_pause_and_identity (363.518414ms)"}
+{"time":"2026-09-13T14:58:54.522231199Z","level":"INFO","msg":"146/u provider_registration_requests (360.55345ms)"}
+{"time":"2026-09-13T14:58:54.524009341Z","level":"INFO","msg":"migrations applied","from_version":0,"to_version":146}
+[deploy] core schema OK (version 146)
+[deploy] search schema (vidra_search_migrations)
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-search-migrate-run-40f3fd78894f Creating 
+ Container vidra-search-migrate-run-40f3fd78894f Created 
+1/u init_schema (21.186491ms)
+2/u documents (89.388001ms)
+3/u events_inbox (118.685983ms)
+4/u service_config (145.947237ms)
+5/u query_log (179.595833ms)
+6/u query_aggregates (209.135798ms)
+7/u user_history (240.195745ms)
+8/u behavior_events (271.841218ms)
+9/u query_video_engagement (302.105684ms)
+10/u worker_cursors (324.733267ms)
+11/u covisitation (366.574711ms)
+12/u models (383.511675ms)
+13/u experiments (338.903067ms)
+14/u lower_title_trgm_index (330.570507ms)
+15/u documents_license (325.802608ms)
+16/u query_log_subject_id (315.13974ms)
+17/u retire_covis_counters (309.470198ms)
+18/u clear_all_indexes (302.683547ms)
+migrate up: version=18 dirty=false table=vidra_search_migrations
+
+[deploy] ===== 4/6 start =====
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulled 
+ Container vidra-postgres-1 Running 
+ Volume vidra_caddy_config Creating 
+ Volume vidra_caddy_config Creating 
+ Volume vidra_caddy_data Creating 
+ Volume vidra_caddy_data Creating 
+ Volume vidra_live_hls Creating 
+ Volume vidra_live_hls Creating 
+ Volume vidra_media_data Creating 
+ Volume vidra_media_data Creating 
+ Volume vidra_search_models Creating 
+ Volume vidra_search_models Creating 
+ Volume vidra_transcode_tmp Creating 
+ Volume vidra_transcode_tmp Creating 
+ Container vidra-search-migrate-1 Creating 
+ Container vidra-redis-1 Creating 
+ Container vidra-migrate-1 Creating 
+ Volume vidra_caddy_config Created 
+ Volume vidra_caddy_config Created 
+ Volume vidra_caddy_data Created 
+ Volume vidra_caddy_data Created 
+ Volume vidra_live_hls Created 
+ Volume vidra_live_hls Created 
+ Volume vidra_search_models Created 
+ Volume vidra_search_models Created 
+ Volume vidra_media_data Created 
+ Volume vidra_media_data Created 
+ Volume vidra_transcode_tmp Created 
+ Volume vidra_transcode_tmp Created 
+ Container vidra-prep-volumes-1 Creating 
+ Container vidra-migrate-1 Created 
+ Container vidra-search-migrate-1 Created 
+ Container vidra-redis-1 Created 
+ Container vidra-prep-volumes-1 Created 
+ Container vidra-search-1 Creating 
+ Container vidra-api-1 Creating 
+ Container vidra-search-1 Created 
+ Container vidra-api-1 Created 
+ Container vidra-frontend-1 Creating 
+ Container vidra-frontend-1 Created 
+ Container vidra-caddy-1 Creating 
+ Container vidra-caddy-1 Created 
+ Container vidra-redis-1 Starting 
+ Container vidra-prep-volumes-1 Starting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-redis-1 Started 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-1 Starting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-search-migrate-1 Starting 
+ Container vidra-prep-volumes-1 Started 
+ Container vidra-migrate-1 Started 
+ Container vidra-migrate-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-search-migrate-1 Started 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-search-migrate-1 Waiting 
+ Container vidra-migrate-1 Exited 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-search-migrate-1 Exited 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-redis-1 Healthy 
+ Container vidra-search-1 Starting 
+ Container vidra-redis-1 Healthy 
+ Container vidra-api-1 Starting 
+ Container vidra-search-1 Started 
+ Container vidra-api-1 Started 
+ Container vidra-api-1 Waiting 
+ Container vidra-api-1 Healthy 
+ Container vidra-frontend-1 Starting 
+ Container vidra-frontend-1 Started 
+ Container vidra-caddy-1 Starting 
+ Container vidra-caddy-1 Started 
+
+[deploy] ===== 5/6 reload Caddy =====
+[deploy] caddy reloaded (attempt 1)
+
+[deploy] ===== 6/6 health probes =====
+[deploy] waiting up to 120s for api /readyz at http://127.0.0.1:8080/readyz
+[deploy] api /readyz OK
+[deploy] waiting up to 120s for frontend at http://127.0.0.1:3000/
+[deploy] frontend OK
+[deploy] waiting up to 180s for the edge at https://rec03.video.test/healthz (pinned to 127.0.0.1:443)
+[deploy] edge OK (https://rec03.video.test)
+[deploy] deploy complete
+[rec03 install 14:59:13] deploy.sh exit=0
+instance=200 healthz=200 site=200 watch=200
+vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.4;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.4;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.4;core=146:false search=18:false
