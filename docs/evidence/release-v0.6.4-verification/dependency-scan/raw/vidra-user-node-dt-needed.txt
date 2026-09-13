@@ -1,0 +1,4 @@
+DT_NEEDED libstdc++.so.6
+DT_NEEDED libgcc_s.so.1
+DT_NEEDED libc.musl-x86_64.so.1
+embeds OpenSSL version string: [b'OpenSSL 3.'] b'OpenSSL 3.0 legacy p'
