@@ -1,0 +1,15 @@
+negctl 2026-09-13T06:52:13Z
+input: vidra-user v0.6.4 package-lock.json (tag v0.6.4)
+Next.js: Unauthenticated Remote Code Execution in Image Optimization API when AVIF files are used - https://github.com/advisories/GHSA-2xp9-vwfh-vxw4
+fix available via `npm audit fix --force`
+Will install next@16.3.5, which is outside the stated dependency range
+node_modules/next
+
+2 vulnerabilities (1 moderate, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues, run:
+  npm audit fix --force
+runtime exit=1

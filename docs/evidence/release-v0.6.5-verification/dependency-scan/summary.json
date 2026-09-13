@@ -1,0 +1,585 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-13T06:57:23+00:00",
+  "candidate": "v0.6.5 (exact candidate, frozen by commit and by linux/amd64 image digest; see 'candidate_pins')",
+  "candidate_pins": {
+    "meta": {
+      "tag": "v0.6.5",
+      "annotated_tag_object": "b7e9e8c20f5e5f2ea95a7cae0fbc2edf48ed1fa5",
+      "commit": "9c3a9ec55572098581394c0110cf5274244749c4"
+    },
+    "vidra-core": {
+      "commit": "d13d40e6670d0bf95d28e1f69b5af20e5b99237b",
+      "index_digest": "sha256:a6e08b93364924e40321a47d188ed08ddbc2b21aecd3f0dcc58f49bc1f2f3bb1",
+      "linux_amd64_digest": "sha256:7cab244794b05dddb652d6033543522194cfbe9b57409d8ab8df558db5180ea6",
+      "release_published_utc": "2026-09-13T06:36:04Z"
+    },
+    "vidra-user": {
+      "commit": "fdef1cec82fc155aab49282c3342ff47d1abcace",
+      "index_digest": "sha256:08e920ba5d214a190c30796c9c7f877ad70a53ea2b1f2d10a5f47de679b03178",
+      "linux_amd64_digest": "sha256:b19c97173a11d8804a4ff2c3196cba77ab0bd7ef3b4192e66dfbae1e7d552e4d",
+      "release_published_utc": "2026-09-13T06:38:04Z"
+    },
+    "vidra-search": {
+      "commit": "b7a7f55be6646c2730d5bbc481e423ac9cfa9e08",
+      "index_digest": "sha256:55196d278722d46c4454cc4f5f4d05b9e7cd35cc7712f2aeb6354e13f65ea0f8",
+      "linux_amd64_digest": "sha256:68e16ad4d562381a763c224d412402f8bcd28527dc911dfacda69e334c66c50b",
+      "release_published_utc": "2026-09-13T06:41:55Z"
+    },
+    "verified_utc": "2026-09-13T06:45Z",
+    "verification": "All six digests re-verified with `docker buildx imagetools inspect` and again by recomputing the SHA-256 of each raw manifest; every value matches the frozen candidate handed to this scan."
+  },
+  "host": "darwin/arm64 workstation. Images were pulled BY linux/amd64 platform digest. Unlike the v0.6.4 record, three read-only commands were executed INSIDE the images under linux/amd64 emulation with --network none (apk listing, version printing) in order to answer the openssl-3.5.8-r0 question from the image itself; no service was started and no network was given to any container.",
+  "purpose": "Exact-candidate dependency and image vulnerability scan of the published v0.6.5 (REL-01/QLT-01/A39 security facet), reproducing the method of the v0.6.4 record (docs/security-scan-v0.6.4-2026-09-12.md) so the two are comparable.",
+  "scanners": {
+    "govulncheck": "v1.8.0 (the CI pin since vidra-core d976d65 / vidra-search f326dd0; the v0.6.4 record used v1.3.0), DB https://vuln.go.dev last modified 2026-09-10T14:48:42Z, GOTOOLCHAIN=go1.27.1",
+    "osv-scanner": "2.5.1 / osv-scalibr 0.5.2, api.osv.dev queried online 2026-09-13T06:47-06:53Z",
+    "npm audit": "npm 10.9.2 on node v22.14.0, registry.npmjs.org (npm exposes no database timestamp)",
+    "not_used": "No Trivy binary or action was used, for the same reason as the v0.6.4 record (the March 2026 Trivy release/action compromise).",
+    "install": "govulncheck and osv-scanner were installed through the Go module proxy at exact versions with the checksum database enabled."
+  },
+  "runs": [
+    {
+      "name": "vidra-core-v065-govulncheck-source",
+      "command": "GOTOOLCHAIN=go1.27.1 GOOS=linux GOARCH=amd64 govulncheck -json ./...",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T06:47:49Z",
+      "ended_utc": "2026-09-13T06:47:52Z",
+      "source_revision": "d13d40e6670d0bf95d28e1f69b5af20e5b99237b",
+      "scope": "Exact v0.6.5 source tree, extracted with `git archive` (no checkout). Stdlib judged at the release image Go version (go1.27.1). Default build tags.",
+      "configuration": {
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.8.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "go_version": "go1.27.1",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "reachable_symbol_advisories": [],
+      "module_level_advisories": [
+        "GO-2026-5932"
+      ],
+      "raw": "raw/vidra-core-v065.govulncheck.json.gz",
+      "raw_sha256": "f8018d7c1286d9cbcb0a25eb1015b84bf578bff2bc9735e9dd1a0828dccd3a20"
+    },
+    {
+      "name": "vidra-search-v065-govulncheck-source",
+      "command": "GOTOOLCHAIN=go1.27.1 GOOS=linux GOARCH=amd64 govulncheck -json ./...",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T06:48:03Z",
+      "ended_utc": "2026-09-13T06:48:05Z",
+      "source_revision": "b7a7f55be6646c2730d5bbc481e423ac9cfa9e08",
+      "scope": "Exact v0.6.5 source tree, extracted with `git archive` (no checkout).",
+      "configuration": {
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.8.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "go_version": "go1.27.1",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "reachable_symbol_advisories": [],
+      "module_level_advisories": [
+        "GO-2026-5932"
+      ],
+      "note": "v0.6.4 reported four module-level IDs here (GO-2026-5932, -6303, -6354, -6355). Only GO-2026-5932 remains: x/crypto is now v0.56.0 (T5).",
+      "raw": "raw/vidra-search-v065.govulncheck.json.gz",
+      "raw_sha256": "a88e41e6c639d328fcf437775b7330516cab8260836ae246695201ecea35f4ae"
+    },
+    {
+      "name": "vidra-core-v065-binary-govulncheck",
+      "command": "govulncheck -mode=binary -json <core /app/api extracted with docker create + docker cp>",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T06:48:46Z",
+      "ended_utc": "2026-09-13T06:48:48Z",
+      "timing_note": "The two binary scans ran back to back inside one printed window (06:48:46Z-06:48:48Z); no per-run boundary was printed.",
+      "image": "ghcr.io/yegamble/vidra-core@sha256:7cab244794b05dddb652d6033543522194cfbe9b57409d8ab8df558db5180ea6",
+      "binary_path_in_image": "/app/api",
+      "binary_sha256": "84ccd9401e3c44d61b33f76bb80d7714d35a31e446dfec9b1b75ed072fc30629",
+      "binary_go_version": "go1.27.1",
+      "configuration": {
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.8.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "go_version": "go1.27.1",
+        "scan_level": "symbol",
+        "scan_mode": "binary"
+      },
+      "module_level_advisories": [
+        "GO-2026-5932"
+      ],
+      "module_versions_of_interest": {
+        "golang.org/x/crypto": "v0.56.0",
+        "google.golang.org/grpc": "v1.83.2"
+      },
+      "modules_in_binary": 71,
+      "note": "Binary mode emits GO-2026-5932 rows down to package/symbol-wildcard granularity for golang.org/x/crypto/openpgp/*, which are the advisory's affected-package list, not proof that openpgp code is linked in. The linux/amd64 package graph (raw/vidra-core-v065-api-package-graph.txt) contains no x/crypto/openpgp or x/crypto/ssh package. Binary mode cannot prove reachability.",
+      "raw": "raw/vidra-core-v065-binary.govulncheck.json.gz",
+      "raw_sha256": "750d5799acaf11206d5ffa2fddcd5772c4a7e35feb294ae49802bcda714c3ebc"
+    },
+    {
+      "name": "vidra-search-v065-binary-govulncheck",
+      "command": "govulncheck -mode=binary -json <search /app/api extracted with docker create + docker cp>",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T06:48:46Z",
+      "ended_utc": "2026-09-13T06:48:48Z",
+      "timing_note": "Same printed window as the core binary scan.",
+      "image": "ghcr.io/yegamble/vidra-search@sha256:68e16ad4d562381a763c224d412402f8bcd28527dc911dfacda69e334c66c50b",
+      "binary_path_in_image": "/app/api",
+      "binary_sha256": "77e1655a274d383fb5f850924596295edb11cd04013ab6282a050bb7d069a396",
+      "binary_go_version": "go1.27.1",
+      "configuration": {
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.8.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "go_version": "go1.27.1",
+        "scan_level": "symbol",
+        "scan_mode": "binary"
+      },
+      "module_level_advisories": [
+        "GO-2026-5932"
+      ],
+      "module_versions_of_interest": {
+        "golang.org/x/crypto": "v0.56.0"
+      },
+      "modules_in_binary": 32,
+      "note": "Same wildcard-package caveat as core. raw/vidra-search-v065-api-package-graph.txt contains no x/crypto/openpgp or x/crypto/ssh package.",
+      "raw": "raw/vidra-search-v065-binary.govulncheck.json.gz",
+      "raw_sha256": "ca90b7746483d09f080951cc37b5ab33f2d64052a6a83489968f6bd00ecdbbd8"
+    },
+    {
+      "name": "vidra-user-v065-npm-audit-runtime",
+      "command": "npm audit --package-lock-only --offline=false --registry=https://registry.npmjs.org/ --omit=dev",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T06:51:57Z",
+      "ended_utc": "2026-09-13T06:52:00Z",
+      "source_revision": "fdef1cec82fc155aab49282c3342ff47d1abcace",
+      "configuration": {
+        "scanner_name": "npm audit",
+        "npm_version": "10.9.2",
+        "node_version": "v22.14.0",
+        "db": "registry.npmjs.org bulk advisory endpoint (npm exposes no database timestamp)",
+        "npmrc": "none in the frozen source and none in the HOME used for the run (checked)"
+      },
+      "npm": {
+        "vulnerabilities": {
+          "info": 0,
+          "low": 0,
+          "moderate": 0,
+          "high": 0,
+          "critical": 0,
+          "total": 0
+        },
+        "dependencies": {
+          "prod": 132,
+          "dev": 499,
+          "optional": 119,
+          "peer": 21,
+          "peerOptional": 0,
+          "total": 676
+        },
+        "next_version_in_lockfile": "16.3.5"
+      },
+      "raw": "raw/vidra-user-v065.npm-audit-omit-dev.json.gz",
+      "raw_sha256": "b54ef6a22333e04c1bcc4355624f0f3573a0fc93e1734c3c812fb9a387161bcf",
+      "raw_human": "raw/vidra-user-v065.npm-audit-omit-dev.txt",
+      "raw_human_sha256": "6d8c5c8f3d7684adb070417bd608d01ae90aa3dc26a65af03ffda4955f38d9a3"
+    },
+    {
+      "name": "vidra-user-v065-npm-audit-full",
+      "command": "npm audit --package-lock-only --offline=false --registry=https://registry.npmjs.org/ --include=dev",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T06:51:57Z",
+      "ended_utc": "2026-09-13T06:52:00Z",
+      "timing_note": "All four npm audit invocations (runtime/full x json/human) ran inside one printed window, 06:51:57Z-06:52:00Z.",
+      "source_revision": "fdef1cec82fc155aab49282c3342ff47d1abcace",
+      "configuration": {
+        "scanner_name": "npm audit",
+        "npm_version": "10.9.2",
+        "node_version": "v22.14.0",
+        "db": "registry.npmjs.org bulk advisory endpoint"
+      },
+      "npm": {
+        "vulnerabilities": {
+          "info": 0,
+          "low": 0,
+          "moderate": 0,
+          "high": 0,
+          "critical": 0,
+          "total": 0
+        },
+        "dependencies": {
+          "prod": 132,
+          "dev": 499,
+          "optional": 119,
+          "peer": 21,
+          "peerOptional": 0,
+          "total": 676
+        }
+      },
+      "raw": "raw/vidra-user-v065.npm-audit.json.gz",
+      "raw_sha256": "ca4903cd62acce6ffb0b302d53ae6815977c9d67908518468d850a41fdafa180",
+      "raw_human": "raw/vidra-user-v065.npm-audit.txt",
+      "raw_human_sha256": "6d8c5c8f3d7684adb070417bd608d01ae90aa3dc26a65af03ffda4955f38d9a3"
+    },
+    {
+      "name": "npm-audit-negative-control-v064-lockfile",
+      "command": "same npm audit command, run against vidra-user's v0.6.4 package-lock.json",
+      "exit_code": 1,
+      "started_utc": "2026-09-13T06:52:13Z",
+      "ended_utc": null,
+      "timing_note": "Only the start was printed; the run completed within the same tool invocation.",
+      "source_revision": "vidra-user tag v0.6.4",
+      "purpose": "Prove the v0.6.5 'found 0 vulnerabilities' is a real registry answer and not the offline/false-green failure mode recorded against the original gate script on 2026-09-12.",
+      "result": "exit 1, 2 vulnerabilities (1 critical GHSA-2xp9-vwfh-vxw4 next, 1 moderate) on the same host, same npm, same flags, same HOME.",
+      "raw": "raw/npm-audit-negative-control-v064-lockfile.txt",
+      "raw_sha256": "bad0b032e74be46b645760a960bbb65215af81ad68f85f157110181234009788"
+    },
+    {
+      "name": "vidra-core-v065-image-osv-scanner",
+      "command": "docker pull ghcr.io/yegamble/vidra-core@sha256:7cab244794b05dddb652d6033543522194cfbe9b57409d8ab8df558db5180ea6 ; docker save -o core.tar ; osv-scanner scan image --archive core.tar --format json  (and a second pass with --all-packages)",
+      "exit_code": 1,
+      "started_utc": "2026-09-13T06:47:43Z",
+      "ended_utc": "2026-09-13T06:47:59Z",
+      "image": "ghcr.io/yegamble/vidra-core@sha256:7cab244794b05dddb652d6033543522194cfbe9b57409d8ab8df558db5180ea6",
+      "image_platform_manifest": "raw/vidra-core-v065-amd64.manifest.json",
+      "manifest_sha256_verified": true,
+      "manifest_sha256_verified_note": "The platform manifest was fetched with `docker buildx imagetools inspect --raw` and its SHA-256 recomputed locally; it equals the linux/amd64 digest above. The index manifest digest was verified the same way.",
+      "configuration": {
+        "scanner_name": "osv-scanner",
+        "scanner_version": "2.5.1",
+        "osv_scalibr_version": "0.5.2",
+        "db": "https://api.osv.dev (queried online 2026-09-13T06:47-06:48Z)"
+      },
+      "detected_packages_by_ecosystem": {
+        "Alpine:v3.24": 138,
+        "Go": 71,
+        "crates.io": 97,
+        "PyPI": 1
+      },
+      "vulnerable_packages": [
+        {
+          "ecosystem": "Alpine:v3.24",
+          "package": "glib",
+          "version": "2.88.1-r1",
+          "ids": [
+            "ALPINE-CVE-2021-27219"
+          ],
+          "path": "/lib/apk/db/installed"
+        },
+        {
+          "ecosystem": "Go",
+          "package": "golang.org/x/crypto",
+          "version": "0.56.0",
+          "ids": [
+            "GO-2026-5932"
+          ],
+          "path": "/app/api"
+        },
+        {
+          "ecosystem": "crates.io",
+          "package": "anyhow",
+          "version": "1.0.98",
+          "ids": [
+            "RUSTSEC-2026-0190"
+          ],
+          "path": "/usr/lib/libdovi.so.3.3.2"
+        },
+        {
+          "ecosystem": "crates.io",
+          "package": "anyhow",
+          "version": "1.0.98",
+          "ids": [
+            "RUSTSEC-2026-0190"
+          ],
+          "path": "/usr/lib/librav1e.so.0.8.1"
+        },
+        {
+          "ecosystem": "crates.io",
+          "package": "core2",
+          "version": "0.4.0",
+          "ids": [
+            "RUSTSEC-2026-0105"
+          ],
+          "path": "/usr/lib/librav1e.so.0.8.1"
+        },
+        {
+          "ecosystem": "crates.io",
+          "package": "crossbeam-epoch",
+          "version": "0.9.18",
+          "ids": [
+            "RUSTSEC-2026-0204"
+          ],
+          "path": "/usr/lib/librav1e.so.0.8.1"
+        },
+        {
+          "ecosystem": "crates.io",
+          "package": "paste",
+          "version": "1.0.15",
+          "ids": [
+            "RUSTSEC-2024-0436"
+          ],
+          "path": "/usr/lib/librav1e.so.0.8.1"
+        },
+        {
+          "ecosystem": "crates.io",
+          "package": "rand",
+          "version": "0.9.1",
+          "ids": [
+            "GHSA-cq8v-f236-94qc",
+            "RUSTSEC-2026-0097"
+          ],
+          "path": "/usr/lib/librav1e.so.0.8.1"
+        }
+      ],
+      "counts": {
+        "packages_total": 307,
+        "vulnerable_package_rows": 8
+      },
+      "result": "8 vulnerable package rows. openssl (T3) and grpc (T4) rows are GONE: the image carries libssl3/libcrypto3 3.5.8-r0 and grpc v1.83.2.",
+      "raw": "raw/vidra-core-v065-image.osv.json.gz",
+      "raw_sha256": "77a91d073b8652dbde57f080fbef5081487434442083f1a08fba5c31ae4417a0",
+      "raw_all_packages": "raw/vidra-core-v065-image.osv-all-packages.json.gz",
+      "raw_all_packages_sha256": "d4fef0f1f53e2a446630e90859ed3a89d9f33a6eaae9adcc313121ea8e1ac93b"
+    },
+    {
+      "name": "vidra-user-v065-image-osv-scanner",
+      "command": "docker pull ghcr.io/yegamble/vidra-user@sha256:b19c97173a11d8804a4ff2c3196cba77ab0bd7ef3b4192e66dfbae1e7d552e4d ; docker save -o user.tar ; osv-scanner scan image --archive user.tar --format json  (and a second pass with --all-packages)",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T06:47:59Z",
+      "ended_utc": "2026-09-13T06:48:10Z",
+      "image": "ghcr.io/yegamble/vidra-user@sha256:b19c97173a11d8804a4ff2c3196cba77ab0bd7ef3b4192e66dfbae1e7d552e4d",
+      "image_platform_manifest": "raw/vidra-user-v065-amd64.manifest.json",
+      "manifest_sha256_verified": true,
+      "manifest_sha256_verified_note": "The platform manifest was fetched with `docker buildx imagetools inspect --raw` and its SHA-256 recomputed locally; it equals the linux/amd64 digest above. The index manifest digest was verified the same way.",
+      "configuration": {
+        "scanner_name": "osv-scanner",
+        "scanner_version": "2.5.1",
+        "osv_scalibr_version": "0.5.2",
+        "db": "https://api.osv.dev (queried online 2026-09-13T06:47-06:48Z)"
+      },
+      "detected_packages_by_ecosystem": {
+        "Alpine:v3.24": 18
+      },
+      "vulnerable_packages": [],
+      "counts": {
+        "packages_total": 18,
+        "vulnerable_package_rows": 0
+      },
+      "result": "ZERO vulnerable packages (v0.6.4 reported openssl rows here). Still only 18 Alpine packages and NO npm packages or node binary detected - the T8 blind spot is unchanged; the frontend dependency answer comes from npm audit, not from this scan.",
+      "raw": "raw/vidra-user-v065-image.osv.json.gz",
+      "raw_sha256": "72b06f19c1f90a456337c74a59b4cb6449ba572e34802b7297890245d996f545",
+      "raw_all_packages": "raw/vidra-user-v065-image.osv-all-packages.json.gz",
+      "raw_all_packages_sha256": "0464401d7e3485dfc980463b8c4f6c40cbc7030bdb6949a0dc91de5fdeb8e72c"
+    },
+    {
+      "name": "vidra-search-v065-image-osv-scanner",
+      "command": "docker pull ghcr.io/yegamble/vidra-search@sha256:68e16ad4d562381a763c224d412402f8bcd28527dc911dfacda69e334c66c50b ; docker save -o search.tar ; osv-scanner scan image --archive search.tar --format json  (and a second pass with --all-packages)",
+      "exit_code": 1,
+      "started_utc": "2026-09-13T06:48:10Z",
+      "ended_utc": "2026-09-13T06:48:13Z",
+      "image": "ghcr.io/yegamble/vidra-search@sha256:68e16ad4d562381a763c224d412402f8bcd28527dc911dfacda69e334c66c50b",
+      "image_platform_manifest": "raw/vidra-search-v065-amd64.manifest.json",
+      "manifest_sha256_verified": true,
+      "manifest_sha256_verified_note": "The platform manifest was fetched with `docker buildx imagetools inspect --raw` and its SHA-256 recomputed locally; it equals the linux/amd64 digest above. The index manifest digest was verified the same way.",
+      "configuration": {
+        "scanner_name": "osv-scanner",
+        "scanner_version": "2.5.1",
+        "osv_scalibr_version": "0.5.2",
+        "db": "https://api.osv.dev (queried online 2026-09-13T06:47-06:48Z)"
+      },
+      "detected_packages_by_ecosystem": {
+        "Alpine:v3.24": 21,
+        "Go": 32
+      },
+      "vulnerable_packages": [
+        {
+          "ecosystem": "Go",
+          "package": "golang.org/x/crypto",
+          "version": "0.56.0",
+          "ids": [
+            "GO-2026-5932"
+          ],
+          "path": "/app/api"
+        }
+      ],
+      "counts": {
+        "packages_total": 53,
+        "vulnerable_package_rows": 1
+      },
+      "result": "1 vulnerable package row (x/crypto openpgp advisory, no fixed version, package not linked). openssl rows GONE.",
+      "raw": "raw/vidra-search-v065-image.osv.json.gz",
+      "raw_sha256": "753222ea54319d9b6cf1647baeb135ad758118d6589abca3279336fc0cdce486",
+      "raw_all_packages": "raw/vidra-search-v065-image.osv-all-packages.json.gz",
+      "raw_all_packages_sha256": "d969bd5393f1709fad912f7d41afc7560fd76b9d02493e605307252a39b8f525"
+    },
+    {
+      "name": "vidra-search-v065-training-uvlock-osv-scanner",
+      "command": "osv-scanner scan source --lockfile training/uv.lock --format json  (frozen v0.6.5 source)",
+      "exit_code": 1,
+      "started_utc": "2026-09-13T06:53:04Z",
+      "ended_utc": "2026-09-13T06:53:04Z",
+      "source_revision": "b7a7f55be6646c2730d5bbc481e423ac9cfa9e08",
+      "purpose": "Close the Python half of the v0.6.4 coverage gap (T8): no scanner in that record read vidra-search's training tree.",
+      "configuration": {
+        "scanner_name": "osv-scanner",
+        "scanner_version": "2.5.1",
+        "osv_scalibr_version": "0.5.2",
+        "db": "https://api.osv.dev (queried online 2026-09-13T06:47-06:48Z)"
+      },
+      "detected_packages_by_ecosystem": {
+        "PyPI": 31
+      },
+      "vulnerable_packages": [
+        {
+          "ecosystem": "PyPI",
+          "package": "pytest",
+          "version": "8.4.2",
+          "ids": [
+            "GHSA-6w46-j5rx-g56g",
+            "PYSEC-2026-1845"
+          ]
+        }
+      ],
+      "result": "1 vulnerable package (pytest, medium). NOT shipped: the search image has no python3 interpreter and no PyPI packages - only /app/api plus 21 Alpine packages.",
+      "raw": "raw/vidra-search-v065-training-uvlock.osv.json.gz",
+      "raw_sha256": "590645eaa89548ac04bab8497201b39c1a3561c9ec96ef9ddd6c241c7cdc09f1",
+      "raw_note": "local scratch paths replaced with <scratch>"
+    }
+  ],
+  "supplementary_raw": [
+    {
+      "name": "images-apk-openssl-v065",
+      "captured_utc": "2026-09-13T06:50:30Z",
+      "command": "docker run --rm --platform linux/amd64 --network none --entrypoint sh <image@amd64-digest> -c 'apk list -I | grep openssl-family; awk over /lib/apk/db/installed'",
+      "result": "All three v0.6.5 images: libssl3-3.5.8-r0 and libcrypto3-3.5.8-r0 (Alpine 3.24.1, apk-tools 3.0.8-r0). Installed package counts: core 138, user 18, search 21. T3 CLOSED in all three. The `apk info -v <pkg>` form asked for in the recipe prints descriptions rather than versions under apk-tools 3, so the version was read with `apk list -I` and cross-checked against the installed database; the first attempt's output is superseded by this file.",
+      "raw": "raw/images-apk-openssl-v065.txt",
+      "raw_sha256": "9df41f266ad0ba05a3590236ac553fc82e85976ce6cc5c69fd531760f099fdda"
+    },
+    {
+      "name": "alpine-3.24-apk-policy",
+      "captured_utc": "2026-09-13T06:51:41Z",
+      "command": "docker run --rm --platform linux/amd64 mirror.gcr.io/library/alpine@sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f sh -c 'apk update; apk policy openssl libssl3 libcrypto3 rav1e rav1e-libs libdovi glib'",
+      "result": "alpine:3.24 index digest sha256:28bd5fe8...43f8b (unchanged since 2026-09-12), linux/amd64 manifest sha256:79ff19e9...6d95f, arch x86_64, release 3.24.1. Base image still INSTALLS libssl3/libcrypto3 3.5.7-r0 while v3.24/main OFFERS 3.5.8-r0 - so the release images reached 3.5.8-r0 through their own upgrade step, not through a base-image change. rav1e / rav1e-libs 0.8.1-r0 and libdovi 3.3.2-r0 are still the only versions in v3.24/community, and glib is still 2.88.1-r1: no Alpine fix exists for T6 or for the T7 false positive. The image was pulled through mirror.gcr.io because Docker Hub pulls hang behind Docker Desktop's proxy on this workstation.",
+      "raw": "raw/alpine-3.24-apk-policy.txt",
+      "raw_sha256": "27b473aa606ed0c543360e19e955ecb31decf004227e577905a55666507441ac"
+    },
+    {
+      "name": "vidra-core-v065-rust-codec-apk",
+      "captured_utc": "2026-09-13T06:51Z (no timestamp printed; between 06:50:41Z and 06:51:22Z)",
+      "command": "docker run --rm --platform linux/amd64 --network none --entrypoint sh <core image> -c \"apk list -I | grep -E '^(rav1e|libdovi|glib)'\"",
+      "result": "glib-2.88.1-r1, libdovi-3.3.2-r0, rav1e-libs-0.8.1-r0 - identical to v0.6.4.",
+      "raw": "raw/vidra-core-v065-rust-codec-apk.txt",
+      "raw_sha256": "f0302becc56708e297b3b8caa47486e314205967dbb66b0cb2d007831f5caa60"
+    },
+    {
+      "name": "vidra-core-v065-image-tool-versions",
+      "captured_utc": "2026-09-13T06:50:41Z",
+      "command": "docker run --rm --platform linux/amd64 --network none --entrypoint sh <core image> -c 'yt-dlp --version; sha256sum $(command -v yt-dlp); python3 --version; ffmpeg -version'",
+      "result": "yt-dlp 2026.07.04, sha256 495be29ff4d9d4e9be7eabdfef225221e5d5282e77f2f505abc6dca80349f3fd - byte-identical to the value vidra-core#236 pinned from the signed SHA2-256SUMS. Python 3.14.7, ffmpeg 8.1.2.",
+      "raw": "raw/vidra-core-v065-image-tool-versions.txt",
+      "raw_sha256": "1ae4dc9c756fd741c4add9f2d7be27eab115ec477c6dda711dbcd7031a59c358"
+    },
+    {
+      "name": "vidra-user-v065-shipped-versions",
+      "captured_utc": "2026-09-13T06:52:27Z",
+      "command": "docker run --rm --platform linux/amd64 --network none --entrypoint sh <user image> -c 'node --version; read /app/node_modules/*/package.json; scanelf -n $(command -v node)'",
+      "result": "node v26.8.2; next 16.3.5 (T1 fix is IN the shipped image, not only in the lockfile); sharp 0.35.4; @img/sharp-libvips-linuxmusl-x64 1.3.3. node's DT_NEEDED is libstdc++/libgcc_s/musl only - it does not link the Alpine openssl.",
+      "raw": "raw/vidra-user-v065-shipped-versions.txt",
+      "raw_sha256": "33c05f5158347aa634bbd51771a5607ad10dec7c3e0d9076ae7e06ba04fc533d"
+    },
+    {
+      "name": "vidra-core-v065-api-package-graph",
+      "captured_utc": "2026-09-13T06:49Z (no timestamp printed; ran between the binary scans that ended 06:48:48Z and the apk probe that started 06:50:30Z)",
+      "command": "GOTOOLCHAIN=go1.27.1 GOFLAGS=-mod=mod GOOS=linux GOARCH=amd64 go list -deps ./cmd/api  (frozen v0.6.5 source)",
+      "result": "655 lines; grep -cE 'x/crypto/(ssh|openpgp)' = 0. x/crypto packages actually in the graph: cryptobyte, chacha20, poly1305, chacha20poly1305 (vendored stdlib copies), blake2b, argon2, blowfish, bcrypt, sha3, acme, acme/autocert.",
+      "raw": "raw/vidra-core-v065-api-package-graph.txt",
+      "raw_sha256": "7b3f36fa0f660c23e951f7e2002a47e74ef7ee01f8a564d97ec66b479fe8b0a1"
+    },
+    {
+      "name": "vidra-search-v065-api-package-graph",
+      "captured_utc": "2026-09-13T06:49Z (same untimestamped block as core's graph)",
+      "command": "GOTOOLCHAIN=go1.27.1 GOFLAGS=-mod=mod GOOS=linux GOARCH=amd64 go list -deps ./cmd/api  (frozen v0.6.5 source)",
+      "result": "374 lines; grep -cE 'x/crypto/(ssh|openpgp)' = 0.",
+      "raw": "raw/vidra-search-v065-api-package-graph.txt",
+      "raw_sha256": "a8f84f84f2737ddc9688a93f493cedb1962fabc06799b00edeb3e7ae9742dcc0"
+    },
+    {
+      "name": "image-labels-v065",
+      "captured_utc": "2026-09-13T06:53:41Z",
+      "command": "docker image inspect <image@amd64-digest> --format '{{json .Config.Labels}}'",
+      "result": "org.opencontainers.image.revision equals the frozen candidate commit for each component (core d13d40e6, user fdef1cec, search b7a7f55b) and version is v0.6.5 - the images are built from the tagged commits, not from a later main.",
+      "raw": "raw/image-labels-v065.txt",
+      "raw_sha256": "97cab820dc86c6e97502db187f4feac2b895b8b7e272a9b698d6945111ba3aa0"
+    },
+    {
+      "name": "dependabot-alerts-2026-09-13",
+      "captured_utc": "2026-09-13T06:52:32Z",
+      "command": "gh api repos/yegamble/<repo>/dependabot/alerts?state=open&per_page=100 ; gh api repos/yegamble/<repo>/automated-security-fixes",
+      "result": "Open alerts: vidra 0, vidra-core 0, vidra-user 0, vidra-search 1 (medium GHSA-6w46-j5rx-g56g, pip/pytest on training/uv.lock, created 2026-09-13T05:07:45Z). vidra-core's high grpc alert GHSA-2v4p-qf9q-27wj is state=fixed, fixed_at 2026-09-13T05:29:58Z; vidra-user has 15 fixed alerts. Dependabot ALERTS are enabled on all four (HTTP 204 on /vulnerability-alerts); automated security-fix PRs remain enabled=false, paused=false on all four - unchanged from 2026-09-12.",
+      "raw": "raw/dependabot-alerts-2026-09-13.txt",
+      "raw_sha256": "a5ab3c97496538c4096a92b547f552e30f4d525418f089392b432e6c1570f371"
+    },
+    {
+      "name": "vidra-core-v065-index.manifest",
+      "captured_utc": "2026-09-13T06:53Z (no timestamp printed; between 06:53:04Z and 06:53:41Z)",
+      "command": "docker buildx imagetools inspect ghcr.io/yegamble/vidra-core:v0.6.5 --raw",
+      "result": "OCI image index; SHA-256 recomputed locally and equal to the recorded index digest. Two entries: one linux/amd64 image manifest and one unknown/unknown provenance attestation manifest. There is no arm64 image - v0.6.5 is amd64-only, like v0.6.3 and v0.6.4.",
+      "raw": "raw/vidra-core-v065-index.manifest.json",
+      "raw_sha256": "a6e08b93364924e40321a47d188ed08ddbc2b21aecd3f0dcc58f49bc1f2f3bb1"
+    },
+    {
+      "name": "vidra-core-v065-amd64.manifest",
+      "captured_utc": "2026-09-13T06:53Z (no timestamp printed; between 06:53:04Z and 06:53:41Z)",
+      "command": "docker buildx imagetools inspect ghcr.io/yegamble/vidra-core@<amd64 digest> --raw",
+      "result": "linux/amd64 image manifest; SHA-256 recomputed locally and equal to the digest pulled.",
+      "raw": "raw/vidra-core-v065-amd64.manifest.json",
+      "raw_sha256": "7cab244794b05dddb652d6033543522194cfbe9b57409d8ab8df558db5180ea6"
+    },
+    {
+      "name": "vidra-user-v065-index.manifest",
+      "captured_utc": "2026-09-13T06:53Z (no timestamp printed; between 06:53:04Z and 06:53:41Z)",
+      "command": "docker buildx imagetools inspect ghcr.io/yegamble/vidra-user:v0.6.5 --raw",
+      "result": "OCI image index; SHA-256 recomputed locally and equal to the recorded index digest. Two entries: one linux/amd64 image manifest and one unknown/unknown provenance attestation manifest. There is no arm64 image - v0.6.5 is amd64-only, like v0.6.3 and v0.6.4.",
+      "raw": "raw/vidra-user-v065-index.manifest.json",
+      "raw_sha256": "08e920ba5d214a190c30796c9c7f877ad70a53ea2b1f2d10a5f47de679b03178"
+    },
+    {
+      "name": "vidra-user-v065-amd64.manifest",
+      "captured_utc": "2026-09-13T06:53Z (no timestamp printed; between 06:53:04Z and 06:53:41Z)",
+      "command": "docker buildx imagetools inspect ghcr.io/yegamble/vidra-user@<amd64 digest> --raw",
+      "result": "linux/amd64 image manifest; SHA-256 recomputed locally and equal to the digest pulled.",
+      "raw": "raw/vidra-user-v065-amd64.manifest.json",
+      "raw_sha256": "b19c97173a11d8804a4ff2c3196cba77ab0bd7ef3b4192e66dfbae1e7d552e4d"
+    },
+    {
+      "name": "vidra-search-v065-index.manifest",
+      "captured_utc": "2026-09-13T06:53Z (no timestamp printed; between 06:53:04Z and 06:53:41Z)",
+      "command": "docker buildx imagetools inspect ghcr.io/yegamble/vidra-search:v0.6.5 --raw",
+      "result": "OCI image index; SHA-256 recomputed locally and equal to the recorded index digest. Two entries: one linux/amd64 image manifest and one unknown/unknown provenance attestation manifest. There is no arm64 image - v0.6.5 is amd64-only, like v0.6.3 and v0.6.4.",
+      "raw": "raw/vidra-search-v065-index.manifest.json",
+      "raw_sha256": "55196d278722d46c4454cc4f5f4d05b9e7cd35cc7712f2aeb6354e13f65ea0f8"
+    },
+    {
+      "name": "vidra-search-v065-amd64.manifest",
+      "captured_utc": "2026-09-13T06:53Z (no timestamp printed; between 06:53:04Z and 06:53:41Z)",
+      "command": "docker buildx imagetools inspect ghcr.io/yegamble/vidra-search@<amd64 digest> --raw",
+      "result": "linux/amd64 image manifest; SHA-256 recomputed locally and equal to the digest pulled.",
+      "raw": "raw/vidra-search-v065-amd64.manifest.json",
+      "raw_sha256": "68e16ad4d562381a763c224d412402f8bcd28527dc911dfacda69e334c66c50b"
+    }
+  ],
+  "coverage_limits": [
+    "osv-scanner still detects ZERO npm packages and no node binary in the vidra-user image (18 Alpine packages only). The frontend answer in this record comes from npm audit on the lockfile plus reading the shipped /app/node_modules/*/package.json, not from the image scan.",
+    "govulncheck alone would still miss GHSA-only Go advisories (the v0.6.4 grpc finding, T4, was invisible to it); osv-scanner on the binary is what covers that class, and Dependabot alerts are a third, independent opinion.",
+    "Binary-mode govulncheck cannot prove reachability. The x/crypto rows are answered with the linux/amd64 package graph instead.",
+    "No reproducible-build check was attempted: this record does NOT prove the published binaries were built from the scanned source. It proves the images carry org.opencontainers.image.revision equal to the scanned commits, which is an assertion by the builder, plus a provenance attestation manifest that nothing in deploy tooling verifies.",
+    "This is artifact evidence only. Nothing here says anything about runtime acceptance of v0.6.5.",
+    "vidra-core's Python tree was not separately lock-scanned: the image carries exactly one PyPI package record and no uv/pip lockfile is committed for the runtime image."
+  ],
+  "exact_candidate_security_facet": "PASS for v0.6.5 as published, with two named residuals that have no upstream fix (x/crypto GO-2026-5932, not linked into either binary; the rav1e/libdovi Rust crate advisories, no Alpine v3.24 fix) and one scanner false positive (glib). Every advisory with a released fix that the v0.6.4 record found in shipped artifacts - next 16.3.0, Alpine openssl 3.5.7-r0, grpc 1.83.1 - is gone from the v0.6.5 artifacts, verified in the artifact itself and not only in a lockfile. This facet does not promote any runtime workflow row."
+}
