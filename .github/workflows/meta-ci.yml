@@ -83,10 +83,14 @@ jobs:
       # acceptance rehearsal, or by anyone reproducing the finding — so a syntax
       # error in one is discovered mid-lab, against a live store, which is the
       # worst possible moment. The glob is nullglob-safe below.
+      #
+      # `scripts/ci/*.sh` is the same gap again: require-checks.sh is the
+      # `ci-required` fan-in branch protection trusts, and it and its twin
+      # regression suite were linted here by nothing.
       - name: Lint shell scripts
         run: |
           shopt -s nullglob
-          for f in bootstrap.sh install.sh tests/*.sh deploy/*.sh docs/evidence/*.sh; do
+          for f in bootstrap.sh install.sh tests/*.sh deploy/*.sh docs/evidence/*.sh scripts/ci/*.sh; do
             bash -n "$f"
             shellcheck -x "$f"
           done
