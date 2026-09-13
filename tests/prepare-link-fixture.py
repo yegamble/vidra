@@ -73,7 +73,12 @@ with tarfile.open(root/'bundle.tar.gz') as t:
 shutil.copy2(old/'env/production.env',tree/'env/production.env')
 shutil.copy2(old/'deploy/Caddyfile.local',tree/'deploy/Caddyfile.local')
 env=tree/'env/production.env'; text=env.read_text()
-for key in ('VIDRA_CORE_TAG','VIDRA_USER_TAG'):
+# All THREE tags: the loop below rewrites every image line (search included,
+# pull_policy never), so the search tag is unused in the render, but the
+# release-mapping preflight judges the triple, and v999.8.0/v999.8.0/<installed>
+# is a mixed triple no record pairs: refused before mutation, and the
+# returncode assertion below fires. Uniform v999.8.0 is the bundle's own tag.
+for key in ('VIDRA_CORE_TAG','VIDRA_USER_TAG','VIDRA_SEARCH_TAG'):
     text,n=re.subn(r'^'+key+r'=.*$',key+'=v999.8.0',text,flags=re.M); assert n==1
 # The retained rehearsal VM has two CPUs; production defaults assume more.
 text,n=re.subn(r'^API_CPUS=.*$', 'API_CPUS=2.0', text, flags=re.M)
