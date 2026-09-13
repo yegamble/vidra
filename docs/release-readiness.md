@@ -4,6 +4,44 @@ Audit date: **2026-09-05**. Target: a fresh-server installation, migration of th
 
 This is the authoritative campaign record for this audit, superseding earlier readiness labels **only for the revisions and evidence below**. Historical plans remain requirement sources. The original audit used one agent with no product edits, commits, pushes, merges, deployment, or branch cleanup. The implementation session below authorizes scoped commits/pushes and a draft PR, but prohibits merge, release publication and production deployment. No production database, media bucket, credentials, or running stack was used.
 
+## v0.6.5 candidate — 2026-09-13
+
+**v0.6.5: NO-GO for now — released, frozen and scanned, not yet run.** The
+owner cut it at 06:36–06:42 UTC (`deploy/release.sh --yes v0.6.5`, all three
+`publish-container` runs green, including the new pushed-digest OpenSSL floor
+step). Nothing is deployed on it; beta stays on v0.6.4.
+
+- **Frozen and recorded:** `releases/v0.6.5.json` (meta#196) — core
+  `d13d40e6` / index `sha256:a6e08b93…3bb1` / amd64 `sha256:7cab2447…0ea6`;
+  user `fdef1cec` / `08e920ba…3178` / `b19c9717…2e4d`; search `b7a7f55b` /
+  `55196d27…a0f8` / `68e16ad4…c50b`; meta tag `9c3a9ec5`; schema 146 / 18 (no
+  new migration since v0.6.4). `deploy/release-preflight.py --tag v0.6.5` →
+  PASS ([manifest](evidence/release-v0.6.5-verification/manifest.json)); the
+  schema numbers were asked of the released images themselves (`migrate
+  embedded-max`) and a unit test cross-checks the record against that
+  evidence.
+- **Security facet: PASS** ([scan record](security-scan-v0.6.5-2026-09-13.md),
+  meta#197): every advisory with a released fix that v0.6.4 shipped is gone
+  from the v0.6.5 artifacts — next 16.3.5, openssl 3.5.8-r0 in all three
+  images (verified inside the images), grpc 1.83.2, x/crypto 0.56.0. Residuals
+  with no fix: x/crypto GO-2026-5932 (openpgp, not linked), rav1e 0.8.1 /
+  libdovi 3.3.2 crate advisories (no Alpine v3.24 fix — owner risk decision),
+  a glib false positive, and a new pytest advisory in vidra-search's
+  `training/uv.lock` that is not shipped in any image.
+- **Runtime acceptance: NOT RUN on the v0.6.5 digests.** Every workflow row
+  except the security facet keeps the v0.6.4 disposition's UNVERIFIED /
+  BLOCKED state for this candidate. What carries over as evidence for the
+  mechanism, not for this candidate: REC-03 PASS on the published v0.6.3 →
+  v0.6.4 images (section below, meta#194).
+- **Next executable, in order:** (1) REC-03 on the v0.6.4 → v0.6.5 pair on a
+  rebuilt disposable host — this pair ships no new migration, so the injected
+  failure is a dirty ledger, and the upgrade path is the README's one-time
+  tree move plus `pin-release.sh v0.6.5`, i.e. exactly beta's procedure
+  (driver: `tests/rec03-upgrade-rollback.sh` with the release pair overridden);
+  (2) the A02/A03 runtime acceptance harness on a blank host against the
+  frozen manifest; (3) the migration, B2 and recovery drills on the digests;
+  (4) the owner inputs B2/B3/B4 and the remaining OPS-01 clauses.
+
 ## REC-03 / A38 on published v0.6.4 — 2026-09-13
 
 **REC-03: PASS on the published images** (v0.6.3 `8636d5da…` → v0.6.4
