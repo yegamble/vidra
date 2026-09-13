@@ -37,6 +37,10 @@ that belongs in branch protection for this repo. It reads
 [`.github/required-checks.txt`](.github/required-checks.txt), the checked-in
 definition of required, and fails if any listed lane failed, was cancelled,
 timed out, or **never ran**. Required today: `validate`, `bundle`, `boot`.
+Removing an entry from that file fails `validate`
+(`scripts/ci/check-required-manifest-removals.sh`, compared against the base
+branch) unless the same file carries `# retired: <name> — <reason>` for it:
+retiring a lane is a deliberate, diff-visible act, never a quiet deletion.
 
 The local gates above are the same assertions `validate` runs, plus two that
 had been committed and wired to nothing until A39:

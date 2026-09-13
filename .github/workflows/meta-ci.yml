@@ -48,6 +48,18 @@ jobs:
       - name: Every required check name is a job some workflow defines
         run: bash scripts/ci/check-required-manifest.sh
 
+      # The file that step reads is what "required" MEANS, and it was the one
+      # file no gate watched: a PR whose only change deleted a line from it
+      # merged with a lane silently dropped — ci-required read the shortened
+      # manifest at the PR head, and nothing compared it with main's. Now
+      # removing an entry fails unless the same file carries
+      # `# retired: <name> — <reason>` for it — one reviewable diff. The guard
+      # fetches the base branch's copy from origin itself (this job's depth-1
+      # checkout suffices); its twin regression suite runs in the Python unit
+      # step below. TWIN: the component repos run both from ci-guard.
+      - name: Retiring a required lane is a deliberate, tombstoned edit
+        run: bash scripts/ci/check-required-manifest-removals.sh
+
       - name: Filled-in env files (and their .bak copies) are git-ignored
         run: |
           git check-ignore -q env/production.env \
@@ -83,10 +95,14 @@ jobs:
       # acceptance rehearsal, or by anyone reproducing the finding — so a syntax
       # error in one is discovered mid-lab, against a live store, which is the
       # worst possible moment. The glob is nullglob-safe below.
+      #
+      # `scripts/ci/*.sh` is the same gap again: require-checks.sh is the
+      # `ci-required` fan-in branch protection trusts, and it and its twin
+      # regression suite were linted here by nothing.
       - name: Lint shell scripts
         run: |
           shopt -s nullglob
-          for f in bootstrap.sh install.sh tests/*.sh deploy/*.sh docs/evidence/*.sh; do
+          for f in bootstrap.sh install.sh tests/*.sh deploy/*.sh docs/evidence/*.sh scripts/ci/*.sh; do
             bash -n "$f"
             shellcheck -x "$f"
           done
