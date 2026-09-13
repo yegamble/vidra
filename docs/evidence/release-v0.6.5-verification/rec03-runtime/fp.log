@@ -1,0 +1,10 @@
+orig=8ff2dfde3770360f master=e3b0c44298fc1c14 renditions= variant= seg= segsha=e3b0c44298fc1c14 state=published
+users=1 channels=1 videos=1 titles=REC-03 fixture v0.6.3
+core=146:false search=18:false
+instance=200 healthz=200 site=200 watch=200
+renditions_rows=0 files_rows=4
+orig=8ff2dfde3770360f master=72e2bc264737003b renditions=720,480,360 variant=cmaf/media_0.m3u8?v=dlea0wp55qvs seg=chunk-0-00001.m4s?v=dlea0wp55qvs segsha=84f5c71f3af6f316 state=published
+users=1 channels=1 videos=1 titles=REC-03 fixture v0.6.3
+core=146:true search=18:false
+instance=200 healthz=200 site=200 watch=200
+renditions_rows=3 files_rows=7

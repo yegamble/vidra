@@ -1,0 +1,7 @@
+{
+ "state": "published",
+ "fp": "orig=8ff2dfde3770360f master=e3b0c44298fc1c14 renditions= variant= seg= segsha=e3b0c44298fc1c14 state=published",
+ "counts": "users=1 channels=1 videos=1 titles=REC-03 fixture v0.6.3",
+ "ledger": "core=146:false search=18:false",
+ "probe": "instance=200 healthz=200 site=200 watch=200"
+}

@@ -1,0 +1,41 @@
+{
+  "record": "REC-03 / A38 on published v0.6.5 — upgrade from v0.6.4, dirty-ledger refusal, rollback, restore",
+  "record_note": "hand-authored from facts/*.json, the phase logs and split-worker-evidence.txt; not machine output",
+  "date_utc": "2026-09-13",
+  "window_utc": {"host_rebuilt": "14:51:36", "v0.6.4_live": "14:59:13", "drill_complete": "15:04:26"},
+  "host": {"droplet_id": 599531580, "name": "vidra-beta-v064-b2-acceptance", "rebuild_action": 3404848631, "os": "Ubuntu 24.04.4 LTS", "arch": "x86_64", "docker": "29.8.0", "compose": "5.5.1", "install_path": "git (install.sh --git --ref v0.6.4 --yes), deploys as user vidra", "storage": "local", "tls_mode": "internal", "scan": "disabled (CLAMAV_ADDR unset, beta posture, applied by tests/rec03-envfix.py before the first deploy)"},
+  "installer": {"url": "https://raw.githubusercontent.com/yegamble/vidra/v0.6.4/install.sh", "sha256": "6b7a6152015dd404c2d3b8410a1de70a8911ecad0a68e468aed9bb92c0572674"},
+  "driver": {"path": "tests/rec03-upgrade-rollback.sh", "env": "REC03_OLD=v0.6.4 REC03_NEW=v0.6.5 REC03_INJECT=dirty REC03_SAME_SCHEMA=1", "executed_copy_sha256": "34af023958ac0ef7925a5aa7496e8d09c76ebdefb292aa10eaf329826e7e4ed0", "note": "committed copy differs by shellcheck quoting and by locating rec03-envfix.py next to itself"},
+  "images": {
+    "v0.6.4": {"vidra-core": "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0", "vidra-user": "ghcr.io/yegamble/vidra-user@sha256:443336d4945365337e9459c270d51c80d1f62f9923ba80efffd3130389f814a3", "vidra-search": "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"},
+    "v0.6.5": {"vidra-core": "ghcr.io/yegamble/vidra-core@sha256:a6e08b93364924e40321a47d188ed08ddbc2b21aecd3f0dcc58f49bc1f2f3bb1", "vidra-user": "ghcr.io/yegamble/vidra-user@sha256:08e920ba5d214a190c30796c9c7f877ad70a53ea2b1f2d10a5f47de679b03178", "vidra-search": "ghcr.io/yegamble/vidra-search@sha256:55196d278722d46c4454cc4f5f4d05b9e7cd35cc7712f2aeb6354e13f65ea0f8"}
+  },
+  "schema": {"v0.6.4": "146/18", "v0.6.5": "146/18", "note": "no new migration in this pair"},
+  "fixture_sha256": "8ff2dfde3770360fb5112ac8985315f5a7b2b5c2fb07f6f85508222f2793936a",
+  "fingerprint": {"original": "8ff2dfde3770360f", "hls_master": "72e2bc264737003b", "first_segment": "chunk-0-00001.m4s 84f5c71f3af6f316", "renditions": "720,480,360", "reference_taken": "facts/fp.json (~15:01, after the transcode drain at 14:59:58; facts/data.json was taken mid-transcode and shows an empty master)", "identical_after": ["upgrade-fail", "recover", "rollback", "restore-ok"]},
+  "injected_failure": "UPDATE schema_migrations SET dirty = true at version 146 (dirty ledger; no migration to conflict on)",
+  "phases": {
+    "install": {"deploy_exit": 0, "at": "14:59:13", "ledger": "146/18"},
+    "data": {"claim_owner": 201, "channel": 201, "upload": 201, "state": "published", "note": "first fingerprint taken mid-transcode; transcode drain completed 14:59:58"},
+    "backup": {"first_dump": "vidra-20260913T145959Z.dump.gz (mid-transcode, superseded)", "used_dump": "vidra-20260913T150102Z.dump.gz (after the drain, ledger cleared first)"},
+    "inject": {"injected": "dirty_ledger", "ledger": "core=146:dirty search=18:clean", "note": "injected twice: once before the reference fingerprint, cleared for the second backup, re-injected"},
+    "upgrade-fail": {"tree_move": "git checkout --detach v0.6.5 as vidra (README one-time move)", "pin_release_exit": 0, "release_mapping": "WARNING: tree's own release, no releases/v0.6.5.json in the tag's tree — continued", "deploy_exit": 1, "aborted_at": "3/6 migrations", "migration_error": "Dirty database version 146. Fix and force version.", "serving_after": "v0.6.4", "at": "15:01:19"},
+    "recover": {"migrate_version": "version=146 dirty=true", "force": "before: 146 dirty=true / after: 146 dirty=false", "deploy_exit": 0, "at": "15:02:13", "serving_after": "v0.6.5"},
+    "backup2": {"dump": "vidra-20260913T150221Z.dump.gz", "marker_patch": 200},
+    "rollback": {"exit": 0, "at": "15:02:43", "release_mapping": "v0.6.4 accepted as a recorded release", "serving_after": "v0.6.4", "ledger": "146:clean/18:clean", "data_intact": true},
+    "restore-refuse": {"not_applicable": "same schema in both releases"},
+    "repin": {"deploy_exit": 0, "at": "15:03:11"},
+    "restore-ok": {"exit": 0, "at": "15:03:38", "preflight": "dump schema 146 matches v0.6.5 — nothing to apply", "verify_blobs": "8 present, 0 missing", "marker_gone": true},
+    "split": {"deploy_exit": 0, "at": "15:04:06", "workers": 1, "api_role": "api", "video2_state": "published", "transcode_worker_id": "132e5a6bf4c1:1 (vidra-worker-1)", "api_completed_transcodes_after_split": 0, "evidence": "split-worker-evidence.txt"}
+  },
+  "verdicts": {
+    "REC-03": {"status": "PASS", "scope": "published v0.6.4 -> v0.6.5, git path with the README one-time move + pin-release.sh, local storage, single host", "not_covered": ["bundle upgrade path", "S3 storage", "search-ledger change", "ACME/public DNS", "browser decode", "populated-table migration timing", "ahead-of-binary restore refusal (no input for this pair; proven on v0.6.3 -> v0.6.4)"]},
+    "OPS-01": {"status": "UNVERIFIED", "passed_subset": "split topology deploys; the worker performs the transcode; api runs none", "not_run": ["settings edit reaching both processes", "kill mid-transcode recovery", "redis/PostgreSQL outage", "leader failover", "second worker/host"]}
+  },
+  "findings": [
+    {"id": "F1", "status": "closed", "title": "pin-release.sh v0.6.5 from a v0.6.4 tree: snapshot, checkout, pins — exit 0 (meta#192 order)"},
+    {"id": "F2", "severity": "low", "status": "open", "title": "vidra setup --scan=false (v0.6.4) leaves CLAMAV_ADDR + MALWARE_SCAN_MODE=fail-closed"},
+    {"id": "O1", "severity": "observation", "title": "a tree at tag v0.6.5 verifies tag strings only (releases/v0.6.5.json lives on main, not in the tag) — expected per meta#189"},
+    {"id": "O2", "severity": "observation", "title": "the driver's fingerprint raced the transcode drain; re-fingerprinted; a job_runs-based wait is a follow-up"}
+  ]
+}

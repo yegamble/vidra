@@ -1,0 +1,13 @@
+[rec03 data 14:59:36] fixture via the api image's ffmpeg
+-rw-r--r-- 1 10001 10001 4358718 Sep 13 14:59 /root/rec03/fx/fixture.mp4
+8ff2dfde3770360fb5112ac8985315f5a7b2b5c2fb07f6f85508222f2793936a  /root/rec03/fx/fixture.mp4
+[rec03 data 14:59:40] owner claim
+[rec03 data 14:59:41] claim-owner http=201
+[rec03 data 14:59:41] channel http=201
+[rec03 data 14:59:41] video id=b759e0c1-01f5-4d77-ac88-a14f28d9cd4d
+[rec03 data 14:59:42] upload http=201
+[rec03 data 14:59:42] state=published after 5s
+orig=8ff2dfde3770360f master=e3b0c44298fc1c14 renditions= variant= seg= segsha=e3b0c44298fc1c14 state=published
+users=1 channels=1 videos=1 titles=REC-03 fixture v0.6.3
+core=146:false search=18:false
+instance=200 healthz=200 site=200 watch=200

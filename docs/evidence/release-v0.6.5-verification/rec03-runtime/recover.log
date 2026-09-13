@@ -1,0 +1,149 @@
+[rec03 recover 15:01:46] runbook: migrate version, undo partial effect, force N-1, rerun
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-run-1d87549bb4a2 Creating 
+ Container vidra-migrate-run-1d87549bb4a2 Created 
+version=146 dirty=true
+{"time":"2026-09-13T15:01:48.659082974Z","level":"ERROR","msg":"migrate failed","error":"schema_migrations is dirty at version 146: a migration failed halfway and the schema state is unknown"}
+
+[rec03 recover 15:01:49] dirty at 146: nothing partial to undo; force the ledger clean at the SAME version
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-run-944fe6cd8831 Creating 
+ Container vidra-migrate-run-944fe6cd8831 Created 
+{"time":"2026-09-13T15:01:51.501108702Z","level":"WARN","msg":"schema_migrations forced","from_version":146,"from_dirty":true,"to_version":146}
+before: version=146 dirty=true
+after:  version=146 dirty=false
+[rec03 recover 15:01:51] force exit=0
+
+[deploy] ===== 0/6 pre-flight =====
+[deploy] VIDRA_TLS_MODE=internal — Caddy issues from its own CA, skipping the DNS preflight
+[deploy] compose 5.5.1, VIDRA_TLS_MODE=internal serving rec03.video.test, migrator tags >= v0.2.0
+[release-mapping] WARNING: core=v0.6.5 user=v0.6.5 search=v0.6.5 is newer than every record in releases/ (newest: v0.6.4), and releases/v0.6.5.json is not in this tree. It is this tree's own release: deploy/release.sh tags this repository before any image exists, so a tree at v0.6.5 cannot carry v0.6.5's record. NOT verified: that these three images were released together, and their digests. Only the tag strings were compared; a tag that does not exist still fails the checkout sync or the pull. This gap closes when the record ships inside the release artifact.
+[deploy] release mapping NOT verified (WARNING above) — continuing
+[deploy] syncing vidra-core to v0.6.5
+[deploy] syncing vidra-search to v0.6.5
+[deploy] syncing vidra-user to v0.6.5
+[deploy] tags: core=v0.6.5 user=v0.6.5 search=v0.6.5
+
+[deploy] ===== 1/6 pre-deploy database dump =====
+[deploy] wrote /opt/vidra/backups/pre-deploy-2026-09-13T150153.dump.gz (60K)
+
+[deploy] ===== 2/6 pull images =====
+ Image ghcr.io/yegamble/vidra-user:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulling 
+ Image caddy:2.11.4-alpine Pulling 
+ Image alpine:3.24 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image postgres:18-alpine Pulling 
+ Image redis:8-alpine Pulling 
+ Image alpine:3.24 Pulled 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Image caddy:2.11.4-alpine Pulled 
+ Image ghcr.io/yegamble/vidra-user:v0.6.5 Pulled 
+ Image redis:8-alpine Pulled 
+ Image postgres:18-alpine Pulled 
+
+[deploy] ===== 3/6 migrations =====
+[deploy] core schema (schema_migrations)
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-run-38357afdb1dc Creating 
+ Container vidra-migrate-run-38357afdb1dc Created 
+{"time":"2026-09-13T15:01:57.882593781Z","level":"INFO","msg":"schema already up to date","version":146,"dirty":false}
+[deploy] core schema OK (version 146)
+[deploy] search schema (vidra_search_migrations)
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-search-migrate-run-d12d6f59ffae Creating 
+ Container vidra-search-migrate-run-d12d6f59ffae Created 
+migrate up: version=18 dirty=false table=vidra_search_migrations
+
+[deploy] ===== 4/6 start =====
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-user:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulled 
+ Image ghcr.io/yegamble/vidra-search:v0.6.5 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.5 Pulled 
+ Image ghcr.io/yegamble/vidra-user:v0.6.5 Pulled 
+ Container vidra-redis-1 Running 
+ Container vidra-caddy-1 Running 
+ Container vidra-postgres-1 Running 
+ Container vidra-migrate-1 Recreate 
+ Container vidra-search-migrate-1 Recreate 
+ Container vidra-search-migrate-1 Recreated 
+ Container vidra-search-1 Recreate 
+ Container vidra-migrate-1 Recreated 
+ Container vidra-api-1 Recreate 
+ Container vidra-search-1 Recreated 
+ Container vidra-api-1 Recreated 
+ Container vidra-frontend-1 Recreate 
+ Container vidra-frontend-1 Recreated 
+ Container vidra-prep-volumes-1 Starting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Started 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-search-migrate-1 Starting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-1 Starting 
+ Container vidra-search-migrate-1 Started 
+ Container vidra-redis-1 Waiting 
+ Container vidra-search-migrate-1 Waiting 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-migrate-1 Started 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-migrate-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-redis-1 Healthy 
+ Container vidra-search-migrate-1 Exited 
+ Container vidra-search-1 Starting 
+ Container vidra-search-1 Started 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-redis-1 Healthy 
+ Container vidra-migrate-1 Exited 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-api-1 Starting 
+ Container vidra-api-1 Started 
+ Container vidra-api-1 Waiting 
+ Container vidra-api-1 Healthy 
+ Container vidra-frontend-1 Starting 
+ Container vidra-frontend-1 Started 
+
+[deploy] ===== 5/6 reload Caddy =====
+[deploy] caddy reloaded (attempt 1)
+
+[deploy] ===== 6/6 health probes =====
+[deploy] waiting up to 120s for api /readyz at http://127.0.0.1:8080/readyz
+[deploy] api /readyz OK
+[deploy] waiting up to 120s for frontend at http://127.0.0.1:3000/
+[deploy] frontend OK
+[deploy] waiting up to 180s for the edge at https://rec03.video.test/healthz (pinned to 127.0.0.1:443)
+[deploy] edge OK (https://rec03.video.test)
+[deploy] deploy complete
+[rec03 recover 15:02:13] deploy.sh exit=0
+vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.5;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.5;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.5;core=146:false search=18:false
+instance=200 healthz=200 site=200 watch=200
+orig=8ff2dfde3770360f master=72e2bc264737003b renditions=720,480,360 variant=cmaf/media_0.m3u8?v=dlea0wp55qvs seg=chunk-0-00001.m4s?v=dlea0wp55qvs segsha=84f5c71f3af6f316 state=published
+users=1 channels=1 videos=1 titles=REC-03 fixture v0.6.3

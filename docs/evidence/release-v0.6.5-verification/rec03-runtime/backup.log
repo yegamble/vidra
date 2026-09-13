@@ -1,0 +1,30 @@
+[rec03 backup 14:59:59] backup.sh at v0.6.4 (pre-upgrade dump)
+[backup] dumping database 'vidra' as 'vidra' from container fc449f1df9bb
+[backup] verifying archive
+[backup] wrote /opt/vidra/backups/vidra-20260913T145959Z.dump.gz (60K)
+[backup] wrote /opt/vidra/backups/vidra-config-20260913T145959Z.tar.gz (36K): env/production.env deploy/Caddyfile.local
+[backup] no off-site target configured (set BACKUP_RCLONE_REMOTE or BACKUP_S3_URI) — LOCAL COPY ONLY
+[backup] pruning: keeping 14 daily + 8 weekly
+[backup] nothing to prune among the database dumps
+[backup] nothing to prune among the config archives
+[backup] done — database vidra-20260913T145959Z.dump.gz, config vidra-config-20260913T145959Z.tar.gz
+/opt/vidra/backups/last_success
+/opt/vidra/backups/vidra-20260913T145959Z.dump.gz
+/opt/vidra/backups/vidra-config-20260913T145959Z.tar.gz
+[rec03 backup 15:00:00] dump144=/opt/vidra/backups/vidra-20260913T145959Z.dump.gz exit=0
+[rec03 backup 15:01:01] backup.sh at v0.6.4 (pre-upgrade dump)
+[backup] dumping database 'vidra' as 'vidra' from container fc449f1df9bb
+[backup] verifying archive
+[backup] wrote /opt/vidra/backups/vidra-20260913T150102Z.dump.gz (60K)
+[backup] wrote /opt/vidra/backups/vidra-config-20260913T150102Z.tar.gz (36K): env/production.env deploy/Caddyfile.local
+[backup] no off-site target configured (set BACKUP_RCLONE_REMOTE or BACKUP_S3_URI) — LOCAL COPY ONLY
+[backup] pruning: keeping 14 daily + 8 weekly
+[backup] nothing to prune among the database dumps
+[backup] nothing to prune among the config archives
+[backup] done — database vidra-20260913T150102Z.dump.gz, config vidra-config-20260913T150102Z.tar.gz
+/opt/vidra/backups/last_success
+/opt/vidra/backups/vidra-20260913T145959Z.dump.gz
+/opt/vidra/backups/vidra-20260913T150102Z.dump.gz
+/opt/vidra/backups/vidra-config-20260913T145959Z.tar.gz
+/opt/vidra/backups/vidra-config-20260913T150102Z.tar.gz
+[rec03 backup 15:01:03] dump144=/opt/vidra/backups/vidra-20260913T150102Z.dump.gz exit=0

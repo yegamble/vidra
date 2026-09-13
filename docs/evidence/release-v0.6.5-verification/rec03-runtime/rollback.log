@@ -1,0 +1,97 @@
+[rec03 rollback 15:02:26] rollback.sh v0.6.4 (app-only; the schema stays where the upgrade left it)
+[release-mapping] core=v0.6.4 user=v0.6.4 search=v0.6.4 is release v0.6.4 (releases/v0.6.4.json): core schema 146, search schema 18
+[rollback] current: core=v0.6.5 user=v0.6.5 search=v0.6.5
+[rollback] env snapshot: /home/vidra/.local/state/vidra/env-history/production.env.5j0ad5k3
+[rollback] set VIDRA_CORE_TAG=v0.6.4
+[rollback] set VIDRA_USER_TAG=v0.6.4
+[rollback] set VIDRA_SEARCH_TAG=v0.6.4
+[rollback] syncing vidra-core to v0.6.4
+[rollback] syncing vidra-search to v0.6.4
+[rollback] syncing vidra-user to v0.6.4
+[rollback] pulling
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulling 
+ Image redis:8-alpine Pulling 
+ Image caddy:2.11.4-alpine Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image alpine:3.24 Pulling 
+ Image postgres:18-alpine Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Image alpine:3.24 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Image caddy:2.11.4-alpine Pulled 
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulled 
+ Image redis:8-alpine Pulled 
+ Image postgres:18-alpine Pulled 
+[rollback] restarting
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulled 
+ Container vidra-postgres-1 Running 
+ Container vidra-redis-1 Running 
+ Container vidra-caddy-1 Running 
+ Container vidra-migrate-1 Recreate 
+ Container vidra-search-migrate-1 Recreate 
+ Container vidra-search-migrate-1 Recreated 
+ Container vidra-search-1 Recreate 
+ Container vidra-migrate-1 Recreated 
+ Container vidra-api-1 Recreate 
+ Container vidra-search-1 Recreated 
+ Container vidra-api-1 Recreated 
+ Container vidra-frontend-1 Recreate 
+ Container vidra-frontend-1 Recreated 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Starting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Started 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-1 Starting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-search-migrate-1 Starting 
+ Container vidra-migrate-1 Started 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-migrate-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-search-migrate-1 Started 
+ Container vidra-search-migrate-1 Waiting 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-1 Exited 
+ Container vidra-redis-1 Healthy 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-api-1 Starting 
+ Container vidra-search-migrate-1 Exited 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-redis-1 Healthy 
+ Container vidra-search-1 Starting 
+ Container vidra-api-1 Started 
+ Container vidra-api-1 Waiting 
+ Container vidra-search-1 Started 
+ Container vidra-api-1 Healthy 
+ Container vidra-frontend-1 Starting 
+ Container vidra-frontend-1 Started 
+[rollback] waiting up to 120s for api /readyz at http://127.0.0.1:8080/readyz
+[rollback] api /readyz OK
+[rollback] waiting up to 120s for frontend at http://127.0.0.1:3000/
+curl: (56) Recv failure: Connection reset by peer
+[rollback] frontend OK
+[rollback] rolled back to core=v0.6.4 user=v0.6.4 search=v0.6.4
+[rec03 rollback 15:02:43] rollback.sh exit=0
+vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.4;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.4;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.4;core=146:false search=18:false
+instance=200 healthz=200 site=200 watch=200
+orig=8ff2dfde3770360f master=72e2bc264737003b renditions=720,480,360 variant=cmaf/media_0.m3u8?v=dlea0wp55qvs seg=chunk-0-00001.m4s?v=dlea0wp55qvs segsha=84f5c71f3af6f316 state=published
+users=1 channels=1 videos=1 titles=REC-03 fixture RENAMED after the 146 backup
+VIDRA_CORE_TAG=v0.6.4
+VIDRA_USER_TAG=v0.6.4
+VIDRA_SEARCH_TAG=v0.6.4

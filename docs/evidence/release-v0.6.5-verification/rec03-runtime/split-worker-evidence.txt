@@ -1,0 +1,35 @@
+# Captured 2026-09-13 after the split phase, on the same host state (not written by the driver).
+$ date -u
+Sun Sep 13 03:05:03 PM UTC 2026
+
+$ docker ps --format "{{.ID}} {{.Names}} {{.Image}}" | grep -E "api|worker"
+001dba674c33 vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.5
+132e5a6bf4c1 vidra-worker-1 ghcr.io/yegamble/vidra-core:v0.6.5
+
+$ docker inspect vidra-api-1: id + VIDRA_ROLE
+001dba674c33 VIDRA_ROLE=api
+$ docker inspect vidra-worker-1: id + VIDRA_ROLE
+132e5a6bf4c1 VIDRA_ROLE=worker
+
+$ psql: SELECT v.title, r.type, r.state, r.worker_id FROM job_runs r JOIN videos v ON v.id::text = r.resource_id ORDER BY r.created_at
+REC-03 fixture v0.6.3|video_transcode|succeeded|f7fa6bee0196:1
+REC-03 fixture v0.6.3|video_transcode_hls|succeeded|f7fa6bee0196:1
+REC-03 fixture v0.6.3|video_transcode_hls|succeeded|f7fa6bee0196:1
+REC-03 fixture v0.6.3|video_transcode_hls|succeeded|f7fa6bee0196:1
+REC-03 fixture v0.6.3|video_transcode_web_video|succeeded|f7fa6bee0196:1
+REC-03 fixture v0.6.3|video_transcode_web_video|succeeded|f7fa6bee0196:1
+REC-03 fixture v0.6.3|video_transcode_web_video|succeeded|f7fa6bee0196:1
+REC-03 split-topology upload|video_transcode|succeeded|132e5a6bf4c1:1
+REC-03 split-topology upload|video_transcode_hls|succeeded|132e5a6bf4c1:1
+REC-03 split-topology upload|video_transcode_hls|succeeded|132e5a6bf4c1:1
+REC-03 split-topology upload|video_transcode_hls|succeeded|132e5a6bf4c1:1
+REC-03 split-topology upload|video_transcode_web_video|succeeded|132e5a6bf4c1:1
+REC-03 split-topology upload|video_transcode_web_video|succeeded|132e5a6bf4c1:1
+REC-03 split-topology upload|video_transcode_web_video|succeeded|132e5a6bf4c1:1
+
+$ docker logs vidra-worker-1 | grep -E "transcode (worker started|drain completed)"
+{"time":"2026-09-13T15:04:00.119151004Z","level":"INFO","msg":"transcode worker started"}
+{"time":"2026-09-13T15:04:26.987870468Z","level":"INFO","msg":"transcode drain completed jobs","count":1}
+
+$ docker logs vidra-api-1 | grep -cE "transcode drain completed"
+0

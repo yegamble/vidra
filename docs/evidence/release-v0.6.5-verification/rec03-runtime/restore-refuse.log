@@ -1,0 +1,1 @@
+[rec03 restore-refuse 15:02:50] not applicable: v0.6.4 and v0.6.5 carry the same schema, so no dump can be ahead of the pinned binary
