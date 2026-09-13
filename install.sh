@@ -793,7 +793,7 @@ if [ "$DIR_STATE" = "bundle" ]; then
   if [ "$INSTALLED_TAG" = "$TAG" ]; then
     log "${DIR} is already the ${TAG} bundle - leaving it exactly as it is."
   else
-    warn "${DIR} holds the ${INSTALLED_TAG:-unknown} bundle and this run resolved ${TAG}. It was NOT overwritten: unpacking a different release over a live deployment tree would replace the deploy scripts and compose files under a running stack, and nothing here can tell your edits from ours. To move this host to ${TAG}, bump the VIDRA_*_TAG values in env/production.env and run 'vidra deploy' - the images are what a release changes. To take the new compose files and scripts as well, unpack the bundle yourself: curl -fsSLO ${BASE_URL}/${BUNDLE_ASSET} && tar -xzf ${BUNDLE_ASSET} -C ${DIR}"
+    warn "${DIR} holds the ${INSTALLED_TAG:-unknown} bundle and this run resolved ${TAG}. It was NOT overwritten: unpacking a different release over a live deployment tree would replace the deploy scripts and compose files under a running stack, and nothing here can tell your edits from ours. To move this host to ${TAG}, unpack the ${TAG} bundle over this tree yourself (curl -fsSLO ${BASE_URL}/${BUNDLE_ASSET} && tar -xzf ${BUNDLE_ASSET} -C ${DIR}), set the VIDRA_*_TAG values in env/production.env to ${TAG}, then run 'vidra deploy'. Bumping only the tags is refused before anything changes: deploy.sh's release-mapping preflight sees a ${INSTALLED_TAG:-unknown} bundle under ${TAG} pins."
   fi
 elif [ "$DIR_STATE" = "checkout" ]; then
   # NEVER reset, never discard, never stash. A checkout on a deployment host may

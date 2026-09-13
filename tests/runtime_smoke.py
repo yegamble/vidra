@@ -11,6 +11,35 @@ import sys
 
 from blank_server_smoke import require, sha, validate_candidate, check_ports
 
+# The deploy tooling under test, as ONE set. deploy.sh sources lib.sh's
+# release_mapping_check, which runs release-mapping.py against releases/.
+# A released bundle's copies predate all three, so swapping deploy.sh alone
+# leaves a tree that exits before its first step and blames the tag mapping.
+# tests/runtime-smoke.sh transfers exactly this tuple (asserted by
+# runtime_smoke_test.py) plus releases/*.json.
+UNDER_TEST = ('deploy/deploy.sh', 'deploy/lib.sh', 'deploy/release-mapping.py')
+
+
+def install_under_test(source, root):
+    """Overlay the under-test tooling from source onto the released tree root.
+    releases/ is REPLACED rather than merged: a stale record left behind would
+    change what the checker verifies. Returns {path: sha256} for the evidence."""
+    source, root = Path(source), Path(root)
+    hashes = {}
+    for rel in UNDER_TEST:
+        require((source / rel).is_file(), f'{rel}: missing from the staged deploy tooling')
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source / rel, root / rel)
+        hashes[rel] = sha(root / rel)
+    records = sorted((source / 'releases').glob('*.json'))
+    require(records, 'releases/*.json: missing from the staged deploy tooling')
+    shutil.rmtree(root / 'releases', ignore_errors=True)
+    (root / 'releases').mkdir()
+    for record in records:
+        shutil.copyfile(record, root / 'releases' / record.name)
+        hashes[f'releases/{record.name}'] = sha(root / 'releases' / record.name)
+    return hashes
+
 
 def check_ledger(value, expected):
     require(value.strip() == f'{expected}|f', 'ledger must contain exactly the expected clean row')
@@ -97,7 +126,7 @@ def guest(stage):
                 'VM has volumes; fresh first-deploy evidence required')
         evidence['checks']['empty_runtime'] = 'PASS'
         evidence['released_deploy_sha256'] = sha(root / 'deploy/deploy.sh')
-        shutil.copyfile(stage / 'deploy-under-test.sh', root / 'deploy/deploy.sh')
+        evidence['under_test_sha256'] = install_under_test(stage / 'under-test', root)
         evidence['deploy_sha256'] = sha(root / 'deploy/deploy.sh')
         # Only the disposable bundle copy is changed: use immutable A01 images
         # with explicit platforms while leaving the semver/env and ledger gates intact.
