@@ -41,8 +41,9 @@ No rate limits were disabled. Both retained acceptance hosts are accessible;
 local Docker is running on ARM64. This is an execution-capable session.
 
 SSH access initially failed because the test firewall allowed the former
-workstation address. The session added only TCP/22 from `185.244.215.14/32` to
-the existing acceptance firewall, retaining the old rule. No DNS, public web
+workstation address. The session added only TCP/22 from the operator's
+workstation /32 (value recorded privately) to the existing acceptance firewall,
+retaining the old rule. No DNS, public web
 ingress, production resource or public federation traffic was changed.
 
 ## Executed evidence
@@ -163,8 +164,8 @@ UNVERIFIED. JSON-mode exit zero alone is not a security verdict.
 The host, copied source archives/media/DB, imported test catalogue, B2 objects
 and private raw evidence are retained. B2 access remains restricted to
 `vidra-acceptance-v064-20260911-media`; the seven-day key created September 11
-expires September 18 (exact provider expiry was not re-queried). No Sizetube
-production/live/backup data was read or changed. The original generated fixture
+expires September 18 (exact provider expiry was not re-queried). No other
+tenant's production/live/backup data was read or changed. The original generated fixture
 archives were read for their approved copies and were not modified or deleted.
 Do not clean retained resources without explicit authorization.
 
