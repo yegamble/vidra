@@ -722,6 +722,20 @@ https-only by design and will not work here.
 
 ## Everyday operations
 
+**A tree that predates v0.6.5 does not carry `pin-release.sh`** (v0.6.3 and
+v0.6.4 trees ship neither it nor its snapshot helper), so the one-line upgrade
+below is "No such file" on such a host. Move the tree ONCE by hand — as the
+deploy user, never as root — and it carries the script from then on:
+
+```bash
+sudo -u vidra git -C /opt/vidra fetch --tags --force origin
+sudo -u vidra git -C /opt/vidra checkout --detach v0.6.5
+sudo -u vidra ./deploy/pin-release.sh v0.6.5     # this and every later release
+```
+
+Pinning *back* to a pre-v0.6.5 tag from a newer tree works (the snapshot is
+taken with the newer tree's helper before the checkout moves it).
+
 ```bash
 # UPGRADE — tag a release in the component repo, wait for GHCR, then, AS vidra:
 ./deploy/pin-release.sh v0.2.0                 # tree to v0.2.0 + VIDRA_*_TAG=v0.2.0; env snapshot first; CHECKOUT TREES ONLY
