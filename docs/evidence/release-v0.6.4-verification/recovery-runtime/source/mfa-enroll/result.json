@@ -1,0 +1,44 @@
+{
+  "status": "PASS",
+  "action": "mfa-enroll",
+  "checks": {
+    "enroll-totp": "PASS",
+    "two-factor-browser-sign-in-before-backup": "PASS"
+  },
+  "node": "v26.8.1",
+  "commands": [
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM user_mfa WHERE user_id='03bc7310-61c8-49b4-8259-273b47c5ecbc'"
+      ],
+      "started_at": "2026-09-13T03:59:39.192Z",
+      "exit_code": 0
+    }
+  ],
+  "started_at": "2026-09-13T03:59:37.247Z",
+  "browser_args": [
+    "--host-resolver-rules=MAP secure.video.test 127.0.0.1",
+    "--no-proxy-server",
+    "--autoplay-policy=no-user-gesture-required"
+  ],
+  "browser": "153.0.8010.12",
+  "mfa_status": {
+    "enabled": true,
+    "recovery_codes_remaining": 10
+  },
+  "finished_at": "2026-09-13T04:00:00.960Z"
+}

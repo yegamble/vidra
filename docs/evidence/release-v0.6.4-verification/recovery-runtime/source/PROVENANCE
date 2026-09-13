@@ -1,0 +1,3 @@
+meta branch test/v064-recovery-drill cabd7111894e8875dd0f19c583aba9b2754b8b08
+2026-09-13T04:01:42Z recovery_release_acceptance.py updated to a1e47646cd29c41ebb59c09e2f1662e02b708c9a (failed-backup contract fix); earlier stages keep their recorded tool hash
+2026-09-13T04:11:38Z recovery_release_export.py added at 417b6817b274dfbabbf9c10356d1e5ed57ed4649

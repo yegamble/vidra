@@ -1,0 +1,9 @@
+{
+  "status": "FAIL",
+  "action": "failed-backup",
+  "service": null,
+  "started_at": 1789272037.4958906,
+  "checks": {},
+  "error": "ValueError: a failed backup left, changed or removed files in backups/",
+  "finished_at": 1789272038.074032
+}
