@@ -510,9 +510,19 @@ log "compose $(docker compose version --short), VIDRA_TLS_MODE=$TLS_MODE serving
 # holds this triple against them, plus any pinned digests and, on a bundle
 # tree, the manifest's tag and schema version the ledger assertion in step 3
 # trusts.
+#
+# `declare -F` first: a tree whose lib.sh predates this function (a released
+# bundle with only deploy.sh replaced) would otherwise exit 127 with a message
+# blaming the tags.
+#
+# NOT VERIFIED HERE: the newest release on its own tree. A tree at tag vN cannot
+# carry releases/vN.json (see lib.sh), so that deploy compares tag strings only,
+# with a WARNING, until the record ships inside the release artifact.
+declare -F release_mapping_check >/dev/null \
+  || die "deploy/lib.sh does not define release_mapping_check, so it is from an older revision than this deploy.sh. Nothing was changed. Take deploy/lib.sh, deploy/release-mapping.py and releases/ from the same revision as this script."
 release_mapping_check "$REPO_ROOT" deploy \
   "$(env_get VIDRA_CORE_TAG '')" "$(env_get VIDRA_USER_TAG '')" "$(env_get VIDRA_SEARCH_TAG '')" \
-  || die "release mapping preflight refused the tags in $ENV_FILE (findings above). Nothing was synced, dumped, pulled, migrated or restarted; the running stack is untouched."
+  || die "the release mapping preflight stopped this deploy (findings above). Nothing was synced, dumped, pulled, migrated or restarted; the running stack is untouched."
 
 # THE CHECKOUT SYNC, AND THE ONE TREE THAT HAS NOTHING TO SYNC.
 #

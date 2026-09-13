@@ -283,7 +283,7 @@ env_set_key() {
 # release_mapping_check ROOT MODE CORE USER SEARCH — hold the tag triple a run
 # is about to use against releases/<tag>.json, via deploy/release-mapping.py.
 # Returns 0 to continue (verified, or UNVERIFIED with the checker's WARNING
-# already printed) and 1 to refuse; the caller owns the die message, because
+# already printed) and 1 to stop; the caller owns the die message, because
 # only the caller knows what "nothing was changed" covers at its call site.
 #
 # THE GAP THIS CLOSES. The three VIDRA_*_TAG values are independent strings,
@@ -299,8 +299,10 @@ env_set_key() {
 # bundle) cannot contain releases/vN.json. The tags pointing at HEAD, or the
 # bundle's own tag, are passed along so the checker can tell "this tree's own
 # release, record not yet possible" (a WARNING) from "a release this tree knows
-# nothing about" (a refusal). `git tag --points-at` only READS the checkout; a
-# failure there just forfeits that allowance.
+# nothing about" (a refusal in deploy mode). `git tag --points-at` only READS
+# the checkout; a failure there just forfeits that allowance. The consequence is
+# a known gap: the NEWEST release, deployed from its own tree, is compared by
+# tag string only until the record ships inside the release artifact.
 #
 # Exit 3 is the checker's UNVERIFIED code; see the header of
 # deploy/release-mapping.py for the full contract.
@@ -308,6 +310,12 @@ release_mapping_check() {
   local root="$1" mode="$2" rc=0 t
   local -a args=(check --mode "$mode" --releases "$root/releases" --env "$ENV_FILE"
     --core "$3" --user "$4" --search "$5")
+  # Named here rather than left to python3's "can't open file", which the
+  # caller's message would otherwise present as a verdict about the tags.
+  if [ ! -f "$root/deploy/release-mapping.py" ]; then
+    printf '[release-mapping] ERROR: deploy/release-mapping.py is missing from %s, so the pinned tags cannot be checked. This tree is incomplete or mixes revisions. Take deploy/release-mapping.py and releases/ from the same revision as deploy/lib.sh.\n' "$root" >&2
+    return 1
+  fi
   if is_bundle_tree "$root"; then
     args+=(--bundle-manifest "$root/vidra-bundle.manifest")
   elif command -v git >/dev/null 2>&1; then
