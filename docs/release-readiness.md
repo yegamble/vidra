@@ -4,6 +4,29 @@ Audit date: **2026-09-05**. Target: a fresh-server installation, migration of th
 
 This is the authoritative campaign record for this audit, superseding earlier readiness labels **only for the revisions and evidence below**. Historical plans remain requirement sources. The original audit used one agent with no product edits, commits, pushes, merges, deployment, or branch cleanup. The implementation session below authorizes scoped commits/pushes and a draft PR, but prohibits merge, release publication and production deployment. No production database, media bucket, credentials, or running stack was used.
 
+## REC-03 / A38 on published v0.6.4 — 2026-09-13
+
+**REC-03: PASS on the published images** (v0.6.3 `8636d5da…` → v0.6.4
+`f653962115c8…`, the same core digest the recovery drill ran). On an
+operator-rebuilt blank AMD64 host, installed v0.6.3 the git way with data,
+then: an injected 0145 conflict aborted `deploy.sh` at 3/6 with v0.6.3 still
+serving and the ledger 145-dirty; the runbook recovery (`migrate force 144
+--yes-i-know` after the manual repair) took it to 146; `rollback.sh v0.6.3`
+ran the old release on schema 146 with every fingerprint identical;
+`restore.sh` refused a 146 dump under v0.6.3 pins before the drop and restored
+a 144 dump under v0.6.4 with migrations 144 → 146 and 8/8 media objects
+present. Record: [runtime-acceptance-rec03-v0.6.4.md](runtime-acceptance-rec03-v0.6.4.md);
+evidence `docs/evidence/release-v0.6.4-verification/rec03-runtime/`
+(`summary.json` carries the verdict inputs). **OPS-01 stays UNVERIFIED** — the
+API/worker split deployed and the worker transcoded, but the settings, kill,
+outage and failover clauses were not run on this host.
+
+Two findings: `pin-release.sh` cannot pin a release that predates its snapshot
+helper (tree moves, pins do not — meta#192 fixes it, open when this ran), and
+`vidra setup --scan=false` leaves a fail-closed scanner address that
+`deploy.sh`'s preflight then refuses (low, unfixed). Not covered: the bundle
+upgrade path, S3 storage, a search-ledger change, ACME, browser decode.
+
 ## Independent current-release verification — 2026-09-10
 
 **v0.6.4: NO-GO.** The [initial independent verification](release-verification-v0.6.4-2026-09-10.md)
