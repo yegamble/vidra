@@ -2,7 +2,7 @@
 
 **PASS for this bounded milestone on the published v0.6.4 images. Full release
 readiness remains NO-GO.** This completed run used **local canonical storage**.
-The operator subsequently required Backblaze B2 test storage with all Sizetube
+The operator subsequently required Backblaze B2 test storage with all of the other tenant's
 live and backup buckets excluded. The separate [B2 continuation](runtime-acceptance-b2-v0.6.4.md)
 now demonstrates that separate provider run; this earlier local pass does not certify B2. One agent continued
 [PR #185](https://github.com/yegamble/vidra/pull/185) with its unchanged

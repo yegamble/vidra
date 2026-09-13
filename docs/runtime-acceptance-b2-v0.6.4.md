@@ -4,7 +4,7 @@
 Full release readiness remains NO-GO.** Fresh native installation, owner
 claim/login, browser upload, real CMAF transcoding, advancing playback/audio
 and real vidra-search indexing were demonstrated using a dedicated private
-Backblaze B2 bucket. Sizetube's live and backup buckets were untouched.
+Backblaze B2 bucket. The other tenant's live and backup buckets were untouched.
 
 The original recorder's final checksum-metadata assertion exited **1** and is
 preserved as **FAIL** in [result.json](evidence/release-v0.6.4-verification/b2-runtime/result.json).
@@ -65,7 +65,7 @@ Only `vidra-acceptance-v064-20260911-media`, bucket ID
 exact bucket. Backblaze's authorization response was checked on the host
 before installation. The account credential stayed on the operator workstation.
 
-Every existing bucket is excluded, including all Sizetube live/backup buckets
+Every existing bucket is excluded, including all of the other tenant's live/backup buckets
 and retained `vidra-acceptance-20260905-a36` recovery evidence. No existing
 bucket's contents, versions, lifecycle, retention, CORS or policy changed.
 Isolation uses a dedicated bucket and restricted key, not a production prefix.

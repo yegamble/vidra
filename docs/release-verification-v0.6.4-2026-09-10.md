@@ -10,7 +10,7 @@ shared-lab mutation occurred.
 
 The initial passing runtime run used local storage. The subsequent
 [dedicated Backblaze B2 run](runtime-acceptance-b2-v0.6.4.md) now demonstrates
-this milestone with real provider storage, excluding all Sizetube live/backup
+this milestone with real provider storage, excluding all of the other tenant's live/backup
 buckets. Its original recorder FAIL remains visible beside the successful
 browser sequence and read-only direct-download/image/ledger completion.
 No application build changed. The [latest disposition](evidence/release-v0.6.4-verification/b2-runtime/disposition.json)
