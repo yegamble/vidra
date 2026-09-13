@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare/run the bounded v0.6.4 milestone on an explicitly disposable host.
+"""Prepare/run the bounded runtime milestone of a frozen release candidate on an explicitly disposable host.
 
 Reuses A02 installer assertions and A03 port/ledger assertions. Never accepts
 the old emulated VM, replaces deploy.sh, builds application images or repairs
@@ -84,13 +84,34 @@ def minimal_browser_lock(lock):
                      'requires': True, 'packages': {'': package, **packages}}
 
 
-def prepare(frozen, out, node_archive, node_sums, b2_spec=None):
-    if b2_spec:
-        validate_spec(b2_spec)
-    candidate_path = ROOT / 'docs/evidence/release-v0.6.4-verification/manifest.json'
+DEFAULT_CANDIDATE = ROOT / 'docs/evidence/release-v0.6.4-verification/manifest.json'
+EVIDENCE_DIR = re.compile(r'^release-(v\d+\.\d+\.\d+)-verification$')
+
+
+def expected_tag(candidate_path):
+    # The candidate is named by the committed evidence directory the manifest
+    # lives in, never by whatever tag the manifest happens to claim: a manifest
+    # regenerated for a newer release cannot silently become "the candidate"
+    # under an older record's directory, and vice versa.
+    resolved = candidate_path.resolve()
+    match = EVIDENCE_DIR.match(resolved.parent.name)
+    require(match is not None, f'candidate manifest must live in docs/evidence/release-<tag>-verification/: {candidate_path}')
+    require(resolved.parent.parent == (ROOT / 'docs/evidence').resolve(),
+            f'candidate must be a committed evidence record under docs/evidence/: {candidate_path}')
+    return match.group(1)
+
+
+def prepare(frozen, out, node_archive, node_sums, b2_spec=None, candidate_path=None):
+    # The bucket spec is validated once the candidate is known (below): its
+    # name must carry the candidate's release, and nothing before that point
+    # mutates anything, so the refusal arrives just as early.
+    candidate_path = Path(candidate_path) if candidate_path else DEFAULT_CANDIDATE
+    tag = expected_tag(candidate_path)
     candidate = json.loads(candidate_path.read_text())
     validate_candidate(candidate)
-    require(candidate['tag'] == 'v0.6.4' and candidate['platform'] == 'linux/amd64', 'wrong frozen candidate')
+    if b2_spec:
+        validate_spec(b2_spec, tag)
+    require(candidate['tag'] == tag and candidate['platform'] == 'linux/amd64', 'wrong frozen candidate')
     sources = frozen / 'source'
     for repo, source in candidate['repositories'].items():
         actual = subprocess.check_output(['git', '-C', str(sources / repo), 'rev-parse', 'HEAD'], text=True).strip()
@@ -140,6 +161,7 @@ def prepare(frozen, out, node_archive, node_sums, b2_spec=None):
     save(out / 'storage.json', {'backend': 'b2', 'spec': b2_spec} if b2_spec else {'backend': 'local'})
     files = {str(p.relative_to(out)): sha(p) for p in out.rglob('*') if p.is_file()}
     save(out / 'handoff.json', {'status': 'PREPARED_NOT_EXECUTED', 'files': files,
+                              'candidate_tag': candidate['tag'],
                               'candidate_sha256': sha(candidate_path), 'node_version': '26.8.1',
                               'application_builds': 'published digests only'})
     print(f'Prepared {out}; handoff.json sha256={sha(out / "handoff.json")}')
@@ -264,7 +286,12 @@ def execute(stage, approval, b2_credentials=None):
             require(sha(stage / name) == expected, f'handoff file changed: {name}')
         candidate = json.loads((stage / 'candidate.json').read_text())
         validate_candidate(candidate)
-        require(candidate['tag'] == 'v0.6.4' and candidate['platform'] == 'linux/amd64', 'wrong candidate')
+        # The handoff names the release it was prepared for; the candidate file
+        # it ships is hash-checked above, so the two can only disagree if the
+        # handoff was assembled for another release.
+        require('candidate.json' in handoff['files'], 'handoff does not cover candidate.json')
+        require(candidate['tag'] == handoff.get('candidate_tag') and candidate['platform'] == 'linux/amd64',
+                'wrong candidate')
         evidence.update(candidate_sha256=sha(stage / 'candidate.json'), handoff_sha256=sha(stage / 'handoff.json'),
                         before=host_facts())
         check_host(evidence['before'])
@@ -275,7 +302,7 @@ def execute(stage, approval, b2_credentials=None):
             require(b2_credentials is not None and b2_credentials.is_file(), 'missing dedicated B2 key file')
             require(b2_credentials.stat().st_mode & 0o077 == 0, 'B2 key file must be private (0600)')
             credentials = json.loads(b2_credentials.read_text())
-            bucket = TestBucket(storage['spec'], credentials)
+            bucket = TestBucket(storage['spec'], credentials, candidate['tag'])
             evidence['storage'] = bucket.require_empty()
         else:
             require(b2_credentials is None, 'B2 key supplied to a local-storage run; refusing silent fallback')
@@ -307,7 +334,7 @@ def execute(stage, approval, b2_credentials=None):
                             '--s3-bucket', spec['bucket'], '--s3-access-key', credentials['access_key']]
             setup_env['VIDRA_SETUP_S3_SECRET_KEY'] = credentials['secret_key']
         run.run(['vidra', 'setup', '--non-interactive', '--yes', '--domain', ORIGIN,
-                 '--instance-name', 'v0.6.4 disposable acceptance', '--registration', 'closed',
+                 '--instance-name', f'{candidate["tag"]} disposable acceptance', '--registration', 'closed',
                  '--tls-mode', 'internal', *storage_args, '--release-tag', candidate['tag'],
                  '--template', 'env/production.env.example'], 'setup-internal', env=setup_env)
         run.run(['vidra', 'setup', '--check', 'env/production.env'], 'setup-check')
@@ -417,6 +444,7 @@ if __name__ == '__main__':
     prep.add_argument('--node-sums', type=Path, required=True)
     prep.add_argument('--out', type=Path, required=True)
     prep.add_argument('--b2-spec', type=Path, help='nonsecret dedicated test bucket/ID/endpoint/region JSON')
+    prep.add_argument('--candidate', type=Path, help='frozen verification manifest, docs/evidence/release-<tag>-verification/manifest.json (default: the v0.6.4 record)')
     modes.add_parser('check-host')
     execute_parser = modes.add_parser('run')
     execute_parser.add_argument('stage', type=Path)
@@ -425,7 +453,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.mode == 'prepare':
         prepare(args.frozen.resolve(), args.out.resolve(), args.node_archive.resolve(), args.node_sums.resolve(),
-                json.loads(args.b2_spec.read_text()) if args.b2_spec else None)
+                json.loads(args.b2_spec.read_text()) if args.b2_spec else None,
+                candidate_path=args.candidate.resolve() if args.candidate else None)
     elif args.mode == 'check-host':
         facts = host_facts()
         print(json.dumps(facts, indent=2))
