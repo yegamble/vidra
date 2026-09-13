@@ -111,7 +111,7 @@ runtime stages' own upgrade step, not from a base-image change. The floor is
 asserted at PUBLISH time only: `publish-container.yml` (core#236 / user#220 /
 search#45, merged before this tag) runs `apk` inside the just-pushed digest and
 fails the job below `OPENSSL_MIN_APK_VERSION=3.5.8-r0` — the step ran green for
-all three v0.6.5 publishes (07:0x… see the release run summaries). The PR-time
+all three v0.6.5 publishes (runs 34743148440 core 06:36Z, 34743227349 user 06:38Z, 34743386552 search 06:41Z; step "Assert the pushed image carries the OpenSSL floor"). The PR-time
 `docker-build` lane builds the image but does not assert the floor, so a dropped
 upgrade step is caught after the release exists, not before.
 
