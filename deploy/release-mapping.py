@@ -16,11 +16,17 @@ holds the pinned triple against it.
 Exit codes are the contract deploy/lib.sh's release_mapping_check reads:
   0  verified: exactly one record pairs these tags (plus digest/bundle checks)
   3  UNVERIFIED but allowed: a pre-manifest release, the tree's own release
-     whose record cannot exist yet, or a rollback to an unrecorded uniform
-     release. Printed as a WARNING; the caller continues.
+     whose record cannot exist yet, or (rollback only) any release-shaped
+     triple no record pairs. Printed as WARNINGs naming what was not
+     verified; the caller continues.
   1  refused: a finding that predicts a broken or unreleased deployment, or
      release metadata that cannot be trusted
   2  usage error (argparse)
+
+WHAT THIS DOES NOT VERIFY: the newest release. deploy/release.sh tags this
+repository before any image exists, so a tree at vN (or the vN bundle) cannot
+carry releases/vN.json, and deploying vN there only checks that all three tags
+say vN. That stays open until the record ships inside the release artifact.
 
 Stdlib only, no network, and it reads nothing from the env file except the
 three VIDRA_*_TAG keys: that file holds every production secret, and this
@@ -173,10 +179,24 @@ def load_records(directory):
     return records, problems
 
 
+def compose_value(raw):
+    """A value as Compose's env-file parser reads it (compose-go dotenv,
+    extractVarValue, checked at v2.14.0). Unquoted, it cuts an inline comment at
+    ` #` and trims trailing whitespace. Quoted, it takes everything up to the
+    closing quote. deploy.sh hands over env_get's raw text, which keeps both, and
+    refusing `VIDRA_USER_TAG=v0.6.4 # pinned` would stop a deploy Compose would
+    have run happily."""
+    value = raw.replace('\r', '').lstrip(' \t')
+    if value[:1] in ('"', "'"):
+        end = value.find(value[0], 1)
+        return value[1:end] if end != -1 else value
+    return value.split(' #', 1)[0].rstrip()
+
+
 def env_file_value(path, key):
     """deploy/lib.sh's env_get, for one key: a non-empty process environment
     variable wins (compose interpolation applies the same precedence), else the
-    LAST `KEY=value` line, with CR and one layer of matching quotes stripped.
+    LAST `KEY=value` line. The raw text is returned; compose_value normalises it.
     Never sources the file and never looks at any other key."""
     value = os.environ.get(key, '')
     if value:
@@ -189,9 +209,7 @@ def env_file_value(path, key):
         for line in handle:
             match = pattern.match(line.rstrip('\n'))
             if match:
-                found = match.group(1).replace('\r', '')
-    if len(found) >= 2 and found[0] == found[-1] and found[0] in '"\'':
-        found = found[1:-1]
+                found = match.group(1)
     return found
 
 
@@ -218,14 +236,15 @@ def check(args):
     for name, key, repo in COMPONENTS:
         explicit = getattr(args, name)
         raw = explicit if explicit else env_file_value(args.env, key)
-        match = PINNED.fullmatch(raw) if raw else None
-        if not raw:
+        value = compose_value(raw)
+        match = PINNED.fullmatch(value) if value else None
+        if not value:
             errors.append(f'{key} is not set{" in " + str(args.env) if args.env else ""}. Without it '
                           f'there is no {repo} image to pull, and the compose render refuses the '
                           'stack later anyway; set it to the tag of a recorded release.')
         elif not match:
-            errors.append(f'{key}={raw!r} is not a Docker image tag (optionally @sha256:<digest>). '
-                          'Compose would refuse to parse the image reference.')
+            errors.append(f'{key}={raw!r} is {value!r} as Compose reads it, which is not a Docker '
+                          'image tag (optionally @sha256:<digest>), so no image can be pulled under it.')
         else:
             pins[name] = (key, repo, match.group('tag'), match.group('digest'))
 
@@ -282,78 +301,102 @@ def check(args):
               for name, _, _ in COMPONENTS}
     known = ', '.join(sorted((r['release'] for r in records), key=semver)) or '(none)'
     floor = min((r['release'] for r in records), key=semver)
+    releases = Path(args.releases).name
+    shaped = all(semver(env[name]) is not None for name, _, _ in COMPONENTS)
+    uniform = len(set(env.values())) == 1
+    tag = env['core']
 
+    # A STALE BUNDLE, whatever the records say. The record-based comparison above
+    # needs a matching record; without one, the v0.6.5 bundle unpacked over an
+    # install still pinning v0.6.3 used to warn here and then dump, pull and
+    # migrate before deploy.sh's ledger assertion compared v0.6.3's migrator with
+    # v0.6.5's schema number. The bundle is built from the core tag, so the two
+    # must agree. Rollbacks run under a newer bundle on purpose; not checked there.
+    if bundle is not None and args.mode == 'deploy' and bundle.get('tag', '') != tag:
+        errors.append(f'{args.bundle_manifest}: vidra-bundle.manifest tag is {bundle.get("tag") or "(missing)"} '
+                      f'but VIDRA_CORE_TAG={tag}. deploy.sh takes the expected core schema version from '
+                      'this manifest, so the migrator would be checked against another release\'s '
+                      'number after the dump, pull and migrations have already run, and this tree\'s '
+                      'compose files belong to that other release. Nothing was changed. Unpack the '
+                      f'{tag} bundle over this tree, or pin the release this bundle is.')
+
+    if not any(owners.values()) and shaped and all(semver(env[n]) < semver(floor) for n, _, _ in COMPONENTS):
+        warnings.append(f'{described} is a release from before {floor}, the first one with a record '
+                        f'in {releases}/. Its component mapping and digests are NOT verified. '
+                        + ('That alone would not stop this run: refusing would make every historical '
+                           'release undeployable and un-rollback-able.' if errors else
+                           'Continuing, because refusing would make every historical release '
+                           'undeployable and un-rollback-able.') + pinned_note(pins))
+        return (REFUSED if errors else UNVERIFIED), errors, warnings, notes
+
+    if not any(owners.values()) and shaped and uniform and tag in tree_tags:
+        warnings.append(f'{described} is this tree\'s own release, and {releases}/{tag}.json is not '
+                        'in it. deploy/release.sh tags this repository before any image exists, so a '
+                        f'tree at {tag} cannot carry {tag}\'s record. NOT verified: that these three '
+                        'images were released together, and their digests. Only the tag strings '
+                        'were compared. This gap closes when the record ships inside the release '
+                        'artifact.' + pinned_note(pins))
+        return (REFUSED if errors else UNVERIFIED), errors, warnings, notes
+
+    findings = []
+    for name, key, repo in COMPONENTS:
+        version = semver(env[name])
+        if owners[name]:
+            findings.append(f'{key}={env[name]} belongs to release {", ".join(owners[name])}')
+        elif version is None:
+            findings.append(f'{key}={env[name]} is not a release tag (vMAJOR.MINOR.PATCH), and no '
+                            'release record names it')
+        elif version < semver(floor):
+            findings.append(f'{key}={env[name]}: no release record names this {repo} tag (it '
+                            f'predates {floor}, the first recorded release)')
+        else:
+            findings.append(f'{key}={env[name]}: no release record names this {repo} tag '
+                            f'(recorded releases: {known})')
     if any(owners.values()):
-        # MIXED: at least one tag belongs to a recorded release, and no record
-        # pairs the whole triple.
-        for name, key, repo in COMPONENTS:
-            if owners[name]:
-                errors.append(f'{key}={env[name]} belongs to release {", ".join(owners[name])}')
-            else:
-                version = semver(env[name])
-                older = (f' (it predates {floor}, the first recorded release)'
-                         if version is not None and version < semver(floor) else '')
-                errors.append(f'{key}={env[name]}: no release record names this {repo} tag{older}')
         best = max(sum(r['components'][n]['tag'] == env[n] for n, _, _ in COMPONENTS) for r in records)
         for record in sorted(records, key=lambda r: semver(r['release'])):
-            shared = sum(record['components'][n]['tag'] == env[n] for n, _, _ in COMPONENTS)
-            if shared != best:
+            if sum(record['components'][n]['tag'] == env[n] for n, _, _ in COMPONENTS) != best:
                 continue
             for name, key, _ in COMPONENTS:
                 expected = record['components'][name]['tag']
                 if expected != env[name]:
-                    errors.append(f'release {record["release"]} expects {key}={expected} '
-                                  f'(env has {env[name]})')
+                    findings.append(f'release {record["release"]} expects {key}={expected} '
+                                    f'(env has {env[name]})')
+
+    if args.mode == 'rollback' and shaped:
+        # THE DOCUMENTED ROLLBACK. rollback.sh's own usage rolls back ONE component
+        # (`--user v0.2.0` under the core and search being served), which is a
+        # triple no record pairs by construction. Mid-incident, refusing it
+        # predicts no failure of the rollback: a tag that does not exist still
+        # fails the pull, which puts the env file back. So it continues, and says
+        # precisely what nobody checked. A digest that contradicts a record and
+        # an unreadable record stay fatal above.
+        warnings.extend(findings)
+        warnings.append(f'{described} is not a recorded release: these images were never released '
+                        'together as far as releases/ knows. NOT verified: that this frontend, core '
+                        'API and search schema work as a set, that these tags exist (the pull below '
+                        'still fails on one that does not), and their digests.' + pinned_note(pins)
+                        + ' The rollback continues because a missing pairing record does not predict '
+                        'that it fails. Once service is back, return to a recorded release '
+                        f'({known}) or record this pairing.')
+        return UNVERIFIED, errors, warnings, notes
+
+    errors.extend(findings)
+    if any(owners.values()):
         errors.append(f'{described} is not a recorded release: these images were never released '
                       'together, so nothing verified that this frontend, core API and search '
                       'schema work as a set (a UI calling endpoints this core lacks, a search '
                       "index this core's outbox does not feed). Nothing was changed. Pin one "
                       f'recorded release ({known}), or, if this pairing really was released, add '
-                      f'its record under {Path(args.releases).name}/ on main and update this tree.')
-        return REFUSED, errors, warnings, notes
-
-    versions = [semver(env[name]) for name, _, _ in COMPONENTS]
-    uniform = len(set(env.values())) == 1
-    tag = env['core']
-
-    if all(v is not None and v < semver(floor) for v in versions):
-        warnings.append(f'{described} is a release from before {floor}, the first one with a record '
-                        f'in {Path(args.releases).name}/. Its component mapping and digests are NOT '
-                        'verified. Continuing, because refusing would make every historical release '
-                        'undeployable and un-rollback-able.' + pinned_note(pins))
-        return UNVERIFIED, errors, warnings, notes
-
-    if uniform and semver(tag) is not None and tag in tree_tags:
-        warnings.append(f'{described} is this tree\'s own release, and '
-                        f'{Path(args.releases).name}/{tag}.json is not in it. That is expected: '
-                        'deploy/release.sh tags this repository before any image exists, so a tree '
-                        f'at {tag} cannot carry {tag}\'s record. The component pairing and digests are '
-                        f'NOT verified. The record reaches hosts with the next meta release.'
-                        + pinned_note(pins))
-        return UNVERIFIED, errors, warnings, notes
-
-    if uniform and semver(tag) is not None and args.mode == 'rollback':
-        warnings.append(f'{described} has no record in {Path(args.releases).name}/ (recorded: {known}). '
-                        'The mapping and digests are NOT verified. A rollback continues, because a '
-                        'missing record is a bookkeeping gap rather than a sign the rollback fails: '
-                        'a tag that does not exist still fails the pull, which puts the env file '
-                        f'back. Add {Path(args.releases).name}/{tag}.json on main.' + pinned_note(pins))
-        return UNVERIFIED, errors, warnings, notes
-
-    for name, key, repo in COMPONENTS:
-        if semver(env[name]) is None:
-            errors.append(f'{key}={env[name]} is not a release tag (vMAJOR.MINOR.PATCH), and no '
-                          'release record names it')
-        else:
-            errors.append(f'{key}={env[name]}: no release record names this {repo} tag '
-                          f'(recorded releases: {known})')
-    hint = (f'add {Path(args.releases).name}/{tag}.json on main and update this tree to a commit '
-            'that carries it, or pin the tree itself to that release with deploy/pin-release.sh'
-            if uniform else 'pin one recorded release, or record this pairing')
-    errors.append(f'{described} is not a recorded release, so nothing says these images exist or '
-                  'were released together. Deploying it runs a mapping nobody verified, against '
-                  'this tree\'s compose files and migration expectations, which may belong to a '
-                  f'different release. Nothing was changed. Either {hint}.')
+                      f'its record under {releases}/ on main and update this tree.')
+    else:
+        hint = (f'add {releases}/{tag}.json on main and update this tree to a commit that carries '
+                'it, or pin the tree itself to that release with deploy/pin-release.sh'
+                if uniform else 'pin one recorded release, or record this pairing')
+        errors.append(f'{described} is not a recorded release, so nothing says these images exist or '
+                      'were released together. Deploying it runs a mapping nobody verified, against '
+                      'this tree\'s compose files and migration expectations, which may belong to a '
+                      f'different release. Nothing was changed. Either {hint}.')
     return REFUSED, errors, warnings, notes
 
 
@@ -399,8 +442,8 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('command', choices=('check',))
     parser.add_argument('--mode', choices=('deploy', 'rollback'), required=True,
-                        help='rollback skips the bundle comparison and tolerates an unrecorded '
-                             'uniform target; everything else is identical')
+                        help='rollback skips the bundle comparison and warns (instead of refusing) '
+                             'on a triple no record pairs; digests and records stay fatal')
     parser.add_argument('--releases', type=Path,
                         default=Path(__file__).resolve().parents[1] / 'releases')
     parser.add_argument('--env', type=Path, help='env file to read VIDRA_*_TAG from')

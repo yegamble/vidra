@@ -281,7 +281,7 @@ class MappingTests(Fixture):
         deploy.sh used to dump, pull and migrate before its ledger assertion
         compared v0.6.3's migrator with v0.6.5's schema number."""
         stale = str(self.bundle(tag='v0.6.5', schema='0150', core_commit=hexsha(5)))
-        for triple in (('v0.6.3',) * 3, ('v0.6.5', 'v0.6.4', 'v0.6.4')):
+        for triple in (('v0.6.3',) * 3, ('v0.6.4', 'v0.6.3', 'v0.6.4')):
             with self.subTest(triple=triple):
                 code, out = self.check('--bundle-manifest', stale, env_file=self.env(*triple))
                 self.assertEqual(code, REFUSED, out)
