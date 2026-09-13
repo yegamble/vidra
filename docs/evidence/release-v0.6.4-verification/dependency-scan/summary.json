@@ -1,0 +1,730 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-13T02:53:06.698093+00:00",
+  "candidate": "v0.6.4 (manifest ../manifest.json; unchanged)",
+  "host": "darwin/arm64 workstation; images pulled by linux/amd64 platform digest, scanned as files, never executed",
+  "purpose": "Exact-candidate dependency and image vulnerability scan (REL-01/QLT-01/A39 security facet), plus failure-propagation proof for the new CI gates.",
+  "runs": [
+    {
+      "name": "vidra-core-v064-govulncheck-source",
+      "command": "GOTOOLCHAIN=go1.27.1 GOOS=linux GOARCH=amd64 govulncheck -json ./...",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T02:50:29Z",
+      "ended_utc": "2026-09-13T02:50:33Z",
+      "source_revision": "ed55a6d946dad3f2e72a47b2518ac095352c795d",
+      "scope": "Exact source tree; stdlib judged at the release image Go version (go1.27.1). Default build tags (release binaries use default tags).",
+      "configuration": {
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.3.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "go_version": "go1.27.1",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "reachable_symbol_advisories": [],
+      "module_level_advisories": [
+        "GO-2026-5932"
+      ],
+      "raw": "raw/vidra-core-v064.govulncheck.json.gz",
+      "raw_sha256": "efc9570122dc8f076c5f13af10df7bc6aead7f2c3e478321278c92cb7fda360e"
+    },
+    {
+      "name": "vidra-core-main-govulncheck-source",
+      "command": "GOTOOLCHAIN=go1.27.1 GOOS=linux GOARCH=amd64 govulncheck -json ./...",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T02:50:33Z",
+      "ended_utc": "2026-09-13T02:50:35Z",
+      "source_revision": "0261b59e09c4230d8ae175fed24652f6b3020f0d",
+      "scope": "Exact source tree; stdlib judged at the release image Go version (go1.27.1). Default build tags (release binaries use default tags).",
+      "configuration": {
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.3.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "go_version": "go1.27.1",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "reachable_symbol_advisories": [],
+      "module_level_advisories": [
+        "GO-2026-5932"
+      ],
+      "raw": "raw/vidra-core-main.govulncheck.json.gz",
+      "raw_sha256": "acaa575060d8910e762b37046968d1611d62058c56f5d6ca32f9f4a6941bd8bb"
+    },
+    {
+      "name": "vidra-search-v064-govulncheck-source",
+      "command": "GOTOOLCHAIN=go1.27.1 GOOS=linux GOARCH=amd64 govulncheck -json ./...",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T02:50:35Z",
+      "ended_utc": "2026-09-13T02:50:37Z",
+      "source_revision": "1f8b85425e7d4dbb039edca56850282df9b93c6d",
+      "scope": "Exact source tree; stdlib judged at the release image Go version (go1.27.1). Default build tags (release binaries use default tags).",
+      "configuration": {
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.3.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "go_version": "go1.27.1",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "reachable_symbol_advisories": [],
+      "module_level_advisories": [
+        "GO-2026-5932",
+        "GO-2026-6303",
+        "GO-2026-6354",
+        "GO-2026-6355"
+      ],
+      "raw": "raw/vidra-search-v064.govulncheck.json.gz",
+      "raw_sha256": "dae5267e08d766853137e0a54066a9b8fc4441a97583e7ae2c81b75c1fd836ed"
+    },
+    {
+      "name": "vidra-search-main-govulncheck-source",
+      "command": "GOTOOLCHAIN=go1.27.1 GOOS=linux GOARCH=amd64 govulncheck -json ./...",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T02:50:37Z",
+      "ended_utc": "2026-09-13T02:50:39Z",
+      "source_revision": "5f7a3a3e7f62aa4885342cbc378ad28e1b3054b4",
+      "scope": "Exact source tree; stdlib judged at the release image Go version (go1.27.1). Default build tags (release binaries use default tags).",
+      "configuration": {
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.3.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "go_version": "go1.27.1",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "reachable_symbol_advisories": [],
+      "module_level_advisories": [
+        "GO-2026-5932",
+        "GO-2026-6303",
+        "GO-2026-6354",
+        "GO-2026-6355"
+      ],
+      "raw": "raw/vidra-search-main.govulncheck.json.gz",
+      "raw_sha256": "68037950dcfd583f46d36d162a7be2ea0618914364cccf7089786e19c0c0e5c9"
+    },
+    {
+      "name": "vidra-core-v064-binary-govulncheck",
+      "command": "govulncheck -mode=binary -json /app/api",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T02:50:46Z",
+      "ended_utc": "2026-09-13T02:50:47Z",
+      "image": "ghcr.io/yegamble/vidra-core@sha256:c0d41c276129f88d13668731954416dbba8884dd11476c86cd3f99fabebbe0c5",
+      "binary_sha256": "0ec31451232a5869d11a54212f73f0c175e561e04ed5b6f5f5b3c29a087ba90a",
+      "binary_go_version": "go1.27.1",
+      "scope": "Executable extracted from the exact published linux/amd64 image. Binary mode cannot prove reachability; its symbol rows for x/crypto/ssh and x/crypto/openpgp are not linked: `go list -deps ./cmd/api` for linux/amd64 at the release revision contains neither package (core 655 deps, search 374 deps).",
+      "configuration": {
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.3.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "scan_level": "symbol",
+        "scan_mode": "binary"
+      },
+      "reported_advisories": [
+        "GO-2026-5932"
+      ],
+      "raw": "raw/vidra-core-v064-binary.govulncheck.json.gz",
+      "raw_sha256": "9c6e02b168909055e4c7224a7480f28adf657dc8d0d624d220028a79556ed360"
+    },
+    {
+      "name": "vidra-search-v064-binary-govulncheck",
+      "command": "govulncheck -mode=binary -json /app/api",
+      "exit_code": 0,
+      "started_utc": "2026-09-13T02:50:50Z",
+      "ended_utc": "2026-09-13T02:50:51Z",
+      "image": "ghcr.io/yegamble/vidra-search@sha256:c8f49a5b8e2af91e99baf1120af120119a53766cb40bb4fe3bd7f81377a01488",
+      "binary_sha256": "a676b2350925c6b87f254b2eede26362759e82249d7acf13bfc38b174187b028",
+      "binary_go_version": "go1.27.1",
+      "scope": "Executable extracted from the exact published linux/amd64 image. Binary mode cannot prove reachability; its symbol rows for x/crypto/ssh and x/crypto/openpgp are not linked: `go list -deps ./cmd/api` for linux/amd64 at the release revision contains neither package (core 655 deps, search 374 deps).",
+      "configuration": {
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.3.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "scan_level": "symbol",
+        "scan_mode": "binary"
+      },
+      "reported_advisories": [
+        "GO-2026-5932",
+        "GO-2026-6303",
+        "GO-2026-6354",
+        "GO-2026-6355"
+      ],
+      "raw": "raw/vidra-search-v064-binary.govulncheck.json.gz",
+      "raw_sha256": "226fcd8215a67e5a5c6df08068c97196e72719da1bdb5ed67ae87c27475ee63b"
+    },
+    {
+      "name": "vidra-user-v064-npm-audit-full",
+      "command": "npm audit --package-lock-only --json",
+      "exit_code": 1,
+      "source_revision": "e584069ee724b49af3d3f3d944efc34d3be6da75",
+      "npm": "10.9.2 (workstation, 2026-09-13T02:2xZ); advisory data from registry.npmjs.org bulk endpoint at scan time \u2014 npm exposes no database timestamp",
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 1,
+        "high": 4,
+        "critical": 1,
+        "total": 6
+      },
+      "advisories": [
+        [
+          "baseline-browser-mapping",
+          "moderate",
+          "GHSA-w5vr-8v7q-w6rv"
+        ],
+        [
+          "brace-expansion",
+          "high",
+          "GHSA-3jxr-9vmj-r5cp"
+        ],
+        [
+          "brace-expansion",
+          "high",
+          "GHSA-mh99-v99m-4gvg"
+        ],
+        [
+          "brace-expansion",
+          "high",
+          "GHSA-rgw5-rvv9-x895"
+        ],
+        [
+          "browserslist",
+          "high",
+          "GHSA-73wf-gq98-2v4g"
+        ],
+        [
+          "browserslist",
+          "high",
+          "GHSA-c83g-rgw3-j3cx"
+        ],
+        [
+          "js-yaml",
+          "high",
+          "GHSA-2883-xcg3-v3hh"
+        ],
+        [
+          "js-yaml",
+          "high",
+          "GHSA-52cp-r559-cp3m"
+        ],
+        [
+          "js-yaml",
+          "high",
+          "GHSA-5p4m-2wfm-xmqj"
+        ],
+        [
+          "next",
+          "critical",
+          "GHSA-2xp9-vwfh-vxw4"
+        ],
+        [
+          "next",
+          "critical",
+          "GHSA-p293-qw3h-jr36"
+        ]
+      ],
+      "raw": "raw/vidra-user-v064.npm-audit.json.gz",
+      "raw_sha256": "c28d68805d595305587e8beb15426314180dd005a0528e1acf489ed5a24599be"
+    },
+    {
+      "name": "vidra-user-v064-npm-audit-runtime",
+      "command": "npm audit --package-lock-only --omit=dev --json",
+      "exit_code": 1,
+      "source_revision": "e584069ee724b49af3d3f3d944efc34d3be6da75",
+      "npm": "10.9.2 (workstation, 2026-09-13T02:2xZ); advisory data from registry.npmjs.org bulk endpoint at scan time \u2014 npm exposes no database timestamp",
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 1,
+        "high": 0,
+        "critical": 1,
+        "total": 2
+      },
+      "advisories": [
+        [
+          "baseline-browser-mapping",
+          "moderate",
+          "GHSA-w5vr-8v7q-w6rv"
+        ],
+        [
+          "next",
+          "critical",
+          "GHSA-2xp9-vwfh-vxw4"
+        ],
+        [
+          "next",
+          "critical",
+          "GHSA-p293-qw3h-jr36"
+        ]
+      ],
+      "raw": "raw/vidra-user-v064.npm-audit-omit-dev.json.gz",
+      "raw_sha256": "548b714aceabcd6735c32ac53214e8a6a2dd9d16d0a02378c50bba85e69f0a23"
+    },
+    {
+      "name": "vidra-user-main-npm-audit-full",
+      "command": "npm audit --package-lock-only --json",
+      "exit_code": 1,
+      "source_revision": "dc4f164d12e2c787ac56d2b3b0981e4155d8b4cb",
+      "npm": "10.9.2 (workstation, 2026-09-13T02:2xZ); advisory data from registry.npmjs.org bulk endpoint at scan time \u2014 npm exposes no database timestamp",
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 1,
+        "high": 4,
+        "critical": 1,
+        "total": 6
+      },
+      "advisories": [
+        [
+          "baseline-browser-mapping",
+          "moderate",
+          "GHSA-w5vr-8v7q-w6rv"
+        ],
+        [
+          "brace-expansion",
+          "high",
+          "GHSA-3jxr-9vmj-r5cp"
+        ],
+        [
+          "brace-expansion",
+          "high",
+          "GHSA-mh99-v99m-4gvg"
+        ],
+        [
+          "brace-expansion",
+          "high",
+          "GHSA-rgw5-rvv9-x895"
+        ],
+        [
+          "browserslist",
+          "high",
+          "GHSA-73wf-gq98-2v4g"
+        ],
+        [
+          "browserslist",
+          "high",
+          "GHSA-c83g-rgw3-j3cx"
+        ],
+        [
+          "js-yaml",
+          "high",
+          "GHSA-2883-xcg3-v3hh"
+        ],
+        [
+          "js-yaml",
+          "high",
+          "GHSA-52cp-r559-cp3m"
+        ],
+        [
+          "js-yaml",
+          "high",
+          "GHSA-5p4m-2wfm-xmqj"
+        ],
+        [
+          "next",
+          "critical",
+          "GHSA-2xp9-vwfh-vxw4"
+        ],
+        [
+          "next",
+          "critical",
+          "GHSA-p293-qw3h-jr36"
+        ]
+      ],
+      "raw": "raw/vidra-user-main.npm-audit.json.gz",
+      "raw_sha256": "c28d68805d595305587e8beb15426314180dd005a0528e1acf489ed5a24599be"
+    },
+    {
+      "name": "vidra-user-main-npm-audit-runtime",
+      "command": "npm audit --package-lock-only --omit=dev --json",
+      "exit_code": 1,
+      "source_revision": "dc4f164d12e2c787ac56d2b3b0981e4155d8b4cb",
+      "npm": "10.9.2 (workstation, 2026-09-13T02:2xZ); advisory data from registry.npmjs.org bulk endpoint at scan time \u2014 npm exposes no database timestamp",
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 1,
+        "high": 0,
+        "critical": 1,
+        "total": 2
+      },
+      "advisories": [
+        [
+          "baseline-browser-mapping",
+          "moderate",
+          "GHSA-w5vr-8v7q-w6rv"
+        ],
+        [
+          "next",
+          "critical",
+          "GHSA-2xp9-vwfh-vxw4"
+        ],
+        [
+          "next",
+          "critical",
+          "GHSA-p293-qw3h-jr36"
+        ]
+      ],
+      "raw": "raw/vidra-user-main.npm-audit-omit-dev.json.gz",
+      "raw_sha256": "548b714aceabcd6735c32ac53214e8a6a2dd9d16d0a02378c50bba85e69f0a23"
+    },
+    {
+      "name": "vidra-core-v064-image-osv-scanner",
+      "command": "crane pull --format tarball ghcr.io/yegamble/vidra-core@sha256:c0d41c276129f88d13668731954416dbba8884dd11476c86cd3f99fabebbe0c5 img.tar && osv-scanner scan image --archive img.tar --format json",
+      "exit_code": 1,
+      "image_platform_manifest": "ghcr.io/yegamble/vidra-core@sha256:c0d41c276129f88d13668731954416dbba8884dd11476c86cd3f99fabebbe0c5",
+      "manifest_sha256_verified": true,
+      "configuration": {
+        "scanner": "osv-scanner 2.5.1 (osv-scalibr 0.5.2), go install via proxy.golang.org; crane v0.22.1",
+        "database": "api.osv.dev queried online at scan time (2026-09-13T02:37:56Z-02:38:09Z); no local DB snapshot"
+      },
+      "detected_packages_by_ecosystem": {
+        "Go": 71,
+        "Alpine:v3.24": 138,
+        "crates.io": 97,
+        "PyPI": 1
+      },
+      "vulnerable_packages": [
+        {
+          "path": "/app/api",
+          "ecosystem": "Go",
+          "package": "golang.org/x/crypto",
+          "os_package": null,
+          "version": "0.56.0",
+          "advisories": [
+            "GO-2026-5932"
+          ],
+          "fixed": []
+        },
+        {
+          "path": "/app/api",
+          "ecosystem": "Go",
+          "package": "google.golang.org/grpc",
+          "os_package": null,
+          "version": "1.83.1",
+          "advisories": [
+            "GHSA-2v4p-qf9q-27wj"
+          ],
+          "fixed": [
+            "1.82.2",
+            "1.83.2",
+            "1.85.0-dev.0.20260825072537-93e31b48545e"
+          ]
+        },
+        {
+          "path": "/lib/apk/db/installed",
+          "ecosystem": "Alpine:v3.24",
+          "package": "glib",
+          "os_package": "glib",
+          "version": "2.88.1-r1",
+          "advisories": [
+            "ALPINE-CVE-2021-27219"
+          ],
+          "fixed": [
+            "2.66.6-r0"
+          ]
+        },
+        {
+          "path": "/lib/apk/db/installed",
+          "ecosystem": "Alpine:v3.24",
+          "package": "openssl",
+          "os_package": "libcrypto3",
+          "version": "3.5.7-r0",
+          "advisories": [
+            "ALPINE-CVE-2026-14456",
+            "ALPINE-CVE-2026-14457",
+            "ALPINE-CVE-2026-18798",
+            "ALPINE-CVE-2026-54874",
+            "ALPINE-CVE-2026-63072",
+            "ALPINE-CVE-2026-63073",
+            "ALPINE-CVE-2026-63074",
+            "ALPINE-CVE-2026-63075",
+            "ALPINE-CVE-2026-63076",
+            "ALPINE-CVE-2026-75803"
+          ],
+          "fixed": [
+            "3.5.8-r0"
+          ]
+        },
+        {
+          "path": "/lib/apk/db/installed",
+          "ecosystem": "Alpine:v3.24",
+          "package": "openssl",
+          "os_package": "libssl3",
+          "version": "3.5.7-r0",
+          "advisories": [
+            "ALPINE-CVE-2026-14456",
+            "ALPINE-CVE-2026-14457",
+            "ALPINE-CVE-2026-18798",
+            "ALPINE-CVE-2026-54874",
+            "ALPINE-CVE-2026-63072",
+            "ALPINE-CVE-2026-63073",
+            "ALPINE-CVE-2026-63074",
+            "ALPINE-CVE-2026-63075",
+            "ALPINE-CVE-2026-63076",
+            "ALPINE-CVE-2026-75803"
+          ],
+          "fixed": [
+            "3.5.8-r0"
+          ]
+        },
+        {
+          "path": "/usr/lib/libdovi.so.3.3.2",
+          "ecosystem": "crates.io",
+          "package": "anyhow",
+          "os_package": null,
+          "version": "1.0.98",
+          "advisories": [
+            "RUSTSEC-2026-0190"
+          ],
+          "fixed": [
+            "1.0.103"
+          ]
+        },
+        {
+          "path": "/usr/lib/librav1e.so.0.8.1",
+          "ecosystem": "crates.io",
+          "package": "anyhow",
+          "os_package": null,
+          "version": "1.0.98",
+          "advisories": [
+            "RUSTSEC-2026-0190"
+          ],
+          "fixed": [
+            "1.0.103"
+          ]
+        },
+        {
+          "path": "/usr/lib/librav1e.so.0.8.1",
+          "ecosystem": "crates.io",
+          "package": "core2",
+          "os_package": null,
+          "version": "0.4.0",
+          "advisories": [
+            "RUSTSEC-2026-0105"
+          ],
+          "fixed": []
+        },
+        {
+          "path": "/usr/lib/librav1e.so.0.8.1",
+          "ecosystem": "crates.io",
+          "package": "crossbeam-epoch",
+          "os_package": null,
+          "version": "0.9.18",
+          "advisories": [
+            "RUSTSEC-2026-0204"
+          ],
+          "fixed": [
+            "0.9.20"
+          ]
+        },
+        {
+          "path": "/usr/lib/librav1e.so.0.8.1",
+          "ecosystem": "crates.io",
+          "package": "paste",
+          "os_package": null,
+          "version": "1.0.15",
+          "advisories": [
+            "RUSTSEC-2024-0436"
+          ],
+          "fixed": []
+        },
+        {
+          "path": "/usr/lib/librav1e.so.0.8.1",
+          "ecosystem": "crates.io",
+          "package": "rand",
+          "os_package": null,
+          "version": "0.9.1",
+          "advisories": [
+            "GHSA-cq8v-f236-94qc",
+            "RUSTSEC-2026-0097"
+          ],
+          "fixed": [
+            "0.10.1",
+            "0.8.6",
+            "0.9.3"
+          ]
+        }
+      ],
+      "raw": "raw/vidra-core-v064-image.osv.json.gz",
+      "raw_sha256": "4f0a09213fa52daca7a3c48d6d38a4c2f3e96e4d90d21c727389d5d07dd43b6a",
+      "raw_all_packages": "raw/vidra-core-v064-image.osv-all-packages.json.gz",
+      "raw_all_packages_sha256": "11b2b9bae9c648f5b46de3c7e2e45eee9e42efe6a6a97ca9b13535b23ab4cefd"
+    },
+    {
+      "name": "vidra-user-v064-image-osv-scanner",
+      "command": "crane pull --format tarball ghcr.io/yegamble/vidra-user@sha256:a0a5b34f4bcd77e926d9cfc6de0ce23aacb2df20a01f4c0d4901f808c946625e img.tar && osv-scanner scan image --archive img.tar --format json",
+      "exit_code": 1,
+      "image_platform_manifest": "ghcr.io/yegamble/vidra-user@sha256:a0a5b34f4bcd77e926d9cfc6de0ce23aacb2df20a01f4c0d4901f808c946625e",
+      "manifest_sha256_verified": true,
+      "configuration": {
+        "scanner": "osv-scanner 2.5.1 (osv-scalibr 0.5.2), go install via proxy.golang.org; crane v0.22.1",
+        "database": "api.osv.dev queried online at scan time (2026-09-13T02:37:56Z-02:38:09Z); no local DB snapshot"
+      },
+      "detected_packages_by_ecosystem": {
+        "Alpine:v3.24": 18
+      },
+      "vulnerable_packages": [
+        {
+          "path": "/lib/apk/db/installed",
+          "ecosystem": "Alpine:v3.24",
+          "package": "openssl",
+          "os_package": "libcrypto3",
+          "version": "3.5.7-r0",
+          "advisories": [
+            "ALPINE-CVE-2026-14456",
+            "ALPINE-CVE-2026-14457",
+            "ALPINE-CVE-2026-18798",
+            "ALPINE-CVE-2026-54874",
+            "ALPINE-CVE-2026-63072",
+            "ALPINE-CVE-2026-63073",
+            "ALPINE-CVE-2026-63074",
+            "ALPINE-CVE-2026-63075",
+            "ALPINE-CVE-2026-63076",
+            "ALPINE-CVE-2026-75803"
+          ],
+          "fixed": [
+            "3.5.8-r0"
+          ]
+        },
+        {
+          "path": "/lib/apk/db/installed",
+          "ecosystem": "Alpine:v3.24",
+          "package": "openssl",
+          "os_package": "libssl3",
+          "version": "3.5.7-r0",
+          "advisories": [
+            "ALPINE-CVE-2026-14456",
+            "ALPINE-CVE-2026-14457",
+            "ALPINE-CVE-2026-18798",
+            "ALPINE-CVE-2026-54874",
+            "ALPINE-CVE-2026-63072",
+            "ALPINE-CVE-2026-63073",
+            "ALPINE-CVE-2026-63074",
+            "ALPINE-CVE-2026-63075",
+            "ALPINE-CVE-2026-63076",
+            "ALPINE-CVE-2026-75803"
+          ],
+          "fixed": [
+            "3.5.8-r0"
+          ]
+        }
+      ],
+      "raw": "raw/vidra-user-v064-image.osv.json.gz",
+      "raw_sha256": "77e192b73b0e9a10642a018805b3f63150798168269f1790f798aa2dd6bd36e6",
+      "raw_all_packages": "raw/vidra-user-v064-image.osv-all-packages.json.gz",
+      "raw_all_packages_sha256": "3a55136799247217527d3316ee4b691a4e3f4cf2146a194dcaf4e446ffbd0343"
+    },
+    {
+      "name": "vidra-search-v064-image-osv-scanner",
+      "command": "crane pull --format tarball ghcr.io/yegamble/vidra-search@sha256:c8f49a5b8e2af91e99baf1120af120119a53766cb40bb4fe3bd7f81377a01488 img.tar && osv-scanner scan image --archive img.tar --format json",
+      "exit_code": 1,
+      "image_platform_manifest": "ghcr.io/yegamble/vidra-search@sha256:c8f49a5b8e2af91e99baf1120af120119a53766cb40bb4fe3bd7f81377a01488",
+      "manifest_sha256_verified": true,
+      "configuration": {
+        "scanner": "osv-scanner 2.5.1 (osv-scalibr 0.5.2), go install via proxy.golang.org; crane v0.22.1",
+        "database": "api.osv.dev queried online at scan time (2026-09-13T02:37:56Z-02:38:09Z); no local DB snapshot"
+      },
+      "detected_packages_by_ecosystem": {
+        "Go": 32,
+        "Alpine:v3.24": 21
+      },
+      "vulnerable_packages": [
+        {
+          "path": "/app/api",
+          "ecosystem": "Go",
+          "package": "golang.org/x/crypto",
+          "os_package": null,
+          "version": "0.54.0",
+          "advisories": [
+            "GO-2026-5932",
+            "GO-2026-6303",
+            "GO-2026-6354",
+            "GO-2026-6355"
+          ],
+          "fixed": [
+            "0.55.0",
+            "0.56.0"
+          ]
+        },
+        {
+          "path": "/lib/apk/db/installed",
+          "ecosystem": "Alpine:v3.24",
+          "package": "openssl",
+          "os_package": "libcrypto3",
+          "version": "3.5.7-r0",
+          "advisories": [
+            "ALPINE-CVE-2026-14456",
+            "ALPINE-CVE-2026-14457",
+            "ALPINE-CVE-2026-18798",
+            "ALPINE-CVE-2026-54874",
+            "ALPINE-CVE-2026-63072",
+            "ALPINE-CVE-2026-63073",
+            "ALPINE-CVE-2026-63074",
+            "ALPINE-CVE-2026-63075",
+            "ALPINE-CVE-2026-63076",
+            "ALPINE-CVE-2026-75803"
+          ],
+          "fixed": [
+            "3.5.8-r0"
+          ]
+        },
+        {
+          "path": "/lib/apk/db/installed",
+          "ecosystem": "Alpine:v3.24",
+          "package": "openssl",
+          "os_package": "libssl3",
+          "version": "3.5.7-r0",
+          "advisories": [
+            "ALPINE-CVE-2026-14456",
+            "ALPINE-CVE-2026-14457",
+            "ALPINE-CVE-2026-18798",
+            "ALPINE-CVE-2026-54874",
+            "ALPINE-CVE-2026-63072",
+            "ALPINE-CVE-2026-63073",
+            "ALPINE-CVE-2026-63074",
+            "ALPINE-CVE-2026-63075",
+            "ALPINE-CVE-2026-63076",
+            "ALPINE-CVE-2026-75803"
+          ],
+          "fixed": [
+            "3.5.8-r0"
+          ]
+        }
+      ],
+      "raw": "raw/vidra-search-v064-image.osv.json.gz",
+      "raw_sha256": "a42391751689e10b3b9c78245e12c0dc4732a1a681e79a3be735d7ac1e3458b7",
+      "raw_all_packages": "raw/vidra-search-v064-image.osv-all-packages.json.gz",
+      "raw_all_packages_sha256": "7a2263251694eca96d08f31862dc3f0e1fdaf00a0be45c76fea8daa154a50761"
+    }
+  ],
+  "gate_failure_propagation": {
+    "dependency-audit (vidra-user#218)": {
+      "v0.6.4 lockfile": 1,
+      "main lockfile": 1,
+      "branch lockfile": 0,
+      "branch, registry unreachable": 1,
+      "main lockfile + .npmrc offline=true/omit=dev, hardened flags": 1,
+      "main lockfile + .npmrc offline=true, ORIGINAL flags (defect found in review, fixed)": 0
+    },
+    "govulncheck (vidra-core#233, vidra-search#43)": {
+      "go1.27.1 branch": 0,
+      "go1.26.2 stale toolchain (reachable stdlib advisories)": "2 (govulncheck 3)",
+      "vulndb unreachable (https://vuln.invalid)": 1
+    },
+    "ci_runs": "First PR runs: dependency-audit, govulncheck (core, search) concluded success; search#43 ci-required success. core#233 and user#218 ci-required red because Docker Hub minio/minio no longer resolves (integration, e2e-backed (s3)) \u2014 separate fix core#234."
+  },
+  "coverage_limits": [
+    "osv-scanner detected ZERO npm packages and no node binary in the vidra-user image (18 Alpine packages only), so it missed next@16.3.0 that npm audit reports. An image scan alone is not a frontend dependency scan.",
+    "govulncheck (source and binary) does not know GHSA-2v4p-qf9q-27wj (grpc) \u2014 absent from the Go vulnerability database at db_last_modified 2026-09-10T14:48:42Z; osv-scanner reported it from the core binary.",
+    "Neither scanner sees libheif inside @img/sharp-libvips native files, vendored next/dist/compiled code, or the yt-dlp zipapp contents.",
+    "npm audit and OSV expose no advisory-database snapshot timestamp; scan times are recorded instead."
+  ],
+  "exact_candidate_security_facet": "FAIL for v0.6.4 as published: known critical/high advisories in shipped dependencies (triage in ../../../security-scan-v0.6.4-2026-09-12.md). Exploitability of the frontend advisories is assessed as not demonstrated; that does not clear the candidate. No workflow-row status is promoted or demoted by this record; release verdict remains NO-GO."
+}
