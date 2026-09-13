@@ -15,11 +15,15 @@ tags. What is refused is a triple no record pairs, like a user image from one
 release beside a core image from another. On a bundle tree, a deploy also
 refuses a bundle whose tag is not `VIDRA_CORE_TAG`.
 
-A **rollback** is stopped only by what predicts the wrong bytes or untrustworthy
-metadata: a digest that contradicts a record, an unreadable record, an
-unparseable tag. A triple no record pairs, including `rollback.sh --user <tag>`
-under the core and search being served, continues with a WARNING that names what
-was not verified.
+A **rollback** is stopped only by what predicts the wrong bytes or a broken env
+rewrite: a digest that contradicts a record that loaded, and a target tag that is
+unset or not release-shaped. A triple no record pairs, including `rollback.sh
+--user <tag>` under the core and search being served, continues with a WARNING
+that names what was not verified. So does a `releases/` directory that cannot be
+used (missing, or holding a corrupt record for some *other* release): it says
+nothing about the target's images, so the rollback continues with a WARNING that
+NOTHING about the target was verified, to be fixed after service is back. The
+same problems refuse a deploy.
 
 ## Who adds one, and when
 
@@ -32,11 +36,15 @@ the new file.
 The record cannot live inside the release's own meta tag. `deploy/release.sh`
 pushes this repository's tag **before** it creates the component releases, because
 vidra-core's release-assets workflow builds the bundle from that tag. No image
-exists at that moment, so there is no digest to record. A tree pinned to tag
-`vN` (by `deploy/pin-release.sh`, or an unpacked `vN` bundle) therefore runs `vN`
-**unverified with a WARNING** instead of being refused, provided all three tags
-are `vN`. The record for `vN` reaches hosts through the next meta tag or bundle.
-That is also what rollbacks to `vN` read.
+exists at that moment, so there is no digest to record. A **uniform** triple
+(all three tags `vN`) that is newer than every record therefore runs
+**unverified with a WARNING** instead of being refused, whatever tree it runs
+from: a tree pinned to tag `vN` (by `deploy/pin-release.sh`, or an unpacked `vN`
+bundle), and equally a tree on `main` — a fresh `install.sh --git`, which clones
+`main` and one commit after the tag no longer sits on it, or a rehearsal lab
+deploying `vN-rc1`. A typo'd uniform tag is still caught by the checkout sync
+and `compose pull`. The record for `vN` reaches hosts through the next meta tag
+or bundle. That is also what rollbacks to `vN` read.
 
 **This is an open gap.** An upgrade to the newest release compares only the tag
 strings, and a wrong digest pin only warns. It closes when the record ships
@@ -44,6 +52,25 @@ strings, and a wrong digest pin only warns. It closes when the record ships
 `deploy/release.sh`) would emit `releases/vN.json` after the images publish, and
 the vN bundle would carry it. `deploy.sh` on a vN bundle would then verify the
 digests against a record that shipped with vN.
+
+## Overriding a refusal: `VIDRA_RELEASE_MAPPING=warn`
+
+A **mixed** triple no record pairs, or a uniform one that falls between two
+records, refuses a deploy. When that pairing is deliberate and its record has not
+landed on this tree yet (a platform release that re-releases only vidra-user, a
+lab), set `VIDRA_RELEASE_MAPPING=warn` in `env/production.env` or in the
+environment (`VIDRA_RELEASE_MAPPING=warn ./deploy/deploy.sh`, read through
+`env_get` like `VIDRA_SKIP_DNS_PREFLIGHT`). `deploy/lib.sh` logs the override
+and the checker turns that one refusal into a WARNING naming exactly what was
+skipped: that the images were released together, that the tags exist, and their
+digests. Unset it once the record is on the tree.
+
+It never reaches past the pairing. A digest that contradicts a record, a tag that
+is unset or not release-shaped, a `releases/` directory that cannot be used and a
+stale bundle all predict a real failure and still stop the deploy. An
+unrecognised value is reported and ignored, so a typo neither bypasses the check
+silently nor stops a rollback. In a rollback the override changes nothing: an
+unpaired triple already warns there.
 
 ## Releases without a record
 

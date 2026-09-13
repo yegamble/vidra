@@ -377,13 +377,29 @@ def check(args):
                            'undeployable and un-rollback-able.') + pinned_note(pins))
         return (REFUSED if errors else UNVERIFIED), errors, warnings, notes
 
-    if not any(owners.values()) and uniform and tag in tree_tags:
-        warnings.append(f'{described} is this tree\'s own release, and {releases}/{tag}.json is not '
-                        'in it. deploy/release.sh tags this repository before any image exists, so a '
-                        f'tree at {tag} cannot carry {tag}\'s record. NOT verified: that these three '
-                        'images were released together, and their digests. Only the tag strings '
-                        'were compared. This gap closes when the record ships inside the release '
-                        'artifact.' + pinned_note(pins))
+    # A UNIFORM triple newer than every record: the tree's own release (tag vN
+    # or the vN bundle), or vN deployed from main by a fresh `install.sh --git`
+    # or a rehearsal lab. Neither can carry releases/vN.json yet: release.sh
+    # tags this repository before any image exists, and the record lands on
+    # main after the images are verified. `git tag --points-at HEAD` is empty
+    # on main one commit after the tag, so the tree's tags alone would refuse
+    # the first deploy of every release until the owner hand-lands the record.
+    # A typo'd uniform tag is still caught by the checkout sync and `compose
+    # pull`; the mixed-triple refusal below is where the value is.
+    newest = max((r['release'] for r in records), key=semver)
+    if not any(owners.values()) and uniform and (tag in tree_tags or semver(tag) > semver(newest)):
+        warnings.append(f'{described} is newer than every record in {releases}/ (newest: {newest}), '
+                        f'and {releases}/{tag}.json is not in this tree. '
+                        + (f'It is this tree\'s own release: deploy/release.sh tags this repository '
+                           f'before any image exists, so a tree at {tag} cannot carry {tag}\'s record. '
+                           if tag in tree_tags else
+                           'A tree on main (a fresh install.sh --git, or a rehearsal lab deploying a '
+                           'prerelease) gets the record only after the images are verified and it '
+                           'lands. ')
+                        + 'NOT verified: that these three images were released together, and their '
+                        'digests. Only the tag strings were compared; a tag that does not exist still '
+                        'fails the checkout sync or the pull. This gap closes when the record ships '
+                        'inside the release artifact.' + pinned_note(pins))
         return (REFUSED if errors else UNVERIFIED), errors, warnings, notes
 
     findings = []
@@ -426,6 +442,22 @@ def check(args):
                         f'({known}) or record this pairing.')
         return UNVERIFIED, errors, warnings, notes
 
+    # THE OVERRIDE (VIDRA_RELEASE_MAPPING=warn, passed by lib.sh as --unrecorded
+    # warn). It covers exactly this refusal, the pairing, and nothing above it:
+    # an unparseable tag, a broken record set and a digest contradiction
+    # returned before this point, and a stale bundle is in `errors` here, so the
+    # override cannot reach past any of them.
+    if args.unrecorded == 'warn' and not errors:
+        warnings.extend(findings)
+        warnings.append(f'VIDRA_RELEASE_MAPPING=warn: {described} is not a recorded release and would '
+                        'have stopped this deploy. NOT verified: that these images were released '
+                        'together (a UI calling endpoints this core lacks, a search index this '
+                        "core's outbox does not feed), that these tags exist (the checkout sync or "
+                        'the pull still fails on one that does not), and their digests.'
+                        + pinned_note(pins) + ' Continuing on the override. Unset it once '
+                        f'{releases}/ records this pairing (recorded releases: {known}).')
+        return UNVERIFIED, errors, warnings, notes
+
     errors.extend(findings)
     if any(owners.values()):
         errors.append(f'{described} is not a recorded release: these images were never released '
@@ -433,7 +465,8 @@ def check(args):
                       'schema work as a set (a UI calling endpoints this core lacks, a search '
                       "index this core's outbox does not feed). Nothing was changed. Pin one "
                       f'recorded release ({known}), or, if this pairing really was released, add '
-                      f'its record under {releases}/ on main and update this tree.')
+                      f'its record under {releases}/ on main and update this tree, or deploy it '
+                      'anyway with VIDRA_RELEASE_MAPPING=warn.')
     else:
         hint = (f'add {releases}/{tag}.json on main and update this tree to a commit that carries '
                 'it, or pin the tree itself to that release with deploy/pin-release.sh'
@@ -441,7 +474,8 @@ def check(args):
         errors.append(f'{described} is not a recorded release, so nothing says these images exist or '
                       'were released together. Deploying it runs a mapping nobody verified, against '
                       'this tree\'s compose files and migration expectations, which may belong to a '
-                      f'different release. Nothing was changed. Either {hint}.')
+                      f'different release. Nothing was changed. Either {hint}, or deploy it anyway '
+                      'with VIDRA_RELEASE_MAPPING=warn.')
     return REFUSED, errors, warnings, notes
 
 
@@ -500,6 +534,11 @@ def main():
                         help="this tree's vidra-bundle.manifest, when it is an unpacked bundle")
     parser.add_argument('--tree-tag', action='append',
                         help='a tag pointing at this checkout\'s HEAD (repeatable)')
+    parser.add_argument('--unrecorded', choices=('refuse', 'warn'), default='refuse',
+                        help='what deploy/lib.sh passes for VIDRA_RELEASE_MAPPING=warn: a deploy of '
+                             'a triple no record pairs WARNS (exit 3) instead of refusing. Never '
+                             'reaches an unparseable tag, a broken releases/, a digest contradiction '
+                             'or a stale bundle')
     args = parser.parse_args()
     try:
         code, errors, warnings, notes = check(args)

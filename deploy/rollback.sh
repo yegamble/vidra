@@ -224,14 +224,19 @@ fi
 # $ENV_FILE and the running stack exactly as they were.
 #
 # Severity follows what each finding predicts for a ROLLBACK (see the header of
-# deploy/release-mapping.py). A digest that contradicts a record, an unreadable
-# record or an unparseable tag stops it. A triple no record pairs is a WARNING
-# that names what was not verified, not a refusal: the single-component rollback
-# in this script's usage is exactly such a triple, and refusing it mid-incident
-# would predict nothing about whether the rollback works. A tag that does not
-# exist still fails the pull below, which restores the env file. The bundle
-# manifest is not compared either: a bundle host rolls back under the newer
-# bundle on purpose.
+# deploy/release-mapping.py). A digest that contradicts a record that loaded, or
+# an unparseable target tag (this script would write it into $ENV_FILE), stops
+# it. A triple no record pairs is a WARNING that names what was not verified,
+# not a refusal: the single-component rollback in this script's usage is
+# exactly such a triple, and refusing it mid-incident would predict nothing
+# about whether the rollback works. A tag that does not exist still fails the
+# pull below, which restores the env file. So is a releases/ directory that
+# cannot be used (missing, or a corrupt record for some OTHER release): it says
+# nothing about the target's images, so the run continues with a WARNING that
+# NOTHING about the target was verified. The bundle manifest is not compared
+# either: a bundle host rolls back under the newer bundle on purpose.
+# VIDRA_RELEASE_MAPPING=warn changes nothing here; an unpaired triple already
+# warns.
 #
 # `declare -F` first: a tree whose lib.sh predates this function (a released
 # bundle with only rollback.sh replaced) would otherwise exit 127 with a message

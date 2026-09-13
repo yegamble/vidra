@@ -137,10 +137,40 @@ class MappingTests(Fixture):
         self.assertIn('VIDRA_SEARCH_TAG=v0.6.9', out)
         self.assertIn('no release record', out)
 
-    def test_a_release_newer_than_every_record_is_refused_in_deploy(self):
-        code, out = self.check(env_file=self.env('v0.7.0', 'v0.7.0', 'v0.7.0'))
+    def test_a_uniform_release_newer_than_every_record_is_unverified_in_deploy(self):
+        """M2. install.sh --git clones main, and after one post-tag commit
+        `git tag --points-at HEAD` is empty, so the tree's-own-release
+        allowance never applied to a fresh --git install of the newest release
+        (nor to a rehearsal lab deploying v0.6.5-rc1 from main). A UNIFORM
+        triple newer than every record is UNVERIFIED with a WARNING, whatever
+        the tree's tags: a typo'd uniform tag is still caught by the checkout
+        sync and `compose pull`; the mixed-triple refusal is where the value
+        is."""
+        for triple in (('v0.7.0',) * 3, ('v0.7.0-rc1',) * 3):
+            with self.subTest(triple=triple):
+                code, out = self.check(env_file=self.env(*triple))
+                self.assertEqual(code, UNVERIFIED, out)
+                self.assertIn('WARNING', out)
+                self.assertIn('newer than every record', out)
+                self.assertIn('NOT verified', out)
+                self.assertIn(f'releases/{triple[0]}.json', out)
+                self.assertNotIn('ERROR', out)
+
+    def test_a_mixed_triple_newer_than_every_record_is_still_refused_in_deploy(self):
+        for triple in (('v0.7.0', 'v0.6.4', 'v0.7.0'), ('v0.7.0', 'v0.7.1', 'v0.7.0')):
+            with self.subTest(triple=triple):
+                code, out = self.check(env_file=self.env(*triple))
+                self.assertEqual(code, REFUSED, out)
+                self.assertIn('VIDRA_USER_TAG', out)
+
+    def test_a_uniform_unrecorded_release_between_records_is_still_refused_in_deploy(self):
+        """Newer than SOME record is not newer than every record: a gap in the
+        middle of the record set is bookkeeping to fix, not a release whose
+        record cannot exist yet."""
+        self.add(synthetic('v0.6.6', 'v0.6.6', 'v0.6.6', 'v0.6.6'))
+        code, out = self.check(env_file=self.env('v0.6.5', 'v0.6.5', 'v0.6.5'))
         self.assertEqual(code, REFUSED, out)
-        self.assertIn('releases/v0.7.0.json', out)
+        self.assertIn('releases/v0.6.5.json', out)
 
     def test_the_trees_own_release_is_unverified_not_refused(self):
         """release.sh tags this repository BEFORE the images exist, so a tree
@@ -475,6 +505,59 @@ class RecordSetSeverityTests(Fixture):
         self.assertIn(digest(7), out)
 
 
+class OverrideTests(Fixture):
+    """M2. `--unrecorded warn` is what deploy/lib.sh passes for
+    VIDRA_RELEASE_MAPPING=warn: a pairing no record pairs WARNS instead of
+    stopping the run, naming exactly what was skipped. It is for the first
+    deploy of a release whose record has not landed yet, and for rehearsal
+    labs. It must never reach past the mapping: a digest that contradicts a
+    record, a tag that cannot be parsed, a broken releases/ and a stale bundle
+    all predict a real failure and still stop the run."""
+
+    def test_unrecorded_warn_downgrades_a_pairing_refusal_and_names_what_was_skipped(self):
+        self.add(synthetic('v0.6.6', 'v0.6.6', 'v0.6.6', 'v0.6.6'))
+        for triple in (('v0.6.5',) * 3, ('v0.6.6', 'v0.6.4', 'v0.6.6')):
+            with self.subTest(triple=triple):
+                code, out = self.check(env_file=self.env(*triple))
+                self.assertEqual(code, REFUSED, out)
+                code, out = self.check('--unrecorded', 'warn', env_file=self.env(*triple))
+                self.assertEqual(code, UNVERIFIED, out)
+                self.assertIn('WARNING', out)
+                self.assertNotIn('ERROR', out)
+                self.assertIn('VIDRA_RELEASE_MAPPING=warn', out)
+                self.assertIn('NOT verified', out)
+                self.assertIn('released together', out)
+                self.assertIn('digests', out)
+        self.assertIn('VIDRA_USER_TAG=v0.6.4 belongs to release v0.6.4', out)
+
+    def test_unrecorded_warn_cannot_bypass_a_digest_contradiction(self):
+        code, out = self.check('--unrecorded', 'warn', env_file=self.env(core=f'v0.6.4@{digest(7)}'))
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn('VIDRA_CORE_TAG pins digest', out)
+
+    def test_unrecorded_warn_cannot_bypass_an_unparseable_tag_or_a_broken_record_set(self):
+        for triple in (('v0.6.4', 'latest', 'v0.6.4'), ('v0.6.4', 'v0.6.4', None)):
+            with self.subTest(triple=triple):
+                code, out = self.check('--unrecorded', 'warn', env_file=self.env(*triple))
+                self.assertEqual(code, REFUSED, out)
+        (self.releases / 'v0.6.5.json').write_text('{not json')
+        code, out = self.check('--unrecorded', 'warn')
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn('v0.6.5.json', out)
+
+    def test_unrecorded_warn_cannot_bypass_a_stale_bundle(self):
+        stale = str(self.bundle(tag='v0.6.5', schema='0150', core_commit=hexsha(5)))
+        code, out = self.check('--unrecorded', 'warn', '--bundle-manifest', stale,
+                               env_file=self.env('v0.6.4', 'v0.6.3', 'v0.6.4'))
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn('vidra-bundle.manifest tag is v0.6.5', out)
+
+    def test_unrecorded_warn_changes_nothing_about_a_recorded_release(self):
+        code, out = self.check('--unrecorded', 'warn')
+        self.assertEqual(code, OK, out)
+        self.assertNotIn('WARNING', out)
+
+
 class CommittedRecordTests(unittest.TestCase):
     def test_v064_record_matches_the_release_evidence(self):
         """releases/v0.6.4.json was copied from the frozen verification
@@ -581,11 +664,11 @@ class ScriptOrderingTests(unittest.TestCase):
             (self.bin / name).write_text(body)
             (self.bin / name).chmod(0o755)
 
-    def write_env(self, core, user, search):
+    def write_env(self, core, user, search, extra=''):
         self.env_file.write_text(
             'VIDRA_TLS_MODE=external\nPOSTGRES_USER=vidra\nPOSTGRES_DB=vidra\n'
             f'JWT_SECRET={SECRET}\nVIDRA_CORE_TAG={core}\nVIDRA_USER_TAG={user}\n'
-            f'VIDRA_SEARCH_TAG={search}\n')
+            f'VIDRA_SEARCH_TAG={search}\n' + extra)
 
     def as_bundle(self, tag='v0.6.4', schema='0146', core_commit='ed55a6d946dad3f2e72a47b2518ac095352c795d'):
         (self.tree / 'vidra-bundle.manifest').write_text(
@@ -597,11 +680,11 @@ class ScriptOrderingTests(unittest.TestCase):
         for repo in (self.tree, self.tree / 'vidra-core'):
             subprocess.run(['git', 'init', '-q', str(repo)], check=True)
 
-    def run_script(self, *args):
+    def run_script(self, *args, process_env=None):
         result = subprocess.run(
             ['bash', *map(str, args)],
             env={**os.environ, 'PATH': f'{self.bin}:{os.environ["PATH"]}', 'HOME': str(self.home),
-                 'STUB_LOG': str(self.log), 'READY_TIMEOUT': '1'},
+                 'STUB_LOG': str(self.log), 'READY_TIMEOUT': '1', **(process_env or {})},
             capture_output=True, text=True, cwd=str(self.tree))
         calls = self.log.read_text() if self.log.exists() else ''
         out = result.stdout + result.stderr
@@ -706,6 +789,52 @@ class ScriptOrderingTests(unittest.TestCase):
                 finally:
                     shutil.rmtree(self.tree / 'releases', ignore_errors=True)
                     shutil.copytree(RECORDS, self.tree / 'releases')
+
+    def test_the_env_override_lets_an_unrecorded_pairing_deploy_with_a_warning(self):
+        """M2. VIDRA_RELEASE_MAPPING=warn is read through env_get, so it works
+        from the env file and from the process environment alike, and lib.sh
+        logs it loudly before the checker's own warning."""
+        self.as_bundle()
+        for source in ('env file', 'process environment'):
+            with self.subTest(source=source):
+                self.write_env('v0.6.4', 'v0.6.3', 'v0.6.4',
+                               extra='VIDRA_RELEASE_MAPPING=warn\n' if source == 'env file' else '')
+                self.log.unlink(missing_ok=True)
+                code, out, calls = self.run_script(
+                    self.tree / 'deploy/deploy.sh',
+                    process_env={'VIDRA_RELEASE_MAPPING': 'warn'} if source != 'env file' else None)
+                self.assertEqual(code, 0, out)
+                self.assertIn('VIDRA_RELEASE_MAPPING=warn', out)
+                self.assertIn('WARNING', out)
+                self.assertIn('VIDRA_USER_TAG=v0.6.3', out)
+                for mutation in self.MUTATIONS:
+                    self.assertIn(mutation, calls)
+
+    def test_the_env_override_cannot_bypass_a_digest_contradiction(self):
+        self.as_bundle()
+        self.write_env('v0.6.4', f'v0.6.4@{digest(7)}', 'v0.6.4', extra='VIDRA_RELEASE_MAPPING=warn\n')
+        code, out, calls = self.run_script(self.tree / 'deploy/deploy.sh')
+        self.assertNotEqual(code, 0, out)
+        self.assertIn('VIDRA_USER_TAG pins digest', out)
+        for mutation in self.MUTATIONS:
+            self.assertNotIn(mutation, calls, f'{mutation!r} ran before the refusal:\n{calls}')
+
+    def test_an_unknown_override_value_is_reported_and_ignored(self):
+        """A typo'd override must neither bypass the check silently nor stop a
+        run on its own: the normal verdict applies, with a line naming the
+        value that was ignored."""
+        self.as_bundle()
+        self.write_env('v0.6.4', 'v0.6.4', 'v0.6.4', extra='VIDRA_RELEASE_MAPPING=warm\n')
+        code, out, calls = self.run_script(self.tree / 'deploy/deploy.sh')
+        self.assertEqual(code, 0, out)
+        self.assertIn('VIDRA_RELEASE_MAPPING=warm', out)
+        self.assertIn('ignored', out)
+        self.write_env('v0.6.4', 'v0.6.3', 'v0.6.4', extra='VIDRA_RELEASE_MAPPING=warm\n')
+        self.log.unlink(missing_ok=True)
+        code, out, calls = self.run_script(self.tree / 'deploy/deploy.sh')
+        self.assertNotEqual(code, 0, out)
+        for mutation in self.MUTATIONS:
+            self.assertNotIn(mutation, calls)
 
     def strip_helper(self):
         lib = self.tree / 'deploy/lib.sh'

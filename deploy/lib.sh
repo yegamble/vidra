@@ -307,7 +307,7 @@ env_set_key() {
 # Exit 3 is the checker's UNVERIFIED code; see the header of
 # deploy/release-mapping.py for the full contract.
 release_mapping_check() {
-  local root="$1" mode="$2" rc=0 t
+  local root="$1" mode="$2" rc=0 t override
   local -a args=(check --mode "$mode" --releases "$root/releases" --env "$ENV_FILE"
     --core "$3" --user "$4" --search "$5")
   # Named here rather than left to python3's "can't open file", which the
@@ -316,6 +316,25 @@ release_mapping_check() {
     printf '[release-mapping] ERROR: deploy/release-mapping.py is missing from %s, so the pinned tags cannot be checked. This tree is incomplete or mixes revisions. Take deploy/release-mapping.py and releases/ from the same revision as deploy/lib.sh.\n' "$root" >&2
     return 1
   fi
+  # VIDRA_RELEASE_MAPPING=warn — the operator's override for a DEPLOY of a
+  # triple no record pairs (a release whose record has not landed on this tree
+  # yet, a rehearsal lab; a rollback already warns there). Read through env_get
+  # so it works from the process environment and the env file alike, exactly
+  # like VIDRA_SKIP_DNS_PREFLIGHT. It never reaches past the pairing: a digest
+  # that contradicts a record, a tag that cannot be parsed, a broken releases/
+  # and a stale bundle predict a real failure and still stop the run. An
+  # unrecognised value is reported and IGNORED rather than refused: a typo then
+  # neither bypasses the check silently (the normal verdict applies) nor stops
+  # a rollback on its own.
+  override="$(env_get VIDRA_RELEASE_MAPPING '')"
+  case "$override" in
+    warn)
+      printf '[release-mapping] WARNING: VIDRA_RELEASE_MAPPING=warn is set — a tag triple no record pairs will WARN instead of stopping this run. A digest that contradicts a record, a tag that cannot be parsed, a broken releases/ directory and a stale bundle still stop it. Unset it once releases/ records this pairing.\n' >&2
+      args+=(--unrecorded warn) ;;
+    ''|refuse) ;;
+    *)
+      printf '[release-mapping] WARNING: VIDRA_RELEASE_MAPPING=%s is not a value this check knows (warn, or unset) and was ignored; the normal verdict applies.\n' "$override" >&2 ;;
+  esac
   if is_bundle_tree "$root"; then
     args+=(--bundle-manifest "$root/vidra-bundle.manifest")
   elif command -v git >/dev/null 2>&1; then
