@@ -12,6 +12,8 @@
 # It REFUSES a core/search tag below MIN_EMBEDDED_MIGRATE_TAG (set below): those
 # images have no embedded `migrate` subcommand, so the migration one-shots `up -d`
 # depends on would boot API servers that never exit, and the rollback would hang.
+# It also REFUSES a target triple no releases/<tag>.json pairs (a --user from one
+# release under a core from another), before the env file is touched.
 #
 # WHAT THIS DOES NOT DO: it does not touch the database. That is deliberate and
 # it is only safe because of the release policy stated in deploy/README.md —
@@ -66,7 +68,7 @@ while [ $# -gt 0 ]; do
     --core)   CORE_TAG="${2:-}";   shift 2 ;;
     --user)   USER_TAG="${2:-}";   shift 2 ;;
     --search) SEARCH_TAG="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,37p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,39p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *)  CORE_TAG="$1"; USER_TAG="$1"; SEARCH_TAG="$1"; shift ;;
   esac
@@ -214,6 +216,26 @@ if [ "$TLS_MODE" = "external" ]; then
 else
   require_caddyfile_local
 fi
+
+# THE RELEASE MAPPING, on the TARGET triple (a flag not given keeps the tag
+# being served), BEFORE the env snapshot and rewrite below, so a refusal leaves
+# $ENV_FILE and the running stack exactly as they were. `--core`/`--user`/`--search`
+# are independent flags, and until this check nothing asked whether the triple
+# they produce had ever been released together: `--user` from one release under
+# a core from another went straight to `up -d`.
+#
+# Severity follows what each finding predicts for a ROLLBACK (see the header of
+# deploy/release-mapping.py): a mixed triple, a wrong digest or an unreadable
+# record stops it; a release from before the first record, or a uniform target
+# whose record was never added, is a WARNING. Mid-incident, a missing record is
+# a bookkeeping gap, and a tag that does not exist still fails the pull below,
+# which restores the env file. The bundle manifest is not compared here: a
+# bundle host rolls back under the newer bundle on purpose.
+release_mapping_check "$REPO_ROOT" rollback \
+  "${CORE_TAG:-$(env_get VIDRA_CORE_TAG '')}" \
+  "${USER_TAG:-$(env_get VIDRA_USER_TAG '')}" \
+  "${SEARCH_TAG:-$(env_get VIDRA_SEARCH_TAG '')}" \
+  || die "release mapping preflight refused the rollback target (findings above). $ENV_FILE was NOT rewritten and nothing was pulled or restarted; the release you are serving is untouched."
 
 HTTP_PORT="$(env_get HTTP_PORT 8080)"
 FRONTEND_PORT="$(env_get FRONTEND_PORT 3000)"

@@ -31,6 +31,8 @@
 #   is_bundle_tree ROOT    exit 0 when ROOT was unpacked, not cloned
 #   bundle_manifest_get ROOT KEY [DEFAULT]   one value from vidra-bundle.manifest
 #   env_snapshot FILE ROOT keeps 10 timestamped generations of an env file
+#   release_mapping_check ROOT MODE CORE USER SEARCH
+#                          exit 0 when releases/ allows this tag triple
 
 # Reads KEY from the env file WITHOUT sourcing it — that file is operator-edited
 # and holds secrets; `source`ing it would execute whatever is in there. A real
@@ -276,4 +278,51 @@ env_set_key() {
   cat "$tmp" > "$ENV_FILE"
   rm -f "$tmp"
   log "set ${key}=${val}"
+}
+
+# release_mapping_check ROOT MODE CORE USER SEARCH — hold the tag triple a run
+# is about to use against releases/<tag>.json, via deploy/release-mapping.py.
+# Returns 0 to continue (verified, or UNVERIFIED with the checker's WARNING
+# already printed) and 1 to refuse; the caller owns the die message, because
+# only the caller knows what "nothing was changed" covers at its call site.
+#
+# THE GAP THIS CLOSES. The three VIDRA_*_TAG values are independent strings,
+# and until this check nothing asked whether they had ever been released
+# TOGETHER: a vidra-user tag from another release, or a core/search pairing
+# never released together, was dumped, pulled, migrated and started. Tags are
+# passed in already resolved by env_get (or rollback's target), so the checker
+# judges exactly the triple the checkout sync and compose will use rather than
+# re-deriving it with a second parser.
+#
+# THE TREE'S OWN RELEASE. deploy/release.sh tags this repository BEFORE any
+# image exists, so a tree at tag vN (pin-release.sh's output, or the unpacked vN
+# bundle) cannot contain releases/vN.json. The tags pointing at HEAD, or the
+# bundle's own tag, are passed along so the checker can tell "this tree's own
+# release, record not yet possible" (a WARNING) from "a release this tree knows
+# nothing about" (a refusal). `git tag --points-at` only READS the checkout; a
+# failure there just forfeits that allowance.
+#
+# Exit 3 is the checker's UNVERIFIED code; see the header of
+# deploy/release-mapping.py for the full contract.
+release_mapping_check() {
+  local root="$1" mode="$2" rc=0 t
+  local -a args=(check --mode "$mode" --releases "$root/releases" --env "$ENV_FILE"
+    --core "$3" --user "$4" --search "$5")
+  if is_bundle_tree "$root"; then
+    args+=(--bundle-manifest "$root/vidra-bundle.manifest")
+  elif command -v git >/dev/null 2>&1; then
+    while IFS= read -r t; do
+      if [ -n "$t" ]; then
+        args+=(--tree-tag "$t")
+      fi
+    done <<EOF
+$(git -C "$root" tag --points-at HEAD 2>/dev/null || true)
+EOF
+  fi
+  python3 "$root/deploy/release-mapping.py" "${args[@]}" || rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    3) log "release mapping NOT verified (WARNING above) — continuing"; return 0 ;;
+  esac
+  return 1
 }

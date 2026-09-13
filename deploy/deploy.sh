@@ -496,6 +496,24 @@ require_embedded_migrate_tag VIDRA_CORE_TAG   "$(env_get VIDRA_CORE_TAG '')"
 require_embedded_migrate_tag VIDRA_SEARCH_TAG "$(env_get VIDRA_SEARCH_TAG '')"
 log "compose $(docker compose version --short), VIDRA_TLS_MODE=$TLS_MODE serving $(url_host "$(env_get PUBLIC_BASE_URL '')"), migrator tags >= $MIN_EMBEDDED_MIGRATE_TAG"
 
+# THE RELEASE MAPPING, and why it sits HERE: after the tag-shape gates above,
+# and before the checkout sync below moves a single file. Everything after this
+# line changes something (nested checkouts, a dump, pulled images, the schema,
+# running containers), so a triple nobody released must stop at this point.
+#
+# The failure it closes: three VIDRA_*_TAG values that are each a real release
+# but were never released TOGETHER (a vidra-user tag from another release, a
+# core/search pairing no release shipped). Every check above passes them, and
+# the stack comes up healthy with a frontend, core API and search schema nobody
+# verified as a set. releases/<tag>.json records the pairings that were
+# released; deploy/release-mapping.py (via release_mapping_check in lib.sh)
+# holds this triple against them, plus any pinned digests and, on a bundle
+# tree, the manifest's tag and schema version the ledger assertion in step 3
+# trusts.
+release_mapping_check "$REPO_ROOT" deploy \
+  "$(env_get VIDRA_CORE_TAG '')" "$(env_get VIDRA_USER_TAG '')" "$(env_get VIDRA_SEARCH_TAG '')" \
+  || die "release mapping preflight refused the tags in $ENV_FILE (findings above). Nothing was synced, dumped, pulled, migrated or restarted; the running stack is untouched."
+
 # THE CHECKOUT SYNC, AND THE ONE TREE THAT HAS NOTHING TO SYNC.
 #
 # An unpacked release bundle carries vidra-core/docker-compose.yml and the files
