@@ -8840,7 +8840,9 @@ command exists anywhere in the four repos.
 | meta | `ci-required` (**new**, all four repos) | PR | — | — | **the one name for branch protection** | — | — |
 
 **Workflows that pull their own compose images.** Confirmed and stated: core's
-`backend-integration` starts `minio/minio:RELEASE.2025-09-07T16-13-09Z` and
+`backend-integration` starts `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e`
+(2026-09-13: moved off Docker Hub, which no longer serves the MinIO image, in
+core#234; the docker-compose.yml pin follows the same move) and
 `clamav/clamav:1.5` chosen to mirror `docker-compose.yml`; `ipfs-integration`
 and the user backed lanes bring up core's compose and **build the api from
 source** (`up -d --build`). None of these lanes runs a PUBLISHED release image,
@@ -10342,9 +10344,9 @@ The lab is the usual disposable one-origin shape — a pipe-only proxy on
 second vidra-core process at `VIDRA_ROLE=worker`; native PostgreSQL 16.15 on
 55450 and redis on 56390, both fresh; core built from `main` `0f223b4`, schema
 135; frontend built on Node 26.8.1; real Chromium. The object store is one
-`mirror.gcr.io/minio/minio` container
-(`sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e`) on a
-named volume at 127.0.0.1:9110, read back with `mc`
+`quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e` container
+(2026-09-13: pulled at the time through the gcr mirror, which no longer serves it, and Docker Hub's MinIO repository is gone; the reference here is the same digest, from the registry vidra-core now pins)
+on a named volume at 127.0.0.1:9110, read back with `mc`
 RELEASE.2025-08-13T08-35-41Z run inside that container's network namespace.
 `STORAGE_S3_FORCE_PATH_STYLE=true`, `STORAGE_S3_USE_SSL=false`, region
 `us-east-1`, bucket `vidra-a24`. Lab deviations, recorded rather than hidden:
@@ -10578,8 +10580,10 @@ established above.
 
 The lab was torn down: the MinIO container and its volume, the throwaway
 Postgres cluster and redis, the four lab accounts and their media, and the
-read-only MinIO user and its policy. The `mirror.gcr.io/minio/minio` and
-`mirror.gcr.io/minio/mc` images are kept. Credentials, raw logs and the media
+read-only MinIO user and its policy. The MinIO server and `mc` images are kept
+(2026-09-13: pull them as `quay.io/minio/minio` and `quay.io/minio/mc` now; the
+gcr mirror no longer serves them, and the evidence JSON keeps the reference as
+it was run). Credentials, raw logs and the media
 fixture stay private under `/tmp/vidra-a24-r1`; nothing from it is committed.
 
 ## Storage hardening — boot write probe, typed refusals, key redaction — 2026-09-08
@@ -10797,7 +10801,9 @@ purge measurement below is unaffected — but it *does* rewrite what a storage
 refusal looks like, so the outage paragraph was re-run against `cb2d2780` plus
 this session's own fix and reports those numbers, not the pre-slice ones.
 
-The object store is one `mirror.gcr.io/minio/minio` on **127.0.0.1:9210** — its
+The object store is one `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e`
+(2026-09-13: pulled at the time through the gcr mirror, which no longer serves it, and Docker Hub's MinIO repository is gone; the reference here is the same digest, from the registry vidra-core now pins)
+on **127.0.0.1:9210** — its
 own origin, which is the whole point — path-style, no TLS, bucket `vidra-a32`. The two additions are `MINIO_API_CORS_ALLOW_ORIGIN`,
 set and unset across runs, and the **edge simulator** on 127.0.0.1:9310: a
 caching reverse proxy in front of `http://127.0.0.1:9210/vidra-a32` that speaks
@@ -11217,7 +11223,8 @@ with honest types.
 
 The lab was torn down: the MinIO container and its volume, the edge simulator,
 the throwaway Postgres cluster and redis, the frontend and proxy processes, and
-the lab accounts and their media. The `mirror.gcr.io/minio/*` images are kept.
+the lab accounts and their media. The MinIO images are kept (2026-09-13: they
+now come from `quay.io/minio/*`; the gcr mirror no longer serves them).
 Credentials, raw logs, the media fixtures and the browser traces stay private
 under `/tmp/vidra-a32-r1`; nothing from it is committed.
 
@@ -13202,7 +13209,9 @@ never follows a redirect, in front of `node .next/standalone/server.js` on
 **140**; frontend the unmodified `main` `766bb59`, rebuilt so
 `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8099` is baked; Node 26.8.1; browser
 Playwright 1.62.1's real Chromium. The object store is one
-`mirror.gcr.io/minio/minio` on 127.0.0.1:9210, bucket `vidra-a33`, **with no
+`quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e`
+(2026-09-13: pulled at the time through the gcr mirror, which no longer serves it, and Docker Hub's MinIO repository is gone; the reference here is the same digest, from the registry vidra-core now pins)
+on 127.0.0.1:9210, bucket `vidra-a33`, **with no
 bucket policy applied at all** — which is the first result and not a setup
 detail. The edge simulator is on 127.0.0.1:9310 with `-origin
 http://127.0.0.1:8088`: the api, not the bucket.
@@ -17981,9 +17990,9 @@ The lab is three core processes built from `a34-a25/ops-storage` `ff5e598` on
 go1.26.2 (schema **144**, migrated from empty): api on `127.0.0.1:8088`, workers
 on 8091 and 8092 for their own health ports, three distinct `process_heartbeats`
 rows. Native PostgreSQL 16.15 on 55470 and redis on 56410, both fresh; the object
-store is one `mirror.gcr.io/minio/minio`
-(`sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e`) on a
-named volume at `127.0.0.1:9130`, bucket `vidra-a34`, read back with `mc`
+store is one `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e`
+(2026-09-13: pulled at the time through the gcr mirror, which no longer serves it, and Docker Hub's MinIO repository is gone; the reference here is the same digest, from the registry vidra-core now pins)
+on a named volume at `127.0.0.1:9130`, bucket `vidra-a34`, read back with `mc`
 RELEASE.2025-08-13T08-35-41Z from inside the container. Lab deviations, recorded
 rather than hidden: `RATE_LIMIT_ENABLED=false` **except** for the Redis-outage
 step, where it was deliberately **true** so the fail-open could be measured;
