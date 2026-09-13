@@ -134,7 +134,7 @@ required. No production or stable-publication action was authorized.
 
 **Requested runtime milestone demonstrated on published v0.6.4 with B2 media.**
 A new private bucket and provider-verified single-bucket key isolated the fresh
-Ubuntu AMD64 run from every Sizetube live/backup bucket and all retained lab data.
+Ubuntu AMD64 run from every other-tenant live/backup bucket and all retained lab data.
 Owner/login, browser upload, real CMAF transcode, advancing video/audio and real
 vidra-search passed. Direct B2 original download matched the fixture/browser
 SHA-256. Actual images, storage identity and both ledgers were checked before
@@ -155,7 +155,7 @@ migration continuation above supplies the current disposition.
 ## Current-release runtime continuation — 2026-09-10
 
 **Storage requirement added by the operator:** use dedicated Backblaze B2 test
-buckets; never access or modify Sizetube's live or backup buckets. The run below
+buckets; never access or modify the other tenant's live or backup buckets. The run below
 used local storage. Its PASS remains valid within that scope; the
 [B2 continuation](runtime-acceptance-b2-v0.6.4.md) records separate provider
 execution and isolation evidence. The older A36 recovery bucket and shared-lab
