@@ -1,0 +1,13 @@
+# dependency-audit: the ORIGINAL gate script run under an .npmrc that sets offline=true (reproduction for the record)
+# script: vidra-user scripts/ci/dependency-audit.sh at b6cdaea (first commit of PR #218), sha256 df5f50b61b98e2ec4e0e062f80d28029f8d74363d97cd1e0ddb3fb07ac2b9ea4
+# inputs: vidra-user package.json + package-lock.json at e584069 (v0.6.4), lockfile sha256 42ddab720fadb43580c08acb2e33b9a5bd24af3f2c784b22b9818bb382ae7c84
+# .npmrc: offline=true
+# host: darwin/arm64 workstation, node v22.14.0, npm 10.9.2; captured 2026-09-13T05:26:06Z
+# the review run that first found this (2026-09-13 ~02:2xZ) kept no log; this is a re-run of the same script and lockfile, not that log
+# control, same inputs with the .npmrc removed: "2 vulnerabilities (1 moderate, 1 critical)" and "6 vulnerabilities (1 moderate, 4 high, 1 critical)", exit 1
+dependency-audit: node v22.14.0, npm 10.9.2, 2026-09-13T05:26:06Z
+== runtime dependencies (--omit=dev): any advisory fails
+found 0 vulnerabilities
+== full tree: high or critical fails
+found 0 vulnerabilities
+exit=0

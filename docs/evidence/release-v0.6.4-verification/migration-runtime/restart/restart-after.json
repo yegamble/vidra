@@ -1,0 +1,9 @@
+{
+  "status": "FAIL",
+  "action": "restart-after",
+  "started_at": 1789134462.6223109,
+  "checks": {},
+  "error": "clamav: unhealthy",
+  "finished_at": 1789134465.8397586,
+  "tool_sha256": "b6199abe9aa7e16ced0557cf034420e07e37bd804515d902f65e2577cf8e8074"
+}

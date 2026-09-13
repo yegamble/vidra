@@ -1,0 +1,31 @@
+{
+  "recorded_at": "2026-09-11T13:59:50.620684+00:00",
+  "reviewer": "fresh-context AI subagent verify_migration_harness",
+  "human_review": false,
+  "host_execution_by_reviewer": false,
+  "reviewed_files_sha256": {
+    "tests/peertube_release_acceptance.py": "fcbfd3d2ff2e090ac6ee9106ff272d350193cc0541a75c8eae21d64f7b89564b",
+    "tests/peertube_release_acceptance_test.py": "36f99d802f3db9b1bbf0359c8955aee1177a1b4ee189a288eb7c4b59d4fbb36f",
+    "tests/peertube_release_checks.py": "b6199abe9aa7e16ced0557cf034420e07e37bd804515d902f65e2577cf8e8074",
+    "tests/peertube_release_export.py": "73f9b35e1058235467c697c8105a865e1430c28ee08ee97da52d8d29af2e917e",
+    "tests/peertube-release-acceptance.mjs": "cc2cd2fe3c435159b90018cb7280a634b2fe1aae31ae78720b3be73ec9ec7578",
+    "docs/runtime-acceptance-migration-v0.6.4.md": "ff9abad7c3b9d03ac3d0ddbfb14409a2cc664166e74230dfaa10060b69a1ebe7"
+  },
+  "executed_checks": [
+    "6/6 targeted Python unit tests",
+    "node --check tests/peertube-release-acceptance.mjs",
+    "git diff --check",
+    "Independently recomputed four govulncheck raw-output hashes and finding-level counts",
+    "Compared retained per-video media assignments, 30 keys, search-sweep timestamps, 13-table fingerprints and changed host boot identity",
+    "Reviewed local restart/browser result artifacts and all report evidence link targets"
+  ],
+  "conclusion": "No remaining substantive harness blocker identified for generated COPY and restart milestone. Report keeps full release NO-GO and source/binary security scope distinct. This is not independent human installation/usability validation.",
+  "corrections_requested_and_applied": [
+    "Full persisted report-cell checks and mode/entity validation",
+    "Before/after exact image identity",
+    "Per-video media association and exact unique object count",
+    "Thirteen-table repeat fingerprints including video_files/captions",
+    "Disconnect requires actual successful reconciliation and preserves unrelated environment",
+    "Original archives described as read for copying but unmodified, not never accessed"
+  ]
+}

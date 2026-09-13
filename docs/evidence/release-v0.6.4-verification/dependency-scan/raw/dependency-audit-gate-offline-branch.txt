@@ -1,0 +1,12 @@
+dependency-audit: node v26.8.1, npm 11.19.0, 2026-09-13T02:26:26Z
+== runtime dependencies (--omit=dev): any advisory fails
+npm warn audit request to https://127.0.0.1:9/-/npm/v1/security/advisories/bulk failed, reason: connect ECONNREFUSED 127.0.0.1:9
+undefined
+npm error audit endpoint returned an error
+npm error A complete log of this run can be found in: ~/.npm/_logs/2026-09-13T02_26_26_131Z-debug-0.log
+== full tree: high or critical fails
+npm warn audit request to https://127.0.0.1:9/-/npm/v1/security/advisories/bulk failed, reason: connect ECONNREFUSED 127.0.0.1:9
+undefined
+npm error audit endpoint returned an error
+npm error A complete log of this run can be found in: ~/.npm/_logs/2026-09-13T02_26_26_360Z-debug-0.log
+::error::dependency-audit: an advisory at or above policy was found, or the audit could not run. Upgrade the named package; do not raise the level to get green.
