@@ -59,6 +59,28 @@ class ConfigArchiveTest(unittest.TestCase):
             recovery.check_config_archive(self.archive, self.root)
 
 
+class FailedBackupTest(unittest.TestCase):
+    before = {'last_success': 'a', 'vidra-20260913T040024Z.dump.gz': 'b'}
+
+    def test_a_private_partial_is_the_documented_residue(self):
+        after = dict(self.before, **{'vidra-20260913T040037Z.dump.gz.part': 'c'})
+        self.assertEqual(recovery.check_failed_backup(self.before, after, 'pg_dump: error'),
+                         ['vidra-20260913T040037Z.dump.gz.part'])
+
+    def test_advancing_the_success_marker_is_advertising_success(self):
+        with self.assertRaises(ValueError):
+            recovery.check_failed_backup(self.before, dict(self.before, last_success='z'), 'pg_dump: error')
+
+    def test_publishing_a_dump_is_advertising_success(self):
+        after = dict(self.before, **{'vidra-20260913T040037Z.dump.gz': 'c'})
+        with self.assertRaises(ValueError):
+            recovery.check_failed_backup(self.before, after, 'pg_dump: error')
+
+    def test_a_success_line_is_advertising_success(self):
+        with self.assertRaises(ValueError):
+            recovery.check_failed_backup(self.before, dict(self.before), '[backup] done — database x')
+
+
 class FingerprintTest(unittest.TestCase):
     def test_sealed_secret_tables_are_part_of_the_data_point(self):
         self.assertIn('user_mfa', recovery.CATALOGUE)

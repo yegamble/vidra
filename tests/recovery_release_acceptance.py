@@ -185,15 +185,29 @@ def backup(run, candidate, stage, result):
     result['checks']['backup_contains_both_schemas_ledgers_mfa_and_config'] = 'PASS'
 
 
+def check_failed_backup(before, after, output):
+    """The shipped contract, not a stricter invented one: backup.sh writes to
+    `.part` and renames only after pg_restore -l passes, so a failed run may leave
+    its private `.part` (tests/backup_test.py asserts exactly that) but must not
+    publish a dump or config archive, touch an existing file, or advance
+    last_success — the marker `vidra doctor` trusts."""
+    changed = sorted(name for name in before if after.get(name) != before[name])
+    require(not changed, f'a failed backup changed or removed existing files: {changed}')
+    new = sorted(set(after) - set(before))
+    require(all(name.endswith('.part') for name in new), f'a failed backup published files: {new}')
+    require('done — database' not in output, 'failed backup reported success')
+    return new
+
+
 def failed_backup(run, result):
     backups = INSTALL / 'backups'
     before = {p.name: sha(p) for p in backups.iterdir() if p.is_file()}
     env = dict(run.env, POSTGRES_DB='vidra_recovery_fault_missing')
     output = run.run(['bash', 'deploy/backup.sh'], 'failed-backup', env=env, expected=1)
     after = {p.name: sha(p) for p in backups.iterdir() if p.is_file()}
-    require(before == after, 'a failed backup left, changed or removed files in backups/')
-    require(not list(backups.glob('*.part')), 'partial files left behind')
-    require('done — database' not in output, 'failed backup reported success')
+    result['partial_files_left'] = check_failed_backup(before, after, output)
+    for name in result['partial_files_left']:
+        require((backups / name).stat().st_mode & 0o077 == 0, f'{name} is readable beyond its owner')
     result['failure_tail'] = output.strip().splitlines()[-3:]
     result['checks']['failed_backup_exits_nonzero_and_advertises_nothing'] = 'PASS'
 
