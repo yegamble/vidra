@@ -21,6 +21,7 @@
 //                       refused), rpo marker absent, decode old media from the
 //                       bucket, find the drill video through real search, then
 //                       upload and decode a NEW video
+//   verify-restore-write  only the new-upload phase (retry after a 429)
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHmac, randomBytes } from 'node:crypto';
@@ -28,7 +29,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 
-const ACTIONS = ['upload-kill', 'recovered-playback', 'search-catchup', 'mfa-enroll', 'rpo-marker', 'verify-restore'];
+const ACTIONS = ['upload-kill', 'recovered-playback', 'search-catchup', 'mfa-enroll', 'rpo-marker', 'verify-restore', 'verify-restore-write'];
 const [stageArg, action] = process.argv.slice(2);
 assert.ok(stageArg && ACTIONS.includes(action), `usage: recovery-release-acceptance.mjs STAGE ${ACTIONS.join('|')}`);
 assert.equal(process.env.COMPOSE_PROJECT_NAME, 'vidra-release-acceptance');
@@ -156,9 +157,18 @@ try {
     if (await another.isVisible()) await another.click();
     await page.getByLabel('Channel handle').fill(handle);
     await page.getByLabel('Channel display name').fill(`Recovery ${nonce}`);
-    const pendingChannel = page.waitForResponse(r => r.url().endsWith('/api/v1/channels') && r.request().method() === 'POST');
-    await page.getByRole('button', { name: 'Create channel', exact: true }).click();
-    assert.equal((await pendingChannel).status(), 201);
+    // Request limits stay ON. The restored-host verification makes many reads in
+    // a few minutes, so a 429 here is expected: wait out Retry-After, then retry.
+    for (let attempt = 0; ; attempt++) {
+      const pendingChannel = page.waitForResponse(r => r.url().endsWith('/api/v1/channels') && r.request().method() === 'POST');
+      await page.getByRole('button', { name: 'Create channel', exact: true }).click();
+      const created = await pendingChannel;
+      if (created.status() === 429 && attempt < 5) {
+        result.rate_limited = [...(result.rate_limited ?? []), { path: '/api/v1/channels', retry_after: created.headers()['retry-after'] ?? null, at: new Date().toISOString() }];
+        await sleep((Number(created.headers()['retry-after']) || 30) * 1000 + 1000); continue;
+      }
+      assert.equal(created.status(), 201); break;
+    }
     await expect(page.getByRole('dialog', { name: 'Create a channel', exact: true })).toHaveCount(0);
     const switcher = page.getByRole('button', { name: /^Switch channel/ });
     if (await switcher.count()) { await switcher.click(); await page.getByRole('menuitem').filter({ hasText: `@${handle}` }).click(); }
@@ -339,6 +349,15 @@ print(sum(float(l.rsplit(' ',1)[1]) for l in lines if l.startswith('vidra_search
     assert.equal(edit.status, 200); assert.equal(edit.body.display_name, marker);
     writeShared('rpo.json', { display_name: marker, written_at: new Date().toISOString() });
     result.marker = marker; result.written_at = new Date().toISOString();
+    result.checks[phase] = 'PASS';
+  } else if (action === 'verify-restore-write') {
+    step('new-upload-transcodes-and-decodes');
+    const fresh = await newPage(); const freshAuth = await signIn(fresh, { expectMfa: true });
+    const title = `Postrestore${randomBytes(4).toString('hex')}`;
+    const id = await uploadAndPublish(fresh, freshAuth, join(baseline, 'fixture.mp4'), title);
+    await poll(() => assert.equal(job(id)?.state, 'done'), 2400000);
+    result.new_video = { id, title, job: job(id) };
+    result.playback_new = await playback(id, 'new');
     result.checks[phase] = 'PASS';
   } else {
     const drillInfo = readShared('drill.json'); const rpo = readShared('rpo.json');
