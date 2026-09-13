@@ -1,0 +1,691 @@
+{
+  "status": "PASS",
+  "checks": {
+    "owner-claim": "PASS",
+    "owner-login-and-session": "PASS",
+    "browser-channel-upload-publish": "PASS",
+    "real-transcoding-and-advertised-tree": "PASS",
+    "browser-playback-advances": "PASS",
+    "same-upload-through-vidra-search": "PASS"
+  },
+  "node": "v26.8.1",
+  "media_requests": [
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/thumbnail",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/original",
+      "status": 206
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/playback-session",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/captions",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/rating",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/comments",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/recommendations",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/view",
+      "status": 204
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/master.m3u8",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/media_0.m3u8",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/media_1.m3u8",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/chunk-1-00001.m4s",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/chunk-0-00001.m4s",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/init-0.mp4",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/init-1.mp4",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/chunk-1-00002.m4s",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/chunk-0-00002.m4s",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/chunk-1-00003.m4s",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/thumbnail",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/thumbnail",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/playback-session",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/rating",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/captions",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/comments",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/recommendations",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/master.m3u8",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/media_0.m3u8",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/media_1.m3u8",
+      "status": 200
+    }
+  ],
+  "commands": [
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM users"
+      ],
+      "started_at": "2026-09-13T15:41:48.464Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "logs",
+        "--no-color",
+        "api"
+      ],
+      "started_at": "2026-09-13T15:41:48.713Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM users WHERE role='admin'"
+      ],
+      "started_at": "2026-09-13T15:41:50.453Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT owner_id FROM channels WHERE id='5d3df7db-63d2-44d7-881f-469061a5a9f0'"
+      ],
+      "started_at": "2026-09-13T15:41:53.203Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT COALESCE(max(id),0) FROM search_outbox"
+      ],
+      "started_at": "2026-09-13T15:41:53.540Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT channel_id FROM videos WHERE id='60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64'"
+      ],
+      "started_at": "2026-09-13T15:41:53.964Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,updated_at FROM transcode_jobs WHERE video_id='60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T15:42:02.950Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,updated_at FROM transcode_jobs WHERE video_id='60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T15:42:03.615Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,updated_at FROM transcode_jobs WHERE video_id='60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T15:42:04.443Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,updated_at FROM transcode_jobs WHERE video_id='60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T15:42:06.029Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT COALESCE(json_agg(e),'[]') FROM (SELECT o.id,o.event_id,o.state,o.attempts,(i.event_id IS NOT NULL) AS received FROM search_outbox o LEFT JOIN search.events_inbox i USING(event_id) WHERE o.id>3 AND o.event_type='video.upsert' AND o.payload::text LIKE '%60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64%' ORDER BY o.id) e"
+      ],
+      "started_at": "2026-09-13T15:42:12.884Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(d) FROM (SELECT video_id,title,eligible FROM search.documents WHERE video_id='60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64') d"
+      ],
+      "started_at": "2026-09-13T15:42:13.189Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "search"
+      ],
+      "started_at": "2026-09-13T15:42:13.563Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "python3",
+        "-c",
+        "\nimport hashlib,hmac,json,subprocess,sys,time,urllib.parse,urllib.request\nc=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]]))[0]\nenv=dict(v.split('=',1) for v in c['Config']['Env'])\nip=next(v['IPAddress'] for v in c['NetworkSettings']['Networks'].values() if v['IPAddress'])\np='/internal/v1/search'; ts=str(int(time.time()))\nsig=hmac.new(env['INTERNAL_SECRET'].encode(),(ts+'\\nGET\\n'+p).encode(),hashlib.sha256).hexdigest()\nu='http://'+ip+':8080'+p+'?'+urllib.parse.urlencode({'q':sys.argv[2],'limit':20,'offset':0,'mode':'simple','personalized':'false'})\nwith urllib.request.urlopen(urllib.request.Request(u,headers={'X-Vidra-Internal-Auth':'v1:'+ts+':'+sig}),timeout=15) as r: print(r.read().decode())\n",
+        "41244a4c711b5cd33f1221e3b4ee5413099c7d1ca18cef9fc3e70140953f3ba2",
+        "Releaseacceptance92cc65bc8369"
+      ],
+      "started_at": "2026-09-13T15:42:14.027Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "python3",
+        "-c",
+        "\nimport json,subprocess,sys,urllib.request\nc=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]]))[0]\nip=next(v['IPAddress'] for v in c['NetworkSettings']['Networks'].values() if v['IPAddress'])\nwith urllib.request.urlopen('http://'+ip+':8080/metrics',timeout=15) as r:\n lines=r.read().decode().splitlines()\nvalues=[float(line.rsplit(' ',1)[1]) for line in lines if line.startswith('vidra_search_http_requests_total{') and 'method=\"GET\"' in line and 'route=\"/internal/v1/search\"' in line and 'status_class=\"2xx\"' in line]\nprint(sum(values))\n",
+        "41244a4c711b5cd33f1221e3b4ee5413099c7d1ca18cef9fc3e70140953f3ba2"
+      ],
+      "started_at": "2026-09-13T15:42:14.463Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "python3",
+        "-c",
+        "\nimport json,subprocess,sys,urllib.request\nc=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]]))[0]\nip=next(v['IPAddress'] for v in c['NetworkSettings']['Networks'].values() if v['IPAddress'])\nwith urllib.request.urlopen('http://'+ip+':8080/metrics',timeout=15) as r:\n lines=r.read().decode().splitlines()\nvalues=[float(line.rsplit(' ',1)[1]) for line in lines if line.startswith('vidra_search_http_requests_total{') and 'method=\"GET\"' in line and 'route=\"/internal/v1/search\"' in line and 'status_class=\"2xx\"' in line]\nprint(sum(values))\n",
+        "41244a4c711b5cd33f1221e3b4ee5413099c7d1ca18cef9fc3e70140953f3ba2"
+      ],
+      "started_at": "2026-09-13T15:42:50.180Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT COALESCE(max(id),0) FROM search_outbox"
+      ],
+      "started_at": "2026-09-13T15:42:50.458Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(e) FROM (SELECT id,event_id,payload->>'source' AS source FROM search_outbox WHERE id>6 AND event_type='search.submitted' AND payload->>'query'='Releaseacceptance92cc65bc8369' AND payload->>'source' IS NOT NULL ORDER BY id DESC LIMIT 1) e"
+      ],
+      "started_at": "2026-09-13T15:42:50.820Z",
+      "exit_code": 0
+    }
+  ],
+  "browser_args": [
+    "--host-resolver-rules=MAP secure.video.test 127.0.0.1",
+    "--no-proxy-server",
+    "--autoplay-policy=no-user-gesture-required"
+  ],
+  "browser": "153.0.8010.12",
+  "owner_id": "a3929797-c792-4a31-8f5c-95268132792b",
+  "query": "Releaseacceptance92cc65bc8369",
+  "channel_id": "5d3df7db-63d2-44d7-881f-469061a5a9f0",
+  "video_id": "60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64",
+  "upload_id": "357922f9-6246-4142-a6f0-abd0313cb0e0",
+  "original": {
+    "status": 200,
+    "bytes": 1311662,
+    "type": "video/mp4",
+    "sha256": "47e46fdf11a5f3851cd87ab7ea02cb12a5db4f679bef5ee846fad4d6fa74923a"
+  },
+  "jobs": [
+    {
+      "id": "fa6dbfdd-8426-45ca-a454-e9c61cd8fe7d",
+      "state": "running",
+      "attempts": 0,
+      "updated_at": "2026-09-13T15:42:02.805761+00:00"
+    },
+    {
+      "id": "fa6dbfdd-8426-45ca-a454-e9c61cd8fe7d",
+      "state": "running",
+      "attempts": 0,
+      "updated_at": "2026-09-13T15:42:02.805761+00:00"
+    },
+    {
+      "id": "fa6dbfdd-8426-45ca-a454-e9c61cd8fe7d",
+      "state": "running",
+      "attempts": 0,
+      "updated_at": "2026-09-13T15:42:02.805761+00:00"
+    },
+    {
+      "id": "fa6dbfdd-8426-45ca-a454-e9c61cd8fe7d",
+      "state": "done",
+      "attempts": 0,
+      "updated_at": "2026-09-13T15:42:06.2139+00:00"
+    }
+  ],
+  "renditions": [
+    {
+      "height": 360,
+      "width": 640
+    }
+  ],
+  "assets": [
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/master.m3u8",
+      "status": 200,
+      "bytes": 476,
+      "type": "application/vnd.apple.mpegurl"
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/media_0.m3u8",
+      "status": 200,
+      "bytes": 258,
+      "type": "application/vnd.apple.mpegurl"
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/chunk-0-00001.m4s",
+      "status": 200,
+      "bytes": 650282,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/chunk-0-00002.m4s",
+      "status": 200,
+      "bytes": 607213,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/init-0.mp4",
+      "status": 200,
+      "bytes": 828,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/media_1.m3u8",
+      "status": 200,
+      "bytes": 309,
+      "type": "application/vnd.apple.mpegurl"
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/chunk-1-00001.m4s",
+      "status": 200,
+      "bytes": 71878,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/chunk-1-00002.m4s",
+      "status": 200,
+      "bytes": 66168,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/chunk-1-00003.m4s",
+      "status": 200,
+      "bytes": 832,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/init-1.mp4",
+      "status": 200,
+      "bytes": 765,
+      "type": "video/mp4"
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/iframe-0.m3u8",
+      "status": 200,
+      "bytes": 1096,
+      "type": "application/vnd.apple.mpegurl"
+    },
+    {
+      "path": "/api/v1/videos/60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64/hls/cmaf/iframe-0.mp4",
+      "status": 200,
+      "bytes": 146059,
+      "type": "video/mp4"
+    }
+  ],
+  "playback_start": {
+    "time": 0,
+    "frames": 13,
+    "audio_bytes": 9955,
+    "width": 640,
+    "height": 360,
+    "ready": 4,
+    "paused": true,
+    "muted": false,
+    "error": null
+  },
+  "playback_end": {
+    "time": 3.761372,
+    "frames": 128,
+    "audio_bytes": 57246,
+    "width": 640,
+    "height": 360,
+    "ready": 4,
+    "paused": false,
+    "muted": false,
+    "error": null
+  },
+  "seek": {
+    "time": 7,
+    "frames": 136,
+    "audio_bytes": 62378,
+    "width": 640,
+    "height": 360,
+    "ready": 4,
+    "paused": true,
+    "muted": false,
+    "error": null
+  },
+  "upsert_events": [
+    {
+      "id": 4,
+      "event_id": "2e682494-f7e3-42b1-80b1-11b9d23fb26e",
+      "state": "delivered",
+      "attempts": 0,
+      "received": true
+    },
+    {
+      "id": 5,
+      "event_id": "ae2f90f6-f6f2-432b-961e-a77ee8fb8b0c",
+      "state": "delivered",
+      "attempts": 0,
+      "received": true
+    }
+  ],
+  "document": {
+    "video_id": "60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64",
+    "title": "Releaseacceptance92cc65bc8369",
+    "eligible": true
+  },
+  "internal_search": {
+    "query": "Releaseacceptance92cc65bc8369",
+    "ids": [
+      {
+        "video_id": "60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64",
+        "score": 0.8999994564022185
+      }
+    ],
+    "model_version": "simple-v1",
+    "total": 1,
+    "total_is_lower_bound": false,
+    "has_more": false
+  },
+  "ui_search": {
+    "service_requests_before": 1,
+    "attempts": [
+      {
+        "status": 429,
+        "retry_after": "34"
+      },
+      {
+        "status": 200,
+        "retry_after": null
+      }
+    ],
+    "video_ids": [
+      "60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64"
+    ],
+    "service_requests_after": 2
+  },
+  "search_href": "/v/U21sNxNnVvQ",
+  "routed_search_attempts": [
+    {
+      "status": 200,
+      "retry_after": null,
+      "video_ids": [
+        "60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64"
+      ],
+      "error_code": null
+    }
+  ],
+  "routed_search": {
+    "status": 200,
+    "retry_after": null,
+    "video_ids": [
+      "60d4ec9e-6c3a-46df-98f1-43ff5ab2cf64"
+    ],
+    "error_code": null
+  },
+  "search_route": {
+    "id": 7,
+    "event_id": "fb880ab6-7713-4a59-9627-15ef66a388e0",
+    "source": "search"
+  },
+  "screenshots": {
+    "owner-claimed.png": "184f4e00d68052b4f0e152b43c4a5686279e1ddb2c6d794a40d419ae1831255a",
+    "upload-published.png": "34db21b1c338fdafc0f33c29cc1af515535c3d6a65a4ae65ab70b0758f32877f",
+    "playback-advancing.png": "4601f27fb6397d2a4d0c8df063625cf5da9fbe6fd623e4fa4cfe16a39f48d3f1",
+    "search-result.png": "91f223774fc55edda602ecc818455b4d444f2557ba2ca1b63b06b4853a38f0be"
+  }
+}

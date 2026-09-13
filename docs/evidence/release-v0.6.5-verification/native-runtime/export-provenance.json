@@ -1,0 +1,27 @@
+{
+  "raw_result_sha256": "7d6250bed57ec47adfc1712e5a98eb3e2e61183eb897d72aa440d0387be664f8",
+  "raw_browser_sha256": "ff95933cd201d5ed4feb9c23f920d00ad97c64153c0ca53ba82f871e83a4d6d6",
+  "raw_commands_sha256": "ecd10fb5a91b25eb7cbe95259f2bb2e7e278f8f161f2242e6496ecd52c158b22",
+  "raw_evidence_location": "/root/vidra-v065-runtime",
+  "runtime_configuration": {
+    "VIDRA_ENV": "production",
+    "TRANSCODING_ENABLED": "true",
+    "TRANSCODING_PACKAGER": "cmaf",
+    "SEARCH_SERVICE_URL": "http://search:8080",
+    "CLAMAV_ADDR": "clamav:3310",
+    "MALWARE_SCAN_MODE": "fail-closed",
+    "RATE_LIMIT_ENABLED": "true",
+    "RATE_LIMIT_REQUESTS": "120",
+    "MEDIA_RATE_LIMIT_REQUESTS": "3000",
+    "STORAGE_BACKEND": "local",
+    "STORAGE_S3_ENDPOINT": "nyc3.digitaloceanspaces.com",
+    "STORAGE_S3_REGION": "nyc3",
+    "STORAGE_S3_BUCKET": "example-video-media",
+    "STORAGE_S3_USE_SSL": "true",
+    "STORAGE_S3_FORCE_PATH_STYLE": "false"
+  },
+  "actual_runtime_storage": [],
+  "completion_raw_sha256": null,
+  "original_failure_preserved": false,
+  "scope": "Sanitized result/browser measurements, command arguments and raw-log hashes, four requested browser screenshots. No raw logs, generated environment, credentials, database or application storage exported."
+}
