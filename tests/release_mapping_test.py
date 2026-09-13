@@ -233,21 +233,82 @@ class MappingTests(Fixture):
                     self.assertIn('WARNING', out)
                     self.assertIn('before v0.6.4', out)
 
-    def test_a_pre_manifest_tag_beside_a_recorded_one_is_refused(self):
-        for mode in ('deploy', 'rollback'):
-            with self.subTest(mode=mode):
-                code, out = self.check(mode=mode, env_file=self.env(user='v0.6.3'))
-                self.assertEqual(code, REFUSED, out)
-                self.assertIn('VIDRA_USER_TAG=v0.6.3', out)
+    def test_a_pre_manifest_tag_beside_a_recorded_one_is_refused_in_deploy(self):
+        code, out = self.check(env_file=self.env(user='v0.6.3'))
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn('VIDRA_USER_TAG=v0.6.3', out)
 
     def test_rollback_to_an_unrecorded_uniform_release_warns(self):
         """Mid-incident, a missing record is a bookkeeping gap, not a prediction
         that the rollback fails: a tag that does not exist still fails the pull,
-        which restores the env file. A MIXED target stays fatal."""
+        which restores the env file."""
         code, out = self.check(mode='rollback', env_file=self.env('v0.6.5', 'v0.6.5', 'v0.6.5'))
         self.assertEqual(code, UNVERIFIED, out)
-        code, out = self.check(mode='rollback', env_file=self.env('v0.6.4', 'v0.6.5', 'v0.6.4'))
+
+    def test_a_mixed_target_warns_in_rollback_and_is_refused_in_deploy(self):
+        """rollback.sh's header documents `--user` on its own (core and search
+        stay where they are), so a mixed triple is the DOCUMENTED rollback, and
+        refusing it mid-incident predicts no failure of the rollback itself. It
+        is still a mapping nobody verified, so the warning must say exactly
+        what was not checked. A deploy is the moment to fix it: refused."""
+        self.add(synthetic('v0.6.5', core='v0.6.5', user='v0.6.5', search='v0.6.5'))
+        triple = self.env('v0.6.5', 'v0.6.4', 'v0.6.5')
+        code, out = self.check(env_file=triple)
         self.assertEqual(code, REFUSED, out)
+        code, out = self.check(mode='rollback', env_file=triple)
+        self.assertEqual(code, UNVERIFIED, out)
+        self.assertNotIn('ERROR', out)
+        for expected in ('WARNING', 'NOT verified', 'VIDRA_USER_TAG=v0.6.4 belongs to release v0.6.4',
+                         'VIDRA_CORE_TAG=v0.6.5 belongs to release v0.6.5',
+                         'never released together', 'digests'):
+            self.assertIn(expected, out)
+        # A pre-manifest tag beside a recorded one is the same shape.
+        code, out = self.check(mode='rollback', env_file=self.env(user='v0.6.3'))
+        self.assertEqual(code, UNVERIFIED, out)
+        self.assertIn('VIDRA_USER_TAG=v0.6.3', out)
+
+    def test_rollback_still_refuses_what_predicts_the_wrong_bytes(self):
+        """The rollback allowance covers missing bookkeeping only: a digest that
+        contradicts the record means running bytes the release never shipped."""
+        code, out = self.check(mode='rollback', env_file=self.env(user=f'v0.6.4@{digest(7)}'))
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn('VIDRA_USER_TAG', out)
+        self.assertIn(digest(7), out)
+
+    def test_a_stale_bundle_is_refused_even_when_no_record_matches(self):
+        """The v0.6.5 bundle unpacked over an install still pinning v0.6.3: no
+        record matches, so the record-based bundle comparison never runs, and
+        deploy.sh used to dump, pull and migrate before its ledger assertion
+        compared v0.6.3's migrator with v0.6.5's schema number."""
+        stale = str(self.bundle(tag='v0.6.5', schema='0150', core_commit=hexsha(5)))
+        for triple in (('v0.6.3',) * 3, ('v0.6.5', 'v0.6.4', 'v0.6.4')):
+            with self.subTest(triple=triple):
+                code, out = self.check('--bundle-manifest', stale, env_file=self.env(*triple))
+                self.assertEqual(code, REFUSED, out)
+                self.assertIn('vidra-bundle.manifest tag is v0.6.5', out)
+                self.assertIn(f'VIDRA_CORE_TAG={triple[0]}', out)
+        code, out = self.check('--bundle-manifest', stale, mode='rollback',
+                               env_file=self.env('v0.6.3', 'v0.6.3', 'v0.6.3'))
+        self.assertEqual(code, UNVERIFIED, out)
+        code, out = self.check('--bundle-manifest', str(self.bundle(tag='v0.6.3', schema='0144')),
+                               env_file=self.env('v0.6.3', 'v0.6.3', 'v0.6.3'))
+        self.assertEqual(code, UNVERIFIED, out)
+
+    def test_values_are_read_the_way_compose_reads_them(self):
+        """Compose's env-file parser drops an unquoted ` #` comment and trailing
+        whitespace, and reads a quoted value up to its closing quote. deploy.sh
+        hands the checker env_get's raw text, which keeps both."""
+        for raw in ('v0.6.4 # pinned 2026-09-12', 'v0.6.4   ', 'v0.6.4\t', '"v0.6.4" # quoted'):
+            with self.subTest(raw=raw):
+                code, out = self.check(env_file=self.env(user=raw))
+                self.assertEqual(code, OK, out)
+                code, out = self.check('--user', raw)
+                self.assertEqual(code, OK, out)
+        code, out = self.check(env_file=self.env(user='v0.6.4#no-space'))
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn("'v0.6.4#no-space'", out)
+        self.assertIn('as Compose reads it', out)
+        self.assertNotIn('would refuse to parse', out)
 
     def test_non_release_and_missing_tags_are_refused(self):
         for triple, key in ((('v0.6.4', 'latest', 'v0.6.4'), 'VIDRA_USER_TAG'),
@@ -438,11 +499,11 @@ class ScriptOrderingTests(unittest.TestCase):
             f'JWT_SECRET={SECRET}\nVIDRA_CORE_TAG={core}\nVIDRA_USER_TAG={user}\n'
             f'VIDRA_SEARCH_TAG={search}\n')
 
-    def as_bundle(self):
+    def as_bundle(self, tag='v0.6.4', schema='0146', core_commit='ed55a6d946dad3f2e72a47b2518ac095352c795d'):
         (self.tree / 'vidra-bundle.manifest').write_text(
-            'tag=v0.6.4\ncore_schema_version=0146\n'
+            f'tag={tag}\ncore_schema_version={schema}\n'
             'meta_commit=0da18462b009b3710ceac7e60d2e88653bebbc37\n'
-            'core_commit=ed55a6d946dad3f2e72a47b2518ac095352c795d\n')
+            f'core_commit={core_commit}\n')
 
     def as_checkout(self):
         for repo in (self.tree, self.tree / 'vidra-core'):
@@ -499,17 +560,75 @@ class ScriptOrderingTests(unittest.TestCase):
         self.assertIn(' pull', calls)
         self.assertIn(' up -d', calls)
 
-    def test_rollback_refuses_a_mixed_target_before_rewriting_the_env(self):
+    def test_deploy_refuses_a_stale_bundle_before_dump_pull_migrate_or_up(self):
+        """The v0.6.5 bundle unpacked over an install still pinning v0.6.3 (tags
+        from before the first record, so no record matches)."""
+        self.as_bundle(tag='v0.6.5', schema='0150', core_commit=hexsha(5))
+        self.write_env('v0.6.3', 'v0.6.3', 'v0.6.3')
+        code, out, calls = self.run_script(self.tree / 'deploy/deploy.sh')
+        self.assertNotEqual(code, 0, out)
+        self.assertIn('vidra-bundle.manifest tag is v0.6.5', out)
+        for mutation in self.MUTATIONS:
+            self.assertNotIn(mutation, calls, f'{mutation!r} ran before the refusal:\n{calls}')
+
+    def test_rollback_refuses_a_digest_mismatch_before_rewriting_the_env(self):
         self.as_bundle()
         self.write_env('v0.6.4', 'v0.6.4', 'v0.6.4')
         before = self.env_file.read_bytes()
-        code, out, calls = self.run_script(self.tree / 'deploy/rollback.sh', '--user', 'v0.6.3')
+        code, out, calls = self.run_script(self.tree / 'deploy/rollback.sh', '--user', f'v0.6.4@{digest(7)}')
         self.assertNotEqual(code, 0, out)
-        self.assertIn('VIDRA_USER_TAG=v0.6.3', out)
+        self.assertIn('VIDRA_USER_TAG pins digest', out)
         self.assertEqual(self.env_file.read_bytes(), before, 'the env file was rewritten')
         self.assertFalse((self.home / '.local/state/vidra/env-history').exists(),
                          'a snapshot was taken, so the rewrite had started')
         for mutation in (' pull', ' up -d'):
+            self.assertNotIn(mutation, calls)
+
+    def test_the_documented_single_component_rollback_warns_and_proceeds(self):
+        """`rollback.sh --user <tag>` is in the script's own usage. Mid-incident
+        it must not be stopped by a missing pairing record."""
+        self.as_bundle()
+        self.write_env('v0.6.4', 'v0.6.4', 'v0.6.4')
+        code, out, calls = self.run_script(self.tree / 'deploy/rollback.sh', '--user', 'v0.6.3')
+        self.assertEqual(code, 0, out)
+        self.assertIn('WARNING', out)
+        self.assertIn('NOT verified', out)
+        self.assertIn('VIDRA_USER_TAG=v0.6.3', self.env_file.read_text())
+        self.assertIn(' pull', calls)
+        self.assertIn(' up -d', calls)
+
+    def strip_helper(self):
+        lib = self.tree / 'deploy/lib.sh'
+        text = lib.read_text()
+        start = text.index('release_mapping_check() {')
+        end = text.index('\n}\n', start) + 3
+        lib.write_text(text[:start] + text[end:])
+
+    def test_a_lib_from_another_revision_is_named_not_reported_as_a_refusal(self):
+        """A released tree with only deploy.sh replaced (the A03 harness did
+        exactly that) used to exit 127 and print 'refused the tags'."""
+        self.as_bundle()
+        self.write_env('v0.6.4', 'v0.6.4', 'v0.6.4')
+        self.strip_helper()
+        for script in ('deploy/deploy.sh', 'deploy/rollback.sh'):
+            with self.subTest(script=script):
+                args = [self.tree / script] + (['--user', 'v0.6.4'] if 'rollback' in script else [])
+                code, out, calls = self.run_script(*args)
+                self.assertNotEqual(code, 0, out)
+                self.assertIn('deploy/lib.sh does not define release_mapping_check', out)
+                self.assertNotIn('refused', out)
+                for mutation in self.MUTATIONS:
+                    self.assertNotIn(mutation, calls)
+
+    def test_a_missing_checker_is_named_not_reported_as_a_refusal(self):
+        self.as_bundle()
+        self.write_env('v0.6.4', 'v0.6.4', 'v0.6.4')
+        (self.tree / 'deploy/release-mapping.py').unlink()
+        code, out, calls = self.run_script(self.tree / 'deploy/deploy.sh')
+        self.assertNotEqual(code, 0, out)
+        self.assertIn('deploy/release-mapping.py is missing', out)
+        self.assertNotIn('refused', out)
+        for mutation in self.MUTATIONS:
             self.assertNotIn(mutation, calls)
 
     def code_of(self, script):
