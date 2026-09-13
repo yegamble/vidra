@@ -308,8 +308,13 @@ env_set_key() {
 # deploy/release-mapping.py for the full contract.
 release_mapping_check() {
   local root="$1" mode="$2" rc=0 t override
+  # The image source goes along with the tags, resolved the same way: the
+  # compose file pulls ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/<repo>,
+  # and a record can only vouch for the images at ITS repository. A fork or a
+  # mirror is reported UNVERIFIED, never refused.
   local -a args=(check --mode "$mode" --releases "$root/releases" --env "$ENV_FILE"
-    --core "$3" --user "$4" --search "$5")
+    --core "$3" --user "$4" --search "$5"
+    --registry "$(env_get VIDRA_IMAGE_REGISTRY '')" --owner "$(env_get VIDRA_IMAGE_OWNER '')")
   # Named here rather than left to python3's "can't open file", which the
   # caller's message would otherwise present as a verdict about the tags.
   if [ ! -f "$root/deploy/release-mapping.py" ]; then

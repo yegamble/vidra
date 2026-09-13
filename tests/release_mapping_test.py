@@ -558,6 +558,67 @@ class OverrideTests(Fixture):
         self.assertNotIn('WARNING', out)
 
 
+class RegistryOwnerTests(Fixture):
+    """M5. docker-compose.prod.yml renders
+    ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/vidra-core:${TAG}.
+    The checker validated the recorded repository's SHAPE and never compared
+    it, so a fork or a mirror pulling different images was told "is release
+    v0.6.4". The two keys are read the way the tags are (env_get in lib.sh, or
+    --env), the effective prefix is compared with the record, and a difference
+    is UNVERIFIED with a warning naming both: a fork is legitimate, and the
+    record simply cannot describe its images."""
+
+    def test_the_defaults_render_the_recorded_repository(self):
+        for extra in ('', 'VIDRA_IMAGE_OWNER=yegamble\nVIDRA_IMAGE_REGISTRY=ghcr.io\n',
+                      'VIDRA_IMAGE_OWNER=\nVIDRA_IMAGE_REGISTRY=\n'):   # ${VAR:-x}: empty is unset
+            with self.subTest(extra=extra):
+                code, out = self.check(env_file=self.env(extra=extra))
+                self.assertEqual(code, OK, out)
+                self.assertNotIn('WARNING', out)
+        code, out = self.check('--registry', '', '--owner', '')
+        self.assertEqual(code, OK, out)
+
+    def test_a_fork_owner_is_unverified_not_refused(self):
+        for source in ('env file', 'process environment', 'flag'):
+            with self.subTest(source=source):
+                kwargs = {'env file': dict(env_file=self.env(extra='VIDRA_IMAGE_OWNER=mycorp # fork\n')),
+                          'process environment': dict(process_env={'VIDRA_IMAGE_OWNER': 'mycorp'}),
+                          'flag': {}}[source]
+                args = ('--owner', 'mycorp') if source == 'flag' else ()
+                code, out = self.check(*args, **kwargs)
+                self.assertEqual(code, UNVERIFIED, out)
+                self.assertIn('WARNING', out)
+                self.assertNotIn('ERROR', out)
+                self.assertIn('ghcr.io/mycorp', out)
+                self.assertIn('ghcr.io/yegamble/vidra-core', out)
+                self.assertIn('VIDRA_IMAGE_OWNER', out)
+
+    def test_a_mirror_registry_is_unverified_not_refused(self):
+        code, out = self.check(env_file=self.env(extra='VIDRA_IMAGE_REGISTRY=registry.internal:5000\n'))
+        self.assertEqual(code, UNVERIFIED, out)
+        self.assertIn('registry.internal:5000/yegamble', out)
+        self.assertIn('ghcr.io/yegamble/vidra-core', out)
+        code, out = self.check('--registry', 'registry.internal:5000', mode='rollback')
+        self.assertEqual(code, UNVERIFIED, out)
+
+    def test_a_fork_pin_is_not_held_to_the_upstream_digest(self):
+        """A fork's image cannot carry the upstream digest, so a pin under a
+        fork owner is reported as NOT compared, not as a contradiction."""
+        code, out = self.check(env_file=self.env(core=f'v0.6.4@{digest(7)}',
+                                                 extra='VIDRA_IMAGE_OWNER=mycorp\n'))
+        self.assertEqual(code, UNVERIFIED, out)
+        self.assertIn('Digest pins not checked', out)
+        self.assertNotIn('ERROR', out)
+
+    def test_a_fork_owner_excuses_neither_a_mixed_triple_nor_a_stale_bundle(self):
+        code, out = self.check(env_file=self.env(user='v0.6.3', extra='VIDRA_IMAGE_OWNER=mycorp\n'))
+        self.assertEqual(code, REFUSED, out)
+        code, out = self.check('--bundle-manifest', str(self.bundle(schema='0145')),
+                               env_file=self.env(extra='VIDRA_IMAGE_OWNER=mycorp\n'))
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn('core_schema_version', out)
+
+
 class CommittedRecordTests(unittest.TestCase):
     def test_v064_record_matches_the_release_evidence(self):
         """releases/v0.6.4.json was copied from the frozen verification
@@ -818,6 +879,20 @@ class ScriptOrderingTests(unittest.TestCase):
         self.assertIn('VIDRA_USER_TAG pins digest', out)
         for mutation in self.MUTATIONS:
             self.assertNotIn(mutation, calls, f'{mutation!r} ran before the refusal:\n{calls}')
+
+    def test_a_fork_owner_deploys_with_a_warning_naming_both_repositories(self):
+        """M5, end to end: deploy.sh hands VIDRA_IMAGE_REGISTRY/OWNER to the
+        checker through env_get, and a fork proceeds UNVERIFIED."""
+        self.as_bundle()
+        self.write_env('v0.6.4', 'v0.6.4', 'v0.6.4', extra='VIDRA_IMAGE_OWNER=mycorp\n')
+        code, out, calls = self.run_script(self.tree / 'deploy/deploy.sh')
+        self.assertEqual(code, 0, out)
+        self.assertIn('WARNING', out)
+        self.assertIn('ghcr.io/mycorp', out)
+        self.assertIn('ghcr.io/yegamble/vidra-core', out)
+        self.assertIn('release mapping NOT verified', out)
+        for mutation in self.MUTATIONS:
+            self.assertIn(mutation, calls)
 
     def test_an_unknown_override_value_is_reported_and_ignored(self):
         """A typo'd override must neither bypass the check silently nor stop a

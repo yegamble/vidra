@@ -110,3 +110,12 @@ would honour. Today that comparison is mostly latent. The embedded-migrator floo
 in `deploy.sh`/`rollback.sh` refuses that spelling for core and search before the
 checker runs, so on the current scripts it only reaches a pinned user tag, or a
 checker run by hand. Pulling by the recorded digests is a separate follow-up.
+
+The record describes the images at **its** `repository`. The effective image
+source, `${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}` as the
+compose file renders it, is compared with that prefix. A fork or a mirror is
+legitimate, so a difference is **UNVERIFIED with a WARNING** naming both
+repositories, never a refusal, and digest pins are then not compared (a fork's
+image cannot carry the upstream digest). The `evidence` key names the
+verification record in this repository's `docs/`; bundles do not ship `docs/`, so
+on a bundle host it is provenance to look up on GitHub, not a path to open.

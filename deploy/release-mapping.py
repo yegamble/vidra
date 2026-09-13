@@ -32,8 +32,9 @@ carry releases/vN.json, and deploying vN there only checks that all three tags
 say vN. That stays open until the record ships inside the release artifact.
 
 Stdlib only, no network, and it reads nothing from the env file except the
-three VIDRA_*_TAG keys: that file holds every production secret, and this
-output is printed to a terminal and to logs.
+three VIDRA_*_TAG keys and the two image-source keys (VIDRA_IMAGE_REGISTRY,
+VIDRA_IMAGE_OWNER): that file holds every production secret, and this output
+is printed to a terminal and to logs.
 """
 import argparse
 import json
@@ -296,6 +297,12 @@ def check(args):
     releases = Path(args.releases).name
     env = {name: pins[name][2] for name, _, _ in COMPONENTS}
     described = ' '.join(f'{name}={env[name]}' for name, _, _ in COMPONENTS)
+    # Read like the tags: the explicit value lib.sh resolved with env_get, else
+    # the env file. `${VAR:-default}` in the compose file takes the default when
+    # the key is unset OR empty, so an empty value is the default here too.
+    registry = compose_value(args.registry or env_file_value(args.env, 'VIDRA_IMAGE_REGISTRY')) or 'ghcr.io'
+    owner = compose_value(args.owner or env_file_value(args.env, 'VIDRA_IMAGE_OWNER')) or 'yegamble'
+    source = f'{registry}/{owner}'
     matches = [r for r in records if all(r['components'][n]['tag'] == env[n] for n, _, _ in COMPONENTS)]
 
     if not records:
@@ -308,14 +315,36 @@ def check(args):
         return UNVERIFIED, errors, warnings, notes
 
     if matches:
+        where = ', '.join(f'{releases}/{r["release"]}.json' for r in matches)
+        # THE IMAGE SOURCE (M5). docker-compose.prod.yml pulls
+        # ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/<repo>:<tag>.
+        # A record describes the images at ITS repository; a fork's or a
+        # mirror's images under the same tag are different bytes the record
+        # cannot vouch for. That is legitimate (deploying a fork is exactly what
+        # those two keys are for), so it is UNVERIFIED with a warning naming both
+        # repositories, and the digest comparison below is skipped: a fork's
+        # image cannot carry the upstream digest, and refusing it would be a
+        # verdict about images the record has never seen.
+        foreign = []
+        for name, key, repo in COMPONENTS:
+            effective = f'{source}/{repo}'
+            recorded = sorted({r['components'][name]['image']['repository'] for r in matches})
+            if effective not in recorded:
+                foreign.append(f'{effective} instead of {" or ".join(recorded)}')
+        if foreign:
+            warnings.append(f'this env pulls {"; ".join(foreign)} (VIDRA_IMAGE_REGISTRY={registry}, '
+                            f'VIDRA_IMAGE_OWNER={owner}), but {where} describes the images at the '
+                            f'recorded repository. A fork or a mirror is legitimate, and the record '
+                            f'cannot speak for its images: NOT verified that {described} under '
+                            f'{source} is the release\'s bytes, and digest pins were not compared.'
+                            + pinned_note(pins) + ' Continuing.')
         # More than one match means two records pair this triple, which is one
         # of the problems above (fatal in a deploy, warned in a rollback). A
         # digest pin is then held against BOTH: it contradicts the release only
         # when neither record shipped it.
-        where = ', '.join(f'{releases}/{r["release"]}.json' for r in matches)
         for name, key, repo in COMPONENTS:
             pinned = pins[name][3]
-            if not pinned:
+            if not pinned or foreign:
                 continue
             allowed, recorded = [], []
             for record in matches:
@@ -342,6 +371,8 @@ def check(args):
             warnings.append(f'{described} is paired by {where}, and its digest pins were held against '
                             f'that record, but {releases}/ has the problems above, so the record set '
                             'as a whole cannot be trusted. Fix the records after service is back.')
+            return UNVERIFIED, errors, warnings, notes
+        if foreign:
             return UNVERIFIED, errors, warnings, notes
         notes.append(f'{described} is release {record["release"]} ({where}): core schema '
                      f'{record["core_schema_version"]}, search schema {record["search_schema_version"]}')
@@ -530,6 +561,10 @@ def main():
     parser.add_argument('--core', help='effective VIDRA_CORE_TAG (overrides --env)')
     parser.add_argument('--user', help='effective VIDRA_USER_TAG (overrides --env)')
     parser.add_argument('--search', help='effective VIDRA_SEARCH_TAG (overrides --env)')
+    parser.add_argument('--registry', help='effective VIDRA_IMAGE_REGISTRY (overrides --env; '
+                                           'empty or absent = ghcr.io, as the compose file defaults it)')
+    parser.add_argument('--owner', help='effective VIDRA_IMAGE_OWNER (overrides --env; '
+                                        'empty or absent = yegamble, as the compose file defaults it)')
     parser.add_argument('--bundle-manifest', type=Path,
                         help="this tree's vidra-bundle.manifest, when it is an unpacked bundle")
     parser.add_argument('--tree-tag', action='append',
