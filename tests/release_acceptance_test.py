@@ -181,6 +181,32 @@ class CandidateSelectionTests(unittest.TestCase):
             self.assertEqual(execute(stage, 'fresh-disposable-host'), 1)
             self.assertIn('wrong candidate', json.loads((stage / 'result.json').read_text())['error'])
 
+    def test_prepare_accepts_a_b2_bucket_named_for_the_candidate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            evidence = base / 'docs/evidence/release-v0.6.5-verification'
+            evidence.mkdir(parents=True)
+            (evidence / 'manifest.json').write_text(json.dumps(CANDIDATE_V065))
+            spec = {'bucket': 'vidra-acceptance-v065-20260913-media', 'bucket_id': 'a' * 24,
+                    'region': 'us-east-005', 'endpoint': 's3.us-east-005.backblazeb2.com'}
+            with patch.object(release_acceptance, 'ROOT', base), self.assertRaises(subprocess.CalledProcessError) as later:
+                prepare(base / 'frozen', base / 'out', base / 'node.tar.xz', base / 'sums.txt', spec,
+                        candidate_path=evidence / 'manifest.json')
+            self.assertNotIn('acceptance bucket', str(later.exception))
+
+    def test_prepare_refuses_a_stale_bucket_for_a_newer_candidate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            evidence = base / 'docs/evidence/release-v0.6.5-verification'
+            evidence.mkdir(parents=True)
+            (evidence / 'manifest.json').write_text(json.dumps(CANDIDATE_V065))
+            spec = {'bucket': 'vidra-acceptance-v064-20260911-media', 'bucket_id': 'a' * 24,
+                    'region': 'us-east-005', 'endpoint': 's3.us-east-005.backblazeb2.com'}
+            with patch.object(release_acceptance, 'ROOT', base), self.assertRaises(ValueError) as refused:
+                prepare(base / 'frozen', base / 'out', base / 'node.tar.xz', base / 'sums.txt', spec,
+                        candidate_path=evidence / 'manifest.json')
+            self.assertIn('v0.6.5 acceptance bucket', str(refused.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

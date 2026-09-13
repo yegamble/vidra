@@ -37,13 +37,13 @@ def complete(stage, out, credentials):
               'scope': 'Only provider GET/list/auth and read-only container/ledger observations; no application mutation or rebuild.'}
     try:
         spec = json.loads((stage / 'storage.json').read_text())['spec']
-        bucket = TestBucket(spec, json.loads(credentials.read_text()))
+        candidate = json.loads((stage / 'candidate.json').read_text())
+        bucket = TestBucket(spec, json.loads(credentials.read_text()), candidate['tag'])
         require(raw['storage']['before'] == [] and raw['storage']['bucket_id'] == spec['bucket_id'],
                 'initial empty dedicated bucket not established')
         shutil.copyfile(stage / 'fixture.mp4', out / 'fixture.mp4')
         result['storage'] = bucket.verify_media(browser['video_id'], out / 'fixture.mp4')
         result['storage']['before'] = raw['storage']['before']
-        candidate = json.loads((stage / 'candidate.json').read_text())
         result['runtime_after_browser'] = runtime_snapshot(run, candidate)
         result['ledgers'] = {}
         for table, expected in json.loads((stage / 'expected-ledgers.json').read_text()).items():

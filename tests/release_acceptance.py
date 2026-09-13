@@ -102,8 +102,9 @@ def expected_tag(candidate_path):
 
 
 def prepare(frozen, out, node_archive, node_sums, b2_spec=None, candidate_path=None):
-    if b2_spec:
-        validate_spec(b2_spec)  # shape only; the release-specific bucket name is checked once the candidate is known
+    # The bucket spec is validated once the candidate is known (below): its
+    # name must carry the candidate's release, and nothing before that point
+    # mutates anything, so the refusal arrives just as early.
     candidate_path = Path(candidate_path) if candidate_path else DEFAULT_CANDIDATE
     tag = expected_tag(candidate_path)
     candidate = json.loads(candidate_path.read_text())
