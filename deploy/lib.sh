@@ -307,7 +307,7 @@ env_set_key() {
 # Exit 3 is the checker's UNVERIFIED code; see the header of
 # deploy/release-mapping.py for the full contract.
 release_mapping_check() {
-  local root="$1" mode="$2" rc=0 t override
+  local root="$1" mode="$2" rc=0 t tags override
   # The image source goes along with the tags, resolved the same way: the
   # compose file pulls ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/<repo>,
   # and a record can only vouch for the images at ITS repository. A fork or a
@@ -343,13 +343,22 @@ release_mapping_check() {
   if is_bundle_tree "$root"; then
     args+=(--bundle-manifest "$root/vidra-bundle.manifest")
   elif command -v git >/dev/null 2>&1; then
-    while IFS= read -r t; do
-      if [ -n "$t" ]; then
-        args+=(--tree-tag "$t")
-      fi
-    done <<EOF
-$(git -C "$root" tag --points-at HEAD 2>/dev/null || true)
+    # `git tag --points-at` only READS the checkout. A failure (a dubious-
+    # ownership refusal, a root that is not a repository) is logged rather
+    # than swallowed: it forfeits the tree's-own-release allowance, and a
+    # refusal that follows must read as that, not as a verdict about the
+    # tags. VIDRA_RELEASE_MAPPING=warn is the way past it mid-incident.
+    if tags="$(git -C "$root" tag --points-at HEAD 2>&1)"; then
+      while IFS= read -r t; do
+        if [ -n "$t" ]; then
+          args+=(--tree-tag "$t")
+        fi
+      done <<EOF
+$tags
 EOF
+    else
+      log "could not read tags at HEAD ($(printf '%s' "$tags" | head -n1)); the tree's-own-release allowance is forfeited"
+    fi
   fi
   python3 "$root/deploy/release-mapping.py" "${args[@]}" || rc=$?
   case "$rc" in

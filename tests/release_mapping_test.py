@@ -913,6 +913,23 @@ class ScriptOrderingTests(unittest.TestCase):
         for mutation in self.MUTATIONS:
             self.assertIn(mutation, calls)
 
+    def test_a_git_failure_reading_tags_is_logged_and_forfeits_the_allowance(self):
+        """L11. lib.sh swallowed every `git tag --points-at HEAD` failure. A
+        dubious-ownership refusal then silently forfeited the tree's-own-release
+        allowance, and the refusal that followed read as a verdict about the
+        tags. One logged line makes it visible."""
+        self.as_checkout()
+        self.write_env('v0.6.4', 'v0.6.4', 'v0.6.4')
+        stub = GIT_STUB.format(real=shutil.which('git')).replace(
+            'case " $* " in',
+            'case " $* " in\n  *" tag --points-at "*) echo "fatal: detected dubious ownership in repository" >&2; exit 128 ;;')
+        (self.bin / 'git').write_text(stub)
+        code, out, calls = self.run_script(self.tree / 'deploy/deploy.sh')
+        self.assertIn('could not read tags at HEAD', out)
+        self.assertIn('dubious ownership', out)
+        self.assertIn('forfeited', out)
+        self.assertIn(' fetch ', calls, 'control: the mapping check passed on the record and the sync began')
+
     def test_an_unknown_override_value_is_reported_and_ignored(self):
         """A typo'd override must neither bypass the check silently nor stop a
         run on its own: the normal verdict applies, with a line naming the
