@@ -1,4 +1,5 @@
 import io
+import json
 import tarfile
 import tempfile
 import unittest
@@ -106,6 +107,50 @@ class ExportTest(unittest.TestCase):
         files = {'a/result.json': b'{"ok": true}', 'b/commands.json': b'["--password", "hunter2-long-secret"]'}
         self.assertEqual(export.leaks(files, {'hunter2-long-secret'}), ['b/commands.json'])
         self.assertEqual(export.leaks({'a/result.json': b'{}'}, {'hunter2-long-secret'}), [])
+
+    # The v0.6.4 drill exports were scanned by a revision that loaded secrets
+    # only from files that happened to exist and recorded nothing about what it
+    # loaded, so "no secret found" could not be told from "no secret looked
+    # for". The scan set must be recorded, key-id values count, and an export
+    # with an empty env scan set is refused rather than certified.
+    def test_key_id_values_count_as_secrets(self):
+        self.assertTrue(export.SECRET_KEY.search('B2_KEY_ID'))
+        self.assertTrue(export.SECRET_KEY.search('AWS_ACCESS_KEY_ID'))
+        self.assertFalse(export.SECRET_KEY.search('HTTP_PORT'))
+
+    def test_host_secrets_records_what_it_loaded(self):
+        root = Path(tempfile.mkdtemp())
+        env = root / 'production.env'
+        env.write_text('JWT_SECRET=abcdefgh1234\nB2_KEY_ID=0012345678abcdef\nSHORT_SECRET=abc\n'
+                       '# PASSWORD=commented-out-1\nHTTP_PORT=8080\n')
+        secrets, loaded = export.host_secrets(root, env_file=env, bucket_key_file=root / 'absent.json',
+                                              owner_file=root / 'absent-owner.json')
+        self.assertEqual(secrets, {'abcdefgh1234', '0012345678abcdef'})
+        self.assertEqual(loaded, {'env': 2, 'bucket_key': False, 'mfa': False, 'owner': False})
+
+    def test_export_with_no_env_secret_loaded_is_refused(self):
+        drill = Path(tempfile.mkdtemp())
+        (drill / 'stage').mkdir()
+        (drill / 'stage/result.json').write_text('{"ok": true}\n')
+        with self.assertRaises(SystemExit):
+            export.export(drill, drill / 'out', ['stage'], env_file=drill / 'absent.env',
+                          bucket_key_file=drill / 'absent.json', owner_file=drill / 'absent-owner.json')
+        self.assertFalse((drill / 'out').exists())
+
+    def test_export_manifest_records_the_scan_set(self):
+        drill = Path(tempfile.mkdtemp())
+        (drill / 'stage').mkdir()
+        (drill / 'stage/result.json').write_text('{"ok": true}\n')
+        (drill / 'private').mkdir()
+        (drill / 'private/mfa.json').write_text('{"secret": "JBSWY3DPEHPK3PXP"}\n')
+        env = drill / 'production.env'
+        env.write_text('JWT_SECRET=abcdefgh1234\n')
+        manifest = export.export(drill, drill / 'out', ['stage'], env_file=env,
+                                 bucket_key_file=drill / 'absent.json', owner_file=drill / 'absent-owner.json')
+        written = json.loads((drill / 'out/artifact-hashes.json').read_text())
+        self.assertEqual(written['secrets_loaded'], {'env': 1, 'bucket_key': False, 'mfa': True, 'owner': False})
+        self.assertEqual(written['files'], manifest)
+        self.assertEqual(list(manifest), ['stage/result.json'])
 
 
 if __name__ == '__main__':

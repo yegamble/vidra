@@ -184,7 +184,9 @@ try {
     assert.equal((await pendingComplete).status(), 202);
     return id;
   };
-  const job = id => { const row = sql(`SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='${id}' ORDER BY created_at DESC LIMIT 1) j`); return row ? JSON.parse(row) : null; };
+  // last_error is TEXT NOT NULL DEFAULT '' (core migration 0039), so `IS NOT NULL` read true on every
+  // row; the v0.6.4 evidence recorded that expression. Only a non-empty message is an error.
+  const job = id => { const row = sql(`SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error <> '' AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='${id}' ORDER BY created_at DESC LIMIT 1) j`); return row ? JSON.parse(row) : null; };
 
   const playback = async (id, label) => {
     const page = await newPage();

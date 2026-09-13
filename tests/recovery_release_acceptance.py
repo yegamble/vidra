@@ -218,7 +218,10 @@ def source_loss(run, candidate, result):
     run.compose('stop')
     left = run.compose('ps', '-q').split()
     require(not left, 'containers still running after the simulated host loss')
-    result['checks']['source_stack_stopped_volumes_retained'] = 'PASS'
+    # `compose stop` removes no volume, but nothing here enumerates them, so the
+    # check claims only what it asserts. Renamed after the v0.6.4 run; that
+    # evidence keeps the earlier key `source_stack_stopped_volumes_retained`.
+    result['checks']['source_stack_stopped_no_container_left'] = 'PASS'
 
 
 def restore(run, candidate, stage, handoff, source_loss_result, result):
