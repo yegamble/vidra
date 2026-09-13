@@ -127,5 +127,15 @@ class B2AcceptanceTests(unittest.TestCase):
                         bucket.verify_media('video-id', fixture)
 
 
+class BucketNamingTests(unittest.TestCase):
+    def test_bucket_must_be_named_for_the_candidate_release(self):
+        v065 = dict(SPEC, bucket='vidra-acceptance-v065-20260913-media')
+        validate_spec(v065, 'v0.6.5')
+        with self.assertRaises(ValueError):
+            validate_spec(SPEC, 'v0.6.5')  # a v064 bucket cannot serve a v0.6.5 run
+        with self.assertRaises(ValueError):
+            validate_spec(v065, 'v0.6.4')
+        validate_spec(SPEC)  # the default keeps the v0.6.4 records valid
+
 if __name__ == '__main__':
     unittest.main()
