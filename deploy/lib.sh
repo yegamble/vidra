@@ -31,6 +31,8 @@
 #   is_bundle_tree ROOT    exit 0 when ROOT was unpacked, not cloned
 #   bundle_manifest_get ROOT KEY [DEFAULT]   one value from vidra-bundle.manifest
 #   env_snapshot FILE ROOT keeps 10 timestamped generations of an env file
+#   release_mapping_check ROOT MODE CORE USER SEARCH
+#                          exit 0 when releases/ allows this tag triple
 
 # Reads KEY from the env file WITHOUT sourcing it — that file is operator-edited
 # and holds secrets; `source`ing it would execute whatever is in there. A real
@@ -276,4 +278,92 @@ env_set_key() {
   cat "$tmp" > "$ENV_FILE"
   rm -f "$tmp"
   log "set ${key}=${val}"
+}
+
+# release_mapping_check ROOT MODE CORE USER SEARCH — hold the tag triple a run
+# is about to use against releases/<tag>.json, via deploy/release-mapping.py.
+# Returns 0 to continue (verified, or UNVERIFIED with the checker's WARNING
+# already printed) and 1 to stop; the caller owns the die message, because
+# only the caller knows what "nothing was changed" covers at its call site.
+#
+# THE GAP THIS CLOSES. The three VIDRA_*_TAG values are independent strings,
+# and until this check nothing asked whether they had ever been released
+# TOGETHER: a vidra-user tag from another release, or a core/search pairing
+# never released together, was dumped, pulled, migrated and started. Tags are
+# passed in already resolved by env_get (or rollback's target), so the checker
+# judges exactly the triple the checkout sync and compose will use rather than
+# re-deriving it with a second parser.
+#
+# THE TREE'S OWN RELEASE. deploy/release.sh tags this repository BEFORE any
+# image exists, so a tree at tag vN (pin-release.sh's output, or the unpacked vN
+# bundle) cannot contain releases/vN.json. The tags pointing at HEAD, or the
+# bundle's own tag, are passed along so the checker can tell "this tree's own
+# release, record not yet possible" (a WARNING) from "a release this tree knows
+# nothing about" (a refusal in deploy mode). `git tag --points-at` only READS
+# the checkout; a failure there just forfeits that allowance. The consequence is
+# a known gap: the NEWEST release, deployed from its own tree, is compared by
+# tag string only until the record ships inside the release artifact.
+#
+# Exit 3 is the checker's UNVERIFIED code; see the header of
+# deploy/release-mapping.py for the full contract.
+release_mapping_check() {
+  local root="$1" mode="$2" rc=0 t tags override
+  # The image source goes along with the tags, resolved the same way: the
+  # compose file pulls ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/<repo>,
+  # and a record can only vouch for the images at ITS repository. A fork or a
+  # mirror is reported UNVERIFIED, never refused.
+  local -a args=(check --mode "$mode" --releases "$root/releases" --env "$ENV_FILE"
+    --core "$3" --user "$4" --search "$5"
+    --registry "$(env_get VIDRA_IMAGE_REGISTRY '')" --owner "$(env_get VIDRA_IMAGE_OWNER '')")
+  # Named here rather than left to python3's "can't open file", which the
+  # caller's message would otherwise present as a verdict about the tags.
+  if [ ! -f "$root/deploy/release-mapping.py" ]; then
+    printf '[release-mapping] ERROR: deploy/release-mapping.py is missing from %s, so the pinned tags cannot be checked. This tree is incomplete or mixes revisions. Take deploy/release-mapping.py and releases/ from the same revision as deploy/lib.sh.\n' "$root" >&2
+    return 1
+  fi
+  # VIDRA_RELEASE_MAPPING=warn — the operator's override for a DEPLOY of a
+  # triple no record pairs (a release whose record has not landed on this tree
+  # yet, a rehearsal lab; a rollback already warns there). Read through env_get
+  # so it works from the process environment and the env file alike, exactly
+  # like VIDRA_SKIP_DNS_PREFLIGHT. It never reaches past the pairing: a digest
+  # that contradicts a record, a tag that cannot be parsed, a broken releases/
+  # and a stale bundle predict a real failure and still stop the run. An
+  # unrecognised value is reported and IGNORED rather than refused: a typo then
+  # neither bypasses the check silently (the normal verdict applies) nor stops
+  # a rollback on its own.
+  override="$(env_get VIDRA_RELEASE_MAPPING '')"
+  case "$override" in
+    warn)
+      printf '[release-mapping] WARNING: VIDRA_RELEASE_MAPPING=warn is set — a tag triple no record pairs will WARN instead of stopping this run. A digest that contradicts a record, a tag that cannot be parsed, a broken releases/ directory and a stale bundle still stop it. Unset it once releases/ records this pairing.\n' >&2
+      args+=(--unrecorded warn) ;;
+    ''|refuse) ;;
+    *)
+      printf '[release-mapping] WARNING: VIDRA_RELEASE_MAPPING=%s is not a value this check knows (warn, or unset) and was ignored; the normal verdict applies.\n' "$override" >&2 ;;
+  esac
+  if is_bundle_tree "$root"; then
+    args+=(--bundle-manifest "$root/vidra-bundle.manifest")
+  elif command -v git >/dev/null 2>&1; then
+    # `git tag --points-at` only READS the checkout. A failure (a dubious-
+    # ownership refusal, a root that is not a repository) is logged rather
+    # than swallowed: it forfeits the tree's-own-release allowance, and a
+    # refusal that follows must read as that, not as a verdict about the
+    # tags. VIDRA_RELEASE_MAPPING=warn is the way past it mid-incident.
+    if tags="$(git -C "$root" tag --points-at HEAD 2>&1)"; then
+      while IFS= read -r t; do
+        if [ -n "$t" ]; then
+          args+=(--tree-tag "$t")
+        fi
+      done <<EOF
+$tags
+EOF
+    else
+      log "could not read tags at HEAD ($(printf '%s' "$tags" | head -n1)); the tree's-own-release allowance is forfeited"
+    fi
+  fi
+  python3 "$root/deploy/release-mapping.py" "${args[@]}" || rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    3) log "release mapping NOT verified (WARNING above) — continuing"; return 0 ;;
+  esac
+  return 1
 }

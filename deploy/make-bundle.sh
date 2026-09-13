@@ -142,6 +142,19 @@ $(LC_ALL=C find "$REPO_ROOT/deploy" -maxdepth 1 -type f \
     ! -name 'Caddyfile.local' ! -name '.*' ! -name 'make-bundle.sh' | LC_ALL=C sort)
 EOF
 
+# The platform release records deploy.sh and rollback.sh check the pinned tag
+# triple against (deploy/release-mapping.py). A bundle host has no checkout to
+# read them from, and without them every deploy from this tree is refused as an
+# unidentifiable tree. They are data, not code, and nothing in them is secret.
+# This bundle's OWN release is not among them (deploy/release.sh tags this
+# repository before any image, and so any digest, exists); the checker treats
+# that case as the tree's own release, using the manifest tag written below.
+copy_in releases/README.md
+for f in "$REPO_ROOT"/releases/*.json; do
+  [ -e "$f" ] || die "releases/*.json matched nothing — deploy.sh refuses a tree that carries no release records"
+  copy_in "releases/$(basename "$f")"
+done
+
 # --- the component half -----------------------------------------------------
 # vidra-core/docker-compose.yml, plus every path it BIND-MOUNTS out of the
 # checkout. The mount list is DERIVED from the file rather than hard-coded here:
