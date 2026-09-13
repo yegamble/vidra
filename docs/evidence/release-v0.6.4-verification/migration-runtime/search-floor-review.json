@@ -1,0 +1,13 @@
+{
+  "run_url": "https://github.com/yegamble/vidra-search/actions/runs/34485406355",
+  "head": "5f7a3a3e7f62aa4885342cbc378ad28e1b3054b4",
+  "job": "prev-migrator-against-new-schema",
+  "job_status": "success",
+  "actual_probe_disposition": "ahead-schema case did not execute because both ledgers are 18; no rollback-floor acceptance PASS",
+  "selected_log_lines": [
+    "prev-migrator-against-new-schema\tUNKNOWN STEP\t2026-09-10T13:53:21.1980001Z HEAD ledger=18, v0.6.4 embeds up to 18",
+    "prev-migrator-against-new-schema\tUNKNOWN STEP\t2026-09-10T13:53:21.1998671Z ##[notice]HEAD adds no migration beyond v0.6.4 (ledger 18 <= embedded 18), so there is nothing AHEAD of the previous migrator to test. This lane proves nothing on this change by design.",
+    "prev-migrator-against-new-schema\tUNKNOWN STEP\t2026-09-10T13:53:21.3399575Z ledger after: version=18 dirty=false table=vidra_search_migrations"
+  ],
+  "raw_log_sha256": "730523d22cc02a1faf328e0ca37f5e418d5f6f747cc3a90428d2faaec3c5593e"
+}

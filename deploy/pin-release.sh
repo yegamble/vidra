@@ -30,13 +30,16 @@
 #   - it snapshots the env file OUTSIDE the checkout (deploy/backup-env.sh), so
 #     there is never a reason to `cp production.env production.env.bak`.
 #
-# ORDERING: preflight → fetch → checkout <tag> → snapshot env → rewrite pins.
-# The checkout goes first because it is the step git can refuse (a dirty
-# tracked file), and a refusal there leaves the env file untouched — so the
-# tree and the pins never disagree, which is exactly the skew REL-01 recorded
-# (an env file naming a release the tree is not on; deploy.sh then runs those
-# images against the previous revision's compose files). If a rewrite fails
-# after the checkout, the snapshot is put back for the same reason.
+# ORDERING: preflight → fetch → snapshot env → checkout <tag> → rewrite pins.
+# The checkout goes before the rewrite because it is the step git can refuse
+# (a dirty tracked file), and a refusal there leaves the env file untouched — so
+# the tree and the pins never disagree, which is exactly the skew REL-01
+# recorded (an env file naming a release the tree is not on; deploy.sh then runs
+# those images against the previous revision's compose files). If a rewrite
+# fails after the checkout, the snapshot is put back for the same reason. The
+# snapshot goes before the checkout because its helper lives in THIS tree and
+# the target release may predate it (v0.6.3 and v0.6.4 do) — see the note at
+# the call site.
 #
 # The body is a function called on the last line, so bash has parsed every
 # statement before the checkout changes the file it is reading from.
@@ -80,13 +83,22 @@ main() {
     || die "git fetch failed — nothing was changed"
   git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null \
     || die "${tag} is not a tag on origin — was the release cut? (deploy/release.sh --yes ${tag}). Nothing was changed"
+  # The snapshot is taken BEFORE the checkout, with this tree's helper. The
+  # helper (deploy/backup-env.sh + deploy/checkout-hygiene.py) landed after
+  # v0.6.4, so a target release may not carry it — every v0.6.3/v0.6.4 tree does
+  # not — and running it after the checkout meant it had just been removed from
+  # under this script: the tree had moved, the pins had not, and the operator
+  # was left in exactly the skew this script exists to prevent. A snapshot is a
+  # private copy outside the tree, so taking it first costs nothing when the
+  # checkout below is refused: the env file is untouched either way.
+  snapshot="$(ENV_FILE="$ENV_FILE" bash "$REPO_ROOT/deploy/backup-env.sh")" || die "env snapshot failed — nothing was changed: the tree has not moved and the env file is untouched"
+  log "env snapshot: ${snapshot}"
+
   log "checking out ${tag}"
   git -C "$REPO_ROOT" checkout --detach --quiet "$tag" \
-    || die "could not check out ${tag} — nothing else was changed; the env file still names the previous release"
+    || die "could not check out ${tag} — nothing else was changed; the env file still names the previous release (${snapshot} is a plain copy of it)"
   log "checkout: $(git -C "$REPO_ROOT" describe --tags --always)"
 
-  snapshot="$(ENV_FILE="$ENV_FILE" bash "$REPO_ROOT/deploy/backup-env.sh")" || die "env snapshot failed — the tree is at ${tag}, the env file is untouched"
-  log "env snapshot: ${snapshot}"
   for key in VIDRA_CORE_TAG VIDRA_USER_TAG VIDRA_SEARCH_TAG; do
     if ! env_set_key "$key" "$tag"; then
       cat "$snapshot" > "$ENV_FILE"

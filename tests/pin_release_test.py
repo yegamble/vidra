@@ -72,6 +72,58 @@ class PinReleaseTests(unittest.TestCase):
         self.assertFalse(list(self.root.glob('env/*.bak*')))
         self.assertIn('next: ./deploy/deploy.sh', result.stdout)
 
+    def test_target_release_without_the_snapshot_helper_still_pins(self):
+        # v0.6.3 and v0.6.4 trees carry neither deploy/backup-env.sh nor
+        # deploy/checkout-hygiene.py (both landed after v0.6.4). An operator on
+        # main — or on any later tag — pinning to such a release ran the
+        # snapshot AFTER the checkout, so the helper it needed had just been
+        # removed from under it: "env snapshot failed — the tree is at vX, the
+        # env file is untouched", with the tree moved and the pins not. Every
+        # rollback of the tree to a pre-helper release hit this.
+        env = {**os.environ, 'GIT_AUTHOR_NAME': 't', 'GIT_AUTHOR_EMAIL': 't@example.com',
+               'GIT_COMMITTER_NAME': 't', 'GIT_COMMITTER_EMAIL': 't@example.com'}
+        old = Path(self.temp.name) / 'old'
+        subprocess.run(['git', 'clone', '-q', str(self.origin), str(old)], check=True)
+        for helper in ('deploy/backup-env.sh', 'deploy/checkout-hygiene.py', 'deploy/pin-release.sh'):
+            subprocess.run(['git', 'rm', '-q', helper], cwd=old, check=True)
+        subprocess.run(['git', 'commit', '-q', '-m', 'a release cut before the helpers existed'], cwd=old, check=True, env=env)
+        subprocess.run(['git', 'tag', '-a', 'v9.9.8', '-m', 'v9.9.8'], cwd=old, check=True, env=env)
+        subprocess.run(['git', 'push', '-q', 'origin', 'v9.9.8'], cwd=old, check=True)
+        result = self.run_pin('v9.9.8')
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertEqual(git('describe', '--tags', cwd=self.root), 'v9.9.8')
+        self.assertFalse((self.root / 'deploy/backup-env.sh').exists())
+        pins = self.pins()
+        self.assertEqual({pins['VIDRA_CORE_TAG'], pins['VIDRA_USER_TAG'], pins['VIDRA_SEARCH_TAG']}, {'v9.9.8'})
+        snapshots = list((self.home / '.local/state/vidra/env-history').iterdir())
+        self.assertEqual(len(snapshots), 1)
+        self.assertIn('VIDRA_CORE_TAG=v0.0.1', snapshots[0].read_text())
+
+    def test_a_refused_checkout_leaves_only_a_harmless_snapshot(self):
+        # The snapshot now precedes the checkout, so the one observable side
+        # effect of a refused checkout is a snapshot that is a byte-identical
+        # copy of the env file nothing changed. A dirty tracked file that the
+        # target tag would overwrite is what git refuses on, so the target
+        # must actually change that file.
+        env = {**os.environ, 'GIT_AUTHOR_NAME': 't', 'GIT_AUTHOR_EMAIL': 't@example.com',
+               'GIT_COMMITTER_NAME': 't', 'GIT_COMMITTER_EMAIL': 't@example.com'}
+        other = Path(self.temp.name) / 'other'
+        subprocess.run(['git', 'clone', '-q', str(self.origin), str(other)], check=True)
+        (other / 'env/production.env.example').write_text('VIDRA_CORE_TAG=\nNEW_KEY=\n')
+        subprocess.run(['git', 'commit', '-q', '-am', 'a release that changes the template'], cwd=other, check=True, env=env)
+        subprocess.run(['git', 'tag', '-a', 'v9.9.7', '-m', 'v9.9.7'], cwd=other, check=True, env=env)
+        subprocess.run(['git', 'push', '-q', 'origin', 'v9.9.7'], cwd=other, check=True)
+        (self.root / 'env/production.env.example').write_text('VIDRA_CORE_TAG=\nDIRTY=1\n')
+        before = self.env_file.read_text()
+        result = self.run_pin('v9.9.7')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('could not check out v9.9.7', result.stderr)
+        self.assertEqual(git('rev-parse', '--abbrev-ref', 'HEAD', cwd=self.root), 'main')
+        self.assertEqual(self.env_file.read_text(), before)
+        snapshots = list((self.home / '.local/state/vidra/env-history').iterdir())
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(snapshots[0].read_text(), before)
+
     def test_rerun_is_a_no_op_apart_from_a_fresh_snapshot(self):
         self.assertEqual(self.run_pin('v9.9.9').returncode, 0)
         before = self.env_file.read_text()

@@ -886,6 +886,7 @@ jobs:
                    deploy/compose.sh deploy/Caddyfile deploy/README.md \
                    deploy/cloud-init.yaml.example deploy/vidra-backup.service \
                    deploy/vidra-backup.timer vidra-bundle.manifest \
+                   deploy/release-mapping.py releases/README.md releases/v0.6.4.json \
                    vidra-core/docker-compose.yml; do
             [ -f "$f" ] || bad="${bad} MISSING:${f}"
           done
