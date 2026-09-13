@@ -107,9 +107,13 @@ All three shipped it. One caveat worth keeping: `alpine:3.24` **still installs
 3.5.7-r0** while `v3.24/main` offers 3.5.8-r0 (re-verified today against the
 linux/amd64 variant, index digest `sha256:28bd5fe8…43f8b`,
 `raw/alpine-3.24-apk-policy.txt`). The 3.5.8-r0 in these images comes from the
-runtime stages' own upgrade step, not from a base-image change — so if that step
-is ever dropped, a rebuild silently regresses to 3.5.7-r0 and nothing in CI
-currently asserts the floor.
+runtime stages' own upgrade step, not from a base-image change. The floor is
+asserted at PUBLISH time only: `publish-container.yml` (core#236 / user#220 /
+search#45, merged before this tag) runs `apk` inside the just-pushed digest and
+fails the job below `OPENSSL_MIN_APK_VERSION=3.5.8-r0` — the step ran green for
+all three v0.6.5 publishes (07:0x… see the release run summaries). The PR-time
+`docker-build` lane builds the image but does not assert the floor, so a dropped
+upgrade step is caught after the release exists, not before.
 
 ## v0.6.4 triage rows, re-measured against v0.6.5
 
@@ -143,10 +147,11 @@ verification held through to the published image (`raw/vidra-core-v065-image-too
   `/vulnerability-alerts`) and, unlike on 2026-09-12, they have been triaged: 0
   open in vidra, vidra-core and vidra-user, 1 open in vidra-search (T9). Alerts
   without auto-PRs mean the next advisory waits for a human to look.
-- **No CI assertion of the openssl floor.** The 3.5.8-r0 in these images comes
-  from a runtime-stage upgrade over a base image that still installs 3.5.7-r0.
-  A one-line `apk list -I` assertion in the image build lane would make a
-  regression fail the build instead of shipping.
+- **The openssl floor is asserted only at publish time.** `publish-container.yml`
+  checks the pushed digest (`OPENSSL_MIN_APK_VERSION`); the PR-time `docker-build`
+  lane builds without asserting it, so a dropped upgrade step fails the release
+  publish rather than the PR. A one-line `apk list -I` assertion in that lane
+  (with `load: true`) would move the failure to the PR.
 - **Provenance attestations are produced and never verified.** Each index
   carries an attestation manifest; no deploy tooling checks it, and base images
   are still pinned by tag rather than digest.
