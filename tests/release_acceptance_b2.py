@@ -13,10 +13,17 @@ from blank_server_smoke import require
 CAPABILITIES = {'listBuckets', 'readBuckets', 'listFiles', 'readFiles', 'writeFiles', 'deleteFiles'}
 
 
-def validate_spec(spec):
+def bucket_label(tag):
+    # v0.6.5 -> v065: the dedicated acceptance bucket is named for the candidate
+    # it serves, so B2 evidence can never say the wrong release.
+    require(re.fullmatch(r'v\d+\.\d+\.\d+', tag) is not None, f'not a release tag: {tag}')
+    return tag.replace('.', '')
+
+
+def validate_spec(spec, tag='v0.6.4'):
     require(set(spec) == {'bucket', 'bucket_id', 'region', 'endpoint'}, 'bucket spec must contain only nonsecret fields')
-    require(re.fullmatch(r'vidra-acceptance-v064-[0-9]{8}-[a-z0-9-]+', spec['bucket']) is not None,
-            'requires a new dedicated v0.6.4 acceptance bucket; existing/shared buckets forbidden')
+    require(re.fullmatch(rf'vidra-acceptance-{bucket_label(tag)}-[0-9]{{8}}-[a-z0-9-]+', spec['bucket']) is not None,
+            f'requires a new dedicated {tag} acceptance bucket; existing/shared buckets forbidden')
     require('sizetube' not in spec['bucket'], 'Sizetube buckets are forbidden')
     require(re.fullmatch(r'[0-9a-f]{24}', spec['bucket_id']) is not None, 'invalid test bucket ID')
     require(re.fullmatch(r'[a-z]{2}-[a-z]+-[0-9]{3}', spec['region']) is not None, 'invalid B2 region')
@@ -51,8 +58,8 @@ def validate_runtime_config(services, spec, credentials):
 
 
 class TestBucket:
-    def __init__(self, spec, credentials):
-        validate_spec(spec)
+    def __init__(self, spec, credentials, tag='v0.6.4'):
+        validate_spec(spec, tag)
         require(set(credentials) == {'access_key', 'secret_key'} and all(credentials.values()), 'invalid dedicated key file')
         self.spec = spec
         self.credentials = credentials

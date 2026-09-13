@@ -93,18 +93,23 @@ def expected_tag(candidate_path):
     # lives in, never by whatever tag the manifest happens to claim: a manifest
     # regenerated for a newer release cannot silently become "the candidate"
     # under an older record's directory, and vice versa.
-    match = EVIDENCE_DIR.match(candidate_path.resolve().parent.name)
+    resolved = candidate_path.resolve()
+    match = EVIDENCE_DIR.match(resolved.parent.name)
     require(match is not None, f'candidate manifest must live in docs/evidence/release-<tag>-verification/: {candidate_path}')
+    require(resolved.parent.parent == (ROOT / 'docs/evidence').resolve(),
+            f'candidate must be a committed evidence record under docs/evidence/: {candidate_path}')
     return match.group(1)
 
 
 def prepare(frozen, out, node_archive, node_sums, b2_spec=None, candidate_path=None):
     if b2_spec:
-        validate_spec(b2_spec)
+        validate_spec(b2_spec)  # shape only; the release-specific bucket name is checked once the candidate is known
     candidate_path = Path(candidate_path) if candidate_path else DEFAULT_CANDIDATE
     tag = expected_tag(candidate_path)
     candidate = json.loads(candidate_path.read_text())
     validate_candidate(candidate)
+    if b2_spec:
+        validate_spec(b2_spec, tag)
     require(candidate['tag'] == tag and candidate['platform'] == 'linux/amd64', 'wrong frozen candidate')
     sources = frozen / 'source'
     for repo, source in candidate['repositories'].items():
@@ -283,6 +288,7 @@ def execute(stage, approval, b2_credentials=None):
         # The handoff names the release it was prepared for; the candidate file
         # it ships is hash-checked above, so the two can only disagree if the
         # handoff was assembled for another release.
+        require('candidate.json' in handoff['files'], 'handoff does not cover candidate.json')
         require(candidate['tag'] == handoff.get('candidate_tag') and candidate['platform'] == 'linux/amd64',
                 'wrong candidate')
         evidence.update(candidate_sha256=sha(stage / 'candidate.json'), handoff_sha256=sha(stage / 'handoff.json'),
@@ -295,7 +301,7 @@ def execute(stage, approval, b2_credentials=None):
             require(b2_credentials is not None and b2_credentials.is_file(), 'missing dedicated B2 key file')
             require(b2_credentials.stat().st_mode & 0o077 == 0, 'B2 key file must be private (0600)')
             credentials = json.loads(b2_credentials.read_text())
-            bucket = TestBucket(storage['spec'], credentials)
+            bucket = TestBucket(storage['spec'], credentials, candidate['tag'])
             evidence['storage'] = bucket.require_empty()
         else:
             require(b2_credentials is None, 'B2 key supplied to a local-storage run; refusing silent fallback')

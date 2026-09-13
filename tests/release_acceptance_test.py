@@ -3,10 +3,14 @@ import copy
 import json
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from release_acceptance import check_host, execute, minimal_browser_lock, pin_images, verify_image, wait_for_health
+import release_acceptance
+
+from release_acceptance import check_host, execute, minimal_browser_lock, pin_images, prepare, verify_image, wait_for_health
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -101,9 +105,6 @@ class ReleaseAcceptanceTests(unittest.TestCase):
             wait_for_health(lambda: {}, clock=lambda: 0)
 
 
-if __name__ == '__main__':
-    unittest.main()
-
 
 class CandidateSelectionTests(unittest.TestCase):
     """The harness must not silently adopt a candidate other than the one whose
@@ -111,28 +112,28 @@ class CandidateSelectionTests(unittest.TestCase):
     for another release."""
 
     def test_prepare_refuses_a_manifest_whose_tag_disagrees_with_its_evidence_directory(self):
-        from release_acceptance import prepare
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             evidence = base / 'docs/evidence/release-v0.6.5-verification'
             evidence.mkdir(parents=True)
             (evidence / 'manifest.json').write_text(json.dumps(CANDIDATE))  # a v0.6.4 manifest under a v0.6.5 directory
-            with self.assertRaises(ValueError) as refused:
+            with patch.object(release_acceptance, 'ROOT', base), self.assertRaises(ValueError) as refused:
                 prepare(base / 'frozen', base / 'out', base / 'node.tar.xz', base / 'sums.txt',
                         candidate_path=evidence / 'manifest.json')
             self.assertIn('wrong frozen candidate', str(refused.exception))
             self.assertFalse((base / 'out').exists())
 
     def test_prepare_accepts_a_manifest_that_matches_its_evidence_directory(self):
-        from release_acceptance import prepare
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             evidence = base / 'docs/evidence/release-v0.6.5-verification'
             evidence.mkdir(parents=True)
             manifest = copy.deepcopy(CANDIDATE)
             manifest['tag'] = 'v0.6.5'
+            for source in manifest['repositories'].values():
+                source['tag'] = 'v0.6.5'  # validate_candidate requires every repository to carry the manifest's tag
             (evidence / 'manifest.json').write_text(json.dumps(manifest))
-            with self.assertRaises(Exception) as later:
+            with patch.object(release_acceptance, 'ROOT', base), self.assertRaises(subprocess.CalledProcessError) as later:
                 prepare(base / 'frozen', base / 'out', base / 'node.tar.xz', base / 'sums.txt',
                         candidate_path=evidence / 'manifest.json')
             # The candidate guard passed; the failure is the absent frozen tree, not the tag.
@@ -149,3 +150,41 @@ class CandidateSelectionTests(unittest.TestCase):
             evidence = json.loads((stage / 'result.json').read_text())
             self.assertEqual(evidence['status'], 'FAIL')
             self.assertIn('wrong candidate', evidence['error'])
+
+    def test_prepare_refuses_a_manifest_outside_the_committed_evidence_tree(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            elsewhere = base / 'scratch/release-v0.6.5-verification'
+            elsewhere.mkdir(parents=True)
+            manifest = copy.deepcopy(CANDIDATE)
+            manifest['tag'] = 'v0.6.5'
+            for source in manifest['repositories'].values():
+                source['tag'] = 'v0.6.5'
+            (elsewhere / 'manifest.json').write_text(json.dumps(manifest))
+            with patch.object(release_acceptance, 'ROOT', base), self.assertRaises(ValueError) as refused:
+                prepare(base / 'frozen', base / 'out', base / 'node.tar.xz', base / 'sums.txt',
+                        candidate_path=elsewhere / 'manifest.json')
+            self.assertIn('committed evidence record', str(refused.exception))
+
+    def test_run_refuses_a_handoff_that_does_not_hash_the_candidate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stage = Path(directory)
+            (stage / 'candidate.json').write_text(json.dumps(CANDIDATE))
+            (stage / 'handoff.json').write_text(json.dumps({'files': {}, 'candidate_tag': 'v0.6.4'}))
+            self.assertEqual(execute(stage, 'fresh-disposable-host'), 1)
+            evidence = json.loads((stage / 'result.json').read_text())
+            self.assertIn('handoff does not cover candidate.json', evidence['error'])
+
+    def test_run_refuses_a_legacy_handoff_without_a_candidate_tag(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stage = Path(directory)
+            (stage / 'candidate.json').write_text(json.dumps(CANDIDATE))
+            import hashlib
+            digest = hashlib.sha256((stage / 'candidate.json').read_bytes()).hexdigest()
+            (stage / 'handoff.json').write_text(json.dumps({'files': {'candidate.json': digest}}))
+            self.assertEqual(execute(stage, 'fresh-disposable-host'), 1)
+            self.assertIn('wrong candidate', json.loads((stage / 'result.json').read_text())['error'])
+
+
+if __name__ == '__main__':
+    unittest.main()

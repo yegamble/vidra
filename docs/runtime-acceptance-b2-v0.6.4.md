@@ -167,7 +167,7 @@ completion command used for the preserved historical attempt was:
 python3 /root/vidra-v064-b2-completion-tools/release_acceptance_complete_b2.py \
   /root/vidra-v064-runtime /root/vidra-v064-b2-completion \
   --b2-credentials /root/vidra-v064-b2-key.json
-python3 /tmp/vidra-export.py /root/vidra-v064-b2-completion
+python3 /tmp/vidra-export.py /root/vidra-v064-runtime /root/vidra-v064-b2-completion
 ```
 
 For a future uninterrupted runner PASS, invoke the
