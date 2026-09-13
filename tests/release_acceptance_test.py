@@ -103,3 +103,49 @@ class ReleaseAcceptanceTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CandidateSelectionTests(unittest.TestCase):
+    """The harness must not silently adopt a candidate other than the one whose
+    frozen evidence directory it was pointed at — nor run a handoff prepared
+    for another release."""
+
+    def test_prepare_refuses_a_manifest_whose_tag_disagrees_with_its_evidence_directory(self):
+        from release_acceptance import prepare
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            evidence = base / 'docs/evidence/release-v0.6.5-verification'
+            evidence.mkdir(parents=True)
+            (evidence / 'manifest.json').write_text(json.dumps(CANDIDATE))  # a v0.6.4 manifest under a v0.6.5 directory
+            with self.assertRaises(ValueError) as refused:
+                prepare(base / 'frozen', base / 'out', base / 'node.tar.xz', base / 'sums.txt',
+                        candidate_path=evidence / 'manifest.json')
+            self.assertIn('wrong frozen candidate', str(refused.exception))
+            self.assertFalse((base / 'out').exists())
+
+    def test_prepare_accepts_a_manifest_that_matches_its_evidence_directory(self):
+        from release_acceptance import prepare
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            evidence = base / 'docs/evidence/release-v0.6.5-verification'
+            evidence.mkdir(parents=True)
+            manifest = copy.deepcopy(CANDIDATE)
+            manifest['tag'] = 'v0.6.5'
+            (evidence / 'manifest.json').write_text(json.dumps(manifest))
+            with self.assertRaises(Exception) as later:
+                prepare(base / 'frozen', base / 'out', base / 'node.tar.xz', base / 'sums.txt',
+                        candidate_path=evidence / 'manifest.json')
+            # The candidate guard passed; the failure is the absent frozen tree, not the tag.
+            self.assertNotIn('wrong frozen candidate', str(later.exception))
+
+    def test_run_refuses_a_handoff_prepared_for_another_release(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stage = Path(directory)
+            (stage / 'candidate.json').write_text(json.dumps(CANDIDATE))  # tag v0.6.4
+            import hashlib
+            digest = hashlib.sha256((stage / 'candidate.json').read_bytes()).hexdigest()
+            (stage / 'handoff.json').write_text(json.dumps({'files': {'candidate.json': digest}, 'candidate_tag': 'v0.6.5'}))
+            self.assertEqual(execute(stage, 'fresh-disposable-host'), 1)
+            evidence = json.loads((stage / 'result.json').read_text())
+            self.assertEqual(evidence['status'], 'FAIL')
+            self.assertIn('wrong candidate', evidence['error'])

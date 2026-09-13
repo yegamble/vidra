@@ -2,8 +2,14 @@
 import hashlib,json,shutil,sys,tarfile
 from pathlib import Path
 
-stage=Path('/root/vidra-v064-runtime')
-out=Path('/root/vidra-v064-reviewed-evidence')
+# The stage directory is the only argument (default: the v0.6.4 run). Every
+# other path derives from its name, so a v0.6.5 run at /root/vidra-v065-runtime
+# exports to /root/vidra-v065-reviewed-evidence{,.tar.gz} and reads the bucket
+# key from /root/vidra-v065-b2-key.json.
+stage=Path(sys.argv[1] if len(sys.argv)>1 else '/root/vidra-v064-runtime')
+assert stage.name.endswith('-runtime'),'stage directory must be named <label>-runtime'
+label=stage.name[:-len('-runtime')]
+out=stage.parent/f'{label}-reviewed-evidence'
 out.mkdir(mode=0o700)
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
 save=lambda name,value:(out/name).write_text(json.dumps(value,indent=2)+'\n')
@@ -45,7 +51,7 @@ configuration={k:model['services']['api']['environment'].get(k) for k in (
 runtime_storage=[]
 if result.get('storage',{}).get('provider')=='Backblaze B2':
  spec=result['storage']
- key=json.loads(Path('/root/vidra-v064-b2-key.json').read_text())
+ key=json.loads((stage.parent/f'{label}-b2-key.json').read_text())
  expected={'STORAGE_BACKEND':'s3','STORAGE_S3_ENDPOINT':spec['endpoint'],
   'STORAGE_S3_REGION':spec['region'],'STORAGE_S3_BUCKET':spec['bucket'],
   'STORAGE_S3_USE_SSL':'true','STORAGE_S3_FORCE_PATH_STYLE':'false'}
@@ -91,7 +97,7 @@ for path in out.glob('*.json'):
  content=path.read_text()
  assert not any(secret and secret in content for secret in secrets),'secret detected; export refused'
 save('export-hashes.json',{p.name:sha(p) for p in sorted(out.iterdir())})
-archive=Path('/root/vidra-v064-reviewed-evidence.tar.gz')
+archive=stage.parent/f'{label}-reviewed-evidence.tar.gz'
 with tarfile.open(archive,'w:gz') as tar:
  for path in sorted(out.iterdir()):tar.add(path,arcname=path.name)
 print(json.dumps({'files':[p.name for p in sorted(out.iterdir())],'archive_sha256':sha(archive),'secret_scan':'PASS'}))
