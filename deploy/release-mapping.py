@@ -1,0 +1,429 @@
+#!/usr/bin/env python3
+"""Refuse a component mapping nobody released, before a deploy or rollback
+changes anything.
+
+  python3 deploy/release-mapping.py check --mode deploy --env env/production.env
+
+WHY. The image tags in the env file are three independent strings. Before this
+check, nothing asked whether they belonged together. A vidra-user tag from
+another release, or a core/search pairing never released together, went
+through the pre-deploy dump, the pull, the migrations and `up -d`. The result
+is a stack whose frontend calls endpoints this core may lack, or whose search
+schema this core's outbox does not feed, and no probe notices. releases/<tag>.json
+is the machine-readable statement of what WAS released together; this script
+holds the pinned triple against it.
+
+Exit codes are the contract deploy/lib.sh's release_mapping_check reads:
+  0  verified: exactly one record pairs these tags (plus digest/bundle checks)
+  3  UNVERIFIED but allowed: a pre-manifest release, the tree's own release
+     whose record cannot exist yet, or a rollback to an unrecorded uniform
+     release. Printed as a WARNING; the caller continues.
+  1  refused: a finding that predicts a broken or unreleased deployment, or
+     release metadata that cannot be trusted
+  2  usage error (argparse)
+
+Stdlib only, no network, and it reads nothing from the env file except the
+three VIDRA_*_TAG keys: that file holds every production secret, and this
+output is printed to a terminal and to logs.
+"""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import sys
+
+OK, REFUSED, UNVERIFIED = 0, 1, 3
+
+COMPONENTS = (('core', 'VIDRA_CORE_TAG', 'vidra-core'),
+              ('user', 'VIDRA_USER_TAG', 'vidra-user'),
+              ('search', 'VIDRA_SEARCH_TAG', 'vidra-search'))
+
+# The shape deploy/release.sh cuts, and the only one a record may name.
+RELEASE_TAG = re.compile(r'v[0-9]+\.[0-9]+\.[0-9]+')
+COMMIT = re.compile(r'[0-9a-f]{40}')
+DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
+PLATFORM = re.compile(r'[a-z0-9]+/[a-z0-9]+(/[a-z0-9]+)?')
+REPOSITORY = re.compile(r'[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)+')
+# What an env file may pin: a Docker tag, optionally with the digest Docker
+# would then pull instead (`repo:tag@sha256:...`).
+PINNED = re.compile(r'(?P<tag>[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})(@(?P<digest>sha256:[0-9a-f]{64}))?')
+SEMVER = re.compile(r'v([0-9]+)\.([0-9]+)\.([0-9]+)([-+].*)?')
+
+RECORD_KEYS = {'schema_version', 'release', 'meta_commit', 'core_schema_version',
+               'search_schema_version', 'components'}
+OPTIONAL_RECORD_KEYS = {'evidence'}
+
+
+def semver(tag):
+    """(major, minor, patch) of a vX.Y.Z tag, ignoring a prerelease/build
+    suffix exactly as deploy.sh's semver_ge does (v0.6.3-a37 is v0.6.3 code);
+    None when the tag is not release-shaped at all."""
+    match = SEMVER.fullmatch(tag)
+    return tuple(int(part) for part in match.groups()[:3]) if match else None
+
+
+def schema_int(value):
+    # bool is an int in Python; `"core_schema_version": true` is not a ledger.
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def validate(path, data):
+    """Every problem with one record, as strings. Unknown keys are refused so a
+    typo such as `index_digets` cannot quietly remove a check."""
+    where = f'{path.parent.name}/{path.name}'
+    problems = []
+
+    def bad(message):
+        problems.append(f'{where}: {message}')
+
+    def keys(obj, required, optional, label):
+        if not isinstance(obj, dict):
+            bad(f'{label} must be an object')
+            return False
+        missing = sorted(required - obj.keys())
+        unknown = sorted(obj.keys() - required - optional)
+        if missing:
+            bad(f'{label} is missing {", ".join(missing)}')
+        if unknown:
+            bad(f'{label} has unknown key(s) {", ".join(unknown)}')
+        return not missing
+
+    if not keys(data, RECORD_KEYS, OPTIONAL_RECORD_KEYS, 'the record'):
+        return problems
+    if data['schema_version'] != 1 or isinstance(data['schema_version'], bool):
+        bad(f'schema_version is {data["schema_version"]!r}; this checker reads version 1 only')
+    release = data['release']
+    if not isinstance(release, str) or not RELEASE_TAG.fullmatch(release):
+        bad(f'release {release!r} is not a vMAJOR.MINOR.PATCH tag')
+    elif path.name != f'{release}.json':
+        bad(f'names release {release}, so it must be called {release}.json')
+    if not isinstance(data['meta_commit'], str) or not COMMIT.fullmatch(data['meta_commit']):
+        bad(f'meta_commit {data["meta_commit"]!r} is not a 40-hex commit')
+    for key in ('core_schema_version', 'search_schema_version'):
+        if not schema_int(data[key]):
+            bad(f'{key} {data[key]!r} is not a positive integer migration version')
+    if 'evidence' in data and not isinstance(data['evidence'], str):
+        bad('evidence must be a string path')
+    components = data['components']
+    if not keys(components, {name for name, _, _ in COMPONENTS}, set(), 'components'):
+        return problems
+    for name, _, repo in COMPONENTS:
+        component = components[name]
+        label = f'components.{name}'
+        if not keys(component, {'tag', 'commit', 'image'}, set(), label):
+            continue
+        if not isinstance(component['tag'], str) or not RELEASE_TAG.fullmatch(component['tag']):
+            bad(f'{label}.tag {component["tag"]!r} is not a vMAJOR.MINOR.PATCH tag')
+        if not isinstance(component['commit'], str) or not COMMIT.fullmatch(component['commit']):
+            bad(f'{label}.commit {component["commit"]!r} is not a 40-hex commit')
+        image = component['image']
+        if not keys(image, {'repository', 'index_digest', 'platforms'}, set(), f'{label}.image'):
+            continue
+        if not isinstance(image['repository'], str) or not REPOSITORY.fullmatch(image['repository']) \
+                or not image['repository'].endswith('/' + repo):
+            bad(f'{label}.image.repository {image["repository"]!r} is not a registry path ending in /{repo}')
+        if not isinstance(image['index_digest'], str) or not DIGEST.fullmatch(image['index_digest']):
+            bad(f'{label}.image.index_digest {image["index_digest"]!r} is not a sha256 digest')
+        platforms = image['platforms']
+        if not isinstance(platforms, dict) or not platforms:
+            bad(f'{label}.image.platforms must name at least one platform digest')
+            continue
+        for platform, value in platforms.items():
+            if not PLATFORM.fullmatch(platform):
+                bad(f'{label}.image.platforms key {platform!r} is not an os/arch platform')
+            if not isinstance(value, str) or not DIGEST.fullmatch(value):
+                bad(f'{label}.image.platforms[{platform}] {value!r} is not a sha256 digest')
+    return problems
+
+
+def load_records(directory):
+    """(records, problems). Every file is read and every problem collected, so
+    one run names every broken record instead of one per attempt."""
+    directory = Path(directory)
+    if not directory.is_dir():
+        return [], [f'{directory} does not exist, so no pinned tags can be checked against a '
+                    'released mapping. It ships with this repository and inside every bundle; '
+                    'a tree without it is incomplete. Restore it from the release this tree '
+                    'came from.']
+    records, problems = [], []
+    for path in sorted(directory.glob('*.json')):
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, ValueError) as error:
+            problems.append(f'{directory.name}/{path.name}: unreadable JSON ({error})')
+            continue
+        found = validate(path, data)
+        problems.extend(found)
+        if not found:
+            records.append(data)
+    if not records and not problems:
+        problems.append(f'{directory} holds no release records (*.json). Nothing can be verified '
+                        'against it; restore the directory from the release this tree came from.')
+    seen = {}
+    for record in records:
+        triple = tuple(record['components'][name]['tag'] for name, _, _ in COMPONENTS)
+        if triple in seen:
+            problems.append(f'{directory.name}/{record["release"]}.json pairs core={triple[0]} '
+                            f'user={triple[1]} search={triple[2]}, exactly like '
+                            f'{directory.name}/{seen[triple]}.json. Two releases cannot share one '
+                            'mapping: the check could not say which one is being deployed.')
+        else:
+            seen[triple] = record['release']
+    return records, problems
+
+
+def env_file_value(path, key):
+    """deploy/lib.sh's env_get, for one key: a non-empty process environment
+    variable wins (compose interpolation applies the same precedence), else the
+    LAST `KEY=value` line, with CR and one layer of matching quotes stripped.
+    Never sources the file and never looks at any other key."""
+    value = os.environ.get(key, '')
+    if value:
+        return value
+    if path is None:
+        return ''
+    pattern = re.compile(r'^[ \t]*' + re.escape(key) + r'[ \t]*=[ \t]*(.*)$')
+    found = ''
+    with open(path, encoding='utf-8', errors='replace') as handle:
+        for line in handle:
+            match = pattern.match(line.rstrip('\n'))
+            if match:
+                found = match.group(1).replace('\r', '')
+    if len(found) >= 2 and found[0] == found[-1] and found[0] in '"\'':
+        found = found[1:-1]
+    return found
+
+
+def bundle_manifest(path):
+    """key=value lines, read the way deploy/lib.sh's bundle_manifest_get reads
+    them (last value wins)."""
+    values = {}
+    for line in Path(path).read_text(encoding='utf-8', errors='replace').splitlines():
+        line = line.strip().replace('\r', '')
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def check(args):
+    """(exit code, errors, warnings, notes)."""
+    errors, warnings, notes = [], [], []
+    records, problems = load_records(args.releases)
+    errors.extend(problems)
+
+    pins = {}
+    for name, key, repo in COMPONENTS:
+        explicit = getattr(args, name)
+        raw = explicit if explicit else env_file_value(args.env, key)
+        match = PINNED.fullmatch(raw) if raw else None
+        if not raw:
+            errors.append(f'{key} is not set{" in " + str(args.env) if args.env else ""}. Without it '
+                          f'there is no {repo} image to pull, and the compose render refuses the '
+                          'stack later anyway; set it to the tag of a recorded release.')
+        elif not match:
+            errors.append(f'{key}={raw!r} is not a Docker image tag (optionally @sha256:<digest>). '
+                          'Compose would refuse to parse the image reference.')
+        else:
+            pins[name] = (key, repo, match.group('tag'), match.group('digest'))
+
+    tree_tags = set(args.tree_tag or [])
+    bundle = None
+    if args.bundle_manifest:
+        try:
+            bundle = bundle_manifest(args.bundle_manifest)
+        except OSError as error:
+            errors.append(f'{args.bundle_manifest} cannot be read ({error.strerror}), so this '
+                          'bundle tree cannot be identified. Re-download the bundle.')
+        else:
+            if bundle.get('tag'):
+                tree_tags.add(bundle['tag'])
+
+    # Metadata that cannot be trusted, or tags that cannot be parsed, stop here
+    # with EVERY such finding reported. Matching against a half-valid record set
+    # would turn a typo in one file into a misleading verdict about another.
+    if errors or len(pins) != len(COMPONENTS):
+        return REFUSED, errors, warnings, notes
+
+    env = {name: pins[name][2] for name, _, _ in COMPONENTS}
+    described = ' '.join(f'{name}={env[name]}' for name, _, _ in COMPONENTS)
+    matches = [r for r in records if all(r['components'][n]['tag'] == env[n] for n, _, _ in COMPONENTS)]
+
+    if matches:
+        record = matches[0]   # load_records refused duplicate triples
+        where = f'{Path(args.releases).name}/{record["release"]}.json'
+        for name, key, repo in COMPONENTS:
+            pinned = pins[name][3]
+            if not pinned:
+                continue
+            image = record['components'][name]['image']
+            allowed = [image['index_digest'], *image['platforms'].values()]
+            if pinned not in allowed:
+                errors.append(f'{key} pins digest {pinned}, but {where} records {repo} '
+                              f'{env[name]} as index {image["index_digest"]} '
+                              f'({", ".join(f"{p} {d}" for p, d in image["platforms"].items())}). '
+                              'Docker pulls by digest, so this would run bytes that release never '
+                              'shipped under a tag that claims it did. Nothing was changed.')
+        if bundle is not None and args.mode == 'deploy':
+            errors.extend(bundle_findings(bundle, record, where, args.bundle_manifest))
+        elif bundle is not None:
+            notes.append('rollback: vidra-bundle.manifest not compared. A bundle host rolls back by '
+                         're-pointing tags under the newer bundle, and rollback.sh never reads the '
+                         "manifest's schema version, so a difference predicts nothing here.")
+        if errors:
+            return REFUSED, errors, warnings, notes
+        notes.append(f'{described} is release {record["release"]} ({where}): core schema '
+                     f'{record["core_schema_version"]}, search schema {record["search_schema_version"]}')
+        return OK, errors, warnings, notes
+
+    owners = {name: sorted(r['release'] for r in records if r['components'][name]['tag'] == env[name])
+              for name, _, _ in COMPONENTS}
+    known = ', '.join(sorted((r['release'] for r in records), key=semver)) or '(none)'
+    floor = min((r['release'] for r in records), key=semver)
+
+    if any(owners.values()):
+        # MIXED: at least one tag belongs to a recorded release, and no record
+        # pairs the whole triple.
+        for name, key, repo in COMPONENTS:
+            if owners[name]:
+                errors.append(f'{key}={env[name]} belongs to release {", ".join(owners[name])}')
+            else:
+                version = semver(env[name])
+                older = (f' (it predates {floor}, the first recorded release)'
+                         if version is not None and version < semver(floor) else '')
+                errors.append(f'{key}={env[name]}: no release record names this {repo} tag{older}')
+        best = max(sum(r['components'][n]['tag'] == env[n] for n, _, _ in COMPONENTS) for r in records)
+        for record in sorted(records, key=lambda r: semver(r['release'])):
+            shared = sum(record['components'][n]['tag'] == env[n] for n, _, _ in COMPONENTS)
+            if shared != best:
+                continue
+            for name, key, _ in COMPONENTS:
+                expected = record['components'][name]['tag']
+                if expected != env[name]:
+                    errors.append(f'release {record["release"]} expects {key}={expected} '
+                                  f'(env has {env[name]})')
+        errors.append(f'{described} is not a recorded release: these images were never released '
+                      'together, so nothing verified that this frontend, core API and search '
+                      'schema work as a set (a UI calling endpoints this core lacks, a search '
+                      "index this core's outbox does not feed). Nothing was changed. Pin one "
+                      f'recorded release ({known}), or, if this pairing really was released, add '
+                      f'its record under {Path(args.releases).name}/ on main and update this tree.')
+        return REFUSED, errors, warnings, notes
+
+    versions = [semver(env[name]) for name, _, _ in COMPONENTS]
+    uniform = len(set(env.values())) == 1
+    tag = env['core']
+
+    if all(v is not None and v < semver(floor) for v in versions):
+        warnings.append(f'{described} is a release from before {floor}, the first one with a record '
+                        f'in {Path(args.releases).name}/. Its component mapping and digests are NOT '
+                        'verified. Continuing, because refusing would make every historical release '
+                        'undeployable and un-rollback-able.' + pinned_note(pins))
+        return UNVERIFIED, errors, warnings, notes
+
+    if uniform and semver(tag) is not None and tag in tree_tags:
+        warnings.append(f'{described} is this tree\'s own release, and '
+                        f'{Path(args.releases).name}/{tag}.json is not in it. That is expected: '
+                        'deploy/release.sh tags this repository before any image exists, so a tree '
+                        f'at {tag} cannot carry {tag}\'s record. The component pairing and digests are '
+                        f'NOT verified. The record reaches hosts with the next meta release.'
+                        + pinned_note(pins))
+        return UNVERIFIED, errors, warnings, notes
+
+    if uniform and semver(tag) is not None and args.mode == 'rollback':
+        warnings.append(f'{described} has no record in {Path(args.releases).name}/ (recorded: {known}). '
+                        'The mapping and digests are NOT verified. A rollback continues, because a '
+                        'missing record is a bookkeeping gap rather than a sign the rollback fails: '
+                        'a tag that does not exist still fails the pull, which puts the env file '
+                        f'back. Add {Path(args.releases).name}/{tag}.json on main.' + pinned_note(pins))
+        return UNVERIFIED, errors, warnings, notes
+
+    for name, key, repo in COMPONENTS:
+        if semver(env[name]) is None:
+            errors.append(f'{key}={env[name]} is not a release tag (vMAJOR.MINOR.PATCH), and no '
+                          'release record names it')
+        else:
+            errors.append(f'{key}={env[name]}: no release record names this {repo} tag '
+                          f'(recorded releases: {known})')
+    hint = (f'add {Path(args.releases).name}/{tag}.json on main and update this tree to a commit '
+            'that carries it, or pin the tree itself to that release with deploy/pin-release.sh'
+            if uniform else 'pin one recorded release, or record this pairing')
+    errors.append(f'{described} is not a recorded release, so nothing says these images exist or '
+                  'were released together. Deploying it runs a mapping nobody verified, against '
+                  'this tree\'s compose files and migration expectations, which may belong to a '
+                  f'different release. Nothing was changed. Either {hint}.')
+    return REFUSED, errors, warnings, notes
+
+
+def pinned_note(pins):
+    pinned = [f'{key}@{digest}' for key, _, _, digest in pins.values() if digest]
+    return f' Digest pins not checked: {", ".join(pinned)}.' if pinned else ''
+
+
+def bundle_findings(bundle, record, where, path):
+    """deploy.sh trusts vidra-bundle.manifest's core_schema_version as the
+    independent opinion its ledger assertion compares the migrator against.
+    A manifest from another release makes that assertion fail AFTER the dump,
+    the pull and the migrations have run, or pass against the wrong number.
+
+    The bundle is a vidra-core release asset built with `--tag <core tag>`, so
+    its tag is compared with the record's CORE tag, not the platform tag: a
+    platform release that re-releases only vidra-user ships no new bundle."""
+    core = record['components']['core']
+    findings = []
+    consequence = ("deploy.sh would compare the migrator's ledger against this bundle's number, "
+                   'failing after the dump, pull and migrations have already run, or passing '
+                   'against the wrong release. Nothing was changed. Unpack the '
+                   f'{core["tag"]} bundle over this tree.')
+    tag = bundle.get('tag', '')
+    if tag != core['tag']:
+        findings.append(f'{path}: vidra-bundle.manifest tag is {tag or "(missing)"}, expected '
+                        f'{core["tag"]} (the core tag of release {record["release"]}, {where}). '
+                        'This tree\'s compose files and scripts belong to another release. '
+                        + consequence)
+    schema = bundle.get('core_schema_version', '')
+    if not schema.isdigit() or int(schema) != record['core_schema_version']:
+        findings.append(f'{path}: vidra-bundle.manifest core_schema_version is {schema or "(missing)"}, '
+                        f'expected {record["core_schema_version"]} ({where}). ' + consequence)
+    commit = bundle.get('core_commit', '')
+    if COMMIT.fullmatch(commit) and commit != core['commit']:
+        findings.append(f'{path}: vidra-bundle.manifest core_commit is {commit}, expected '
+                        f'{core["commit"]} ({where}). ' + consequence)
+    return findings
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0],
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('command', choices=('check',))
+    parser.add_argument('--mode', choices=('deploy', 'rollback'), required=True,
+                        help='rollback skips the bundle comparison and tolerates an unrecorded '
+                             'uniform target; everything else is identical')
+    parser.add_argument('--releases', type=Path,
+                        default=Path(__file__).resolve().parents[1] / 'releases')
+    parser.add_argument('--env', type=Path, help='env file to read VIDRA_*_TAG from')
+    parser.add_argument('--core', help='effective VIDRA_CORE_TAG (overrides --env)')
+    parser.add_argument('--user', help='effective VIDRA_USER_TAG (overrides --env)')
+    parser.add_argument('--search', help='effective VIDRA_SEARCH_TAG (overrides --env)')
+    parser.add_argument('--bundle-manifest', type=Path,
+                        help="this tree's vidra-bundle.manifest, when it is an unpacked bundle")
+    parser.add_argument('--tree-tag', action='append',
+                        help='a tag pointing at this checkout\'s HEAD (repeatable)')
+    args = parser.parse_args()
+    try:
+        code, errors, warnings, notes = check(args)
+    except OSError as error:
+        code, errors, warnings, notes = REFUSED, [f'cannot read {error.filename}: {error.strerror}'], [], []
+    for note in notes:
+        print(f'[release-mapping] {note}')
+    for warning in warnings:
+        print(f'[release-mapping] WARNING: {warning}', file=sys.stderr)
+    for error in errors:
+        print(f'[release-mapping] ERROR: {error}', file=sys.stderr)
+    return code
+
+
+if __name__ == '__main__':
+    sys.exit(main())
