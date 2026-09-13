@@ -5,20 +5,31 @@ in "Not covered". **OPS-01 stays UNVERIFIED**; the passed subset (split topology
 deploys, the worker transcodes) is recorded below.
 
 This is the "next milestone" the 2026-09-13 continuation named: REC-03/A38 on
-one more disposable host, rebuilt by the operator. Every step ran the released
-scripts as the `vidra` user on a git-path install — the topology beta runs —
-against the published GHCR images, with **local** media storage so the drill
-could never touch the shared B2 test bucket. Nothing here touched production.
+one more disposable host, rebuilt by the operator. The installer, `vidra setup`
+and `provision.sh` ran as root (provisioning is what creates the deploy user);
+every `deploy.sh`, `rollback.sh`, `restore.sh`, `backup.sh` and `pin-release.sh`
+invocation ran as the `vidra` user on a git-path install — the topology beta
+runs — against the published GHCR images, with **local** media storage so the
+drill could never touch the shared B2 test bucket. Nothing here touched
+production.
 
 Driver: [`tests/rec03-upgrade-rollback.sh`](../tests/rec03-upgrade-rollback.sh)
-(phases `install → data → backup → inject → upgrade-fail → recover → backup2 →
-rollback → restore-refuse → repin → restore-ok → split → report`). The copy that
-executed is sha256 `1a327ae9e5c12eae14c895273444fc866f35de5b40988d31764b57089756fc06`;
-the committed copy differs only by shellcheck quoting and `find`-for-`ls`
-substitutions made afterwards so it passes `meta-ci`'s lint. Evidence:
+(phases `install → data → fp → backup → inject → upgrade-fail → recover →
+backup2 → rollback → restore-refuse → repin → restore-ok → split → report`).
+The driver was edited twice during the drill: after the `data` phase its
+fingerprint helper was extended (the first body could not locate the HLS master,
+so `facts/data.json` carries `master=e3b0c442…`, the hash of an empty fetch, and
+a `master_url` key the final body no longer emits; the `fp` phase re-ran the
+final helper and is the reference), and after the run the committed copy gained
+shellcheck quoting and `find`-for-`ls` substitutions so it passes `meta-ci`'s
+lint. The copy that executed every phase from `fp` onward is sha256
+`1a327ae9e5c12eae14c895273444fc866f35de5b40988d31764b57089756fc06`. Evidence:
 [`docs/evidence/release-v0.6.4-verification/rec03-runtime/`](evidence/release-v0.6.4-verification/rec03-runtime/)
-— one log per phase plus `facts/<phase>.json` (the verdict inputs) and
-`summary.json` (digests, host, verdicts).
+— one log per phase (the driver's `tee`d console, force-added past the repo's
+`*.log` ignore), `facts/<phase>.json` (the driver's own verdict inputs),
+`split-worker-evidence.txt` (captured by hand on the same host state after the
+run), and `summary.json` (hand-authored from the facts and logs — not machine
+output; the driver's `report` phase only prints the merged facts).
 
 ## Candidate
 
@@ -68,15 +79,18 @@ Times are UTC on 2026-09-13. Every phase's full output is in its log.
   named the consequence ("the api would come up healthy and then refuse every
   upload"). Applied its third option — `MALWARE_SCAN_MODE=disabled`,
   `CLAMAV_ADDR` unset, which is beta's posture — and re-ran: **exit 0 at
-  05:10:05**, all six probes OK, `v0.6.3` images, ledgers 144 / 18. See
-  finding F2.
+  05:10:05**, the deploy's health step passed (api `/readyz`, frontend, edge),
+  `v0.6.3` images, ledgers 144 / 18 (`install.log`). `facts/install.json`
+  captures only the refused first attempt (the re-run happened outside the
+  driver's phase); the successful state is in `facts/fp.json`. See finding F2.
 - Data: a 12 s 1280×720 `testsrc2` + 440 Hz fixture rendered by the v0.6.3 api
   image's own ffmpeg (sha256 `8ff2dfde…936a`); owner claimed by redeeming the
   boot-logged token at `POST /api/v1/setup/claim-owner` (201); channel `drill`
   (201); a public video created and uploaded through `POST /videos/{id}/file`
   (201); **published within 5 s** with renditions 720/480/360 (3
   `video_renditions`, 7 `video_files` rows).
-- **Fingerprint** (recomputed after every later step): original
+- **Fingerprint** (recomputed after `upgrade-fail`, `recover`, `rollback` and
+  `restore-ok`; identical each time): original
   `8ff2dfde3770360f`, HLS master `0b8854fa8721cd9e`, first CMAF segment
   `chunk-0-00001.m4s` `bddbd11c7fc3638a`, state `published`; counts users=1
   channels=1 videos=1.
@@ -166,11 +180,16 @@ Exit 1 at 05:14:13; counts byte-identical before/after; stack still serving.
 
 `EXTRA_COMPOSE_PROFILES=worker` + `API_ROLE=api` in the env, `deploy.sh` → exit
 0 at 05:15:51; `vidra-worker-1` up with `VIDRA_ROLE=worker` beside the api with
-`VIDRA_ROLE=api`. A second upload published within 5 s; the worker logged
-`transcode worker started` and `transcode drain completed jobs count=1`; every
-`job_runs` row for that video carries `worker_id 466f0964f713:1`, which is the
-worker container's ID; the api container logged zero completed transcodes after
-the split. Not run on this host: the settings-edit-reaches-both-processes check,
+`VIDRA_ROLE=api`. A second upload published within 5 s (`split.log`,
+`facts/split.json`). The driver itself only counted log lines (the api
+container's 3 `ffmpeg` mentions in `facts/split.json` are its boot-time
+capability lines). The correspondence that matters was captured by hand
+afterwards on the same host state, in `split-worker-evidence.txt`: all seven
+`job_runs` rows for the second video carry `worker_id 466f0964f713:1`, the
+worker container's ID (the first video's rows carry the pre-split api's ID),
+the worker logged `transcode worker started` and `transcode drain completed
+jobs count=1`, and the api container logged zero `transcode drain completed`
+lines. Not run on this host: the settings-edit-reaches-both-processes check,
 kill-mid-transcode recovery, redis/PostgreSQL outage, leader failover, a second
 worker or a second host — so OPS-01 keeps its UNVERIFIED disposition.
 
@@ -189,9 +208,10 @@ worker or a second host — so OPS-01 keeps its UNVERIFIED disposition.
   `MALWARE_SCAN_MODE=fail-closed` while removing the profile that would start
   clamav. `deploy.sh`'s preflight catches the contradiction (it did, with the
   right explanation), but the setup should not write it. Low; not fixed here.
-- **Observation** — `rollback.sh`'s frontend wait printed one `curl: (56) Recv
-  failure: Connection reset by peer` line before `frontend OK` (the loop
-  retried, as designed). Cosmetic noise in an otherwise clean rollback log.
+- **Observation** — during `rollback.sh`'s frontend wait one `curl: (56) Recv
+  failure: Connection reset by peer` line appeared on the run console before
+  `frontend OK` (the loop retried, as designed). It is not in the committed
+  `rollback.log`, so it is recorded here as a console observation only.
 
 ## Not covered
 

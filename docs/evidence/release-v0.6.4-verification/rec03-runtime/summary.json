@@ -1,18 +1,36 @@
 {
-  "record": "REC-03 / A38 on published v0.6.4 — upgrade, injected failure, rollback, restore",
+  "record": "REC-03 / A38 on published v0.6.4 \u2014 upgrade, injected failure, rollback, restore",
   "date_utc": "2026-09-13",
-  "window_utc": {"host_rebuilt": "05:06:09", "v0.6.3_live": "05:10:05", "drill_complete": "05:15:52"},
+  "window_utc": {
+    "host_rebuilt": "05:06:09",
+    "v0.6.3_live": "05:10:05",
+    "drill_complete": "05:15:52"
+  },
   "host": {
     "droplet_id": 599531580,
     "name": "vidra-beta-v064-b2-acceptance",
     "rebuild_action": 3404163963,
-    "os": "Ubuntu 24.04.4 LTS", "arch": "x86_64", "vcpus": 8, "memory_gib": 15,
-    "docker": "29.8.0", "compose": "5.5.1", "python": "3.12.3",
+    "os": "Ubuntu 24.04.4 LTS",
+    "arch": "x86_64",
+    "vcpus": 8,
+    "memory_gib": 15,
+    "docker": "29.8.0",
+    "compose": "5.5.1",
+    "python": "3.12.3",
     "install_path": "git (install.sh --git --ref v0.6.3 --yes), deploys as user vidra",
-    "storage": "local", "tls_mode": "internal", "scan": "disabled (CLAMAV_ADDR unset, beta posture)"
+    "storage": "local",
+    "tls_mode": "internal",
+    "scan": "disabled (CLAMAV_ADDR unset, beta posture)"
   },
-  "installer": {"url": "https://raw.githubusercontent.com/yegamble/vidra/v0.6.3/install.sh", "sha256": "6b7a6152015dd404c2d3b8410a1de70a8911ecad0a68e468aed9bb92c0572674"},
-  "driver": {"path": "tests/rec03-upgrade-rollback.sh", "executed_copy_sha256": "1a327ae9e5c12eae14c895273444fc866f35de5b40988d31764b57089756fc06", "note": "committed copy differs only by shellcheck quoting and find-for-ls substitutions"},
+  "installer": {
+    "url": "https://raw.githubusercontent.com/yegamble/vidra/v0.6.3/install.sh",
+    "sha256": "6b7a6152015dd404c2d3b8410a1de70a8911ecad0a68e468aed9bb92c0572674"
+  },
+  "driver": {
+    "path": "tests/rec03-upgrade-rollback.sh",
+    "executed_copy_sha256_from_fp_onward": "1a327ae9e5c12eae14c895273444fc866f35de5b40988d31764b57089756fc06",
+    "note": "the fingerprint helper was extended after the data phase (facts/data.json carries the earlier body's output: master=e3b0c442\u2026 is an empty fetch); the committed copy adds shellcheck quoting, find-for-ls, a hard docker-present refusal and the fp/split phases in the header list"
+  },
   "images": {
     "v0.6.3": {
       "vidra-core": "ghcr.io/yegamble/vidra-core@sha256:8636d5daf37674c6fa867294f47e615bbbb9b0ef6ca65984201ea32ef3f7c64e",
@@ -25,30 +43,149 @@
       "vidra-search": "ghcr.io/yegamble/vidra-search@sha256:afcdb8a4bba86adfc7c64c4ea8a5e6edd8411fbc97c3f1a5f31dfb999dafb2cc"
     }
   },
-  "meta_tree": {"install": "v0.6.3", "upgrade_via": "origin/main 67840ab (v0.6.4-6-g67840ab) then tag v0.6.4"},
+  "meta_tree": {
+    "install": "v0.6.3",
+    "upgrade_via": "origin/main 67840ab (v0.6.4-6-g67840ab) then tag v0.6.4"
+  },
   "fixture_sha256": "8ff2dfde3770360fb5112ac8985315f5a7b2b5c2fb07f6f85508222f2793936a",
-  "fingerprint": {"original": "8ff2dfde3770360f", "hls_master": "0b8854fa8721cd9e", "first_segment": "chunk-0-00001.m4s bddbd11c7fc3638a", "renditions": "720,480,360", "identical_after": ["upgrade-fail", "recover", "rollback", "restore-ok"]},
+  "fingerprint": {
+    "original": "8ff2dfde3770360f",
+    "hls_master": "0b8854fa8721cd9e",
+    "first_segment": "chunk-0-00001.m4s bddbd11c7fc3638a",
+    "renditions": "720,480,360",
+    "identical_after": [
+      "upgrade-fail",
+      "recover",
+      "rollback",
+      "restore-ok"
+    ]
+  },
   "injected_failure": "ALTER TABLE storage_migrations ADD COLUMN paused_reason TEXT NOT NULL DEFAULT '' (0145 has no IF NOT EXISTS)",
   "phases": {
-    "install": {"deploy_exit_first": 1, "why": "preflight: CLAMAV_ADDR set with MALWARE_SCAN_MODE=fail-closed and no scan profile", "deploy_exit_after_fix": 0, "ledger": "144/18"},
-    "data": {"claim_owner": 201, "channel": 201, "upload": 201, "state": "published", "renditions_rows": 3, "video_files_rows": 7},
-    "backup": {"exit": 0, "dump": "vidra-20260913T051158Z.dump.gz", "schema": 144},
-    "upgrade-fail": {"pin_release_exit": 1, "pin_release_error": "bash: /opt/vidra/deploy/backup-env.sh: No such file or directory", "deploy_exit": 1, "aborted_at": "3/6 migrations", "migration_error": "column \"paused_reason\" of relation \"storage_migrations\" already exists", "serving_after": "v0.6.3", "ledger": "core=145:dirty search=18:clean"},
-    "recover": {"migrate_version": "version=145 dirty=true", "force": "before: 145 dirty=true / after: 144 dirty=false", "deploy_exit": 0, "applied": ["145/u", "146/u"], "ledger": "146/18", "serving_after": "v0.6.4"},
-    "backup2": {"exit": 0, "dump": "vidra-20260913T051341Z.dump.gz", "schema": 146, "marker_patch": 200},
-    "rollback": {"exit": 0, "serving_after": "v0.6.3", "ledger": "146:clean/18:clean", "data_intact": true, "migrator_noop_line_captured": false},
-    "restore-refuse": {"exit": 1, "refused_before_drop": true, "counts_unchanged": true},
-    "repin": {"deploy_exit": 0, "ledger": "146/18"},
-    "restore-ok": {"exit": 0, "preflight": "documented forward path 144 -> 146", "migrations_applied": "144 -> 146", "verify_blobs": "8 present, 0 missing", "marker_gone": true},
-    "split": {"deploy_exit": 0, "workers": 1, "api_role": "api", "video2_state": "published", "transcode_worker_id": "466f0964f713:1 (vidra-worker-1)", "api_completed_transcodes_after_split": 0}
+    "install": {
+      "deploy_exit_first": 1,
+      "why": "preflight: CLAMAV_ADDR set with MALWARE_SCAN_MODE=fail-closed and no scan profile",
+      "deploy_exit_after_fix": 0,
+      "ledger": "144/18",
+      "note": "facts/install.json captures the refused first attempt; the successful re-run's state is facts/fp.json"
+    },
+    "data": {
+      "claim_owner": 201,
+      "channel": 201,
+      "upload": 201,
+      "state": "published",
+      "renditions_rows": 3,
+      "video_files_rows": 7
+    },
+    "backup": {
+      "exit": 0,
+      "dump": "vidra-20260913T051158Z.dump.gz",
+      "schema": 144
+    },
+    "upgrade-fail": {
+      "pin_release_exit": 1,
+      "pin_release_error": "bash: /opt/vidra/deploy/backup-env.sh: No such file or directory",
+      "deploy_exit": 1,
+      "aborted_at": "3/6 migrations",
+      "migration_error": "column \"paused_reason\" of relation \"storage_migrations\" already exists",
+      "serving_after": "v0.6.3",
+      "ledger": "core=145:dirty search=18:clean"
+    },
+    "recover": {
+      "migrate_version": "version=145 dirty=true",
+      "force": "before: 145 dirty=true / after: 144 dirty=false",
+      "deploy_exit": 0,
+      "applied": [
+        "145/u",
+        "146/u"
+      ],
+      "ledger": "146/18",
+      "serving_after": "v0.6.4"
+    },
+    "backup2": {
+      "exit": 0,
+      "dump": "vidra-20260913T051341Z.dump.gz",
+      "schema": 146,
+      "marker_patch": 200
+    },
+    "rollback": {
+      "exit": 0,
+      "serving_after": "v0.6.3",
+      "ledger": "146:clean/18:clean",
+      "data_intact": true,
+      "migrator_noop_line_captured": false
+    },
+    "restore-refuse": {
+      "exit": 1,
+      "refused_before_drop": true,
+      "counts_unchanged": true
+    },
+    "repin": {
+      "deploy_exit": 0,
+      "ledger": "146/18"
+    },
+    "restore-ok": {
+      "exit": 0,
+      "preflight": "documented forward path 144 -> 146",
+      "migrations_applied": "144 -> 146",
+      "verify_blobs": "8 present, 0 missing",
+      "marker_gone": true
+    },
+    "split": {
+      "deploy_exit": 0,
+      "workers": 1,
+      "api_role": "api",
+      "video2_state": "published",
+      "transcode_worker_id": "466f0964f713:1 (vidra-worker-1)",
+      "api_completed_transcodes_after_split": 0,
+      "evidence": "split-worker-evidence.txt (captured by hand after the run: container ids, VIDRA_ROLE per container, job_runs.worker_id per video, worker/api log counts)",
+      "api_ffmpeg_mentions_note": "3 boot-time capability lines (thumbnail/storyboard/pipeline wired), not transcodes"
+    }
   },
   "verdicts": {
-    "REC-03": {"status": "PASS", "scope": "published v0.6.3 -> v0.6.4, git path, local storage, single host", "not_covered": ["bundle upgrade path", "S3 storage", "search-ledger rollback (unchanged at 18)", "ACME/public DNS", "browser decode", "populated-table migration timing"]},
-    "OPS-01": {"status": "UNVERIFIED", "passed_subset": "split topology deploys; the worker performs the transcode; api runs none", "not_run": ["settings edit reaching both processes", "kill mid-transcode recovery", "redis/PostgreSQL outage", "leader failover", "second worker/host"]}
+    "REC-03": {
+      "status": "PASS",
+      "scope": "published v0.6.3 -> v0.6.4, git path, local storage, single host",
+      "not_covered": [
+        "bundle upgrade path",
+        "S3 storage",
+        "search-ledger rollback (unchanged at 18)",
+        "ACME/public DNS",
+        "browser decode",
+        "populated-table migration timing"
+      ]
+    },
+    "OPS-01": {
+      "status": "UNVERIFIED",
+      "passed_subset": "split topology deploys; the worker performs the transcode; api runs none",
+      "not_run": [
+        "settings edit reaching both processes",
+        "kill mid-transcode recovery",
+        "redis/PostgreSQL outage",
+        "leader failover",
+        "second worker/host"
+      ]
+    }
   },
   "findings": [
-    {"id": "F1", "severity": "medium", "title": "pin-release.sh cannot pin a release that predates its snapshot helper; tree moves, pins do not", "fix": "meta#192 (snapshot before checkout), open when this ran"},
-    {"id": "F2", "severity": "low", "title": "vidra setup --scan=false leaves CLAMAV_ADDR + MALWARE_SCAN_MODE=fail-closed in the env; deploy.sh preflight catches it", "fix": "not fixed here"},
-    {"id": "O1", "severity": "cosmetic", "title": "rollback.sh frontend wait printed one curl (56) line before frontend OK", "fix": "none"}
-  ]
+    {
+      "id": "F1",
+      "severity": "medium",
+      "title": "pin-release.sh cannot pin a release that predates its snapshot helper; tree moves, pins do not",
+      "fix": "meta#192 (snapshot before checkout), open when this ran"
+    },
+    {
+      "id": "F2",
+      "severity": "low",
+      "title": "vidra setup --scan=false leaves CLAMAV_ADDR + MALWARE_SCAN_MODE=fail-closed in the env; deploy.sh preflight catches it",
+      "fix": "not fixed here"
+    },
+    {
+      "id": "O1",
+      "severity": "cosmetic",
+      "title": "one curl (56) line on the run console during rollback.sh's frontend wait, before frontend OK (console observation; not in the committed rollback.log)",
+      "fix": "none"
+    }
+  ],
+  "record_note": "hand-authored from facts/*.json, the phase logs and split-worker-evidence.txt; not machine output"
 }

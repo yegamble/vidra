@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # REC-03 / A38 drill driver — runs ON the disposable host as root:
 #   ssh root@HOST 'bash -s -- <phase>' < rec03.sh
-# Phases: install | data | backup | inject | upgrade-fail | recover | backup2 | rollback | restore-refuse | repin | restore-ok | report
+# Phases: install | data | fp <label> | backup | inject | upgrade-fail | recover | backup2 | rollback | restore-refuse | repin | restore-ok | split | report
 # Every phase appends to /root/rec03/<phase>.log and writes facts to /root/rec03/facts/<phase>.json.
+# Deliberately no `set -e`: a phase's whole point is to capture a non-zero exit
+# (a refused deploy, a refused restore) as a fact rather than to stop on it.
 set -uo pipefail
 PHASE="${1:?phase}"; shift; set -- "$PHASE" "${1:-}"
 R=/root/rec03; mkdir -p "$R/facts"; F="$R/facts/$PHASE.json"
@@ -42,8 +44,9 @@ PY
 
 case "$PHASE" in
 install)
-  log "blank-host check"; docker info >/dev/null 2>&1 && { log "docker already present — not blank"; }
-  [ -e $DIR ] && { log "$DIR exists — not blank"; exit 1; }
+  log "blank-host check"
+  if docker info >/dev/null 2>&1 && [ "${REC03_ALLOW_DOCKER:-0}" != 1 ]; then log "docker already present — not a blank host (REC03_ALLOW_DOCKER=1 to proceed anyway)"; exit 1; fi
+  [ -e "$DIR" ] && { log "$DIR exists — not blank"; exit 1; }
   grep -q "$DOMAIN" /etc/hosts || echo "127.0.0.1 $DOMAIN" >> /etc/hosts
   log "released installer $OLD (git path)"
   curl -fsSL "https://raw.githubusercontent.com/yegamble/vidra/$OLD/install.sh" -o /root/install-$OLD.sh

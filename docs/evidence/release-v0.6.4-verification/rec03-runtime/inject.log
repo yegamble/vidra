@@ -1,0 +1,3 @@
+[rec03 inject 05:11:59] inject: pre-create the column migration 0145 adds (ALTER TABLE ... ADD COLUMN paused_reason has no IF NOT EXISTS)
+ALTER TABLE
+core=144:false search=18:false

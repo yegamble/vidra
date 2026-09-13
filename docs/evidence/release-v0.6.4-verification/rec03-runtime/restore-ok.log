@@ -1,0 +1,125 @@
+[rec03 restore-ok 05:14:56] restore.sh of the 144 dump under v0.6.4 pins — supported: reload then migrate up to 146; the marker rename must be gone
+[restore] decompressing vidra-20260913T051158Z.dump.gz
+[restore] copying archive into the postgres container
+[restore] checking that the pinned images can reach this dump's schema
+[restore] core: dump schema 144, pinned VIDRA_CORE_TAG=v0.6.4 carries up to 146 — the migrator step below will apply the difference. This is the documented forward path.
+[restore] search: dump schema 18 matches what VIDRA_SEARCH_TAG=v0.6.4 carries — nothing to apply.
+[restore] stopping api, search and frontend
+ Container vidra-frontend-1 Stopping 
+ Container vidra-search-1 Stopping 
+ Container vidra-search-1 Stopped 
+ Container vidra-frontend-1 Stopped 
+ Container vidra-api-1 Stopping 
+ Container vidra-api-1 Stopped 
+[restore] dropping and recreating 'vidra'
+[restore] restoring with 4 parallel jobs
+[restore] running core migrations
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-run-85c4b9888300 Creating 
+ Container vidra-migrate-run-85c4b9888300 Created 
+{"time":"2026-09-13T05:15:07.57653161Z","level":"INFO","msg":"145/u storage_migration_pause_and_identity (50.919932ms)"}
+{"time":"2026-09-13T05:15:07.605379274Z","level":"INFO","msg":"146/u provider_registration_requests (79.957835ms)"}
+{"time":"2026-09-13T05:15:07.608117507Z","level":"INFO","msg":"migrations applied","from_version":144,"to_version":146}
+[restore] running search migrations
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-search-migrate-run-c7b83e57248f Creating 
+ Container vidra-search-migrate-run-c7b83e57248f Created 
+migrate up: version=18 dirty=false table=vidra_search_migrations
+[restore] verifying that the restored database's media is present
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Container vidra-postgres-1 Running 
+ Container vidra-redis-1 Running 
+ Container vidra-prep-volumes-1 Starting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Started 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-1 Starting 
+ Container vidra-migrate-1 Started 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Container vidra-redis-1 Waiting 
+ Container vidra-migrate-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-migrate-1 Exited 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-redis-1 Healthy 
+ Container vidra-api-run-7a0669ca7749 Creating 
+ Container vidra-api-run-7a0669ca7749 Created 
+media store (local disk): local:/app/data/media
+checked 8 referenced object(s) — existence only
+  present:        8
+  MISSING:        0
+  MISMATCHED:     0
+  known missing:  0 (rows the hash backfill already recorded as dangling)
+  unreadable:     0
+  skipped:        0 (streaming playlists whose transcode produced no master)
+
+consistent: every object the database references is in the store.
+[restore] media consistency: every object the restored database references is present
+[restore] starting api, search and frontend
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulled 
+ Container vidra-redis-1 Running 
+ Container vidra-postgres-1 Running 
+ Container vidra-prep-volumes-1 Starting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Started 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-1 Starting 
+ Container vidra-search-migrate-1 Starting 
+ Container vidra-migrate-1 Started 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-migrate-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-search-migrate-1 Started 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-search-migrate-1 Waiting 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-migrate-1 Exited 
+ Container vidra-redis-1 Healthy 
+ Container vidra-api-1 Starting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-redis-1 Healthy 
+ Container vidra-search-migrate-1 Exited 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-search-1 Starting 
+ Container vidra-api-1 Started 
+ Container vidra-api-1 Waiting 
+ Container vidra-search-1 Started 
+ Container vidra-api-1 Healthy 
+ Container vidra-frontend-1 Starting 
+ Container vidra-frontend-1 Started 
+[restore] waiting up to 120s for http://127.0.0.1:8080/readyz
+[restore] restore complete; /readyz is 200
+[rec03 restore-ok 05:15:23] restore.sh exit=0
+vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.4;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.4;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.4;core=146:false search=18:false
+instance=200 healthz=200 site=200 watch=200
+orig=8ff2dfde3770360f master=0b8854fa8721cd9e renditions=720,480,360 variant=cmaf/media_0.m3u8?v=dldxhnoi48h4 seg=chunk-0-00001.m4s?v=dldxhnoi48h4 segsha=bddbd11c7fc3638a state=published
+users=1 channels=1 videos=1 titles=REC-03 fixture v0.6.3

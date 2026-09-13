@@ -1,0 +1,223 @@
+[rec03 upgrade-fail 05:12:15] tree -> origin/main (to obtain pin-release.sh), then pin-release.sh v0.6.4
+From https://github.com/yegamble/vidra
+   f669812..af50fc5  deploy/release-mapping-preflight -> origin/deploy/release-mapping-preflight
+v0.6.4-6-g67840ab
+[pin] fetching tags from origin
+[pin] checking out v0.6.4
+[pin] checkout: v0.6.4
+bash: /opt/vidra/deploy/backup-env.sh: No such file or directory
+[pin] ERROR: env snapshot failed — the tree is at v0.6.4, the env file is untouched
+[rec03 upgrade-fail 05:12:16] pin-release.sh exit=1
+fatal: detected dubious ownership in repository at '/opt/vidra'
+To add an exception for this directory, call:
+
+	git config --global --add safe.directory /opt/vidra
+VIDRA_CORE_TAG=v0.6.3
+VIDRA_USER_TAG=v0.6.3
+VIDRA_SEARCH_TAG=v0.6.3
+[rec03 upgrade-fail 05:12:16] pin-release.sh failed — falling back to the v0.6.4-era runbook: tree at tag + rewrite pins as vidra
+VIDRA_CORE_TAG=v0.6.4
+VIDRA_USER_TAG=v0.6.4
+VIDRA_SEARCH_TAG=v0.6.4
+[rec03 upgrade-fail 05:12:16] deploy.sh (expected: abort at 3/6 migrations, no restart)
+
+[deploy] ===== 0/6 pre-flight =====
+[deploy] VIDRA_TLS_MODE=internal — Caddy issues from its own CA, skipping the DNS preflight
+[deploy] compose 5.5.1, VIDRA_TLS_MODE=internal serving rec03.video.test, migrator tags >= v0.2.0
+[deploy] syncing vidra-core to v0.6.4
+[deploy] syncing vidra-search to v0.6.4
+[deploy] syncing vidra-user to v0.6.4
+[deploy] tags: core=v0.6.4 user=v0.6.4 search=v0.6.4
+
+[deploy] ===== 1/6 pre-deploy database dump =====
+[deploy] wrote /opt/vidra/backups/pre-deploy-2026-09-13T051218.dump.gz (60K)
+
+[deploy] ===== 2/6 pull images =====
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image redis:8-alpine Pulling 
+ Image alpine:3.24 Pulling 
+ Image postgres:18-alpine Pulling 
+ Image caddy:2.11.4-alpine Pulling 
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ 44136fa355b3 Already exists 0B
+ 59d7966f3123 Pulling fs layer 0B
+ e9322314a1ca Pulling fs layer 0B
+ 4f1e8bff94eb Pulling fs layer 0B
+ 79dacbd04dd4 Pulling fs layer 0B
+ 43bef031aa93 Pulling fs layer 0B
+ d1f2b753c5b3 Pulling fs layer 0B
+ 3325c022789d Pulling fs layer 0B
+ Image alpine:3.24 Pulled 
+ ff061cba204a Download complete 0B
+ 59d7966f3123 Downloading 2.097MB
+ e9322314a1ca Downloading 1.665MB
+ 4f1e8bff94eb Download complete 0B
+ 44136fa355b3 Already exists 0B
+ Image redis:8-alpine Pulled 
+ Image caddy:2.11.4-alpine Pulled 
+ 59d7966f3123 Download complete 0B
+ e9322314a1ca Download complete 0B
+ Image postgres:18-alpine Pulled 
+ e9322314a1ca Extracting 1B
+ 3325c022789d Downloading 1.049MB
+ 5a3ce0dd37b9 Download complete 0B
+ 4f1e8bff94eb Pull complete 0B
+ 59d7966f3123 Extracting 1B
+ e9322314a1ca Pull complete 0B
+ d1f2b753c5b3 Downloading 3.146MB
+ 43bef031aa93 Download complete 0B
+ 3325c022789d Downloading 10.49MB
+ 79dacbd04dd4 Downloading 1.049MB
+ 59d7966f3123 Extracting 1B
+ 79dacbd04dd4 Downloading 9.437MB
+ d1f2b753c5b3 Downloading 10.49MB
+ 3325c022789d Downloading 17.83MB
+ 59d7966f3123 Extracting 1B
+ 79dacbd04dd4 Downloading 14.05MB
+ d1f2b753c5b3 Downloading 17.4MB
+ 3325c022789d Downloading 27.13MB
+ 59d7966f3123 Pull complete 0B
+ d1f2b753c5b3 Download complete 0B
+ 3325c022789d Downloading 33.55MB
+ 79dacbd04dd4 Download complete 0B
+ 5a5dd05dd75c Pulling fs layer 0B
+ ee0bc0d13d54 Pulling fs layer 0B
+ dd80bf5f8934 Pulling fs layer 0B
+ ecc61e2655aa Pulling fs layer 0B
+ 3192bda34358 Pulling fs layer 0B
+ cb5b72c22abd Pulling fs layer 0B
+ 3c95619f2edb Pulling fs layer 0B
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ 44136fa355b3 Already exists 0B
+ 3325c022789d Downloading 42.99MB
+ ee0bc0d13d54 Download complete 0B
+ 2da60be43f27 Download complete 0B
+ 5a5dd05dd75c Download complete 0B
+ 3325c022789d Downloading 52.43MB
+ ecc61e2655aa Downloading 93B
+ 3c95619f2edb Downloading 106.2kB
+ dd80bf5f8934 Downloading 4.194MB
+ 3192bda34358 Downloading 1.049MB
+ 3325c022789d Downloading 53.08MB
+ dd80bf5f8934 Downloading 12.58MB
+ 3192bda34358 Downloading 10.49MB
+ ecc61e2655aa Download complete 0B
+ cb5b72c22abd Download complete 0B
+ 3c95619f2edb Download complete 0B
+ 3325c022789d Download complete 0B
+ 3325c022789d Extracting 1B
+ 3192bda34358 Downloading 17.83MB
+ dd80bf5f8934 Download complete 0B
+ 3325c022789d Extracting 1B
+ 3192bda34358 Downloading 26.21MB
+ 3325c022789d Extracting 1B
+ 3192bda34358 Downloading 35.65MB
+ 3325c022789d Extracting 1B
+ 3192bda34358 Downloading 46.14MB
+ 3325c022789d Extracting 1B
+ 3192bda34358 Downloading 54.53MB
+ 3325c022789d Extracting 1B
+ 3192bda34358 Downloading 59.76MB
+ 3325c022789d Extracting 1B
+ 3192bda34358 Download complete 0B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 1B
+ 3325c022789d Extracting 1B
+ 3192bda34358 Extracting 1B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 1B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 1B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ 3325c022789d Extracting 2B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ 3192bda34358 Extracting 1B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ 3192bda34358 Extracting 1B
+ 3325c022789d Extracting 2B
+ 3325c022789d Extracting 2B
+ 3192bda34358 Extracting 2B
+ 3192bda34358 Extracting 2B
+ d1f2b753c5b3 Extracting 1B
+ 3192bda34358 Extracting 2B
+ 3325c022789d Pull complete 0B
+ d1f2b753c5b3 Extracting 1B
+ 3192bda34358 Extracting 2B
+ d1f2b753c5b3 Extracting 1B
+ 3192bda34358 Extracting 2B
+ d1f2b753c5b3 Extracting 1B
+ 3192bda34358 Extracting 2B
+ 3192bda34358 Extracting 2B
+ d1f2b753c5b3 Extracting 1B
+ 3192bda34358 Extracting 2B
+ d1f2b753c5b3 Extracting 1B
+ d1f2b753c5b3 Extracting 1B
+ 3192bda34358 Extracting 2B
+ d1f2b753c5b3 Extracting 1B
+ 3192bda34358 Extracting 2B
+ 3192bda34358 Extracting 3B
+ d1f2b753c5b3 Extracting 1B
+ 3192bda34358 Extracting 3B
+ d1f2b753c5b3 Extracting 1B
+ 43bef031aa93 Pull complete 0B
+ d1f2b753c5b3 Pull complete 0B
+ 3192bda34358 Extracting 3B
+ 79dacbd04dd4 Extracting 1B
+ 79dacbd04dd4 Extracting 1B
+ 3192bda34358 Extracting 3B
+ 79dacbd04dd4 Extracting 1B
+ 3192bda34358 Extracting 3B
+ 79dacbd04dd4 Extracting 1B
+ 3192bda34358 Extracting 3B
+ 79dacbd04dd4 Extracting 1B
+ 3192bda34358 Extracting 3B
+ 79dacbd04dd4 Pull complete 0B
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ 3192bda34358 Extracting 3B
+ 3192bda34358 Extracting 3B
+ 3192bda34358 Extracting 3B
+ 3192bda34358 Extracting 3B
+ 3192bda34358 Pull complete 0B
+ ee0bc0d13d54 Pull complete 0B
+ ecc61e2655aa Pull complete 0B
+ cb5b72c22abd Pull complete 0B
+ 3c95619f2edb Pull complete 0B
+ dd80bf5f8934 Extracting 1B
+ dd80bf5f8934 Extracting 1B
+ dd80bf5f8934 Extracting 1B
+ dd80bf5f8934 Extracting 1B
+ dd80bf5f8934 Extracting 1B
+ dd80bf5f8934 Extracting 1B
+ dd80bf5f8934 Extracting 1B
+ dd80bf5f8934 Extracting 1B
+ dd80bf5f8934 Extracting 1B
+ dd80bf5f8934 Extracting 1B
+ dd80bf5f8934 Extracting 1B
+ dd80bf5f8934 Extracting 2B
+ dd80bf5f8934 Extracting 2B
+ dd80bf5f8934 Pull complete 0B
+ 5a5dd05dd75c Pull complete 0B
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulled 
+
+[deploy] ===== 3/6 migrations =====
+[deploy] core schema (schema_migrations)
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-run-adf199d8a141 Creating 
+ Container vidra-migrate-run-adf199d8a141 Created 
+{"time":"2026-09-13T05:12:30.302870333Z","level":"ERROR","msg":"migrate failed","error":"dbmigrate: apply migrations: migration failed: column \"paused_reason\" of relation \"storage_migrations\" already exists in line 0: -- 0145: a storage migration can be PAUSED, can clean up after itself, and\n-- remembers which request started it.\n--\n-- Three findings from A34, one migration, because they are three columns on one\n-- table.\n--\n-- PAUSE. A migration TARGET the process cannot write to was a fatal boot\n-- refusal: booting with a read-only credential produced `fatal error=\"storage\n-- migration target: … Access Denied. [write_denied]\"` and the process exited\n-- BEFORE the listener opened, for the api as well as the workers. So an\n-- operator who rotates or narrows the target bucket's credential loses the whole\n-- instance — every video, every page, and the admin console they would fix it\n-- from — over a store the instance needs only in order to FINISH A MOVE. The\n-- ruling: degrade, do not refuse. The campaign parks in 'paused', the storage\n-- component degrades with the class, reads keep being served by whichever store\n-- holds authority, and the campaign resumes when the write probe next succeeds.\n-- Only the AUTHORITATIVE store being unwritable stays fatal, because an instance\n-- that cannot write to the store it serves from is a different fact.\n--\n-- ABORT-WITH-CLEANUP. A cancelled campaign left its partial copies on the\n-- destination forever and nothing in the product removed them; emptying the\n-- bucket was the operator's job, on a store they may not have console access to.\n-- 'aborting' is the state that removes them, batch by batch, through the same\n-- leader-gated sweep that deletes the source at the other end of a successful\n-- move — and for the same reason: it is destructive, so exactly one process may\n-- do it and every batch must be interruptible.\n--\n-- IDENTITY. storage_migrations IS projected into job_runs (the 0107 trigger), so\n-- A17's \"does not call the job recorder yet\" list is stale for this queue — but\n-- the projected rows carry EMPTY request_id/correlation_id/worker_id, so a\n-- campaign cannot be tied back to the admin request that started it. Same\n-- columns, same second-trigger idiom, and the same reasoning as 0139: they live\n-- on the QUEUE ROW rather than only on the projection, because the queue row is\n-- what survives.\n\nALTER TABLE storage_migrations\n    -- Why the campaign is paused. A short FIXED vocabulary, because this column\n    -- is rendered to an operator and projected into job_runs.stage's neighbours:\n    --   target_write_denied  the migration target refused a write probe\n    --   operator             an admin pressed pause\n    -- '' whenever the campaign is not paused.\n    ADD COLUMN paused_reason  TEXT NOT NULL DEFAULT ''\n        CHECK (paused_reason IN ('', 'target_write_denied', 'operator')),\n    -- The state to return to on resume. A pause must be reversible without\n    -- guessing: a campaign paused out of 'synced' is ready to cut over and one\n    -- paused out of 'copying' is not, and resuming both into 'copying' would\n    -- silently re-open a finished copy phase.\n    ADD COLUMN resume_state   TEXT NOT NULL DEFAULT ''\n        CHECK (resume_state IN ('', 'enumerating', 'copying', 'synced')),\n    ADD COLUMN request_id     TEXT NOT NULL DEFAULT '' CHECK (length(request_id) <= 128),\n    ADD COLUMN correlation_id TEXT NOT NULL DEFAULT '' CHECK (length(correlation_id) <= 128),\n    ADD COLUMN worker_id      TEXT NOT NULL DEFAULT '' CHECK (length(worker_id) <= 255);\n\n-- Widen the state vocabulary. The drop-then-re-add of the SAME constraint name\n-- is the one destructive-DDL idiom scripts/migrate-lint.sh allows, and it is\n-- allowed precisely because widening a CHECK cannot invalidate a row that\n-- already satisfied the narrower one.\nALTER TABLE storage_migrations\n    DROP CONSTRAINT storage_migrations_state_check,\n    ADD CONSTRAINT storage_migrations_state_check\n        CHECK (state IN ('enumerating', 'copying', 'synced', 'paused', 'aborting',\n                         'cutover', 'deleting_source', 'done', 'cancelled', 'failed'));\n\n-- NOTE ON THE SINGLE-ACTIVE INDEX, which is deliberately NOT touched.\n-- storage_migrations_single_active_idx is `WHERE state NOT IN ('done',\n-- 'cancelled', 'failed')`, so both new states count as LIVE and still block a\n-- second campaign. That is the answer both of them want: a paused move has not\n-- finished and starting another would race it over the same objects, and an\n-- aborting one is still deleting from a store.\n\n-- Reproject the campaign with the two new phases.\n--\n-- 'paused' maps to job_runs 'retry_scheduled' rather than 'queued': the run is\n-- not waiting to start, it started and will continue — automatically when the\n-- write probe recovers, or when an operator resumes it. 'aborting' maps to\n-- 'cancel_requested', which is exactly what that state means: the cancel has\n-- been accepted and the work of cancelling is still running.\n--\n-- Everything else in this function is byte-identical to 0107's. It is repeated\n-- in full rather than patched because CREATE OR REPLACE FUNCTION takes a whole\n-- body, and a half-copy is how two definitions drift.\nCREATE OR REPLACE FUNCTION sync_storage_migration_job_run() RETURNS trigger LANGUAGE plpgsql AS $$\nDECLARE\n    canonical_state TEXT;\n    canonical_stage TEXT;\n    canonical_progress SMALLINT;\n    event_kind TEXT;\n    run_started_at TIMESTAMPTZ;\n    run_finished_at TIMESTAMPTZ;\n    safe_error_class TEXT := '';\n    safe_error_code TEXT := '';\n    safe_error_detail TEXT := '';\n    safe_retryable BOOLEAN;\nBEGIN\n    CASE NEW.state\n        WHEN 'enumerating'     THEN canonical_state := 'running';\n        WHEN 'copying'         THEN canonical_state := 'running';\n        WHEN 'synced'          THEN canonical_state := 'running';\n        WHEN 'paused'          THEN canonical_state := 'retry_scheduled';\n        WHEN 'aborting'        THEN canonical_state := 'cancel_requested';\n        WHEN 'cutover'         THEN canonical_state := 'running';\n        WHEN 'deleting_source' THEN canonical_state := 'running';\n        WHEN 'done'            THEN canonical_state := 'succeeded';\n        WHEN 'cancelled'       THEN canonical_state := 'cancelled';\n        ELSE                        canonical_state := 'failed';\n    END CASE;\n    canonical_stage := NEW.state;\n\n    IF NEW.state = 'done' THEN\n        canonical_progress := 100;\n    ELSE\n        canonical_progress := LEAST(100, (NEW.objects_done * 100 / GREATEST(NEW.objects_total, 1)))::smallint;\n    END IF;\n\n    run_started_at := NEW.created_at;\n    IF NEW.state IN ('done', 'cancelled', 'failed') THEN\n        run_finished_at := NEW.updated_at;\n    END IF;\n\n    IF NEW.state = 'failed' THEN\n        safe_error_class := 'execution';\n        safe_error_code := 'storage_migration_failed';\n        safe_error_detail := 'The storage migration stopped; inspect correlated system logs for diagnostic detail.';\n        safe_retryable := false;\n    END IF;\n\n    INSERT INTO job_runs (\n        type, queue, source_id, state, stage, progress_percent, priority, attempt,\n        resource_type, resource_id, input_metadata, output_metadata,\n        error_class, error_code, error_detail, error_retryable,\n        created_at, started_at, updated_at, finished_at\n    ) VALUES (\n        'storage_migration', 'storage_migrations', NEW.id::text, canonical_state,\n        canonical_stage, canonical_progress, 0, 0, 'storage_migration', NEW.id::text,\n        '{}'::jsonb, '{}'::jsonb,\n        safe_error_class, safe_error_code, safe_error_detail, safe_retryable,\n        NEW.created_at, run_started_at, NEW.updated_at, run_finished_at\n    )\n    ON CONFLICT (queue, source_id) WHERE source_id <> '' DO UPDATE SET\n        state = EXCLUDED.state,\n        stage = EXCLUDED.stage,\n        progress_percent = EXCLUDED.progress_percent,\n        error_class = EXCLUDED.error_class,\n        error_code = EXCLUDED.error_code,\n        error_detail = EXCLUDED.error_detail,\n        error_retryable = EXCLUDED.error_retryable,\n        started_at = COALESCE(job_runs.started_at, EXCLUDED.started_at),\n        updated_at = EXCLUDED.updated_at,\n        finished_at = EXCLUDED.finished_at;\n\n    IF TG_OP = 'INSERT' THEN\n        event_kind := 'enqueued';\n    ELSIF OLD.state IS DISTINCT FROM NEW.state THEN\n        event_kind := CASE canonical_state\n            WHEN 'succeeded' THEN 'succeeded'\n            WHEN 'cancelled' THEN 'cancelled'\n            WHEN 'failed'    THEN 'failed'\n            ELSE 'stage_changed'\n        END;\n    ELSIF OLD.objects_done IS DISTINCT FROM NEW.objects_done\n       OR OLD.objects_total IS DISTINCT FROM NEW.objects_total THEN\n        event_kind := 'progress';\n    ELSE\n        RETURN NEW;\n    END IF;\n\n    INSERT INTO job_events (\n        job_id, kind, state, stage, progress_percent, attempt, message, metadata, occurred_at\n    )\n    SELECT r.id, event_kind, canonical_state, canonical_stage, canonical_progress, 0,\n           safe_error_detail, '{}'::jsonb, NEW.updated_at\n    FROM job_runs r\n    WHERE r.queue = 'storage_migrations' AND r.source_id = NEW.id::text;\n\n    RETURN NEW;\nEND;\n$$;\n\n-- Carry the campaign's identity onto the job_runs row the projection above\n-- creates. A SECOND trigger rather than four more assignments inside that\n-- function, exactly as 0139 did for federation_deliveries: row triggers fire in\n-- alphabetical order by trigger NAME, and \"storage_migrations_operational_\n-- projection\" sorts before \"storage_migrations_run_identity\", so the run exists\n-- by the time this runs. The guard on the EXISTING value makes it idempotent and\n-- keeps a later empty-identity update from erasing an id the start recorded --\n-- which matters here more than it did there, because a campaign is written by\n-- the admin request that starts it and then by a WORKER on every sweep.\nCREATE OR REPLACE FUNCTION storage_migration_run_identity() RETURNS TRIGGER\nLANGUAGE plpgsql AS $$\nBEGIN\n    IF NEW.request_id = '' AND NEW.correlation_id = '' AND NEW.worker_id = '' THEN\n        RETURN NEW;\n    END IF;\n    UPDATE job_runs\n       SET request_id     = CASE WHEN job_runs.request_id = ''     THEN NEW.request_id     ELSE job_runs.request_id END,\n           correlation_id = CASE WHEN job_runs.correlation_id = '' THEN NEW.correlation_id ELSE job_runs.correlation_id END,\n           worker_id      = CASE WHEN job_runs.worker_id = ''      THEN NEW.worker_id      ELSE job_runs.worker_id END\n     WHERE job_runs.queue = 'storage_migrations'\n       AND job_runs.source_id = NEW.id::text;\n    RETURN NEW;\nEND;\n$$;\n\nCREATE TRIGGER storage_migrations_run_identity\nAFTER INSERT OR UPDATE ON storage_migrations\nFOR EACH ROW EXECUTE FUNCTION storage_migration_run_identity();\n (details: pq: column \"paused_reason\" of relation \"storage_migrations\" already exists)"}
+
+[deploy] ERROR: CORE MIGRATION FAILED (exit 1). The stack has NOT been restarted; the previous release is still serving. See 'Migration failed mid-deploy' in deploy/README.md.
+[rec03 upgrade-fail 05:12:30] deploy.sh exit=1
+vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.3;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.3;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.3;core=145:true search=18:false
+instance=200 healthz=200 site=200 watch=200
+orig=8ff2dfde3770360f master=0b8854fa8721cd9e renditions=720,480,360 variant=cmaf/media_0.m3u8?v=dldxhnoi48h4 seg=chunk-0-00001.m4s?v=dldxhnoi48h4 segsha=bddbd11c7fc3638a state=published

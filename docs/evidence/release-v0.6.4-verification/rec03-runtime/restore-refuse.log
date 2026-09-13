@@ -1,0 +1,9 @@
+[rec03 restore-refuse 05:14:08] restore.sh of the 146 dump under v0.6.3 pins — expected refusal BEFORE dropdb
+[restore] decompressing vidra-20260913T051341Z.dump.gz
+[restore] copying archive into the postgres container
+[restore] checking that the pinned images can reach this dump's schema
+[restore] ERROR: core: the dump is at 146; pinned VIDRA_CORE_TAG=v0.6.3 carries up to 144. The migrator runs AFTER the drop and the reload, and it cannot walk a ledger that is ahead of it, so this restore would end with the database replaced, the site down, and no way back from this script's output — this is exactly A38 run 13. Set VIDRA_CORE_TAG in env/production.env to the release that carries schema 146 (the release this dump was taken on), or pass --allow-schema-mismatch if you know better. Nothing was changed.
+[rec03 restore-refuse 05:14:13] restore.sh exit=1
+vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.3;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.3;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.3;core=146:false search=18:false
+instance=200 healthz=200 site=200 watch=200
+[rec03 restore-refuse 05:14:16] counts unchanged
