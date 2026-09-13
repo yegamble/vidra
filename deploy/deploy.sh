@@ -492,6 +492,12 @@ require_scanner_profile
 
 # Before the checkout loop below moves anything: a tag that predates the embedded
 # migrator would hang step 3/6 instead of failing it.
+#
+# A core/search DIGEST PIN (`v0.6.4@sha256:...`) dies HERE: semver_ge cannot
+# parse it, so it never reaches the release-mapping digest comparison below.
+# That is deliberate for now — the checkout sync would otherwise run
+# `git checkout "v0.6.4@sha256:..."` on the nested repos. Only VIDRA_USER_TAG
+# (no migrator, no checkout on a bundle tree) reaches the digest comparison.
 require_embedded_migrate_tag VIDRA_CORE_TAG   "$(env_get VIDRA_CORE_TAG '')"
 require_embedded_migrate_tag VIDRA_SEARCH_TAG "$(env_get VIDRA_SEARCH_TAG '')"
 log "compose $(docker compose version --short), VIDRA_TLS_MODE=$TLS_MODE serving $(url_host "$(env_get PUBLIC_BASE_URL '')"), migrator tags >= $MIN_EMBEDDED_MIGRATE_TAG"

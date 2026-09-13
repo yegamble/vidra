@@ -144,6 +144,12 @@ require_embedded_migrate_tag() {
 # Gate the two migrator tags BEFORE the env file is rewritten, so a refusal
 # leaves the running stack and $ENV_FILE exactly as they were. vidra-user has no
 # migrator, so --user is not gated.
+#
+# A core/search DIGEST PIN (`--core v0.6.4@sha256:...`) dies HERE: semver_ge
+# cannot parse it, so it never reaches the release-mapping digest comparison
+# below. Deliberate for now: on a git tree deploy.sh's checkout sync would run
+# `git checkout "v0.6.4@sha256:..."` on the same pin. Only --user reaches the
+# digest comparison.
 require_embedded_migrate_tag VIDRA_CORE_TAG   "$CORE_TAG"
 require_embedded_migrate_tag VIDRA_SEARCH_TAG "$SEARCH_TAG"
 
