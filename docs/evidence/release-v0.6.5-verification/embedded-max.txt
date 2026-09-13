@@ -1,0 +1,7 @@
+# 'migrate embedded-max' asked of the released images by linux/amd64 digest, 2026-09-13 (docker run --rm --entrypoint /app/api … / search image)
+$ docker run --rm ghcr.io/yegamble/vidra-core@sha256:7cab244794b05dddb652d6033543522194cfbe9b57409d8ab8df558db5180ea6 migrate embedded-max
+WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested
+146
+$ docker run --rm ghcr.io/yegamble/vidra-search@sha256:68e16ad4d562381a763c224d412402f8bcd28527dc911dfacda69e334c66c50b migrate embedded-max
+WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested
+18
