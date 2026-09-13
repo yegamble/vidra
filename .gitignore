@@ -113,3 +113,6 @@ Thumbs.db
 
 # A39: CI evidence bundles (uploaded as artifacts, never committed)
 /ci-report/
+
+# Evidence records keep their console logs (the repo-wide *.log rule above dropped fourteen of them from meta#194 silently).
+!docs/evidence/**/*.log

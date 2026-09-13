@@ -1,0 +1,6 @@
+{
+ "install_exit": "1",
+ "images": "",
+ "ledger": "core= search=",
+ "probe": "instance=000 healthz=000 site=000 watch=000"
+}

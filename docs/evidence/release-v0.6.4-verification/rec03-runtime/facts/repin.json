@@ -1,0 +1,6 @@
+{
+ "deploy_exit": "0",
+ "images": "vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.4;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.4;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.4;",
+ "ledger": "core=146:false search=18:false",
+ "probe": "instance=200 healthz=200 site=200 watch=200"
+}

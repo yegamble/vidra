@@ -1,0 +1,25 @@
+[rec03 data 05:10:16] fixture via the api image's ffmpeg
+-rw-r--r-- 1 10001 10001 4358718 Sep 13 05:10 /root/rec03/fx/fixture.mp4
+8ff2dfde3770360fb5112ac8985315f5a7b2b5c2fb07f6f85508222f2793936a  /root/rec03/fx/fixture.mp4
+[rec03 data 05:10:21] owner claim
+[rec03 data 05:10:22] claim-owner http=201
+[rec03 data 05:10:22] channel http=201
+[rec03 data 05:10:22] video id=6be67826-9694-487a-83c5-6c7b9dceac41
+[rec03 data 05:10:23] upload http=201
+[rec03 data 05:10:23] state=published after 5s
+orig=8ff2dfde3770360f master=e3b0c44298fc1c14 master_url=
+users=1 channels=1 videos=1 titles=REC-03 fixture v0.6.3
+ERROR:  column ":" does not exist
+LINE 1: SELECT version||":"||dirty FROM schema_migrations
+                        ^
+ERROR:  column ":" does not exist
+LINE 1: SELECT version||":"||dirty FROM vidra_search_migrations
+                        ^
+core= search=
+instance=200 healthz=200 site=200 watch=200
+ERROR:  column ":" does not exist
+LINE 1: SELECT version||":"||dirty FROM schema_migrations
+                        ^
+ERROR:  column ":" does not exist
+LINE 1: SELECT version||":"||dirty FROM vidra_search_migrations
+                        ^

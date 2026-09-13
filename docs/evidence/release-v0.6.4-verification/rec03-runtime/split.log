@@ -1,0 +1,138 @@
+[rec03 split 05:15:31] OPS-01: API/worker split on v0.6.4 — EXTRA_COMPOSE_PROFILES=worker + API_ROLE=api, then deploy
+EXTRA_COMPOSE_PROFILES=worker
+API_ROLE=api
+
+[deploy] ===== 0/6 pre-flight =====
+[deploy] VIDRA_TLS_MODE=internal — Caddy issues from its own CA, skipping the DNS preflight
+[deploy] compose 5.5.1, VIDRA_TLS_MODE=internal serving rec03.video.test, migrator tags >= v0.2.0
+[deploy] syncing vidra-core to v0.6.4
+[deploy] syncing vidra-search to v0.6.4
+[deploy] syncing vidra-user to v0.6.4
+[deploy] tags: core=v0.6.4 user=v0.6.4 search=v0.6.4
+
+[deploy] ===== 1/6 pre-deploy database dump =====
+[deploy] wrote /opt/vidra/backups/pre-deploy-2026-09-13T051533.dump.gz (60K)
+
+[deploy] ===== 2/6 pull images =====
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulling 
+ Image caddy:2.11.4-alpine Pulling 
+ Image alpine:3.24 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image redis:8-alpine Pulling 
+ Image postgres:18-alpine Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Image alpine:3.24 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Image caddy:2.11.4-alpine Pulled 
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulled 
+ Image redis:8-alpine Pulled 
+ Image postgres:18-alpine Pulled 
+
+[deploy] ===== 3/6 migrations =====
+[deploy] core schema (schema_migrations)
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-run-8e001c8b5d87 Creating 
+ Container vidra-migrate-run-8e001c8b5d87 Created 
+{"time":"2026-09-13T05:15:38.442007893Z","level":"INFO","msg":"schema already up to date","version":146,"dirty":false}
+[deploy] core schema OK (version 146)
+[deploy] search schema (vidra_search_migrations)
+ Container vidra-postgres-1 Running 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-search-migrate-run-1927d4c3c893 Creating 
+ Container vidra-search-migrate-run-1927d4c3c893 Created 
+migrate up: version=18 dirty=false table=vidra_search_migrations
+
+[deploy] ===== 4/6 start =====
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulling 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-search:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-core:v0.6.4 Pulled 
+ Image ghcr.io/yegamble/vidra-user:v0.6.4 Pulled 
+ Container vidra-frontend-1 Running 
+ Container vidra-redis-1 Running 
+ Container vidra-caddy-1 Running 
+ Container vidra-postgres-1 Running 
+ Container vidra-search-1 Running 
+ Container vidra-worker-1 Creating 
+ Container vidra-api-1 Recreate 
+ Container vidra-worker-1 Created 
+ Container vidra-api-1 Recreated 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Starting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Started 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-search-migrate-1 Starting 
+ Container vidra-migrate-1 Starting 
+ Container vidra-search-migrate-1 Started 
+ Container vidra-search-migrate-1 Waiting 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-migrate-1 Started 
+ Container vidra-migrate-1 Waiting 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-redis-1 Waiting 
+ Container vidra-migrate-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-postgres-1 Waiting 
+ Container vidra-prep-volumes-1 Waiting 
+ Container vidra-redis-1 Healthy 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-search-migrate-1 Exited 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-migrate-1 Exited 
+ Container vidra-prep-volumes-1 Exited 
+ Container vidra-redis-1 Healthy 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-migrate-1 Exited 
+ Container vidra-redis-1 Healthy 
+ Container vidra-api-1 Starting 
+ Container vidra-postgres-1 Healthy 
+ Container vidra-worker-1 Starting 
+ Container vidra-api-1 Started 
+ Container vidra-api-1 Waiting 
+ Container vidra-worker-1 Started 
+ Container vidra-api-1 Healthy 
+
+[deploy] ===== 5/6 reload Caddy =====
+[deploy] caddy reloaded (attempt 1)
+
+[deploy] ===== 6/6 health probes =====
+[deploy] waiting up to 120s for api /readyz at http://127.0.0.1:8080/readyz
+[deploy] api /readyz OK
+[deploy] waiting up to 120s for frontend at http://127.0.0.1:3000/
+[deploy] frontend OK
+[deploy] waiting up to 180s for the edge at https://rec03.video.test/healthz (pinned to 127.0.0.1:443)
+[deploy] edge OK (https://rec03.video.test)
+[deploy] deploy complete
+[rec03 split 05:15:51] deploy.sh exit=0
+vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.4;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.4;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.4;vidra-api-1 Up 7 seconds (healthy)
+vidra-worker-1 Up 6 seconds
+[rec03 split 05:15:52] video2 id=69bc3d23-f64d-4b19-997e-7f8d10d6ada7
+[rec03 split 05:15:53] upload2 http=201
+[rec03 split 05:15:53] video2 state=published after 5s
+[rec03 split 05:15:53] who transcoded it: ffmpeg/transcode lines per container
+vidra-api-1: 3
+vidra-worker-1: 6
+[rec03 split 05:15:53] api container ffmpeg mentions=3
+instance=200 healthz=200 site=200 watch=200
+users=1 channels=1 videos=2 titles=REC-03 fixture v0.6.3|REC-03 split-topology upload

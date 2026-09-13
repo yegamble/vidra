@@ -1,0 +1,136 @@
+vidra doctor — /opt/vidra (/opt/vidra/env/production.env)
+
+docker & compose
+  ✓ compose version: docker compose 5.5.1 (>= 2.24, so the prod overlay's !reset/!override merge tags are honoured)
+  ✓ published ports: only the expected ports face the internet (caddy 80, caddy 443); 2 further publish(es) are bound to 127.0.0.1
+  ✓ log caps: every service caps its container log (10 service(s), driver json-file with max-size)
+  ✓ dev override: the running stack does not load docker-compose.override.yml (7 container(s) checked)
+  ✓ stray vidra-core/.env: no vidra-core/.env to poison the included model's variable substitutions
+
+configuration
+  ✓ reverse proxy: deploy/Caddyfile.local serves rec03.video.test, which matches PUBLIC_BASE_URL
+  ⚠ domain DNS: skipped: VIDRA_TLS_MODE=internal: certificates are issued by Caddy's own local CA, so no ACME order depends on this host's DNS
+  ⚠ env file vs template: env/production.env.example defines 1 key(s) env/production.env does not assign: CLAMAV_ADDR
+      → re-run `vidra setup --template env/production.env.example --output env/production.env --yes` to fill them in — it preserves every value the file already sets, including the KEKs, and adds the ones a newer template introduced
+  ⚠ env file vs template: env/production.env assigns 2 key(s) env/production.env.example does not define: API_ROLE, EXTRA_COMPOSE_PROFILES
+      → check each one is still read by something. A key the template dropped is usually harmless (it is simply unused), but a MISSPELLED one looks exactly the same from here and takes its setting with it
+  ⚠ configuration values: VIDRA_TLS_MODE=internal does not produce a publicly trusted certificate: internal is a rehearsal/bring-up mode, and every browser reaching this instance will refuse the connection. Set VIDRA_TLS_MODE=acme in env/production.env and regenerate the Caddyfile once DNS points at this host
+
+data & state
+  ✓ schema ledger: the core migration ledger (schema_migrations) is at version 146 and clean
+  ⚠ search ledger: skipped: this deployment uses the bundled Postgres, which publishes no host port, and the api image's `migrate version` only reports core's ledger
+  ✓ db pool sizing: the connection pool fits the server: each process opens up to 10 connections (DB_MAX_CONNS) and this PostgreSQL accepts 100, of which 3 are reserved for superusers — so 97 usable. Total demand is DB_MAX_CONNS × PROCESSES: 20 for the stock api+worker split (2), and more for every extra replica
+  ✓ backups: the last successful backup was 2m18s ago (2026-09-13T05:13:41Z)
+  ✓ backup timer: vidra-backup.timer is enabled and active (daily at 03:15 with jitter)
+  ✓ disk space: the checkout (and backups/): 300.6 GiB free of 308.9 GiB (97%)
+  ✓ media GC posture: media garbage collection runs daily and deletes stored objects no database row references; a sweep that finds more than 25% of what it scanned to be orphans deletes nothing instead (MEDIA_GC_MAX_ORPHAN_PERCENT). The first sweep after each restart is always a dry run
+  ✓ storage migration: no storage migration in flight — media is served from, and garbage-collected in, one store
+  ⚠ cdn purge backlog: skipped: this deployment uses the bundled Postgres, which publishes no host port (by design) — read the same numbers in the cdn_purge block of GET /api/v1/admin/system
+  ✓ instance owner: the instance owner is marked and protected from other administrators — though it is the only active admin, so the last-admin guard is what is holding the console open: promote a second admin before that account goes anywhere
+
+reachability
+  ✓ object storage: STORAGE_BACKEND=local — media lives in the media_data volume, so there is no object store to reach (make sure that volume is in your backups)
+  ✓ object write: STORAGE_BACKEND=local — media lives in the media_data volume, so there is no object-store credential that could turn out to be read-only
+  ✓ object retention: media lives on local disk, where a delete frees the bytes immediately — object versioning does not apply
+  ✓ bucket ownership: media lives on local disk, which this instance populated itself — there is no shared bucket to mistake for its own, so the ownership marker does not apply
+  ✓ smtp: mail is off (MAIL_ENABLED is not true, or SMTP_HOST is blank) — password reset and email verification are unavailable, which is a deliberate configuration and not a fault
+  ✓ search service: the search service answers /healthz inside the compose network (Up 40 seconds (healthy))
+  ✓ ffmpeg: ffmpeg is present in the api container: ffmpeg version 8.1.2 Copyright (c) 2000-2026 the FFmpeg developers
+  ✓ video encoders: only H.264 is enabled, which every client can play and every ffmpeg can encode — there is no extra encoder to check
+  ✓ hardware transcode: hardware transcode available: vaapi (/dev/dri/renderD128) — enable it with TRANSCODING_HW=vaapi. CPU encoding is the default and always works; hardware is faster and cheaper but depends on this host keeping that device (checked against the api container's ffmpeg)
+
+23 ✓  6 ⚠  0 ✗  (4.228s)
+No failures. The warnings above are either checks that could not run here, or findings that do not stop a deployment.
+Docker version 29.8.0, build 88096ef
+Docker Compose version v5.5.1
+Python 3.12.3
+Ubuntu 24.04.4 LTS
+{
+ "backup": {
+  "backup_exit": "0",
+  "dump144": "/opt/vidra/backups/vidra-20260913T051158Z.dump.gz"
+ },
+ "backup2": {
+  "backup_exit": "0",
+  "dump146": "/opt/vidra/backups/vidra-20260913T051341Z.dump.gz",
+  "marker_http": "200",
+  "counts": "users=1 channels=1 videos=1 titles=REC-03 fixture RENAMED after the 146 backup"
+ },
+ "data": {
+  "state": "published",
+  "fp": "orig=8ff2dfde3770360f master=e3b0c44298fc1c14 master_url=",
+  "counts": "users=1 channels=1 videos=1 titles=REC-03 fixture v0.6.3",
+  "ledger": "core= search=",
+  "probe": "instance=200 healthz=200 site=200 watch=200"
+ },
+ "fp": {
+  "fp": "orig=8ff2dfde3770360f master=0b8854fa8721cd9e renditions=720,480,360 variant=cmaf/media_0.m3u8?v=dldxhnoi48h4 seg=chunk-0-00001.m4s?v=dldxhnoi48h4 segsha=bddbd11c7fc3638a state=published",
+  "counts": "users=1 channels=1 videos=1 titles=REC-03 fixture v0.6.3",
+  "ledger": "core=144:false search=18:false",
+  "probe": "instance=200 healthz=200 site=200 watch=200"
+ },
+ "inject": {
+  "injected": "paused_reason",
+  "ledger": "core=144:false search=18:false"
+ },
+ "install": {
+  "install_exit": "1",
+  "images": "",
+  "ledger": "core= search=",
+  "probe": "instance=000 healthz=000 site=000 watch=000"
+ },
+ "recover": {
+  "deploy_exit": "0",
+  "images": "vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.4;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.4;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.4;",
+  "ledger": "core=146:false search=18:false",
+  "probe": "instance=200 healthz=200 site=200 watch=200",
+  "fp": "orig=8ff2dfde3770360f master=0b8854fa8721cd9e renditions=720,480,360 variant=cmaf/media_0.m3u8?v=dldxhnoi48h4 seg=chunk-0-00001.m4s?v=dldxhnoi48h4 segsha=bddbd11c7fc3638a state=published",
+  "counts": "users=1 channels=1 videos=1 titles=REC-03 fixture v0.6.3"
+ },
+ "repin": {
+  "deploy_exit": "0",
+  "images": "vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.4;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.4;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.4;",
+  "ledger": "core=146:false search=18:false",
+  "probe": "instance=200 healthz=200 site=200 watch=200"
+ },
+ "restore-ok": {
+  "restore_exit": "0",
+  "images": "vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.4;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.4;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.4;",
+  "ledger": "core=146:false search=18:false",
+  "probe": "instance=200 healthz=200 site=200 watch=200",
+  "fp": "orig=8ff2dfde3770360f master=0b8854fa8721cd9e renditions=720,480,360 variant=cmaf/media_0.m3u8?v=dldxhnoi48h4 seg=chunk-0-00001.m4s?v=dldxhnoi48h4 segsha=bddbd11c7fc3638a state=published",
+  "counts": "users=1 channels=1 videos=1 titles=REC-03 fixture v0.6.3"
+ },
+ "restore-refuse": {
+  "restore_exit": "1",
+  "counts_before": "users=1 channels=1 videos=1 titles=REC-03 fixture RENAMED after the 146 backup",
+  "counts_after": "users=1 channels=1 videos=1 titles=REC-03 fixture RENAMED after the 146 backup",
+  "ledger": "core=146:false search=18:false",
+  "probe": "instance=200 healthz=200 site=200 watch=200"
+ },
+ "rollback": {
+  "rollback_exit": "0",
+  "images": "vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.3;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.3;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.3;",
+  "ledger": "core=146:false search=18:false",
+  "probe": "instance=200 healthz=200 site=200 watch=200",
+  "fp": "orig=8ff2dfde3770360f master=0b8854fa8721cd9e renditions=720,480,360 variant=cmaf/media_0.m3u8?v=dldxhnoi48h4 seg=chunk-0-00001.m4s?v=dldxhnoi48h4 segsha=bddbd11c7fc3638a state=published",
+  "counts": "users=1 channels=1 videos=1 titles=REC-03 fixture RENAMED after the 146 backup"
+ },
+ "split": {
+  "deploy_exit": "0",
+  "images": "vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.4;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.4;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.4;",
+  "video2_state": "published",
+  "probe": "instance=200 healthz=200 site=200 watch=200",
+  "counts": "users=1 channels=1 videos=2 titles=REC-03 fixture v0.6.3|REC-03 split-topology upload",
+  "api_ffmpeg_mentions": "3",
+  "workers": "1"
+ },
+ "upgrade-fail": {
+  "pin_release_exit": "1",
+  "deploy_exit": "1",
+  "images": "vidra-api-1 ghcr.io/yegamble/vidra-core:v0.6.3;vidra-frontend-1 ghcr.io/yegamble/vidra-user:v0.6.3;vidra-search-1 ghcr.io/yegamble/vidra-search:v0.6.3;",
+  "ledger": "core=145:true search=18:false",
+  "probe": "instance=200 healthz=200 site=200 watch=200",
+  "fp": "orig=8ff2dfde3770360f master=0b8854fa8721cd9e renditions=720,480,360 variant=cmaf/media_0.m3u8?v=dldxhnoi48h4 seg=chunk-0-00001.m4s?v=dldxhnoi48h4 segsha=bddbd11c7fc3638a state=published"
+ }
+}
