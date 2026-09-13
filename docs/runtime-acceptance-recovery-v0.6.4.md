@@ -77,11 +77,39 @@ exists. Rows and reasons: [disposition delta](evidence/release-v0.6.4-verificati
   - Rendition `job_runs` created before the kill and completed after it still name the killed container's `worker_id`.
   - `/readyz` did not reflect a 10-second search outage.
   - Recovery of a crashed job waits the whole 30-minute lease.
+- **Harness corrections after the run (2026-09-13 evidence audit).** The
+  committed evidence is the record and keeps the forms it was written with.
+  - `source/py-source-loss/result.json` records the check as
+    `source_stack_stopped_volumes_retained`; the harness asserts only that no
+    container is left after `compose stop` and never enumerates volumes, so the
+    key in `tests/recovery_release_acceptance.py` is now
+    `source_stack_stopped_no_container_left`.
+  - The job rows in `source/upload-kill/result.json` carry `has_error` computed
+    as `last_error IS NOT NULL`, which is always true on that `TEXT NOT NULL
+    DEFAULT ''` column (core migration 0039); `tests/recovery-release-acceptance.mjs`
+    now uses `last_error <> ''`. No claim above rests on that field.
+  - The exporter change under **Export** below.
 - **Resources.**
   - The source stack is **stopped**; the replacement stack is **running**. Both have `MEDIA_GC_ENABLED=true` against one bucket, so never run both.
   - Restart the source only after stopping the replacement: `cd /opt/vidra && COMPOSE_PROJECT_NAME=vidra-release-acceptance bash deploy/compose.sh stop`, then `… start` on the source.
   - Raw logs, the backup handoff and test credentials stay private under `/root/vidra-v064-recovery-20260913` on each host. The bucket key expires 2026-09-18.
-- **Export.** Reviewed exports were written by [`tests/recovery_release_export.py`](../tests/recovery_release_export.py). It hashes command output and health-probe output instead of exporting them, and refuses on any host secret: env secrets, bucket key, owner password, TOTP secret, recovery codes. Source export 22 files, replacement 7; per-file hashes are in each `artifact-hashes.json`. The supplementary `replacement/post-restore-index-readback.json` is hashed in the disposition delta.
+- **Export.** Reviewed exports were written by [`tests/recovery_release_export.py`](../tests/recovery_release_export.py). It hashes command output and health-probe output instead of exporting them, and refuses the export when any host secret it loaded appears in it. Source export 22 files, replacement 7; per-file hashes are in each `artifact-hashes.json`. The supplementary `replacement/post-restore-index-readback.json` is hashed in the disposition delta.
+  - **What the secret scan proves (corrected 2026-09-13).** Both exports ran
+    the exporter at sha256 `12b22ba4…bd43` (added at `417b681`, per each host's
+    `PROVENANCE` and `TOOLS.SHA256`). That revision loaded each secret source
+    only if its file existed, matched env keys on `SECRET|PASSWORD|TOKEN|KEK|_KEY$|ACCESS_KEY`
+    (not `_KEY_ID`), and recorded nothing about what it loaded, so the
+    committed evidence cannot show that the env secrets, the bucket key, the
+    owner password, the TOTP secret or the recovery codes were in the scan set.
+    The exporter now records `secrets_loaded` (`env` count, `bucket_key`,
+    `mfa`, `owner`) in `artifact-hashes.json`, matches `_KEY_ID` keys, and
+    refuses when no env secret was loaded; that revision has run on no host.
+    What the committed evidence does prove is that no such value appears in
+    the committed files: a re-grep on 2026-09-13T05:28Z of all 38 files under
+    `recovery-runtime/` for env-style secret assignments, base32 TOTP-secret
+    shapes, B2 key and key-id shapes, recovery-code shapes and the literal
+    words `totp_secret`, `recovery_code` and `"password":` found none (the only
+    hits were table fingerprints and the count `recovery_codes_remaining: 10`).
 
 Next executable milestone: REC-03/A38 on a disposable host — install v0.6.3, create
 data, upgrade to v0.6.4 through `deploy.sh`, inject a migration failure, roll the

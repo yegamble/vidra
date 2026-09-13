@@ -13,10 +13,11 @@ destination now exists). The base disposition is open draft #187's
 [recovery delta](evidence/release-v0.6.4-verification/recovery-runtime/disposition-delta.json)
 records every changed row. No row is promoted to PASS.
 
-**Candidate.** The frozen v0.6.4 manifest is unchanged. Component mains
-(core `0261b59`, user `dc4f164`, search `5f7a3a3`) are not the candidate. No
-next candidate is frozen: every fix below is on unmerged branches, and an
-unreleased main-branch fix is not a released fix.
+**Candidate.** The frozen v0.6.4 manifest is unchanged. Component mains at
+the scan time (2026-09-13T02:50Z: core `0261b59`, user `dc4f164`, search
+`5f7a3a3`) are not the candidate and have since moved. No next candidate is
+frozen: at 2026-09-13T05:25Z three fixes are merged to `main` (below) and the
+rest are open, and an unreleased main-branch fix is not a released fix.
 
 **Security scan facet: FAIL for v0.6.4 as published**
 (record `docs/security-scan-v0.6.4-2026-09-12.md`, arriving with draft #190). The first by-digest
@@ -48,34 +49,41 @@ populated B2 host and a blank rebuilt AMD64 replacement:
   unhandled 429. Both were corrected with separate provenance.
 - **Measurements, not acceptances:** no RPO/RTO objective is approved.
 
-**Open draft PRs — none merged, none released.** Merge core #234 first; its
-MinIO registry fix unblocks the red required lanes on every core and user PR.
+**PR state at 2026-09-13T05:25Z — merged: core #234 (04:54:19Z, `f87bf6f`,
+the MinIO registry fix that unblocked the red required lanes on every core and
+user PR), search #43 (05:16:02Z, `92bdd79`), user #218 (05:17:11Z, `6854c0f`).
+Everything else below is open. Nothing is released.**
 
 | Scope | PRs | Verified state |
 |---|---|---|
-| Dependency advisories | user #218 (next 16.3.5, required `dependency-audit`), core #233 / search #43 (required `govulncheck`) | New lanes green in CI; RED on released lockfile/stale toolchain, fail-closed offline; an `.npmrc` false-clean found in review and fixed |
-| Required-CI integrity | meta #188, core #235, search #44, user #219 | `ci-required` fail-open paths closed; byte-identical twin test 38 cases/41 assertions; fresh-context verification of review fixes passed |
-| Release mapping | meta #189 | Mixed/unreleased component triples and stale bundles refused before mutation (stubbed ordering proof, 137 tests). **Requirement still OPEN:** the newest release is checked by tag string only until the release artifact carries its own record |
-| Image hardening | core #236, search #45, user #220 | Runtime `apk upgrade` (openssl 3.5.8, local arm64 builds only — no CI lane builds the release Dockerfiles), grpc 1.83.2, yt-dlp verified by SHA-256, release builds bypass the cached package layer |
-| Evidence | meta #190 (scan), this branch (recovery drill tools + evidence) | Docs/evidence only |
+| Dependency advisories | user #218 (next 16.3.5, required `dependency-audit`) **merged**; search #43 (required `govulncheck`) **merged**; core #233 open (head `1d1e15e`, every lane green at 05:24Z) | New lanes green in CI; RED on released lockfile/stale toolchain, fail-closed offline; an `.npmrc` false-clean found in review and fixed (reproduced for the record in #190); both govulncheck PRs raised the pin v1.3.0 → v1.8.0 (`d976d65` / `f326dd0`) |
+| Required-CI integrity | meta #188 `c51d083`, core #235 `65c4a2b`, search #44 `f5c3f3f`, user #219 `6b237ca` | `ci-required` fail-open paths closed; byte-identical twin test 45 cases / 52 assertions at `c51d083` (38/41 at `c3c32ac`), 25 RED against core main `f87bf6f` and 27 against meta main `67840ab`, 0 after; fresh-context verification of review fixes passed |
+| Release mapping | meta #189 `02ad018` | Mixed/unreleased component triples and stale bundles refused before mutation (stubbed ordering proof; 162 unit tests OK at `02ad018`, re-run 2026-09-13). **Requirement still OPEN:** the newest release is checked by tag string only until the release artifact carries its own record |
+| Image hardening | core #236 `8734545`, search #45 `76499c6`, user #220 `507c9d7` | Runtime `apk upgrade` (openssl 3.5.8-r0: local arm64 builds, log not retained, then each PR's `docker-build` lane built its production Dockerfile for linux/amd64 on GitHub with `Upgrading libssl3 (3.5.7-r0 -> 3.5.8-r0)` in the log — runs 34739925166 / 34739638218 / 34739626736; the release image itself is unbuilt), grpc 1.83.2, yt-dlp verified by SHA-256, release builds bypass the cached package layer |
+| Evidence | meta #190 (scan; audit fixes `3ff4ac4`), meta #191 (this branch: recovery drill tools + evidence), meta #187 (base disposition, `0cf2da4`) | Docs/evidence only; #187 must merge before #191 because the recovery delta references #187's `migration-runtime/disposition.json` |
 
 **Remaining for GO, by kind.**
-- **Product defects on unmerged fixes:** the scan findings above; the absent
-  mapping preflight (#189); the `ci-required` fail-open paths.
+- **Product defects on unreleased fixes:** the scan findings above (the next
+  fix merged 2026-09-13T05:17Z, the openssl/grpc fixes open); the absent
+  mapping preflight (#189); the `ci-required` fail-open paths (#188 and twins).
 - **Missing inputs or authorization:**
   - B2: a representative sanitized PeerTube source, and approval to move the
     generated-fixture passwords to the test host.
   - B3: an offsite backup destination/credentials and the selected providers.
   - B4: approved RPO/RTO objectives.
   - Owner decisions listed in #189.
-  - Dependabot alerts/security updates are disabled in all four service repos.
+  - Dependabot security updates (auto-PRs) are disabled in all four service
+    repos; alerts were enabled on 2026-09-13 (~05:06Z) and are untriaged —
+    open at 05:22Z: core 1 high (GHSA-2v4p-qf9q-27wj grpc), search 1 medium
+    (pytest, `training/uv.lock`); user's 15 auto-fixed when #218 merged.
 - **Missing execution:** REC-03/A38 upgrade/rollback, the OPS-01 worker split,
   full browser/control/mobile/WebKit coverage, a new candidate build rescanned
   by digest, and the release-artifact record for mapping.
 
-**Resources.** The source stack at `159.203.118.182` is **stopped** (volumes
-kept). The replacement at `159.65.249.255` is **running** against the same test
-bucket. Never run both: both have media GC on.
+**Resources.** The source stack at `159.203.118.182` is **stopped** (`compose
+stop` only, so no volume was removed; volumes were not enumerated). The
+replacement at `159.65.249.255` is **running** against the same test bucket.
+Never run both: both have media GC on.
 
 The previous `599514574` contents are preserved privately under
 `env/acceptance-hosts-v064-20260913/`. The test bucket key expires 2026-09-18.

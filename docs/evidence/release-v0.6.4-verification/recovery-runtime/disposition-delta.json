@@ -155,7 +155,7 @@
     "A38": "Not closed: not executed; now executable on a disposable host."
   },
   "resources": {
-    "source_host": "159.203.118.182 (droplet 599531580): stack STOPPED after the simulated loss, all 8 volumes and every evidence directory retained; restart with `cd /opt/vidra && COMPOSE_PROJECT_NAME=vidra-release-acceptance bash deploy/compose.sh start` only after stopping the replacement stack (both use MEDIA_GC_ENABLED=true against one bucket).",
+    "source_host": "159.203.118.182 (droplet 599531580): stack STOPPED after the simulated loss (`compose stop` only, so no volume was removed; volumes were not enumerated); every evidence directory retained; restart with `cd /opt/vidra && COMPOSE_PROJECT_NAME=vidra-release-acceptance bash deploy/compose.sh start` only after stopping the replacement stack (both use MEDIA_GC_ENABLED=true against one bucket).",
     "replacement_host": "159.65.249.255 (droplet 599514574): restored v0.6.4 stack RUNNING against the same test bucket; drill raw logs under /root/vidra-v064-recovery-20260913.",
     "bucket": "vidra-acceptance-v064-20260911-media only; new objects from the drill and post-restore upload; key expires 2026-09-18.",
     "preserved_before_rebuild": "Native-runtime evidence, DB dump, config archive and media volume of the previous 599514574 contents: private gitignored env/acceptance-hosts-v064-20260913/native-599514574-preserved (SHA256SUMS verified)."
