@@ -72,7 +72,7 @@ the frontend answer this time is "zero vulnerabilities", and because the
 v0.6.4 record documented a gate that printed exactly that when it was silently
 offline, the same npm command was re-run against **vidra-user's v0.6.4
 lockfile** on the same host, npm, flags and `HOME`: it exited 1 with 2 findings
-(`raw/npm-audit-negative-control-v064-lockfile.txt`). The clean answer is a real
+(`raw/npm-audit-negative-control-v064-lockfile.txt` (runtime `--omit=dev` flags) and `raw/npm-audit-negative-control-v064-lockfile-include-dev.txt` (the `--include=dev` lane, added after the evidence audit: exit 1 on the v0.6.4 lockfile)). The clean answer is a real
 registry answer.
 
 ## What ran
@@ -84,7 +84,7 @@ registry answer.
 | core, search released binaries | govulncheck `-mode=binary` | 0 / 0 | GO-2026-5932 only; module lists confirm **grpc v1.83.2** (core, 71 modules) and **x/crypto v0.56.0** (both) |
 | user lockfile v0.6.5 | npm audit, runtime (`--omit=dev`) and full (`--include=dev`) | 0 / 0 | **0 vulnerabilities in both**; `metadata.dependencies.total` = **676** (prod 132, dev 499, optional 119, peer 21); `next` = **16.3.5** |
 | core image | osv-scanner image, by digest | 1 | 138 apk, 71 Go, 97 crates, 1 PyPI = 307 packages; 8 vulnerable rows |
-| user image | osv-scanner image, by digest | 0 | **18 apk packages only, zero vulnerable rows** — and still **zero npm packages, no node binary detected** |
+| user image | osv-scanner image, by digest | 0 | **18 apk packages only, zero vulnerable rows** — and still **zero npm packages and no node package record (the node binary itself is present, see `vidra-user-v065-shipped-versions.txt`)** |
 | search image | osv-scanner image, by digest | 1 | 21 apk + 32 Go = 53 packages; 1 vulnerable row |
 | search `training/uv.lock` | osv-scanner source (new this record) | 1 | 31 PyPI packages; 1 vulnerable (pytest, medium) — **not shipped** |
 | all three images | in-image `apk` listing, `--network none` | 0 | **libssl3 3.5.8-r0 and libcrypto3 3.5.8-r0 in all three** |
@@ -126,7 +126,7 @@ upgrade step is caught after the release exists, not before.
 | T5 | x/crypto: GO-2026-5932 (openpgp, no fix) plus search's 0.54.0 ssh advisories -6303 / -6354 / -6355 | **Half closed, half a permanent residual.** The three ssh advisories are **gone** — x/crypto is 0.56.0 in both modules. **GO-2026-5932 remains** with no fixed version; it is not linked into either binary: `grep -cE 'x/crypto/(ssh\|openpgp)'` = 0 on both linux/amd64 package graphs | `raw/vidra-{core,search}-v065-api-package-graph.txt`, `raw/vidra-search-v065.govulncheck.json.gz` |
 | T6 | core image rav1e 0.8.1 / libdovi 3.3.2 crate advisories (RUSTSEC-2026-0190, -0204, -0097 / GHSA-cq8v, -0105, 2024-0436) | **STILL OPEN, unchanged, and still unfixable from Alpine**: v3.24/community carries exactly rav1e-libs 0.8.1-r0 and libdovi 3.3.2-r0, which is what the image installs. Unsoundness and unmaintained classes in libraries that parse untrusted uploads; no exploit path demonstrated. Owner risk decision: accept pending Alpine, or build without these codecs | `raw/vidra-core-v065-rust-codec-apk.txt`, `raw/alpine-3.24-apk-policy.txt`, `raw/vidra-core-v065-image.osv.json.gz` |
 | T7 | core glib 2.88.1-r1 flagged ALPINE-CVE-2021-27219 (fixed 2.66.6) | **Unchanged scanner false positive** — installed version is far newer than the fix, and 2.88.1-r1 is the only version v3.24/main has. Recorded, not suppressed | `raw/vidra-core-v065-image.osv.json.gz`, `raw/alpine-3.24-apk-policy.txt` |
-| T8 | **Scanner coverage gap**: the image scan saw no npm packages; no Python tree was scanned anywhere | **Half closed.** The Python half is closed: `training/uv.lock` was scanned for the first time and is reported below. The npm half is **unchanged** — osv-scanner still finds 0 npm packages and no node binary in the user image, so an image scan alone is still not a frontend dependency scan | this table; `raw/vidra-user-v065-image.osv-all-packages.json.gz`; `raw/vidra-search-v065-training-uvlock.osv.json.gz` |
+| T8 | **Scanner coverage gap**: the image scan saw no npm packages; no Python tree was scanned anywhere | **Half closed.** The Python half is closed: `training/uv.lock` was scanned for the first time and is reported below. The npm half is **unchanged** — osv-scanner still finds 0 npm packages and no npm or node package record in the user image, so an image scan alone is still not a frontend dependency scan | this table; `raw/vidra-user-v065-image.osv-all-packages.json.gz`; `raw/vidra-search-v065-training-uvlock.osv.json.gz` |
 
 ### New this record
 

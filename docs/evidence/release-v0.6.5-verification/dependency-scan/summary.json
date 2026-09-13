@@ -449,6 +449,17 @@
       "raw": "raw/vidra-search-v065-training-uvlock.osv.json.gz",
       "raw_sha256": "590645eaa89548ac04bab8497201b39c1a3561c9ec96ef9ddd6c241c7cdc09f1",
       "raw_note": "local scratch paths replaced with <scratch>"
+    },
+    {
+      "name": "npm-audit-negative-control-v064-lockfile-include-dev",
+      "command": "npm audit --package-lock-only --offline=false --registry=https://registry.npmjs.org/ --include=dev --audit-level=high, against vidra-user's v0.6.4 package-lock.json",
+      "exit_code": 1,
+      "started_utc": "2026-09-13T07:19:17Z",
+      "ended_utc": "2026-09-13T07:19:19Z",
+      "source_revision": "vidra-user tag v0.6.4",
+      "purpose": "Negative control for the --include=dev lane (added after the evidence audit found the first control covered the runtime flags only): the v0.6.4 lockfile must fail this exact command, so the v0.6.5 'found 0' is a registry answer.",
+      "raw": "raw/npm-audit-negative-control-v064-lockfile-include-dev.txt",
+      "raw_sha256": "a833d6b3ea14994c0a1d494c43447eec9af1be2b5059344a384985634cce6e35"
     }
   ],
   "supplementary_raw": [
