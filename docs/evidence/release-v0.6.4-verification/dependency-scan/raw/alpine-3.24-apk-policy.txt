@@ -1,0 +1,30 @@
+# captured 2026-09-13T05:23:14Z on darwin/arm64 host, docker 29.2.1, platform linux/amd64
+# image: mirror.gcr.io/library/alpine:3.24
+# pulled: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b id=sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+# command: docker run --rm --platform linux/amd64 mirror.gcr.io/library/alpine:3.24 sh -c 'cat /etc/alpine-release; apk --print-arch; apk update >/dev/null && apk policy libssl3 libcrypto3 openssl rav1e rav1e-libs libdovi 2>&1'
+alpine-release: 3.24.1
+arch: x86_64
+libcrypto3 policy:
+  3.5.7-r0:
+    lib/apk/db/installed
+  3.5.8-r0:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+libdovi policy:
+  3.3.2-r0:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+libssl3 policy:
+  3.5.7-r0:
+    lib/apk/db/installed
+  3.5.8-r0:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+openssl policy:
+  3.5.8-r0:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+rav1e policy:
+  0.8.1-r0:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+rav1e-libs policy:
+  0.8.1-r0:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+apk-policy-exit: 0
+# docker-run-exit: 0
