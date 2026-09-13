@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "tag": "v0.6.5",
+  "platform": "linux/amd64",
+  "created_at": "2026-09-13T06:46:48.591723+00:00",
+  "repositories": {
+    "vidra": {
+      "remote": "https://github.com/yegamble/vidra.git",
+      "tag": "v0.6.5",
+      "revision": "9c3a9ec55572098581394c0110cf5274244749c4"
+    },
+    "vidra-core": {
+      "remote": "https://github.com/yegamble/vidra-core.git",
+      "tag": "v0.6.5",
+      "revision": "d13d40e6670d0bf95d28e1f69b5af20e5b99237b"
+    },
+    "vidra-user": {
+      "remote": "https://github.com/yegamble/vidra-user.git",
+      "tag": "v0.6.5",
+      "revision": "fdef1cec82fc155aab49282c3342ff47d1abcace"
+    },
+    "vidra-search": {
+      "remote": "https://github.com/yegamble/vidra-search.git",
+      "tag": "v0.6.5",
+      "revision": "b7a7f55be6646c2730d5bbc481e423ac9cfa9e08"
+    }
+  },
+  "images": {
+    "vidra-core": {
+      "digest": "sha256:a6e08b93364924e40321a47d188ed08ddbc2b21aecd3f0dcc58f49bc1f2f3bb1",
+      "reference": "ghcr.io/yegamble/vidra-core@sha256:a6e08b93364924e40321a47d188ed08ddbc2b21aecd3f0dcc58f49bc1f2f3bb1",
+      "platform": "linux/amd64",
+      "revision": "d13d40e6670d0bf95d28e1f69b5af20e5b99237b"
+    },
+    "vidra-user": {
+      "digest": "sha256:08e920ba5d214a190c30796c9c7f877ad70a53ea2b1f2d10a5f47de679b03178",
+      "reference": "ghcr.io/yegamble/vidra-user@sha256:08e920ba5d214a190c30796c9c7f877ad70a53ea2b1f2d10a5f47de679b03178",
+      "platform": "linux/amd64",
+      "revision": "fdef1cec82fc155aab49282c3342ff47d1abcace"
+    },
+    "vidra-search": {
+      "digest": "sha256:55196d278722d46c4454cc4f5f4d05b9e7cd35cc7712f2aeb6354e13f65ea0f8",
+      "reference": "ghcr.io/yegamble/vidra-search@sha256:55196d278722d46c4454cc4f5f4d05b9e7cd35cc7712f2aeb6354e13f65ea0f8",
+      "platform": "linux/amd64",
+      "revision": "b7a7f55be6646c2730d5bbc481e423ac9cfa9e08"
+    }
+  },
+  "assets": {
+    "SHA256SUMS": {
+      "url": "https://github.com/yegamble/vidra-core/releases/download/v0.6.5/SHA256SUMS",
+      "sha256": "29adc9823ca81ac7949f74ff95008c8481c314ce665a00ca8235fa5fb9a8e9c6"
+    },
+    "vidra-bundle_v0.6.5.tar.gz": {
+      "url": "https://github.com/yegamble/vidra-core/releases/download/v0.6.5/vidra-bundle_v0.6.5.tar.gz",
+      "sha256": "4663b2166c7046ab9dadaede500b96a3a372498e7840eb1662ad0b44fec98e27"
+    },
+    "vidra_v0.6.5_linux_amd64": {
+      "url": "https://github.com/yegamble/vidra-core/releases/download/v0.6.5/vidra_v0.6.5_linux_amd64",
+      "sha256": "8af9ccf79a0cca5bcc7f03e0637eccd94fb49c33acbe6b564a641ffcea5eafce"
+    }
+  },
+  "checks": {
+    "assets": "PASS",
+    "paths": "PASS",
+    "generated_types": "PASS",
+    "resolver_skew_rejected": "PASS"
+  },
+  "verifier_sha256": "7ffb428372889a5eaedb389802ca4c59cc3a5f1f74fe40207a44a6aaada46025",
+  "tools": {
+    "node": "v26.8.1",
+    "npm": "11.19.0",
+    "buildx": "github.com/docker/buildx v0.32.1-desktop.1 56d7a98f3ce2e9c260d9f75460a8308e4f157a47"
+  }
+}

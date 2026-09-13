@@ -17,6 +17,7 @@ commands, so "the log does not contain pull" cannot pass vacuously.
 """
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -665,6 +666,40 @@ class CommittedRecordTests(unittest.TestCase):
         self.assertEqual(ledgers['schema_migrations']['source_revision'], record['components']['core']['commit'])
         self.assertEqual(ledgers['vidra_search_migrations']['source_revision'],
                          record['components']['search']['commit'])
+
+    def test_v065_record_matches_the_release_evidence(self):
+        """releases/v0.6.5.json against its frozen evidence. The v0.6.5 manifest
+        is the raw release-preflight output (no hand-added platform digest, no
+        runtime ledger file), so the platform digests come from the committed
+        `imagetools inspect` transcript and the schema numbers from the
+        released images' own `migrate embedded-max` answers."""
+        evidence = ROOT / 'docs/evidence/release-v0.6.5-verification'
+        record = json.loads((RECORDS / 'v0.6.5.json').read_text())
+        manifest = json.loads((evidence / 'manifest.json').read_text())
+        self.assertEqual(manifest['status'], 'PASS')
+        self.assertEqual(record['release'], manifest['tag'])
+        self.assertEqual(record['meta_commit'], manifest['repositories']['vidra']['revision'])
+        # "Name: <repo>:v0.6.5@sha256:… / Platform: linux/amd64" pairs, as
+        # `docker buildx imagetools inspect` prints them.
+        transcript = (evidence / 'platform-digests.txt').read_text()
+        platform_digests = {}
+        for match in re.finditer(r'Name:\s+(ghcr\.io/yegamble/vidra-[a-z]+):v0\.6\.5@(sha256:[0-9a-f]{64})\s+MediaType:.*?\s+Platform:\s+(\S+)', transcript):
+            platform_digests[(match.group(1), match.group(3))] = match.group(2)
+        answers = dict(re.findall(r'vidra-(core|search)@sha256:[0-9a-f]{64} migrate embedded-max\n(?:WARNING:[^\n]*\n)?(\d+)\n',
+                                  (evidence / 'embedded-max.txt').read_text()))
+        for key, repo in (('core', 'vidra-core'), ('user', 'vidra-user'), ('search', 'vidra-search')):
+            with self.subTest(component=key):
+                component = record['components'][key]
+                image = manifest['images'][repo]
+                self.assertEqual(component['tag'], manifest['repositories'][repo]['tag'])
+                self.assertEqual(component['commit'], manifest['repositories'][repo]['revision'])
+                self.assertEqual(component['commit'], image['revision'])
+                self.assertEqual(f"{component['image']['repository']}@{component['image']['index_digest']}",
+                                 image['reference'])
+                self.assertEqual(component['image']['platforms'],
+                                 {'linux/amd64': platform_digests[(component['image']['repository'], 'linux/amd64')]})
+        self.assertEqual(str(record['core_schema_version']), answers['core'])
+        self.assertEqual(str(record['search_schema_version']), answers['search'])
 
     def test_every_committed_record_validates(self):
         with tempfile.TemporaryDirectory() as tmp:
