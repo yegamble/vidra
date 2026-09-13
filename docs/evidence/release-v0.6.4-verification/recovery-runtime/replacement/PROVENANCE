@@ -1,0 +1,4 @@
+restore action: meta branch test/v064-recovery-drill c70740db0b4b1d8263cdb7033d7e4fb3ef438a35; other files copied from source host tools dir (source actions ran eca6f1c4 recovery_release_acceptance.py from cabd7111894e8875dd0f19c583aba9b2754b8b08)
+2026-09-13T04:01:43Z recovery_release_acceptance.py updated to a1e47646cd29c41ebb59c09e2f1662e02b708c9a (failed-backup contract fix); earlier stages keep their recorded tool hash
+2026-09-13T04:09:44Z recovery-release-acceptance.mjs updated to c7be2d70757ed4919a1f3450fb7d779dd9cca054 (429 handling, verify-restore-write); verify-restore attempt 1 ran the previous hash
+2026-09-13T04:11:41Z recovery_release_export.py added at 417b6817b274dfbabbf9c10356d1e5ed57ed4649

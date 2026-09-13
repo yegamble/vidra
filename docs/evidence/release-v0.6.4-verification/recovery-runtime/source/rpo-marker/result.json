@@ -1,0 +1,19 @@
+{
+  "status": "PASS",
+  "action": "rpo-marker",
+  "checks": {
+    "write-after-backup": "PASS"
+  },
+  "node": "v26.8.1",
+  "commands": [],
+  "started_at": "2026-09-13T04:01:58.472Z",
+  "browser_args": [
+    "--host-resolver-rules=MAP secure.video.test 127.0.0.1",
+    "--no-proxy-server",
+    "--autoplay-policy=no-user-gesture-required"
+  ],
+  "browser": "153.0.8010.12",
+  "marker": "RPO marker 880d6d14",
+  "written_at": "2026-09-13T04:02:00.614Z",
+  "finished_at": "2026-09-13T04:02:00.614Z"
+}

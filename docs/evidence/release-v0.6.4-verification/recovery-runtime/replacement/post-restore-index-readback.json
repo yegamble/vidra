@@ -1,0 +1,42 @@
+{
+  "kind": "supplementary read-only readback (not a harness stage); SELECT only",
+  "host": "159.65.249.255 (droplet 599514574, rebuilt blank then restored)",
+  "recorded_at": "2026-09-13T04:14:09Z",
+  "commands": [
+    "SELECT json_agg(e ORDER BY e.id) FROM (SELECT o.id,o.event_type,o.state,o.attempts,(i.event_id IS NOT NULL) AS received FROM search_outbox o LEFT JOIN search.events_inbox i USING(event_id) WHERE o.payload::text LIKE '%42853832-22f9-47e6-baec-4b866edd4e84%') e",
+    "SELECT row_to_json(d) FROM (SELECT video_id,title,eligible FROM search.documents WHERE video_id='42853832-22f9-47e6-baec-4b866edd4e84') d"
+  ],
+  "exit_codes": [
+    0,
+    0
+  ],
+  "outbox": [
+    {
+      "id": 74,
+      "event_type": "video.upsert",
+      "state": "delivered",
+      "attempts": 0,
+      "received": true
+    },
+    {
+      "id": 75,
+      "event_type": "video.upsert",
+      "state": "delivered",
+      "attempts": 0,
+      "received": true
+    },
+    {
+      "id": 76,
+      "event_type": "video.play_started",
+      "state": "delivered",
+      "attempts": 0,
+      "received": true
+    }
+  ],
+  "document": {
+    "video_id": "42853832-22f9-47e6-baec-4b866edd4e84",
+    "title": "Postrestore2a3fbe10",
+    "eligible": true
+  },
+  "scope": "Post-restore write indexed through the real outbox; not a UI search of the new video and not a full index rebuild."
+}

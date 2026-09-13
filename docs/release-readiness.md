@@ -4,6 +4,92 @@ Audit date: **2026-09-05**. Target: a fresh-server installation, migration of th
 
 This is the authoritative campaign record for this audit, superseding earlier readiness labels **only for the revisions and evidence below**. Historical plans remain requirement sources. The original audit used one agent with no product edits, commits, pushes, merges, deployment, or branch cleanup. The implementation session below authorizes scoped commits/pushes and a draft PR, but prohibits merge, release publication and production deployment. No production database, media bucket, credentials, or running stack was used.
 
+## Security, release-consistency and recovery continuation — 2026-09-13
+
+**Full v0.6.4 remains NO-GO: 2 PASS, 46 UNVERIFIED, 11 BLOCKED** (from 2/45/12;
+only REC-03 moves, BLOCKED→UNVERIFIED, because its missing disposable
+destination now exists). The base disposition is open draft #187's
+`migration-runtime/disposition.json` (`7261ce37…`); the
+[recovery delta](evidence/release-v0.6.4-verification/recovery-runtime/disposition-delta.json)
+records every changed row. No row is promoted to PASS.
+
+**Candidate.** The frozen v0.6.4 manifest is unchanged. Component mains
+(core `0261b59`, user `dc4f164`, search `5f7a3a3`) are not the candidate. No
+next candidate is frozen: every fix below is on unmerged branches, and an
+unreleased main-branch fix is not a released fix.
+
+**Security scan facet: FAIL for v0.6.4 as published**
+([record](security-scan-v0.6.4-2026-09-12.md), draft #190). The first by-digest
+scan found three problems in shipped artifacts:
+- next 16.3.0, carrying two critical advisories (exposure not demonstrated);
+- Alpine openssl 3.5.7 in all three images;
+- grpc 1.83.1 in core.
+
+It also found that osv-scanner sees no npm packages in the frontend image, so an
+image scan alone is not a frontend dependency scan.
+
+**Recovery drill** ([record](runtime-acceptance-recovery-v0.6.4.md)), on the
+populated B2 host and a blank rebuilt AMD64 replacement:
+- **Worker crash:** a SIGKILL mid-transcode recovered unaided once the fixed
+  30-minute lease lapsed.
+- **Outages:** PostgreSQL, Redis and search each recovered in 6–7.5 s with no api
+  restart and no persisted change. A write made during the search outage caught
+  up in 21 s.
+- **Backup:** the shipped backup contains both schemas, both ledgers, the TOTP
+  tables and a config archive byte-equal to live files. A failed dump publishes
+  nothing.
+- **Restore:** the replacement host was ready 209.9 s after the simulated loss,
+  on an exact data-point match with 0 missing blobs. Its sealed TOTP secret
+  decrypts (wrong code 401, right code 200). Old and new media decode, and search
+  serves the UI.
+- **Retained harness failures:** a too-strict failed-backup assertion, and an
+  unhandled 429. Both were corrected with separate provenance.
+- **Measurements, not acceptances:** no RPO/RTO objective is approved.
+
+**Open draft PRs — none merged, none released.** Merge core #234 first; its
+MinIO registry fix unblocks the red required lanes on every core and user PR.
+
+| Scope | PRs | Verified state |
+|---|---|---|
+| Dependency advisories | user #218 (next 16.3.5, required `dependency-audit`), core #233 / search #43 (required `govulncheck`) | New lanes green in CI; RED on released lockfile/stale toolchain, fail-closed offline; an `.npmrc` false-clean found in review and fixed |
+| Required-CI integrity | meta #188, core #235, search #44, user #219 | `ci-required` fail-open paths closed; byte-identical twin test 38 cases/41 assertions; fresh-context verification of review fixes passed |
+| Release mapping | meta #189 | Mixed/unreleased component triples and stale bundles refused before mutation (stubbed ordering proof, 137 tests). **Requirement still OPEN:** the newest release is checked by tag string only until the release artifact carries its own record |
+| Image hardening | core #236, search #45, user #220 | Runtime `apk upgrade` (openssl 3.5.8, local arm64 builds only — no CI lane builds the release Dockerfiles), grpc 1.83.2, yt-dlp verified by SHA-256, release builds bypass the cached package layer |
+| Evidence | meta #190 (scan), this branch (recovery drill tools + evidence) | Docs/evidence only |
+
+**Remaining for GO, by kind.**
+- **Product defects on unmerged fixes:** the scan findings above; the absent
+  mapping preflight (#189); the `ci-required` fail-open paths.
+- **Missing inputs or authorization:**
+  - B2: a representative sanitized PeerTube source, and approval to move the
+    generated-fixture passwords to the test host.
+  - B3: an offsite backup destination/credentials and the selected providers.
+  - B4: approved RPO/RTO objectives.
+  - Owner decisions listed in #189.
+  - Dependabot alerts/security updates are disabled in all four service repos.
+- **Missing execution:** REC-03/A38 upgrade/rollback, the OPS-01 worker split,
+  full browser/control/mobile/WebKit coverage, a new candidate build rescanned
+  by digest, and the release-artifact record for mapping.
+
+**Resources.** The source stack at `159.203.118.182` is **stopped** (volumes
+kept). The replacement at `159.65.249.255` is **running** against the same test
+bucket. Never run both: both have media GC on.
+
+The previous `599514574` contents are preserved privately under
+`env/acceptance-hosts-v064-20260913/`. The test bucket key expires 2026-09-18.
+Production (`sizetube-production`) was not touched.
+
+**Next executable command set (REC-03/A38).** After an operator rebuild of a
+disposable host:
+1. Install v0.6.3 from its released bundle and create data.
+2. `pin-release.sh v0.6.4 && deploy.sh`.
+3. Inject a migration failure and prove refusal/recovery per
+   `deploy/README.md` "Migration failed mid-deploy".
+4. `rollback.sh` app-only.
+5. Restore across an incompatible schema with `restore.sh`.
+
+Record everything with `tests/recovery_release_acceptance.py`-style stages.
+
 ## Independent current-release verification — 2026-09-10
 
 **v0.6.4: NO-GO.** The [initial independent verification](release-verification-v0.6.4-2026-09-10.md)

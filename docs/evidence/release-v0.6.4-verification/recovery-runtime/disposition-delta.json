@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-13T04:20:00Z",
+  "release_verdict": "NO-GO",
+  "candidate": "v0.6.4 — ../manifest.json unchanged; all running images verified by digest on both hosts",
+  "prior_disposition": {
+    "path": "docs/evidence/release-v0.6.4-verification/migration-runtime/disposition.json",
+    "revision": "ed4c82de2b9468a1109128011a3d390e26312273 (open draft PR #187)",
+    "sha256": "7261ce373dce5e68025e19c57552994275bbf2a1ae5b17d99ec14ba8ea83518e",
+    "counts": {"PASS": 2, "UNVERIFIED": 45, "BLOCKED": 12}
+  },
+  "counts_after": {"PASS": 2, "UNVERIFIED": 46, "BLOCKED": 11},
+  "blocker_changes": {
+    "B4": "Narrowed. An authorized disposable replacement host was provided (droplet 599514574, rebuilt blank by the operator) and used. Approved RPO/RTO objectives are still absent, so B4 now means objectives only.",
+    "B3": "Unchanged for recovery: no offsite backup destination or credentials; the test-media key grants no backup bucket."
+  },
+  "workflow_changes": [
+    {
+      "id": "REC-01",
+      "before": {"status": "BLOCKED", "blockers": ["B4"]},
+      "after": {"status": "BLOCKED", "blockers": ["B3"]},
+      "passed_subsets": [
+        "Shipped deploy/backup.sh on the populated B2 host: custom-format dump lists the search schema, public users/user_mfa and both migration ledgers plus search.documents; config archive holds exactly env/production.env and deploy/Caddyfile.local, byte-equal to the live files, mode 0600; last_success names the dump; no catalogue write landed during the backup.",
+        "Injected pg_dump failure: exit 1, no dump or config archive published, last_success unchanged, only its private .part left (the tested contract)."
+      ],
+      "remaining": [
+        "Encrypted offsite config/media retrieval with the same timestamp (B3).",
+        "Local-storage media snapshot path (STORAGE_BACKEND=local) not exercised; this run is S3-canonical.",
+        "Search-model rebuild plan and S3 version-retention documentation not re-reviewed."
+      ],
+      "failed_attempts_retained": ["source/py-failed-backup: harness required byte-identical backups/ and rejected the documented .part residue (harness defect, corrected in source/py-failed-backup-v2)"]
+    },
+    {
+      "id": "REC-02",
+      "before": {"status": "BLOCKED", "blockers": ["B4"]},
+      "after": {"status": "BLOCKED", "blockers": ["B4", "B3"]},
+      "passed_subsets": [
+        "Source stack stopped (volumes kept) to simulate host loss; replacement host passed the runtime milestone's blank-host guard (Ubuntu 24.04.4, x86_64, no tree/CLI/container runtime).",
+        "Released installer at v0.6.4, then deploy/README.md DR order: config archive first, postgres, restore.sh --yes, deploy.sh.",
+        "Ledgers 146|f and 18|f; all 15 catalogue/MFA fingerprints and search.documents equal the backup data point.",
+        "restore.sh verify-blobs: MISSING 0 against the B2 test bucket.",
+        "Chromium: password + restored TOTP sign-in (wrong code 401, right code 200 — proves MFA_KEY_KEK decrypts the restored secret); post-backup write absent; legacy B2 upload and the recovered drill video decode and advance; drill video found through the UI with vidra-search's 2xx counter 0→1.",
+        "New post-restore upload published, transcoded (attempts 0), decoded; its video.upsert events delivered and indexed (supplementary SELECT readback)."
+      ],
+      "measured": {
+        "source_loss_to_ready_seconds": 209.945,
+        "install_to_ready_seconds": 167.805,
+        "restore_script_seconds": 67.698,
+        "data_point": "backup finished 04:00:37Z (marker 2026-09-13T04:00:25Z); the write at 04:02:00.614Z was lost as expected. Production RPO equals the backup cadence (the shipped timer is nightly).",
+        "objective": "none approved — measurement only"
+      },
+      "remaining": [
+        "Approved RPO/RTO objectives to judge the measurements (B4).",
+        "Offsite retrieval instead of an operator host-to-host copy (B3).",
+        "Decryption of saved integrations beyond TOTP: this instance has no federation/ATProto/DRM KEK or OAuth provider configured.",
+        "An explicit index rebuild (restored index served; rebuild not forced)."
+      ],
+      "failed_attempts_retained": ["replacement/verify-restore: final phase got 429 on POST /api/v1/channels (rate limits kept on; harness lacked Retry-After handling), corrected in replacement/verify-restore-write"]
+    },
+    {
+      "id": "REC-03",
+      "before": {"status": "BLOCKED", "blockers": ["B4"]},
+      "after": {"status": "UNVERIFIED", "blockers": []},
+      "basis": "Its blocker was the missing disposable destination, now available. Upgrade from v0.6.3 with data, injected migration failure, app-only rollback and incompatible-schema restore were NOT executed."
+    },
+    {
+      "id": "OPS-01",
+      "before": {"status": "UNVERIFIED", "blockers": []},
+      "after": {"status": "UNVERIFIED", "blockers": []},
+      "passed_subsets": [
+        "Default inline topology: SIGKILL of the api while its transcode job ran; the orphaned 30-minute lease lapsed at 03:52:39Z, the sweep reclaimed at 03:52:50Z (attempts 0→1), job done 03:55:58Z, recovered rendition decodes. Recovery is bounded by the fixed lease (33 min end to end).",
+        "PostgreSQL outage: /readyz and reads 503 database_unavailable, ready 5.97 s after start, same api container, catalogue unchanged.",
+        "Redis outage: /readyz degraded, reads served, ready 6.07 s after start, same api container, catalogue unchanged."
+      ],
+      "remaining": ["API-only + two workers, settings propagation, leader failover, kill of a split worker."],
+      "observations": ["job_runs rows for renditions completed after recovery still carry the killed container's worker_id; projection accuracy not investigated (ADM-04/OPS-02 follow-up)."]
+    },
+    {
+      "id": "SRC-02",
+      "before": {"status": "UNVERIFIED", "blockers": []},
+      "after": {"status": "UNVERIFIED", "blockers": []},
+      "passed_subsets": [
+        "Search stopped: public search stayed 200 (local fallback found the video); a title edit's video.upsert stayed pending with attempts 1; after restart the index caught up in 21 s and the UI query was served by vidra-search.",
+        "Search outage without writes: reads served, same api container, catalogue unchanged, ready 7.48 s after start."
+      ],
+      "remaining": ["Privacy transitions, deletion, prolonged outage retry budget, degraded-fallback labelling."],
+      "observations": ["/readyz still reported ok 10 s into the search outage; health-interval behaviour not investigated."]
+    }
+  ],
+  "acceptance_delta": {
+    "A36": "Not closed: local backup/content/failed-dump subsets pass on v0.6.4; offsite retrieval (B3) remains.",
+    "A37": "Not closed: replacement-host restore with login, TOTP decryption, playback, search and measured recovery passes; approved objectives (B4), offsite retrieval (B3) and a forced reindex remain.",
+    "A38": "Not closed: not executed; now executable on a disposable host."
+  },
+  "resources": {
+    "source_host": "159.203.118.182 (droplet 599531580): stack STOPPED after the simulated loss, all 8 volumes and every evidence directory retained; restart with `cd /opt/vidra && COMPOSE_PROJECT_NAME=vidra-release-acceptance bash deploy/compose.sh start` only after stopping the replacement stack (both use MEDIA_GC_ENABLED=true against one bucket).",
+    "replacement_host": "159.65.249.255 (droplet 599514574): restored v0.6.4 stack RUNNING against the same test bucket; drill raw logs under /root/vidra-v064-recovery-20260913.",
+    "bucket": "vidra-acceptance-v064-20260911-media only; new objects from the drill and post-restore upload; key expires 2026-09-18.",
+    "preserved_before_rebuild": "Native-runtime evidence, DB dump, config archive and media volume of the previous 599514574 contents: private gitignored env/acceptance-hosts-v064-20260913/native-599514574-preserved (SHA256SUMS verified)."
+  },
+  "authorization": "Operator approved the recovery drill on both acceptance hosts, the rebuild of 599514574 (run by the operator) and host-to-host transfer of the backup and test credentials. No merge, release, tag move, production action, DNS change or new spending."
+}

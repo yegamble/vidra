@@ -1,0 +1,16 @@
+[
+  {
+    "argv": [
+      "bash",
+      "deploy/backup.sh"
+    ],
+    "cwd": "/opt/vidra",
+    "label": "failed-backup",
+    "started_at": 1789272104.4297223,
+    "log": "001-failed-backup.log",
+    "exit_code": 1,
+    "finished_at": 1789272105.0985484,
+    "log_sha256": "124d6653434772d1e7c6e5cc1f777898e9d1cb297361abcef7b1cf29d4121e9d",
+    "log_visibility": "retained privately on host; output not exported"
+  }
+]
