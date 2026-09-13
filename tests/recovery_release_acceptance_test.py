@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 import recovery_release_acceptance as recovery
+import recovery_release_export as export
 
 
 def config_archive(members):
@@ -93,6 +94,18 @@ class FingerprintTest(unittest.TestCase):
     def test_differences_are_reported_by_name(self):
         self.assertEqual(recovery.differing({'users': '1|a', 'videos': '2|b'}, {'users': '1|a', 'videos': '3|c'}), ['videos'])
         self.assertEqual(recovery.differing({'users': '1|a'}, {}), ['users'])
+
+
+class ExportTest(unittest.TestCase):
+    def test_health_probe_output_is_hashed_not_exported(self):
+        value = export.hash_health_output({'Health': {'Log': [{'Output': 'token=abc'}]}})
+        self.assertNotIn('Output', value['Health']['Log'][0])
+        self.assertEqual(len(value['Health']['Log'][0]['output_sha256']), 64)
+
+    def test_any_host_secret_in_any_file_refuses_the_export(self):
+        files = {'a/result.json': b'{"ok": true}', 'b/commands.json': b'["--password", "hunter2-long-secret"]'}
+        self.assertEqual(export.leaks(files, {'hunter2-long-secret'}), ['b/commands.json'])
+        self.assertEqual(export.leaks({'a/result.json': b'{}'}, {'hunter2-long-secret'}), [])
 
 
 if __name__ == '__main__':
