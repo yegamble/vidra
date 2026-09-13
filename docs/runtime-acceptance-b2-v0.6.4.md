@@ -4,7 +4,7 @@
 Full release readiness remains NO-GO.** Fresh native installation, owner
 claim/login, browser upload, real CMAF transcoding, advancing playback/audio
 and real vidra-search indexing were demonstrated using a dedicated private
-Backblaze B2 bucket. the other tenant's live and backup buckets were untouched.
+Backblaze B2 bucket. The other tenant's live and backup buckets were untouched.
 
 The original recorder's final checksum-metadata assertion exited **1** and is
 preserved as **FAIL** in [result.json](evidence/release-v0.6.4-verification/b2-runtime/result.json).
