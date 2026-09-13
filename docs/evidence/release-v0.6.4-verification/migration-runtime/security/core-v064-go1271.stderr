@@ -1,0 +1,26 @@
+govulncheck: loading packages: 
+There are errors with the provided package patterns:
+
+<go-module-cache>/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/internal/poll/splice_linux.go:237:21: unknown field rfd in struct literal of type splicePipe
+<go-module-cache>/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/internal/poll/splice_linux.go:237:34: unknown field wfd in struct literal of type splicePipe
+<go-module-cache>/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/math/rand/v2/rand.go:213:17: method must have no type parameters
+<go-module-cache>/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/math/rand/v2/rand.go:213:33: Int (function) is not a type
+<go-module-cache>/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/math/rand/v2/rand.go:213:38: Int (function) is not a type
+<go-module-cache>/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/math/rand/v2/rand.go:217:13: too many arguments in call to Int
+	have (uint64)
+	want ()
+<go-module-cache>/golang.org/x/text@v0.41.0/unicode/norm/tables17.0.0.go:5:9: file requires newer Go version go1.27 (application built with go1.26)
+<go-module-cache>/golang.org/x/text@v0.41.0/cases/tables17.0.0.go:5:9: file requires newer Go version go1.27 (application built with go1.26)
+<go-module-cache>/golang.org/x/text@v0.41.0/unicode/bidi/tables17.0.0.go:5:9: file requires newer Go version go1.27 (application built with go1.26)
+<go-module-cache>/golang.org/x/text@v0.41.0/width/tables17.0.0.go:5:9: file requires newer Go version go1.27 (application built with go1.26)
+<go-module-cache>/golang.org/x/text@v0.41.0/secure/precis/tables17.0.0.go:5:9: file requires newer Go version go1.27 (application built with go1.26)
+<go-module-cache>/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/vendor/golang.org/x/text/unicode/bidi/tables17.0.0.go:5:9: file requires newer Go version go1.27 (application built with go1.26)
+<go-module-cache>/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/vendor/golang.org/x/text/unicode/norm/tables17.0.0.go:5:9: file requires newer Go version go1.27 (application built with go1.26)
+<go-module-cache>/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/vendor/golang.org/x/net/idna/tables17.0.0.go:5:9: file requires newer Go version go1.27 (application built with go1.26)
+<go-module-cache>/golang.org/x/net@v0.58.0/idna/tables17.0.0.go:5:9: file requires newer Go version go1.27 (application built with go1.26)
+<go-module-cache>/golang.org/x/net@v0.58.0/http2/client_priority_go127.go:7:9: file requires newer Go version go1.27 (application built with go1.26)
+<go-module-cache>/golang.org/x/net@v0.58.0/http2/server_wrap.go:9:9: file requires newer Go version go1.27 (application built with go1.26)
+<go-module-cache>/golang.org/x/net@v0.58.0/http2/transport_wrap.go:9:9: file requires newer Go version go1.27 (application built with go1.26)
+
+For details on package patterns, see https://pkg.go.dev/cmd/go#hdr-Package_lists_and_patterns.
+
