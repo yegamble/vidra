@@ -15,6 +15,7 @@ from release_acceptance import check_host, execute, minimal_browser_lock, pin_im
 
 ROOT = Path(__file__).resolve().parent.parent
 CANDIDATE = json.loads((ROOT / 'docs/evidence/release-v0.6.4-verification/manifest.json').read_text())
+CANDIDATE_V065 = json.loads((ROOT / 'docs/evidence/release-v0.6.5-verification/manifest.json').read_text())
 
 
 class ReleaseAcceptanceTests(unittest.TestCase):
@@ -128,11 +129,10 @@ class CandidateSelectionTests(unittest.TestCase):
             base = Path(directory)
             evidence = base / 'docs/evidence/release-v0.6.5-verification'
             evidence.mkdir(parents=True)
-            manifest = copy.deepcopy(CANDIDATE)
-            manifest['tag'] = 'v0.6.5'
-            for source in manifest['repositories'].values():
-                source['tag'] = 'v0.6.5'  # validate_candidate requires every repository to carry the manifest's tag
-            (evidence / 'manifest.json').write_text(json.dumps(manifest))
+            # The real, committed v0.6.5 manifest: validate_candidate checks every
+            # repository tag and asset URL against the release, so a mutated
+            # v0.6.4 copy would fail there instead of reaching the frozen tree.
+            (evidence / 'manifest.json').write_text(json.dumps(CANDIDATE_V065))
             with patch.object(release_acceptance, 'ROOT', base), self.assertRaises(subprocess.CalledProcessError) as later:
                 prepare(base / 'frozen', base / 'out', base / 'node.tar.xz', base / 'sums.txt',
                         candidate_path=evidence / 'manifest.json')
@@ -156,11 +156,7 @@ class CandidateSelectionTests(unittest.TestCase):
             base = Path(directory)
             elsewhere = base / 'scratch/release-v0.6.5-verification'
             elsewhere.mkdir(parents=True)
-            manifest = copy.deepcopy(CANDIDATE)
-            manifest['tag'] = 'v0.6.5'
-            for source in manifest['repositories'].values():
-                source['tag'] = 'v0.6.5'
-            (elsewhere / 'manifest.json').write_text(json.dumps(manifest))
+            (elsewhere / 'manifest.json').write_text(json.dumps(CANDIDATE_V065))
             with patch.object(release_acceptance, 'ROOT', base), self.assertRaises(ValueError) as refused:
                 prepare(base / 'frozen', base / 'out', base / 'node.tar.xz', base / 'sums.txt',
                         candidate_path=elsewhere / 'manifest.json')
