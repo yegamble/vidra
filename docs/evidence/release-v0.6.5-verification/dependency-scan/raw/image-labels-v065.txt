@@ -1,0 +1,19 @@
+image labels 2026-09-13T06:53:41Z
+=== vidra-core ===
+    "org.opencontainers.image.created": "2026-09-13T06:36:18.643Z",
+    "org.opencontainers.image.revision": "d13d40e6670d0bf95d28e1f69b5af20e5b99237b",
+    "org.opencontainers.image.source": "https://github.com/yegamble/vidra-core",
+    "org.opencontainers.image.version": "v0.6.5"
+Created: 2026-09-13T06:37:11.269592579Z  Arch: amd64/linux
+=== vidra-user ===
+    "org.opencontainers.image.created": "2026-09-13T06:38:31.099Z",
+    "org.opencontainers.image.revision": "fdef1cec82fc155aab49282c3342ff47d1abcace",
+    "org.opencontainers.image.source": "https://github.com/yegamble/vidra-user",
+    "org.opencontainers.image.version": "v0.6.5"
+Created: 2026-09-13T06:39:34.706485412Z  Arch: amd64/linux
+=== vidra-search ===
+    "org.opencontainers.image.created": "2026-09-13T06:42:15.328Z",
+    "org.opencontainers.image.revision": "b7a7f55be6646c2730d5bbc481e423ac9cfa9e08",
+    "org.opencontainers.image.source": "https://github.com/yegamble/vidra-search",
+    "org.opencontainers.image.version": "v0.6.5"
+Created: 2026-09-13T06:42:54.97368865Z  Arch: amd64/linux

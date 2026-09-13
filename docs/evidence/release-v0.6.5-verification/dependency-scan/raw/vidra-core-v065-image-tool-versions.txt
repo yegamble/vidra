@@ -1,0 +1,7 @@
+core image tool versions 2026-09-13T06:50:41Z
+yt-dlp --version: 2026.07.04
+yt-dlp path: /usr/local/bin/yt-dlp
+yt-dlp sha256: 495be29ff4d9d4e9be7eabdfef225221e5d5282e77f2f505abc6dca80349f3fd
+python3: Python 3.14.7
+ffmpeg: ffmpeg version 8.1.2 Copyright (c) 2000-2026 the FFmpeg developers
+exit=0

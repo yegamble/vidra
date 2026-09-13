@@ -1,0 +1,18 @@
+dependabot query 2026-09-13T06:52:32Z
+=== vidra ===
+open alerts: 0
+automated-security-fixes: {"enabled":false,"paused":false}
+vulnerability-alerts: HTTP/2.0 204 No Content
+=== vidra-core ===
+open alerts: 0
+automated-security-fixes: {"enabled":false,"paused":false}
+vulnerability-alerts: HTTP/2.0 204 No Content
+=== vidra-user ===
+open alerts: 0
+automated-security-fixes: {"enabled":false,"paused":false}
+vulnerability-alerts: HTTP/2.0 204 No Content
+=== vidra-search ===
+open alerts: 1
+  - GHSA-6w46-j5rx-g56g medium pip/pytest manifest=training/uv.lock created=2026-09-13T05:07:45Z
+automated-security-fixes: {"enabled":false,"paused":false}
+vulnerability-alerts: HTTP/2.0 204 No Content

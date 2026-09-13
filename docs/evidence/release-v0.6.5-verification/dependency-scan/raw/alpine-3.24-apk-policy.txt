@@ -1,0 +1,33 @@
+alpine:3.24 linux/amd64 apk policy 2026-09-13T06:51:41Z
+index digest sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b ; amd64 manifest sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f
+Unable to find image 'mirror.gcr.io/library/alpine@sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f' locally
+mirror.gcr.io/library/alpine@sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f: Pulling from library/alpine
+Digest: sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f
+Status: Downloaded newer image for mirror.gcr.io/library/alpine@sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f
+alpine-release: 3.24.1; arch: x86_64
+glib policy:
+  2.88.1-r1:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+libcrypto3 policy:
+  3.5.7-r0:
+    lib/apk/db/installed
+  3.5.8-r0:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+libdovi policy:
+  3.3.2-r0:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+libssl3 policy:
+  3.5.7-r0:
+    lib/apk/db/installed
+  3.5.8-r0:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+openssl policy:
+  3.5.8-r0:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+rav1e policy:
+  0.8.1-r0:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+rav1e-libs policy:
+  0.8.1-r0:
+    https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+exit=0
