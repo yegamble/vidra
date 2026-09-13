@@ -60,6 +60,12 @@ REPOSITORY = re.compile(r'[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)+')
 PINNED = re.compile(r'(?P<tag>[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})(@(?P<digest>sha256:[0-9a-f]{64}))?')
 SEMVER = re.compile(r'v([0-9]+)\.([0-9]+)\.([0-9]+)([-+].*)?')
 
+# WHY NOT COMPARED: `meta_commit` is provenance, never held against the tree
+# this runs from. A v0.6.5 tree legitimately deploys or rolls back to v0.6.4
+# (rollback.sh runs under the newer bundle on purpose), and a `main` checkout
+# is never at any record's commit. The bundle manifest's own meta_commit is
+# not compared for the same reason. `evidence` names a path under docs/ that
+# bundles do not ship: provenance to look up, not a file to open.
 RECORD_KEYS = {'schema_version', 'release', 'meta_commit', 'core_schema_version',
                'search_schema_version', 'components'}
 OPTIONAL_RECORD_KEYS = {'evidence'}
