@@ -99,6 +99,31 @@ class PinReleaseTests(unittest.TestCase):
         self.assertEqual(len(snapshots), 1)
         self.assertIn('VIDRA_CORE_TAG=v0.0.1', snapshots[0].read_text())
 
+    def test_a_refused_checkout_leaves_only_a_harmless_snapshot(self):
+        # The snapshot now precedes the checkout, so the one observable side
+        # effect of a refused checkout is a snapshot that is a byte-identical
+        # copy of the env file nothing changed. A dirty tracked file that the
+        # target tag would overwrite is what git refuses on, so the target
+        # must actually change that file.
+        env = {**os.environ, 'GIT_AUTHOR_NAME': 't', 'GIT_AUTHOR_EMAIL': 't@example.com',
+               'GIT_COMMITTER_NAME': 't', 'GIT_COMMITTER_EMAIL': 't@example.com'}
+        other = Path(self.temp.name) / 'other'
+        subprocess.run(['git', 'clone', '-q', str(self.origin), str(other)], check=True)
+        (other / 'env/production.env.example').write_text('VIDRA_CORE_TAG=\nNEW_KEY=\n')
+        subprocess.run(['git', 'commit', '-q', '-am', 'a release that changes the template'], cwd=other, check=True, env=env)
+        subprocess.run(['git', 'tag', '-a', 'v9.9.7', '-m', 'v9.9.7'], cwd=other, check=True, env=env)
+        subprocess.run(['git', 'push', '-q', 'origin', 'v9.9.7'], cwd=other, check=True)
+        (self.root / 'env/production.env.example').write_text('VIDRA_CORE_TAG=\nDIRTY=1\n')
+        before = self.env_file.read_text()
+        result = self.run_pin('v9.9.7')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('could not check out v9.9.7', result.stderr)
+        self.assertEqual(git('rev-parse', '--abbrev-ref', 'HEAD', cwd=self.root), 'main')
+        self.assertEqual(self.env_file.read_text(), before)
+        snapshots = list((self.home / '.local/state/vidra/env-history').iterdir())
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(snapshots[0].read_text(), before)
+
     def test_rerun_is_a_no_op_apart_from_a_fresh_snapshot(self):
         self.assertEqual(self.run_pin('v9.9.9').returncode, 0)
         before = self.env_file.read_text()
