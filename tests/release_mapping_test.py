@@ -338,7 +338,11 @@ class RecordValidationTests(Fixture):
         mutate(record)
         return record
 
-    def test_malformed_records_are_fatal_in_every_mode(self):
+    def test_malformed_records_are_fatal_in_deploy_and_warn_in_rollback(self):
+        """A record that cannot be trusted stops a deploy: matching against a
+        half-valid set would turn a typo in one file into a verdict about
+        another. A rollback is stopped only by what predicts its failure, and a
+        broken record predicts nothing about the target's images (H1)."""
         cases = {
             'short tag': lambda r: r.update(release='v0.6'),
             'short commit': lambda r: r['components']['core'].update(commit='ed55a6d'),
@@ -355,13 +359,18 @@ class RecordValidationTests(Fixture):
             'schema version': lambda r: r.update(schema_version=2),
         }
         for label, mutate in cases.items():
-            for mode, triple in (('deploy', ('v0.6.4',) * 3), ('rollback', ('v0.6.3',) * 3)):
-                with self.subTest(case=label, mode=mode):
+            for mode, triple, expected in (('deploy', ('v0.6.4',) * 3, REFUSED),
+                                           ('rollback', ('v0.6.3',) * 3, UNVERIFIED),
+                                           ('rollback', ('v0.6.4',) * 3, UNVERIFIED)):
+                with self.subTest(case=label, mode=mode, triple=triple):
                     path = self.add(self.mutated(mutate), name='v0.6.5.json')
                     try:
                         code, out = self.check(mode=mode, env_file=self.env(*triple))
-                        self.assertEqual(code, REFUSED, out)
+                        self.assertEqual(code, expected, out)
                         self.assertIn('v0.6.5.json', out)
+                        if mode == 'rollback':
+                            self.assertIn('WARNING', out)
+                            self.assertNotIn('ERROR', out)
                     finally:
                         path.unlink()
 
@@ -380,11 +389,90 @@ class RecordValidationTests(Fixture):
             path.unlink()
         self.assertEqual(self.check()[0], OK)
 
-    def test_a_tree_without_records_is_refused(self):
+    def test_a_tree_without_records_is_refused_in_deploy(self):
         shutil.rmtree(self.releases)
         code, out = self.check()
         self.assertEqual(code, REFUSED, out)
         self.assertIn('releases', out)
+
+
+class RecordSetSeverityTests(Fixture):
+    """H1. A missing releases/ directory, or a corrupt record for some OTHER
+    release, says nothing about whether the rollback target's images work. The
+    deploy-guard rule is that a finding may only stop what it predicts, so in a
+    rollback these are WARNINGS that name what was therefore not verified. What
+    stays fatal is what predicts wrong bytes or a broken env rewrite: a digest
+    that contradicts a record that did load, and a target tag that cannot be
+    parsed or is unset."""
+
+    def test_rollback_continues_unverified_when_releases_is_missing(self):
+        shutil.rmtree(self.releases)
+        code, out = self.check(mode='rollback')
+        self.assertEqual(code, UNVERIFIED, out)
+        self.assertIn('WARNING', out)
+        self.assertNotIn('ERROR', out)
+        self.assertIn('NOTHING about', out)
+        self.assertIn('not the pairing, not the digests', out)
+        self.assertIn('after service is back', out)
+
+    def test_a_corrupt_record_for_another_release_does_not_stop_a_rollback(self):
+        (self.releases / 'v0.6.5.json').write_text('{not json')
+        code, out = self.check(mode='rollback')
+        self.assertEqual(code, UNVERIFIED, out)
+        self.assertIn('v0.6.5.json', out)
+        self.assertIn('WARNING', out)
+        self.assertNotIn('ERROR', out)
+        self.assertIn('after service is back', out)
+        # The record that DID load still paired the target, and says so.
+        self.assertIn('v0.6.4.json', out)
+
+    def test_the_same_record_set_problems_stay_fatal_in_deploy(self):
+        (self.releases / 'v0.6.5.json').write_text('{not json')
+        code, out = self.check()
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn('v0.6.5.json', out)
+        shutil.rmtree(self.releases)
+        code, out = self.check()
+        self.assertEqual(code, REFUSED, out)
+
+    def test_a_digest_contradicting_a_valid_record_still_stops_a_rollback(self):
+        """The demotion covers the record set's bookkeeping, not the one record
+        that loaded and pairs the target: a pin that contradicts it still means
+        bytes the release never shipped."""
+        (self.releases / 'v0.6.5.json').write_text('{not json')
+        code, out = self.check(mode='rollback', env_file=self.env(user=f'v0.6.4@{digest(7)}'))
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn('VIDRA_USER_TAG pins digest', out)
+        self.assertIn(digest(7), out)
+
+    def test_an_unset_or_unparseable_target_stays_fatal_beside_broken_records(self):
+        """rollback.sh rewrites the env file from these values; an unparseable
+        one predicts a broken env_set_key, records or no records."""
+        shutil.rmtree(self.releases)
+        for triple, key in ((('v0.6.4', 'latest', 'v0.6.4'), 'VIDRA_USER_TAG'),
+                            (('v0.6.4', 'v0.6.4', None), 'VIDRA_SEARCH_TAG')):
+            with self.subTest(triple=triple):
+                code, out = self.check(mode='rollback', env_file=self.env(*triple))
+                self.assertEqual(code, REFUSED, out)
+                self.assertIn(key, out)
+
+    def test_a_duplicate_pairing_warns_in_rollback_and_a_pin_matching_either_record_passes(self):
+        """Two records pairing one triple is a record-set fault, so in a
+        rollback it warns. A digest pin is then held against BOTH: it is a
+        contradiction only when neither record shipped it."""
+        other = synthetic('v0.6.9', 'v0.6.4', 'v0.6.4', 'v0.6.4', seed=40)
+        self.add(other)
+        real = json.loads((RECORDS / 'v0.6.4.json').read_text())
+        for pinned in (other['components']['core']['image']['index_digest'],
+                       real['components']['core']['image']['index_digest']):
+            with self.subTest(pinned=pinned):
+                code, out = self.check(mode='rollback', env_file=self.env(core=f'v0.6.4@{pinned}'))
+                self.assertEqual(code, UNVERIFIED, out)
+                self.assertIn('v0.6.9', out)
+                self.assertNotIn('ERROR', out)
+        code, out = self.check(mode='rollback', env_file=self.env(core=f'v0.6.4@{digest(7)}'))
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn(digest(7), out)
 
 
 class CommittedRecordTests(unittest.TestCase):
@@ -596,6 +684,28 @@ class ScriptOrderingTests(unittest.TestCase):
         self.assertIn('VIDRA_USER_TAG=v0.6.3', self.env_file.read_text())
         self.assertIn(' pull', calls)
         self.assertIn(' up -d', calls)
+
+    def test_a_rollback_proceeds_when_releases_is_missing_or_holds_a_corrupt_record(self):
+        """H1, end to end: a 3am rollback to a recorded release must not be
+        stopped by a releases/ directory that is missing, or by a corrupt record
+        for some other release. Neither predicts anything about the target."""
+        self.as_bundle()
+        self.write_env('v0.6.4', 'v0.6.4', 'v0.6.4')
+        for label, damage in (('missing', lambda: shutil.rmtree(self.tree / 'releases')),
+                              ('corrupt sibling', lambda: (self.tree / 'releases/v0.6.5.json').write_text('{'))):
+            with self.subTest(records=label):
+                damage()
+                self.log.unlink(missing_ok=True)
+                try:
+                    code, out, calls = self.run_script(self.tree / 'deploy/rollback.sh', '--user', 'v0.6.4')
+                    self.assertEqual(code, 0, out)
+                    self.assertIn('WARNING', out)
+                    self.assertIn('after service is back', out)
+                    self.assertIn(' pull', calls)
+                    self.assertIn(' up -d', calls)
+                finally:
+                    shutil.rmtree(self.tree / 'releases', ignore_errors=True)
+                    shutil.copytree(RECORDS, self.tree / 'releases')
 
     def strip_helper(self):
         lib = self.tree / 'deploy/lib.sh'

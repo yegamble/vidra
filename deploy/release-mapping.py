@@ -17,10 +17,13 @@ Exit codes are the contract deploy/lib.sh's release_mapping_check reads:
   0  verified: exactly one record pairs these tags (plus digest/bundle checks)
   3  UNVERIFIED but allowed: a pre-manifest release, the tree's own release
      whose record cannot exist yet, or (rollback only) any release-shaped
-     triple no record pairs. Printed as WARNINGs naming what was not
-     verified; the caller continues.
-  1  refused: a finding that predicts a broken or unreleased deployment, or
-     release metadata that cannot be trusted
+     triple no record pairs, or a releases/ directory that could not be
+     used. Printed as WARNINGs naming what was not verified; the caller
+     continues.
+  1  refused: a finding that predicts a broken or unreleased deployment. In
+     BOTH modes: a tag that is unset or cannot be parsed, a digest that
+     contradicts a record that loaded. In a deploy also: release metadata
+     that cannot be trusted, a stale bundle, a triple no record pairs.
   2  usage error (argparse)
 
 WHAT THIS DOES NOT VERIFY: the newest release. deploy/release.sh tags this
@@ -230,7 +233,6 @@ def check(args):
     """(exit code, errors, warnings, notes)."""
     errors, warnings, notes = [], [], []
     records, problems = load_records(args.releases)
-    errors.extend(problems)
 
     pins = {}
     for name, key, repo in COMPONENTS:
@@ -245,6 +247,17 @@ def check(args):
         elif not match:
             errors.append(f'{key}={raw!r} is {value!r} as Compose reads it, which is not a Docker '
                           'image tag (optionally @sha256:<digest>), so no image can be pulled under it.')
+        elif semver(match.group('tag')) is None:
+            # `latest`, `main`, `sha-abc123`: a Docker tag, but not one a release
+            # is cut as, so no record can name it and nothing can be verified
+            # about the image under it. Fatal in every mode, records or no
+            # records: deploy.sh's migrator floor refuses the core/search
+            # spellings anyway, and a rollback to it is a rollback to nothing
+            # releases/ could ever describe.
+            errors.append(f'{key}={raw!r} is {match.group("tag")!r}, which is not a release tag '
+                          '(vMAJOR.MINOR.PATCH, optionally with a suffix). Releases are cut as semver '
+                          'tags, so no record can name it and nothing about the image under it can be '
+                          'verified. Nothing was changed.')
         else:
             pins[name] = (key, repo, match.group('tag'), match.group('digest'))
 
@@ -254,37 +267,68 @@ def check(args):
         try:
             bundle = bundle_manifest(args.bundle_manifest)
         except OSError as error:
-            errors.append(f'{args.bundle_manifest} cannot be read ({error.strerror}), so this '
-                          'bundle tree cannot be identified. Re-download the bundle.')
+            problems.append(f'{args.bundle_manifest} cannot be read ({error.strerror}), so this '
+                            'bundle tree cannot be identified. Re-download the bundle.')
         else:
             if bundle.get('tag'):
                 tree_tags.add(bundle['tag'])
 
-    # Metadata that cannot be trusted, or tags that cannot be parsed, stop here
-    # with EVERY such finding reported. Matching against a half-valid record set
-    # would turn a typo in one file into a misleading verdict about another.
-    if errors or len(pins) != len(COMPONENTS):
-        return REFUSED, errors, warnings, notes
+    # A tag that is unset or cannot be parsed stops EVERY mode: deploy.sh's
+    # checkout sync would `git checkout` it and rollback.sh's env_set_key would
+    # write it. Every finding is reported with it, so one run names everything.
+    if len(pins) != len(COMPONENTS):
+        return REFUSED, errors + problems, warnings, notes
 
+    # Release metadata that cannot be trusted: a missing releases/, a corrupt or
+    # malformed record, two records pairing one triple, an unreadable manifest.
+    # A DEPLOY stops here. Matching against a half-valid record set would turn a
+    # typo in one file into a misleading verdict about another, and a deploy is
+    # the moment to fix the tree. A ROLLBACK does not (H1): a corrupt record for
+    # some OTHER release, or a releases/ directory that is simply not there,
+    # predicts nothing about whether the TARGET's images work, and a finding
+    # may only stop what it predicts. It is a WARNING that names what was
+    # therefore not verified. The records that DID load are still used, so a
+    # digest that contradicts one of them stays fatal below.
+    if problems and args.mode == 'deploy':
+        return REFUSED, problems, warnings, notes
+    warnings.extend(problems)
+
+    releases = Path(args.releases).name
     env = {name: pins[name][2] for name, _, _ in COMPONENTS}
     described = ' '.join(f'{name}={env[name]}' for name, _, _ in COMPONENTS)
     matches = [r for r in records if all(r['components'][n]['tag'] == env[n] for n, _, _ in COMPONENTS)]
 
+    if not records:
+        # Rollback only: load_records reports a missing or empty directory as a
+        # problem, and a deploy returned on it above.
+        warnings.append(f'{releases}/ could not be used (above), so NOTHING about {described} was '
+                        'verified: not the pairing, not the digests.' + pinned_note(pins)
+                        + ' The rollback continues because a record set that cannot be read predicts '
+                        'nothing about whether these images work. Fix the records after service is back.')
+        return UNVERIFIED, errors, warnings, notes
+
     if matches:
-        record = matches[0]   # load_records refused duplicate triples
-        where = f'{Path(args.releases).name}/{record["release"]}.json'
+        # More than one match means two records pair this triple, which is one
+        # of the problems above (fatal in a deploy, warned in a rollback). A
+        # digest pin is then held against BOTH: it contradicts the release only
+        # when neither record shipped it.
+        where = ', '.join(f'{releases}/{r["release"]}.json' for r in matches)
         for name, key, repo in COMPONENTS:
             pinned = pins[name][3]
             if not pinned:
                 continue
-            image = record['components'][name]['image']
-            allowed = [image['index_digest'], *image['platforms'].values()]
+            allowed, recorded = [], []
+            for record in matches:
+                image = record['components'][name]['image']
+                allowed += [image['index_digest'], *image['platforms'].values()]
+                recorded.append(f'{releases}/{record["release"]}.json records {repo} {env[name]} as '
+                                f'index {image["index_digest"]} '
+                                f'({", ".join(f"{p} {d}" for p, d in image["platforms"].items())})')
             if pinned not in allowed:
-                errors.append(f'{key} pins digest {pinned}, but {where} records {repo} '
-                              f'{env[name]} as index {image["index_digest"]} '
-                              f'({", ".join(f"{p} {d}" for p, d in image["platforms"].items())}). '
+                errors.append(f'{key} pins digest {pinned}, but {"; ".join(recorded)}. '
                               'Docker pulls by digest, so this would run bytes that release never '
                               'shipped under a tag that claims it did. Nothing was changed.')
+        record = matches[0]
         if bundle is not None and args.mode == 'deploy':
             errors.extend(bundle_findings(bundle, record, where, args.bundle_manifest))
         elif bundle is not None:
@@ -293,6 +337,12 @@ def check(args):
                          "manifest's schema version, so a difference predicts nothing here.")
         if errors:
             return REFUSED, errors, warnings, notes
+        if problems:
+            # Rollback only (a deploy returned on problems above).
+            warnings.append(f'{described} is paired by {where}, and its digest pins were held against '
+                            f'that record, but {releases}/ has the problems above, so the record set '
+                            'as a whole cannot be trusted. Fix the records after service is back.')
+            return UNVERIFIED, errors, warnings, notes
         notes.append(f'{described} is release {record["release"]} ({where}): core schema '
                      f'{record["core_schema_version"]}, search schema {record["search_schema_version"]}')
         return OK, errors, warnings, notes
@@ -301,8 +351,6 @@ def check(args):
               for name, _, _ in COMPONENTS}
     known = ', '.join(sorted((r['release'] for r in records), key=semver)) or '(none)'
     floor = min((r['release'] for r in records), key=semver)
-    releases = Path(args.releases).name
-    shaped = all(semver(env[name]) is not None for name, _, _ in COMPONENTS)
     uniform = len(set(env.values())) == 1
     tag = env['core']
 
@@ -320,7 +368,7 @@ def check(args):
                       'compose files belong to that other release. Nothing was changed. Unpack the '
                       f'{tag} bundle over this tree, or pin the release this bundle is.')
 
-    if not any(owners.values()) and shaped and all(semver(env[n]) < semver(floor) for n, _, _ in COMPONENTS):
+    if not any(owners.values()) and all(semver(env[n]) < semver(floor) for n, _, _ in COMPONENTS):
         warnings.append(f'{described} is a release from before {floor}, the first one with a record '
                         f'in {releases}/. Its component mapping and digests are NOT verified. '
                         + ('That alone would not stop this run: refusing would make every historical '
@@ -329,7 +377,7 @@ def check(args):
                            'undeployable and un-rollback-able.') + pinned_note(pins))
         return (REFUSED if errors else UNVERIFIED), errors, warnings, notes
 
-    if not any(owners.values()) and shaped and uniform and tag in tree_tags:
+    if not any(owners.values()) and uniform and tag in tree_tags:
         warnings.append(f'{described} is this tree\'s own release, and {releases}/{tag}.json is not '
                         'in it. deploy/release.sh tags this repository before any image exists, so a '
                         f'tree at {tag} cannot carry {tag}\'s record. NOT verified: that these three '
@@ -343,9 +391,6 @@ def check(args):
         version = semver(env[name])
         if owners[name]:
             findings.append(f'{key}={env[name]} belongs to release {", ".join(owners[name])}')
-        elif version is None:
-            findings.append(f'{key}={env[name]} is not a release tag (vMAJOR.MINOR.PATCH), and no '
-                            'release record names it')
         elif version < semver(floor):
             findings.append(f'{key}={env[name]}: no release record names this {repo} tag (it '
                             f'predates {floor}, the first recorded release)')
@@ -363,14 +408,14 @@ def check(args):
                     findings.append(f'release {record["release"]} expects {key}={expected} '
                                     f'(env has {env[name]})')
 
-    if args.mode == 'rollback' and shaped:
+    if args.mode == 'rollback':
         # THE DOCUMENTED ROLLBACK. rollback.sh's own usage rolls back ONE component
         # (`--user v0.2.0` under the core and search being served), which is a
         # triple no record pairs by construction. Mid-incident, refusing it
         # predicts no failure of the rollback: a tag that does not exist still
         # fails the pull, which puts the env file back. So it continues, and says
         # precisely what nobody checked. A digest that contradicts a record and
-        # an unreadable record stay fatal above.
+        # a tag that is not release-shaped stay fatal above.
         warnings.extend(findings)
         warnings.append(f'{described} is not a recorded release: these images were never released '
                         'together as far as releases/ knows. NOT verified: that this frontend, core '
@@ -443,7 +488,8 @@ def main():
     parser.add_argument('command', choices=('check',))
     parser.add_argument('--mode', choices=('deploy', 'rollback'), required=True,
                         help='rollback skips the bundle comparison and warns (instead of refusing) '
-                             'on a triple no record pairs; digests and records stay fatal')
+                             'on a triple no record pairs and on a releases/ that cannot be used; '
+                             'an unparseable tag and a digest contradicting a loaded record stay fatal')
     parser.add_argument('--releases', type=Path,
                         default=Path(__file__).resolve().parents[1] / 'releases')
     parser.add_argument('--env', type=Path, help='env file to read VIDRA_*_TAG from')
