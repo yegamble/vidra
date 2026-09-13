@@ -1,0 +1,473 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-13",
+  "baseline_assessment": "docs/evidence/release-v0.6.4-verification/native-runtime/disposition.json",
+  "baseline_sha256": "ad86388790e7d7237721c7908038cf2d414ee0a31831056feb85cd36d318fa06",
+  "baseline_is_historical": true,
+  "release_verdict": "NO-GO",
+  "first_runtime_milestone": {
+    "status": "PASS",
+    "certification": "BOUNDED_MILESTONE_ONLY",
+    "started_utc": "2026-09-13 15:38:05",
+    "finished_utc": "2026-09-13 15:42:54",
+    "duration_seconds": 289.3,
+    "host": "droplet 599531580 (159.203.118.182), rebuilt blank 2026-09-13 15:29 UTC",
+    "storage": {
+      "backend": "local"
+    },
+    "checks": {
+      "blank_native_host": "PASS",
+      "corrupt-bundle": "PASS",
+      "corrupt-cli": "PASS",
+      "install": "PASS",
+      "native_cli_executes": "PASS (help; binary identity verified by checksum)",
+      "configuration_preserved": "PASS",
+      "production_ports": "PASS (Compose render; runtime ports belong to A03)",
+      "pinned_image_pulls": "PASS",
+      "installed_migrated_serving": "PASS",
+      "browser_upload_transcode_playback_search": "PASS"
+    },
+    "browser_checks": {
+      "owner-claim": "PASS",
+      "owner-login-and-session": "PASS",
+      "browser-channel-upload-publish": "PASS",
+      "real-transcoding-and-advertised-tree": "PASS",
+      "browser-playback-advances": "PASS",
+      "same-upload-through-vidra-search": "PASS"
+    },
+    "result_sha256": "b114ece685a634b2b385b3d5f9601c4e18cd44d58dc8403cc760d816ecd0e150",
+    "browser_sha256": "ff95933cd201d5ed4feb9c23f920d00ad97c64153c0ca53ba82f871e83a4d6d6"
+  },
+  "resolved_blockers": {
+    "B1": "Authorized disposable native Ubuntu AMD64 host provisioned and the first runtime milestone executed."
+  },
+  "retained_requirements": "All 59 original verification procedures, all 40 acceptance criteria and all ten scope families remain authoritative. Missing providers, representative source, recovery inputs and scope decisions apply only to dependent criteria.",
+  "workflow_counts": {
+    "PASS": 3,
+    "UNVERIFIED": 41,
+    "BLOCKED": 15
+  },
+  "workflows": [
+    {
+      "id": "REL-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Static PASS retained on the v0.6.5 preflight (release-preflight.py --tag v0.6.5 \u2192 PASS: source, image, asset and contract boundary)."
+    },
+    {
+      "id": "INS-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "AUTH-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "AUTH-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "AUTH-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PLAY-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PLAY-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PLAY-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "CRT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "CRT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SRC-01",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Same-upload outbox/inbox, eligible document, internal search, UI response and routed fetch demonstrated on the published v0.6.5 images (this run)."
+    },
+    {
+      "id": "SRC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SRC-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SOC-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SOC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MSG-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MSG-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MSG-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MIG-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-05",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-06",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "STO-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "STO-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "STO-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-06",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-07",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-08",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-09",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-10",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-11",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "OPS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "OPS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "REC-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B4"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "REC-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B4"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "REC-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Upgrade v0.6.4\u2192v0.6.5 with data, dirty-ledger refusal before restart, runbook recovery, app-only rollback, forward restore, on the published images (docs/runtime-acceptance-rec03-v0.6.5.md, meta#199)."
+    },
+    {
+      "id": "QLT-01",
+      "status": "UNVERIFIED",
+      "blockers": [
+        "U1"
+      ],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "QLT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    }
+  ],
+  "acceptance_delta": {
+    "from": "v0.6.4 native-runtime disposition (2 PASS / 41 UNVERIFIED / 16 BLOCKED)",
+    "to": "3 PASS / 41 UNVERIFIED / 15 BLOCKED",
+    "moved": {
+      "REC-03": "BLOCKED/UNVERIFIED \u2192 PASS (meta#199)",
+      "SRC-01": "PASS re-established on v0.6.5 (this run)",
+      "INS-03": "PASS retained on the v0.6.5 preflight"
+    },
+    "note": "Every row the recovery, migration and B2 continuations moved for v0.6.4 is UNVERIFIED again for v0.6.5 until those drills run on the v0.6.5 digests."
+  },
+  "measured_subsets": {
+    "OPS-01": "split topology deployed and the worker transcoded (meta#199); the remaining clauses not run"
+  },
+  "candidate": {
+    "tag": "v0.6.5",
+    "record": "releases/v0.6.5.json",
+    "manifest": "docs/evidence/release-v0.6.5-verification/manifest.json",
+    "images": {
+      "api": "ghcr.io/yegamble/vidra-core@sha256:a6e08b93364924e40321a47d188ed08ddbc2b21aecd3f0dcc58f49bc1f2f3bb1",
+      "frontend": "ghcr.io/yegamble/vidra-user@sha256:08e920ba5d214a190c30796c9c7f877ad70a53ea2b1f2d10a5f47de679b03178",
+      "search": "ghcr.io/yegamble/vidra-search@sha256:55196d278722d46c4454cc4f5f4d05b9e7cd35cc7712f2aeb6354e13f65ea0f8"
+    },
+    "ledgers": {
+      "schema_migrations": {
+        "actual": "146|f",
+        "expected": 146,
+        "source_revision": "d13d40e6670d0bf95d28e1f69b5af20e5b99237b"
+      },
+      "vidra_search_migrations": {
+        "actual": "18|f",
+        "expected": 18,
+        "source_revision": "b7a7f55be6646c2730d5bbc481e423ac9cfa9e08"
+      }
+    }
+  }
+}
