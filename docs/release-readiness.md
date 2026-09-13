@@ -19,7 +19,7 @@ next candidate is frozen: every fix below is on unmerged branches, and an
 unreleased main-branch fix is not a released fix.
 
 **Security scan facet: FAIL for v0.6.4 as published**
-([record](security-scan-v0.6.4-2026-09-12.md), draft #190). The first by-digest
+(record `docs/security-scan-v0.6.4-2026-09-12.md`, arriving with draft #190). The first by-digest
 scan found three problems in shipped artifacts:
 - next 16.3.0, carrying two critical advisories (exposure not demonstrated);
 - Alpine openssl 3.5.7 in all three images;
@@ -30,17 +30,19 @@ image scan alone is not a frontend dependency scan.
 
 **Recovery drill** ([record](runtime-acceptance-recovery-v0.6.4.md)), on the
 populated B2 host and a blank rebuilt AMD64 replacement:
-- **Worker crash:** a SIGKILL mid-transcode recovered unaided once the fixed
-  30-minute lease lapsed.
-- **Outages:** PostgreSQL, Redis and search each recovered in 6–7.5 s with no api
-  restart and no persisted change. A write made during the search outage caught
+- **Worker crash:** after a SIGKILL mid-transcode and a harness api restart, the
+  orphaned job was reclaimed by the sweep once the fixed 30-minute lease lapsed.
+- **Outages:** after PostgreSQL, Redis or search restarted, the stack was healthy
+  again within 6.0/6.1/7.5 s with the same api container and no persisted change
+  (only PostgreSQL made `/readyz` fail; Redis read `degraded`, search stayed `ok`). A write made during the search outage caught
   up in 21 s.
-- **Backup:** the shipped backup contains both schemas, both ledgers, the TOTP
-  tables and a config archive byte-equal to live files. A failed dump publishes
+- **Backup:** the shipped backup's dump lists both schemas, both ledgers and
+  `user_mfa`, and its config archive is byte-equal to the live files. A failed dump publishes
   nothing.
-- **Restore:** the replacement host was ready 209.9 s after the simulated loss,
-  on an exact data-point match with 0 missing blobs. Its sealed TOTP secret
-  decrypts (wrong code 401, right code 200). Old and new media decode, and search
+- **Restore:** the replacement host was ready 209.9 s after the simulated loss
+  (including a ~42 s operator transfer, across two host clocks), on an exact
+  data-point match with 0 missing blobs. Its sealed TOTP secret decrypts (wrong
+  code recorded 401; right code accepted, asserted 200 by the harness). Old and new media decode, and search
   serves the UI.
 - **Retained harness failures:** a too-strict failed-backup assertion, and an
   unhandled 429. Both were corrected with separate provenance.
@@ -77,7 +79,7 @@ bucket. Never run both: both have media GC on.
 
 The previous `599514574` contents are preserved privately under
 `env/acceptance-hosts-v064-20260913/`. The test bucket key expires 2026-09-18.
-Production (`sizetube-production`) was not touched.
+Production was not touched.
 
 **Next executable command set (REC-03/A38).** After an operator rebuild of a
 disposable host:
