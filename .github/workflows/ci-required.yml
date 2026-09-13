@@ -9,8 +9,9 @@ name: ci-required
 # purpose, so "one required check named ci-required" means the same thing in all
 # four and the manifest stays the single place the required set is declared.
 # TWIN: vidra-core .github/workflows/ci-required.yml. Without a fan-in, "required for merge" would
-# have to be spelled out as eight separate branch-protection entries that drift
-# out of step with the workflow set the moment a lane is added or renamed.
+# have to be spelled out as one branch-protection entry per lane (three here:
+# validate, bundle, boot) that drift out of step with the workflow set the
+# moment a lane is added or renamed.
 #
 # So this job reads .github/required-checks.txt — the checked-in definition of
 # required — and waits for exactly those check runs on this commit. The owner
