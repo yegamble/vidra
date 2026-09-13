@@ -76,15 +76,23 @@ operator; value recorded privately).
   (`facts/data.json` at 14:59:4x and the first `fp` at ~14:59:55) caught the
   video **before its transcode drained** (renditions empty, HLS master = the
   hash of an empty fetch); `job_runs` shows all seven transcode rows
-  `succeeded` and the api logged `transcode drain completed jobs count=1` at
-  14:59:58. The reference fingerprint was retaken at ~15:01 (`facts/fp.json`):
+  `succeeded` (`split-worker-evidence.txt`), and the api's drain-complete line
+  was seen on the console (its container was replaced at the recover deploy,
+  so that line is not in any committed file). The committed proof that the
+  transcode finished between the two fingerprints is `fp.log`: `renditions_rows`
+  0 → 3 and `files_rows` 4 → 7. The reference fingerprint was retaken at ~15:01
+  (`facts/fp.json`):
   original `8ff2dfde3770360f`, HLS master `72e2bc264737003b`, renditions
   720/480/360, first CMAF segment `chunk-0-00001.m4s` `84f5c71f3af6f316`.
   Because the first `backup.sh` (14:59:59) and the first injection had already
   run against the mid-transcode state, the ledger was cleared, **`backup.sh`
   was re-run at 15:01:02** (the dump every later step uses) and the dirty
-  ledger re-injected. `facts/fp.json` therefore shows the ledger dirty: it was
-  taken between the first injection and the clear.
+  ledger re-injected (both backups are in `backup.log`, both injections in
+  `inject.log`). The clear itself was an ad-hoc `psql` between phases and is in
+  no phase log; that `facts/fp.json` shows the ledger dirty is consistent with
+  the fingerprint having been retaken between the first injection and the
+  clear, and the 150102Z dump's cleanliness is shown by `facts/restore-ok.json`
+  (ledger clean after the reload).
 
 ### 2. Inject the failure — `inject.log`
 
@@ -94,7 +102,10 @@ run, a dirty ledger is what the v0.6.5 migrator must refuse.
 ### 3. Upgrade attempt — `upgrade-fail.log`
 
 - As `vidra`: `git fetch --tags --force origin && git checkout --detach v0.6.5`
-  (the README's one-time move for a pre-v0.6.5 tree), then
+  (the README's one-time move for a pre-v0.6.5 tree; the `fatal: detected
+  dubious ownership` line right after it in `upgrade-fail.log` is the driver's
+  own root-run `git describe` over the `vidra`-owned tree, not the move — the
+  move's result is the `v0.6.5` printed by the `vidra`-run describe above it), then
   **`./deploy/pin-release.sh v0.6.5` → exit 0**: env snapshot taken FIRST
   (`~/.local/state/vidra/env-history/…`), checkout, three pins set. This is the
   meta#192 order, proven on the real procedure.
@@ -129,10 +140,9 @@ renamed through the API (200) so the two later restores are distinguishable.
 recorded release** (`is release v0.6.4 (releases/v0.6.4.json): core schema 146,
 search schema 18`), env snapshot, pins to v0.6.4, checkouts synced, pull,
 restart, probes OK, **exit 0 at 15:02:43**. v0.6.4 on schema 146, ledger clean,
-fingerprint identical, marker rename present. The one `curl: (56)` line during
-the frontend wait appeared on the run console again; as in the v0.6.4 run it
-is not in the committed `rollback.log` (the probe loop's stderr bypasses the
-phase's `tee`), so it stays a console observation.
+fingerprint identical, marker rename present. One `curl: (56) Recv failure`
+line appeared during the frontend wait and is captured this time at
+`rollback.log:87`; the probe loop retried and passed.
 
 ### 7. Restore across an incompatible schema — not applicable
 
@@ -160,7 +170,9 @@ binary; the refusal branch was exercised on the v0.6.3 → v0.6.4 pair
 (`VIDRA_ROLE=api`); a second upload published within 5 s; every `job_runs` row
 for it carries `worker_id 132e5a6bf4c1:1`, the worker container's id; the
 worker logged `transcode worker started` (15:04:00) and `transcode drain
-completed jobs count=1` (15:04:26); the api logged zero completed transcodes.
+completed jobs count=1` (15:04:26); the api logged zero completed transcodes
+(its 3 `ffmpeg` mentions in `facts/split.json` are startup capability lines;
+no `job_runs` row names it).
 Not run: settings-edit propagation, kill-mid-transcode recovery, redis /
 PostgreSQL outage, leader failover, a second worker or host — OPS-01 keeps its
 UNVERIFIED disposition.

@@ -116,7 +116,7 @@ upgrade-fail)
     log "tree -> origin/main (to obtain pin-release.sh), then pin-release.sh $NEW"
     su - vidra -c "git -C $DIR checkout --detach --quiet origin/main && git -C $DIR describe --tags --always"
   fi
-  asv ./deploy/pin-release.sh "$NEW"; prc=$?; log "pin-release.sh exit=$prc"; git -C $DIR describe --tags --always; grep -E '^VIDRA_[A-Z_]*TAG=' $DIR/env/production.env
+  asv ./deploy/pin-release.sh "$NEW"; prc=$?; log "pin-release.sh exit=$prc"; su - vidra -c "git -C $DIR describe --tags --always"; grep -E '^VIDRA_[A-Z_]*TAG=' $DIR/env/production.env
   if [ $prc -ne 0 ]; then
     log "pin-release.sh failed — falling back to the v0.6.4-era runbook: tree at tag + rewrite pins as vidra"
     su - vidra -c "git -C $DIR checkout --detach --quiet $NEW && cd $DIR && python3 - <<'PY'
