@@ -12,6 +12,10 @@
 # It REFUSES a core/search tag below MIN_EMBEDDED_MIGRATE_TAG (set below): those
 # images have no embedded `migrate` subcommand, so the migration one-shots `up -d`
 # depends on would boot API servers that never exit, and the rollback would hang.
+# Before the env file is touched it also holds the target triple against
+# releases/<tag>.json. A digest that contradicts a record, or an unreadable
+# record, stops it. A triple no record pairs, including the single-component
+# form above, continues with a WARNING naming what was not verified.
 #
 # WHAT THIS DOES NOT DO: it does not touch the database. That is deliberate and
 # it is only safe because of the release policy stated in deploy/README.md —
@@ -66,7 +70,7 @@ while [ $# -gt 0 ]; do
     --core)   CORE_TAG="${2:-}";   shift 2 ;;
     --user)   USER_TAG="${2:-}";   shift 2 ;;
     --search) SEARCH_TAG="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,37p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,41p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *)  CORE_TAG="$1"; USER_TAG="$1"; SEARCH_TAG="$1"; shift ;;
   esac
@@ -140,6 +144,12 @@ require_embedded_migrate_tag() {
 # Gate the two migrator tags BEFORE the env file is rewritten, so a refusal
 # leaves the running stack and $ENV_FILE exactly as they were. vidra-user has no
 # migrator, so --user is not gated.
+#
+# A core/search DIGEST PIN (`--core v0.6.4@sha256:...`) dies HERE: semver_ge
+# cannot parse it, so it never reaches the release-mapping digest comparison
+# below. Deliberate for now: on a git tree deploy.sh's checkout sync would run
+# `git checkout "v0.6.4@sha256:..."` on the same pin. Only --user reaches the
+# digest comparison.
 require_embedded_migrate_tag VIDRA_CORE_TAG   "$CORE_TAG"
 require_embedded_migrate_tag VIDRA_SEARCH_TAG "$SEARCH_TAG"
 
@@ -214,6 +224,36 @@ if [ "$TLS_MODE" = "external" ]; then
 else
   require_caddyfile_local
 fi
+
+# THE RELEASE MAPPING, on the TARGET triple (a flag not given keeps the tag
+# being served), BEFORE the env snapshot and rewrite below, so a stop leaves
+# $ENV_FILE and the running stack exactly as they were.
+#
+# Severity follows what each finding predicts for a ROLLBACK (see the header of
+# deploy/release-mapping.py). A digest that contradicts a record that loaded, or
+# an unparseable target tag (this script would write it into $ENV_FILE), stops
+# it. A triple no record pairs is a WARNING that names what was not verified,
+# not a refusal: the single-component rollback in this script's usage is
+# exactly such a triple, and refusing it mid-incident would predict nothing
+# about whether the rollback works. A tag that does not exist still fails the
+# pull below, which restores the env file. So is a releases/ directory that
+# cannot be used (missing, or a corrupt record for some OTHER release): it says
+# nothing about the target's images, so the run continues with a WARNING that
+# NOTHING about the target was verified. The bundle manifest is not compared
+# either: a bundle host rolls back under the newer bundle on purpose.
+# VIDRA_RELEASE_MAPPING=warn changes nothing here; an unpaired triple already
+# warns.
+#
+# `declare -F` first: a tree whose lib.sh predates this function (a released
+# bundle with only rollback.sh replaced) would otherwise exit 127 with a message
+# blaming the tags.
+declare -F release_mapping_check >/dev/null \
+  || die "deploy/lib.sh does not define release_mapping_check, so it is from an older revision than this rollback.sh. Nothing was changed. Take deploy/lib.sh, deploy/release-mapping.py and releases/ from the same revision as this script."
+release_mapping_check "$REPO_ROOT" rollback \
+  "${CORE_TAG:-$(env_get VIDRA_CORE_TAG '')}" \
+  "${USER_TAG:-$(env_get VIDRA_USER_TAG '')}" \
+  "${SEARCH_TAG:-$(env_get VIDRA_SEARCH_TAG '')}" \
+  || die "the release mapping preflight stopped this rollback (findings above). $ENV_FILE was NOT rewritten and nothing was pulled or restarted; the release you are serving is untouched."
 
 HTTP_PORT="$(env_get HTTP_PORT 8080)"
 FRONTEND_PORT="$(env_get FRONTEND_PORT 3000)"

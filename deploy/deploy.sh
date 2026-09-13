@@ -492,9 +492,49 @@ require_scanner_profile
 
 # Before the checkout loop below moves anything: a tag that predates the embedded
 # migrator would hang step 3/6 instead of failing it.
+#
+# A core/search DIGEST PIN (`v0.6.4@sha256:...`) dies HERE: semver_ge cannot
+# parse it, so it never reaches the release-mapping digest comparison below.
+# That is deliberate for now — the checkout sync would otherwise run
+# `git checkout "v0.6.4@sha256:..."` on the nested repos. Only VIDRA_USER_TAG
+# (no migrator, no checkout on a bundle tree) reaches the digest comparison.
 require_embedded_migrate_tag VIDRA_CORE_TAG   "$(env_get VIDRA_CORE_TAG '')"
 require_embedded_migrate_tag VIDRA_SEARCH_TAG "$(env_get VIDRA_SEARCH_TAG '')"
 log "compose $(docker compose version --short), VIDRA_TLS_MODE=$TLS_MODE serving $(url_host "$(env_get PUBLIC_BASE_URL '')"), migrator tags >= $MIN_EMBEDDED_MIGRATE_TAG"
+
+# THE RELEASE MAPPING, and why it sits HERE: after the tag-shape gates above,
+# and before the checkout sync below moves a single file. Everything after this
+# line changes something (nested checkouts, a dump, pulled images, the schema,
+# running containers), so a triple nobody released must stop at this point.
+#
+# The failure it closes: three VIDRA_*_TAG values that are each a real release
+# but were never released TOGETHER (a vidra-user tag from another release, a
+# core/search pairing no release shipped). Every check above passes them, and
+# the stack comes up healthy with a frontend, core API and search schema nobody
+# verified as a set. releases/<tag>.json records the pairings that were
+# released; deploy/release-mapping.py (via release_mapping_check in lib.sh)
+# holds this triple against them, plus any pinned digests and, on a bundle
+# tree, the manifest's tag and schema version the ledger assertion in step 3
+# trusts.
+#
+# `declare -F` first: a tree whose lib.sh predates this function (a released
+# bundle with only deploy.sh replaced) would otherwise exit 127 with a message
+# blaming the tags.
+#
+# NOT VERIFIED HERE: the newest release. A UNIFORM triple newer than every
+# record (the tree's own release at tag vN or the vN bundle, or vN deployed from
+# main by a fresh `install.sh --git` or a rehearsal lab) cannot have its record
+# yet (see lib.sh), so that deploy compares tag strings only, with a WARNING,
+# until the record ships inside the release artifact. A MIXED triple no record
+# pairs is refused. VIDRA_RELEASE_MAPPING=warn (env file or environment, like
+# VIDRA_SKIP_DNS_PREFLIGHT) turns that one refusal into a WARNING naming what
+# was skipped; it cannot reach an unparseable tag, a broken releases/, a digest
+# that contradicts a record or a stale bundle, all of which predict a failure.
+declare -F release_mapping_check >/dev/null \
+  || die "deploy/lib.sh does not define release_mapping_check, so it is from an older revision than this deploy.sh. Nothing was changed. Take deploy/lib.sh, deploy/release-mapping.py and releases/ from the same revision as this script."
+release_mapping_check "$REPO_ROOT" deploy \
+  "$(env_get VIDRA_CORE_TAG '')" "$(env_get VIDRA_USER_TAG '')" "$(env_get VIDRA_SEARCH_TAG '')" \
+  || die "the release mapping preflight stopped this deploy (findings above). Nothing was synced, dumped, pulled, migrated or restarted; the running stack is untouched."
 
 # THE CHECKOUT SYNC, AND THE ONE TREE THAT HAS NOTHING TO SYNC.
 #

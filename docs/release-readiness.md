@@ -26,6 +26,101 @@ helper (tree moves, pins do not — meta#192 fixes it, open when this ran), and
 `vidra setup --scan=false` leaves a fail-closed scanner address that
 `deploy.sh`'s preflight then refuses (low, unfixed). Not covered: the bundle
 upgrade path, S3 storage, a search-ledger change, ACME, browser decode.
+## Security, release-consistency and recovery continuation — 2026-09-13
+
+**Full v0.6.4 remains NO-GO: 2 PASS, 46 UNVERIFIED, 11 BLOCKED** (from 2/45/12;
+only REC-03 moves, BLOCKED→UNVERIFIED, because its missing disposable
+destination now exists). The base disposition is open draft #187's
+`migration-runtime/disposition.json` (`7261ce37…`); the
+[recovery delta](evidence/release-v0.6.4-verification/recovery-runtime/disposition-delta.json)
+records every changed row. No row is promoted to PASS.
+
+**Candidate.** The frozen v0.6.4 manifest is unchanged. Component mains at
+the scan time (2026-09-13T02:50Z: core `0261b59`, user `dc4f164`, search
+`5f7a3a3`) are not the candidate and have since moved. No next candidate is
+frozen: at 2026-09-13T05:25Z three fixes are merged to `main` (below) and the
+rest are open, and an unreleased main-branch fix is not a released fix.
+
+**Security scan facet: FAIL for v0.6.4 as published**
+(record `docs/security-scan-v0.6.4-2026-09-12.md`, arriving with draft #190). The first by-digest
+scan found three problems in shipped artifacts:
+- next 16.3.0, carrying two critical advisories (exposure not demonstrated);
+- Alpine openssl 3.5.7 in all three images;
+- grpc 1.83.1 in core.
+
+It also found that osv-scanner sees no npm packages in the frontend image, so an
+image scan alone is not a frontend dependency scan.
+
+**Recovery drill** ([record](runtime-acceptance-recovery-v0.6.4.md)), on the
+populated B2 host and a blank rebuilt AMD64 replacement:
+- **Worker crash:** after a SIGKILL mid-transcode and a harness api restart, the
+  orphaned job was reclaimed by the sweep once the fixed 30-minute lease lapsed.
+- **Outages:** after PostgreSQL, Redis or search restarted, the stack was healthy
+  again within 6.0/6.1/7.5 s with the same api container and no persisted change
+  (only PostgreSQL made `/readyz` fail; Redis read `degraded`, search stayed `ok`). A write made during the search outage caught
+  up in 21 s.
+- **Backup:** the shipped backup's dump lists both schemas, both ledgers and
+  `user_mfa`, and its config archive is byte-equal to the live files. A failed dump publishes
+  nothing.
+- **Restore:** the replacement host was ready 209.9 s after the simulated loss
+  (including a ~42 s operator transfer, across two host clocks), on an exact
+  data-point match with 0 missing blobs. Its sealed TOTP secret decrypts (wrong
+  code recorded 401; right code accepted, asserted 200 by the harness). Old and new media decode, and search
+  serves the UI.
+- **Retained harness failures:** a too-strict failed-backup assertion, and an
+  unhandled 429. Both were corrected with separate provenance.
+- **Measurements, not acceptances:** no RPO/RTO objective is approved.
+
+**PR state at 2026-09-13T05:25Z — merged: core #234 (04:54:19Z, `f87bf6f`,
+the MinIO registry fix that unblocked the red required lanes on every core and
+user PR), search #43 (05:16:02Z, `92bdd79`), user #218 (05:17:11Z, `6854c0f`).
+Everything else below is open. Nothing is released.**
+
+| Scope | PRs | Verified state |
+|---|---|---|
+| Dependency advisories | user #218 (next 16.3.5, required `dependency-audit`) **merged**; search #43 (required `govulncheck`) **merged**; core #233 open (head `1d1e15e`, every lane green at 05:24Z) | New lanes green in CI; RED on released lockfile/stale toolchain, fail-closed offline; an `.npmrc` false-clean found in review and fixed (reproduced for the record in #190); both govulncheck PRs raised the pin v1.3.0 → v1.8.0 (`d976d65` / `f326dd0`) |
+| Required-CI integrity | meta #188 `c51d083`, core #235 `65c4a2b`, search #44 `f5c3f3f`, user #219 `6b237ca` | `ci-required` fail-open paths closed; byte-identical twin test 45 cases / 52 assertions at `c51d083` (38/41 at `c3c32ac`), 25 RED against core main `f87bf6f` and 27 against meta main `67840ab`, 0 after; fresh-context verification of review fixes passed |
+| Release mapping | meta #189 `02ad018` | Mixed/unreleased component triples and stale bundles refused before mutation (stubbed ordering proof; 162 unit tests OK at `02ad018`, re-run 2026-09-13). **Requirement still OPEN:** the newest release is checked by tag string only until the release artifact carries its own record |
+| Image hardening | core #236 `8734545`, search #45 `76499c6`, user #220 `507c9d7` | Runtime `apk upgrade` (openssl 3.5.8-r0: local arm64 builds, log not retained, then each PR's `docker-build` lane built its production Dockerfile for linux/amd64 on GitHub with `Upgrading libssl3 (3.5.7-r0 -> 3.5.8-r0)` in the log — runs 34739925166 / 34739638218 / 34739626736; the release image itself is unbuilt), grpc 1.83.2, yt-dlp verified by SHA-256, release builds bypass the cached package layer |
+| Evidence | meta #190 (scan; audit fixes `3ff4ac4`), meta #191 (this branch: recovery drill tools + evidence), meta #187 (base disposition, `0cf2da4`) | Docs/evidence only; #187 must merge before #191 because the recovery delta references #187's `migration-runtime/disposition.json` |
+
+**Remaining for GO, by kind.**
+- **Product defects on unreleased fixes:** the scan findings above (the next
+  fix merged 2026-09-13T05:17Z, the openssl/grpc fixes open); the absent
+  mapping preflight (#189); the `ci-required` fail-open paths (#188 and twins).
+- **Missing inputs or authorization:**
+  - B2: a representative sanitized PeerTube source, and approval to move the
+    generated-fixture passwords to the test host.
+  - B3: an offsite backup destination/credentials and the selected providers.
+  - B4: approved RPO/RTO objectives.
+  - Owner decisions listed in #189.
+  - Dependabot security updates (auto-PRs) are disabled in all four service
+    repos; alerts were enabled on 2026-09-13 (~05:06Z) and are untriaged —
+    open at 05:22Z: core 1 high (GHSA-2v4p-qf9q-27wj grpc), search 1 medium
+    (pytest, `training/uv.lock`); user's 15 auto-fixed when #218 merged.
+- **Missing execution:** REC-03/A38 upgrade/rollback, the OPS-01 worker split,
+  full browser/control/mobile/WebKit coverage, a new candidate build rescanned
+  by digest, and the release-artifact record for mapping.
+
+**Resources.** The source stack at `159.203.118.182` is **stopped** (`compose
+stop` only, so no volume was removed; volumes were not enumerated). The
+replacement at `159.65.249.255` is **running** against the same test bucket.
+Never run both: both have media GC on.
+
+The previous `599514574` contents are preserved privately under
+`env/acceptance-hosts-v064-20260913/`. The test bucket key expires 2026-09-18.
+Production was not touched.
+
+**Next executable command set (REC-03/A38).** After an operator rebuild of a
+disposable host:
+1. Install v0.6.3 from its released bundle and create data.
+2. `pin-release.sh v0.6.4 && deploy.sh`.
+3. Inject a migration failure and prove refusal/recovery per
+   `deploy/README.md` "Migration failed mid-deploy".
+4. `rollback.sh` app-only.
+5. Restore across an incompatible schema with `restore.sh`.
+
+Record everything with `tests/recovery_release_acceptance.py`-style stages.
 
 ## Independent current-release verification — 2026-09-10
 
@@ -35,6 +130,27 @@ froze four revisions and immutable image digests and recorded 1 static PASS,
 available. Those counts are historical. The runtime continuation below resolves
 host access and demonstrates the first milestone; full release acceptance,
 representative-source, provider and recovery requirements remain.
+
+## Packaged migration and restart continuation — 2026-09-11
+
+**Full v0.6.4 remains NO-GO: 2 PASS, 45 UNVERIFIED, 12 BLOCKED workflows.**
+The [new execution record](runtime-acceptance-migration-v0.6.4.md) follows the
+published CLI/deploy/admin path on the retained B2 host, without rebuilding
+images or wiping the host. Generated-source preview/import/repeat, schema
+refusal, per-video mapping and thirty B2 hashes, real search/browser results,
+and selected source-disconnected decode passed. A real host reboot preserved
+thirteen catalogue/media tables and both migration ledgers after readiness.
+Only A01/A02 are fully passed for the current release; no generated subset
+automatically closes another item. The [current disposition](evidence/release-v0.6.4-verification/migration-runtime/disposition.json)
+retains every required procedure and records the remaining inputs/execution.
+
+PR #186 is merged at `67840abed3c7181703d7bd17b1b7800cf78a9702`.
+Current component mains, published artifacts and acceptance-tool revisions
+are distinct in the new record. Failed harness/export/early-restart attempts
+remain preserved. The documentation fix is on a draft branch; it is not yet
+part of a newly qualified published bundle. Representative migration,
+replacement recovery, full browser/provider/security and release gates remain
+required. No production or stable-publication action was authorized.
 
 ## Dedicated Backblaze B2 continuation — 2026-09-11
 
@@ -55,7 +171,8 @@ checks; their remaining procedures are UNVERIFIED, not automatically passed.
 Current counts are **2 PASS, 45 UNVERIFIED, 12 BLOCKED**; full release remains
 **NO-GO**. Provider presign/CDN, retention/GC, recovery, representative source and
 other scope decisions remain required. The older local-run disposition below
-is historical at its timestamp. Draft PR #186 remains unmerged.
+is historical at its timestamp. PR #186 was subsequently merged; the newer
+migration continuation above supplies the current disposition.
 
 ## Current-release runtime continuation — 2026-09-10
 
@@ -85,8 +202,8 @@ dependent criteria. The 59 workflow requirements, 40 acceptance criteria,
 provider deferrals and scope decisions are preserved. Earlier failed harness
 attempts and diagnostics are retained; the passing run followed a fresh OS
 rebuild and used no application modification. Historical fixture closure below
-remains historical. [Draft PR #186](https://github.com/yegamble/vidra/pull/186)
-is open — awaiting review and merge; merging is prohibited in this session.
+remains historical. [PR #186](https://github.com/yegamble/vidra/pull/186)
+was subsequently merged; this session does not authorize another merge.
 
 ## Historical fixture close-out — 2026-09-10
 

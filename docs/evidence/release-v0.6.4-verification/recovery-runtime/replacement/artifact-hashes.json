@@ -1,0 +1,9 @@
+{
+  "py-restore/commands.json": "2eab0f3a951507f032e10195317cfc4777d320f13618f67467561b81c6e75eb8",
+  "py-restore/result.json": "a6af19ed41eb13a7fcb1031e6700fa3e19deab01f8dc97e01342f9a7b882c63f",
+  "verify-restore-write/playback-new.png": "8e7d5934168cbad7a57b799291e3fd0a710ec6a91e4c82dfefe6079557b4f3fb",
+  "verify-restore-write/result.json": "d44e60c8a136dc1e80d681f0fe96f0ff39177344a3c1ef460cc8afee8a9540a9",
+  "verify-restore/playback-drill.png": "dce9c3f3f335140b2e1e6d010a83c41850b0ce90d7c687a3491437961717f2fc",
+  "verify-restore/playback-legacy.png": "2d093a1cf4d9a695139524c0a19691b74957beba1a36e5fcf7358887badf50df",
+  "verify-restore/result.json": "875f7fbd3e3e0d13fc3715cdcabc772fee62aacf7300b29574b738a663f5c79f"
+}

@@ -1,0 +1,652 @@
+{
+  "status": "PASS",
+  "action": "upload-kill",
+  "checks": {
+    "kill-api-while-transcoding": "PASS"
+  },
+  "node": "v26.8.1",
+  "commands": [
+    {
+      "argv": [
+        "chmod",
+        "0777",
+        "/root/vidra-v064-recovery-20260913/upload-kill/fixture"
+      ],
+      "started_at": "2026-09-13T03:21:08.554Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "run",
+        "--rm",
+        "--entrypoint",
+        "ffmpeg",
+        "-v",
+        "/root/vidra-v064-recovery-20260913/upload-kill/fixture:/out",
+        "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=1280x720:rate=30:duration=180",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:duration=180",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-shortest",
+        "/out/recovery-drill.mp4"
+      ],
+      "started_at": "2026-09-13T03:21:08.562Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "sha256sum",
+        "/root/vidra-v064-recovery-20260913/upload-kill/fixture/recovery-drill.mp4"
+      ],
+      "started_at": "2026-09-13T03:21:48.591Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:21:59.359Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:00.042Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:01.083Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:02.529Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:04.829Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:07.156Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:09.560Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:11.858Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:14.172Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:16.434Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:18.687Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:21.005Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:23.244Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:25.615Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:28.057Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:30.381Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:32.708Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:35.024Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:37.316Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:39.597Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "api"
+      ],
+      "started_at": "2026-09-13T03:22:39.869Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "kill",
+        "--signal",
+        "KILL",
+        "10dddbf5cc5a6461faeb5c7368efb710f276abc3b494eff61fceb44101a04ea2"
+      ],
+      "started_at": "2026-09-13T03:22:40.227Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "docker",
+        "inspect",
+        "--format",
+        "{{json .State}}",
+        "10dddbf5cc5a6461faeb5c7368efb710f276abc3b494eff61fceb44101a04ea2"
+      ],
+      "started_at": "2026-09-13T03:22:45.634Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "up",
+        "-d",
+        "api"
+      ],
+      "started_at": "2026-09-13T03:22:45.678Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "curl",
+        "-s",
+        "-o",
+        "/dev/null",
+        "-w",
+        "%{http_code}",
+        "http://127.0.0.1:8080/readyz"
+      ],
+      "started_at": "2026-09-13T03:22:48.995Z",
+      "exit_code": 56
+    },
+    {
+      "argv": [
+        "curl",
+        "-s",
+        "-o",
+        "/dev/null",
+        "-w",
+        "%{http_code}",
+        "http://127.0.0.1:8080/readyz"
+      ],
+      "started_at": "2026-09-13T03:22:49.266Z",
+      "exit_code": 56
+    },
+    {
+      "argv": [
+        "curl",
+        "-s",
+        "-o",
+        "/dev/null",
+        "-w",
+        "%{http_code}",
+        "http://127.0.0.1:8080/readyz"
+      ],
+      "started_at": "2026-09-13T03:22:49.788Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT row_to_json(j) FROM (SELECT id,state,attempts,next_attempt_at,last_error IS NOT NULL AS has_error,created_at,updated_at FROM transcode_jobs WHERE video_id='4ad22df0-8fa6-499c-926d-47515965da8f' ORDER BY created_at DESC LIMIT 1) j"
+      ],
+      "started_at": "2026-09-13T03:22:49.805Z",
+      "exit_code": 0
+    }
+  ],
+  "started_at": "2026-09-13T03:21:07.607Z",
+  "browser_args": [
+    "--host-resolver-rules=MAP secure.video.test 127.0.0.1",
+    "--no-proxy-server",
+    "--autoplay-policy=no-user-gesture-required"
+  ],
+  "browser": "153.0.8010.12",
+  "fixture_sha256": "8b3d271eaf80525d21a400313b6b67a013c0e2c84acc7be0a1bda944dd1097af",
+  "video_id": "4ad22df0-8fa6-499c-926d-47515965da8f",
+  "title": "Recoverydrill38badfc3",
+  "job_observations": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "id": "883080af-b165-46a8-854d-b31e26b73aa5",
+      "state": "pending",
+      "attempts": 0,
+      "next_attempt_at": "2026-09-13T03:22:35.449291+00:00",
+      "has_error": true,
+      "created_at": "2026-09-13T03:22:35.449291+00:00",
+      "updated_at": "2026-09-13T03:22:35.449291+00:00"
+    },
+    {
+      "id": "883080af-b165-46a8-854d-b31e26b73aa5",
+      "state": "running",
+      "attempts": 0,
+      "next_attempt_at": "2026-09-13T03:52:39.482209+00:00",
+      "has_error": true,
+      "created_at": "2026-09-13T03:22:35.449291+00:00",
+      "updated_at": "2026-09-13T03:22:39.482209+00:00"
+    }
+  ],
+  "killed_container": "10dddbf5cc5a6461faeb5c7368efb710f276abc3b494eff61fceb44101a04ea2",
+  "killed_at": "2026-09-13T03:22:40.227Z",
+  "state_after_kill": {
+    "status": "exited",
+    "exit_code": 137,
+    "oom": false
+  },
+  "api_ready_again_at": "2026-09-13T03:22:49.805Z",
+  "job_after_restart": {
+    "id": "883080af-b165-46a8-854d-b31e26b73aa5",
+    "state": "running",
+    "attempts": 0,
+    "next_attempt_at": "2026-09-13T03:52:39.482209+00:00",
+    "has_error": true,
+    "created_at": "2026-09-13T03:22:35.449291+00:00",
+    "updated_at": "2026-09-13T03:22:39.482209+00:00"
+  },
+  "finished_at": "2026-09-13T03:22:50.090Z"
+}

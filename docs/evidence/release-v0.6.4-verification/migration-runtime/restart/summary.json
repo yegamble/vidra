@@ -1,0 +1,35 @@
+{
+  "status": "PASS",
+  "scope": "host/container restart, preserved state and post-readiness owner login/three-format COPY playback/search; not replacement restore",
+  "before_boot_id": "c0ee2241-28b3-49a8-9518-a12a3f102fc4",
+  "after_boot_id": "09779c00-9b17-4e0e-93c7-ae2664fc29ed",
+  "data_point": {
+    "captured_at_utc": "2026-09-11T13:46:20.658391+00:00",
+    "tables": {
+      "users": "7|c7ddbddbdfa9f5284d8ef238eb354728",
+      "channels": "7|b10e714c8795c74c33c4422a4fb628fc",
+      "videos": "8|1e46488877e88f741ef05931bddf6c91",
+      "comments": "4|ed3299a4da627c848a488cfffbdf8d2d",
+      "playlists": "1|3d19e5395ad48ef6fb37b39639a0c6f9",
+      "playlist_items": "2|7d9f16190a494e198f3faceba225782a",
+      "channel_follows": "1|e6d9dadc5f3352c2092a0e24e1971334",
+      "video_ratings": "1|94937096f16ea151b8fe797a85ef4255",
+      "video_tags": "12|1d70b3b56447f31e702361017790562c",
+      "video_chapters": "2|84eacd57117631a653d5ffd5863d9de9",
+      "streaming_playlists": "7|b5b56b4c03c56f57866752bcaa0db753",
+      "video_files": "31|3ef2339b1a08be002369455c49dcf209",
+      "captions": "1|de45d66f944e653bff1be1f5f0587a6b"
+    },
+    "ledgers": {
+      "schema_migrations": "146|f",
+      "vidra_search_migrations": "18|f"
+    }
+  },
+  "ready_comparison_at_utc": "2026-09-11T13:49:49.531127+00:00",
+  "observed_interval_seconds": 208.873,
+  "interval_caveat": "Upper bound from pre-reboot capture to successful state comparison includes scheduling and operator/early-probe investigation; not instrumented minimum recovery time. No approved RPO/RTO for this candidate was supplied.",
+  "earlier_failed_health_probe": "restart-after.json",
+  "browser_playback_status": "PASS",
+  "browser_search_status": "PASS",
+  "recovery_objective_acceptance": "BLOCKED: approved targets and independent replacement-host/offsite inputs missing"
+}

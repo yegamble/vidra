@@ -1,0 +1,71 @@
+{
+  "checks": [
+    {
+      "name": "python-units",
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "*_test.py",
+        "-v"
+      ],
+      "started_at": 1789135096.452331,
+      "finished_at": 1789135100.645012,
+      "exit_code": 0,
+      "sha256": "8d87e10b07c5196a844bc76a8423ab4fde20d4c89d419059ff01b532f921b7ed",
+      "test_count": 98,
+      "skip_count": 0
+    },
+    {
+      "name": "browser-syntax",
+      "command": [
+        "node",
+        "--check",
+        "tests/peertube-release-acceptance.mjs"
+      ],
+      "started_at": 1789135100.645625,
+      "finished_at": 1789135100.669534,
+      "exit_code": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "compose-production",
+      "command": [
+        "docker",
+        "compose",
+        "-f",
+        "docker-compose.yml",
+        "-f",
+        "docker-compose.prod.yml",
+        "--env-file",
+        "/tmp/vidra-readiness-20260911/check.env",
+        "config",
+        "-q"
+      ],
+      "started_at": 1789135100.6697652,
+      "finished_at": 1789135100.8763762,
+      "exit_code": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "started_at": 1789135100.876605,
+      "finished_at": 1789135100.897664,
+      "exit_code": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "python_ast": "PASS: four touched Python files",
+  "shell_syntax_shellcheck": "No shell scripts changed",
+  "configuration": "Dummy production env; no real credentials",
+  "test_tools": "Tests only; not product installation prerequisites"
+}

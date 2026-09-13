@@ -1,0 +1,133 @@
+{
+  "recorded_at": "2026-09-11T13:55:01.827823+00:00",
+  "source_revision": "ed55a6d946dad3f2e72a47b2518ac095352c795d",
+  "image": "ghcr.io/yegamble/vidra-core@sha256:f653962115c8f36857e237b9e0ec9c95d89fef5b1f23cdcea75c20d1582f42a0",
+  "binary_sha256": "0ec31451232a5869d11a54212f73f0c175e561e04ed5b6f5f5b3c29a087ba90a",
+  "binary_go_version": "go1.27.1",
+  "runs": [
+    {
+      "name": "core-v064",
+      "command": "GOOS=linux GOARCH=amd64 govulncheck -json ./...",
+      "exit_code": 0,
+      "scope": "Exact released core source with workstation Go 1.26.2; not release-binary attribution",
+      "configuration": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.3.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "go_version": "go1.26.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "finding_levels": {
+        "symbol": 43,
+        "package": 19,
+        "module": 22
+      },
+      "advisory_ids": [
+        "GO-2026-4918",
+        "GO-2026-4970",
+        "GO-2026-4971",
+        "GO-2026-4976",
+        "GO-2026-4977",
+        "GO-2026-4980",
+        "GO-2026-4981",
+        "GO-2026-4982",
+        "GO-2026-4986",
+        "GO-2026-5026",
+        "GO-2026-5037",
+        "GO-2026-5038",
+        "GO-2026-5039",
+        "GO-2026-5856",
+        "GO-2026-5932",
+        "GO-2026-5942",
+        "GO-2026-5972",
+        "GO-2026-6088",
+        "GO-2026-6089",
+        "GO-2026-6090",
+        "GO-2026-6091",
+        "GO-2026-6218"
+      ],
+      "raw_stdout_sha256": "49987851f05442612efdb57edc1c1e198b39af03efba58a54985e2a60b099e8b",
+      "recorded_file_mtime_utc": "2026-09-11T13:39:55.044791+00:00"
+    },
+    {
+      "name": "core-v064-binary",
+      "command": "govulncheck -mode=binary -json released-core-api",
+      "exit_code": 0,
+      "scope": "Executable extracted from frozen deployed core image; Go 1.27.1",
+      "configuration": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.3.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "scan_level": "symbol",
+        "scan_mode": "binary"
+      },
+      "finding_levels": {
+        "symbol": 7,
+        "package": 7,
+        "module": 1
+      },
+      "advisory_ids": [
+        "GO-2026-5932"
+      ],
+      "raw_stdout_sha256": "e0482e566cb932b80f4ae54f7e87487b62c5bf72da61ec492a4bf57f454abfd7",
+      "recorded_file_mtime_utc": "2026-09-11T13:42:47.848980+00:00"
+    },
+    {
+      "name": "core-v064-go1271",
+      "command": "GOTOOLCHAIN=go1.27.1 GOOS=linux GOARCH=amd64 govulncheck -json ./cmd/api",
+      "exit_code": 1,
+      "scope": "Failed scanner/toolchain compatibility attempt; never a clean scan",
+      "configuration": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.3.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "go_version": "go1.27.1",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "finding_levels": {
+        "symbol": 0,
+        "package": 0,
+        "module": 0
+      },
+      "advisory_ids": [],
+      "raw_stdout_sha256": "54cb9c7c09ba4b0ce8a9785e0f1dbc1c1e196cb908cd4b94a55e6a512faba7dd",
+      "recorded_file_mtime_utc": "2026-09-11T13:44:44.732399+00:00"
+    },
+    {
+      "name": "core-v064-go1271-retry",
+      "command": "GOTOOLCHAIN=go1.27.1 GOOS=linux GOARCH=amd64 go1271-tools/govulncheck -json ./cmd/api",
+      "exit_code": 0,
+      "scope": "Same scanner v1.3.0 rebuilt with Go 1.27.1; exact released source/API target",
+      "configuration": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.3.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-09-10T14:48:42Z",
+        "go_version": "go1.27.1",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "finding_levels": {
+        "symbol": 0,
+        "package": 0,
+        "module": 1
+      },
+      "advisory_ids": [
+        "GO-2026-5932"
+      ],
+      "raw_stdout_sha256": "7d3ae5cf2972b83aa2f39c96991679c0f94412f0cbbd827a6e3a6994054c7ef2",
+      "recorded_file_mtime_utc": "2026-09-11T13:48:05.735474+00:00"
+    }
+  ],
+  "openpgp_packages_in_exact_api_graph": [],
+  "disposition": "No vulnerable imported packages/reachable symbols in matching Go 1.27.1 API source scan. Binary scanner emitted GO-2026-5932 wildcard matches; retain for review, not suppressed or declared a clean full-image scan. Workstation Go 1.26.2 source build has reachable stdlib advisories. Other components, OS/image packages, JS and required scan gates remain UNVERIFIED."
+}
