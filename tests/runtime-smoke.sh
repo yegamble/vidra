@@ -30,7 +30,17 @@ step "start retained disposable VM"
 multipass start "$VM" > "$OUT/start.log" 2>&1
 multipass exec "$VM" -- mkdir "$STAGE"
 multipass transfer "$2" "$VM:$STAGE/candidate.json"
-multipass transfer "$ROOT/deploy/deploy.sh" "$VM:$STAGE/deploy-under-test.sh"
+# The deploy tooling under test travels as one set: deploy.sh sources lib.sh's
+# release_mapping_check, which reads deploy/release-mapping.py and releases/.
+# runtime_smoke.py's UNDER_TEST must name the same three paths (unit-tested).
+under_test=(deploy/deploy.sh deploy/lib.sh deploy/release-mapping.py)
+for f in "$ROOT"/releases/*.json; do
+  under_test+=("releases/${f##*/}")
+done
+multipass exec "$VM" -- mkdir -p "$STAGE/under-test/deploy" "$STAGE/under-test/releases"
+for file in "${under_test[@]}"; do
+  multipass transfer "$ROOT/$file" "$VM:$STAGE/under-test/$file"
+done
 for file in runtime_smoke.py blank_server_smoke.py; do
   multipass transfer "$ROOT/tests/$file" "$VM:$STAGE/$file"
 done
