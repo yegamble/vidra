@@ -229,6 +229,25 @@ class MappingTests(Fixture):
         code, out = self.check('--bundle-manifest', str(self.bundle()))
         self.assertEqual(code, OK, out)
 
+    def test_an_older_recorded_release_under_a_newer_bundle_is_also_told_to_roll_back(self):
+        """L7. "Unpack the v0.6.4 bundle over this tree" is half the advice when
+        the env pins an OLDER recorded release under a NEWER bundle: that host
+        may be mid-rollback, and rollback.sh runs under the newer bundle on
+        purpose. A bundle OLDER than the recorded release is a stale tree, and
+        gets no such advice."""
+        newer = str(self.bundle(tag='v0.6.5', schema='0150', core_commit=hexsha(5)))
+        code, out = self.check('--bundle-manifest', newer)   # env v0.6.4 x3, record v0.6.4
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn('Unpack the v0.6.4 bundle over this tree', out)
+        self.assertIn('deploy/rollback.sh v0.6.4', out)
+        self.assertIn('runs under the newer bundle on purpose', out)
+        self.add(synthetic('v0.6.5', 'v0.6.5', 'v0.6.5', 'v0.6.5'))
+        code, out = self.check('--bundle-manifest', str(self.bundle(tag='v0.6.4')),
+                               env_file=self.env('v0.6.5', 'v0.6.5', 'v0.6.5'))
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn('Unpack the v0.6.5 bundle over this tree', out)
+        self.assertNotIn('rollback.sh', out)
+
     def test_rollback_does_not_judge_the_bundle_tree(self):
         """A bundle host rolls back by re-pointing tags UNDER the newer bundle —
         rollback.sh never reads the manifest's schema version, so a bundle that

@@ -526,11 +526,18 @@ def bundle_findings(bundle, record, where, path):
     platform release that re-releases only vidra-user ships no new bundle."""
     core = record['components']['core']
     findings = []
+    tag = bundle.get('tag', '')
+    # A record OLDER than the bundle may be a host mid-rollback: rollback.sh
+    # re-points the tags under the newer bundle on purpose (and never reads its
+    # schema version), so that is the other way forward. A bundle older than
+    # the record is a stale tree, and gets only the first.
+    older = semver(tag) is not None and semver(core['tag']) < semver(tag)
     consequence = ("deploy.sh would compare the migrator's ledger against this bundle's number, "
                    'failing after the dump, pull and migrations have already run, or passing '
                    'against the wrong release. Nothing was changed. Unpack the '
-                   f'{core["tag"]} bundle over this tree.')
-    tag = bundle.get('tag', '')
+                   f'{core["tag"]} bundle over this tree'
+                   + (f', or roll back with `deploy/rollback.sh {core["tag"]}`, which runs under '
+                      'the newer bundle on purpose.' if older else '.'))
     if tag != core['tag']:
         findings.append(f'{path}: vidra-bundle.manifest tag is {tag or "(missing)"}, expected '
                         f'{core["tag"]} (the core tag of release {record["release"]}, {where}). '
