@@ -1,10 +1,16 @@
 #!/usr/bin/env node
-// Browser half of the v0.6.4 recovery drill (recovery_release_acceptance.py is
-// the host half). Real Chromium against the released stack; SQL is SELECT-only
+// Browser half of the recovery drill (recovery_release_acceptance.py is the
+// host half). Real Chromium against the released stack; SQL is SELECT-only
 // readback, never a seed or repair. Credentials and TOTP material stay in the
 // 0600 private files named below and are never written to result.json.
 //
-//   node recovery-release-acceptance.mjs STAGE ACTION
+//   node recovery-release-acceptance.mjs STAGE ACTION [BASELINE]
+//
+// BASELINE is the prepared runtime stage of the candidate under drill — the
+// Playwright install, owner fixture, candidate manifest and upload fixture all
+// come from it. It was hard-wired to the v0.6.4 stage, which is now only the
+// default; a v0.6.5 drill passes /root/vidra-v065-runtime as the third argument
+// or in VIDRA_BASELINE, matching --baseline on the host half.
 //
 // ACTION (run in this order on the source, then `verify-restore` on the
 // replacement host):
@@ -30,10 +36,10 @@ import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 
 const ACTIONS = ['upload-kill', 'recovered-playback', 'search-catchup', 'mfa-enroll', 'rpo-marker', 'verify-restore', 'verify-restore-write'];
-const [stageArg, action] = process.argv.slice(2);
-assert.ok(stageArg && ACTIONS.includes(action), `usage: recovery-release-acceptance.mjs STAGE ${ACTIONS.join('|')}`);
+const [stageArg, action, baselineArg] = process.argv.slice(2);
+assert.ok(stageArg && ACTIONS.includes(action), `usage: recovery-release-acceptance.mjs STAGE ${ACTIONS.join('|')} [BASELINE]`);
 assert.equal(process.env.COMPOSE_PROJECT_NAME, 'vidra-release-acceptance');
-const baseline = '/root/vidra-v064-runtime';
+const baseline = baselineArg ?? process.env.VIDRA_BASELINE ?? '/root/vidra-v064-runtime';
 const drill = resolve(stageArg);
 const out = join(drill, action);
 assert.ok(!existsSync(out), 'use a new stage per attempt; failed evidence is retained');

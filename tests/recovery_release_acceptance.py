@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
-"""Recovery acceptance on the frozen v0.6.4 candidate (REC-01/02, OPS-01 subsets).
+"""Recovery acceptance on a frozen release candidate (REC-01/02, OPS-01 subsets).
 
 Runs ON a disposable acceptance host and reuses release_acceptance.Recorder, so
 every command, exit and private log is captured exactly as the runtime milestone
 captured them. Browser steps live in recovery-release-acceptance.mjs.
+
+`--baseline` is the prepared runtime stage of the candidate under drill: its
+`candidate.json` names the release, and its `expected-ledgers.json`,
+`install.sh`, `frozen-deploy-hashes.json` and `pinned-prod.yml` are what the
+drill installs and asserts against. It was hard-wired to the v0.6.4 stage, which
+is now only the DEFAULT, so a v0.6.5 drill passes
+`--baseline /root/vidra-v065-runtime` and the v0.6.4 records stay valid. Pass the
+same value to the browser half via VIDRA_BASELINE.
 
 Boundaries this module holds by construction:
   * source actions stop and start services but never remove a volume, image,
@@ -30,7 +38,7 @@ import release_acceptance as runtime
 from blank_server_smoke import require, sha
 from runtime_smoke import check_ledger
 
-BASELINE = Path('/root/vidra-v064-runtime')
+DEFAULT_BASELINE = Path('/root/vidra-v064-runtime')
 INSTALL = runtime.INSTALL
 # The catalogue #187 fingerprinted across a host reboot, plus the two tables that
 # hold the sealed TOTP fixture: a restore that loses them passes every other
@@ -40,6 +48,32 @@ CATALOGUE = ('users', 'channels', 'videos', 'comments', 'playlists', 'playlist_i
              'streaming_playlists', 'video_files', 'captions', 'user_mfa', 'mfa_recovery_codes')
 CONFIG_MEMBERS = {'env/production.env', 'deploy/Caddyfile.local'}
 FAULT_SERVICES = ('postgres', 'redis', 'search')
+
+
+def load_candidate(baseline):
+    """The baseline names the release under drill; nothing else may.
+
+    Read here rather than at each use so a baseline that holds no candidate
+    manifest, or one without a release tag, fails at the first line of the
+    action instead of KeyError-ing halfway through a restore.
+    """
+    candidate = json.loads((Path(baseline) / 'candidate.json').read_text())
+    require(re.fullmatch(r'v\d+\.\d+\.\d+', candidate.get('tag') or '') is not None,
+            f'baseline holds no release candidate: {baseline}/candidate.json')
+    return candidate
+
+
+def check_recorded_tag(name, record, candidate):
+    """Evidence a restore consumes must come from the release it rebuilds.
+
+    A dump taken on one candidate, restored onto a host installed from another,
+    then passes every downstream comparison — because the expected catalogue and
+    ledgers come from that same wrong evidence. Every action records
+    `candidate_tag`; a record without one is refused, never assumed to match.
+    """
+    recorded = record.get('candidate_tag')
+    require(recorded == candidate['tag'],
+            f"{name} was recorded on {recorded or 'an unrecorded release'}, not {candidate['tag']}")
 
 
 def fingerprint_sql(table):
@@ -105,12 +139,12 @@ def api_identity(run):
     return {'id': info['Id'], 'started_at': info['State']['StartedAt'], 'restart_count': info['RestartCount']}
 
 
-def snapshot(run, candidate, with_images=True):
+def snapshot(run, candidate, baseline, with_images=True):
     result = {'at': time.time(), 'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
               'catalogue': fingerprint(run), 'ledgers': {}, 'api': api_identity(run)}
     if with_images:
         result['runtime'] = runtime.runtime_snapshot(run, candidate)
-    for table, spec in json.loads((BASELINE / 'expected-ledgers.json').read_text()).items():
+    for table, spec in json.loads((baseline / 'expected-ledgers.json').read_text()).items():
         actual = run.sql(f'SELECT version, dirty FROM {table}')
         check_ledger(actual, spec['version'])
         result['ledgers'][table] = actual
@@ -127,10 +161,10 @@ def wait(check, timeout, pause=2):
         time.sleep(pause)
 
 
-def fault(run, candidate, service, result):
+def fault(run, candidate, baseline, service, result):
     require(service in FAULT_SERVICES, 'unsupported fault service')
     probes = ('/readyz', '/api/v1/videos?limit=1', '/api/v1/videos/search?q=recovery')
-    result['before'] = snapshot(run, candidate)
+    result['before'] = snapshot(run, candidate, baseline)
     result['before_probes'] = [http(p) for p in probes]
     require(result['before_probes'][0]['status'] == 200, 'stack not ready before the fault')
     result['stopped_at'] = time.time()
@@ -144,7 +178,7 @@ def fault(run, candidate, service, result):
     result['ready_probe'] = ready
     result['recovery_seconds'] = round(ready['at'] - result['started_at'], 3)
     result['after_probes'] = [http(p) for p in probes]
-    result['after'] = snapshot(run, candidate)
+    result['after'] = snapshot(run, candidate, baseline)
     # Recovery must come from the process reconnecting, not from someone (or
     # Docker's restart policy) replacing the api container behind the probe.
     require(result['after']['api'] == result['before']['api'], 'api container restarted during the fault')
@@ -153,10 +187,10 @@ def fault(run, candidate, service, result):
     result['checks'][f'{service}_outage_recovered_without_api_restart'] = 'PASS'
 
 
-def backup(run, candidate, stage, result):
-    result['before'] = snapshot(run, candidate)
+def backup(run, candidate, baseline, stage, result):
+    result['before'] = snapshot(run, candidate, baseline)
     log = run.run(['bash', 'deploy/backup.sh'], 'backup', timeout=1800)
-    result['after'] = snapshot(run, candidate)
+    result['after'] = snapshot(run, candidate, baseline)
     changed = differing(result['before']['catalogue'], result['after']['catalogue'])
     require(not changed, f'writes landed during the backup, so the recovered data point is ambiguous: {changed}')
     dump, config = parse_backup_done(log)
@@ -212,8 +246,8 @@ def failed_backup(run, result):
     result['checks']['failed_backup_exits_nonzero_and_advertises_nothing'] = 'PASS'
 
 
-def source_loss(run, candidate, result):
-    result['before'] = snapshot(run, candidate)
+def source_loss(run, candidate, baseline, result):
+    result['before'] = snapshot(run, candidate, baseline)
     result['stopped_at'] = time.time()
     run.compose('stop')
     left = run.compose('ps', '-q').split()
@@ -224,8 +258,9 @@ def source_loss(run, candidate, result):
     result['checks']['source_stack_stopped_no_container_left'] = 'PASS'
 
 
-def restore(run, candidate, stage, handoff, source_loss_result, result):
-    installer = BASELINE / 'install.sh'
+def restore(run, candidate, baseline, stage, handoff, source_loss_result, result):
+    installer = baseline / 'install.sh'
+    check_recorded_tag('source-loss evidence', source_loss_result, candidate)
     # The same blank-host guard the runtime milestone used: native Ubuntu 24.04
     # AMD64, root in a systemd VM, and no deployment tree, CLI or container
     # runtime. A populated original destination can never pass as a replacement.
@@ -238,6 +273,11 @@ def restore(run, candidate, stage, handoff, source_loss_result, result):
     require(len(dumps) == 1 and len(configs) == 1, 'handoff must hold one dump and one config archive')
     expected = json.loads((handoff.parent / 'backup-result.json').read_text())
     require(expected['status'] == 'PASS', 'source backup did not pass')
+    # The dump about to be restored was produced by that backup, onto a host
+    # this action is about to install from `candidate`; a dump from another
+    # release would be restored under the wrong images and still match the
+    # catalogue it was taken with.
+    check_recorded_tag('source backup', expected, candidate)
     for name, digest in expected['handoff'].items():
         require(sha(files[name]) == digest, f'{name}: transferred bytes differ from the source backup')
     result['timeline'] = {'source_stopped_at': source_loss_result['stopped_at'], 'install_started_at': time.time()}
@@ -252,12 +292,13 @@ def restore(run, candidate, stage, handoff, source_loss_result, result):
     # deploy/README.md "Disaster recovery", step 3, verbatim: configuration FIRST.
     run.run(['tar', '-xzf', str(handoff / configs[0]), '-C', str(INSTALL)], 'restore-config')
     require(check_config_archive(handoff / configs[0], INSTALL) == expected['config_members_sha256'], 'restored config differs')
-    # The same, and only, adaptation every v0.6.4 acceptance deployment used:
-    # the six application image references pinned to the frozen digests.
+    # The same, and only, adaptation every acceptance deployment since v0.6.4
+    # has used: the six application image references pinned to the frozen
+    # digests — of the baseline's candidate, not of some other release.
     # Deployment scripts must still match the released bundle byte for byte.
-    for name, digest in json.loads((BASELINE / 'frozen-deploy-hashes.json').read_text()).items():
+    for name, digest in json.loads((baseline / 'frozen-deploy-hashes.json').read_text()).items():
         require(sha(INSTALL / name) == digest, f'installed deployment source differs: {name}')
-    shutil.copyfile(BASELINE / 'pinned-prod.yml', INSTALL / 'docker-compose.prod.yml')
+    shutil.copyfile(baseline / 'pinned-prod.yml', INSTALL / 'docker-compose.prod.yml')
     result['deployment_adaptation'] = 'six application image references replaced with frozen digests; scripts unchanged'
     run.compose('up', '-d', 'postgres')
     wait(lambda: 'healthy' in run.run(['docker', 'inspect', '--format', '{{.State.Health.Status}}',
@@ -269,7 +310,7 @@ def restore(run, candidate, stage, handoff, source_loss_result, result):
     run.run(['bash', 'deploy/deploy.sh'], 'deploy', timeout=3600)
     runtime.wait_for_runtime(run)
     result['timeline']['ready_at'] = wait(lambda: (p := http('/readyz'))['status'] == 200 and p['at'], 600)
-    result['after'] = snapshot(run, candidate)
+    result['after'] = snapshot(run, candidate, baseline)
     changed = differing(expected['data_point']['catalogue'], result['after']['catalogue'])
     require(not changed, f'restored catalogue differs from the backup data point: {changed}')
     require(result['after']['ledgers'] == expected['data_point']['ledgers'], 'restored ledgers differ')
@@ -282,37 +323,47 @@ def restore(run, candidate, stage, handoff, source_loss_result, result):
     result['checks']['replacement_host_restore_matches_backup_data_point'] = 'PASS'
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['snapshot', 'fault', 'backup', 'failed-backup', 'source-loss', 'restore'])
     parser.add_argument('--stage', type=Path, required=True, help='new attempt directory per action')
+    parser.add_argument('--baseline', type=Path, default=DEFAULT_BASELINE,
+                        help='prepared runtime stage of the candidate under drill (default: the v0.6.4 stage)')
     parser.add_argument('--service', choices=FAULT_SERVICES)
     parser.add_argument('--handoff', type=Path, help='restore: directory holding the transferred dump/config')
     parser.add_argument('--source-loss', type=Path, help='restore: source-loss result.json')
     parser.add_argument('--acknowledge', help='restore: must be "replacement-host"')
-    args = parser.parse_args()
+    return parser
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    baseline = args.baseline.resolve()
     os.umask(0o077)
     stage = args.stage.resolve()
     require(not stage.exists(), 'use a new stage per attempt; failed evidence is retained')
     stage.mkdir(parents=True, mode=0o700)
     run = runtime.Recorder(stage)
     result = {'status': 'UNVERIFIED', 'action': args.action, 'service': args.service,
-              'started_at': time.time(), 'checks': {}}
+              'baseline': str(baseline), 'started_at': time.time(), 'checks': {}}
     try:
-        candidate = json.loads((BASELINE / 'candidate.json').read_text())
+        candidate = load_candidate(baseline)
+        # Every action stamps the release it ran on, so the records `restore`
+        # consumes can be checked against the release it is rebuilding.
+        result['candidate_tag'] = candidate['tag']
         if args.action == 'snapshot':
-            result['snapshot'] = snapshot(run, candidate)
+            result['snapshot'] = snapshot(run, candidate, baseline)
         elif args.action == 'fault':
-            fault(run, candidate, args.service, result)
+            fault(run, candidate, baseline, args.service, result)
         elif args.action == 'backup':
-            backup(run, candidate, stage, result)
+            backup(run, candidate, baseline, stage, result)
         elif args.action == 'failed-backup':
             failed_backup(run, result)
         elif args.action == 'source-loss':
-            source_loss(run, candidate, result)
+            source_loss(run, candidate, baseline, result)
         else:
             require(args.acknowledge == 'replacement-host', 'explicit replacement-host acknowledgement required')
-            restore(run, candidate, stage, args.handoff.resolve(),
+            restore(run, candidate, baseline, stage, args.handoff.resolve(),
                     json.loads(args.source_loss.read_text()), result)
         result['status'] = 'PASS'
     except Exception as error:  # every failure is recorded, never swallowed

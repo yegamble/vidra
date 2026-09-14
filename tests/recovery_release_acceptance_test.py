@@ -97,6 +97,53 @@ class FingerprintTest(unittest.TestCase):
         self.assertEqual(recovery.differing({'users': '1|a'}, {}), ['users'])
 
 
+# The drill was written for v0.6.4 and read its candidate, expected ledgers,
+# installer, frozen deployment hashes and pinned prod overlay from one hard-coded
+# directory, so it could not be pointed at the v0.6.5 stage being prepared now.
+# The baseline is an argument whose default keeps every v0.6.4 record valid.
+class BaselineTest(unittest.TestCase):
+    def test_candidate_is_read_from_the_chosen_baseline(self):
+        baseline = Path(tempfile.mkdtemp())
+        (baseline / 'candidate.json').write_text(json.dumps({'tag': 'v0.6.5', 'platform': 'linux/amd64'}))
+        self.assertEqual(recovery.load_candidate(baseline)['tag'], 'v0.6.5')
+
+    def test_a_baseline_without_a_candidate_manifest_is_refused(self):
+        with self.assertRaises(FileNotFoundError):
+            recovery.load_candidate(Path(tempfile.mkdtemp()))
+
+    def test_a_candidate_without_a_release_tag_is_refused(self):
+        baseline = Path(tempfile.mkdtemp())
+        (baseline / 'candidate.json').write_text(json.dumps({'platform': 'linux/amd64'}))
+        with self.assertRaises(ValueError):
+            recovery.load_candidate(baseline)
+
+    def test_the_default_baseline_keeps_the_v064_drill_unchanged(self):
+        args = recovery.build_parser().parse_args(['snapshot', '--stage', '/tmp/attempt'])
+        self.assertEqual(args.baseline, recovery.DEFAULT_BASELINE)
+        self.assertEqual(str(recovery.DEFAULT_BASELINE), '/root/vidra-v064-runtime')
+
+    def test_baseline_flag_selects_another_candidates_stage(self):
+        args = recovery.build_parser().parse_args(
+            ['restore', '--stage', '/tmp/attempt', '--baseline', '/root/vidra-v065-runtime'])
+        self.assertEqual(args.baseline, Path('/root/vidra-v065-runtime'))
+
+
+# A dump, or an outage clock, recorded on one release and restored onto another
+# rebuilds the wrong images and then passes every downstream comparison, because
+# both sides of that comparison came from the same wrong evidence.
+class RecordedTagTest(unittest.TestCase):
+    def test_evidence_from_the_candidate_being_restored_is_accepted(self):
+        recovery.check_recorded_tag('source-loss', {'candidate_tag': 'v0.6.5'}, {'tag': 'v0.6.5'})
+
+    def test_a_dump_from_another_release_cannot_be_restored(self):
+        with self.assertRaises(ValueError):
+            recovery.check_recorded_tag('backup', {'candidate_tag': 'v0.6.4'}, {'tag': 'v0.6.5'})
+
+    def test_a_record_without_a_tag_is_refused_not_assumed_to_match(self):
+        with self.assertRaises(ValueError):
+            recovery.check_recorded_tag('source-loss', {'status': 'PASS'}, {'tag': 'v0.6.4'})
+
+
 class ExportTest(unittest.TestCase):
     def test_health_probe_output_is_hashed_not_exported(self):
         value = export.hash_health_output({'Health': {'Log': [{'Output': 'token=abc'}]}})
@@ -151,6 +198,47 @@ class ExportTest(unittest.TestCase):
         self.assertEqual(written['secrets_loaded'], {'env': 1, 'bucket_key': False, 'mfa': True, 'owner': False})
         self.assertEqual(written['files'], manifest)
         self.assertEqual(list(manifest), ['stage/result.json'])
+
+    # A v0.6.5 host keeps its bucket key and owner fixture under v065 paths. The
+    # v0.6.4 exporter read every source "if it exists", so run there it scanned
+    # neither the B2 credential nor the owner password and still certified the
+    # export clean. A source the exporter NAMES must be present, or refused.
+    def test_a_named_secret_source_that_is_missing_refuses_the_export(self):
+        drill = Path(tempfile.mkdtemp())
+        (drill / 'stage').mkdir()
+        (drill / 'stage/result.json').write_text('{"ok": true}\n')
+        env = drill / 'production.env'
+        env.write_text('JWT_SECRET=abcdefgh1234\n')
+        with self.assertRaises(SystemExit):
+            export.export(drill, drill / 'out', ['stage'], required=export.REQUIRED_SOURCES,
+                          env_file=env, bucket_key_file=drill / 'absent.json',
+                          owner_file=drill / 'absent-owner.json')
+        self.assertFalse((drill / 'out').exists())
+
+    def test_every_named_source_present_is_scanned_and_recorded(self):
+        drill = Path(tempfile.mkdtemp())
+        (drill / 'stage').mkdir()
+        (drill / 'stage/result.json').write_text('{"ok": true}\n')
+        env = drill / 'production.env'
+        env.write_text('JWT_SECRET=abcdefgh1234\n')
+        key = drill / 'b2-key.json'
+        key.write_text(json.dumps({'access_key': '0012345678abcdef', 'secret_key': 'K005longsecretvalue'}))
+        owner = drill / 'owner.json'
+        owner.write_text(json.dumps({'password': 'owner-password-long'}))
+        export.export(drill, drill / 'out', ['stage'], required=export.REQUIRED_SOURCES,
+                      env_file=env, bucket_key_file=key, owner_file=owner)
+        written = json.loads((drill / 'out/artifact-hashes.json').read_text())
+        self.assertEqual(written['secrets_loaded'], {'env': 1, 'bucket_key': True, 'mfa': False, 'owner': True})
+
+    def test_the_owner_fixture_is_derived_from_the_baseline(self):
+        self.assertEqual(export.owner_path(Path('/root/vidra-v065-runtime')),
+                         Path('/root/vidra-v065-runtime/private/owner.json'))
+
+    def test_a_foreign_baseline_with_the_default_bucket_key_is_refused(self):
+        # Forgetting --b2-key on a v0.6.5 host must not quietly scan a leftover
+        # v0.6.4 key file and report a covered scan.
+        with self.assertRaises(SystemExit):
+            export.main(['drill', 'out', 'stage', '--baseline', '/root/vidra-v065-runtime'])
 
 
 if __name__ == '__main__':

@@ -7,11 +7,18 @@ hashed the same way. Before anything is written the export is scanned for every
 real secret this host holds (env-file secrets, the test-bucket key, the owner
 password, the TOTP secret and recovery codes) and refused on any match. The
 manifest records what the scan actually loaded (`secrets_loaded`), and an
-export whose env scan set is empty is refused: "no secret found" must never be
+export missing any source it NAMED is refused: "no secret found" must never be
 mistaken for "no secret looked for".
 
-  python3 recovery_release_export.py DRILL_DIR OUT_DIR STAGE [STAGE...]
+The bucket key and the owner fixture live under per-candidate paths, so they are
+arguments, not constants. Leaving them at the v0.6.4 defaults on a v0.6.5 host
+would have scanned neither file and certified the export anyway; now the export
+is refused instead.
+
+  python3 recovery_release_export.py DRILL_DIR OUT_DIR STAGE [STAGE...] \\
+      [--baseline /root/vidra-v065-runtime] [--b2-key /root/vidra-v065-b2-key.json]
 """
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -22,10 +29,20 @@ import sys
 # pair and must not reach the public record either.
 SECRET_KEY = re.compile(r'(SECRET|PASSWORD|TOKEN|KEK|_KEY$|_KEY_ID$|ACCESS_KEY)')
 
-# Where a v0.6.4 acceptance host keeps the secrets the scan must know about.
+# Where an acceptance host keeps the secrets the scan must know about. The env
+# file is the deployment's, identical on every candidate; the other two are the
+# drilled candidate's and default to v0.6.4 so those records stay reproducible.
 ENV_FILE = Path('/opt/vidra/env/production.env')
-BUCKET_KEY_FILE = Path('/root/vidra-v064-b2-key.json')
-OWNER_FILE = Path('/root/vidra-v064-runtime/private/owner.json')
+DEFAULT_BASELINE = Path('/root/vidra-v064-runtime')
+DEFAULT_B2_KEY = Path('/root/vidra-v064-b2-key.json')
+# Sources the command line names, and therefore asserts it scanned. `mfa` is
+# left out: it is written by the drill's mfa-enroll action under DRILL_DIR, so
+# an export taken before that action legitimately has none.
+REQUIRED_SOURCES = ('env', 'bucket_key', 'owner')
+
+
+def owner_path(baseline):
+    return Path(baseline) / 'private/owner.json'
 
 
 def sha_bytes(data):
@@ -44,13 +61,14 @@ def hash_health_output(value):
     return value
 
 
-def host_secrets(drill, env_file=ENV_FILE, bucket_key_file=BUCKET_KEY_FILE, owner_file=OWNER_FILE):
+def host_secrets(drill, env_file=ENV_FILE, bucket_key_file=DEFAULT_B2_KEY,
+                 owner_file=owner_path(DEFAULT_BASELINE)):
     """Collect the host's secret values and record what was actually loaded.
 
     The v0.6.4 drill exports were scanned by a revision that read each source
     only `if path.exists()` and kept no note of it, so a missing file silently
     shrank the scan. `loaded` is written into the export manifest so the record
-    says which sources the scan covered; export() refuses an empty env set.
+    says which sources the scan covered; export() refuses a source it required.
     """
     secrets = set()
     loaded = {'env': 0, 'bucket_key': False, 'mfa': False, 'owner': False}
@@ -91,7 +109,7 @@ def leaks(files, secrets):
     return sorted(found)
 
 
-def export(drill, out, stages, **sources):
+def export(drill, out, stages, required=('env',), **sources):
     files = {}
     for stage in stages:
         directory = drill / stage
@@ -110,9 +128,17 @@ def export(drill, out, stages, **sources):
         for image in sorted(directory.glob('*.png')):
             files[f'{stage}/{image.name}'] = image.read_bytes()
     secrets, loaded = host_secrets(drill, **sources)
-    if loaded['env'] == 0:
-        raise SystemExit('refusing export: no env secret was loaded, so a clean scan would prove nothing '
-                         f'(env file {sources.get("env_file", ENV_FILE)} missing or without secret keys)')
+    # A source that was named but not read makes the scan narrower than the
+    # record claims, and a clean result then proves nothing about it.
+    scanned = {'env': sources.get('env_file', ENV_FILE),
+               'bucket_key': sources.get('bucket_key_file', DEFAULT_B2_KEY),
+               'owner': sources.get('owner_file', owner_path(DEFAULT_BASELINE)),
+               'mfa': drill / 'private/mfa.json'}
+    missing = [name for name in required if not loaded[name]]
+    if missing:
+        raise SystemExit('refusing export: no secret was loaded from ' +
+                         ', '.join(f'{name} ({scanned[name]})' for name in missing) +
+                         ' — missing, or holding no secret value, so a clean scan would prove nothing')
     found = leaks(files, secrets)
     if found:
         raise SystemExit(f'refusing export: host secret material found in {found}')
@@ -129,8 +155,26 @@ def export(drill, out, stages, **sources):
     return manifest
 
 
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('drill', type=Path, help='drill directory holding the stage subdirectories')
+    parser.add_argument('out', type=Path, help='new export directory')
+    parser.add_argument('stages', nargs='+', help='stage subdirectory names to export')
+    parser.add_argument('--baseline', type=Path, default=DEFAULT_BASELINE,
+                        help='prepared runtime stage of the drilled candidate; the owner fixture is '
+                             '<baseline>/private/owner.json (default: the v0.6.4 stage)')
+    parser.add_argument('--b2-key', type=Path, default=DEFAULT_B2_KEY,
+                        help='dedicated test-bucket key file (default: the v0.6.4 key)')
+    args = parser.parse_args(argv)
+    # A candidate's key file is named for that candidate. Taking another
+    # candidate's baseline while leaving the key at the v0.6.4 default would
+    # scan a leftover key — or nothing — and report a covered scan either way.
+    if args.baseline != DEFAULT_BASELINE and args.b2_key == DEFAULT_B2_KEY:
+        raise SystemExit(f'refusing export: --baseline {args.baseline} is not the v0.6.4 stage but --b2-key '
+                         f'still points at {DEFAULT_B2_KEY}; name this candidate\'s key file')
+    return export(args.drill, args.out, args.stages, required=REQUIRED_SOURCES, env_file=ENV_FILE,
+                  bucket_key_file=args.b2_key, owner_file=owner_path(args.baseline))
+
+
 if __name__ == '__main__':
-    if len(sys.argv) < 4:
-        raise SystemExit(__doc__)
-    manifest = export(Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3:])
-    print(json.dumps({'files': len(manifest)}))
+    print(json.dumps({'files': len(main(sys.argv[1:]))}))
