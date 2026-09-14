@@ -13,8 +13,11 @@ and image vulnerability scan is done (PASS, below), its runtime milestone and
 the new white-label toggle passed on the v0.6.6 digests (below), and the
 storage and disaster-recovery drills are carried from v0.6.5 by a documented
 delta rather than re-run. Nothing is deployed on it; beta stays on v0.6.4.
-Overall verdict stays **NO-GO** for full production until the browser/Safari/iOS
-matrix runs on v0.6.6 and the owner makes the deploy call.
+The highest-risk iOS-specific behaviours (watch-page load, playback advancing,
+sign-in) now pass on a **real iPhone** (below); overall verdict stays **NO-GO**
+for full production until the **broader** browser matrix (other iOS
+versions, iPad, macOS Safari, accessibility) runs on v0.6.6 and the owner makes
+the deploy call.
 
 - **Contents:** `core#242` + `user#221` — the admin-only white-label toggle
   `branding_hide_software_name`. **No new migration:** schema stays **146 / 18**,
@@ -60,6 +63,24 @@ matrix runs on v0.6.6 and the owner makes the deploy call.
   `PATCH /api/v1/admin/instance-settings` flipped `GET /api/v1/instance`'s
   `branding.hide_software_name` to true, then reverted. API-level admin toggle +
   public read-back; the browser chrome render belongs to the iOS/UI matrix.
+- **iOS Safari (real device): PASS on v0.6.6 — focused single-device pass.**
+  A real **iPhone 15 / iOS 17** on the LambdaTest real-device cloud reached the
+  v0.6.6 local-storage runtime stack over **LambdaTest Tunnel MITM** against the
+  self-signed internal origin `secure.video.test` (trusted padlock via MITM) and
+  passed all four checks: watch page loads, `<video>` reaches `readyState` 4
+  (duration 12.01 s, `currentSrc` a `blob:` URL — the **Managed Media Source**
+  path, expected on iOS 17, not a defect), playback advances **0 → 2.255 s** with
+  no media error, and a real owner sign-in succeeds
+  ([record](runtime-acceptance-ios-v0.6.6.md), evidence
+  `docs/evidence/release-v0.6.6-verification/ios-runtime/`; session 607dbe4f).
+  This is the first real-Apple-hardware confirmation of the MSE playback path the
+  desktop campaign could only predict. **Covers only** the highest-risk
+  iOS-specific behaviours on **one device + version**; it does **not** close the
+  browser matrix — no other iOS versions / iPad / macOS Safari / accessibility, no
+  upload-from-iOS, no player-gesture controls, and it took the MSE path, not
+  native-HLS. **No workflow row moved** (PLAY-01 and QLT-02 considered and kept
+  UNVERIFIED — a single-device sample does not close a full row); counts stay
+  5/45/9. [Disposition](evidence/release-v0.6.6-verification/ios-runtime/disposition.json).
 - **Storage and disaster-recovery: carried from v0.6.5 by documented delta.**
   v0.6.6 is v0.6.5 plus one admin-only branding flag with no migration and no
   change to the deploy, storage, media, backup or recovery code, so the B2,
@@ -71,11 +92,16 @@ matrix runs on v0.6.6 and the owner makes the deploy call.
   (only a B2 media subset ever passed, never the full procedure). Counts: **5
   PASS / 45 UNVERIFIED / 9 BLOCKED**, same as the v0.6.5 offsite baseline.
 - **Beta: untouched** — still on v0.6.4.
-- **Next executable:** the browser/Safari/iOS matrix on v0.6.6 (LambdaTest);
-  optionally a fresh REC-03 upgrade/rollback re-based on v0.6.6 (currently carried
-  by delta, defensible because v0.6.6 adds no migration); then the owner's deploy
-  decision. Still open: the representative-source migration (B2) and the selected
-  IdP/mail/CDN providers (B3).
+- **Next executable:** the highest-risk iOS-specific behaviours passed on a real
+  iPhone (above), so the remaining browser work is the **broader matrix** — other
+  iOS versions, iPad, macOS Safari and accessibility (plus native-HLS on Apple
+  hardware, upload-from-iOS and player-gesture controls); optionally a fresh
+  REC-03 upgrade/rollback re-based on v0.6.6 (currently carried by delta,
+  defensible because v0.6.6 adds no migration); then the owner's deploy decision.
+  Still open: the representative-source migration (B2) and the selected
+  IdP/mail/CDN providers (B3). The last blocking **browser** gap for a pragmatic
+  GO is **materially reduced** — the real-device iOS smoke passed — though the
+  full matrix and the owner call remain.
 
 ## v0.6.5 candidate — 2026-09-13
 

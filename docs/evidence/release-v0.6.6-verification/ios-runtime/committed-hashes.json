@@ -1,0 +1,21 @@
+{
+  "note": "sha256 of every committed file in this ios-runtime tree except this file itself, recomputed at commit time over the bytes as committed. Covers the exporter-produced evidence (run-3/ result.json + four PNGs; retained/ run-1/run-2 result JSONs + two PNGs; provenance.json; ios_safari_pass.py; artifact-hashes.json) and the derived disposition.json. This index is the independent second opinion over the whole tree; artifact-hashes.json is the exporter's own on-host attestation over the files it wrote (it does not hash itself). The copied evidence bytes were verified equal to artifact-hashes.json at commit time.",
+  "candidate": "v0.6.6",
+  "date_utc": "2026-09-14",
+  "count": 13,
+  "files": {
+    "artifact-hashes.json": "a5a6db57a0033dce749411b46d2082bc57fb9d1f9016f72945482d0a51b30936",
+    "disposition.json": "ee64251376d11e6b394f8d7afbfbb9b055471943f50b2b039e08afdb445a0150",
+    "ios_safari_pass.py": "c0be0ad15cd291f203eb041c83e513d0f18f847cecc927cd8616714964d7824c",
+    "provenance.json": "1463f71d14acb6437a92351897c9bb5bfc4fccaca03bf625db2dbbac57e014bc",
+    "retained/run-1-hub-auth-refused-result.json": "3e74402d7d644ec24649947ab21ae919fad740d2ed97d79b51025c0d9b8e68cb",
+    "retained/run-2-01-watch.png": "0caa6aaf18be7fa27f1909e43ae7258593abab1c8860dfaece846c0b8405abb6",
+    "retained/run-2-99-fail-playback-advances.png": "b5b253691d86c768a47304f7eba178610009496cb3a906c46218c9ca5830f05e",
+    "retained/run-2-script-bug-result.json": "d6ca95e1f7b44b5e48e9640dc1a827c5a70ef22e933d4675d1f6a12c322e6a31",
+    "run-3/01-watch.png": "5bb16d65184639bdfa1450c7e0e5aa1d25a53307e13260716754506d2349f9f5",
+    "run-3/02-playing.png": "9b2801546abf240bd68348d861c4fd44c8741994a98982f1b983a9661b2c9fac",
+    "run-3/03-login-filled.png": "89337c067adad4d1c0c83a912998b4178f7017e7beefb85ca53e0b0c44d0cdf7",
+    "run-3/04-signed-in.png": "a9da1b29c6cd7563b794569dd46838e61b20e0e1c252add37916e528f3ac29de",
+    "run-3/result.json": "afac45eb1967d887fcf76ec08ac2685cea3970829b789fefe5f9e5be33612b84"
+  }
+}

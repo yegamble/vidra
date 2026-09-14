@@ -1,0 +1,44 @@
+{
+  "candidate": "v0.6.6",
+  "date_utc": "2026-09-14",
+  "scope": "Focused real-iPhone Safari pass (iOS-specific risks desktop Chromium cannot cover) against the v0.6.6 local-storage runtime stack via LambdaTest Tunnel in MITM mode (self-signed internal origin secure.video.test).",
+  "provider": "LambdaTest real-device cloud (Appium/XCUITest), mobile-hub.lambdatest.com",
+  "device": "iPhone 15",
+  "ios": "17",
+  "tunnel": {
+    "name": "vidra-v066-ios",
+    "mode": "--mitm --allowHosts secure.video.test",
+    "host": "159.203 (the stack host), tunnel id 17014436 (session-reported)"
+  },
+  "session_id": "607dbe4f-a428-4a8a-8cbe-ccfd351ef735",
+  "result": "PASS",
+  "checks": {
+    "watch-page-loads": "PASS",
+    "video-element-ready": "PASS",
+    "playback-advances": "PASS",
+    "sign-in": "PASS"
+  },
+  "playback": {
+    "start": {
+      "t": 0,
+      "err": null
+    },
+    "end": {
+      "t": 2.2549181343327698,
+      "paused": false,
+      "err": null,
+      "ready": 4
+    },
+    "advanced_seconds": 2.255
+  },
+  "video_src_note": "the <video> currentSrc was a blob: URL \u2014 on iPhone 15 / iOS 17 the player took the Media Source (managed MSE) path rather than a native m3u8 src; readyState 4 and time advanced with no media error",
+  "retained_attempts": {
+    "run-1": "session refused 'Authorization Required' \u2014 the mobile hub, like the tunnel service, requires the account EMAIL as the user (the REST API accepts the username); credentials issue in the harness, not the product",
+    "run-2": "page load + video ready PASSED; the playback-advance check crashed on a bug in the operator's script (walrus-in-conditional evaluation order); the device screenshot shows the pause icon and a moved frame counter, i.e. playback was in progress; re-run as run-3"
+  },
+  "not_claimed": "upload from iOS, player-control gestures, other iOS versions/devices, iPad, WebKit on macOS Safari, accessibility; a single device/version sample",
+  "tool_sha256": {
+    "ios_safari_pass.py": "c0be0ad15cd291f203eb041c83e513d0f18f847cecc927cd8616714964d7824c"
+  },
+  "exported_at": "2026-09-14T21:09:23Z"
+}
