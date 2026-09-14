@@ -1,0 +1,15 @@
+{
+  "candidate": "v0.6.6",
+  "date_utc": "2026-09-14",
+  "feature": "branding_hide_software_name (admin-only white-label toggle; core#242 + user#221)",
+  "host": "159.203 v0.6.6 runtime-milestone stack (local storage), COMPOSE_PROJECT_NAME=vidra-release-acceptance",
+  "endpoint": "PATCH /api/v1/admin/instance-settings {\"branding_hide_software_name\": <bool>}; read back via GET /api/v1/instance branding.hide_software_name",
+  "sequence": [
+    {"step": "default", "instance.branding.hide_software_name": false, "instance.software.name": "vidra"},
+    {"step": "PATCH true (admin, owner token)", "http": 200},
+    {"step": "read back", "instance.branding.hide_software_name": true},
+    {"step": "revert to false", "http": 200}
+  ],
+  "result": "PASS — the admin toggle flips the public branding block's hide_software_name on the v0.6.6 images; machine-readable identifiers unchanged per spec",
+  "scope": "API-level admin toggle + public read-back; not a browser render check of the chrome (that belongs to the UI/iOS matrix)"
+}
