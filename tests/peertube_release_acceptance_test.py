@@ -1,4 +1,5 @@
 """Guard archive handling, candidate derivation and the sole Compose adaptation of the COPY rehearsal."""
+from contextlib import redirect_stdout
 import io
 import json
 import os
@@ -6,6 +7,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import peertube_release_acceptance as p
 import peertube_release_export as export_tool
@@ -208,6 +210,37 @@ class StageRefusalTests(unittest.TestCase):
         self.assertIn('baseline', self.refuse(baseline, self.prepared(baseline='/root/vidra-v064-runtime')))
         self.assertIn('v0.6.4', self.refuse(baseline, self.prepared(candidate_tag='v0.6.4')))
         self.assertIn('source_container', self.refuse(baseline, self.prepared(source_container=None)))
+        # Nonempty was the whole test before: a v0.6.4 clone left on the host
+        # answers to `docker exec ... psql` exactly as a v0.6.5 one does, so a
+        # recorded name from the previous drill reconciled the previous drill's
+        # database and stamped the result v0.6.5.
+        self.assertIn('source_container', self.refuse(baseline, self.prepared(
+            source_container='vidra-v064-migration-source-20260911')))
+
+    def continuation(self, **overrides):
+        source = self.tmp / 'prior'
+        source.mkdir(exist_ok=True)
+        (source / 'preparation.json').write_text(json.dumps(
+            self.prepared(status='FAIL', error='source role could write', **overrides)))
+        return source
+
+    def test_a_continuation_against_another_release_is_refused_before_anything_is_created(self):
+        # `--prepared-source` re-supplies `--baseline` too, and the generated
+        # PeerTube fixture hashes are IDENTICAL across releases, so nothing
+        # further down prepare() would notice: a v0.6.5 drill continued with
+        # `--prepared-source /root/vidra-v064-migration-20260911` reuses that
+        # drill's container name and POSTGRES_PASSWORD and calls the evidence
+        # v0.6.5. The stage's own record is the second opinion, and it is read
+        # before the recorder, the clone or any host command exists.
+        baseline = self.baseline({'backend': 'b2', 'spec': B2_SPEC})
+        stage = self.tmp / 'continuation-stage'
+        for bad in ({'candidate_tag': 'v0.6.4'}, {'baseline': '/root/vidra-v064-runtime'},
+                    {'source_container': 'vidra-v064-migration-source-20260911'}):
+            with self.subTest(bad=bad), patch('platform.machine', return_value='x86_64'), \
+                    patch('platform.system', return_value='Linux'):
+                with self.assertRaises(ValueError):
+                    p.prepare(stage, baseline, self.continuation(**bad))
+            self.assertFalse(stage.exists(), 'refusal created the stage it was asked to prepare')
 
     def test_a_stage_that_records_nothing_extra_is_still_accepted(self):
         # Legacy stages predate the recorded fields; only a DISAGREEING value is
@@ -259,14 +292,23 @@ class ExportTopologyTests(unittest.TestCase):
             export_tool.preparation_sources(self.root)
         self.assertIn('nothing to export', str(caught.exception))
 
-    def test_clean_first_time_prepare_reaches_the_secret_scan(self):
+    def test_a_clean_first_time_prepare_exports_the_one_stage_that_exists(self):
+        # Reaching the secret scan proved nothing once the scan moved ahead of
+        # the topology: collect_secrets refuses first on any stage shape, so the
+        # old assertion passed whether or not a missing `-continuation` would
+        # still have raised FileNotFoundError. The scan is covered by
+        # ExportSecretSourceTests; patching it out is what lets this test assert
+        # the topology — that an export past the scan COMPLETES on a run with no
+        # continuation, and records exactly the attempt that exists.
         self.attempt()
-        (self.root / 'private').mkdir()
-        (self.root / 'private/source.env').write_text('POSTGRES_PASSWORD=generated-secret-value\n')
-        with self.assertRaises(AssertionError) as caught:
+        with patch.object(export_tool, 'collect_secrets', return_value=['unrelated-secret']), \
+                redirect_stdout(io.StringIO()):
             export_tool.export('reviewed', self.root, self.tmp / 'baseline', self.tmp / 'key.json')
-        # A missing `-continuation` used to raise FileNotFoundError here.
-        self.assertIn('named secret source', str(caught.exception))
+        out = Path(str(self.root) + '-reviewed')
+        provenance = json.loads((out / 'provenance.json').read_text())
+        self.assertEqual(provenance['preparation_stages'], {'prepare-original': str(self.root)})
+        self.assertEqual(provenance['secret_scan'], 'PASS')
+        self.assertTrue((out / 'prepare-original.json').is_file())
 
     def test_a_refused_export_leaves_no_output_directory(self):
         self.attempt()

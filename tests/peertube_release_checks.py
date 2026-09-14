@@ -18,8 +18,8 @@ import urllib.request
 import release_acceptance as runtime
 from blank_server_smoke import require, sha
 from peertube_release_acceptance import (DEFAULT_B2_KEY, DEFAULT_BASELINE, DEFAULT_ROOT,
-                                         baseline_storage, check_stage_prepared_for,
-                                         frozen_cli_sha256, release_tag)
+                                         baseline_storage, check_source_container,
+                                         check_stage_prepared_for, frozen_cli_sha256, release_tag)
 from release_acceptance_b2 import TestBucket
 
 
@@ -55,10 +55,9 @@ def execute(stage, action, label=None, baseline=DEFAULT_BASELINE, root=DEFAULT_R
     # on a later day, or against another release, from addressing a foreign
     # database.
     prior = json.loads((stage / 'preparation.json').read_text())
-    container = prior.get('source_container')
-    require(isinstance(container, str) and bool(container),
-            f'{stage}/preparation.json records no source_container; re-prepare the stage with this harness')
     check_stage_prepared_for(prior, baseline, tag)
+    container = check_source_container(prior.get('source_container'), tag,
+                                       f'{stage}/preparation.json')
     out = stage / (label or action)
     out.mkdir(mode=0o700)
     run = runtime.Recorder(out)

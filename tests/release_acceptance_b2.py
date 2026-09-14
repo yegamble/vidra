@@ -20,7 +20,12 @@ def bucket_label(tag):
     return tag.replace('.', '')
 
 
-def validate_spec(spec, tag='v0.6.4'):
+def validate_spec(spec, tag):
+    # `tag` is REQUIRED of every caller. A default here is not a convenience:
+    # it is the shape of the bug it caused — a caller that forgets the tag
+    # validates the NEXT release's bucket against the LAST release's name and
+    # only finds out on the acceptance host, mid-drill. Forgetting it now is a
+    # TypeError at the call site, in CI, before anything reaches Backblaze.
     require(set(spec) == {'bucket', 'bucket_id', 'region', 'endpoint'}, 'bucket spec must contain only nonsecret fields')
     require(re.fullmatch(rf'vidra-acceptance-{bucket_label(tag)}-[0-9]{{8}}-[a-z0-9-]+', spec['bucket']) is not None,
             f'requires a new dedicated {tag} acceptance bucket; existing/shared buckets forbidden')
@@ -30,10 +35,10 @@ def validate_spec(spec, tag='v0.6.4'):
     require(spec['endpoint'] == f's3.{spec["region"]}.backblazeb2.com', 'requires regional B2 TLS endpoint')
 
 
-def validate_scope(spec, storage, tag='v0.6.4'):
-    # Same tag the caller established, never this function's own default: a
-    # v0.6.5 run re-checking its spec against v0.6.4 would refuse its own
-    # correctly named bucket at b2_authorize_account, on the host, mid-drill.
+def validate_scope(spec, storage, tag):
+    # Re-validates the spec against the tag the CALLER established. Checking it
+    # against anything else would refuse a correctly named v0.6.5 bucket at
+    # b2_authorize_account, on the host, mid-drill.
     validate_spec(spec, tag)
     allowed = storage['allowed']
     require(allowed.get('buckets') == [{'id': spec['bucket_id'], 'name': spec['bucket']}],
@@ -61,7 +66,7 @@ def validate_runtime_config(services, spec, credentials):
 
 
 class TestBucket:
-    def __init__(self, spec, credentials, tag='v0.6.4'):
+    def __init__(self, spec, credentials, tag):
         validate_spec(spec, tag)
         require(set(credentials) == {'access_key', 'secret_key'} and all(credentials.values()), 'invalid dedicated key file')
         self.spec = spec
