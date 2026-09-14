@@ -1,0 +1,56 @@
+{
+  "raw_result_sha256": "9791507a2d7d15a9cb177c5bdc9604ec5730be46870a7457e47837a028d5df2d",
+  "raw_browser_sha256": "a4437d0cc368ba27c28ddb2cc030c1b43ad6b1e54336318a896c593086b5d19b",
+  "raw_commands_sha256": "e34a9fb3b5c418673cec57ac4b456853916bdce3c89ec0fb8e339deec0a7ac8b",
+  "raw_evidence_location": "/root/vidra-v065-runtime",
+  "runtime_configuration": {
+    "VIDRA_ENV": "production",
+    "TRANSCODING_ENABLED": "true",
+    "TRANSCODING_PACKAGER": "cmaf",
+    "SEARCH_SERVICE_URL": "http://search:8080",
+    "CLAMAV_ADDR": "clamav:3310",
+    "MALWARE_SCAN_MODE": "fail-closed",
+    "RATE_LIMIT_ENABLED": "true",
+    "RATE_LIMIT_REQUESTS": "120",
+    "MEDIA_RATE_LIMIT_REQUESTS": "3000",
+    "STORAGE_BACKEND": "s3",
+    "STORAGE_S3_ENDPOINT": "s3.us-east-005.backblazeb2.com",
+    "STORAGE_S3_REGION": "us-east-005",
+    "STORAGE_S3_BUCKET": "vidra-acceptance-v065-20260914-media",
+    "STORAGE_S3_USE_SSL": "true",
+    "STORAGE_S3_FORCE_PATH_STYLE": "false"
+  },
+  "actual_runtime_storage": [
+    {
+      "service": "api",
+      "container_id": "581a8baf477dd3323a480e6b6c8f3ee4002f426200fe75647000a5c01585f97e",
+      "observed_at": 1789367856.4121592,
+      "configuration": {
+        "STORAGE_BACKEND": "s3",
+        "STORAGE_S3_ENDPOINT": "s3.us-east-005.backblazeb2.com",
+        "STORAGE_S3_REGION": "us-east-005",
+        "STORAGE_S3_BUCKET": "vidra-acceptance-v065-20260914-media",
+        "STORAGE_S3_USE_SSL": "true",
+        "STORAGE_S3_FORCE_PATH_STYLE": "false"
+      },
+      "credential_matches_verified_single_bucket_key": true
+    },
+    {
+      "service": "api",
+      "container_id": "581a8baf477dd3323a480e6b6c8f3ee4002f426200fe75647000a5c01585f97e",
+      "observed_at": 1789367982.7359743,
+      "configuration": {
+        "STORAGE_BACKEND": "s3",
+        "STORAGE_S3_ENDPOINT": "s3.us-east-005.backblazeb2.com",
+        "STORAGE_S3_REGION": "us-east-005",
+        "STORAGE_S3_BUCKET": "vidra-acceptance-v065-20260914-media",
+        "STORAGE_S3_USE_SSL": "true",
+        "STORAGE_S3_FORCE_PATH_STYLE": "false"
+      },
+      "credential_matches_verified_single_bucket_key": true
+    }
+  ],
+  "completion_raw_sha256": null,
+  "original_failure_preserved": false,
+  "scope": "Sanitized result/browser measurements, command arguments and raw-log hashes, four requested browser screenshots. No raw logs, generated environment, credentials, database or application storage exported."
+}
