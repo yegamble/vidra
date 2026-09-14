@@ -72,6 +72,24 @@ def source_container(tag, day=None):
     return f'vidra-{bucket_label(tag)}-migration-source-{day or time.strftime("%Y%m%d", time.gmtime())}'
 
 
+def check_source_container(container, tag, where):
+    """The recorded clone name must be THIS release's own, not merely nonempty.
+
+    `source_container()` builds the name and the stage records it; every later
+    step reads it back rather than recomputing it, which is what stops a step
+    run on a later day from addressing a different database. Accepting any
+    nonempty string left the recorded name unverified: a v0.6.4 clone left
+    running on the host answers `docker exec ... psql` exactly as a v0.6.5 one
+    does, so the wrong release's database would be reconciled and the evidence
+    would still be stamped with this release.
+    """
+    require(isinstance(container, str) and
+            re.fullmatch(rf'vidra-{bucket_label(tag)}-migration-source-[0-9]{{8}}', container) is not None,
+            f'{where} records no {tag} source_container ({container!r}); '
+            'prepare the stage for this release with this harness')
+    return container
+
+
 def check_stage_prepared_for(prior, baseline, tag):
     """A stage carries the baseline and the release it was prepared against.
 
@@ -86,6 +104,30 @@ def check_stage_prepared_for(prior, baseline, tag):
             f'stage was prepared against baseline {recorded}, not {baseline}')
     recorded = prior.get('candidate_tag')
     require(recorded in (None, tag), f'stage was prepared for release {recorded}, not {tag}')
+
+
+def continuation_source(prepared_source, baseline, tag):
+    """Validate a `--prepared-source` stage and return its recorded preparation.
+
+    A continuation re-supplies `--baseline` as well, so the same typo that can
+    point a check at another release's stage can point a continuation at one —
+    and the generated PeerTube fixture hashes are IDENTICAL across releases, so
+    nothing further down prepare() would notice. A v0.6.5 drill continued with
+    `--prepared-source /root/vidra-v064-migration-20260911` would reuse that
+    drill's container name and POSTGRES_PASSWORD and call the evidence v0.6.5.
+    Everything here is read before the recorder, the clone or any host command
+    exists, so a refusal leaves the host untouched.
+    """
+    prior = json.loads((prepared_source / 'preparation.json').read_text())
+    check_stage_prepared_for(prior, baseline, tag)
+    require(prior['status'] == 'FAIL' and prior['error'] == 'source role could write',
+            'continuation is only for the preserved read-only probe recorder failure')
+    # Continue against the database the original attempt created and recorded,
+    # never a freshly derived name: a continuation run on a later day would
+    # otherwise address a container that does not exist.
+    check_source_container(prior.get('source_container'), tag,
+                           f'{prepared_source}/preparation.json')
+    return prior
 
 
 def baseline_storage(baseline, tag):
@@ -133,12 +175,13 @@ def prepare(stage, baseline, prepared_source=None):
     if not prepared_source:
         require(all(not (stage / name).exists() and not (stage / name).is_symlink()
                     for name in ('source-media8', 'source-db')), 'source paths must be new')
-    # The release, and the bucket whose bytes its evidence may cite, are facts
-    # of the baseline. Read them before anything is created: both refusals below
-    # leave the host untouched.
+    # The release, the bucket whose bytes its evidence may cite, and (on a
+    # continuation) the stage being continued are all facts established before
+    # anything is created: every refusal below leaves the host untouched.
     candidate = json.loads((baseline / 'candidate.json').read_text())
     tag = release_tag(candidate)
     spec = baseline_storage(baseline, tag)
+    prior = continuation_source(prepared_source, baseline, tag) if prepared_source else None
     run = runtime.Recorder(stage)
     result = {'status': 'UNVERIFIED', 'started_at': time.time(), 'checks': {},
               'scope': scope(tag), 'candidate_tag': tag, 'test_bucket': spec['bucket'],
@@ -162,15 +205,7 @@ def prepare(stage, baseline, prepared_source=None):
         require(env.get('RATE_LIMIT_ENABLED') != 'false', 'rate limits must stay enabled')
         source_stage = prepared_source or stage
         if prepared_source:
-            prior = json.loads((prepared_source / 'preparation.json').read_text())
-            require(prior['status'] == 'FAIL' and prior['error'] == 'source role could write',
-                    'continuation is only for the preserved read-only probe recorder failure')
-            # Continue against the database the original attempt created and
-            # recorded, never a freshly derived name: a continuation run on a
-            # later day would otherwise address a container that does not exist.
-            container = prior.get('source_container')
-            require(isinstance(container, str) and bool(container),
-                    'prior preparation records no source_container; cannot continue against an unnamed database')
+            container = prior['source_container']
             result['prior_preparation'] = {'path': str(prepared_source), 'sha256': sha(prepared_source / 'preparation.json')}
         else:
             container = source_container(tag)

@@ -6,6 +6,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import peertube_release_acceptance as p
 import peertube_release_export as export_tool
@@ -208,6 +209,37 @@ class StageRefusalTests(unittest.TestCase):
         self.assertIn('baseline', self.refuse(baseline, self.prepared(baseline='/root/vidra-v064-runtime')))
         self.assertIn('v0.6.4', self.refuse(baseline, self.prepared(candidate_tag='v0.6.4')))
         self.assertIn('source_container', self.refuse(baseline, self.prepared(source_container=None)))
+        # Nonempty was the whole test before: a v0.6.4 clone left on the host
+        # answers to `docker exec ... psql` exactly as a v0.6.5 one does, so a
+        # recorded name from the previous drill reconciled the previous drill's
+        # database and stamped the result v0.6.5.
+        self.assertIn('source_container', self.refuse(baseline, self.prepared(
+            source_container='vidra-v064-migration-source-20260911')))
+
+    def continuation(self, **overrides):
+        source = self.tmp / 'prior'
+        source.mkdir(exist_ok=True)
+        (source / 'preparation.json').write_text(json.dumps(
+            self.prepared(status='FAIL', error='source role could write', **overrides)))
+        return source
+
+    def test_a_continuation_against_another_release_is_refused_before_anything_is_created(self):
+        # `--prepared-source` re-supplies `--baseline` too, and the generated
+        # PeerTube fixture hashes are IDENTICAL across releases, so nothing
+        # further down prepare() would notice: a v0.6.5 drill continued with
+        # `--prepared-source /root/vidra-v064-migration-20260911` reuses that
+        # drill's container name and POSTGRES_PASSWORD and calls the evidence
+        # v0.6.5. The stage's own record is the second opinion, and it is read
+        # before the recorder, the clone or any host command exists.
+        baseline = self.baseline({'backend': 'b2', 'spec': B2_SPEC})
+        stage = self.tmp / 'continuation-stage'
+        for bad in ({'candidate_tag': 'v0.6.4'}, {'baseline': '/root/vidra-v064-runtime'},
+                    {'source_container': 'vidra-v064-migration-source-20260911'}):
+            with self.subTest(bad=bad), patch('platform.machine', return_value='x86_64'), \
+                    patch('platform.system', return_value='Linux'):
+                with self.assertRaises(ValueError):
+                    p.prepare(stage, baseline, self.continuation(**bad))
+            self.assertFalse(stage.exists(), 'refusal created the stage it was asked to prepare')
 
     def test_a_stage_that_records_nothing_extra_is_still_accepted(self):
         # Legacy stages predate the recorded fields; only a DISAGREEING value is
