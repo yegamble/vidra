@@ -24,10 +24,10 @@ which is a provider representation, not a checksum attestation — the byte
 identity below rests on the SHA-256 the runner computed over the object it
 actually downloaded.
 
-Conventions, as in the native v0.6.5 record: values below are **file-asserted**
-— read out of the committed evidence — unless marked **session-reported**, in
-which case they come from the operator's account of the run and are not
-reconstructible from the committed artifacts.
+Extending the native v0.6.5 record's labelling: values below are
+**file-asserted** — read out of the committed evidence — unless marked
+**session-reported**, in which case they come from the operator's account of
+the run and are not reconstructible from the committed artifacts.
 
 ## Candidate and execution boundary
 
@@ -58,9 +58,11 @@ LTS (Noble Numbat)**, `root` true, `systemd` true, `container` false and
 DigitalOcean droplet **599531580** (`159.203.118.182`), rebuilt blank by the
 operator at **04:39:23 UTC** with 8 vCPU / 15 GiB / 309 GB, is
 **session-reported**. The browser reached the guest-internal origin
-`https://secure.video.test` (`--host-resolver-rules=MAP secure.video.test
-127.0.0.1`, `--no-proxy-server`). No production DNS, traffic or resource was
-touched.
+`https://secure.video.test` (`browser_args`: `--host-resolver-rules=MAP
+secure.video.test 127.0.0.1`, `--no-proxy-server`,
+`--autoplay-policy=no-user-gesture-required` — the user-gesture requirement was
+deliberately disabled so the driver could start playback and assert that it
+advances). No production DNS, traffic or resource was touched.
 
 The run began **2026-09-14 06:35:13 UTC** and finished **06:39:45 UTC**
 (**271.4 s**), as transient unit `vidra-v065-acceptance`. That the unit
@@ -276,6 +278,15 @@ python3 tests/release_acceptance.py prepare \
   --candidate docs/evidence/release-v0.6.5-verification/manifest.json \
   --out /tmp/vidra-v065-b2-next/handoff
 ```
+
+The v0.6.4 recipe's `--default-server-side-encryption SSE-B2` is deliberately
+absent: this run's bucket was created without it, and the recipe has to
+describe what ran. It would also have been an unverifiable flag to carry over —
+neither the harness nor the exported evidence reads a bucket's default-encryption
+setting back, so v0.6.4's "SSE-B2 / AES256" line was never evidenced either.
+This bucket's setting is therefore **not in evidence** (as stated above), and a
+future run that wants to assert encryption at rest must capture `b2 bucket get`
+output into the evidence rather than infer it from the create command.
 
 `--candidate` is **not optional here**: `prepare` falls back to the committed
 v0.6.4 manifest, and without the flag the handoff is prepared against the
