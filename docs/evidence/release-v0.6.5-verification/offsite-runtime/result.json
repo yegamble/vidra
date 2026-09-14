@@ -1,0 +1,44 @@
+{
+  "status": "PASS",
+  "date_utc": "2026-09-14",
+  "scope": "Encrypted off-site backup of the running restored v0.6.5 instance to an independent provider, retrieved and decrypted independently. Client-side encryption; the provider stores only ciphertext.",
+  "provider": "Cloudflare R2",
+  "independence": "different provider AND geography than the primary Backblaze B2 media store (us-east-005); protects against a Backblaze account/provider failure, not only a region outage",
+  "endpoint": "https://<account-id>.r2.cloudflarestorage.com",
+  "bucket": "vidra-backup",
+  "encryption": {
+    "tool": "rclone crypt",
+    "layer": "client-side before upload",
+    "filename_encryption": "standard",
+    "at_rest_proof": "raw R2 object magic bytes = b'RCLONE\\x00\\x00' (rclone crypt header); object names are encrypted, not the plaintext dump names"
+  },
+  "product_path": "deploy/backup.sh with BACKUP_RCLONE_REMOTE=offsite: (the shipped off-site mechanism; no code change)",
+  "host": "restored v0.6.5 replacement, droplet 599514574 (159.65.249.255), COMPOSE_PROJECT_NAME=vidra-release-acceptance",
+  "rclone": {
+    "host_clean_run": "v1.75.1",
+    "note": "the distro rclone v1.60.1 emitted a harmless 501 on the mod-time set then succeeded on retry; v1.75.1 uploads cleanly. Operator guidance: use current rclone."
+  },
+  "runs": [
+    {
+      "attempt": "distro rclone 1.60.1",
+      "dump": "vidra-20260914T170105Z.dump.gz",
+      "dump_sha256": "f02ac5f2db9e76d07c3b3b8a10033db06832ac72cbd2e30cfb426f39456e322e",
+      "config_sha256": "8db945e20aa03948eec5fc021c6cc454555aeed03dbd3fb4b4576118439e4f64",
+      "offsite_decrypted_matches_host": true,
+      "gzip_ok": true,
+      "note": "501-then-retry-success; bytes verified intact"
+    },
+    {
+      "attempt": "rclone 1.75.1 (clean)",
+      "dump": "vidra-20260914T170228Z.dump.gz",
+      "dump_sha256": "3f83f1d57336320dd6f6605436bbc6d380494aeba510f4e58c458e8a1ce47031",
+      "config_sha256": "8db945e20aa03948eec5fc021c6cc454555aeed03dbd3fb4b4576118439e4f64",
+      "offsite_decrypted_matches_host": true,
+      "gzip_ok": true,
+      "pgdmp_magic": true,
+      "no_errors": true
+    }
+  ],
+  "independent_retrieval": "from a separate workstation with only the scoped R2 key + the crypt password: rclone crypt cat -> byte-exact match of the host dump, gzip -t OK, PGDMP magic present",
+  "not_claimed": "This proves off-site push+retrieve+decrypt+integrity on an independent provider. A full restore FROM the off-site copy onto a host reuses the recovery drill's restore (proven separately). Not wired into the production beta deploy here (beta untouched); operator documentation to be added."
+}
