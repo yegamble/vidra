@@ -127,14 +127,38 @@ step). Nothing is deployed on it; beta stays on v0.6.4.
   to `resolved_blockers`; B3 remains. Two retained harness artifacts (a
   TOTP-replay rpo-marker and a rate-limited verify-restore new-upload), each
   re-run to PASS. Desktop Chromium only, inline single worker.
+- **Off-site backup (independent provider): PASS — REC-01 met on Cloudflare R2
+  with client-side encryption**
+  ([record](runtime-acceptance-offsite-v0.6.5.md), evidence
+  `docs/evidence/release-v0.6.5-verification/offsite-runtime/`): on the restored
+  v0.6.5 replacement host (599514574) still running from the recovery drill, the
+  shipped `deploy/backup.sh` with `BACKUP_RCLONE_REMOTE` — **no code change** —
+  pushed the dump + config to an rclone **crypt** remote (client-side, filename
+  encryption standard) over **Cloudflare R2**, a **different company and region**
+  than the Backblaze B2 media store (us-east-005). Two runs verified byte-exact
+  (distro rclone 1.60.1 emitted a harmless 501 then retried; rclone 1.75.1 clean,
+  dump sha256 `3f83f1d5…7031`); the raw R2 objects carry **encrypted filenames**
+  and the rclone crypt header `b'RCLONE\x00\x00'`, not plaintext. An independent
+  workstation holding only the scoped R2 key + the crypt password decrypted a
+  byte-exact match of the host dump, `gzip -t` OK, PGDMP magic present. This is
+  the input REC-01 was still BLOCKED on; the restore half is the merged recovery
+  drill (REC-02 PASS). The derived
+  [disposition](evidence/release-v0.6.5-verification/offsite-runtime/disposition.json)
+  moves **REC-01 from BLOCKED (B3) to PASS**, marks the **A36 off-site-backup
+  facet DEMONSTRATED**, and reads **5 PASS / 45 UNVERIFIED / 9 BLOCKED**. B3
+  stays open for the other selected-provider inputs (selected IdP/mail
+  AUTH-03/04, selected CDN INT-10); AUTH-03/04, INT-10 and MIG-01…06 stay
+  BLOCKED. Not wired into the beta deploy; no single-pass off-site→restore chain.
 - **Everything else: NOT RUN on the v0.6.5 digests.** The browser/Safari/iOS
-  matrix, the owner inputs B2 (representative source) and B3 (offsite backup
-  destination + selected providers), the remaining OPS-01 clauses and every
-  other workflow row keep the disposition's UNVERIFIED / BLOCKED state for this
-  candidate.
-- **Next executable:** the owner inputs B2/B3, the browser/Safari/iOS matrix,
-  and the remaining OPS-01 clauses (API/worker split, two-worker interruption,
-  settings propagation, leader failover).
+  matrix, the owner input B2 (representative source) and B3's remaining
+  selected-provider inputs (selected IdP/mail, selected CDN) — the off-site
+  backup object store is now demonstrated — the remaining OPS-01 clauses and
+  every other workflow row keep the disposition's UNVERIFIED / BLOCKED state for
+  this candidate.
+- **Next executable:** the owner input B2 (representative source) and B3's
+  remaining selected-provider inputs (selected IdP/mail, selected CDN), the
+  browser/Safari/iOS matrix, and the remaining OPS-01 clauses (API/worker split,
+  two-worker interruption, settings propagation, leader failover).
 
 ## REC-03 / A38 on published v0.6.4 — 2026-09-13
 

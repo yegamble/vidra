@@ -1,0 +1,515 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-14",
+  "baseline_assessment": "docs/evidence/release-v0.6.5-verification/recovery-runtime/disposition.json",
+  "baseline_sha256": "45c9ccbd6f9c65d4b7ab468597f191a42eed3b3c6ddf9c9a96ade4378400594d",
+  "baseline_is_historical": false,
+  "release_verdict": "NO-GO",
+  "offsite_drill": {
+    "status": "PASS",
+    "certification": "OFFSITE_RETRIEVAL_DEMONSTRATED (encrypted client-side push + independent-provider retrieve + decrypt + integrity, 2026-09-14)",
+    "scope": "Encrypted off-site backup of the running restored v0.6.5 instance to an independent provider, retrieved and decrypted independently. Client-side encryption; the provider stores only ciphertext.",
+    "provider": "Cloudflare R2",
+    "endpoint": "https://<account-id>.r2.cloudflarestorage.com",
+    "bucket": "vidra-backup",
+    "independence": "different provider AND geography than the primary Backblaze B2 media store (us-east-005); protects against a Backblaze account/provider failure, not only a region outage",
+    "product_path": "deploy/backup.sh with BACKUP_RCLONE_REMOTE=offsite: (the shipped off-site mechanism; no code change)",
+    "encryption": {
+      "tool": "rclone crypt",
+      "layer": "client-side before upload",
+      "filename_encryption": "standard",
+      "at_rest_proof": "raw R2 object magic bytes = b'RCLONE\\x00\\x00' (rclone crypt header); object names are encrypted, not the plaintext dump names"
+    },
+    "host": "restored v0.6.5 replacement, droplet 599514574 (159.65.249.255), COMPOSE_PROJECT_NAME=vidra-release-acceptance (session-reported)",
+    "rclone": {
+      "host_clean_run": "v1.75.1",
+      "note": "the distro rclone v1.60.1 emitted a harmless 501 on the mod-time set then succeeded on retry; v1.75.1 uploads cleanly. Operator guidance: use current rclone."
+    },
+    "runs": [
+      {
+        "attempt": "distro rclone 1.60.1",
+        "dump": "vidra-20260914T170105Z.dump.gz",
+        "dump_sha256": "f02ac5f2db9e76d07c3b3b8a10033db06832ac72cbd2e30cfb426f39456e322e",
+        "config_sha256": "8db945e20aa03948eec5fc021c6cc454555aeed03dbd3fb4b4576118439e4f64",
+        "offsite_decrypted_matches_host": true,
+        "gzip_ok": true,
+        "note": "501-then-retry-success; bytes verified intact"
+      },
+      {
+        "attempt": "rclone 1.75.1 (clean)",
+        "dump": "vidra-20260914T170228Z.dump.gz",
+        "dump_sha256": "3f83f1d57336320dd6f6605436bbc6d380494aeba510f4e58c458e8a1ce47031",
+        "config_sha256": "8db945e20aa03948eec5fc021c6cc454555aeed03dbd3fb4b4576118439e4f64",
+        "offsite_decrypted_matches_host": true,
+        "gzip_ok": true,
+        "pgdmp_magic": true,
+        "no_errors": true
+      }
+    ],
+    "independent_retrieval": "from a separate workstation with only the scoped R2 key + the crypt password: rclone crypt cat -> byte-exact match of the host dump, gzip -t OK, PGDMP magic present",
+    "restore_half": "A full restore FROM the off-site copy onto a host reuses the merged recovery drill's restore (REC-02 PASS, meta#208).",
+    "labelling": "Extending the native v0.6.5 record's labelling: file-asserted unless session-reported. Measurements (sha256, gzip/PGDMP integrity, crypt header) are file-asserted from offsite-runtime/result.json; host, provider, bucket and rclone-version facts are session-reported."
+  },
+  "resolved_blockers": {
+    "B1": "Authorized disposable native Ubuntu AMD64 host provisioned and the first runtime milestone executed.",
+    "B4": "Recovery objective approved: owner approved RPO 24h / RTO 4h on 2026-09-14 (session-reported). REC-02 met the objective by a real replacement-host restore (recovery-runtime, meta#208).",
+    "B3 (partial)": "The off-site backup object-store facet of B3 is demonstrated for v0.6.5: encrypted client-side push + independent retrieval/decrypt/integrity on an independent provider (Cloudflare R2), so REC-01 \u2192 PASS. B3 remains OPEN for the other selected-provider inputs (selected IdP/mail AUTH-03/04, selected CDN INT-10/A33)."
+  },
+  "resolved_provider_input": "B3's off-site backup object store is now demonstrated on an independent provider (Cloudflare R2, different company + geography than the B2 media store) for v0.6.5. B3 still blocks the other selected-provider inputs (selected IdP/mail AUTH-03/04, selected CDN INT-10/A33); no blanket provider certification.",
+  "provider_facets": {
+    "A24 selected provider bucket": "UNVERIFIED: canonical B2 media subset passed on v0.6.5; full storage/retention/GC procedure remains.",
+    "A32 provider presign": "UNVERIFIED: provider test bucket available; cross-origin/presigned browser checks not run.",
+    "A33 selected CDN": "BLOCKED B3: selected CDN integration inputs absent; not exercised by this off-site backup drill.",
+    "A36 off-site backup": "DEMONSTRATED: encrypted client-side (rclone crypt) push to an independent provider (Cloudflare R2) with independent retrieval, decrypt and byte-exact integrity (offsite-runtime/result.json). REC-01 \u2192 PASS.",
+    "A37 offsite recovery": "PARTIAL: replacement-host restore met the objective (REC-02 PASS); the off-site copy is now retrievable/decryptable on an independent provider (A36). A single-pass off-site \u2192 restore-onto-host chain was not run, so A37 is not fully closed."
+  },
+  "retained_requirements": "All 59 original verification procedures, all 40 acceptance criteria and all ten scope families remain authoritative. Missing providers, representative source, recovery inputs and scope decisions apply only to dependent criteria.",
+  "workflow_counts": {
+    "PASS": 5,
+    "UNVERIFIED": 45,
+    "BLOCKED": 9
+  },
+  "workflows": [
+    {
+      "id": "REL-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Static PASS retained on the v0.6.5 preflight (release-preflight.py --tag v0.6.5 \u2192 PASS: source, image, asset and contract boundary)."
+    },
+    {
+      "id": "INS-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "AUTH-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "AUTH-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "AUTH-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PLAY-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PLAY-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PLAY-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "CRT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "CRT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SRC-01",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Same-upload outbox/inbox, eligible document, internal search, UI response and routed fetch demonstrated on the published v0.6.5 images (this run)."
+    },
+    {
+      "id": "SRC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SRC-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SOC-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SOC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MSG-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MSG-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MSG-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MIG-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime on the v0.6.5 digests; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime on the v0.6.5 digests; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime on the v0.6.5 digests; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime on the v0.6.5 digests; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-05",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime on the v0.6.5 digests; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-06",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime on the v0.6.5 digests; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "STO-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established for v0.6.5 (new private bucket, scoped single-bucket key, verified empty before deployment). The canonical-media subset passed on the published v0.6.5 images; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "STO-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established for v0.6.5 (new private bucket, scoped single-bucket key, verified empty before deployment). The canonical-media subset passed on the published v0.6.5 images; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "STO-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established for v0.6.5 (new private bucket, scoped single-bucket key, verified empty before deployment). The canonical-media subset passed on the published v0.6.5 images; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "INT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-06",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-07",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-08",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-09",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established for v0.6.5 (new private bucket, scoped single-bucket key, verified empty before deployment). The canonical-media subset passed on the published v0.6.5 images; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "INT-10",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-11",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "OPS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not promoted. Measured subset expanded by this recovery drill on the release default INLINE-worker topology: a single-worker api SIGKILL mid-transcode with orphaned-lease recovery and no operator job intervention (recovered after 1938 s, bounded by the fixed 30-minute lease; job done, rendition decodes); postgres, redis and search outages each recovered without an api container restart (6.543 / 7.157 / 7.483 s, restart_count 0->0); and the failed-backup nonzero contract. The API/worker split, settings propagation, two-worker interruption and leader failover clauses remain unrun (the split-topology worker transcode is recorded separately under REC-03/meta#199)."
+    },
+    {
+      "id": "OPS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "REC-01",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Encrypted off-site backup to an independent provider demonstrated on the running restored v0.6.5 host (droplet 599514574, session-reported) via the shipped deploy/backup.sh with BACKUP_RCLONE_REMOTE (no code change): an rclone crypt remote (client-side, filename encryption standard) layered over a Cloudflare R2 S3 remote \u2014 a different company AND geography than the primary Backblaze B2 media store (us-east-005). Two runs verified byte-exact: distro rclone 1.60.1 emitted a harmless HTTP 501 on the mod-time set then succeeded on retry; rclone 1.75.1 ran clean (dump sha256 3f83f1d5\u20267031, config 8db945e2\u20264f64). The raw R2 objects carry encrypted names and the rclone crypt header b'RCLONE\\x00\\x00', not the plaintext dump. Independent retrieval from a separate workstation with only the scoped R2 key + the crypt password decrypted to a byte-exact match of the host dump, gzip -t OK, PGDMP magic present. Combined with the recovery drill's backup completeness (both schemas, both ledgers 146|f / 18|f, user_mfa, mfa_recovery_codes, search.documents, byte-equal config archive), failed-dump contract and replacement-host restore (REC-02 PASS, meta#208), REC-01 moves BLOCKED [B3] \u2192 PASS: B4 was already resolved and B3's off-site object-store facet is now demonstrated. Media stays S3-canonical in B2 (itself off-host); local-storage media snapshots are not part of this instance (offsite-runtime/result.json; docs/runtime-acceptance-offsite-v0.6.5.md)."
+    },
+    {
+      "id": "REC-02",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Approved recovery objective met by a real replacement-host restore on the published v0.6.5 images. Owner approved RPO 24h / RTO 4h on 2026-09-14 (session-reported; B4 resolved). Source stack stopped with no container left; the blank replacement host 599514574 (rebuilt 12:11:57Z, blank-host guard passed) installed from the released installer with the config archive restored FIRST, six application digests pinned, postgres, restore.sh --yes (verify-blobs MISSING 0) and deploy.sh. Restored 16 catalogue/MFA fingerprints and both ledgers (146|f / 18|f) equalled the backup data point exactly; Chromium confirmed restored password + sealed TOTP (wrong code 401, right accepted), the post-backup RPO marker absent, legacy-B2 and drill video decode, and vidra-search serving the UI (2xx counter 0->1). Measured source-loss-to-ready 304.653 s (RTO) and a post-backup-write data loss within a 24h backup window (RPO) both meet the approved objective. A new post-restore upload transcoded and decoded on the dedicated verify-restore-write action (video 5a9e26c7-4d90-496a-9486-2c8c6e65dbc5, job done, attempts 0) after a retained rate-limit harness artifact (replacement/verify-restore, replacement/verify-restore-write)."
+    },
+    {
+      "id": "REC-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Upgrade v0.6.4\u2192v0.6.5 with data, dirty-ledger refusal before restart, runbook recovery, app-only rollback, forward restore, on the published images (docs/runtime-acceptance-rec03-v0.6.5.md, meta#199)."
+    },
+    {
+      "id": "QLT-01",
+      "status": "UNVERIFIED",
+      "blockers": [
+        "U1"
+      ],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "QLT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    }
+  ],
+  "acceptance_delta": {
+    "from": "v0.6.5 recovery-runtime disposition (4 PASS / 45 UNVERIFIED / 10 BLOCKED)",
+    "to": "5 PASS / 45 UNVERIFIED / 9 BLOCKED",
+    "moved": {
+      "REC-01": {
+        "from": "BLOCKED [B3]",
+        "to": "PASS",
+        "why": "Encrypted off-site push to an independent provider (Cloudflare R2) plus independent retrieval/decrypt/integrity demonstrated via the shipped deploy/backup.sh (no code change); the restore half is the merged recovery drill (REC-02 PASS, meta#208). B3's off-site object-store facet is now demonstrated."
+      }
+    },
+    "kept_blocked": {
+      "AUTH-03 [B3]": "Selected external IdP / mail (SMTP) provider inputs were not exercised here; unrelated to the off-site object store. Stays BLOCKED.",
+      "AUTH-04 [B3]": "Selected OIDC provider inputs were not exercised here; unrelated to the off-site object store. Stays BLOCKED.",
+      "INT-10 [B3]": "Selected-CDN delivery inputs were not exercised; this drill exercised the off-site backup object store only, not a CDN. Stays BLOCKED.",
+      "MIG-01..06 [B2]": "Representative sanitized source still required; unaffected by this drill. Stays BLOCKED."
+    },
+    "not_promoted": {
+      "A37 / full offsite\u2192restore chain": "A single-pass off-site \u2192 restore-onto-host chain was not run. The restore leg is the merged recovery drill (REC-02 PASS), which restored from a host-to-host handoff; this drill adds only REC-01's off-site retrieval leg.",
+      "OPS-01": "Unchanged UNVERIFIED (no split-worker/failover run here)."
+    },
+    "note": "One row moves to PASS (REC-01). B4 was resolved in the recovery-runtime baseline; B3's off-site object-store facet is now demonstrated, but B3 stays open for the other selected-provider inputs (selected IdP/mail AUTH-03/04, selected CDN INT-10/A33) and B2 stays open for MIG-01..06. Nothing else moves.",
+    "acceptance_items": {
+      "A36": "Off-site-backup facet moved to DEMONSTRATED: encrypted client-side push to an independent provider (Cloudflare R2) with independent retrieval, decrypt and byte-exact integrity. Combined with the recovery drill's backup completeness + failed-dump contract, A36's off-site leg is shown.",
+      "A37": "Replacement-host restore passed in the recovery drill (REC-02 PASS). The off-site copy is now retrievable and decryptable on an independent provider (this drill); a single-pass off-site \u2192 restore-onto-host chain was not run, so A37 is not fully closed.",
+      "A38": "Unaffected (REC-03 PASS from meta#199)."
+    }
+  },
+  "measured_subsets": {
+    "REC-01 (off-site retrieval)": "Shipped deploy/backup.sh with BACKUP_RCLONE_REMOTE pushed the dump + config archive to an rclone crypt remote (client-side, filename encryption standard) over Cloudflare R2. Two runs byte-exact (distro rclone 1.60.1 501-then-retry; rclone 1.75.1 clean). Raw R2 objects: encrypted names + rclone crypt header b'RCLONE\\x00\\x00'. Independent workstation retrieval with only the scoped R2 key + crypt password decrypted byte-exact, gzip -t OK, PGDMP magic present. Media not pushed off-site (stays S3-canonical in B2).",
+    "REC-01 (backup integrity, from recovery baseline)": "Dump lists both schemas, both clean ledgers (146|f / 18|f), users, user_mfa, mfa_recovery_codes and search.documents; config archive byte-equal to env/production.env + deploy/Caddyfile.local; failed dump exits 1 and publishes only a private .part.",
+    "REC-02 (replacement-host restore, from recovery baseline)": "Blank replacement host restored config archive first, six-digest pin, postgres, restore.sh (verify-blobs MISSING 0), deploy.sh; catalogue + ledgers matched the backup data point; restored password + sealed TOTP, media decode and search served in Chromium; RTO 304.653 s / RPO within 24h met."
+  },
+  "candidate": {
+    "tag": "v0.6.5",
+    "record": "releases/v0.6.5.json",
+    "manifest": "docs/evidence/release-v0.6.5-verification/manifest.json",
+    "images": {
+      "api": "ghcr.io/yegamble/vidra-core@sha256:a6e08b93364924e40321a47d188ed08ddbc2b21aecd3f0dcc58f49bc1f2f3bb1",
+      "frontend": "ghcr.io/yegamble/vidra-user@sha256:08e920ba5d214a190c30796c9c7f877ad70a53ea2b1f2d10a5f47de679b03178",
+      "search": "ghcr.io/yegamble/vidra-search@sha256:55196d278722d46c4454cc4f5f4d05b9e7cd35cc7712f2aeb6354e13f65ea0f8"
+    },
+    "ledgers": {
+      "schema_migrations": {
+        "actual": "146|f",
+        "expected": 146,
+        "source_revision": "d13d40e6670d0bf95d28e1f69b5af20e5b99237b"
+      },
+      "vidra_search_migrations": {
+        "actual": "18|f",
+        "expected": 18,
+        "source_revision": "b7a7f55be6646c2730d5bbc481e423ac9cfa9e08"
+      }
+    }
+  },
+  "not_claimed": [
+    "Only the DB dump + config archive were pushed off-site; media stays S3-canonical in the primary Backblaze B2 store (itself off-host). No local-storage media snapshot was pushed off-site here.",
+    "A single-pass off-site \u2192 restore-onto-host chain was not run: the restore leg is the merged recovery drill (REC-02 PASS, meta#208), which restored from a host-to-host handoff, not from the off-site copy.",
+    "Not wired into the production beta deploy: the beta instance was untouched; this is an operator-configured off-site target on the acceptance host.",
+    "No selected-CDN, selected-IdP/mail or presign provider exercised: those B3/B-facet rows stay as the recovery-runtime baseline left them.",
+    "Desktop/operator-CLI evidence: no browser, WebKit, Safari or iOS claim (none applies to a backup push).",
+    "The crypt password/salt are stored privately by the operator (gitignored env/offsite.env), never in the repo; the 32-hex R2 account id is redacted throughout."
+  ],
+  "prior_disposition": "docs/evidence/release-v0.6.5-verification/recovery-runtime/disposition.json",
+  "prior_disposition_sha256": "45c9ccbd6f9c65d4b7ab468597f191a42eed3b3c6ddf9c9a96ade4378400594d",
+  "committed_hashes": "docs/evidence/release-v0.6.5-verification/offsite-runtime/committed-hashes.json is the independent sha256 index recomputed over every committed file in this offsite-runtime tree except itself (result.json and disposition.json), over the bytes as committed.",
+  "backlog_report": "docs/runtime-acceptance-offsite-v0.6.5.md",
+  "authorization": "Scoped work branch/PR and disposable acceptance operations on the restored v0.6.5 replacement host (droplet 599514574) plus an operator-owned Cloudflare R2 test bucket and a separate retrieval workstation. No merge, stable publication, tag moves, production action, public DNS/federation, new infrastructure spend beyond the operator's own R2 test bucket, rebuild or evidence deletion."
+}

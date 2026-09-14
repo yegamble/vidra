@@ -1236,6 +1236,70 @@ format is a contract; do not "improve" it.
 - **Restore drill (quarterly).** Restore the latest dump into a scratch stack,
   boot, and click through login / watch / upload.
 
+### Off-site with client-side encryption (rclone crypt)
+
+The bullet above sends the dump and config **plaintext** to whatever
+`BACKUP_RCLONE_REMOTE` names. For an off-site copy on a provider you do not fully
+trust — and for provider independence in general — point `BACKUP_RCLONE_REMOTE`
+at an **rclone `crypt` remote layered over your object store**, so everything is
+encrypted **client-side before upload** and the provider only ever stores
+ciphertext. This is the shipped, no-code-change path; `deploy/backup.sh` just
+runs `rclone copyto` to the remote you configure.
+
+Choose an off-site provider that is independent of your media store — a
+**different company and region**, not just a different bucket — so that a single
+provider or account failure cannot take both your media and your backups. A
+demonstrated example is Cloudflare R2 as the off-site target while media stays in
+Backblaze B2 (see [`docs/runtime-acceptance-offsite-v0.6.5.md`](../docs/runtime-acceptance-offsite-v0.6.5.md)).
+
+Configure it once with `rclone config`: an S3 remote for the object store, then a
+`crypt` remote wrapping it. The crypt remote is what `BACKUP_RCLONE_REMOTE`
+points at. Sketch of `~/.config/rclone/rclone.conf` (no real secrets shown):
+
+```ini
+# 1. The object-store remote (example: Cloudflare R2 via its S3 API).
+[r2]
+type = s3
+provider = Cloudflare
+access_key_id = <scoped-key-id>
+secret_access_key = <scoped-key-secret>
+endpoint = https://<account-id>.r2.cloudflarestorage.com
+
+# 2. The crypt remote layered over a bucket/path in the store above.
+#    filename_encryption = standard hides the object names too, not just bodies.
+[offsite]
+type = crypt
+remote = r2:vidra-backup
+filename_encryption = standard
+password = <obscured-by-rclone-config>
+password2 = <obscured-salt>
+```
+
+```bash
+# In env/production.env (untracked; never commit secrets):
+BACKUP_RCLONE_REMOTE=offsite:
+```
+
+- **Use a current rclone.** Older rclone against R2 logs a **harmless HTTP 501**
+  when it sets an object's mod-time and then **succeeds on a retry** — the bytes
+  are intact, but the noise is alarming in a backup log. rclone **1.75.1** was
+  verified to upload **cleanly with no errors**; the distro **1.60.1** works with
+  the 501-then-retry. Install a current rclone rather than relying on the distro
+  package.
+- **CRITICAL — store the crypt password independently of the server.** The
+  `crypt` password (and `password2` salt) is what decrypts the off-site copy.
+  `rclone config` keeps it obscured **on this host**, inside the same
+  `env/offsite.env` / rclone config that the host holds — which is gone the
+  moment the host is. Keep the crypt password in a **password manager or other
+  store separate from the server**, exactly as you keep `MFA_KEY_KEK`: lose the
+  host and the crypt password together and the encrypted off-site backups are
+  **unrecoverable ciphertext**. Retain the crypt recovery config separately from
+  the encrypted bucket.
+- **Recovery still uses the same order below.** Fetch both files for one stamp
+  with `rclone copy "$BACKUP_RCLONE_REMOTE/…"` — rclone decrypts transparently
+  once the crypt remote is configured with the password you stored elsewhere —
+  then restore config-first exactly as in the next section.
+
 ### Disaster recovery: rebuild the host, in this order
 
 The order matters and it is not the obvious one. `restore.sh` **refuses to run

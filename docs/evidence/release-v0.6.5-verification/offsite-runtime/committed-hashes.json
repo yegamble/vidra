@@ -1,0 +1,9 @@
+{
+  "note": "sha256 of every committed file in this offsite-runtime tree except this file itself, recomputed at commit time over the bytes as committed. result.json is the sanitized drill evidence (account id redacted, no keys/passwords); disposition.json is derived from it against the recovery-runtime baseline. This index is the independent second opinion over the whole tree.",
+  "date_utc": "2026-09-14",
+  "count": 2,
+  "files": {
+    "disposition.json": "cc21305e8fe9ef05c81540939e0916ffc286c3f569df81e23517cf159ac3f544",
+    "result.json": "dd15aca88d66fecbf7b8c33a592a499876f8afd95507cad0261294684ed01017"
+  }
+}
