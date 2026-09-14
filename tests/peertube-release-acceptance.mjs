@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 
@@ -57,8 +57,12 @@ try {
   assert.equal(preparation.status, 'PASS');
   // The stage records the baseline it was prepared against; a legacy stage
   // records none, but a DISAGREEING one means this driver is reading one
-  // release's credentials against another release's run.
-  if (preparation.baseline !== undefined) assert.equal(preparation.baseline, baseline);
+  // release's credentials against another release's run. Compare REAL paths:
+  // prepare() recorded `Path.resolve()`, which follows symlinks, while node's
+  // `path.resolve()` does not, so the two disagree on any baseline reached
+  // through a symlink — and this driver would then refuse a stage the same
+  // baseline had correctly prepared, on a spelling difference alone.
+  if (preparation.baseline !== undefined) assert.equal(preparation.baseline, realpathSync(baseline));
   result.images_before = imageSnapshot();
   result.tool_sha256 = createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
   result.node = process.version;
