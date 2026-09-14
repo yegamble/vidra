@@ -1,0 +1,499 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-14",
+  "baseline_assessment": "docs/evidence/release-v0.6.5-verification/native-runtime/disposition.json",
+  "baseline_sha256": "d3df8e7fee541586983055914758687aa8b06e3f79f331c3826bde4b76e9a3e6",
+  "baseline_is_historical": false,
+  "release_verdict": "NO-GO",
+  "first_runtime_milestone": {
+    "status": "PASS",
+    "certification": "BOUNDED_MILESTONE_ONLY",
+    "started_utc": "2026-09-14 06:35:13",
+    "finished_utc": "2026-09-14 06:39:45",
+    "duration_seconds": 271.4,
+    "host": "droplet 599531580 (159.203.118.182), rebuilt blank 2026-09-14 04:39 UTC (session-reported)",
+    "storage": {
+      "backend": "s3",
+      "provider": "Backblaze B2",
+      "bucket": "vidra-acceptance-v065-20260914-media",
+      "bucket_id": "9555421b394994e8a7070215",
+      "region": "us-east-005",
+      "endpoint": "s3.us-east-005.backblazeb2.com",
+      "preflight": "PASS",
+      "provider_objects": "PASS",
+      "versions_before": 0,
+      "versions_after": 29,
+      "direct_original_readback": {
+        "status": 200,
+        "type": "video/mp4",
+        "bytes": 1311662,
+        "sha256": "47e46fdf11a5f3851cd87ab7ea02cb12a5db4f679bef5ee846fad4d6fa74923a",
+        "equals_fixture": true
+      }
+    },
+    "checks": {
+      "blank_native_host": "PASS",
+      "corrupt-bundle": "PASS",
+      "corrupt-cli": "PASS",
+      "install": "PASS",
+      "native_cli_executes": "PASS (help; binary identity verified by checksum)",
+      "configuration_preserved": "PASS",
+      "production_ports": "PASS (Compose render; runtime ports belong to A03)",
+      "pinned_image_pulls": "PASS",
+      "installed_migrated_serving": "PASS",
+      "browser_upload_transcode_playback_search": "PASS"
+    },
+    "browser_checks": {
+      "owner-claim": "PASS",
+      "owner-login-and-session": "PASS",
+      "browser-channel-upload-publish": "PASS",
+      "real-transcoding-and-advertised-tree": "PASS",
+      "browser-playback-advances": "PASS",
+      "same-upload-through-vidra-search": "PASS"
+    },
+    "result_sha256": "1274e0953784d928e2a5975f793b669ec1dfd96b3e721619c3469e1ea4f93fda",
+    "browser_sha256": "a4437d0cc368ba27c28ddb2cc030c1b43ad6b1e54336318a896c593086b5d19b"
+  },
+  "resolved_blockers": {
+    "B1": "Authorized disposable native Ubuntu AMD64 host provisioned and the first runtime milestone executed."
+  },
+  "retained_requirements": "All 59 original verification procedures, all 40 acceptance criteria and all ten scope families remain authoritative. Missing providers, representative source, recovery inputs and scope decisions apply only to dependent criteria.",
+  "workflow_counts": {
+    "PASS": 3,
+    "UNVERIFIED": 45,
+    "BLOCKED": 11
+  },
+  "workflows": [
+    {
+      "id": "REL-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Static PASS retained on the v0.6.5 preflight (release-preflight.py --tag v0.6.5 \u2192 PASS: source, image, asset and contract boundary)."
+    },
+    {
+      "id": "INS-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "AUTH-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "AUTH-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "AUTH-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PLAY-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PLAY-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PLAY-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "CRT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "CRT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SRC-01",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Same-upload outbox/inbox, eligible document, internal search, UI response and routed fetch demonstrated on the published v0.6.5 images (this run)."
+    },
+    {
+      "id": "SRC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SRC-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SOC-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SOC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MSG-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MSG-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MSG-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MIG-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-05",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "MIG-06",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "STO-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established for v0.6.5 (new private bucket, scoped single-bucket key, verified empty before deployment). The canonical-media subset passed on the published v0.6.5 images; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "STO-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established for v0.6.5 (new private bucket, scoped single-bucket key, verified empty before deployment). The canonical-media subset passed on the published v0.6.5 images; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "STO-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established for v0.6.5 (new private bucket, scoped single-bucket key, verified empty before deployment). The canonical-media subset passed on the published v0.6.5 images; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "INT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-06",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-07",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-08",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-09",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established for v0.6.5 (new private bucket, scoped single-bucket key, verified empty before deployment). The canonical-media subset passed on the published v0.6.5 images; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "INT-10",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-11",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "OPS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "OPS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "REC-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B4"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "REC-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B4"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "REC-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Upgrade v0.6.4\u2192v0.6.5 with data, dirty-ledger refusal before restart, runbook recovery, app-only rollback, forward restore, on the published images (docs/runtime-acceptance-rec03-v0.6.5.md, meta#199)."
+    },
+    {
+      "id": "QLT-01",
+      "status": "UNVERIFIED",
+      "blockers": [
+        "U1"
+      ],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "QLT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    }
+  ],
+  "acceptance_delta": {
+    "from": "v0.6.5 native-runtime disposition (3 PASS / 41 UNVERIFIED / 15 BLOCKED)",
+    "to": "3 PASS / 45 UNVERIFIED / 11 BLOCKED",
+    "moved": {
+      "STO-01": "BLOCKED (B3) -> UNVERIFIED (provider access established; not executed)",
+      "STO-02": "BLOCKED (B3) -> UNVERIFIED (provider access established; not executed)",
+      "STO-03": "BLOCKED (B3) -> UNVERIFIED (provider access established; not executed)",
+      "INT-09": "BLOCKED (B3) -> UNVERIFIED (provider access established; not executed)"
+    },
+    "note": "Same delta the v0.6.4 B2 milestone applied, on the v0.6.5 digests: provider access unblocks STO-01/02/03 and INT-09, it does not verify them. No row is promoted to PASS by this run: SRC-01 was already PASS from the native v0.6.5 run and the same-upload search chain passed again here. AUTH-03/04 and INT-10 stay BLOCKED on B3 (other provider/CDN inputs), MIG-01..06 on B2, REC-01/02 on B4."
+  },
+  "measured_subsets": {
+    "STO-01/02/03": "Canonical media on a dedicated private B2 bucket: loaded API storage identity and credential scope confirmed before and after the browser phase; original, thumbnail, storyboard and real CMAF transcode objects written; direct signed S3 GET of the original matched the fixture SHA-256. Retention, lifecycle, destructive GC and quota clauses not executed.",
+    "INT-09": "API-proxied playback of B2-backed media through the released edge; presigned and CDN delivery not exercised.",
+    "OPS-01": "split topology deployed and the worker transcoded (meta#199); the remaining clauses not run"
+  },
+  "candidate": {
+    "tag": "v0.6.5",
+    "record": "releases/v0.6.5.json",
+    "manifest": "docs/evidence/release-v0.6.5-verification/manifest.json",
+    "images": {
+      "api": "ghcr.io/yegamble/vidra-core@sha256:a6e08b93364924e40321a47d188ed08ddbc2b21aecd3f0dcc58f49bc1f2f3bb1",
+      "frontend": "ghcr.io/yegamble/vidra-user@sha256:08e920ba5d214a190c30796c9c7f877ad70a53ea2b1f2d10a5f47de679b03178",
+      "search": "ghcr.io/yegamble/vidra-search@sha256:55196d278722d46c4454cc4f5f4d05b9e7cd35cc7712f2aeb6354e13f65ea0f8"
+    },
+    "ledgers": {
+      "schema_migrations": {
+        "actual": "146|f",
+        "expected": 146,
+        "source_revision": "d13d40e6670d0bf95d28e1f69b5af20e5b99237b"
+      },
+      "vidra_search_migrations": {
+        "actual": "18|f",
+        "expected": 18,
+        "source_revision": "b7a7f55be6646c2730d5bbc481e423ac9cfa9e08"
+      }
+    }
+  },
+  "resolved_provider_input": "B3 object bucket/endpoint/scoped test credentials are available for v0.6.5. B3 still blocks the other selected-provider inputs; no blanket provider certification.",
+  "provider_facets": {
+    "A24 selected provider bucket": "UNVERIFIED: canonical B2 media subset passed on v0.6.5; full storage/retention/GC procedure remains.",
+    "A32 provider presign": "UNVERIFIED: provider test bucket available; cross-origin/presigned browser checks not run.",
+    "A33 selected CDN": "BLOCKED B3: selected CDN integration inputs absent.",
+    "A37 offsite recovery": "BLOCKED B3/B4: independent recovery provider/destination/objectives remain required; the test-media key does not grant backup access."
+  },
+  "prior_disposition": "docs/evidence/release-v0.6.5-verification/native-runtime/disposition.json",
+  "prior_disposition_sha256": "d3df8e7fee541586983055914758687aa8b06e3f79f331c3826bde4b76e9a3e6",
+  "not_claimed": [
+    "No split-worker or OPS row is promoted: this run used the release default inline worker topology.",
+    "Desktop Chromium only; no WebKit, no mobile viewport.",
+    "No representative-source migration, no PeerTube continuation, no recovery drill.",
+    "No presigned or CDN delivery, no destructive GC, no provider retention/billing policy."
+  ]
+}
