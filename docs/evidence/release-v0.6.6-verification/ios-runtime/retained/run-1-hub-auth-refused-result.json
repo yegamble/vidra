@@ -1,0 +1,16 @@
+{
+  "status": "FAIL",
+  "candidate": "v0.6.6",
+  "device": "iPhone 15",
+  "ios": "17",
+  "tunnel": "vidra-v066-ios",
+  "origin": "https://secure.video.test",
+  "watch_path": "/v/BfnHVc4m9E4",
+  "video_id": "8d06000b-627a-4781-952f-05ecb4e8607f",
+  "started_at": "2026-09-14T21:06:11Z",
+  "checks": {},
+  "steps": [],
+  "failed_phase": "session",
+  "error": "Traceback (most recent call last):\n  File \"/private/tmp/claude-501/-Users-yosefgamble-github-vidra/f6390aca-a47b-4b3a-aaef-1953c99c5872/scratchpad/ios/ios_safari_pass.py\", line 54, in <module>\n    driver = webdriver.Remote(hub, options=opts)\n  File \"/private/tmp/claude-501/-Users-yosefgamble-github-vidra/f6390aca-a47b-4b3a-aaef-1953c99c5872/scratchpad/ios/venv/lib/python3.9/site-packages/appium/webdriver/webdriver.py\", line 251, in __init__\n    super().__init__(\n  File \"/private/tmp/claude-501/-Users-yosefgamble-github-vidra/f6390aca-a47b-4b3a-aaef-1953c99c5872/scratchpad/ios/venv/lib/python3.9/site-packages/selenium/webdriver/remote/webdriver.py\", line 263, in __init__\n    self.start_session(capabilities)\n  File \"/private/tmp/claude-501/-Users-yosefgamble-github-vidra/f6390aca-a47b-4b3a-aaef-1953c99c5872/scratchpad/ios/venv/lib/python3.9/site-packages/appium/webdriver/webdriver.py\", line 345, in start_session\n    response = self.execute(RemoteCommand.NEW_SESSION, w3c_caps)\n  File \"/private/tmp/claude-501/-Users-yosefgamble-github-vidra/f6390aca-a47b-4b3a-aaef-1953c99c5872/scratchpad/ios/venv/lib/python3.9/site-packages/selenium/webdriver/remote/webdriver.py\", line 458, in execute\n    self.error_handler.check_response(response)\n  File \"/private/tmp/claude-501/-Users-yosefgamble-github-vidra/f6390aca-a47b-4b3a-aaef-1953c99c5872/scratchpad/ios/venv/lib/python3.9/site-packages/selenium/webdriver/remote/errorhandler.py\", line 196, in check_response\n    raise exception_class(value)\nselenium.common.exceptions.WebDriverException: Message: Authorization Required\n\n",
+  "finished_at": "2026-09-14T21:06:11Z"
+}

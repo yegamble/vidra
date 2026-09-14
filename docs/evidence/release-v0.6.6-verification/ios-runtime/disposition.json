@@ -1,0 +1,496 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-14",
+  "candidate_release": "v0.6.6",
+  "facet": "ios-runtime (focused real-iPhone Safari pass)",
+  "prior_disposition": "docs/evidence/release-v0.6.6-verification/native-runtime/disposition.json",
+  "prior_disposition_sha256": "34a58bc0b82376a709e501152bc1d53654142f79683598e3d0b9a48b53d2289e",
+  "prior_disposition_note": "The prior is the current v0.6.6 disposition (native-runtime, 5 PASS / 45 UNVERIFIED / 9 BLOCKED). This ios-runtime record is a focused single-device delta on it: it adds one real-iPhone Safari playback + sign-in subset and moves NO workflow row. Every workflow row below is carried verbatim from the native-runtime v0.6.6 disposition.",
+  "baseline_chain": {
+    "v0.6.5_offsite_disposition": "docs/evidence/release-v0.6.5-verification/offsite-runtime/disposition.json",
+    "v0.6.5_offsite_disposition_sha256": "cc21305e8fe9ef05c81540939e0916ffc286c3f569df81e23517cf159ac3f544"
+  },
+  "release_verdict": "NO-GO",
+  "ios_safari_pass": {
+    "status": "PASS",
+    "certification": "SINGLE_DEVICE_SUBSET_ONLY",
+    "scope": "Focused real-iPhone Safari pass of the highest-risk iOS-specific behaviours (page load, video playback advancing, sign-in) on the v0.6.6 local-storage runtime stack that the native-runtime milestone (meta#213) stood up. One device and one iOS version; NOT a browser matrix.",
+    "device": "iPhone 15",
+    "ios": "17",
+    "host_and_tunnel": "Real-device cloud + Tunnel MITM to the self-signed internal origin https://secure.video.test (TLS_MODE=internal). Device/tunnel/session identifiers are session-reported (not reconstructible from the committed artifacts).",
+    "session_id": "607dbe4f-a428-4a8a-8cbe-ccfd351ef735",
+    "started_at": "2026-09-14T21:07:55Z",
+    "finished_at": "2026-09-14T21:08:38Z",
+    "watch_path": "/v/BfnHVc4m9E4",
+    "video_id": "8d06000b-627a-4781-952f-05ecb4e8607f",
+    "checks": {
+      "watch-page-loads": "PASS",
+      "video-element-ready": "PASS",
+      "playback-advances": "PASS",
+      "sign-in": "PASS"
+    },
+    "video_element": {
+      "readyState": 4,
+      "duration_seconds": 12.010666666666667,
+      "currentSrc": "blob:https://secure.video.test/ceb2d0b2-edf6-47f8-b7f7-978ebfccd665",
+      "path": "Managed Media Source (MSE) \u2014 currentSrc is a blob: URL, NOT a native m3u8 src. Expected iOS 17 behaviour: hls.js takes ManagedMediaSource, which the campaign predicted (PLAY-01 residual) but had never verified on real Apple hardware. Not a defect."
+    },
+    "playback": {
+      "start": {
+        "t": 0,
+        "err": null
+      },
+      "end": {
+        "t": 2.2549181343327698,
+        "paused": false,
+        "err": null,
+        "ready": 4
+      },
+      "advanced_seconds": 2.255
+    },
+    "evidence": {
+      "result": "docs/evidence/release-v0.6.6-verification/ios-runtime/run-3/result.json",
+      "screenshots": [
+        "docs/evidence/release-v0.6.6-verification/ios-runtime/run-3/01-watch.png",
+        "docs/evidence/release-v0.6.6-verification/ios-runtime/run-3/02-playing.png",
+        "docs/evidence/release-v0.6.6-verification/ios-runtime/run-3/03-login-filled.png",
+        "docs/evidence/release-v0.6.6-verification/ios-runtime/run-3/04-signed-in.png"
+      ],
+      "provenance": "docs/evidence/release-v0.6.6-verification/ios-runtime/provenance.json",
+      "script": "docs/evidence/release-v0.6.6-verification/ios-runtime/ios_safari_pass.py"
+    },
+    "retained_attempts": {
+      "run-1": "FAIL at session creation: 'Authorization Required'. The real-device hub, like the tunnel service, requires the account EMAIL as the user (the REST API accepts the username). Credential/harness artifact, not a product defect. retained/run-1-hub-auth-refused-result.json",
+      "run-2": "Page load + video-element-ready PASSED; the playback-advance check crashed on a bug in the operator's own script (walrus-in-conditional evaluation order), fixed for run-3. The retained device screenshot shows playback already in progress (pause icon, advanced frame counter). Harness artifact, not a product defect. retained/run-2-script-bug-result.json, retained/run-2-*.png"
+    },
+    "maps_to_numbered_row": "none (recorded as a measured feature subset, not a numbered A-row)"
+  },
+  "rows_considered_not_moved": {
+    "PLAY-01": "NOT MOVED (kept UNVERIFIED). PLAY-01's definition is a full playback-control matrix ('Watch, seek, quality, speed, resume, PiP/theater and mobile/native playback ... Chromium plus native-HLS Safari on representative ladder'). This iOS pass is a single-device smoke of page-load + currentTime advance (0 -> 2.255 s) + sign-in on one rendition; it exercises no seek/quality/speed/resume/PiP and no representative ladder, and it took the Managed Media Source (blob:) path, NOT the native-HLS branch PLAY-01's Safari slice (docs/evidence/play-01-safari.json) established. In the native-runtime v0.6.6 disposition PLAY-01 is UNVERIFIED pending full re-execution on the v0.6.6 digests; a single-device subset does not satisfy that. The pass is recorded as a measured subset instead.",
+    "QLT-02": "NOT MOVED (kept UNVERIFIED). QLT-02's definition is a full control + accessibility inventory ('All required screens handle keyboard/mobile/themes/errors and real persistence' \u2014 inventory every required control by role; 390px and desktop; light/dark; keyboard/axe; loading/empty/error/retry; mutation readback after full reload). This iOS pass drives no control inventory, no axe/keyboard, no theme or error-state checks. It does use a real touch device (a residual QLT-02 flagged as missing), but that is one fragment of a large row. Recorded as a measured subset instead.",
+    "basis": "Be conservative: a single device + version sample does not close a full browser matrix. No UNVERIFIED->PASS move is made; counts are unchanged at 5/45/9."
+  },
+  "workflow_counts": {
+    "PASS": 5,
+    "UNVERIFIED": 45,
+    "BLOCKED": 9
+  },
+  "counts_unchanged_from_prior": true,
+  "counts_note": "Same as the native-runtime v0.6.6 disposition (5 PASS / 45 UNVERIFIED / 9 BLOCKED). No row changed status.",
+  "workflows": [
+    {
+      "id": "REL-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INS-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "PASS re-anchored on v0.6.6: the candidate manifest sha256 b023dacb4aa809643852551b8c5082005083c7a824509c621977f5c804911f68 equals the committed docs/evidence/release-v0.6.6-verification/manifest.json, and the running images match the v0.6.6 index digests (core \u202607e32fd, user \u2026be8882e, search \u2026555e927c6); the release-integrity/security facet (exporter secret_scan PASS) is recorded separately in meta#212."
+    },
+    {
+      "id": "INS-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INS-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "AUTH-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "AUTH-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "AUTH-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "BLOCKED [B3] carried from v0.6.5: selected external provider inputs absent (IdP/mail for AUTH-03/04, selected CDN for INT-10); unaffected by the v0.6.6 branding flag. Full original procedure remains required."
+    },
+    {
+      "id": "AUTH-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "BLOCKED [B3] carried from v0.6.5: selected external provider inputs absent (IdP/mail for AUTH-03/04, selected CDN for INT-10); unaffected by the v0.6.6 branding flag. Full original procedure remains required."
+    },
+    {
+      "id": "AUTH-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PUB-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PUB-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PUB-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PUB-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PLAY-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PLAY-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PLAY-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "CRT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "CRT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "SRC-01",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "PASS re-anchored on v0.6.6: same-upload outbox/inbox, eligible document, internal search (score 0.90, model simple-v1, total 1), UI response and routed fetch demonstrated on the published v0.6.6 images this run (video 8d06000b-627a-4781-952f-05ecb4e8607f)."
+    },
+    {
+      "id": "SRC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "SRC-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "SOC-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "SOC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "MSG-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "MSG-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "MSG-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "ADM-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "ADM-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "ADM-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "ADM-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "MIG-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "BLOCKED [B2] carried from v0.6.5: representative sanitized source still required; unaffected by the v0.6.6 branding flag (no schema change; schema_migrations 146|f unchanged)."
+    },
+    {
+      "id": "MIG-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "BLOCKED [B2] carried from v0.6.5: representative sanitized source still required; unaffected by the v0.6.6 branding flag (no schema change; schema_migrations 146|f unchanged)."
+    },
+    {
+      "id": "MIG-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "BLOCKED [B2] carried from v0.6.5: representative sanitized source still required; unaffected by the v0.6.6 branding flag (no schema change; schema_migrations 146|f unchanged)."
+    },
+    {
+      "id": "MIG-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "BLOCKED [B2] carried from v0.6.5: representative sanitized source still required; unaffected by the v0.6.6 branding flag (no schema change; schema_migrations 146|f unchanged)."
+    },
+    {
+      "id": "MIG-05",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "BLOCKED [B2] carried from v0.6.5: representative sanitized source still required; unaffected by the v0.6.6 branding flag (no schema change; schema_migrations 146|f unchanged)."
+    },
+    {
+      "id": "MIG-06",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "BLOCKED [B2] carried from v0.6.5: representative sanitized source still required; unaffected by the v0.6.6 branding flag (no schema change; schema_migrations 146|f unchanged)."
+    },
+    {
+      "id": "STO-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "UNVERIFIED-carried (NOT promoted). This row was UNVERIFIED \u2014 not PASS \u2014 in the v0.6.5 offsite disposition: a B2 canonical-media subset passed on the v0.6.5 images but the full original procedure never ran. The storage/media code is unchanged in v0.6.6 (admin branding flag only), so the v0.6.5 subset carries, but there is no v0.6.5 PASS to inherit; the full procedure remains required."
+    },
+    {
+      "id": "STO-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "UNVERIFIED-carried (NOT promoted). This row was UNVERIFIED \u2014 not PASS \u2014 in the v0.6.5 offsite disposition: a B2 canonical-media subset passed on the v0.6.5 images but the full original procedure never ran. The storage/media code is unchanged in v0.6.6 (admin branding flag only), so the v0.6.5 subset carries, but there is no v0.6.5 PASS to inherit; the full procedure remains required."
+    },
+    {
+      "id": "STO-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "UNVERIFIED-carried (NOT promoted). This row was UNVERIFIED \u2014 not PASS \u2014 in the v0.6.5 offsite disposition: a B2 canonical-media subset passed on the v0.6.5 images but the full original procedure never ran. The storage/media code is unchanged in v0.6.6 (admin branding flag only), so the v0.6.5 subset carries, but there is no v0.6.5 PASS to inherit; the full procedure remains required."
+    },
+    {
+      "id": "INT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-06",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-07",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-08",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-09",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "UNVERIFIED-carried (NOT promoted). This row was UNVERIFIED \u2014 not PASS \u2014 in the v0.6.5 offsite disposition: a B2 canonical-media subset passed on the v0.6.5 images but the full original procedure never ran. The storage/media code is unchanged in v0.6.6 (admin branding flag only), so the v0.6.5 subset carries, but there is no v0.6.5 PASS to inherit; the full procedure remains required."
+    },
+    {
+      "id": "INT-10",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "BLOCKED [B3] carried from v0.6.5: selected external provider inputs absent (IdP/mail for AUTH-03/04, selected CDN for INT-10); unaffected by the v0.6.6 branding flag. Full original procedure remains required."
+    },
+    {
+      "id": "INT-11",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "OPS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "OPS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "REC-01",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "CARRIED PASS from v0.6.5 by delta [v0.6.5-established; v0.6.6 delta = admin branding flag only, no schema/storage change; re-anchored by the v0.6.6 runtime milestone + security scan (meta#212)]. v0.6.5 basis (offsite-runtime, meta#210): encrypted client-side off-site backup to an independent provider (Cloudflare R2) via the shipped deploy/backup.sh with BACKUP_RCLONE_REMOTE (no code change), independently retrieved, decrypted and byte-exact, combined with the recovery-drill backup completeness and replacement-host restore (REC-02). The backup/off-site code is unchanged in v0.6.6."
+    },
+    {
+      "id": "REC-02",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "CARRIED PASS from v0.6.5 by delta [v0.6.5-established; v0.6.6 delta = admin branding flag only, no schema/storage change; re-anchored by the v0.6.6 runtime milestone + security scan (meta#212)]. v0.6.5 basis (recovery-runtime, meta#208): approved recovery objective met by a real replacement-host restore on the published images (RTO 304.653 s, RPO within 24h). The restore/recovery code is unchanged in v0.6.6."
+    },
+    {
+      "id": "REC-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "CARRIED PASS from v0.6.5 by delta [v0.6.5-established; v0.6.6 delta = admin branding flag only, no schema/storage change; re-anchored by the v0.6.6 runtime milestone + security scan (meta#212)]. v0.6.5 basis (meta#199): upgrade v0.6.4\u2192v0.6.5 with data, dirty-ledger refusal before restart, runbook recovery, app-only rollback and forward restore on the published images. The deploy/upgrade/rollback tooling and the schema (146) are unchanged in v0.6.6, so the mechanics carry."
+    },
+    {
+      "id": "QLT-01",
+      "status": "UNVERIFIED",
+      "blockers": [
+        "U1"
+      ],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "QLT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    }
+  ],
+  "measured_subsets": {
+    "ios_safari (v0.6.6, this run)": "Real iPhone 15 / iOS 17 Safari via a real-device cloud + Tunnel MITM to the self-signed internal origin https://secure.video.test on the v0.6.6 local-storage runtime stack: watch page loaded (trusted padlock via MITM), <video> reached readyState 4 / duration 12.01 s with currentSrc a blob: URL (Managed Media Source path, not native m3u8 \u2014 expected iOS 17 behaviour), playback advanced 0 -> 2.255 s (not paused, no media error), then a real owner sign-in through the login form succeeded (account menu / home feed rendered). PASS, session 607dbe4f. Single device + version subset; NOT a browser matrix, NOT upload-from-iOS, NOT player-gesture controls, NOT iPad/macOS-Safari/accessibility. See ios-runtime/run-3/result.json.",
+    "branding_hide_software_name (v0.6.6, this run)": "Admin PATCH /api/v1/admin/instance-settings {branding_hide_software_name:true} -> 200; public GET /api/v1/instance read-back hide_software_name true; reverted to false -> 200. API-level only; no browser chrome render check. See branding-evidence.json.",
+    "REC-01 (off-site retrieval, carried from v0.6.5)": "Shipped deploy/backup.sh with BACKUP_RCLONE_REMOTE pushed the dump + config archive to an rclone crypt remote over Cloudflare R2, independently retrieved/decrypted byte-exact (v0.6.5 offsite-runtime, meta#210). Unchanged code in v0.6.6.",
+    "REC-02 (replacement-host restore, carried from v0.6.5)": "Blank replacement host restored config archive first, six-digest pin, restore.sh (verify-blobs MISSING 0), deploy.sh; RTO 304.653 s / RPO within 24h met (v0.6.5 recovery-runtime, meta#208). Unchanged code in v0.6.6.",
+    "STO/INT-09 (B2 canonical-media subset, carried UNVERIFIED from v0.6.5)": "The canonical-media subset passed on the published v0.6.5 images; row stayed UNVERIFIED. Storage code unchanged in v0.6.6; the full original procedure remains required."
+  },
+  "candidate": {
+    "tag": "v0.6.6",
+    "record": "releases/v0.6.6.json",
+    "manifest": "docs/evidence/release-v0.6.6-verification/manifest.json",
+    "manifest_sha256": "b023dacb4aa809643852551b8c5082005083c7a824509c621977f5c804911f68",
+    "images": {
+      "api": "ghcr.io/yegamble/vidra-core@sha256:b2b7717da82aa5676a2bc3b8c9c09bd52a6b414081140f8723fa0619807e32fd",
+      "frontend": "ghcr.io/yegamble/vidra-user@sha256:4d86a264b66778a211d87b3ee95caa7e3c36ef4add096dc6094b52355be8882e",
+      "search": "ghcr.io/yegamble/vidra-search@sha256:804530bfb5595944d9c2492cf16aec803696c74831df7e1fdc15192555e927c6"
+    },
+    "ledgers": {
+      "schema_migrations": {
+        "actual": "146|f",
+        "expected": 146,
+        "source_revision": "3219290e0b7dfe6827f2d22e9f1dd3d5eb067b4c"
+      },
+      "vidra_search_migrations": {
+        "actual": "18|f",
+        "expected": 18,
+        "source_revision": "b7a7f55be6646c2730d5bbc481e423ac9cfa9e08"
+      }
+    }
+  },
+  "committed_hashes": "docs/evidence/release-v0.6.6-verification/ios-runtime/committed-hashes.json is the independent sha256 index recomputed over every committed file in this ios-runtime tree except itself, over the bytes as committed, and is authoritative for the committed bytes. artifact-hashes.json (and provenance.json's tool_sha256) is the exporter's on-host attestation over the EXPORTED artifact and is left unchanged. Every committed file matches it byte-for-byte EXCEPT ios_safari_pass.py, which was reworded after export for comment accuracy only (two 'native HLS on iOS' comments -> 'native or MSE depending on the engine'; no executable line changed), so its committed sha256 c7b0fec8...8610 differs from the exported c0be0ad1...7824c. See docs/runtime-acceptance-ios-v0.6.6.md.",
+  "backlog_report": "docs/runtime-acceptance-ios-v0.6.6.md",
+  "not_claimed": [
+    "Single device + iOS version (iPhone 15 / iOS 17); this is NOT the full browser/Safari matrix.",
+    "The iOS-specific playback + sign-in risks only: watch-page load, <video> playback advancing, owner sign-in. NOT seek/quality/speed/resume/PiP, NOT the control + accessibility inventory.",
+    "NOT upload-from-iOS, NOT player-gesture controls, NOT other iOS versions/devices, NOT iPad, NOT macOS Safari, NOT accessibility (screen reader / physical speaker output).",
+    "On iOS 17 the player took the Managed Media Source (blob:) path, NOT the native-HLS branch; PLAY-01's native-HLS Safari slice remains the only native-HLS evidence and stays UNVERIFIED on the v0.6.6 digests.",
+    "Tunnel/session/device identifiers are session-reported; the stack is the meta#213 local-storage runtime milestone host, self-signed internal origin reached via Tunnel MITM. Not deployed: production and beta were untouched.",
+    "No workflow row changed status; PLAY-01 and QLT-02 were considered and NOT moved."
+  ]
+}

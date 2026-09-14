@@ -1,0 +1,40 @@
+{
+  "status": "FAIL",
+  "candidate": "v0.6.6",
+  "device": "iPhone 15",
+  "ios": "17",
+  "tunnel": "vidra-v066-ios",
+  "origin": "https://secure.video.test",
+  "watch_path": "/v/BfnHVc4m9E4",
+  "video_id": "8d06000b-627a-4781-952f-05ecb4e8607f",
+  "started_at": "2026-09-14T21:06:36Z",
+  "checks": {
+    "watch-page-loads": "PASS",
+    "video-element-ready": "PASS"
+  },
+  "steps": [
+    {
+      "step": "session-created",
+      "at": "21:07:03",
+      "session_id": "2edb3e6c-b661-41e3-8d09-a2165cceb396",
+      "caps_device": "iPhone 15"
+    },
+    {
+      "step": "watch-page-loads",
+      "at": "21:07:09",
+      "title": "Releaseacceptancec998f7b453b8",
+      "url": "https://secure.video.test/v/BfnHVc4m9E4"
+    },
+    {
+      "step": "video-element-ready",
+      "at": "21:07:09",
+      "ready": 4,
+      "src": "blob:https://secure.video.test/83146cf0-1452-49c4-b1c7-ad39bd71dec1",
+      "duration": 12.010666666666667
+    }
+  ],
+  "session_id": "2edb3e6c-b661-41e3-8d09-a2165cceb396",
+  "failed_phase": "playback-advances",
+  "error": "Traceback (most recent call last):\n  File \"/private/tmp/claude-501/-Users-yosefgamble-github-vidra/f6390aca-a47b-4b3a-aaef-1953c99c5872/scratchpad/ios/ios_safari_pass.py\", line 82, in <module>\n    end = WebDriverWait(driver, 60).until(lambda d: (s := sample(d)) if s['t'] - start['t'] >= 2 else None)\n  File \"/private/tmp/claude-501/-Users-yosefgamble-github-vidra/f6390aca-a47b-4b3a-aaef-1953c99c5872/scratchpad/ios/venv/lib/python3.9/site-packages/selenium/webdriver/support/wait.py\", line 129, in until\n    value = method(self._driver)\n  File \"/private/tmp/claude-501/-Users-yosefgamble-github-vidra/f6390aca-a47b-4b3a-aaef-1953c99c5872/scratchpad/ios/ios_safari_pass.py\", line 82, in <lambda>\n    end = WebDriverWait(driver, 60).until(lambda d: (s := sample(d)) if s['t'] - start['t'] >= 2 else None)\nUnboundLocalError: local variable 's' referenced before assignment\n",
+  "finished_at": "2026-09-14T21:07:11Z"
+}
