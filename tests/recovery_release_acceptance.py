@@ -10,8 +10,14 @@ captured them. Browser steps live in recovery-release-acceptance.mjs.
 `install.sh`, `frozen-deploy-hashes.json` and `pinned-prod.yml` are what the
 drill installs and asserts against. It was hard-wired to the v0.6.4 stage, which
 is now only the DEFAULT, so a v0.6.5 drill passes
-`--baseline /root/vidra-v065-runtime` and the v0.6.4 records stay valid. Pass the
-same value to the browser half via VIDRA_BASELINE.
+`--baseline /root/vidra-v065-runtime`. Pass the same value to the browser half
+via VIDRA_BASELINE.
+
+The source actions behave exactly as they did for v0.6.4 when every flag is
+defaulted. `restore` does NOT: it now requires the backup and source-loss
+records it consumes to name the release they were taken on, and the archived
+v0.6.4 results predate that stamping. Restoring from them means re-running the
+source actions on this harness — deliberate, since the v0.6.4 drill is closed.
 
 Boundaries this module holds by construction:
   * source actions stop and start services but never remove a volume, image,
@@ -35,7 +41,7 @@ import urllib.error
 import urllib.request
 
 import release_acceptance as runtime
-from blank_server_smoke import require, sha
+from blank_server_smoke import require, sha, validate_candidate
 from runtime_smoke import check_ledger
 
 DEFAULT_BASELINE = Path('/root/vidra-v064-runtime')
@@ -53,13 +59,18 @@ FAULT_SERVICES = ('postgres', 'redis', 'search')
 def load_candidate(baseline):
     """The baseline names the release under drill; nothing else may.
 
-    Read here rather than at each use so a baseline that holds no candidate
-    manifest, or one without a release tag, fails at the first line of the
-    action instead of KeyError-ing halfway through a restore.
+    The drill installs from this manifest and asserts every image against it, so
+    it gets the same A01 validation `release_acceptance` applies — a manifest of
+    a release whose own verification did not pass is not a candidate. Read here
+    rather than at each use so a baseline holding no manifest, or a bad one,
+    fails at the first line of the action instead of KeyError-ing mid-restore.
     """
-    candidate = json.loads((Path(baseline) / 'candidate.json').read_text())
-    require(re.fullmatch(r'v\d+\.\d+\.\d+', candidate.get('tag') or '') is not None,
-            f'baseline holds no release candidate: {baseline}/candidate.json')
+    path = Path(baseline) / 'candidate.json'
+    candidate = json.loads(path.read_text())
+    try:
+        validate_candidate(candidate)
+    except ValueError as error:
+        raise ValueError(f'{path}: {error}') from error
     return candidate
 
 
@@ -70,10 +81,14 @@ def check_recorded_tag(name, record, candidate):
     then passes every downstream comparison — because the expected catalogue and
     ledgers come from that same wrong evidence. Every action records
     `candidate_tag`; a record without one is refused, never assumed to match.
+    The archived v0.6.4 source results predate the stamping, so the message says
+    so: a real refusal must not read as a harness bug.
     """
     recorded = record.get('candidate_tag')
+    remedy = '' if recorded else (' (records written before candidate_tag stamping cannot be restored; '
+                                  're-run the source actions on this harness)')
     require(recorded == candidate['tag'],
-            f"{name} was recorded on {recorded or 'an unrecorded release'}, not {candidate['tag']}")
+            f"{name} was recorded on {recorded or 'an unrecorded release'}, not {candidate['tag']}{remedy}")
 
 
 def fingerprint_sql(table):

@@ -13,10 +13,15 @@ mistaken for "no secret looked for".
 The bucket key and the owner fixture live under per-candidate paths, so they are
 arguments, not constants. Leaving them at the v0.6.4 defaults on a v0.6.5 host
 would have scanned neither file and certified the export anyway; now the export
-is refused instead.
+is refused instead. The replacement host legitimately holds no key FILE, which
+`--b2-key none` declares on the record (see required_sources).
 
+  # source host
   python3 recovery_release_export.py DRILL_DIR OUT_DIR STAGE [STAGE...] \\
-      [--baseline /root/vidra-v065-runtime] [--b2-key /root/vidra-v065-b2-key.json]
+      --baseline /root/vidra-v065-runtime --b2-key /root/vidra-v065-b2-key.json
+  # replacement host
+  python3 recovery_release_export.py DRILL_DIR OUT_DIR STAGE [STAGE...] \\
+      --baseline /root/vidra-v065-runtime --b2-key none
 """
 import argparse
 import hashlib
@@ -39,10 +44,40 @@ DEFAULT_B2_KEY = Path('/root/vidra-v064-b2-key.json')
 # left out: it is written by the drill's mfa-enroll action under DRILL_DIR, so
 # an export taken before that action legitimately has none.
 REQUIRED_SOURCES = ('env', 'bucket_key', 'owner')
+DECLARED_ABSENT = 'declared-absent'
 
 
 def owner_path(baseline):
     return Path(baseline) / 'private/owner.json'
+
+
+def resolve_baseline(value):
+    return Path(value).resolve()
+
+
+def bucket_key_argument(value):
+    """`--b2-key none` declares that this host holds no standalone key file."""
+    return None if value == 'none' else Path(value)
+
+
+def required_sources(bucket_key_file):
+    """Which named sources this export asserts it scanned.
+
+    The B2 key file exists only on the SOURCE host: the replacement host is
+    rebuilt blank from the released bundle and never holds one, so requiring it
+    there would refuse every replacement-half export (`py-restore`,
+    `verify-restore`, …). `--b2-key none` takes it out of the required set and
+    writes DECLARED_ABSENT into `secrets_loaded`, so the narrower scan is a
+    decision on the record rather than a file that silently was not there.
+
+    The credential itself stays covered: the replacement host's restored
+    /opt/vidra/env/production.env carries STORAGE_S3_ACCESS_KEY and
+    STORAGE_S3_SECRET_KEY, which the env scan loads. What is declared absent is
+    the standalone key FILE, never the secret.
+    """
+    if bucket_key_file is None:
+        return tuple(name for name in REQUIRED_SOURCES if name != 'bucket_key')
+    return REQUIRED_SOURCES
 
 
 def sha_bytes(data):
@@ -90,7 +125,11 @@ def host_secrets(drill, env_file=ENV_FILE, bucket_key_file=DEFAULT_B2_KEY,
         elif isinstance(value, str) and len(value) >= 8:
             secrets.add(value)
     for name, path in (('bucket_key', bucket_key_file), ('mfa', drill / 'private/mfa.json')):
-        if path.exists():
+        if path is None:
+            # Declared absent by the caller (see required_sources), not simply
+            # not found: the record must be able to tell those apart.
+            loaded[name] = DECLARED_ABSENT
+        elif path.exists():
             collect(json.loads(path.read_text()))
             loaded[name] = True
     if owner_file.exists():
@@ -160,19 +199,23 @@ def main(argv=None):
     parser.add_argument('drill', type=Path, help='drill directory holding the stage subdirectories')
     parser.add_argument('out', type=Path, help='new export directory')
     parser.add_argument('stages', nargs='+', help='stage subdirectory names to export')
-    parser.add_argument('--baseline', type=Path, default=DEFAULT_BASELINE,
+    parser.add_argument('--baseline', type=resolve_baseline, default=DEFAULT_BASELINE,
                         help='prepared runtime stage of the drilled candidate; the owner fixture is '
                              '<baseline>/private/owner.json (default: the v0.6.4 stage)')
-    parser.add_argument('--b2-key', type=Path, default=DEFAULT_B2_KEY,
-                        help='dedicated test-bucket key file (default: the v0.6.4 key)')
+    parser.add_argument('--b2-key', type=bucket_key_argument, default=DEFAULT_B2_KEY,
+                        help='dedicated test-bucket key file, or "none" to declare on the record that this '
+                             'host holds none — the replacement host never does (default: the v0.6.4 key)')
     args = parser.parse_args(argv)
     # A candidate's key file is named for that candidate. Taking another
     # candidate's baseline while leaving the key at the v0.6.4 default would
     # scan a leftover key — or nothing — and report a covered scan either way.
-    if args.baseline != DEFAULT_BASELINE and args.b2_key == DEFAULT_B2_KEY:
+    # `--b2-key none` is not the default, so a declared-absent key passes here:
+    # only the accidental default is refused.
+    if args.baseline != DEFAULT_BASELINE.resolve() and args.b2_key == DEFAULT_B2_KEY:
         raise SystemExit(f'refusing export: --baseline {args.baseline} is not the v0.6.4 stage but --b2-key '
-                         f'still points at {DEFAULT_B2_KEY}; name this candidate\'s key file')
-    return export(args.drill, args.out, args.stages, required=REQUIRED_SOURCES, env_file=ENV_FILE,
+                         f'still points at {DEFAULT_B2_KEY}; name this candidate\'s key file, or pass '
+                         '--b2-key none to declare on the record that this host holds none')
+    return export(args.drill, args.out, args.stages, required=required_sources(args.b2_key), env_file=ENV_FILE,
                   bucket_key_file=args.b2_key, owner_file=owner_path(args.baseline))
 
 
