@@ -1,4 +1,5 @@
 """Guard archive handling, candidate derivation and the sole Compose adaptation of the COPY rehearsal."""
+from contextlib import redirect_stdout
 import io
 import json
 import os
@@ -291,14 +292,23 @@ class ExportTopologyTests(unittest.TestCase):
             export_tool.preparation_sources(self.root)
         self.assertIn('nothing to export', str(caught.exception))
 
-    def test_clean_first_time_prepare_reaches_the_secret_scan(self):
+    def test_a_clean_first_time_prepare_exports_the_one_stage_that_exists(self):
+        # Reaching the secret scan proved nothing once the scan moved ahead of
+        # the topology: collect_secrets refuses first on any stage shape, so the
+        # old assertion passed whether or not a missing `-continuation` would
+        # still have raised FileNotFoundError. The scan is covered by
+        # ExportSecretSourceTests; patching it out is what lets this test assert
+        # the topology — that an export past the scan COMPLETES on a run with no
+        # continuation, and records exactly the attempt that exists.
         self.attempt()
-        (self.root / 'private').mkdir()
-        (self.root / 'private/source.env').write_text('POSTGRES_PASSWORD=generated-secret-value\n')
-        with self.assertRaises(AssertionError) as caught:
+        with patch.object(export_tool, 'collect_secrets', return_value=['unrelated-secret']), \
+                redirect_stdout(io.StringIO()):
             export_tool.export('reviewed', self.root, self.tmp / 'baseline', self.tmp / 'key.json')
-        # A missing `-continuation` used to raise FileNotFoundError here.
-        self.assertIn('named secret source', str(caught.exception))
+        out = Path(str(self.root) + '-reviewed')
+        provenance = json.loads((out / 'provenance.json').read_text())
+        self.assertEqual(provenance['preparation_stages'], {'prepare-original': str(self.root)})
+        self.assertEqual(provenance['secret_scan'], 'PASS')
+        self.assertTrue((out / 'prepare-original.json').is_file())
 
     def test_a_refused_export_leaves_no_output_directory(self):
         self.attempt()
