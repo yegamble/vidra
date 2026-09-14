@@ -80,7 +80,9 @@ step). Nothing is deployed on it; beta stays on v0.6.4.
   retained B2 host and stack as the milestone above, the drill tools at meta
   `ef1614f` (#202–#205) drove the released `setup` → `deploy.sh` → admin
   `/admin/import-peertube` path against a **generated** PeerTube 8.0.0 / schema
-  970 fixture. Preview planned and imported nothing; the import worker ran
+  970 fixture. The preview planned the whole source — 6 users, 6 channels,
+  7 videos and the rest — and imported **nothing**, leaving every catalogue
+  fingerprint unchanged; the import worker then ran
   10:58:33 → 10:58:39 UTC and brought in 6 users, 6 channels, 7 videos, 6 HLS
   playlists, 12 tag links, 4 comments, 2 chapters and 1 caption with **zero
   failed and zero unsupported**; an identical repeat imported and updated

@@ -21,6 +21,16 @@ because a generated seven-video fixture is not representative-source
 acceptance. What changes is the MIG rows' `basis`, plus the measured subsets
 this rehearsal is entitled to record.
 
+Two deliberate omissions there. The v0.6.4 b2→migration delta also added an
+`acceptance_completion_counts` key; **no v0.6.5 disposition in this chain
+carries one**, so rather than invent A-item completion counts for this
+candidate, the key is omitted (as is `historical_acceptance`, absent for the
+same reason). And **SRC-01's row `basis` is deliberately left untouched**: the
+row was already PASS from the native v0.6.5 run and this rehearsal adds no new
+claim to it, so the imported-content evidence lives in `measured_subsets` under
+`SRC-01 (imported content)` rather than being written back over a row that did
+not move.
+
 Extending the native v0.6.5 record's labelling, as the B2 record did: values
 below are **file-asserted** — read out of the committed evidence — unless
 marked **session-reported**, in which case they come from the operator's
@@ -75,7 +85,7 @@ that no production DNS, traffic or resource was touched, is
 **session-reported**.
 
 Source inputs are copies of the retained generated fixture:
-`source-final.dump` sha256 `ec26be51…d273` (**323,141** bytes) and
+`source-final.dump` sha256 `ec26be51…2273` (**323,141** bytes) and
 `source-media-config.tgz` sha256 `9756abd4…4b43` (**75,002,357** bytes), both
 matching `retained_archive_manifest` in
 [the fixture record](evidence/a18-a23-peertube-fixture.json). The originals
@@ -121,7 +131,10 @@ Screenshots (`preview.png`, `import.png`, `repeat.png`, `schema-refusal.png`,
 exits and timestamps are in the evidence directory. Health outputs are
 represented by hashes; raw logs, DSNs, credentials, account-password hashes and
 private actor keys are excluded — `provenance.json` records `secret_scan`
-**PASS** and lists the 34 private raw files by hash.
+**PASS** and lists the 34 raw source files by hash, **14 of them private**
+(six `*/result.json`, seven `*/private/commands.jsonl` and `preparation.json`).
+The other 20 — 12 screenshots and 8 `*-browser.json` — are committed here, and
+all 20 are byte-identical to the hashes `provenance.json` recorded for them.
 
 The recovered data point is the pre-reboot thirteen-table snapshot captured at
 **11:03:19.037 UTC**; the successful comparison completed at **11:04:56.633
@@ -241,16 +254,34 @@ phase finishing (10:59:36.819 UTC) and `schema-unsupported` starting
 
 Use a **new** stage directory — this one is populated, and neither it, the
 bucket's contents, the stopped source container nor the retained evidence may
-be erased or reused automatically. The migration harness's own `prepare` takes
-the candidate baseline positionally and has **no** `--candidate` flag — that
-flag belongs to the runtime harness `release_acceptance.py`, whose own
-`prepare` step must always carry it, because a committed unit test
+be erased or reused automatically.
+
+**`--baseline` is not optional for v0.6.5.** The migration harness takes only
+the *stage* positionally; the candidate baseline is the optional `--baseline`
+flag, and its default is still `DEFAULT_BASELINE = /root/vidra-v064-runtime`
+(`tests/peertube_release_acceptance.py:26,284-287`, imported and reused by
+`tests/peertube_release_checks.py`). An operator who omits it therefore
+prepares silently against **v0.6.4**, not against this candidate. Every v0.6.5
+invocation must pass `--baseline /root/vidra-v065-runtime`, as the runnable
+block below does. That this run did is file-asserted for the preparation step —
+`prepare-original.json` records `baseline` `/root/vidra-v065-runtime` — and
+corroborated for the check steps, which each carry `candidate_tag` **v0.6.5**
+and the v0.6.5 test bucket (the values #202 made the caller supply rather than
+default). The harness's own argv is **not** in `commands.json`, which records
+the host commands the harness issued, so the flag itself is not separately
+evidenced per step.
+
+That is the migration harness's analogue of `--candidate`, which belongs to the
+runtime harness `release_acceptance.py` — its own `prepare` step must always
+carry it, because a committed unit test
 (`tests/docs_prepare_candidate_test.py`) fails the `validate` lane if a recipe
-outside a v0.6.4 record omits it. That guard matches on the command text
-alone, so it fires on prose that merely names the runtime harness's step as
-well as on a real recipe; this paragraph is worded to avoid the adjacency
-rather than to quote a recipe it does not run. Run, as root, with the
-baseline's Node on `PATH`:
+outside a v0.6.4 record omits it. That guard matches on the command text alone,
+so it fires on prose that merely names the runtime harness's step as well as on
+a real recipe; this paragraph is worded to avoid the adjacency rather than to
+quote a recipe it does not run. There is no equivalent committed guard for a
+`--baseline` omission — nothing mechanical would catch one.
+
+Run, as root, with the baseline's Node on `PATH`:
 
 ```bash
 export COMPOSE_PROJECT_NAME=vidra-release-acceptance
