@@ -129,12 +129,22 @@ new `measured_subsets` entry (as the branding toggle was), and counts stay
 ## Evidence integrity
 
 The evidence tree is copied verbatim into
-`docs/evidence/release-v0.6.6-verification/ios-runtime/`. The exporter's
-attestation [`artifact-hashes.json`](evidence/release-v0.6.6-verification/ios-runtime/artifact-hashes.json)
-was verified byte-equal against the copied files at commit time, and
+`docs/evidence/release-v0.6.6-verification/ios-runtime/`, with **one deliberate
+exception**: the committed `ios_safari_pass.py` was reworded **after export** for
+comment accuracy only — two comments said "native HLS on iOS" where the run
+actually took the Managed Media Source path, so they now read "native or MSE
+depending on the engine" (the script only ever inspects `currentTime`/`error`,
+never the engine; no executable line changed). That edits its bytes, so the
+committed script no longer matches the exporter's attestation
+[`artifact-hashes.json`](evidence/release-v0.6.6-verification/ios-runtime/artifact-hashes.json)
+(exported `c0be0ad1…7824c`, committed `c7b0fec8…8610`) or `provenance.json`'s
+`tool_sha256`; **both are left unchanged** as the honest record of what was
+exported. Every **other** file was verified byte-equal to `artifact-hashes.json`
+at commit time.
 [`committed-hashes.json`](evidence/release-v0.6.6-verification/ios-runtime/committed-hashes.json)
 is the independent sha256 index recomputed over every committed file in the tree
-except itself (13 files, including `disposition.json` and `artifact-hashes.json`).
+except itself (13 files, including `disposition.json` and `artifact-hashes.json`)
+and is **authoritative for the committed bytes**.
 
 ## What this proves and does not
 

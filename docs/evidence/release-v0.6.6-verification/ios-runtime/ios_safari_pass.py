@@ -3,9 +3,10 @@
 
 What it proves (the iOS-specific risks desktop Chromium cannot): the watch page
 loads on real iOS Safari through the tunnel, the <video> element reaches a
-playable state and *advances* (native HLS on iOS), no media error, the player
-is present; then a real sign-in through the login form. Everything else stays
-with the desktop drills. Screenshots + a JSON result are written per step.
+playable state and *advances* (native or MSE depending on the engine), no media
+error, the player is present; then a real sign-in through the login form.
+Everything else stays with the desktop drills. Screenshots + a JSON result are
+written per step.
 
 Usage: ios_safari_pass.py OUT_DIR  (env: LT_USERNAME, LT_ACCESS_KEY, LT_TUNNEL,
        VIDRA_ORIGIN, VIDRA_WATCH_PATH, VIDRA_VIDEO_ID, OWNER_JSON,
@@ -73,7 +74,7 @@ try:
     step(phase, **ready)
     result['checks'][phase] = 'PASS'
 
-    # --- 3) playback advances (native HLS on iOS Safari) ---
+    # --- 3) playback advances (native or MSE depending on the engine) ---
     phase = 'playback-advances'
     start = driver.execute_script(
         "const v=document.querySelector('video'); v.muted=true; v.playsInline=true; const p=v.play(); return {t:v.currentTime, err:v.error?v.error.code:null}")

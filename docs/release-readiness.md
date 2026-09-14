@@ -99,9 +99,8 @@ the deploy call.
   REC-03 upgrade/rollback re-based on v0.6.6 (currently carried by delta,
   defensible because v0.6.6 adds no migration); then the owner's deploy decision.
   Still open: the representative-source migration (B2) and the selected
-  IdP/mail/CDN providers (B3). The last blocking **browser** gap for a pragmatic
-  GO is **materially reduced** — the real-device iOS smoke passed — though the
-  full matrix and the owner call remain.
+  IdP/mail/CDN providers (B3). The real-device iOS playback + sign-in risks are
+  now covered; the broader browser matrix and the owner deploy call remain.
 
 ## v0.6.5 candidate — 2026-09-13
 
