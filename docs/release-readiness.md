@@ -73,12 +73,37 @@ step). Nothing is deployed on it; beta stays on v0.6.4.
   access is established, not exercised to completion — and promotes **nothing**
   to PASS, reading **3 PASS / 45 UNVERIFIED / 11 BLOCKED**. No presign/CDN, no
   split-worker or OPS claim, no WebKit, no migration or recovery claim.
-- **Everything else: NOT RUN on the v0.6.5 digests.** The migration and
-  recovery drills, the browser matrix and every other workflow row keep the
-  v0.6.4 disposition's UNVERIFIED / BLOCKED state for this candidate.
-- **Next executable, in order:** (1) the migration and recovery drills on the
-  digests (their v0.6.4 harnesses need the same candidate parametrisation
-  meta#200 gave the runtime harness and #202–#205 gave the drill tools);
+- **Migration rehearsal (generated fixture): PASS on the published v0.6.5
+  images — MIG rows unchanged**
+  ([record](runtime-acceptance-migration-v0.6.5.md), evidence
+  `docs/evidence/release-v0.6.5-verification/migration-runtime/`): on the same
+  retained B2 host and stack as the milestone above, the drill tools at meta
+  `ef1614f` (#202–#205) drove the released `setup` → `deploy.sh` → admin
+  `/admin/import-peertube` path against a **generated** PeerTube 8.0.0 / schema
+  970 fixture. Preview planned and imported nothing; the import worker ran
+  10:58:33 → 10:58:39 UTC and brought in 6 users, 6 channels, 7 videos, 6 HLS
+  playlists, 12 tag links, 4 comments, 2 chapters and 1 caption with **zero
+  failed and zero unsupported**; an identical repeat imported and updated
+  nothing and left all thirteen table fingerprints identical; a clone-only
+  970 → 1040 marker made the preview fail `unverified_schema` with no
+  catalogue change. Reconciliation matched 7 source mappings, 26 per-video
+  asset rows and **30 B2 objects byte-equal to the source**; the import's own
+  `reconcile.begin/page/end` events were delivered to real vidra-search and
+  exactly the 3 eligible public imports came back through the browser (counter
+  4 → 5). With the source **stopped and its media unmounted**, Chromium
+  decoded progressive, HLS-only and split-audio from B2, and a real reboot
+  (boot id `197275e8…` → `a9cd289a…`) preserved every fingerprint and both
+  ledgers 146\|f / 18\|f; 10:56:32 → 11:06:24 UTC. The derived
+  [disposition](evidence/release-v0.6.5-verification/migration-runtime/disposition.json)
+  moves **no row** and stays **3 PASS / 45 UNVERIFIED / 11 BLOCKED**:
+  **MIG-01…06 remain BLOCKED on B2** because a generated seven-video fixture
+  is not the approved sanitized representative source, so only the rows'
+  `basis` and the measured subsets change. No recovery claim, no browser but
+  desktop Chromium, inline worker only.
+- **Everything else: NOT RUN on the v0.6.5 digests.** The recovery drill, the
+  browser matrix, the owner inputs B2/B3/B4 and every other workflow row keep
+  the v0.6.4 disposition's UNVERIFIED / BLOCKED state for this candidate.
+- **Next executable, in order:** (1) the recovery drill on the digests;
   (2) the owner inputs B2/B3/B4 and the remaining OPS-01 clauses.
 
 ## REC-03 / A38 on published v0.6.4 — 2026-09-13
