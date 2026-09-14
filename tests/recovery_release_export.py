@@ -138,6 +138,16 @@ def host_secrets(drill, env_file=ENV_FILE, bucket_key_file=DEFAULT_B2_KEY,
     return secrets, loaded
 
 
+def source_scanned(value):
+    """Whether `loaded[name]` says a secret actually came out of that source.
+
+    Explicit, because the values are not uniformly boolean: `env` is a count and
+    a declared-absent source is the truthy STRING DECLARED_ABSENT. Truthiness
+    would read both a zero count and a declared absence as a completed scan.
+    """
+    return value is True or (type(value) is int and value > 0)
+
+
 def leaks(files, secrets):
     found = []
     for name, data in files.items():
@@ -173,7 +183,17 @@ def export(drill, out, stages, required=('env',), **sources):
                'bucket_key': sources.get('bucket_key_file', DEFAULT_B2_KEY),
                'owner': sources.get('owner_file', owner_path(DEFAULT_BASELINE)),
                'mfa': drill / 'private/mfa.json'}
-    missing = [name for name in required if not loaded[name]]
+    # A required source can never be DECLARED absent: declaring it absent is
+    # exactly what takes it out of the required set (see required_sources). The
+    # two are separate refusals because they are separate mistakes — one is a
+    # file that was not there, the other a caller asserting a scan it also
+    # declared it did not perform.
+    declared = [name for name in required if loaded[name] == DECLARED_ABSENT]
+    if declared:
+        raise SystemExit('refusing export: ' + ', '.join(declared) + ' is declared absent yet listed as '
+                         'required — a declared-absent source must be dropped from the required set, '
+                         'not certified as scanned')
+    missing = [name for name in required if not source_scanned(loaded[name])]
     if missing:
         raise SystemExit('refusing export: no secret was loaded from ' +
                          ', '.join(f'{name} ({scanned[name]})' for name in missing) +

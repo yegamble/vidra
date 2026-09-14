@@ -307,6 +307,24 @@ class ExportTest(unittest.TestCase):
         written = json.loads((drill / 'out/artifact-hashes.json').read_text())
         self.assertEqual(written['secrets_loaded'], {'env': 1, 'bucket_key': True, 'mfa': False, 'owner': True})
 
+    def test_a_required_source_cannot_be_declared_absent(self):
+        # DECLARED_ABSENT is a truthy string, so a truthiness test reads a
+        # declared-absent source as scanned. Declaring a source absent is what
+        # takes it OUT of the required set; a caller that keeps bucket_key in
+        # `required` while passing bucket_key_file=None would otherwise certify
+        # "bucket_key scanned" having scanned nothing.
+        drill = Path(tempfile.mkdtemp())
+        (drill / 'stage').mkdir()
+        (drill / 'stage/result.json').write_text('{"ok": true}\n')
+        env = drill / 'production.env'
+        env.write_text('JWT_SECRET=abcdefgh1234\n')
+        owner = drill / 'owner.json'
+        owner.write_text(json.dumps({'password': 'owner-password-long'}))
+        with self.assertRaises(SystemExit):
+            export.export(drill, drill / 'out', ['stage'], required=export.REQUIRED_SOURCES,
+                          env_file=env, bucket_key_file=None, owner_file=owner)
+        self.assertFalse((drill / 'out').exists())
+
     def test_the_owner_fixture_is_derived_from_the_baseline(self):
         self.assertEqual(export.owner_path(Path('/root/vidra-v065-runtime')),
                          Path('/root/vidra-v065-runtime/private/owner.json'))
