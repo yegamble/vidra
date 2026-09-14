@@ -30,8 +30,11 @@ def validate_spec(spec, tag='v0.6.4'):
     require(spec['endpoint'] == f's3.{spec["region"]}.backblazeb2.com', 'requires regional B2 TLS endpoint')
 
 
-def validate_scope(spec, storage):
-    validate_spec(spec)
+def validate_scope(spec, storage, tag='v0.6.4'):
+    # Same tag the caller established, never this function's own default: a
+    # v0.6.5 run re-checking its spec against v0.6.4 would refuse its own
+    # correctly named bucket at b2_authorize_account, on the host, mid-drill.
+    validate_spec(spec, tag)
     allowed = storage['allowed']
     require(allowed.get('buckets') == [{'id': spec['bucket_id'], 'name': spec['bucket']}],
             'key must be restricted by Backblaze to exactly the dedicated test bucket')
@@ -67,7 +70,7 @@ class TestBucket:
         basic = base64.b64encode((credentials['access_key'] + ':' + credentials['secret_key']).encode()).decode()
         auth = self.request('https://api.backblazeb2.com/b2api/v4/b2_authorize_account', {}, 'Basic ' + basic)
         storage = auth['apiInfo']['storageApi']
-        validate_scope(spec, storage)  # before any bucket request or host mutation
+        validate_scope(spec, storage, tag)  # before any bucket request or host mutation
         self.api = storage['apiUrl']
         require(re.fullmatch(r'https://api[0-9]+\.backblazeb2\.com', self.api) is not None, 'unexpected B2 API host')
         self.token = auth['authorizationToken']

@@ -12,11 +12,14 @@ from release_acceptance_complete_b2 import complete
 
 SPEC = {'bucket': 'vidra-acceptance-v064-20260911-media', 'bucket_id': 'a' * 24,
         'region': 'us-east-005', 'endpoint': 's3.us-east-005.backblazeb2.com'}
+# The real v0.6.5 acceptance bucket, so these tests fail here rather than on the host.
+V065_SPEC = dict(SPEC, bucket='vidra-acceptance-v065-20260914-media',
+                 bucket_id='9555421b394994e8a7070215')
 
 
-def authorization():
-    return {'s3ApiUrl': 'https://' + SPEC['endpoint'], 'apiUrl': 'https://api005.backblazeb2.com',
-            'allowed': {'buckets': [{'id': SPEC['bucket_id'], 'name': SPEC['bucket']}],
+def authorization(spec=SPEC):
+    return {'s3ApiUrl': 'https://' + spec['endpoint'], 'apiUrl': 'https://api005.backblazeb2.com',
+            'allowed': {'buckets': [{'id': spec['bucket_id'], 'name': spec['bucket']}],
                         'capabilities': sorted(CAPABILITIES), 'namePrefix': None}}
 
 
@@ -129,13 +132,38 @@ class B2AcceptanceTests(unittest.TestCase):
 
 class BucketNamingTests(unittest.TestCase):
     def test_bucket_must_be_named_for_the_candidate_release(self):
-        v065 = dict(SPEC, bucket='vidra-acceptance-v065-20260913-media')
-        validate_spec(v065, 'v0.6.5')
+        validate_spec(V065_SPEC, 'v0.6.5')
         with self.assertRaises(ValueError):
             validate_spec(SPEC, 'v0.6.5')  # a v064 bucket cannot serve a v0.6.5 run
         with self.assertRaises(ValueError):
-            validate_spec(v065, 'v0.6.4')
+            validate_spec(V065_SPEC, 'v0.6.4')
         validate_spec(SPEC)  # the default keeps the v0.6.4 records valid
+
+    def test_scope_check_honours_the_callers_tag_not_the_default(self):
+        # validate_scope re-validates the spec. If it does that against its own
+        # default instead of the tag the caller established, a correctly named
+        # v0.6.5 bucket is refused the moment its scope is checked.
+        validate_scope(V065_SPEC, authorization(V065_SPEC), 'v0.6.5')
+        with self.assertRaises(ValueError):
+            validate_scope(V065_SPEC, authorization(V065_SPEC))  # default tag rejects it
+        with self.assertRaises(ValueError):
+            validate_scope(SPEC, authorization(SPEC), 'v0.6.5')  # and v064 cannot serve v0.6.5
+        validate_scope(SPEC, authorization(SPEC))  # the default keeps the v0.6.4 records valid
+
+    def test_bucket_authorizes_a_v065_candidate_end_to_end(self):
+        # The regression this closes would have surfaced on the acceptance host:
+        # __init__ validated the spec against its tag, then dropped the tag on
+        # the way into validate_scope, so the v0.6.5 B2 drill died at its first
+        # b2_authorize_account with "requires a new dedicated v0.6.4 bucket".
+        response = {'apiInfo': {'storageApi': authorization(V065_SPEC)}, 'authorizationToken': 'auth-token'}
+        with patch.object(TestBucket, 'request', return_value=response) as network:
+            bucket = TestBucket(V065_SPEC, {'access_key': 'id', 'secret_key': 'secret'}, 'v0.6.5')
+        self.assertEqual(network.call_count, 1)
+        self.assertTrue(network.call_args.args[0].endswith('b2_authorize_account'))
+        self.assertEqual(bucket.api, 'https://api005.backblazeb2.com')
+        self.assertEqual(bucket.proof['bucket'], 'vidra-acceptance-v065-20260914-media')
+        self.assertEqual(bucket.proof['bucket_id'], V065_SPEC['bucket_id'])
+        self.assertEqual(bucket.proof['authorized_scope'], authorization(V065_SPEC)['allowed'])
 
 if __name__ == '__main__':
     unittest.main()
