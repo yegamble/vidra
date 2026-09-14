@@ -7,11 +7,15 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 
-const [stageArg, mode, label = mode] = process.argv.slice(2);
+// The runtime baseline names the release under rehearsal, so it is an input:
+// `VIDRA_BASELINE=/root/vidra-v065-runtime` or a fourth argument (after an
+// explicit label), defaulting to the v0.6.4 drill's stage.
+const [stageArg, mode, label = mode, baselineArg] = process.argv.slice(2);
 assert.ok(stageArg && ['preview', 'import', 'repeat', 'schema-refusal', 'search', 'playback'].includes(mode));
 assert.match(label, /^[a-z][a-z0-9-]*$/);
 assert.equal(process.env.COMPOSE_PROJECT_NAME, 'vidra-release-acceptance');
-const stage = resolve(stageArg), baseline = '/root/vidra-v064-runtime';
+const stage = resolve(stageArg);
+const baseline = resolve(baselineArg ?? process.env.VIDRA_BASELINE ?? '/root/vidra-v064-runtime');
 const output = join(stage, `${label}-browser.json`);
 assert.ok(!existsSync(output), 'preserve old results; use a separate attempt directory');
 const result = { status: 'UNVERIFIED', started_at: new Date().toISOString(), mode, checks: {}, requests: [], commands: [] };
@@ -49,7 +53,12 @@ const imageSnapshot = () => {
 let browser, phase = 'login';
 try {
   const { chromium, expect } = createRequire(join(baseline, 'browser/package.json'))('@playwright/test');
-  assert.equal(JSON.parse(readFileSync(join(stage, 'preparation.json'))).status, 'PASS');
+  const preparation = JSON.parse(readFileSync(join(stage, 'preparation.json')));
+  assert.equal(preparation.status, 'PASS');
+  // The stage records the baseline it was prepared against; a legacy stage
+  // records none, but a DISAGREEING one means this driver is reading one
+  // release's credentials against another release's run.
+  if (preparation.baseline !== undefined) assert.equal(preparation.baseline, baseline);
   result.images_before = imageSnapshot();
   result.tool_sha256 = createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
   result.node = process.version;
@@ -204,7 +213,19 @@ print(sum(float(s.rsplit(' ',1)[1]) for s in lines if s.startswith('vidra_search
     result.checks[phase] = 'PASS';
   } else {
     phase = 'source-disconnected-playback';
-    result.source_running = host(['docker', 'inspect', 'vidra-v064-migration-source-20260911', '--format', '{{.State.Running}}']);
+    // The disposable clone's name is a fact of the stage that created it. A
+    // literal here would address another release's database — reporting a
+    // stranger's state as this drill's disconnect proof — or, on the v0.6.5
+    // host, fail the inspect outright. The name is checked against THIS
+    // release's label, so a v0.6.4 container cannot answer for a v0.6.5 drill.
+    const candidateTag = JSON.parse(readFileSync(join(baseline, 'candidate.json'))).tag;
+    assert.match(candidateTag, /^v[0-9]+\.[0-9]+\.[0-9]+$/);
+    assert.equal(typeof preparation.source_container, 'string',
+      'stage records no source_container; re-prepare it with this harness');
+    assert.match(preparation.source_container,
+      new RegExp(`^vidra-${candidateTag.replaceAll('.', '')}-migration-source-[0-9]{8}$`));
+    result.source_container = preparation.source_container;
+    result.source_running = host(['docker', 'inspect', preparation.source_container, '--format', '{{.State.Running}}']);
     assert.equal(result.source_running, 'false');
     const mounts = JSON.parse(host(['docker', 'inspect', host(['bash', 'deploy/compose.sh', 'ps', '-q', 'api']), '--format', '{{json .Mounts}}']));
     assert.ok(!mounts.some(m => m.Destination === '/peertube-source'));

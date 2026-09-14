@@ -1,15 +1,75 @@
 #!/usr/bin/env python3
 """Export named, secret-checked migration results; retain all raw failures privately."""
+import argparse
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import shutil
-import sys
 import tarfile
 
 from blank_server_smoke import sha
+from peertube_release_acceptance import DEFAULT_B2_KEY, DEFAULT_BASELINE, DEFAULT_ROOT
+
+SECRET_KEYS = ('SECRET', 'PASSWORD', 'TOKEN', 'KEK', 'KEY', 'SOURCE_URL')
+
+
+def env_secrets(path):
+    """Generated credentials in an env file."""
+    found = []
+    for line in path.read_text().splitlines():
+        if '=' in line and not line.startswith('#'):
+            key, value = line.split('=', 1)
+            if any(word in key for word in SECRET_KEYS) and len(value) >= 12:
+                found.append(value.strip('"\''))
+    return found
+
+
+def owner_password(path):
+    return [json.loads(path.read_text())['password']]
+
+
+def json_values(path):
+    return list(json.loads(path.read_text()).values())
+
+
+def collect_secrets(sources):
+    """The live credentials the exported archive must not contain.
+
+    The scrub is the only thing between the private stage and a published
+    archive, so a named source that is missing — or that yields no credential —
+    refuses the export. Scanning for one secret fewer looks exactly like a clean
+    scan, which is the failure this guard exists to make impossible.
+    """
+    secrets = []
+    for path, extract in sources:
+        assert path.is_file(), f'named secret source missing; export refused: {path}'
+        found = [value for value in extract(path) if value]
+        assert found, f'named secret source yielded no credential; export refused: {path}'
+        secrets.extend(found)
+    return secrets
+
+
+def preparation_sources(root):
+    """The prepare attempts this drill actually produced, in attempt order.
+
+    The v0.6.4 drill needed three (original, continuation, ready) and the export
+    hard-coded that shape. A run that PASSES first time leaves no
+    `-continuation`, and the operator cannot manufacture one — `--prepared-source`
+    is gated on the recorded 'source role could write' failure, and a same-day
+    `docker run --name` collides — so the export died on a missing file after
+    every hour of host work was already spent. The last attempt present is the
+    live stage whose browser results and check attempts are exported.
+    """
+    candidates = [(root, 'prepare-original'),
+                  (Path(str(root) + '-continuation'), 'prepare-continuation'),
+                  (Path(str(root) + '-ready'), 'prepare-ready')]
+    present = [(directory, name) for directory, name in candidates
+               if (directory / 'preparation.json').is_file()]
+    assert present, (f'no preparation.json under {root}, {root}-continuation or {root}-ready; '
+                     'nothing to export')
+    return present
 
 
 def reject_secrets(content, secrets):
@@ -19,14 +79,23 @@ def reject_secrets(content, secrets):
     assert not re.search(r'\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}', content), 'password hash detected'
 
 
-def export(label='reviewed'):
+def export(label='reviewed', root=DEFAULT_ROOT, baseline=DEFAULT_BASELINE, b2_key=DEFAULT_B2_KEY):
     os.umask(0o077)
-    root = Path('/root/vidra-v064-migration-20260911')
-    stage = Path(str(root) + '-ready')
     assert re.fullmatch(r'reviewed(?:-v[0-9]+)?', label), 'invalid export attempt label'
+    # Gather the live credentials, and settle which attempts exist, before
+    # anything is written: a refusal here must not leave a burned export label
+    # and a directory of UNSCRUBBED evidence behind.
+    secrets = collect_secrets([(root / 'private/source.env', env_secrets),
+                               (Path('/opt/vidra/env/production.env'), env_secrets),
+                               (baseline / 'private/owner.json', owner_password),
+                               (b2_key, json_values)])
+    sources = preparation_sources(root)
+    stage = sources[-1][0]
     out = Path(str(root) + '-' + label)
     out.mkdir(mode=0o700)
-    provenance = {'raw_files': {}, 'raw_logs': [], 'tool_files': {}, 'scope':
+    provenance = {'raw_files': {}, 'raw_logs': [], 'tool_files': {},
+                  'preparation_stages': {name: str(directory) for directory, name in sources},
+                  'scope':
                   'Generated-source packaged COPY milestone. Raw credentials, SQL dumps, configuration and logs remain private.'}
 
     def sanitized(value):
@@ -41,12 +110,10 @@ def export(label='reviewed'):
     def save(name, value):
         (out / name).write_text(json.dumps(value, indent=2) + '\n')
 
-    sources = [(root, 'prepare-original'), (Path(str(root) + '-continuation'), 'prepare-continuation'),
-               (stage, 'prepare-ready')]
-    for directory, label in sources:
+    for directory, stage_label in sources:
         path = directory / 'preparation.json'
         provenance['raw_files'][str(path)] = sha(path)
-        save(label + '.json', sanitized(json.loads(path.read_text())))
+        save(stage_label + '.json', sanitized(json.loads(path.read_text())))
     for path in sorted(stage.glob('*-browser.json')):
         value = json.loads(path.read_text())
         assert value['status'] in ('PASS', 'FAIL'), 'browser still running'
@@ -56,7 +123,7 @@ def export(label='reviewed'):
         provenance['raw_files'][str(path)] = sha(path)
         save(path.parent.name + '.json', sanitized(json.loads(path.read_text())))
     commands = []
-    for directory in [root, Path(str(root) + '-continuation'), stage, *sorted(p for p in stage.iterdir() if p.is_dir())]:
+    for directory in [d for d, _ in sources] + sorted(p for p in stage.iterdir() if p.is_dir()):
         path = directory / 'private/commands.jsonl'
         if not path.exists():
             continue
@@ -74,23 +141,14 @@ def export(label='reviewed'):
     # Source snapshots are public harness code, including the failed revisions.
     tool_texts = []
     tool_sources = []
-    for directory, label in sources:
+    for directory, stage_label in sources:
         for path in sorted((directory / 'tools').glob('*')):
             if path.is_file() and path.suffix in ('.py', '.mjs'):
-                name = label + '/' + path.name
+                name = stage_label + '/' + path.name
                 tool_texts.append(path.read_text())
                 tool_sources.append((path, name))
                 provenance['tool_files'][name] = sha(path)
 
-    secrets = []
-    for path in (root / 'private/source.env', Path('/opt/vidra/env/production.env')):
-        for line in path.read_text().splitlines():
-            if '=' in line and not line.startswith('#'):
-                key, value = line.split('=', 1)
-                if any(word in key for word in ('SECRET', 'PASSWORD', 'TOKEN', 'KEK', 'KEY', 'SOURCE_URL')) and len(value) >= 12:
-                    secrets.append(value.strip('"\''))
-    secrets.append(json.loads(Path('/root/vidra-v064-runtime/private/owner.json').read_text())['password'])
-    secrets.extend(json.loads(Path('/root/vidra-v064-b2-key.json').read_text()).values())
     # The source is stopped for COPY independence. Exported result fields carry
     # aggregate counts/fingerprints, never account records or actor key material.
     for content in [p.read_text() for p in out.glob('*.json')] + tool_texts:
@@ -108,4 +166,13 @@ def export(label='reviewed'):
 
 
 if __name__ == '__main__':
-    export(sys.argv[1] if len(sys.argv) == 2 else 'reviewed')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('label', nargs='?', default='reviewed')
+    parser.add_argument('--root', type=Path, default=DEFAULT_ROOT,
+                        help='migration root; the ready stage, continuation and export directories derive from it')
+    parser.add_argument('--baseline', type=Path, default=DEFAULT_BASELINE,
+                        help='runtime-milestone stage holding the owner credential the scrub must cover')
+    parser.add_argument('--b2-key', type=Path, default=DEFAULT_B2_KEY,
+                        help='private key file for the dedicated acceptance bucket')
+    args = parser.parse_args()
+    export(args.label, args.root.resolve(), args.baseline.resolve(), args.b2_key.resolve())

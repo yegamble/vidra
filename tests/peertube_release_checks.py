@@ -17,7 +17,9 @@ import urllib.request
 
 import release_acceptance as runtime
 from blank_server_smoke import require, sha
-from peertube_release_acceptance import SOURCE
+from peertube_release_acceptance import (DEFAULT_B2_KEY, DEFAULT_BASELINE, DEFAULT_ROOT,
+                                         baseline_storage, check_stage_prepared_for,
+                                         frozen_cli_sha256, release_tag)
 from release_acceptance_b2 import TestBucket
 
 
@@ -36,23 +38,39 @@ def match_assets(source, destination, field):
             'media assigned to wrong video, missing, or duplicated')
 
 
-def execute(stage, action, label=None):
+def execute(stage, action, label=None, baseline=DEFAULT_BASELINE, root=DEFAULT_ROOT, b2_key=DEFAULT_B2_KEY):
     os.umask(0o077)
     require(re.fullmatch(r'[a-z][a-z0-9-]*', label or action), 'invalid attempt label')
+    source_media = root / 'source-media8'
+    candidate = json.loads((baseline / 'candidate.json').read_text())
+    tag = release_tag(candidate)
+    # Everything below is refused BEFORE the attempt directory exists. Attempt
+    # results are never replaced, so a guard that fired after the mkdir would
+    # burn an attempt label and leave an empty directory that reads as an
+    # abandoned run. Storage is refused for every action, not only reconcile:
+    # the drill as a whole is defined on the B2 host.
+    bucket_spec = baseline_storage(baseline, tag)
+    # The disposable clone is named by the prepare step that created it. Reading
+    # the recorded name (rather than deriving one here) is what keeps a check run
+    # on a later day, or against another release, from addressing a foreign
+    # database.
+    prior = json.loads((stage / 'preparation.json').read_text())
+    container = prior.get('source_container')
+    require(isinstance(container, str) and bool(container),
+            f'{stage}/preparation.json records no source_container; re-prepare the stage with this harness')
+    check_stage_prepared_for(prior, baseline, tag)
     out = stage / (label or action)
     out.mkdir(mode=0o700)
     run = runtime.Recorder(out)
-    result = {'status': 'UNVERIFIED', 'action': action, 'started_at': time.time(), 'checks': {}}
-    baseline = Path('/root/vidra-v064-runtime')
-    source_media = Path('/root/vidra-v064-migration-20260911/source-media8')
-    candidate = json.loads((baseline / 'candidate.json').read_text())
+    result = {'status': 'UNVERIFIED', 'action': action, 'started_at': time.time(), 'checks': {},
+              'candidate_tag': tag, 'source_container': container, 'test_bucket': bucket_spec['bucket']}
     def source(query):
-        return run.run(['docker', 'exec', SOURCE, 'psql', '-U', 'postgres', '-d', 'peertube', '-At',
+        return run.run(['docker', 'exec', container, 'psql', '-U', 'postgres', '-d', 'peertube', '-At',
                         '-v', 'ON_ERROR_STOP=1', '-c', query], 'source-query').strip()
     try:
         result['images_before'] = runtime.runtime_snapshot(run, candidate)
         result['cli_sha256'] = sha(Path('/usr/local/bin/vidra'))
-        require(result['cli_sha256'] == candidate['assets']['vidra_v0.6.4_linux_amd64']['sha256'], 'CLI drift')
+        require(result['cli_sha256'] == frozen_cli_sha256(candidate, tag), 'CLI drift')
         result['shipped_files'] = json.loads((baseline / 'frozen-deploy-hashes.json').read_text())
         for name, digest in result['shipped_files'].items():
             require(sha(runtime.INSTALL / name) == digest, 'released tooling drift: ' + name)
@@ -130,9 +148,7 @@ def execute(stage, action, label=None):
             pairs[captions[0]['storage_key']] = source_media / 'captions' / source_captions[0]['filename']
             result['source_asset_assignments']['captions'] = source_captions
             require(len(pairs) == 30, 'expected 30 distinct generated media objects')
-            spec = {'bucket': 'vidra-acceptance-v064-20260911-media', 'bucket_id': 'e565124b996984e8a7070215',
-                    'region': 'us-east-005', 'endpoint': 's3.us-east-005.backblazeb2.com'}
-            bucket = TestBucket(spec, json.loads(Path('/root/vidra-v064-b2-key.json').read_text()))
+            bucket = TestBucket(bucket_spec, json.loads(b2_key.read_text()), tag)
             result['provider_scope'] = bucket.proof
             result['media'] = []
             for n, (key, path) in enumerate(sorted(pairs.items())):
@@ -182,7 +198,7 @@ def execute(stage, action, label=None):
             mount = f'  - {source_media}:/peertube-source:ro\n'
             require(prod.read_text().count(mount) == 1, 'unexpected source mount')
             prod.write_text(prod.read_text().replace(mount, ''))
-            run.run(['docker', 'stop', SOURCE], 'disconnect-source-database')
+            run.run(['docker', 'stop', container], 'disconnect-source-database')
             run.run(['bash', 'deploy/deploy.sh'], 'released-deploy-without-source', timeout=1800)
             runtime.wait_for_runtime(run)
             result['checks']['source_disconnected'] = 'PASS'
@@ -202,5 +218,12 @@ if __name__ == '__main__':
     parser.add_argument('stage', type=Path)
     parser.add_argument('action', choices=['schema-unsupported', 'schema-restore', 'reconcile', 'disconnect', 'restart-before', 'restart-after'])
     parser.add_argument('--label', help='new attempt name; existing results are never replaced')
+    parser.add_argument('--baseline', type=Path, default=DEFAULT_BASELINE,
+                        help='runtime-milestone stage naming the release, its frozen candidate and its test bucket')
+    parser.add_argument('--root', type=Path, default=DEFAULT_ROOT,
+                        help='migration root holding the extracted source media (<root>/source-media8)')
+    parser.add_argument('--b2-key', type=Path, default=DEFAULT_B2_KEY,
+                        help='private key file for the dedicated acceptance bucket')
     args = parser.parse_args()
-    execute(args.stage.resolve(), args.action, args.label)
+    execute(args.stage.resolve(), args.action, args.label,
+            args.baseline.resolve(), args.root.resolve(), args.b2_key.resolve())

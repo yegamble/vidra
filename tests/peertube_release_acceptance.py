@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configure a COPY rehearsal on the retained, disposable v0.6.4 B2 host.
+"""Configure a COPY rehearsal on a retained, disposable release B2 host.
 
 Reuses the runtime recorder; never installs, wipes, or rewrites old evidence.
 Inputs are copies of the generated fixture, verified against its retained hashes.
@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import secrets
 import shutil
 import tarfile
@@ -18,12 +19,91 @@ import time
 
 import release_acceptance as runtime
 from blank_server_smoke import require, sha
+from release_acceptance_b2 import bucket_label, validate_spec
 
-SOURCE = 'vidra-v064-migration-source-20260911'
+# The v0.6.4 drill's paths, now defaults rather than literals: the same harness
+# runs against the v0.6.5 host without a source edit.
+DEFAULT_BASELINE = Path('/root/vidra-v064-runtime')
+DEFAULT_ROOT = Path('/root/vidra-v064-migration-20260911')
+DEFAULT_B2_KEY = Path('/root/vidra-v064-b2-key.json')
+# The generated PeerTube 8.0.0 fixture is the same input for every release.
 HASHES = {
     'source-final.dump': 'ec26be5179544e8767c438dda2a26456da10f15d6536e63f38fdbc15f23b2273',
     'source-media-config.tgz': '9756abd405bb8e5801cb8fff4f4c76d3ac2fd6619879389668e445e187014b43',
 }
+
+
+def release_tag(candidate):
+    """The release under rehearsal, named by the baseline's frozen candidate.
+
+    Never a literal: a hard-coded tag both blocks the next release's host and,
+    worse, would keep naming the OLD release in evidence produced on the new
+    one.
+    """
+    tag = candidate.get('tag')
+    require(isinstance(tag, str) and re.fullmatch(r'v\d+\.\d+\.\d+', tag) is not None,
+            f'baseline candidate carries no release tag: {tag!r}')
+    return tag
+
+
+def frozen_cli_sha256(candidate, tag):
+    """The frozen CLI asset for this release, keyed by tag."""
+    asset = candidate.get('assets', {}).get(f'vidra_{tag}_linux_amd64')
+    require(isinstance(asset, dict) and asset.get('sha256'),
+            f'baseline candidate ships no vidra_{tag}_linux_amd64 asset')
+    return asset['sha256']
+
+
+def scope(tag):
+    return (f'Generated seven-video source through packaged {tag} admin import; '
+            'not representative-source certification')
+
+
+def source_container(tag, day=None):
+    """`vidra-v065-migration-source-20260914`.
+
+    The disposable PeerTube clone is named for the release it feeds and the day
+    it was created, so two drills cannot collide on one host and no record can
+    name the wrong release. The chosen name is RECORDED in the stage, and every
+    later step (the checks, the browser driver, a continuation) reads it back
+    from there rather than recomputing it: a step run on a later day must not
+    address a different database.
+    """
+    return f'vidra-{bucket_label(tag)}-migration-source-{day or time.strftime("%Y%m%d", time.gmtime())}'
+
+
+def check_stage_prepared_for(prior, baseline, tag):
+    """A stage carries the baseline and the release it was prepared against.
+
+    `--baseline` and `--root` are supplied again on every later step, so a typo
+    — or a second drill on the same host — could point a check at one release's
+    stage while reading another release's candidate. The stage's own record is
+    the second opinion. A field a legacy stage never wrote is accepted; a field
+    that DISAGREES is not.
+    """
+    recorded = prior.get('baseline')
+    require(recorded in (None, str(baseline)),
+            f'stage was prepared against baseline {recorded}, not {baseline}')
+    recorded = prior.get('candidate_tag')
+    require(recorded in (None, tag), f'stage was prepared for release {recorded}, not {tag}')
+
+
+def baseline_storage(baseline, tag):
+    """The dedicated acceptance bucket the runtime milestone actually used.
+
+    The drill copies media into object storage and reconciles the bytes back out
+    of it, so it is defined only on a B2 baseline; a local-storage baseline has
+    no bucket to compare against and must be refused loudly rather than
+    silently reconciling nothing.
+    """
+    storage = json.loads((baseline / 'storage.json').read_text())
+    backend = storage.get('backend')
+    require(backend == 'b2',
+            f'the migration drill is defined on the B2 host; {baseline} recorded backend {backend!r} '
+            f'(a local-storage runtime baseline has no acceptance bucket to reconcile against)')
+    spec = storage['spec']
+    validate_spec(spec, tag)
+    return spec
 
 
 def media_members(archive):
@@ -53,15 +133,19 @@ def prepare(stage, baseline, prepared_source=None):
     if not prepared_source:
         require(all(not (stage / name).exists() and not (stage / name).is_symlink()
                     for name in ('source-media8', 'source-db')), 'source paths must be new')
+    # The release, and the bucket whose bytes its evidence may cite, are facts
+    # of the baseline. Read them before anything is created: both refusals below
+    # leave the host untouched.
+    candidate = json.loads((baseline / 'candidate.json').read_text())
+    tag = release_tag(candidate)
+    spec = baseline_storage(baseline, tag)
     run = runtime.Recorder(stage)
     result = {'status': 'UNVERIFIED', 'started_at': time.time(), 'checks': {},
-              'scope': 'Generated seven-video source through packaged v0.6.4 admin import; not representative-source certification',
+              'scope': scope(tag), 'candidate_tag': tag, 'test_bucket': spec['bucket'],
               'baseline': str(baseline), 'source_inputs': HASHES,
               'tools_sha256': {p.name: sha(p) for p in Path(__file__).parent.glob('*') if p.is_file()}}
     try:
-        candidate = json.loads((baseline / 'candidate.json').read_text())
-        require(candidate['tag'] == 'v0.6.4', 'wrong candidate')
-        require(sha(Path('/usr/local/bin/vidra')) == candidate['assets']['vidra_v0.6.4_linux_amd64']['sha256'],
+        require(sha(Path('/usr/local/bin/vidra')) == frozen_cli_sha256(candidate, tag),
                 'installed CLI differs from frozen release asset')
         result['shipped_files'] = json.loads((baseline / 'frozen-deploy-hashes.json').read_text())
         for name, digest in result['shipped_files'].items():
@@ -71,7 +155,9 @@ def prepare(stage, baseline, prepared_source=None):
         api = result['before']['images']['api']['container_id']
         info = json.loads(run.run(['docker', 'inspect', api], 'private-api-config'))[0]
         env = dict(v.split('=', 1) for v in info['Config']['Env'] if '=' in v)
-        require(env['STORAGE_S3_BUCKET'] == 'vidra-acceptance-v064-20260911-media', 'wrong test bucket')
+        require(env['STORAGE_S3_BUCKET'] == spec['bucket'],
+                f'wrong test bucket: the runtime uses {env["STORAGE_S3_BUCKET"]}, '
+                f'the baseline recorded {spec["bucket"]}')
         require(env['MALWARE_SCAN_MODE'] == 'fail-closed', 'scanner must stay enabled')
         require(env.get('RATE_LIMIT_ENABLED') != 'false', 'rate limits must stay enabled')
         source_stage = prepared_source or stage
@@ -79,7 +165,16 @@ def prepare(stage, baseline, prepared_source=None):
             prior = json.loads((prepared_source / 'preparation.json').read_text())
             require(prior['status'] == 'FAIL' and prior['error'] == 'source role could write',
                     'continuation is only for the preserved read-only probe recorder failure')
+            # Continue against the database the original attempt created and
+            # recorded, never a freshly derived name: a continuation run on a
+            # later day would otherwise address a container that does not exist.
+            container = prior.get('source_container')
+            require(isinstance(container, str) and bool(container),
+                    'prior preparation records no source_container; cannot continue against an unnamed database')
             result['prior_preparation'] = {'path': str(prepared_source), 'sha256': sha(prepared_source / 'preparation.json')}
+        else:
+            container = source_container(tag)
+        result['source_container'] = container
         for name, digest in HASHES.items():
             require(sha(source_stage / name) == digest, 'generated fixture hash mismatch')
         if not prepared_source:
@@ -94,16 +189,16 @@ def prepare(stage, baseline, prepared_source=None):
             # New source database/container only; no connection to the retained lab.
             password = secrets.token_hex(24)
             (run.private / 'source.env').write_text(f'POSTGRES_PASSWORD={password}\nPOSTGRES_DB=peertube\n')
-            run.run(['docker', 'run', '-d', '--name', SOURCE, '--network', runtime.PROJECT + '_default',
+            run.run(['docker', 'run', '-d', '--name', container, '--network', runtime.PROJECT + '_default',
                      '--env-file', str(run.private / 'source.env'),
                      '-v', str(stage / 'source-db') + ':/var/lib/postgresql', 'postgres:18-alpine'], 'new-source-database')
             for _ in range(60):
-                if subprocess.run(['docker', 'exec', SOURCE, 'pg_isready', '-U', 'postgres'],
+                if subprocess.run(['docker', 'exec', container, 'pg_isready', '-U', 'postgres'],
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
                     break
                 time.sleep(1)
-            run.run(['docker', 'cp', str(stage / 'source-final.dump'), SOURCE + ':/tmp/source.dump'], 'copy-generated-dump')
-            run.run(['docker', 'exec', SOURCE, 'pg_restore', '--exit-on-error', '--no-owner', '--no-acl',
+            run.run(['docker', 'cp', str(stage / 'source-final.dump'), container + ':/tmp/source.dump'], 'copy-generated-dump')
+            run.run(['docker', 'exec', container, 'pg_restore', '--exit-on-error', '--no-owner', '--no-acl',
                      '-U', 'postgres', '-d', 'peertube', '/tmp/source.dump'], 'restore-new-source')
             sql = run.private / 'source-role.sql'
             sql.write_text(f"CREATE ROLE migration_reader LOGIN PASSWORD '{password}';\n"
@@ -111,16 +206,16 @@ def prepare(stage, baseline, prepared_source=None):
                            "GRANT USAGE ON SCHEMA public TO migration_reader;\n"
                            "GRANT SELECT ON ALL TABLES IN SCHEMA public TO migration_reader;\n"
                            "ALTER ROLE migration_reader SET default_transaction_read_only=on;\n")
-            run.run(['docker', 'cp', str(sql), SOURCE + ':/tmp/source-role.sql'], 'copy-readonly-role')
-            run.run(['docker', 'exec', SOURCE, 'psql', '-U', 'postgres', '-d', 'peertube', '-v', 'ON_ERROR_STOP=1',
+            run.run(['docker', 'cp', str(sql), container + ':/tmp/source-role.sql'], 'copy-readonly-role')
+            run.run(['docker', 'exec', container, 'psql', '-U', 'postgres', '-d', 'peertube', '-v', 'ON_ERROR_STOP=1',
                      '-f', '/tmp/source-role.sql'], 'create-readonly-role')
-        refused = run.run(['docker', 'exec', SOURCE, 'psql', '-U', 'migration_reader', '-d', 'peertube',
+        refused = run.run(['docker', 'exec', container, 'psql', '-U', 'migration_reader', '-d', 'peertube',
                           '-v', 'ON_ERROR_STOP=1', '-c', 'BEGIN READ WRITE; UPDATE video SET name=name WHERE false; ROLLBACK;'],
                          'source-write-refused', expected=1)
         require('permission denied for table video' in refused, 'source role could write')
         result['checks']['source_read_only'] = 'PASS'
         dsn = run.private / 'source-dsn'
-        dsn.write_text(f'postgres://migration_reader:{password}@{SOURCE}:5432/peertube?sslmode=disable')
+        dsn.write_text(f'postgres://migration_reader:{password}@{container}:5432/peertube?sslmode=disable')
         env_file = runtime.INSTALL / 'env/production.env'
         prod = runtime.INSTALL / 'docker-compose.prod.yml'
         for p in (env_file, prod):
@@ -152,7 +247,9 @@ def prepare(stage, baseline, prepared_source=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('stage', type=Path)
-    parser.add_argument('--baseline', type=Path, default=Path('/root/vidra-v064-runtime'))
+    parser.add_argument('--baseline', type=Path, default=DEFAULT_BASELINE,
+                        help='runtime-milestone stage naming the release, its frozen candidate and its test bucket')
     parser.add_argument('--prepared-source', type=Path, help='original failed read-only probe stage; writes a separate continuation')
     args = parser.parse_args()
-    prepare(args.stage.resolve(), args.baseline.resolve(), args.prepared_source)
+    prepare(args.stage.resolve(), args.baseline.resolve(),
+            args.prepared_source.resolve() if args.prepared_source else None)
