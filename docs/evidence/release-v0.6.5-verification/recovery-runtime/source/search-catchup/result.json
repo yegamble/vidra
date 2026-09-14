@@ -1,0 +1,348 @@
+{
+  "status": "PASS",
+  "action": "search-catchup",
+  "baseline": "/root/vidra-v065-runtime",
+  "candidate_tag": "v0.6.5",
+  "checks": {
+    "write-while-search-is-down": "PASS",
+    "restart-search-and-catch-up": "PASS"
+  },
+  "node": "v26.8.1",
+  "commands": [
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "stop",
+        "search"
+      ],
+      "started_at": "2026-09-14T12:48:22.362Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT COALESCE(json_agg(o ORDER BY o.id),'[]') FROM (SELECT id,event_type,state,attempts FROM search_outbox WHERE payload::text LIKE '%c053388e-fe28-4a56-99d6-7cfcc9916752%' ORDER BY id DESC LIMIT 3) o"
+      ],
+      "started_at": "2026-09-14T12:48:38.319Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "start",
+        "search"
+      ],
+      "started_at": "2026-09-14T12:48:38.622Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT title FROM search.documents WHERE video_id='c053388e-fe28-4a56-99d6-7cfcc9916752'"
+      ],
+      "started_at": "2026-09-14T12:48:40.535Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT title FROM search.documents WHERE video_id='c053388e-fe28-4a56-99d6-7cfcc9916752'"
+      ],
+      "started_at": "2026-09-14T12:48:41.055Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT title FROM search.documents WHERE video_id='c053388e-fe28-4a56-99d6-7cfcc9916752'"
+      ],
+      "started_at": "2026-09-14T12:48:41.819Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT title FROM search.documents WHERE video_id='c053388e-fe28-4a56-99d6-7cfcc9916752'"
+      ],
+      "started_at": "2026-09-14T12:48:43.080Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT title FROM search.documents WHERE video_id='c053388e-fe28-4a56-99d6-7cfcc9916752'"
+      ],
+      "started_at": "2026-09-14T12:48:45.339Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT title FROM search.documents WHERE video_id='c053388e-fe28-4a56-99d6-7cfcc9916752'"
+      ],
+      "started_at": "2026-09-14T12:48:47.605Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT title FROM search.documents WHERE video_id='c053388e-fe28-4a56-99d6-7cfcc9916752'"
+      ],
+      "started_at": "2026-09-14T12:48:49.897Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT title FROM search.documents WHERE video_id='c053388e-fe28-4a56-99d6-7cfcc9916752'"
+      ],
+      "started_at": "2026-09-14T12:48:52.204Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT title FROM search.documents WHERE video_id='c053388e-fe28-4a56-99d6-7cfcc9916752'"
+      ],
+      "started_at": "2026-09-14T12:48:54.439Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT title FROM search.documents WHERE video_id='c053388e-fe28-4a56-99d6-7cfcc9916752'"
+      ],
+      "started_at": "2026-09-14T12:48:56.675Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT title FROM search.documents WHERE video_id='c053388e-fe28-4a56-99d6-7cfcc9916752'"
+      ],
+      "started_at": "2026-09-14T12:48:58.990Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "search"
+      ],
+      "started_at": "2026-09-14T12:48:59.244Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "python3",
+        "-c",
+        "\nimport json,subprocess,sys,urllib.request\nc=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]]))[0]\nip=next(v['IPAddress'] for v in c['NetworkSettings']['Networks'].values() if v['IPAddress'])\nlines=urllib.request.urlopen('http://'+ip+':8080/metrics',timeout=15).read().decode().splitlines()\nprint(sum(float(l.rsplit(' ',1)[1]) for l in lines if l.startswith('vidra_search_http_requests_total{') and 'route=\"/internal/v1/search\"' in l and 'status_class=\"2xx\"' in l))\n",
+        "6a8ca321fcdd3c3ee8dbbf3dc924f52d3e6302cbac2d9836f8b22778c284b14f"
+      ],
+      "started_at": "2026-09-14T12:48:59.563Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "search"
+      ],
+      "started_at": "2026-09-14T12:49:00.632Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "python3",
+        "-c",
+        "\nimport json,subprocess,sys,urllib.request\nc=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]]))[0]\nip=next(v['IPAddress'] for v in c['NetworkSettings']['Networks'].values() if v['IPAddress'])\nlines=urllib.request.urlopen('http://'+ip+':8080/metrics',timeout=15).read().decode().splitlines()\nprint(sum(float(l.rsplit(' ',1)[1]) for l in lines if l.startswith('vidra_search_http_requests_total{') and 'route=\"/internal/v1/search\"' in l and 'status_class=\"2xx\"' in l))\n",
+        "6a8ca321fcdd3c3ee8dbbf3dc924f52d3e6302cbac2d9836f8b22778c284b14f"
+      ],
+      "started_at": "2026-09-14T12:49:01.131Z",
+      "exit_code": 0
+    }
+  ],
+  "started_at": "2026-09-14T12:48:20.590Z",
+  "browser_args": [
+    "--host-resolver-rules=MAP secure.video.test 127.0.0.1",
+    "--no-proxy-server",
+    "--autoplay-policy=no-user-gesture-required"
+  ],
+  "browser": "153.0.8010.12",
+  "search_stopped_at": "2026-09-14T12:48:23.204Z",
+  "outbox_while_down": "[{\"id\":43,\"event_type\":\"reconcile.page\",\"state\":\"delivered\",\"attempts\":0}, \n {\"id\":45,\"event_type\":\"video.play_started\",\"state\":\"pending\",\"attempts\":1}, \n {\"id\":46,\"event_type\":\"video.upsert\",\"state\":\"pending\",\"attempts\":1}]",
+  "search_while_down": {
+    "status": 200,
+    "found": true
+  },
+  "search_started_at": "2026-09-14T12:48:40.530Z",
+  "caught_up_at": "2026-09-14T12:48:59.244Z",
+  "ui_search": {
+    "query": "Recoverycatchup3ccfd071",
+    "service_requests_before": 0,
+    "service_requests_after": 1
+  },
+  "finished_at": "2026-09-14T12:49:01.557Z"
+}

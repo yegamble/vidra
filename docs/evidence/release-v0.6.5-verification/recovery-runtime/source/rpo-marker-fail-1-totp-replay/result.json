@@ -1,0 +1,19 @@
+{
+  "status": "FAIL",
+  "action": "rpo-marker",
+  "baseline": "/root/vidra-v065-runtime",
+  "candidate_tag": "v0.6.5",
+  "checks": {},
+  "node": "v26.8.1",
+  "commands": [],
+  "started_at": "2026-09-14T12:51:51.388Z",
+  "browser_args": [
+    "--host-resolver-rules=MAP secure.video.test 127.0.0.1",
+    "--no-proxy-server",
+    "--autoplay-policy=no-user-gesture-required"
+  ],
+  "browser": "153.0.8010.12",
+  "failed_phase": "write-after-backup",
+  "error": "AssertionError [ERR_ASSERTION]: the restored TOTP secret did not verify\n\n401 !== 200\n\n    at signIn (file:///root/vidra-v065-drill-tools/recovery-release-acceptance.mjs:156:14)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:541:9)\n    at async file:///root/vidra-v065-drill-tools/recovery-release-acceptance.mjs:358:18",
+  "finished_at": "2026-09-14T12:51:53.391Z"
+}

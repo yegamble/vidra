@@ -1,0 +1,19 @@
+{
+  "status": "PASS",
+  "action": "failed-backup",
+  "service": null,
+  "baseline": "/root/vidra-v065-runtime",
+  "started_at": 1789390310.6917202,
+  "checks": {
+    "failed_backup_exits_nonzero_and_advertises_nothing": "PASS"
+  },
+  "candidate_tag": "v0.6.5",
+  "partial_files_left": [
+    "vidra-20260914T125151Z.dump.gz.part"
+  ],
+  "failure_tail": [
+    "[backup] dumping database 'vidra_recovery_fault_missing' as 'vidra' from container f262160295fc",
+    "pg_dump: error: connection to server on socket \"/var/run/postgresql/.s.PGSQL.5432\" failed: FATAL:  database \"vidra_recovery_fault_missing\" does not exist"
+  ],
+  "finished_at": 1789390311.2164557
+}

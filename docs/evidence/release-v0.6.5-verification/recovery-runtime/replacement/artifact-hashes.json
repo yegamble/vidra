@@ -1,0 +1,17 @@
+{
+  "files": {
+    "py-restore/commands.json": "1d12f4bd7780d69cc16897e649b279839fe28bd6224a305cce51691c6e95e586",
+    "py-restore/result.json": "4228ccef1c960773a59cccbe0da201427535b415eb5df271c78991ff7f8ef121",
+    "verify-restore-write/playback-new.png": "a57fc4f18963a031d084b32208ad2784fdc8c141c6c66a5bea273cf8990dc7ee",
+    "verify-restore-write/result.json": "7ef0f05f9e51ab2769e7bccc8602abd34498add3e87964d9f85ffd57a0e54733",
+    "verify-restore/playback-drill.png": "bae38e01fd6322e3b989ec530a55b854ae13c145ac07d76a7bfe176ad95c5ce0",
+    "verify-restore/playback-legacy.png": "7c14b88a7046266951e371f0f09793c51730a65aa7dd49d57c1c60b4dcf2d785",
+    "verify-restore/result.json": "17ef552511185014e1660bd40514048923f1886211acb7aa03c6b175ab08c1cd"
+  },
+  "secrets_loaded": {
+    "env": 7,
+    "bucket_key": "declared-absent",
+    "mfa": true,
+    "owner": true
+  }
+}

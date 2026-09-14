@@ -102,11 +102,39 @@ step). Nothing is deployed on it; beta stays on v0.6.4.
   is not the approved sanitized representative source, so only the rows'
   `basis` and the measured subsets change. No recovery claim, no browser but
   desktop Chromium, inline worker only.
-- **Everything else: NOT RUN on the v0.6.5 digests.** The recovery drill, the
-  browser matrix, the owner inputs B2/B3/B4 and every other workflow row keep
-  the v0.6.4 disposition's UNVERIFIED / BLOCKED state for this candidate.
-- **Next executable, in order:** (1) the recovery drill on the digests;
-  (2) the owner inputs B2/B3/B4 and the remaining OPS-01 clauses.
+- **Recovery drill: PASS on the published v0.6.5 images — REC objective met
+  (RPO 24h/RTO 4h approved)**
+  ([record](runtime-acceptance-recovery-v0.6.5.md), evidence
+  `docs/evidence/release-v0.6.5-verification/recovery-runtime/`): on the
+  retained B2 source host and a blank AMD64 replacement the operator rebuilt at
+  12:11:57 UTC, the meta `ef1614f` (#202–#205) drill tools drove a real api
+  `SIGKILL` mid-transcode (orphaned lease recovered with **no intervention**
+  after 1938 s), PostgreSQL/Redis/search outages each recovered **without an api
+  restart** (6.543/7.157/7.483 s), a shipped backup (marker
+  `vidra-20260914T125140Z`) and a failed backup (exit 1, nothing published),
+  then a simulated source loss and a restore onto the blank host — config
+  archive **first**, six-digest pin, `restore.sh` (verify-blobs MISSING 0),
+  `deploy.sh` — that matched the backup data point exactly and, in Chromium,
+  restored password + sealed TOTP, lost the post-backup RPO marker, decoded
+  legacy and recovered media and served search. **Measured source-loss-to-ready
+  304.653 s and `restore.sh` 70.879 s**, both inside the owner-approved **RTO
+  4h**, with the post-backup write lost inside a **24h** window (RPO); the owner
+  approved the objective on 2026-09-14 (session-reported). The derived
+  [disposition](evidence/release-v0.6.5-verification/recovery-runtime/disposition.json)
+  moves **REC-02 from BLOCKED (B4) to PASS**, relabels **REC-01 BLOCKED B4 → B3**
+  (offsite retrieval not exercised) and keeps **OPS-01 UNVERIFIED** with an
+  expanded subset, reading **4 PASS / 45 UNVERIFIED / 10 BLOCKED**. B4 is added
+  to `resolved_blockers`; B3 remains. Two retained harness artifacts (a
+  TOTP-replay rpo-marker and a rate-limited verify-restore new-upload), each
+  re-run to PASS. Desktop Chromium only, inline single worker.
+- **Everything else: NOT RUN on the v0.6.5 digests.** The browser/Safari/iOS
+  matrix, the owner inputs B2 (representative source) and B3 (offsite backup
+  destination + selected providers), the remaining OPS-01 clauses and every
+  other workflow row keep the disposition's UNVERIFIED / BLOCKED state for this
+  candidate.
+- **Next executable:** the owner inputs B2/B3, the browser/Safari/iOS matrix,
+  and the remaining OPS-01 clauses (API/worker split, two-worker interruption,
+  settings propagation, leader failover).
 
 ## REC-03 / A38 on published v0.6.4 — 2026-09-13
 
