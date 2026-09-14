@@ -6,9 +6,11 @@ This is the authoritative campaign record for this audit, superseding earlier re
 
 ## v0.6.6 candidate — 2026-09-14
 
-**v0.6.6: recorded — not drilled, not scanned, not deployed.** The owner cut it
+**v0.6.6: recorded and scanned — not drilled, not deployed.** The owner cut it
 on 2026-09-14 (`deploy/release.sh --yes v0.6.6`, exit 0; session-reported) and
-this session recorded it. Nothing is deployed on it; beta stays on v0.6.4.
+this session recorded it. Its dependency and image vulnerability scan is done
+(PASS, below); no runtime drill has been re-based on it. Nothing is deployed on
+it; beta stays on v0.6.4.
 
 - **Contents:** `core#242` + `user#221` — the admin-only white-label toggle
   `branding_hide_software_name`. **No new migration:** schema stays **146 / 18**,
@@ -26,18 +28,28 @@ this session recorded it. Nothing is deployed on it; beta stays on v0.6.4.
   v0.6.5 shipped) but its **image was rebuilt**, so its digests differ from
   v0.6.5's. Only the digests tell the two search images apart, which is why the
   record and its cross-check are pinned to v0.6.6's.
-- **Security facet: NOT RUN for v0.6.6.** The image vulnerability scan on record
-  ([v0.6.5 scan](security-scan-v0.6.5-2026-09-13.md)) was measured on **v0.6.5's**
-  artifacts. All three v0.6.6 images were rebuilt, so their base-image and
-  dependency state is unmeasured.
+- **Security facet: PASS on the v0.6.6 digests**
+  ([scan record](security-scan-v0.6.6-2026-09-14.md), evidence
+  `docs/evidence/release-v0.6.6-verification/dependency-scan/`): all three rebuilt
+  images were scanned by linux/amd64 digest with osv-scanner 2.5.1 and
+  govulncheck 1.8.0 binary mode, and vidra-user's lockfile with npm audit. The
+  result **matches v0.6.5 exactly** — the image-scan advisory set is identical
+  (core 8 rows, user 0, search 1: GO-2026-5932), the Go binary finding is the same
+  single advisory, npm audit is 0/0 across 676 deps, and the OpenSSL floor holds
+  at 3.5.8-r0 (session-reported). **No new vulnerability was introduced by the
+  rebuild and no v0.6.5 fix regressed.** Residuals with no fix are unchanged:
+  x/crypto GO-2026-5932 (openpgp, not linked), the rav1e 0.8.1 / libdovi 3.3.2
+  AV1 crate advisories (no Alpine v3.24 fix — owner risk decision), and a glib
+  false positive.
 - **Every drill: NOT RE-RUN on the v0.6.6 digests.** The B2 runtime milestone,
   the packaged migration rehearsal, the recovery drill (REC-02 at the approved
   RPO 24h / RTO 4h) and REC-03 were all measured against **v0.6.5's** published
   images and keep that basis. No disposition row moves for v0.6.6; the standing
   count remains the recovery drill's **4 PASS / 45 UNVERIFIED / 10 BLOCKED**.
 - **Beta: untouched** — still on v0.6.4.
-- **Next executable:** an image vulnerability scan of the v0.6.6 artifacts, and
-  whichever drills the owner wants re-based off v0.6.6 instead of v0.6.5.
+- **Next executable:** whichever drills the owner wants re-based off v0.6.6
+  instead of v0.6.5 (the image vulnerability scan is now done — see the security
+  facet above).
 
 ## v0.6.5 candidate — 2026-09-13
 

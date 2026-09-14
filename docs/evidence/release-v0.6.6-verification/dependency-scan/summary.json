@@ -1,0 +1,53 @@
+{
+  "candidate": "v0.6.6",
+  "date_utc": "2026-09-14",
+  "scanner": {
+    "osv": "2.5.1",
+    "govulncheck": "1.8.0 (GOTOOLCHAIN go1.27.1)",
+    "npm_audit": "node from runtime baseline"
+  },
+  "verdict": "PASS \u2014 matches v0.6.5; the rebuild introduced no new vulnerabilities and did not regress any v0.6.5 fix",
+  "images_by_amd64_digest": {
+    "core": "sha256:332bdc20\u2026e64a",
+    "user": "sha256:de2f8b17\u20262bde",
+    "search": "sha256:f021b0b1\u2026fbd6"
+  },
+  "osv_image": {
+    "core": [
+      "ALPINE-CVE-2021-27219",
+      "GHSA-cq8v-f236-94qc",
+      "GO-2026-5932",
+      "RUSTSEC-2024-0436",
+      "RUSTSEC-2026-0097",
+      "RUSTSEC-2026-0105",
+      "RUSTSEC-2026-0190",
+      "RUSTSEC-2026-0204"
+    ],
+    "user": [],
+    "search": [
+      "GO-2026-5932"
+    ]
+  },
+  "openssl_floor": "libcrypto3/libssl3 3.5.8-r0 in all three images (== v0.6.5 floor)",
+  "govulncheck_binary": {
+    "core": "GO-2026-5932 (x/crypto/openpgp) module-level; grpc + x/crypto present; binary mode = no call-reachability",
+    "search": "GO-2026-5932 module-level; x/crypto present"
+  },
+  "npm_audit_user": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "deps_total": 676
+  },
+  "delta_vs_v065": "osv image IDs are a SUBSET of v0.6.5's recorded set (no new IDs); openssl floor identical; Go advisory identical (GO-2026-5932); npm audit clean",
+  "residuals_no_fix": [
+    "GO-2026-5932 x/crypto/openpgp (not linked)",
+    "RUSTSEC crate advisories for AV1 codecs (rav1e/libdovi, no Alpine fix)",
+    "glib false positive (ALPINE-CVE-2021-27219 / GHSA-cq8v-f236-94qc)"
+  ]
+}
