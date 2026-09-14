@@ -1,0 +1,524 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-14",
+  "candidate_release": "v0.6.6",
+  "baseline_assessment": "docs/evidence/release-v0.6.5-verification/offsite-runtime/disposition.json",
+  "baseline_sha256": "cc21305e8fe9ef05c81540939e0916ffc286c3f569df81e23517cf159ac3f544",
+  "baseline_is_historical": true,
+  "baseline_note": "Cross-release delta: the baseline is the latest v0.6.5 disposition (offsite-runtime, 5 PASS / 45 UNVERIFIED / 9 BLOCKED). v0.6.6 = v0.6.5 + one admin-only white-label toggle; see delta_from_v065 for the carry reasoning.",
+  "prior_disposition": "docs/evidence/release-v0.6.5-verification/offsite-runtime/disposition.json",
+  "prior_disposition_sha256": "cc21305e8fe9ef05c81540939e0916ffc286c3f569df81e23517cf159ac3f544",
+  "release_verdict": "NO-GO",
+  "first_runtime_milestone": {
+    "status": "PASS",
+    "certification": "BOUNDED_MILESTONE_ONLY",
+    "started_utc": "2026-09-14 18:01:30",
+    "finished_utc": "2026-09-14 18:06:45",
+    "duration_seconds": 315.1,
+    "host": "droplet 599531580 (159.203), rebuilt blank amd64 (session-reported)",
+    "storage": {
+      "backend": "local"
+    },
+    "checks": {
+      "blank_native_host": "PASS",
+      "corrupt-bundle": "PASS",
+      "corrupt-cli": "PASS",
+      "install": "PASS",
+      "native_cli_executes": "PASS (help; binary identity verified by checksum)",
+      "configuration_preserved": "PASS",
+      "production_ports": "PASS (Compose render; runtime ports belong to A03)",
+      "pinned_image_pulls": "PASS",
+      "installed_migrated_serving": "PASS",
+      "browser_upload_transcode_playback_search": "PASS"
+    },
+    "browser_checks": {
+      "owner-claim": "PASS",
+      "owner-login-and-session": "PASS",
+      "browser-channel-upload-publish": "PASS",
+      "real-transcoding-and-advertised-tree": "PASS",
+      "browser-playback-advances": "PASS",
+      "same-upload-through-vidra-search": "PASS"
+    },
+    "candidate_sha256": "b023dacb4aa809643852551b8c5082005083c7a824509c621977f5c804911f68",
+    "candidate_sha256_matches_committed_manifest": true,
+    "result_sha256": "5aafe0103e601ad75ecccce0610d341b3b3845a962ee2214ef5ac147eb5ec1ca",
+    "browser_sha256": "4fe4932811c76e7c503fc8a3f605e4a612c050cd1609e317225e059b59a66b39",
+    "operator_note_apt_lock": "Session-reported: the first attempt died at the installer apt step because the freshly-rebuilt host held the first-boot apt lock; after cloud-init finished the re-run passed. The failed attempt is retained on the host as vidra-v066-runtime-fail-1-aptlock; its evidence is not part of this record. Harness/host, not a v0.6.6 defect."
+  },
+  "new_feature_measured": {
+    "feature": "branding_hide_software_name (admin-only white-label toggle; core#242 3219290e / user#221 1aec0d23)",
+    "status": "PASS (API-level admin toggle + public read-back)",
+    "scope": "API-level admin toggle and public read-back only; NOT a browser render check of the chrome (that belongs to the UI/iOS matrix).",
+    "evidence": "docs/evidence/release-v0.6.6-verification/native-runtime/branding-evidence.json",
+    "sequence": "default GET /api/v1/instance branding.hide_software_name=false, software.name=\"vidra\"; PATCH /api/v1/admin/instance-settings {branding_hide_software_name:true} -> 200; read-back hide_software_name=true; reverted to false -> 200",
+    "maps_to_numbered_row": "none (recorded as a measured feature subset, not a numbered A-row)"
+  },
+  "delta_from_v065": {
+    "summary": "v0.6.6 = v0.6.5 + a single admin-only white-label toggle branding_hide_software_name (core#242 3219290e / user#221 1aec0d23). No schema migration (schema_migrations 146|f unchanged; vidra_search_migrations 18|f, search rebuilt at the same revision b7a7f55b). Deploy tooling, storage, media, backup and recovery code are the v0.6.5 code unchanged.",
+    "re_anchored_on_v066": {
+      "first_runtime_milestone": "Executed on the v0.6.6 index digests this run (install/deploy/browser facets).",
+      "SRC-01": "Re-anchored PASS on the v0.6.6 images (this run).",
+      "INS-03": "Re-anchored PASS via the v0.6.6 candidate-manifest/digest verification this run; security facet in meta#212."
+    },
+    "carried_pass_by_delta": {
+      "rows": [
+        "REC-01",
+        "REC-02",
+        "REC-03"
+      ],
+      "reasoning": "These rows were PASS in the v0.6.5 offsite disposition. The mechanics they exercise (off-site backup, replacement-host restore, upgrade/app-only rollback/forward restore) are unchanged by an admin-only branding flag with no schema change and the same deploy/storage/backup tooling, and the v0.6.6 runtime milestone plus the v0.6.6 security scan (meta#212) confirm the images carrying that code are the ones under test. They are kept PASS and annotated as carried; they were NOT re-run on the v0.6.6 digests."
+    },
+    "not_promoted": {
+      "rows": [
+        "STO-01",
+        "STO-02",
+        "STO-03",
+        "INT-09"
+      ],
+      "reasoning": "The parent task described these as v0.6.5 storage PASS rows, but in the v0.6.5 offsite disposition (and the earlier b2-runtime disposition) they are UNVERIFIED, not PASS \u2014 only a B2 canonical-media subset passed. Promoting them to PASS for v0.6.6 would invent a PASS the v0.6.5 lineage never established, so they are carried at UNVERIFIED. The unchanged storage code means the v0.6.5 subset still holds; the full original procedure remains required."
+    },
+    "kept_blocked": {
+      "MIG-01..06 [B2]": "Representative sanitized source still required; unaffected by the branding flag.",
+      "AUTH-03/04 [B3]": "Selected IdP/mail provider inputs absent; unaffected by the branding flag.",
+      "INT-10 [B3]": "Selected-CDN inputs absent; unaffected by the branding flag."
+    }
+  },
+  "retained_requirements": "All 59 original verification procedures, all 40 acceptance criteria and all ten scope families remain authoritative. Missing providers, representative source, recovery inputs and scope decisions apply only to dependent criteria.",
+  "workflow_counts": {
+    "PASS": 5,
+    "UNVERIFIED": 45,
+    "BLOCKED": 9
+  },
+  "workflows": [
+    {
+      "id": "REL-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INS-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "PASS re-anchored on v0.6.6: the candidate manifest sha256 b023dacb4aa809643852551b8c5082005083c7a824509c621977f5c804911f68 equals the committed docs/evidence/release-v0.6.6-verification/manifest.json, and the running images match the v0.6.6 index digests (core \u202607e32fd, user \u2026be8882e, search \u2026555e927c6); the release-integrity/security facet (exporter secret_scan PASS) is recorded separately in meta#212."
+    },
+    {
+      "id": "INS-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INS-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "AUTH-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "AUTH-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "AUTH-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "BLOCKED [B3] carried from v0.6.5: selected external provider inputs absent (IdP/mail for AUTH-03/04, selected CDN for INT-10); unaffected by the v0.6.6 branding flag. Full original procedure remains required."
+    },
+    {
+      "id": "AUTH-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "BLOCKED [B3] carried from v0.6.5: selected external provider inputs absent (IdP/mail for AUTH-03/04, selected CDN for INT-10); unaffected by the v0.6.6 branding flag. Full original procedure remains required."
+    },
+    {
+      "id": "AUTH-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PUB-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PUB-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PUB-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PUB-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PLAY-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PLAY-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "PLAY-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "CRT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "CRT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "SRC-01",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "PASS re-anchored on v0.6.6: same-upload outbox/inbox, eligible document, internal search (score 0.90, model simple-v1, total 1), UI response and routed fetch demonstrated on the published v0.6.6 images this run (video 8d06000b-627a-4781-952f-05ecb4e8607f)."
+    },
+    {
+      "id": "SRC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "SRC-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "SOC-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "SOC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "MSG-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "MSG-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "MSG-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "ADM-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "ADM-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "ADM-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "ADM-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "MIG-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "BLOCKED [B2] carried from v0.6.5: representative sanitized source still required; unaffected by the v0.6.6 branding flag (no schema change; schema_migrations 146|f unchanged)."
+    },
+    {
+      "id": "MIG-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "BLOCKED [B2] carried from v0.6.5: representative sanitized source still required; unaffected by the v0.6.6 branding flag (no schema change; schema_migrations 146|f unchanged)."
+    },
+    {
+      "id": "MIG-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "BLOCKED [B2] carried from v0.6.5: representative sanitized source still required; unaffected by the v0.6.6 branding flag (no schema change; schema_migrations 146|f unchanged)."
+    },
+    {
+      "id": "MIG-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "BLOCKED [B2] carried from v0.6.5: representative sanitized source still required; unaffected by the v0.6.6 branding flag (no schema change; schema_migrations 146|f unchanged)."
+    },
+    {
+      "id": "MIG-05",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "BLOCKED [B2] carried from v0.6.5: representative sanitized source still required; unaffected by the v0.6.6 branding flag (no schema change; schema_migrations 146|f unchanged)."
+    },
+    {
+      "id": "MIG-06",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "BLOCKED [B2] carried from v0.6.5: representative sanitized source still required; unaffected by the v0.6.6 branding flag (no schema change; schema_migrations 146|f unchanged)."
+    },
+    {
+      "id": "STO-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "UNVERIFIED-carried (NOT promoted). This row was UNVERIFIED \u2014 not PASS \u2014 in the v0.6.5 offsite disposition: a B2 canonical-media subset passed on the v0.6.5 images but the full original procedure never ran. The storage/media code is unchanged in v0.6.6 (admin branding flag only), so the v0.6.5 subset carries, but there is no v0.6.5 PASS to inherit; the full procedure remains required."
+    },
+    {
+      "id": "STO-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "UNVERIFIED-carried (NOT promoted). This row was UNVERIFIED \u2014 not PASS \u2014 in the v0.6.5 offsite disposition: a B2 canonical-media subset passed on the v0.6.5 images but the full original procedure never ran. The storage/media code is unchanged in v0.6.6 (admin branding flag only), so the v0.6.5 subset carries, but there is no v0.6.5 PASS to inherit; the full procedure remains required."
+    },
+    {
+      "id": "STO-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "UNVERIFIED-carried (NOT promoted). This row was UNVERIFIED \u2014 not PASS \u2014 in the v0.6.5 offsite disposition: a B2 canonical-media subset passed on the v0.6.5 images but the full original procedure never ran. The storage/media code is unchanged in v0.6.6 (admin branding flag only), so the v0.6.5 subset carries, but there is no v0.6.5 PASS to inherit; the full procedure remains required."
+    },
+    {
+      "id": "INT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-06",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-07",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-08",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "INT-09",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "UNVERIFIED-carried (NOT promoted). This row was UNVERIFIED \u2014 not PASS \u2014 in the v0.6.5 offsite disposition: a B2 canonical-media subset passed on the v0.6.5 images but the full original procedure never ran. The storage/media code is unchanged in v0.6.6 (admin branding flag only), so the v0.6.5 subset carries, but there is no v0.6.5 PASS to inherit; the full procedure remains required."
+    },
+    {
+      "id": "INT-10",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "BLOCKED [B3] carried from v0.6.5: selected external provider inputs absent (IdP/mail for AUTH-03/04, selected CDN for INT-10); unaffected by the v0.6.6 branding flag. Full original procedure remains required."
+    },
+    {
+      "id": "INT-11",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "OPS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "OPS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "REC-01",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "CARRIED PASS from v0.6.5 by delta [v0.6.5-established; v0.6.6 delta = admin branding flag only, no schema/storage change; re-anchored by the v0.6.6 runtime milestone + security scan (meta#212)]. v0.6.5 basis (offsite-runtime, meta#210): encrypted client-side off-site backup to an independent provider (Cloudflare R2) via the shipped deploy/backup.sh with BACKUP_RCLONE_REMOTE (no code change), independently retrieved, decrypted and byte-exact, combined with the recovery-drill backup completeness and replacement-host restore (REC-02). The backup/off-site code is unchanged in v0.6.6."
+    },
+    {
+      "id": "REC-02",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "CARRIED PASS from v0.6.5 by delta [v0.6.5-established; v0.6.6 delta = admin branding flag only, no schema/storage change; re-anchored by the v0.6.6 runtime milestone + security scan (meta#212)]. v0.6.5 basis (recovery-runtime, meta#208): approved recovery objective met by a real replacement-host restore on the published images (RTO 304.653 s, RPO within 24h). The restore/recovery code is unchanged in v0.6.6."
+    },
+    {
+      "id": "REC-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "CARRIED PASS from v0.6.5 by delta [v0.6.5-established; v0.6.6 delta = admin branding flag only, no schema/storage change; re-anchored by the v0.6.6 runtime milestone + security scan (meta#212)]. v0.6.5 basis (meta#199): upgrade v0.6.4\u2192v0.6.5 with data, dirty-ledger refusal before restart, runbook recovery, app-only rollback and forward restore on the published images. The deploy/upgrade/rollback tooling and the schema (146) are unchanged in v0.6.6, so the mechanics carry."
+    },
+    {
+      "id": "QLT-01",
+      "status": "UNVERIFIED",
+      "blockers": [
+        "U1"
+      ],
+      "basis": "Not executed on the v0.6.6 digests."
+    },
+    {
+      "id": "QLT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.6 digests."
+    }
+  ],
+  "measured_subsets": {
+    "branding_hide_software_name (v0.6.6, this run)": "Admin PATCH /api/v1/admin/instance-settings {branding_hide_software_name:true} -> 200; public GET /api/v1/instance read-back hide_software_name true; reverted to false -> 200. API-level only; no browser chrome render check. See branding-evidence.json.",
+    "REC-01 (off-site retrieval, carried from v0.6.5)": "Shipped deploy/backup.sh with BACKUP_RCLONE_REMOTE pushed the dump + config archive to an rclone crypt remote over Cloudflare R2, independently retrieved/decrypted byte-exact (v0.6.5 offsite-runtime, meta#210). Unchanged code in v0.6.6.",
+    "REC-02 (replacement-host restore, carried from v0.6.5)": "Blank replacement host restored config archive first, six-digest pin, restore.sh (verify-blobs MISSING 0), deploy.sh; RTO 304.653 s / RPO within 24h met (v0.6.5 recovery-runtime, meta#208). Unchanged code in v0.6.6.",
+    "STO/INT-09 (B2 canonical-media subset, carried UNVERIFIED from v0.6.5)": "The canonical-media subset passed on the published v0.6.5 images; row stayed UNVERIFIED. Storage code unchanged in v0.6.6; the full original procedure remains required."
+  },
+  "candidate": {
+    "tag": "v0.6.6",
+    "record": "releases/v0.6.6.json",
+    "manifest": "docs/evidence/release-v0.6.6-verification/manifest.json",
+    "manifest_sha256": "b023dacb4aa809643852551b8c5082005083c7a824509c621977f5c804911f68",
+    "images": {
+      "api": "ghcr.io/yegamble/vidra-core@sha256:b2b7717da82aa5676a2bc3b8c9c09bd52a6b414081140f8723fa0619807e32fd",
+      "frontend": "ghcr.io/yegamble/vidra-user@sha256:4d86a264b66778a211d87b3ee95caa7e3c36ef4add096dc6094b52355be8882e",
+      "search": "ghcr.io/yegamble/vidra-search@sha256:804530bfb5595944d9c2492cf16aec803696c74831df7e1fdc15192555e927c6"
+    },
+    "ledgers": {
+      "schema_migrations": {
+        "actual": "146|f",
+        "expected": 146,
+        "source_revision": "3219290e0b7dfe6827f2d22e9f1dd3d5eb067b4c"
+      },
+      "vidra_search_migrations": {
+        "actual": "18|f",
+        "expected": 18,
+        "source_revision": "b7a7f55be6646c2730d5bbc481e423ac9cfa9e08"
+      }
+    }
+  },
+  "acceptance_delta": {
+    "from": "v0.6.5 offsite-runtime disposition (5 PASS / 45 UNVERIFIED / 9 BLOCKED)",
+    "to": "5 PASS / 45 UNVERIFIED / 9 BLOCKED",
+    "re_anchored": {
+      "SRC-01": "PASS re-anchored on v0.6.6 (this run)",
+      "INS-03": "PASS re-anchored on the v0.6.6 candidate manifest/digest verification (this run)"
+    },
+    "carried_pass": {
+      "REC-01": "carried from v0.6.5 (meta#210)",
+      "REC-02": "carried from v0.6.5 (meta#208)",
+      "REC-03": "carried from v0.6.5 (meta#199)"
+    },
+    "no_status_change": "No workflow row changed status vs the v0.6.5 offsite disposition. v0.6.6 adds one admin-only branding flag with no schema change; the already-PASS runtime rows are re-anchored on the v0.6.6 digests and every other row carries at its v0.6.5 status.",
+    "new_feature": "branding_hide_software_name recorded as a measured feature subset (API-level admin toggle + public read-back), not a numbered A-row.",
+    "security_facet": "The v0.6.6 security-facet (secret_scan) PASS is recorded in meta#212, not duplicated here."
+  },
+  "committed_hashes": "docs/evidence/release-v0.6.6-verification/native-runtime/committed-hashes.json is the independent sha256 index recomputed over every committed file in this native-runtime tree except itself, over the bytes as committed.",
+  "backlog_report": "docs/runtime-acceptance-v0.6.6.md",
+  "not_claimed": [
+    "Local canonical storage only: no B2 or any S3 provider exercised this run (STO-01/02/03, INT-09 stay UNVERIFIED).",
+    "The branding toggle was checked at the API level (admin PATCH + public read-back), NOT rendered in a browser; the chrome render belongs to the UI/iOS matrix.",
+    "No browser/WebKit/Safari/iOS coverage beyond the Chromium upload/transcode/playback/search milestone.",
+    "REC-01/REC-02/REC-03 are carried from v0.6.5 by an explicit delta, NOT re-run on the v0.6.6 digests.",
+    "STO-01/02/03 and INT-09 are UNVERIFIED-carried, not PASS: only a B2 canonical-media subset passed for v0.6.5.",
+    "Not deployed: production/beta untouched; this is a bounded acceptance milestone on a disposable host.",
+    "The v0.6.6 security scan (secret_scan) PASS is recorded in meta#212; this record does not duplicate it."
+  ]
+}
