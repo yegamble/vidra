@@ -92,10 +92,14 @@ done
 # a record describes core+user+search released together, so a subset re-publish
 # of one image after a partial failure does not change the pairing and must not
 # rewrite (or half-write) the record. It is written AFTER the images publish,
-# because the record names digests that do not exist until then, and it is
-# committed to main as a normal follow-up commit — the tag stays at the reviewed
-# commit and `meta_commit` stays equal to the tag's commit, the convention every
-# existing record (v0.6.4, v0.6.5) and tests/release_mapping_test.py assume.
+# because the record names digests that do not exist until then, and it lands via
+# a short-lived branch + an auto-opened PR — never a direct push to main, which is
+# branch-protected (ci-required + enforce_admins) and would REJECT a fresh commit,
+# degrading to the exact by-hand step #189 removes. Every record to date landed by
+# PR (v0.6.4 #189, v0.6.5 #196, v0.6.6 #209); this just opens that PR for you. The
+# tag stays at the reviewed commit and `meta_commit` stays equal to the tag's
+# commit, the convention every existing record and tests/release_mapping_test.py
+# assume.
 RECORD_REL="releases/${TAG}.json"
 RECORD_PATH="${REPO_ROOT}/${RECORD_REL}"
 RECORD_HELPER="${REPO_ROOT}/deploy/release-record.py"
@@ -216,14 +220,14 @@ if [ "$FULL_RELEASE" = 1 ]; then
   # already recorded; refuse rather than clobber a committed record.
   [ ! -e "$RECORD_PATH" ] \
     || die "${RECORD_REL} already exists, so ${TAG} was already recorded. Records are immutable like the tag; pick the next version, or remove that file deliberately if it was written in error and never released."
-  # The record is committed to main as a follow-up commit, so this checkout must
-  # BE main at origin/main's tip — otherwise the commit would not fast-forward
-  # and the record could not be pushed after the images are already public.
+  # The record lands as a PR whose branch forks HEAD, so this checkout must BE
+  # main at origin/main's tip — then the record branch is origin/main plus exactly
+  # the record commit, and the PR is a clean data-only diff.
   META_BRANCH="$(git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD || true)"
   [ "$META_BRANCH" = "main" ] \
-    || die "the release record is committed to main, but this checkout is on '${META_BRANCH:-a detached HEAD}'. Check out main at origin/main and re-run."
+    || die "the release record is opened as a PR off main, but this checkout is on '${META_BRANCH:-a detached HEAD}'. Check out main at origin/main and re-run."
   if [ "$META_SHA" != "$(git -C "$REPO_ROOT" rev-parse origin/main)" ]; then
-    die "HEAD ($(git -C "$REPO_ROOT" rev-parse --short HEAD)) is not at origin/main's tip, so committing ${RECORD_REL} after publish would not fast-forward main. Update main and re-run."
+    die "HEAD ($(git -C "$REPO_ROOT" rev-parse --short HEAD)) is not at origin/main's tip, so the record PR would carry unrelated local commits. Update main and re-run."
   fi
 fi
 
@@ -243,7 +247,7 @@ elif [ -t 0 ]; then
   fi
   if [ "$FULL_RELEASE" = 1 ]; then
     echo "After the images publish it writes ${RECORD_REL} (the deploy/rollback"
-    echo "release record) and commits it to main."
+    echo "release record) and opens a PR to add it to main."
   fi
   read -r -p "Type \"${TAG}\" to confirm: " answer
   [ "$answer" = "$TAG" ] || { echo "Aborted."; exit 1; }
@@ -343,8 +347,15 @@ watch_publish_run() {
 
 # --- writing releases/<tag>.json (finding #189) -------------------------------
 # All of this runs AFTER the images are public, so a failure here does not undo a
-# release; it means the record is missing and must be completed by hand. Say that
-# loudly rather than exiting as if the release itself failed.
+# release; it means the record is missing and must be opened as a PR by hand. Say
+# that loudly rather than exiting as if the release itself failed.
+#
+# The block between the markers below is extracted and sourced by
+# tests/release_record_landing_test.py to assert the branch+PR landing without a
+# real GitHub — keep the markers, and keep the block self-contained (it depends
+# only on the vars/log/step/python3 the test supplies and the git/gh/docker it
+# stubs).
+# >>> release-record functions >>>
 record_die() {
   printf '[release] ERROR: %s\n' "$*" >&2
   cat >&2 <<EOF
@@ -352,11 +363,15 @@ record_die() {
 [release] ${TAG} IS PUBLISHED, but ${RECORD_REL} was NOT written.
   The images are live and verified; only the machine-readable record is missing,
   which leaves deploys of ${TAG} UNVERIFIED (a warning), not broken. Fix the cause,
-  then write it by hand and commit it to main. For each of vidra-core, vidra-user,
-  vidra-search:
+  then finish it by hand: assemble ${RECORD_REL} and open a PR against main (the
+  record cannot be pushed straight to a protected main). For each of vidra-core,
+  vidra-user, vidra-search:
       docker buildx imagetools inspect ghcr.io/${OWNER}/<repo>:${TAG} \\
         --format '{{json .Manifest}}' > /tmp/<repo>.mf.json
-  then deploy/release-record.py skeleton … | complete (see its --help).
+  then deploy/release-record.py skeleton … | complete (see its --help), then
+      git switch -c releases/record-${TAG} && git add ${RECORD_REL} && git commit …
+      git push -u origin releases/record-${TAG}
+      gh pr create --repo ${OWNER}/${META_REPO} --base main --head releases/record-${TAG} --title "releases: record ${TAG}"
 EOF
   exit 1
 }
@@ -381,6 +396,9 @@ component_commit() {
 # number, numerically highest). Numeric so 0146 and 146 compare equal, then
 # 10#-normalised to the plain integer release-mapping.py requires. RETURNs on
 # failure (called in a substitution).
+# NOTE: the GitHub contents API lists at most 1000 entries for a directory
+# unpaginated; migrations dirs are far below that today (core ~146, search ~18,
+# each with up+down files), but past ~500 pairs this would need the Git Trees API.
 component_schema() {
   local repo="$1" ref="$2" names max
   names="$(gh api "repos/${OWNER}/${repo}/contents/migrations?ref=${ref}" --jq '.[].name' 2>/dev/null || true)"
@@ -408,7 +426,7 @@ resolve_manifest() {
 write_release_record() {
   step "recording ${RECORD_REL}"
   local meta_commit core_commit user_commit search_commit core_schema search_schema
-  local tmp skel
+  local tmp skel record_branch pr_url
 
   meta_commit="$(git -C "$REPO_ROOT" rev-parse "${TAG}^{commit}" 2>/dev/null || true)"
   case "$meta_commit" in
@@ -447,14 +465,31 @@ write_release_record() {
     --out "$RECORD_PATH" \
     || record_die "could not fill the image digests into ${RECORD_REL}."
 
+  # main is branch-protected (ci-required + enforce_admins), so a fresh commit
+  # pushed straight to it is REJECTED. Land the record the way every record to
+  # date did: a short-lived branch and a PR. It is a data-only change, so
+  # ci-required passes trivially and the owner merges it. Each git step is gated
+  # on its own exit code — never `add && commit && push`.
+  record_branch="releases/record-${TAG}"
+  git -C "$REPO_ROOT" checkout -b "$record_branch" \
+    || record_die "could not create the record branch ${record_branch} (does it already exist?)."
   git -C "$REPO_ROOT" add -- "$RECORD_REL" \
     || record_die "git add ${RECORD_REL} failed."
   git -C "$REPO_ROOT" commit -q -m "releases: record ${TAG} (written by deploy/release.sh after publish)" -- "$RECORD_REL" \
     || record_die "could not commit ${RECORD_REL}."
-  git -C "$REPO_ROOT" push origin HEAD:main \
-    || record_die "could not push ${RECORD_REL} to main (main may have advanced). The commit is local; push it once main is reconcilable."
-  log "committed and pushed ${RECORD_REL} to main"
+  git -C "$REPO_ROOT" push -u origin "$record_branch" \
+    || record_die "could not push ${record_branch}. The record commit is local on that branch; push it and open the PR by hand."
+  pr_url="$(gh pr create --repo "${OWNER}/${META_REPO}" --base main --head "$record_branch" \
+    --title "releases: record ${TAG}" \
+    --body "Machine-readable release record for ${TAG}, written by deploy/release.sh after the images were published and verified. Data-only (${RECORD_REL}); ci-required passes trivially. Merge to complete the release." 2>&1)" \
+    || record_die "gh pr create failed for ${record_branch}: ${pr_url}. The branch is pushed; open the PR by hand: gh pr create --repo ${OWNER}/${META_REPO} --base main --head ${record_branch} --title \"releases: record ${TAG}\""
+  log "opened the record PR: ${pr_url}"
+  # Back to main so the operator's checkout is where they started; the record now
+  # lives on ${record_branch}. Non-fatal: the record is already pushed and PR'd.
+  git -C "$REPO_ROOT" checkout -q main \
+    || log "note: could not switch back to main; you are on ${record_branch} (the record PR is open)."
 }
+# <<< release-record functions <<<
 
 rc=0
 RESULTS=()
