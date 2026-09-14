@@ -6,11 +6,15 @@ This is the authoritative campaign record for this audit, superseding earlier re
 
 ## v0.6.6 candidate — 2026-09-14
 
-**v0.6.6: recorded and scanned — not drilled, not deployed.** The owner cut it
-on 2026-09-14 (`deploy/release.sh --yes v0.6.6`, exit 0; session-reported) and
-this session recorded it. Its dependency and image vulnerability scan is done
-(PASS, below); no runtime drill has been re-based on it. Nothing is deployed on
-it; beta stays on v0.6.4.
+**v0.6.6: recorded, scanned and runtime-drilled — storage/DR carried by delta,
+not deployed.** The owner cut it on 2026-09-14 (`deploy/release.sh --yes
+v0.6.6`, exit 0; session-reported) and this session recorded it. Its dependency
+and image vulnerability scan is done (PASS, below), its runtime milestone and
+the new white-label toggle passed on the v0.6.6 digests (below), and the
+storage and disaster-recovery drills are carried from v0.6.5 by a documented
+delta rather than re-run. Nothing is deployed on it; beta stays on v0.6.4.
+Overall verdict stays **NO-GO** for full production until the browser/Safari/iOS
+matrix runs on v0.6.6 and the owner makes the deploy call.
 
 - **Contents:** `core#242` + `user#221` — the admin-only white-label toggle
   `branding_hide_software_name`. **No new migration:** schema stays **146 / 18**,
@@ -41,15 +45,37 @@ it; beta stays on v0.6.4.
   x/crypto GO-2026-5932 (openpgp, not linked), the rav1e 0.8.1 / libdovi 3.3.2
   AV1 crate advisories (no Alpine v3.24 fix — owner risk decision), and a glib
   false positive.
-- **Every drill: NOT RE-RUN on the v0.6.6 digests.** The B2 runtime milestone,
-  the packaged migration rehearsal, the recovery drill (REC-02 at the approved
-  RPO 24h / RTO 4h) and REC-03 were all measured against **v0.6.5's** published
-  images and keep that basis. No disposition row moves for v0.6.6; the standing
-  count remains the recovery drill's **4 PASS / 45 UNVERIFIED / 10 BLOCKED**.
+- **Runtime milestone: PASS on the v0.6.6 digests**
+  ([record](runtime-acceptance-v0.6.6.md), evidence
+  `docs/evidence/release-v0.6.6-verification/native-runtime/`): on a host rebuilt
+  blank, the release-agnostic harness (`--candidate` the committed v0.6.6
+  manifest) installed v0.6.6 from the released installer/CLI/bundle by checksum,
+  refused a tampered bundle and CLI, deployed the three images **by v0.6.6
+  digest** with ledgers 146|f / 18|f, and drove a browser through owner claim,
+  upload, real transcode, HLS playback (0 → 3.90 s, 18 → 136 frames) and search
+  on local storage. All 10 host + 6 browser checks PASS; `candidate_sha256`
+  equals the committed manifest.
+- **White-label toggle: PASS.** The new `branding_hide_software_name` was
+  exercised on the live v0.6.6 stack: default off (software name "vidra"), admin
+  `PATCH /api/v1/admin/instance-settings` flipped `GET /api/v1/instance`'s
+  `branding.hide_software_name` to true, then reverted. API-level admin toggle +
+  public read-back; the browser chrome render belongs to the iOS/UI matrix.
+- **Storage and disaster-recovery: carried from v0.6.5 by documented delta.**
+  v0.6.6 is v0.6.5 plus one admin-only branding flag with no migration and no
+  change to the deploy, storage, media, backup or recovery code, so the B2,
+  migration, recovery (REC-01/REC-02 at the approved RPO 24h / RTO 4h) and REC-03
+  results carry with a `delta_from_v065` basis rather than a re-run. The
+  [v0.6.6 disposition](evidence/release-v0.6.6-verification/native-runtime/disposition.json)
+  re-anchors SRC-01, INS-03 and the runtime milestone on v0.6.6 evidence, carries
+  REC-01/02/03 PASS by delta, and holds STO-01/02/03 and INT-09 at UNVERIFIED
+  (only a B2 media subset ever passed, never the full procedure). Counts: **5
+  PASS / 45 UNVERIFIED / 9 BLOCKED**, same as the v0.6.5 offsite baseline.
 - **Beta: untouched** — still on v0.6.4.
-- **Next executable:** whichever drills the owner wants re-based off v0.6.6
-  instead of v0.6.5 (the image vulnerability scan is now done — see the security
-  facet above).
+- **Next executable:** the browser/Safari/iOS matrix on v0.6.6 (LambdaTest);
+  optionally a fresh REC-03 upgrade/rollback re-based on v0.6.6 (currently carried
+  by delta, defensible because v0.6.6 adds no migration); then the owner's deploy
+  decision. Still open: the representative-source migration (B2) and the selected
+  IdP/mail/CDN providers (B3).
 
 ## v0.6.5 candidate — 2026-09-13
 
