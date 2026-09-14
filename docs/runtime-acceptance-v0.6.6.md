@@ -20,8 +20,7 @@ v0.6.6 is v0.6.5 plus a single admin-only white-label toggle
 `vidra_search_migrations` at **18** (vidra-search rebuilt at the same revision
 `b7a7f55b`).
 
-The harness ran release-agnostic: `tests/release_acceptance.py prepare
---candidate docs/evidence/release-v0.6.6-verification/manifest.json` then `run`.
+The harness ran release-agnostic: `tests/release_acceptance.py prepare --candidate docs/evidence/release-v0.6.6-verification/manifest.json` then `run`.
 The candidate handed to `prepare` was the **committed**
 [frozen manifest](evidence/release-v0.6.6-verification/manifest.json):
 `result.json`'s `candidate_sha256`
