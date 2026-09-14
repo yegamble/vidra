@@ -1,0 +1,13 @@
+{
+  "note": "SHA-256 of every file under this dependency-scan tree except this manifest itself. Generated at commit time; recompute with sha256sum to confirm the committed evidence is byte-identical to the capture.",
+  "algorithm": "sha256",
+  "files": {
+    "raw/core-binary.govulncheck.json.gz": "3b9ae188c448802d34981a40dd1a2939956c449084182ed009afdeae0a428260",
+    "raw/core.json.gz": "b741dc7d30f471da268ef27b15495ec4a71421dde73127f291e0ac1e85c2a326",
+    "raw/search-binary.govulncheck.json.gz": "0859dfe0ef48568ae7332565a051b11a8faf20f5caecce8b417e7947a8d99cf0",
+    "raw/search.json.gz": "a3e386527042b147ea0cd4c9d233a83d2e10e4fa3e509ea432f0fdb19825cb50",
+    "raw/user-npm-audit.json": "39d311cfd3c3cca358f77ed0ee475707ab7d9a1ab6a031c8bb8f51e696309ac6",
+    "raw/user.json.gz": "77baa9cc3790f8aeb445c8c55360d9ce7d04a8ae2b2973e6cbaa4dbd5ca44fae",
+    "summary.json": "a1e71bbe84834ce704a87a703ec7068248924abbc4545ba5a4a60d7b2370242b"
+  }
+}
