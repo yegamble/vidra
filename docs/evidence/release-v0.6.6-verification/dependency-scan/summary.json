@@ -47,7 +47,7 @@
   "delta_vs_v065": "osv image IDs are a SUBSET of v0.6.5's recorded set (no new IDs); openssl floor identical; Go advisory identical (GO-2026-5932); npm audit clean",
   "residuals_no_fix": [
     "GO-2026-5932 x/crypto/openpgp (not linked)",
-    "RUSTSEC crate advisories for AV1 codecs (rav1e/libdovi, no Alpine fix)",
-    "glib false positive (ALPINE-CVE-2021-27219 / GHSA-cq8v-f236-94qc)"
+    "RUSTSEC crate advisories for AV1 codecs (rav1e/libdovi, no Alpine fix; includes GHSA-cq8v-f236-94qc = RUSTSEC-2026-0097 on the rand crate)",
+    "glib false positive (ALPINE-CVE-2021-27219)"
   ]
 }
