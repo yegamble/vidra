@@ -1,0 +1,510 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-14",
+  "baseline_assessment": "docs/evidence/release-v0.6.5-verification/migration-runtime/disposition.json",
+  "baseline_sha256": "4987c6851f134f9a2e43b8c7b8a8d72c92493e673dc8776c778802fc0dfd8a32",
+  "baseline_is_historical": false,
+  "release_verdict": "NO-GO",
+  "recovery_drill": {
+    "status": "PASS",
+    "certification": "RECOVERY_OBJECTIVE_MET (RPO 24h / RTO 4h, owner-approved 2026-09-14, session-reported)",
+    "started_utc": "2026-09-14 12:13:47",
+    "finished_utc": "2026-09-14 13:45:58",
+    "source_host": "droplet 599531580 (159.203.118.182): retained v0.6.5 B2/migration stack, baseline /root/vidra-v065-runtime, bucket vidra-acceptance-v065-20260914-media. Left STOPPED after the simulated source loss (compose stop; no volume removed). Session-reported.",
+    "replacement_host": "droplet 599514574 (159.65.249.255): rebuilt blank by the operator at 12:11:57 UTC (Ubuntu 24.04.4 x86_64, 8 vCPU / 15 GiB / 309 GB; verified no /opt/vidra, no docker, no CLI). Left RUNNING the restored v0.6.5 against the same test bucket. Session-reported.",
+    "tools": "/root/vidra-v065-drill-tools = tests/ files from meta main ef1614f (#202-#205), checksummed. tests/recovery_release_acceptance.py (host, --baseline /root/vidra-v065-runtime) + tests/recovery-release-acceptance.mjs (Chromium 153.0.8010.12).",
+    "source_phase": {
+      "baseline": "PASS (source/py-000-baseline)",
+      "upload-kill": "PASS (180 s 720p clip uploaded, api SIGKILLed mid-transcode exit 137, restarted; job not yet done at restart) (source/upload-kill)",
+      "recovered-playback": "PASS (orphaned lease recovered with no intervention after 1938 s; job done; recovered video decodes) (source/recovered-playback)",
+      "search-catchup": "PASS (search stopped, title edited, search restarted, outbox retry caught up, UI served) (source/search-catchup)",
+      "fault-postgres": "PASS recovered without an api restart in 6.543 s (source/py-fault-postgres)",
+      "fault-redis": "PASS recovered without an api restart in 7.157 s (source/py-fault-redis)",
+      "fault-search": "PASS recovered without an api restart in 7.483 s (source/py-fault-search)",
+      "mfa-enroll": "PASS (owner TOTP enrolled + a real two-factor browser sign-in before the backup) (source/mfa-enroll)",
+      "backup": "PASS (16 catalogue tables + ledgers 146|f / 18|f; marker vidra-20260914T125140Z.dump.gz; dump+config handoff hashes recorded) (source/py-backup)",
+      "failed-backup": "PASS (exit 1, published nothing, only a private .part) (source/py-failed-backup)",
+      "rpo-marker": "PASS (post-backup owner display-name marker a restore must lose) (source/rpo-marker)",
+      "source-loss": "PASS (whole source stack stopped, 0 containers left) (source/py-source-loss)"
+    },
+    "replacement_phase": {
+      "restore": "PASS (installer -> config archive FIRST -> six-digest pin -> postgres -> restore.sh (verify-blobs MISSING 0) -> deploy.sh; restored catalogue + ledgers matched the backup data point exactly) (replacement/py-restore)",
+      "verify-restore": "4 of 5 phases PASS (restored-account-password-and-sealed-TOTP, write-after-backup-is-lost, old-media-decodes-from-the-bucket, restored-search-index-serves-ui); 5th phase (new-upload) is a retained rate-limit harness FAIL (replacement/verify-restore)",
+      "verify-restore-write": "PASS (new video 5a9e26c7-4d90-496a-9486-2c8c6e65dbc5 transcoded, job done, decoded) (replacement/verify-restore-write)"
+    },
+    "measured": {
+      "source_loss_to_ready_seconds": 304.653,
+      "install_to_ready_seconds": 173.664,
+      "restore_script_seconds": 70.879,
+      "recovered_lease_wait_seconds": 1938,
+      "fault_recovery_seconds": {
+        "postgres": 6.543,
+        "redis": 7.157,
+        "search": 7.483
+      },
+      "objective": "RPO 24h / RTO 4h owner-approved 2026-09-14 (session-reported); RTO 304.653 s and a post-backup-write RPO within a 24h window both meet it."
+    },
+    "retained_failures": [
+      "source/rpo-marker-fail-1-totp-replay: FIRST rpo-marker attempt failed with a TOTP 401 because the harness freshCode generated a code for the same 30-second TOTP step the mfa-enroll sign-in had just consumed (cross-process replay). Harness-timing artifact, NOT a v0.6.5 defect; the re-run (source/rpo-marker) passed immediately.",
+      "replacement/verify-restore new-upload phase: the draft-upload POST hit the request limiter under the restored-host verification's many requests, and the harness uploadAndPublish does not 429-retry the draft POST (only the channel POST), so an undefined response id surfaced as a uuid(undefined) TypeError. Rate limits were kept ON. Harness artifact, mirrors v0.6.4; the dedicated verify-restore-write action passed after a cooldown."
+    ],
+    "operator_followups_not_product_defects": [
+      "The blank replacement host lacked libatomic.so.1; the recovery-drill browser provisioning had to apt-get install -y libatomic1 before Node ran (the runtime execute step installs it, the recovery path did not). The restore itself was unaffected."
+    ]
+  },
+  "resolved_blockers": {
+    "B1": "Authorized disposable native Ubuntu AMD64 host provisioned and the first runtime milestone executed.",
+    "B4": "Recovery objective approved: owner approved RPO 24h / RTO 4h on 2026-09-14 (session-reported). The disposable replacement host was already provided and used (droplet 599514574, rebuilt blank by the operator). REC-02 met the objective by a real replacement-host restore this run."
+  },
+  "retained_requirements": "All 59 original verification procedures, all 40 acceptance criteria and all ten scope families remain authoritative. Missing providers, representative source, recovery inputs and scope decisions apply only to dependent criteria.",
+  "workflow_counts": {
+    "PASS": 4,
+    "UNVERIFIED": 45,
+    "BLOCKED": 10
+  },
+  "workflows": [
+    {
+      "id": "REL-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Static PASS retained on the v0.6.5 preflight (release-preflight.py --tag v0.6.5 \u2192 PASS: source, image, asset and contract boundary)."
+    },
+    {
+      "id": "INS-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INS-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "AUTH-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "AUTH-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "AUTH-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "AUTH-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PUB-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PLAY-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PLAY-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "PLAY-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "CRT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "CRT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SRC-01",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Same-upload outbox/inbox, eligible document, internal search, UI response and routed fetch demonstrated on the published v0.6.5 images (this run)."
+    },
+    {
+      "id": "SRC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SRC-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SOC-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "SOC-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MSG-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MSG-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MSG-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "ADM-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "MIG-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime on the v0.6.5 digests; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-02",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime on the v0.6.5 digests; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-03",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime on the v0.6.5 digests; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-04",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime on the v0.6.5 digests; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-05",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime on the v0.6.5 digests; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "MIG-06",
+      "status": "BLOCKED",
+      "blockers": [
+        "B2"
+      ],
+      "basis": "Generated packaged COPY subsets recorded in migration-runtime on the v0.6.5 digests; representative source and all remaining original procedures still required."
+    },
+    {
+      "id": "STO-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established for v0.6.5 (new private bucket, scoped single-bucket key, verified empty before deployment). The canonical-media subset passed on the published v0.6.5 images; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "STO-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established for v0.6.5 (new private bucket, scoped single-bucket key, verified empty before deployment). The canonical-media subset passed on the published v0.6.5 images; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "STO-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established for v0.6.5 (new private bucket, scoped single-bucket key, verified empty before deployment). The canonical-media subset passed on the published v0.6.5 images; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "INT-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-03",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-04",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-05",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-06",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-07",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-08",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "INT-09",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Dedicated B2 provider test access is established for v0.6.5 (new private bucket, scoped single-bucket key, verified empty before deployment). The canonical-media subset passed on the published v0.6.5 images; the full original procedure remains required and its remaining cases were not executed."
+    },
+    {
+      "id": "INT-10",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Blocked for v0.6.5 as for v0.6.4: Full original verification procedure remains required; first milestone does not close its remaining cases."
+    },
+    {
+      "id": "INT-11",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "OPS-01",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not promoted. Measured subset expanded by this recovery drill on the release default INLINE-worker topology: a single-worker api SIGKILL mid-transcode with orphaned-lease recovery and no operator job intervention (recovered after 1938 s, bounded by the fixed 30-minute lease; job done, rendition decodes); postgres, redis and search outages each recovered without an api container restart (6.543 / 7.157 / 7.483 s, restart_count 0->0); and the failed-backup nonzero contract. The API/worker split, settings propagation, two-worker interruption and leader failover clauses remain unrun (the split-topology worker transcode is recorded separately under REC-03/meta#199)."
+    },
+    {
+      "id": "OPS-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "REC-01",
+      "status": "BLOCKED",
+      "blockers": [
+        "B3"
+      ],
+      "basis": "Backup integrity demonstrated on the populated v0.6.5 B2 host: shipped deploy/backup.sh produced a dump listing both schemas, both clean ledgers (146|f / 18|f), users, user_mfa, mfa_recovery_codes and search.documents, plus a config archive byte-equal to env/production.env + deploy/Caddyfile.local with no group/other permission bits; the failed-dump contract exits 1 and publishes nothing but a private .part (source/py-backup, source/py-failed-backup). B4 (recovery objective) is now approved, so the blocker moves B4 -> B3, but REC-01 stays BLOCKED: encrypted offsite / independent-provider retrieval of config and media (A36/A37, B3) was NOT exercised. This drill is S3-canonical \u2014 media stays in the dedicated test bucket and restore.sh verify-blobs is the reconciliation \u2014 and the backup moved host-to-host, not via an offsite destination."
+    },
+    {
+      "id": "REC-02",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Approved recovery objective met by a real replacement-host restore on the published v0.6.5 images. Owner approved RPO 24h / RTO 4h on 2026-09-14 (session-reported; B4 resolved). Source stack stopped with no container left; the blank replacement host 599514574 (rebuilt 12:11:57Z, blank-host guard passed) installed from the released installer with the config archive restored FIRST, six application digests pinned, postgres, restore.sh --yes (verify-blobs MISSING 0) and deploy.sh. Restored 16 catalogue/MFA fingerprints and both ledgers (146|f / 18|f) equalled the backup data point exactly; Chromium confirmed restored password + sealed TOTP (wrong code 401, right accepted), the post-backup RPO marker absent, legacy-B2 and drill video decode, and vidra-search serving the UI (2xx counter 0->1). Measured source-loss-to-ready 304.653 s (RTO) and a post-backup-write data loss within a 24h backup window (RPO) both meet the approved objective. A new post-restore upload transcoded and decoded on the dedicated verify-restore-write action (video 5a9e26c7-4d90-496a-9486-2c8c6e65dbc5, job done, attempts 0) after a retained rate-limit harness artifact (replacement/verify-restore, replacement/verify-restore-write)."
+    },
+    {
+      "id": "REC-03",
+      "status": "PASS",
+      "blockers": [],
+      "basis": "Upgrade v0.6.4\u2192v0.6.5 with data, dirty-ledger refusal before restart, runbook recovery, app-only rollback, forward restore, on the published images (docs/runtime-acceptance-rec03-v0.6.5.md, meta#199)."
+    },
+    {
+      "id": "QLT-01",
+      "status": "UNVERIFIED",
+      "blockers": [
+        "U1"
+      ],
+      "basis": "Not executed on the v0.6.5 digests."
+    },
+    {
+      "id": "QLT-02",
+      "status": "UNVERIFIED",
+      "blockers": [],
+      "basis": "Not executed on the v0.6.5 digests."
+    }
+  ],
+  "acceptance_delta": {
+    "from": "v0.6.5 migration-runtime disposition (3 PASS / 45 UNVERIFIED / 11 BLOCKED)",
+    "to": "4 PASS / 45 UNVERIFIED / 10 BLOCKED",
+    "moved": {
+      "REC-02": {
+        "from": "BLOCKED [B4]",
+        "to": "PASS",
+        "why": "Owner-approved recovery objective (RPO 24h / RTO 4h) met by a real replacement-host restore on the published v0.6.5 images."
+      }
+    },
+    "relabelled": {
+      "REC-01": {
+        "from": "BLOCKED [B4]",
+        "to": "BLOCKED [B3]",
+        "why": "B4 (recovery objective) approved, but offsite / independent-provider retrieval (A36/A37, B3) was not exercised. Still BLOCKED; no count change."
+      }
+    },
+    "expanded_not_promoted": {
+      "OPS-01": "Measured subset expanded (single-worker crash + lease recovery, DB/Redis/search outages recovered without api restart, failed-backup contract); two-worker interruption, settings propagation and leader failover remain, so it stays UNVERIFIED."
+    },
+    "note": "One row moves to PASS (REC-02). REC-01's blocker relabels B4 -> B3 and stays BLOCKED because the offsite mechanism was not exercised. OPS-01 stays UNVERIFIED with an expanded measured subset. Nothing else moves. B4 is added to resolved_blockers; B3 remains open for the offsite/independent-provider inputs.",
+    "acceptance_items": {
+      "A36": "Backup completeness + failed-dump contract passed on v0.6.5; offsite retrieval (B3) remains, so A36 is not closed.",
+      "A37": "Replacement-host restore with login, sealed-TOTP decryption, playback, search and a measured recovery within the approved objective passed (REC-02 PASS); offsite / independent-provider retrieval (B3) remains, so A37 is not fully closed.",
+      "A38": "Upgrade/rollback (REC-03) already PASS from meta#199; unaffected by this drill."
+    }
+  },
+  "measured_subsets": {
+    "REC-02 (replacement-host restore)": "Source stack stopped with no container left; blank replacement host guard passed. Released installer -> config archive first -> six-digest pin -> postgres -> restore.sh --yes -> deploy.sh. verify-blobs MISSING 0. 16 catalogue/MFA fingerprints and both ledgers (146|f / 18|f) equal the backup data point. Chromium: restored password + sealed TOTP (wrong 401, right accepted), post-backup marker absent, legacy-B2 + drill video decode, UI search served by vidra-search (0->1). New post-restore upload transcoded and decoded (verify-restore-write). Offsite/independent-provider retrieval and a forced index rebuild NOT exercised.",
+    "REC-01 (backup integrity)": "Dump lists both schemas, both clean ledgers, users, user_mfa, mfa_recovery_codes and search.documents; config archive byte-equal to env/production.env + deploy/Caddyfile.local with no group/other bits; failed dump exits 1 and publishes nothing but a private .part. Offsite/independent-provider retrieval and local-storage media snapshots NOT exercised (B3).",
+    "OPS-01 (inline-topology subset)": "Single-worker api SIGKILL mid-transcode; orphaned lease recovered with no operator job intervention after 1938 s (fixed 30-minute lease), job done, rendition decodes. PostgreSQL / Redis / search outages each recovered without an api container restart (6.543 / 7.157 / 7.483 s; restart_count 0->0). Failed-backup nonzero contract held. API/worker split, settings propagation, two-worker interruption and leader failover NOT run."
+  },
+  "candidate": {
+    "tag": "v0.6.5",
+    "record": "releases/v0.6.5.json",
+    "manifest": "docs/evidence/release-v0.6.5-verification/manifest.json",
+    "images": {
+      "api": "ghcr.io/yegamble/vidra-core@sha256:a6e08b93364924e40321a47d188ed08ddbc2b21aecd3f0dcc58f49bc1f2f3bb1",
+      "frontend": "ghcr.io/yegamble/vidra-user@sha256:08e920ba5d214a190c30796c9c7f877ad70a53ea2b1f2d10a5f47de679b03178",
+      "search": "ghcr.io/yegamble/vidra-search@sha256:55196d278722d46c4454cc4f5f4d05b9e7cd35cc7712f2aeb6354e13f65ea0f8"
+    },
+    "ledgers": {
+      "schema_migrations": {
+        "actual": "146|f",
+        "expected": 146,
+        "source_revision": "d13d40e6670d0bf95d28e1f69b5af20e5b99237b"
+      },
+      "vidra_search_migrations": {
+        "actual": "18|f",
+        "expected": 18,
+        "source_revision": "b7a7f55be6646c2730d5bbc481e423ac9cfa9e08"
+      }
+    }
+  },
+  "not_claimed": [
+    "Desktop Chromium only; no WebKit, no Safari, no iOS, no mobile viewport.",
+    "No offsite / independent-provider retrieval: the backup moved host-to-host, and REC-01 stays BLOCKED on B3.",
+    "Inline worker topology only (release default); no API/worker split, no two-worker interruption, no leader failover, so OPS-01 stays UNVERIFIED.",
+    "Single-worker crash only; the two-worker interruption clause is unrun.",
+    "S3-canonical only: media stays in the dedicated test bucket; local-storage media snapshots not exercised.",
+    "Two retained harness-timing artifacts (rpo-marker TOTP replay; verify-restore new-upload rate limit), each re-run to PASS; neither is a v0.6.5 defect."
+  ],
+  "prior_disposition": "docs/evidence/release-v0.6.5-verification/migration-runtime/disposition.json",
+  "prior_disposition_sha256": "4987c6851f134f9a2e43b8c7b8a8d72c92493e673dc8776c778802fc0dfd8a32",
+  "committed_hashes": "docs/evidence/release-v0.6.5-verification/recovery-runtime/committed-hashes.json is the independent sha256 index recomputed over every committed file in this recovery-runtime tree except itself; each host's own artifact-hashes.json is the exporter's original, kept byte-verbatim and re-verified against the copied bytes.",
+  "backlog_report": "docs/runtime-acceptance-recovery-v0.6.5.md",
+  "authorization": "Scoped work branch/PR and disposable acceptance operations on the retained v0.6.5 B2 drill source host and the operator-rebuilt replacement host, plus host-to-host transfer of the backup and test credentials. No merge, stable publication, tag moves, production action, public DNS/federation, new infrastructure spend, rebuild or evidence deletion."
+}

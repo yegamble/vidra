@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "action": "rpo-marker",
+  "baseline": "/root/vidra-v065-runtime",
+  "candidate_tag": "v0.6.5",
+  "checks": {
+    "write-after-backup": "PASS"
+  },
+  "node": "v26.8.1",
+  "commands": [],
+  "started_at": "2026-09-14T12:54:04.393Z",
+  "browser_args": [
+    "--host-resolver-rules=MAP secure.video.test 127.0.0.1",
+    "--no-proxy-server",
+    "--autoplay-policy=no-user-gesture-required"
+  ],
+  "browser": "153.0.8010.12",
+  "marker": "RPO marker 3ad570c5",
+  "written_at": "2026-09-14T12:54:07.143Z",
+  "finished_at": "2026-09-14T12:54:07.143Z"
+}

@@ -1,0 +1,127 @@
+{
+  "status": "FAIL",
+  "action": "verify-restore",
+  "baseline": "/root/vidra-v065-runtime",
+  "candidate_tag": "v0.6.5",
+  "checks": {
+    "restored-account-password-and-sealed-totp": "PASS",
+    "write-after-backup-is-lost": "PASS",
+    "old-media-decodes-from-the-bucket": "PASS",
+    "restored-search-index-serves-ui": "PASS"
+  },
+  "node": "v26.8.1",
+  "commands": [
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "search"
+      ],
+      "started_at": "2026-09-14T13:41:01.343Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "python3",
+        "-c",
+        "\nimport json,subprocess,sys,urllib.request\nc=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]]))[0]\nip=next(v['IPAddress'] for v in c['NetworkSettings']['Networks'].values() if v['IPAddress'])\nlines=urllib.request.urlopen('http://'+ip+':8080/metrics',timeout=15).read().decode().splitlines()\nprint(sum(float(l.rsplit(' ',1)[1]) for l in lines if l.startswith('vidra_search_http_requests_total{') and 'route=\"/internal/v1/search\"' in l and 'status_class=\"2xx\"' in l))\n",
+        "7083f7aea68c958352e513c91066a931cc81ca56f02aa6fb1d0e8fb151b9d9f9"
+      ],
+      "started_at": "2026-09-14T13:41:01.754Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "ps",
+        "-q",
+        "search"
+      ],
+      "started_at": "2026-09-14T13:41:02.820Z",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "python3",
+        "-c",
+        "\nimport json,subprocess,sys,urllib.request\nc=json.loads(subprocess.check_output(['docker','inspect',sys.argv[1]]))[0]\nip=next(v['IPAddress'] for v in c['NetworkSettings']['Networks'].values() if v['IPAddress'])\nlines=urllib.request.urlopen('http://'+ip+':8080/metrics',timeout=15).read().decode().splitlines()\nprint(sum(float(l.rsplit(' ',1)[1]) for l in lines if l.startswith('vidra_search_http_requests_total{') and 'route=\"/internal/v1/search\"' in l and 'status_class=\"2xx\"' in l))\n",
+        "7083f7aea68c958352e513c91066a931cc81ca56f02aa6fb1d0e8fb151b9d9f9"
+      ],
+      "started_at": "2026-09-14T13:41:03.193Z",
+      "exit_code": 0
+    }
+  ],
+  "started_at": "2026-09-14T13:40:45.878Z",
+  "browser_args": [
+    "--host-resolver-rules=MAP secure.video.test 127.0.0.1",
+    "--no-proxy-server",
+    "--autoplay-policy=no-user-gesture-required"
+  ],
+  "browser": "153.0.8010.12",
+  "wrong_code_status": 401,
+  "rpo": {
+    "marker_written_at": "2026-09-14T12:54:07.143Z",
+    "marker_present": false
+  },
+  "playback_legacy": {
+    "id": "cded6735-89ee-497b-b5ec-4f31c457f1e7",
+    "start": {
+      "time": 0,
+      "frames": 13,
+      "audio_bytes": 8892,
+      "width": 640,
+      "height": 360,
+      "src_blob": true,
+      "paused": true,
+      "muted": false,
+      "error": null
+    },
+    "end": {
+      "time": 3.75827,
+      "frames": 126,
+      "audio_bytes": 56183,
+      "width": 640,
+      "height": 360,
+      "src_blob": true,
+      "paused": false,
+      "muted": false,
+      "error": null
+    }
+  },
+  "playback_drill": {
+    "id": "c053388e-fe28-4a56-99d6-7cfcc9916752",
+    "start": {
+      "time": 0,
+      "frames": 21,
+      "audio_bytes": 15376,
+      "width": 854,
+      "height": 480,
+      "src_blob": true,
+      "paused": true,
+      "muted": false,
+      "error": null
+    },
+    "end": {
+      "time": 3.777898,
+      "frames": 135,
+      "audio_bytes": 73550,
+      "width": 854,
+      "height": 480,
+      "src_blob": true,
+      "paused": false,
+      "muted": false,
+      "error": null
+    }
+  },
+  "ui_search": {
+    "query": "Recoverycatchup3ccfd071",
+    "service_requests_before": 0,
+    "service_requests_after": 1
+  },
+  "failed_phase": "new-upload-transcodes-and-decodes",
+  "error": "AssertionError [ERR_ASSERTION]: The \"string\" argument must be of type string. Received type undefined (undefined)\n    at uuid (file:///root/vidra-v065-drill-tools/recovery-release-acceptance.mjs:71:32)\n    at uploadAndPublish (file:///root/vidra-v065-drill-tools/recovery-release-acceptance.mjs:189:65)\n    at async file:///root/vidra-v065-drill-tools/recovery-release-acceptance.mjs:399:16",
+  "finished_at": "2026-09-14T13:41:07.263Z"
+}

@@ -1,0 +1,46 @@
+{
+  "status": "PASS",
+  "action": "mfa-enroll",
+  "baseline": "/root/vidra-v065-runtime",
+  "candidate_tag": "v0.6.5",
+  "checks": {
+    "enroll-totp": "PASS",
+    "two-factor-browser-sign-in-before-backup": "PASS"
+  },
+  "node": "v26.8.1",
+  "commands": [
+    {
+      "argv": [
+        "bash",
+        "deploy/compose.sh",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "vidra",
+        "-d",
+        "vidra",
+        "-At",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "SELECT count(*) FROM user_mfa WHERE user_id='a654ce9b-84d3-435e-8d8e-0f0131771e8f'"
+      ],
+      "started_at": "2026-09-14T12:51:00.596Z",
+      "exit_code": 0
+    }
+  ],
+  "started_at": "2026-09-14T12:50:57.586Z",
+  "browser_args": [
+    "--host-resolver-rules=MAP secure.video.test 127.0.0.1",
+    "--no-proxy-server",
+    "--autoplay-policy=no-user-gesture-required"
+  ],
+  "browser": "153.0.8010.12",
+  "mfa_status": {
+    "enabled": true,
+    "recovery_codes_remaining": 10
+  },
+  "finished_at": "2026-09-14T12:51:31.113Z"
+}
