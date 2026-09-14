@@ -84,6 +84,29 @@ done
 [ -n "$TAG" ] || die "usage: $0 [--yes] vX.Y.Z [repo ...]  (default repos: ${ALL_REPOS[*]})"
 [ ${#REPOS[@]} -gt 0 ] || REPOS=("${ALL_REPOS[@]}")
 
+# THE MACHINE-READABLE RELEASE RECORD (finding #189). deploy/deploy.sh and
+# rollback.sh read releases/<tag>.json to refuse a component triple nobody
+# released; until now that file was hand-written out of band, so the script that
+# cut the tag never wrote the record that names the tag's image digests. This
+# script now writes it — but only for a WHOLE platform release (all three repos):
+# a record describes core+user+search released together, so a subset re-publish
+# of one image after a partial failure does not change the pairing and must not
+# rewrite (or half-write) the record. It is written AFTER the images publish,
+# because the record names digests that do not exist until then, and it is
+# committed to main as a normal follow-up commit — the tag stays at the reviewed
+# commit and `meta_commit` stays equal to the tag's commit, the convention every
+# existing record (v0.6.4, v0.6.5) and tests/release_mapping_test.py assume.
+RECORD_REL="releases/${TAG}.json"
+RECORD_PATH="${REPO_ROOT}/${RECORD_REL}"
+RECORD_HELPER="${REPO_ROOT}/deploy/release-record.py"
+FULL_RELEASE=0
+if [ ${#REPOS[@]} -eq ${#ALL_REPOS[@]} ]; then
+  FULL_RELEASE=1
+  for want in "${ALL_REPOS[@]}"; do
+    case " ${REPOS[*]} " in *" $want "*) ;; *) FULL_RELEASE=0 ;; esac
+  done
+fi
+
 step "0/2 pre-flight"
 
 # The v-prefix is the documented convention, not decoration: env/production.env
@@ -175,6 +198,35 @@ else
   die "tag ${TAG} already exists in ${OWNER}/${META_REPO} but points at ${META_REMOTE_SHA}, not at HEAD (${META_SHA}). The deployment bundle for this release would be built from that other commit. Releases are immutable here: pick the next version, or delete that tag deliberately if it was never released."
 fi
 
+# --- the release record: everything that can be refused, refused now ----------
+# The record is written after the images publish (see below), but a reason it
+# CANNOT be written must surface here, before the outward-facing release, not
+# after the images are already public. Only for a whole platform release.
+if [ "$FULL_RELEASE" = 1 ]; then
+  [ -f "$RECORD_HELPER" ] \
+    || die "deploy/release-record.py is missing, so ${RECORD_REL} cannot be assembled. Restore it from this revision and re-run."
+  command -v python3 >/dev/null 2>&1 \
+    || die "python3 not found — it assembles ${RECORD_REL} (the deploy-script tests use it too). Install it and re-run."
+  # buildx resolves the index and per-platform digests the record names. It is
+  # the same tool deploy/release-preflight.py requires to freeze a release, so it
+  # is part of the release toolchain, not a new dependency — but assert it now.
+  docker buildx version >/dev/null 2>&1 \
+    || die "docker buildx not found — it resolves the image digests ${RECORD_REL} records (deploy/release-preflight.py needs it too). Install it and re-run."
+  # Records are immutable like tags. If one already exists this release was
+  # already recorded; refuse rather than clobber a committed record.
+  [ ! -e "$RECORD_PATH" ] \
+    || die "${RECORD_REL} already exists, so ${TAG} was already recorded. Records are immutable like the tag; pick the next version, or remove that file deliberately if it was written in error and never released."
+  # The record is committed to main as a follow-up commit, so this checkout must
+  # BE main at origin/main's tip — otherwise the commit would not fast-forward
+  # and the record could not be pushed after the images are already public.
+  META_BRANCH="$(git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD || true)"
+  [ "$META_BRANCH" = "main" ] \
+    || die "the release record is committed to main, but this checkout is on '${META_BRANCH:-a detached HEAD}'. Check out main at origin/main and re-run."
+  if [ "$META_SHA" != "$(git -C "$REPO_ROOT" rev-parse origin/main)" ]; then
+    die "HEAD ($(git -C "$REPO_ROOT" rev-parse --short HEAD)) is not at origin/main's tip, so committing ${RECORD_REL} after publish would not fast-forward main. Update main and re-run."
+  fi
+fi
+
 # A GitHub release notifies watchers and shows up on the repo's front page. It is
 # the one step in this file that reaches people outside the machine, so it asks.
 if [ "$ASSUME_YES" = "1" ]; then
@@ -188,6 +240,10 @@ elif [ -t 0 ]; then
     echo "It also tags THIS repository ${TAG} at $(git -C "$REPO_ROOT" rev-parse --short HEAD) and pushes"
     echo "that tag first — vidra-core's release-assets workflow builds the deployment"
     echo "bundle from a checkout of it, and fails the release if it is not there."
+  fi
+  if [ "$FULL_RELEASE" = 1 ]; then
+    echo "After the images publish it writes ${RECORD_REL} (the deploy/rollback"
+    echo "release record) and commits it to main."
   fi
   read -r -p "Type \"${TAG}\" to confirm: " answer
   [ "$answer" = "$TAG" ] || { echo "Aborted."; exit 1; }
@@ -285,6 +341,121 @@ watch_publish_run() {
   log "publish-container succeeded for ${repo}"
 }
 
+# --- writing releases/<tag>.json (finding #189) -------------------------------
+# All of this runs AFTER the images are public, so a failure here does not undo a
+# release; it means the record is missing and must be completed by hand. Say that
+# loudly rather than exiting as if the release itself failed.
+record_die() {
+  printf '[release] ERROR: %s\n' "$*" >&2
+  cat >&2 <<EOF
+
+[release] ${TAG} IS PUBLISHED, but ${RECORD_REL} was NOT written.
+  The images are live and verified; only the machine-readable record is missing,
+  which leaves deploys of ${TAG} UNVERIFIED (a warning), not broken. Fix the cause,
+  then write it by hand and commit it to main. For each of vidra-core, vidra-user,
+  vidra-search:
+      docker buildx imagetools inspect ghcr.io/${OWNER}/<repo>:${TAG} \\
+        --format '{{json .Manifest}}' > /tmp/<repo>.mf.json
+  then deploy/release-record.py skeleton … | complete (see its --help).
+EOF
+  exit 1
+}
+
+# Echo the 40-hex commit the component's ${TAG} points at, or return 1 (the tag
+# was just created by gh release create, so it resolves to a commit). This runs
+# inside $(command substitution), so it must RETURN, never exit — an exit would
+# only leave the subshell and hand the caller an empty string.
+component_commit() {
+  local repo="$1" sha
+  sha="$(gh api "repos/${OWNER}/${repo}/commits/${TAG}" --jq '.sha' 2>/dev/null || true)"
+  case "$sha" in
+    *[!0-9a-f]* | '') printf '[release] could not resolve %s commit at %s (got %s)\n' "$repo" "$TAG" "${sha:-empty}" >&2; return 1 ;;
+  esac
+  [ "${#sha}" -eq 40 ] || { printf '[release] %s commit at %s is not 40 hex (%s)\n' "$repo" "$TAG" "$sha" >&2; return 1; }
+  printf '%s\n' "$sha"
+}
+
+# Echo the component's schema version: the highest leading number among
+# migrations/*.up.sql at ${ref}, read from GitHub — the SAME pipeline deploy.sh
+# and make-bundle.sh use on a checkout (`ls migrations/*.up.sql` -> leading
+# number, numerically highest). Numeric so 0146 and 146 compare equal, then
+# 10#-normalised to the plain integer release-mapping.py requires. RETURNs on
+# failure (called in a substitution).
+component_schema() {
+  local repo="$1" ref="$2" names max
+  names="$(gh api "repos/${OWNER}/${repo}/contents/migrations?ref=${ref}" --jq '.[].name' 2>/dev/null || true)"
+  max="$(printf '%s\n' "$names" | grep -E '\.up\.sql$' | awk -F_ '{print $1}' | sort -n | tail -1 || true)"
+  case "$max" in
+    '' | *[!0-9]*) printf '[release] could not compute %s schema from migrations at %s\n' "$repo" "$ref" >&2; return 1 ;;
+  esac
+  printf '%s\n' "$((10#$max))"
+}
+
+# Resolve one image's index + per-platform digests into $out, exactly as
+# release-preflight froze v0.6.5 — `imagetools inspect … {{json .Manifest}}`,
+# which deploy/release-record.py then parses. Runs directly (not in a
+# substitution), so record_die here stops the script.
+resolve_manifest() {
+  local repo="$1" out="$2"
+  docker buildx imagetools inspect "ghcr.io/${OWNER}/${repo}:${TAG}" --format '{{json .Manifest}}' > "$out" 2>/dev/null \
+    || record_die "docker buildx imagetools inspect failed for ghcr.io/${OWNER}/${repo}:${TAG}; the image digests could not be resolved."
+}
+
+# Build the skeleton from the now-published facts, fill the digests, and commit
+# the finished record to main. meta_commit is the commit the meta tag points at,
+# preserving the record convention (see the pre-flight note). Every git step is
+# gated on its own exit code — never `add && commit && push`.
+write_release_record() {
+  step "recording ${RECORD_REL}"
+  local meta_commit core_commit user_commit search_commit core_schema search_schema
+  local tmp skel
+
+  meta_commit="$(git -C "$REPO_ROOT" rev-parse "${TAG}^{commit}" 2>/dev/null || true)"
+  case "$meta_commit" in
+    *[!0-9a-f]* | '') record_die "could not resolve the meta tag ${TAG} to a commit." ;;
+  esac
+
+  core_commit="$(component_commit vidra-core)"     || record_die "could not resolve the vidra-core commit at ${TAG}."
+  user_commit="$(component_commit vidra-user)"     || record_die "could not resolve the vidra-user commit at ${TAG}."
+  search_commit="$(component_commit vidra-search)" || record_die "could not resolve the vidra-search commit at ${TAG}."
+  core_schema="$(component_schema vidra-core "$core_commit")"       || record_die "could not compute the core schema version."
+  search_schema="$(component_schema vidra-search "$search_commit")" || record_die "could not compute the search schema version."
+
+  tmp="$(mktemp -d)" || record_die "could not create a temporary directory for the record."
+  # shellcheck disable=SC2064  # expand $tmp now so the cleanup targets THIS dir.
+  trap "rm -rf '$tmp'" RETURN
+  skel="$tmp/skeleton.json"
+
+  python3 "$RECORD_HELPER" skeleton \
+    --release "$TAG" --meta-commit "$meta_commit" \
+    --core-schema "$core_schema" --search-schema "$search_schema" \
+    --evidence "docs/evidence/release-${TAG}-verification/manifest.json" \
+    --component "core:${TAG}:${core_commit}:ghcr.io/${OWNER}/vidra-core" \
+    --component "user:${TAG}:${user_commit}:ghcr.io/${OWNER}/vidra-user" \
+    --component "search:${TAG}:${search_commit}:ghcr.io/${OWNER}/vidra-search" \
+    --out "$skel" \
+    || record_die "could not assemble the ${RECORD_REL} skeleton."
+
+  resolve_manifest vidra-core   "$tmp/core.mf.json"
+  resolve_manifest vidra-user   "$tmp/user.mf.json"
+  resolve_manifest vidra-search "$tmp/search.mf.json"
+
+  python3 "$RECORD_HELPER" complete --record "$skel" \
+    --manifest "core=$tmp/core.mf.json" \
+    --manifest "user=$tmp/user.mf.json" \
+    --manifest "search=$tmp/search.mf.json" \
+    --out "$RECORD_PATH" \
+    || record_die "could not fill the image digests into ${RECORD_REL}."
+
+  git -C "$REPO_ROOT" add -- "$RECORD_REL" \
+    || record_die "git add ${RECORD_REL} failed."
+  git -C "$REPO_ROOT" commit -q -m "releases: record ${TAG} (written by deploy/release.sh after publish)" -- "$RECORD_REL" \
+    || record_die "could not commit ${RECORD_REL}."
+  git -C "$REPO_ROOT" push origin HEAD:main \
+    || record_die "could not push ${RECORD_REL} to main (main may have advanced). The commit is local; push it once main is reconcilable."
+  log "committed and pushed ${RECORD_REL} to main"
+}
+
 rc=0
 RESULTS=()
 for repo in "${REPOS[@]}"; do
@@ -321,6 +492,15 @@ if [ "$rc" -ne 0 ]; then
       gh workflow run publish-container.yml -R ${OWNER}/<repo> -f tag=${TAG}
 EOF
   exit 1
+fi
+
+# Every image is published and verified. Write the record that names them, so the
+# release no longer depends on someone hand-crafting releases/<tag>.json out of
+# band (finding #189). Only for a full platform release — see the top-of-file note.
+if [ "$FULL_RELEASE" = 1 ]; then
+  write_release_record
+else
+  log "subset release (${REPOS[*]}): ${RECORD_REL} was not written — a release record describes a full core+user+search release. Cut the full release, or complete the record by hand once all three images are green."
 fi
 
 log "released ${TAG} in: ${REPOS[*]}"
