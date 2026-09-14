@@ -29,6 +29,11 @@ ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / 'deploy/release-mapping.py'
 RECORDS = ROOT / 'releases'
 EVIDENCE = ROOT / 'docs/evidence/release-v0.6.4-verification'
+# Releases whose committed evidence is the RAW release-preflight output. v0.6.4
+# is not one: its manifest carries a hand-added platform digest and a runtime
+# ledger file, so it keeps a test of its own. Every record must be covered by one
+# or the other -- test_every_record_has_an_evidence_cross_check enforces that.
+RAW_PREFLIGHT_RELEASES = {'v0.6.5', 'v0.6.6'}
 
 OK, REFUSED, UNVERIFIED = 0, 1, 3
 SECRET = 'SECRET_MUST_NOT_APPEAR'
@@ -671,13 +676,16 @@ class CommittedRecordTests(unittest.TestCase):
         """A record written from the RAW release-preflight manifest — no
         hand-added platform digest and no runtime ledger file, which only
         v0.6.4's evidence carries. The platform digests therefore come from the
-        committed `imagetools inspect` transcript and the schema numbers from
-        the released images' own `migrate embedded-max` answers. One body for
-        every such release: a per-release copy drifts, and the copy is what
-        stops asserting.
+        committed `imagetools inspect` transcript, the schema numbers from the
+        released images' own `migrate embedded-max` answers, and the bundle
+        provenance a bundle host would read is checked against the record too.
+        One body for every such release: a per-release copy drifts, and the copy
+        is what stops asserting.
 
-        A transcript or an embedded-max file that does not name the release's
-        images raises KeyError here rather than vacuously passing."""
+        Every lookup is keyed by the tag or DIGEST the record itself claims, so
+        evidence belonging to a different release cannot satisfy it — the live
+        hazard when a component is retagged at an unchanged commit, because then
+        only the digests tell the two releases apart."""
         evidence = ROOT / f'docs/evidence/release-{tag}-verification'
         record = json.loads((RECORDS / f'{tag}.json').read_text())
         manifest = json.loads((evidence / 'manifest.json').read_text())
@@ -690,8 +698,13 @@ class CommittedRecordTests(unittest.TestCase):
         platform_digests = {}
         for match in re.finditer(rf'Name:\s+(ghcr\.io/yegamble/vidra-[a-z]+):{re.escape(tag)}@(sha256:[0-9a-f]{{64}})\s+MediaType:.*?\s+Platform:\s+(\S+)', transcript):
             platform_digests[(match.group(1), match.group(3))] = match.group(2)
-        answers = dict(re.findall(r'vidra-(core|search)@sha256:[0-9a-f]{64} migrate embedded-max\n(?:WARNING:[^\n]*\n)?(\d+)\n',
+        # Keyed by the DIGEST that was asked, never by the component name: an
+        # answer counts only if it came from the image this record pins. Keying
+        # by name let v0.6.5's transcript satisfy v0.6.6 (both say 146 and 18).
+        answers = dict(re.findall(r'vidra-(?:core|search)@(sha256:[0-9a-f]{64}) migrate embedded-max\n(?:WARNING:[^\n]*\n)?(\d+)\n',
                                   (evidence / 'embedded-max.txt').read_text()))
+        provenance = dict(re.findall(r'^([a-z_]+)=(\S+)$',
+                                     (evidence / 'bundle-provenance.txt').read_text(), re.MULTILINE))
         for key, repo in (('core', 'vidra-core'), ('user', 'vidra-user'), ('search', 'vidra-search')):
             with self.subTest(component=key):
                 component = record['components'][key]
@@ -703,19 +716,35 @@ class CommittedRecordTests(unittest.TestCase):
                                  image['reference'])
                 self.assertEqual(component['image']['platforms'],
                                  {'linux/amd64': platform_digests[(component['image']['repository'], 'linux/amd64')]})
-        self.assertEqual(str(record['core_schema_version']), answers['core'])
-        self.assertEqual(str(record['search_schema_version']), answers['search'])
+        for key in ('core', 'search'):
+            with self.subTest(schema=key):
+                asked = record['components'][key]['image']['platforms']['linux/amd64']
+                self.assertEqual(str(record[f'{key}_schema_version']), answers[asked])
+        # What deploy.sh reads on a BUNDLE host instead of the nested checkout,
+        # to compute the expected migration version: it must name this release.
+        self.assertEqual(provenance['tag'], record['release'])
+        self.assertEqual(provenance['meta_commit'], record['meta_commit'])
+        self.assertEqual(provenance['core_commit'], record['components']['core']['commit'])
+        self.assertEqual(int(provenance['core_schema_version']), record['core_schema_version'])
 
-    def test_v065_record_matches_the_release_evidence(self):
-        self.assert_record_matches_raw_preflight_evidence('v0.6.5')
-
-    def test_v066_record_matches_the_release_evidence(self):
+    def test_raw_preflight_records_match_their_release_evidence(self):
         """v0.6.6 re-released vidra-core and vidra-user for the white-label
         toggle. vidra-search was rebuilt at the SAME source revision as v0.6.5,
-        so its commit repeats while its digests do not — the record must carry
-        the v0.6.6 bytes, not v0.6.5's. No migration shipped either side, so the
-        released images still answer 146 and 18."""
-        self.assert_record_matches_raw_preflight_evidence('v0.6.6')
+        so its commit repeats while its image digests do not — the record must
+        carry the v0.6.6 bytes, not v0.6.5's. No migration shipped either side,
+        so the released images still answer 146 and 18."""
+        for tag in sorted(RAW_PREFLIGHT_RELEASES):
+            with self.subTest(release=tag):
+                self.assert_record_matches_raw_preflight_evidence(tag)
+
+    def test_every_record_has_an_evidence_cross_check(self):
+        """A record nothing cross-checks is only FORMAT-validated — exactly how
+        v0.6.5's landed at first, with its values compared to nothing. Adding
+        releases/vX.Y.Z.json without listing it in RAW_PREFLIGHT_RELEASES (or
+        writing a bespoke test, as v0.6.4 has) fails here instead of shipping an
+        unchecked record."""
+        self.assertEqual({path.stem for path in RECORDS.glob('*.json')},
+                         {'v0.6.4'} | RAW_PREFLIGHT_RELEASES)
 
     def test_every_committed_record_validates(self):
         with tempfile.TemporaryDirectory() as tmp:
