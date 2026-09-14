@@ -143,6 +143,13 @@ python3 tests/release_acceptance.py prepare \
   --out /tmp/vidra-v064-b2-next/handoff
 ```
 
+`prepare` defaults to the v0.6.4 manifest, so the block above is complete only
+for v0.6.4. For any other candidate add `--candidate
+docs/evidence/release-<tag>-verification/manifest.json` (PR #200): without it
+the handoff is prepared against the v0.6.4 record, and the correctly named
+`vidra-acceptance-<label>-YYYYMMDD-media-NONCE` bucket created for that release
+is then refused as "requires a new dedicated v0.6.4 acceptance bucket".
+
 Convert the two key values privately into JSON; never print, commit, or include
 credentials in the nonsecret handoff archive. Transfer the verified archive
 and separately the scoped key to the selected disposable host. Extract into
