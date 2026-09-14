@@ -51,6 +51,27 @@ def collect_secrets(sources):
     return secrets
 
 
+def preparation_sources(root):
+    """The prepare attempts this drill actually produced, in attempt order.
+
+    The v0.6.4 drill needed three (original, continuation, ready) and the export
+    hard-coded that shape. A run that PASSES first time leaves no
+    `-continuation`, and the operator cannot manufacture one — `--prepared-source`
+    is gated on the recorded 'source role could write' failure, and a same-day
+    `docker run --name` collides — so the export died on a missing file after
+    every hour of host work was already spent. The last attempt present is the
+    live stage whose browser results and check attempts are exported.
+    """
+    candidates = [(root, 'prepare-original'),
+                  (Path(str(root) + '-continuation'), 'prepare-continuation'),
+                  (Path(str(root) + '-ready'), 'prepare-ready')]
+    present = [(directory, name) for directory, name in candidates
+               if (directory / 'preparation.json').is_file()]
+    assert present, (f'no preparation.json under {root}, {root}-continuation or {root}-ready; '
+                     'nothing to export')
+    return present
+
+
 def reject_secrets(content, secrets):
     assert not any(secret and secret in content for secret in secrets), 'secret detected; export refused'
     # Match PEM content, not the scanner's own marker literals in tool source.
@@ -60,11 +81,21 @@ def reject_secrets(content, secrets):
 
 def export(label='reviewed', root=DEFAULT_ROOT, baseline=DEFAULT_BASELINE, b2_key=DEFAULT_B2_KEY):
     os.umask(0o077)
-    stage = Path(str(root) + '-ready')
     assert re.fullmatch(r'reviewed(?:-v[0-9]+)?', label), 'invalid export attempt label'
+    # Gather the live credentials, and settle which attempts exist, before
+    # anything is written: a refusal here must not leave a burned export label
+    # and a directory of UNSCRUBBED evidence behind.
+    secrets = collect_secrets([(root / 'private/source.env', env_secrets),
+                               (Path('/opt/vidra/env/production.env'), env_secrets),
+                               (baseline / 'private/owner.json', owner_password),
+                               (b2_key, json_values)])
+    sources = preparation_sources(root)
+    stage = sources[-1][0]
     out = Path(str(root) + '-' + label)
     out.mkdir(mode=0o700)
-    provenance = {'raw_files': {}, 'raw_logs': [], 'tool_files': {}, 'scope':
+    provenance = {'raw_files': {}, 'raw_logs': [], 'tool_files': {},
+                  'preparation_stages': {name: str(directory) for directory, name in sources},
+                  'scope':
                   'Generated-source packaged COPY milestone. Raw credentials, SQL dumps, configuration and logs remain private.'}
 
     def sanitized(value):
@@ -79,12 +110,10 @@ def export(label='reviewed', root=DEFAULT_ROOT, baseline=DEFAULT_BASELINE, b2_ke
     def save(name, value):
         (out / name).write_text(json.dumps(value, indent=2) + '\n')
 
-    sources = [(root, 'prepare-original'), (Path(str(root) + '-continuation'), 'prepare-continuation'),
-               (stage, 'prepare-ready')]
-    for directory, label in sources:
+    for directory, stage_label in sources:
         path = directory / 'preparation.json'
         provenance['raw_files'][str(path)] = sha(path)
-        save(label + '.json', sanitized(json.loads(path.read_text())))
+        save(stage_label + '.json', sanitized(json.loads(path.read_text())))
     for path in sorted(stage.glob('*-browser.json')):
         value = json.loads(path.read_text())
         assert value['status'] in ('PASS', 'FAIL'), 'browser still running'
@@ -94,7 +123,7 @@ def export(label='reviewed', root=DEFAULT_ROOT, baseline=DEFAULT_BASELINE, b2_ke
         provenance['raw_files'][str(path)] = sha(path)
         save(path.parent.name + '.json', sanitized(json.loads(path.read_text())))
     commands = []
-    for directory in [root, Path(str(root) + '-continuation'), stage, *sorted(p for p in stage.iterdir() if p.is_dir())]:
+    for directory in [d for d, _ in sources] + sorted(p for p in stage.iterdir() if p.is_dir()):
         path = directory / 'private/commands.jsonl'
         if not path.exists():
             continue
@@ -112,18 +141,14 @@ def export(label='reviewed', root=DEFAULT_ROOT, baseline=DEFAULT_BASELINE, b2_ke
     # Source snapshots are public harness code, including the failed revisions.
     tool_texts = []
     tool_sources = []
-    for directory, label in sources:
+    for directory, stage_label in sources:
         for path in sorted((directory / 'tools').glob('*')):
             if path.is_file() and path.suffix in ('.py', '.mjs'):
-                name = label + '/' + path.name
+                name = stage_label + '/' + path.name
                 tool_texts.append(path.read_text())
                 tool_sources.append((path, name))
                 provenance['tool_files'][name] = sha(path)
 
-    secrets = collect_secrets([(root / 'private/source.env', env_secrets),
-                               (Path('/opt/vidra/env/production.env'), env_secrets),
-                               (baseline / 'private/owner.json', owner_password),
-                               (b2_key, json_values)])
     # The source is stopped for COPY independence. Exported result fields carry
     # aggregate counts/fingerprints, never account records or actor key material.
     for content in [p.read_text() for p in out.glob('*.json')] + tool_texts:

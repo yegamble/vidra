@@ -18,7 +18,8 @@ import urllib.request
 import release_acceptance as runtime
 from blank_server_smoke import require, sha
 from peertube_release_acceptance import (DEFAULT_B2_KEY, DEFAULT_BASELINE, DEFAULT_ROOT,
-                                         baseline_storage, frozen_cli_sha256, release_tag)
+                                         baseline_storage, check_stage_prepared_for,
+                                         frozen_cli_sha256, release_tag)
 from release_acceptance_b2 import TestBucket
 
 
@@ -40,23 +41,27 @@ def match_assets(source, destination, field):
 def execute(stage, action, label=None, baseline=DEFAULT_BASELINE, root=DEFAULT_ROOT, b2_key=DEFAULT_B2_KEY):
     os.umask(0o077)
     require(re.fullmatch(r'[a-z][a-z0-9-]*', label or action), 'invalid attempt label')
-    out = stage / (label or action)
-    out.mkdir(mode=0o700)
-    run = runtime.Recorder(out)
     source_media = root / 'source-media8'
     candidate = json.loads((baseline / 'candidate.json').read_text())
     tag = release_tag(candidate)
-    # Refused here for every action, not only reconcile: the drill as a whole is
-    # defined on the B2 host, and the operator should learn that before a stage
-    # directory full of half-finished attempts exists.
+    # Everything below is refused BEFORE the attempt directory exists. Attempt
+    # results are never replaced, so a guard that fired after the mkdir would
+    # burn an attempt label and leave an empty directory that reads as an
+    # abandoned run. Storage is refused for every action, not only reconcile:
+    # the drill as a whole is defined on the B2 host.
     bucket_spec = baseline_storage(baseline, tag)
     # The disposable clone is named by the prepare step that created it. Reading
     # the recorded name (rather than deriving one here) is what keeps a check run
     # on a later day, or against another release, from addressing a foreign
     # database.
-    container = json.loads((stage / 'preparation.json').read_text()).get('source_container')
+    prior = json.loads((stage / 'preparation.json').read_text())
+    container = prior.get('source_container')
     require(isinstance(container, str) and bool(container),
             f'{stage}/preparation.json records no source_container; re-prepare the stage with this harness')
+    check_stage_prepared_for(prior, baseline, tag)
+    out = stage / (label or action)
+    out.mkdir(mode=0o700)
+    run = runtime.Recorder(out)
     result = {'status': 'UNVERIFIED', 'action': action, 'started_at': time.time(), 'checks': {},
               'candidate_tag': tag, 'source_container': container, 'test_bucket': bucket_spec['bucket']}
     def source(query):

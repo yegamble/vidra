@@ -1,13 +1,15 @@
 """Guard archive handling, candidate derivation and the sole Compose adaptation of the COPY rehearsal."""
 import io
 import json
+import os
 from pathlib import Path
 import tarfile
 import tempfile
 import unittest
 
 import peertube_release_acceptance as p
-from peertube_release_checks import original_files, match_assets
+import peertube_release_export as export_tool
+from peertube_release_checks import execute, original_files, match_assets
 from peertube_release_export import collect_secrets, env_secrets, json_values, owner_password, reject_secrets
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -156,3 +158,119 @@ class ExportSecretSourceTests(unittest.TestCase):
             empty.write_text('# no credentials here\nPOSTGRES_DB=peertube\n')
             with self.assertRaises(AssertionError):
                 collect_secrets([(empty, env_secrets)])
+
+
+class StageRefusalTests(unittest.TestCase):
+    """Refusals must arrive before the run leaves anything behind.
+
+    Every attempt directory is permanent by design (results are never replaced),
+    so a guard that fires after `out.mkdir()` burns an attempt label and leaves
+    an empty directory that looks like an abandoned run; an export guard that
+    fires after `out/` is populated leaves UNSCRUBBED evidence on disk.
+    """
+
+    def setUp(self):
+        self.addCleanup(os.umask, os.umask(0o022))
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__('shutil').rmtree(self.tmp, ignore_errors=True))
+
+    def baseline(self, storage, tag='v0.6.5'):
+        directory = self.tmp / 'baseline'
+        directory.mkdir(exist_ok=True)
+        (directory / 'candidate.json').write_text(json.dumps(
+            {'tag': tag, 'assets': {f'vidra_{tag}_linux_amd64': {'sha256': 'a' * 64}}}))
+        (directory / 'storage.json').write_text(json.dumps(storage))
+        return directory
+
+    def stage(self, preparation):
+        directory = self.tmp / 'stage'
+        directory.mkdir(exist_ok=True)
+        (directory / 'preparation.json').write_text(json.dumps(preparation))
+        return directory
+
+    def prepared(self, **overrides):
+        return {'status': 'PASS', 'source_container': 'vidra-v065-migration-source-20260914',
+                'baseline': str(self.tmp / 'baseline'), 'candidate_tag': 'v0.6.5', **overrides}
+
+    def refuse(self, baseline, preparation):
+        stage = self.stage(preparation)
+        with self.assertRaises(ValueError) as caught:
+            execute(stage, 'reconcile', 'attempt-1', baseline, self.tmp / 'migration', self.tmp / 'key.json')
+        self.assertFalse((stage / 'attempt-1').exists(), 'refusal burned an attempt label')
+        return str(caught.exception)
+
+    def test_local_storage_baseline_is_refused_before_the_attempt_directory(self):
+        message = self.refuse(self.baseline({'backend': 'local'}), self.prepared())
+        self.assertIn('B2', message)
+
+    def test_stage_prepared_against_another_baseline_or_release_is_refused(self):
+        baseline = self.baseline({'backend': 'b2', 'spec': B2_SPEC})
+        self.assertIn('baseline', self.refuse(baseline, self.prepared(baseline='/root/vidra-v064-runtime')))
+        self.assertIn('v0.6.4', self.refuse(baseline, self.prepared(candidate_tag='v0.6.4')))
+        self.assertIn('source_container', self.refuse(baseline, self.prepared(source_container=None)))
+
+    def test_a_stage_that_records_nothing_extra_is_still_accepted(self):
+        # Legacy stages predate the recorded fields; only a DISAGREEING value is
+        # a refusal, never a silent one.
+        p.check_stage_prepared_for({'source_container': 'x'}, Path('/root/vidra-v065-runtime'), 'v0.6.5')
+        p.check_stage_prepared_for(self.prepared(baseline='/b', candidate_tag='v0.6.5'), Path('/b'), 'v0.6.5')
+        for bad in ({'baseline': '/other'}, {'candidate_tag': 'v0.6.4'}):
+            with self.assertRaises(ValueError):
+                p.check_stage_prepared_for(bad, Path('/b'), 'v0.6.5')
+
+
+class ExportTopologyTests(unittest.TestCase):
+    """A clean first-time PASS must be exportable.
+
+    The v0.6.4 drill needed three prepare attempts, and the export hard-coded
+    that shape: on a run that passes first time there is no `-continuation`
+    stage, and the operator cannot manufacture one (`--prepared-source` is gated
+    on the recorded read-only probe failure, and a same-day `docker run --name`
+    collides). The export would have died on a missing file after every hour of
+    host work was already spent.
+    """
+
+    def setUp(self):
+        self.addCleanup(os.umask, os.umask(0o022))
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__('shutil').rmtree(self.tmp, ignore_errors=True))
+        self.root = self.tmp / 'vidra-v065-migration-20260914'
+
+    def attempt(self, suffix=''):
+        directory = Path(str(self.root) + suffix)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / 'preparation.json').write_text(json.dumps({'status': 'PASS'}))
+        return directory
+
+    def test_sources_follow_the_attempts_that_exist(self):
+        first = self.attempt()
+        self.assertEqual(export_tool.preparation_sources(self.root), [(first, 'prepare-original')])
+        ready = self.attempt('-ready')
+        self.assertEqual(export_tool.preparation_sources(self.root),
+                         [(first, 'prepare-original'), (ready, 'prepare-ready')])
+        continuation = self.attempt('-continuation')
+        self.assertEqual(export_tool.preparation_sources(self.root),
+                         [(first, 'prepare-original'), (continuation, 'prepare-continuation'),
+                          (ready, 'prepare-ready')])
+
+    def test_an_export_with_no_prepare_record_at_all_is_refused(self):
+        self.root.mkdir(parents=True)
+        with self.assertRaises(AssertionError) as caught:
+            export_tool.preparation_sources(self.root)
+        self.assertIn('nothing to export', str(caught.exception))
+
+    def test_clean_first_time_prepare_reaches_the_secret_scan(self):
+        self.attempt()
+        (self.root / 'private').mkdir()
+        (self.root / 'private/source.env').write_text('POSTGRES_PASSWORD=generated-secret-value\n')
+        with self.assertRaises(AssertionError) as caught:
+            export_tool.export('reviewed', self.root, self.tmp / 'baseline', self.tmp / 'key.json')
+        # A missing `-continuation` used to raise FileNotFoundError here.
+        self.assertIn('named secret source', str(caught.exception))
+
+    def test_a_refused_export_leaves_no_output_directory(self):
+        self.attempt()
+        out = Path(str(self.root) + '-reviewed')
+        with self.assertRaises(AssertionError):
+            export_tool.export('reviewed', self.root, self.tmp / 'baseline', self.tmp / 'key.json')
+        self.assertFalse(out.exists(), 'refused export left an unscrubbed directory behind')

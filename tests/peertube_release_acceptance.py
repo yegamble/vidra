@@ -72,6 +72,22 @@ def source_container(tag, day=None):
     return f'vidra-{bucket_label(tag)}-migration-source-{day or time.strftime("%Y%m%d", time.gmtime())}'
 
 
+def check_stage_prepared_for(prior, baseline, tag):
+    """A stage carries the baseline and the release it was prepared against.
+
+    `--baseline` and `--root` are supplied again on every later step, so a typo
+    — or a second drill on the same host — could point a check at one release's
+    stage while reading another release's candidate. The stage's own record is
+    the second opinion. A field a legacy stage never wrote is accepted; a field
+    that DISAGREES is not.
+    """
+    recorded = prior.get('baseline')
+    require(recorded in (None, str(baseline)),
+            f'stage was prepared against baseline {recorded}, not {baseline}')
+    recorded = prior.get('candidate_tag')
+    require(recorded in (None, tag), f'stage was prepared for release {recorded}, not {tag}')
+
+
 def baseline_storage(baseline, tag):
     """The dedicated acceptance bucket the runtime milestone actually used.
 
@@ -235,4 +251,5 @@ if __name__ == '__main__':
                         help='runtime-milestone stage naming the release, its frozen candidate and its test bucket')
     parser.add_argument('--prepared-source', type=Path, help='original failed read-only probe stage; writes a separate continuation')
     args = parser.parse_args()
-    prepare(args.stage.resolve(), args.baseline.resolve(), args.prepared_source)
+    prepare(args.stage.resolve(), args.baseline.resolve(),
+            args.prepared_source.resolve() if args.prepared_source else None)

@@ -55,6 +55,10 @@ try {
   const { chromium, expect } = createRequire(join(baseline, 'browser/package.json'))('@playwright/test');
   const preparation = JSON.parse(readFileSync(join(stage, 'preparation.json')));
   assert.equal(preparation.status, 'PASS');
+  // The stage records the baseline it was prepared against; a legacy stage
+  // records none, but a DISAGREEING one means this driver is reading one
+  // release's credentials against another release's run.
+  if (preparation.baseline !== undefined) assert.equal(preparation.baseline, baseline);
   result.images_before = imageSnapshot();
   result.tool_sha256 = createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
   result.node = process.version;
@@ -212,8 +216,14 @@ print(sum(float(s.rsplit(' ',1)[1]) for s in lines if s.startswith('vidra_search
     // The disposable clone's name is a fact of the stage that created it. A
     // literal here would address another release's database — reporting a
     // stranger's state as this drill's disconnect proof — or, on the v0.6.5
-    // host, fail the inspect outright.
-    assert.match(preparation.source_container, /^vidra-v[0-9]+-migration-source-[0-9]{8}$/);
+    // host, fail the inspect outright. The name is checked against THIS
+    // release's label, so a v0.6.4 container cannot answer for a v0.6.5 drill.
+    const candidateTag = JSON.parse(readFileSync(join(baseline, 'candidate.json'))).tag;
+    assert.match(candidateTag, /^v[0-9]+\.[0-9]+\.[0-9]+$/);
+    assert.equal(typeof preparation.source_container, 'string',
+      'stage records no source_container; re-prepare it with this harness');
+    assert.match(preparation.source_container,
+      new RegExp(`^vidra-${candidateTag.replaceAll('.', '')}-migration-source-[0-9]{8}$`));
     result.source_container = preparation.source_container;
     result.source_running = host(['docker', 'inspect', preparation.source_container, '--format', '{{.State.Running}}']);
     assert.equal(result.source_running, 'false');
