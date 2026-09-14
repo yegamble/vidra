@@ -667,23 +667,28 @@ class CommittedRecordTests(unittest.TestCase):
         self.assertEqual(ledgers['vidra_search_migrations']['source_revision'],
                          record['components']['search']['commit'])
 
-    def test_v065_record_matches_the_release_evidence(self):
-        """releases/v0.6.5.json against its frozen evidence. The v0.6.5 manifest
-        is the raw release-preflight output (no hand-added platform digest, no
-        runtime ledger file), so the platform digests come from the committed
-        `imagetools inspect` transcript and the schema numbers from the
-        released images' own `migrate embedded-max` answers."""
-        evidence = ROOT / 'docs/evidence/release-v0.6.5-verification'
-        record = json.loads((RECORDS / 'v0.6.5.json').read_text())
+    def assert_record_matches_raw_preflight_evidence(self, tag):
+        """A record written from the RAW release-preflight manifest — no
+        hand-added platform digest and no runtime ledger file, which only
+        v0.6.4's evidence carries. The platform digests therefore come from the
+        committed `imagetools inspect` transcript and the schema numbers from
+        the released images' own `migrate embedded-max` answers. One body for
+        every such release: a per-release copy drifts, and the copy is what
+        stops asserting.
+
+        A transcript or an embedded-max file that does not name the release's
+        images raises KeyError here rather than vacuously passing."""
+        evidence = ROOT / f'docs/evidence/release-{tag}-verification'
+        record = json.loads((RECORDS / f'{tag}.json').read_text())
         manifest = json.loads((evidence / 'manifest.json').read_text())
         self.assertEqual(manifest['status'], 'PASS')
         self.assertEqual(record['release'], manifest['tag'])
         self.assertEqual(record['meta_commit'], manifest['repositories']['vidra']['revision'])
-        # "Name: <repo>:v0.6.5@sha256:… / Platform: linux/amd64" pairs, as
+        # "Name: <repo>:<tag>@sha256:… / Platform: linux/amd64" pairs, as
         # `docker buildx imagetools inspect` prints them.
         transcript = (evidence / 'platform-digests.txt').read_text()
         platform_digests = {}
-        for match in re.finditer(r'Name:\s+(ghcr\.io/yegamble/vidra-[a-z]+):v0\.6\.5@(sha256:[0-9a-f]{64})\s+MediaType:.*?\s+Platform:\s+(\S+)', transcript):
+        for match in re.finditer(rf'Name:\s+(ghcr\.io/yegamble/vidra-[a-z]+):{re.escape(tag)}@(sha256:[0-9a-f]{{64}})\s+MediaType:.*?\s+Platform:\s+(\S+)', transcript):
             platform_digests[(match.group(1), match.group(3))] = match.group(2)
         answers = dict(re.findall(r'vidra-(core|search)@sha256:[0-9a-f]{64} migrate embedded-max\n(?:WARNING:[^\n]*\n)?(\d+)\n',
                                   (evidence / 'embedded-max.txt').read_text()))
@@ -700,6 +705,17 @@ class CommittedRecordTests(unittest.TestCase):
                                  {'linux/amd64': platform_digests[(component['image']['repository'], 'linux/amd64')]})
         self.assertEqual(str(record['core_schema_version']), answers['core'])
         self.assertEqual(str(record['search_schema_version']), answers['search'])
+
+    def test_v065_record_matches_the_release_evidence(self):
+        self.assert_record_matches_raw_preflight_evidence('v0.6.5')
+
+    def test_v066_record_matches_the_release_evidence(self):
+        """v0.6.6 re-released vidra-core and vidra-user for the white-label
+        toggle. vidra-search was rebuilt at the SAME source revision as v0.6.5,
+        so its commit repeats while its digests do not — the record must carry
+        the v0.6.6 bytes, not v0.6.5's. No migration shipped either side, so the
+        released images still answer 146 and 18."""
+        self.assert_record_matches_raw_preflight_evidence('v0.6.6')
 
     def test_every_committed_record_validates(self):
         with tempfile.TemporaryDirectory() as tmp:
