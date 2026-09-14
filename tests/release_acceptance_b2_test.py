@@ -12,7 +12,10 @@ from release_acceptance_complete_b2 import complete
 
 SPEC = {'bucket': 'vidra-acceptance-v064-20260911-media', 'bucket_id': 'a' * 24,
         'region': 'us-east-005', 'endpoint': 's3.us-east-005.backblazeb2.com'}
-# The real v0.6.5 acceptance bucket, so these tests fail here rather than on the host.
+# The name and ID SHAPE of the real v0.6.5 acceptance bucket, so the naming rule
+# is exercised against the literal the host will present. CI never reaches
+# Backblaze, so this is not evidence that the bucket exists — it is the shape a
+# correctly named drill bucket has, checked where a mistake is cheap.
 V065_SPEC = dict(SPEC, bucket='vidra-acceptance-v065-20260914-media',
                  bucket_id='9555421b394994e8a7070215')
 
@@ -63,23 +66,23 @@ class B2AcceptanceTests(unittest.TestCase):
             validate_runtime_config({}, SPEC, credentials)
 
     def test_shared_historical_or_secret_bearing_spec_refused(self):
-        validate_spec(SPEC)
+        validate_spec(SPEC, 'v0.6.4')
         for change in ({'bucket': 'sizetube'}, {'bucket': 'sizetube-backup'},
                        {'bucket': 'vidra-acceptance-20260905-a36'},
                        {'bucket': 'vidra-acceptance-v064-20260911-sizetube'},
                        {'secret_key': 'not-public'}, {'endpoint': 's3.attacker.example'},
                        {'bucket_id': '../other'}):
             with self.subTest(change=change), self.assertRaises(ValueError):
-                validate_spec(dict(SPEC, **change))
+                validate_spec(dict(SPEC, **change), 'v0.6.4')
 
     def test_provider_scope_must_be_exact_not_account_wide_or_multiple(self):
-        validate_scope(SPEC, authorization())
+        validate_scope(SPEC, authorization(), 'v0.6.4')
         for buckets in (None, [], [{'id': 'b' * 24, 'name': SPEC['bucket']}],
                         [{'id': SPEC['bucket_id'], 'name': 'sizetube'}],
                         authorization()['allowed']['buckets'] * 2):
             with self.subTest(buckets=buckets), self.assertRaises(ValueError):
                 auth = authorization(); auth['allowed']['buckets'] = buckets
-                validate_scope(SPEC, auth)
+                validate_scope(SPEC, auth, 'v0.6.4')
 
     def test_management_permissions_prefix_or_wrong_region_refused(self):
         for field, value in [('capabilities', sorted(CAPABILITIES | {'writeKeys'})),
@@ -87,16 +90,16 @@ class B2AcceptanceTests(unittest.TestCase):
                              ('namePrefix', 'testing/')]:
             with self.subTest(field=field), self.assertRaises(ValueError):
                 auth = authorization(); auth['allowed'][field] = value
-                validate_scope(SPEC, auth)
+                validate_scope(SPEC, auth, 'v0.6.4')
         auth = authorization(); auth['s3ApiUrl'] = 'https://s3.us-west-004.backblazeb2.com'
         with self.assertRaises(ValueError):
-            validate_scope(SPEC, auth)
+            validate_scope(SPEC, auth, 'v0.6.4')
 
     def test_account_key_never_reaches_a_bucket_request(self):
         auth = authorization(); auth['allowed']['buckets'] = None
         with patch.object(TestBucket, 'request', return_value={'apiInfo': {'storageApi': auth}}) as network:
-            with self.assertRaises(ValueError):
-                TestBucket(SPEC, {'access_key': 'id', 'secret_key': 'secret'})
+            with self.assertRaisesRegex(ValueError, 'restricted by Backblaze'):
+                TestBucket(SPEC, {'access_key': 'id', 'secret_key': 'secret'}, 'v0.6.4')
             self.assertEqual(network.call_count, 1)
             self.assertTrue(network.call_args.args[0].endswith('b2_authorize_account'))
 
@@ -133,22 +136,35 @@ class B2AcceptanceTests(unittest.TestCase):
 class BucketNamingTests(unittest.TestCase):
     def test_bucket_must_be_named_for_the_candidate_release(self):
         validate_spec(V065_SPEC, 'v0.6.5')
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, 'requires a new dedicated v0.6.5'):
             validate_spec(SPEC, 'v0.6.5')  # a v064 bucket cannot serve a v0.6.5 run
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, 'requires a new dedicated v0.6.4'):
             validate_spec(V065_SPEC, 'v0.6.4')
-        validate_spec(SPEC)  # the default keeps the v0.6.4 records valid
+        validate_spec(SPEC, 'v0.6.4')  # the v0.6.4 records stay valid, named explicitly
 
-    def test_scope_check_honours_the_callers_tag_not_the_default(self):
-        # validate_scope re-validates the spec. If it does that against its own
-        # default instead of the tag the caller established, a correctly named
-        # v0.6.5 bucket is refused the moment its scope is checked.
+    def test_the_release_tag_is_required_of_every_caller(self):
+        # The v0.6.4 DEFAULT was the mechanism behind the scope bug: a caller
+        # that forgets the tag validates the next release against the last one,
+        # and finds out on the acceptance host, mid-drill, at its first
+        # b2_authorize_account. There is no default left to forget — omitting
+        # the tag is a TypeError at the call site, in CI, before any network.
+        with self.assertRaises(TypeError):
+            validate_spec(V065_SPEC)
+        with self.assertRaises(TypeError):
+            validate_scope(V065_SPEC, authorization(V065_SPEC))
+        with self.assertRaises(TypeError):
+            TestBucket(V065_SPEC, {'access_key': 'id', 'secret_key': 'secret'})
+
+    def test_scope_check_honours_the_callers_tag(self):
+        # validate_scope re-validates the spec. If it did that against anything
+        # but the tag the caller established, a correctly named v0.6.5 bucket
+        # would be refused the moment its scope is checked.
         validate_scope(V065_SPEC, authorization(V065_SPEC), 'v0.6.5')
-        with self.assertRaises(ValueError):
-            validate_scope(V065_SPEC, authorization(V065_SPEC))  # default tag rejects it
-        with self.assertRaises(ValueError):
-            validate_scope(SPEC, authorization(SPEC), 'v0.6.5')  # and v064 cannot serve v0.6.5
-        validate_scope(SPEC, authorization(SPEC))  # the default keeps the v0.6.4 records valid
+        with self.assertRaisesRegex(ValueError, 'requires a new dedicated v0.6.4'):
+            validate_scope(V065_SPEC, authorization(V065_SPEC), 'v0.6.4')
+        with self.assertRaisesRegex(ValueError, 'requires a new dedicated v0.6.5'):
+            validate_scope(SPEC, authorization(SPEC), 'v0.6.5')
+        validate_scope(SPEC, authorization(SPEC), 'v0.6.4')
 
     def test_bucket_authorizes_a_v065_candidate_end_to_end(self):
         # The regression this closes would have surfaced on the acceptance host:
