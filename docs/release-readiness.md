@@ -53,12 +53,33 @@ step). Nothing is deployed on it; beta stays on v0.6.4.
   local storage; 15:38:05 → 15:42:54 UTC. **SRC-01 PASS** for v0.6.5; the
   derived [disposition](evidence/release-v0.6.5-verification/native-runtime/disposition.json)
   reads **3 PASS / 41 UNVERIFIED / 15 BLOCKED** (SRC-01, INS-03, REC-03).
-- **Everything else: NOT RUN on the v0.6.5 digests.** Every other workflow row
-  keeps the v0.6.4 disposition's UNVERIFIED / BLOCKED state for this candidate.
-- **Next executable, in order:** (1) the migration, B2 and recovery drills on
-  the digests (their v0.6.4 harnesses need the same candidate parametrisation
-  meta#200 gave the runtime harness); (2) the owner inputs B2/B3/B4 and the
-  remaining OPS-01 clauses.
+- **B2 runtime milestone: PASS on the published v0.6.5 images**
+  ([record](runtime-acceptance-b2-v0.6.5.md), evidence
+  `docs/evidence/release-v0.6.5-verification/b2-runtime/`): on the host
+  rebuilt blank at 04:39 UTC, the same harness ran with a **dedicated private
+  Backblaze B2 bucket as canonical storage** — verified empty (0 versions)
+  before deployment, reached through a single-bucket key with no name prefix.
+  The loaded api container was read twice and both times carried that exact
+  bucket/endpoint/region with a credential matching the scoped key; the browser
+  upload, a real CMAF transcode (job `done`, 0 retries), advancing Chromium
+  playback (0 → 3.756 s, 17 → 130 frames, audio 10224 → 57515 B, seek to 7 s)
+  and the vidra-search chain all passed, and an **independent signed S3 GET
+  straight from B2** returned the original at 1311662 B `video/mp4` with
+  SHA-256 `47e46fdf…923a`, equal to the fixture. Final inventory **29 versions
+  = 24 uploads + 5 hide markers**; ledgers 146\|f / 18\|f; 06:35:13 → 06:39:45
+  UTC. The runner exited zero and did the readback itself — no completion step.
+  The derived [disposition](evidence/release-v0.6.5-verification/b2-runtime/disposition.json)
+  moves **STO-01/02/03 and INT-09 from BLOCKED (B3) to UNVERIFIED** — provider
+  access is established, not exercised to completion — and promotes **nothing**
+  to PASS, reading **3 PASS / 45 UNVERIFIED / 11 BLOCKED**. No presign/CDN, no
+  split-worker or OPS claim, no WebKit, no migration or recovery claim.
+- **Everything else: NOT RUN on the v0.6.5 digests.** The migration and
+  recovery drills, the browser matrix and every other workflow row keep the
+  v0.6.4 disposition's UNVERIFIED / BLOCKED state for this candidate.
+- **Next executable, in order:** (1) the migration and recovery drills on the
+  digests (their v0.6.4 harnesses need the same candidate parametrisation
+  meta#200 gave the runtime harness and #202–#205 gave the drill tools);
+  (2) the owner inputs B2/B3/B4 and the remaining OPS-01 clauses.
 
 ## REC-03 / A38 on published v0.6.4 — 2026-09-13
 
