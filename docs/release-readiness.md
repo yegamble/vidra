@@ -4,6 +4,41 @@ Audit date: **2026-09-05**. Target: a fresh-server installation, migration of th
 
 This is the authoritative campaign record for this audit, superseding earlier readiness labels **only for the revisions and evidence below**. Historical plans remain requirement sources. The original audit used one agent with no product edits, commits, pushes, merges, deployment, or branch cleanup. The implementation session below authorizes scoped commits/pushes and a draft PR, but prohibits merge, release publication and production deployment. No production database, media bucket, credentials, or running stack was used.
 
+## v0.6.6 candidate — 2026-09-14
+
+**v0.6.6: recorded — not drilled, not scanned, not deployed.** The owner cut it
+on 2026-09-14 (`deploy/release.sh --yes v0.6.6`, exit 0; session-reported) and
+this session recorded it. Nothing is deployed on it; beta stays on v0.6.4.
+
+- **Contents:** `core#242` + `user#221` — the admin-only white-label toggle
+  `branding_hide_software_name`. **No new migration:** schema stays **146 / 18**,
+  asked of the released images themselves (`migrate embedded-max` by linux/amd64
+  digest) rather than read off the source tree.
+- **Frozen and recorded:** `releases/v0.6.6.json` (meta#209) — core `3219290e` /
+  index `sha256:b2b7717d…32fd` / amd64 `sha256:332bdc20…e64a`; user `1aec0d23` /
+  `4d86a264…882e` / `de2f8b17…2bde`; search `b7a7f55b` / `804530bf…27c6` /
+  `f021b0b1…fbd6`; meta tag `22b27d5b`. `deploy/release-preflight.py --tag
+  v0.6.6` → PASS
+  ([manifest](evidence/release-v0.6.6-verification/manifest.json)); a unit test
+  cross-checks the record against that frozen evidence, keyed by the digests the
+  record itself claims.
+- **vidra-search was retagged at an UNCHANGED commit** (`b7a7f55b`, the revision
+  v0.6.5 shipped) but its **image was rebuilt**, so its digests differ from
+  v0.6.5's. Only the digests tell the two search images apart, which is why the
+  record and its cross-check are pinned to v0.6.6's.
+- **Security facet: NOT RUN for v0.6.6.** The image vulnerability scan on record
+  ([v0.6.5 scan](security-scan-v0.6.5-2026-09-13.md)) was measured on **v0.6.5's**
+  artifacts. All three v0.6.6 images were rebuilt, so their base-image and
+  dependency state is unmeasured.
+- **Every drill: NOT RE-RUN on the v0.6.6 digests.** The B2 runtime milestone,
+  the packaged migration rehearsal, the recovery drill (REC-02 at the approved
+  RPO 24h / RTO 4h) and REC-03 were all measured against **v0.6.5's** published
+  images and keep that basis. No disposition row moves for v0.6.6; the standing
+  count remains the recovery drill's **4 PASS / 45 UNVERIFIED / 10 BLOCKED**.
+- **Beta: untouched** — still on v0.6.4.
+- **Next executable:** an image vulnerability scan of the v0.6.6 artifacts, and
+  whichever drills the owner wants re-based off v0.6.6 instead of v0.6.5.
+
 ## v0.6.5 candidate — 2026-09-13
 
 **v0.6.5: NO-GO for now — released, frozen and scanned, not yet run.** The
