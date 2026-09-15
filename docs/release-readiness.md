@@ -91,6 +91,34 @@ the deploy call.
   REC-01/02/03 PASS by delta, and holds STO-01/02/03 and INT-09 at UNVERIFIED
   (only a B2 media subset ever passed, never the full procedure). Counts: **5
   PASS / 45 UNVERIFIED / 9 BLOCKED**, same as the v0.6.5 offsite baseline.
+- **Backend-backed e2e suite: 19 GROUP-1 rows PASS on v0.6.6, 2 known frontend
+  issues found.** Wave A ran the committed `vidra-user/e2e-backed` Playwright
+  suite (the REAL backend-backed project, 76 specs — not the mocked `e2e/`)
+  against a backend on the **published v0.6.6 images** (core
+  `sha256:332bdc20…e64a` / index `…07e32fd`, search `sha256:f021b0b1…fbd6`; host
+  159.65; ledgers 146|f / 18|f; frontend source `1aec0d23`)
+  ([record](runtime-acceptance-e2e-v0.6.6.md), evidence
+  `docs/evidence/release-v0.6.6-verification/e2e-runtime/`,
+  [disposition](evidence/release-v0.6.6-verification/e2e-runtime/disposition.json)).
+  CPU-load flakes at 4 workers were separated by unloaded individual re-runs
+  (flake-then-pass counted as pass). **19 workflow rows move UNVERIFIED → PASS**
+  — PUB-01..04, PLAY-01..03 (Chromium slice), CRT-01, SOC-01/02, MSG-01..03,
+  ADM-01..04, INT-11, and QLT-02 (8/8 axe-clean, with a host-timeout budget
+  caveat: the two axe sweeps need 300 s vs the spec's 90 s on the 8-vCPU host —
+  a wall-clock artifact, not an a11y/product defect). New counts: **24 PASS /
+  26 UNVERIFIED / 9 BLOCKED**. **Two real frontend issues found (both minor,
+  backend proven healthy, spec never in CI, fix would land in a future release
+  since v0.6.6 images are frozen):**
+  - **SRC-03 search history-delete refresh timing** — event → 202 and
+    `/me/search-history` returns the entry in < 5 s, but the settings page reads
+    history ~5 s before the batched `search.submitted` event flushes (5 s
+    `FLUSH_INTERVAL_MS`) and does not refetch, so a just-searched query does not
+    appear; autocomplete/suggestions PASS. Kept **UNVERIFIED** (SRC-02/03).
+  - **AUTH-02 registration-approval in-place label** — approve/reject API 200,
+    account created/refused and login gated correctly, but the UI drops the row
+    from the Pending filter on approve/reject whereas the spec expects the row to
+    show "approved" in place (UI-vs-spec mismatch, pending a UX ruling). Kept
+    **UNVERIFIED**. CRT-02 stays UNVERIFIED (no backed driver).
 - **Beta: untouched** — still on v0.6.4.
 - **Next executable:** the highest-risk iOS-specific behaviours passed on a real
   iPhone (above), so the remaining browser work is the **broader matrix** — other

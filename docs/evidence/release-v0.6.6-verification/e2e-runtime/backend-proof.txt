@@ -1,0 +1,21 @@
+===== v0.6.6 BACKEND PROOF (host 159.65.249.255) =====
+captured=2026-09-15T06:10:54Z
+--- core api running image digest ---
+core_api_image=sha256:332bdc2005db5a967d62f285b95b33b87f0246fccf28c7d54710e52d4c8ee64a
+core_repo_digests=["vidra-core-api@sha256:332bdc2005db5a967d62f285b95b33b87f0246fccf28c7d54710e52d4c8ee64a","ghcr.io/yegamble/vidra-core@sha256:332bdc2005db5a967d62f285b95b33b87f0246fccf28c7d54710e52d4c8ee64a"]
+--- search api running image digest ---
+search_api_image=sha256:f021b0b1db340b7277cb625f946b23f31daec5a66ff7b68ba62cd7be6dc9fbd6
+search_repo_digests=["vidra-search@sha256:f021b0b1db340b7277cb625f946b23f31daec5a66ff7b68ba62cd7be6dc9fbd6","ghcr.io/yegamble/vidra-search@sha256:f021b0b1db340b7277cb625f946b23f31daec5a66ff7b68ba62cd7be6dc9fbd6"]
+--- postgres/redis images ---
+core_pg=postgres:18-alpine
+core_redis=redis:8-alpine
+--- core migration ledger ---
+version=146 dirty=false
+--- search migration ledger ---
+version=18 dirty=false table=vidra_search_migrations
+--- core healthz ---
+{"status":"ok"}
+
+--- search healthz ---
+{"status":"ok"}
+

@@ -1,0 +1,535 @@
+{
+  "config": {
+    "argv": [
+      "/usr/local/bin/node",
+      "/root/vidra-user/node_modules/.bin/playwright",
+      "test",
+      "--project=backend-backed",
+      "--workers=1",
+      "e2e-backed/studio.spec.ts"
+    ],
+    "configFile": "/root/vidra-user/playwright.config.ts",
+    "rootDir": "/root/vidra-user/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": true,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/root/vidra-user/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "backed-setup",
+        "name": "backed-setup",
+        "testDir": "/root/vidra-user/e2e-backed",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.setup\\.ts/"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "backend-backed",
+        "name": "backend-backed",
+        "testDir": "/root/vidra-user/e2e-backed",
+        "testIgnore": [
+          "/.*\\.setup\\.ts/"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        {
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/root/reports/indiv-studio.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run start -- -p 3000",
+      "url": "http://localhost:3000",
+      "env": {
+        "INTERNAL_API_BASE_URL": "http://localhost:8080",
+        "PUBLIC_BASE_URL": ""
+      },
+      "reuseExistingServer": false,
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "../e2e-backed/admin.setup.ts",
+      "file": "../e2e-backed/admin.setup.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "ensure a deterministic admin exists",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backed-setup",
+              "projectName": "backed-setup",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 375,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:43:08.099Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d1b667611c786c59191e-fdb025ffe23e3e8d3ea6",
+          "file": "../e2e-backed/admin.setup.ts",
+          "line": 12,
+          "column": 6
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/studio.spec.ts",
+      "file": "../e2e-backed/studio.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a creator can create a channel and publish a video (chunked upload)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10680,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:43:09.268Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-creat-92390-ish-a-video-chunked-upload--backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-b338c9900a2af5568116",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 23,
+          "column": 5
+        },
+        {
+          "title": "a creator can edit and delete their video",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8046,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:43:20.423Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-edit-and-delete-their-video-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-5e317cdefca10043a0d4",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 62,
+          "column": 5
+        },
+        {
+          "title": "a creator can add chapters that persist and show on the watch page",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12588,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:43:28.773Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-add-c-89c27--and-show-on-the-watch-page-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-2ebd92c7c36beb13d66e",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 129,
+          "column": 5
+        },
+        {
+          "title": "a creator can replace their video's thumbnail",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14523,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:43:41.705Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-replace-their-video-s-thumbnail-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-44eadeb5cc816ccab07a",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 203,
+          "column": 5
+        },
+        {
+          "title": "a creator can publish a video by importing from a URL (async job)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11587,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:43:56.391Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-publi-202ce-rting-from-a-URL-async-job--backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-2412f1405678d605e8db",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 267,
+          "column": 5
+        },
+        {
+          "title": "a rejected upload is reported as failed, not published",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9246,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:44:08.291Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-rejected-upload-is-reported-as-failed-not-published-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-a23b78a900b918b6bc53",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 314,
+          "column": 5
+        },
+        {
+          "title": "a non-http import URL shows an inline url field error",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4166,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:44:17.820Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-non-http-import-URL-shows-an-inline-url-field-error-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-e08bc5a732757bc530e7",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 364,
+          "column": 5
+        },
+        {
+          "title": "a creator can create, rekey, and delete a live stream",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4756,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:44:22.172Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-create-rekey-and-delete-a-live-stream-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-3769d5fa535290f228d6",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 402,
+          "column": 5
+        },
+        {
+          "title": "a live stream shows LIVE after the ingest hook flips it",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4540,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:44:27.129Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-live-stream-shows-f61d6-er-the-ingest-hook-flips-it-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-9ef2c36e862f308e8b03",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 463,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-15T05:43:05.765Z",
+    "duration": 86215.23700000001,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

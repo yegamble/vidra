@@ -1,0 +1,505 @@
+{
+  "config": {
+    "argv": [
+      "/usr/local/bin/node",
+      "/root/vidra-user/node_modules/.bin/playwright",
+      "test",
+      "--project=backend-backed",
+      "--workers=1",
+      "e2e-backed/registration-approval.spec.ts"
+    ],
+    "configFile": "/root/vidra-user/playwright.config.ts",
+    "rootDir": "/root/vidra-user/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": true,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/root/vidra-user/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "backed-setup",
+        "name": "backed-setup",
+        "testDir": "/root/vidra-user/e2e-backed",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.setup\\.ts/"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "backend-backed",
+        "name": "backend-backed",
+        "testDir": "/root/vidra-user/e2e-backed",
+        "testIgnore": [
+          "/.*\\.setup\\.ts/"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        {
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/root/reports/regapproval.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run start -- -p 3000",
+      "url": "http://localhost:3000",
+      "env": {
+        "INTERNAL_API_BASE_URL": "http://localhost:8080",
+        "PUBLIC_BASE_URL": ""
+      },
+      "reuseExistingServer": false,
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "../e2e-backed/admin.setup.ts",
+      "file": "../e2e-backed/admin.setup.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "ensure a deterministic admin exists",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backed-setup",
+              "projectName": "backed-setup",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 419,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T06:00:51.943Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d1b667611c786c59191e-fdb025ffe23e3e8d3ea6",
+          "file": "../e2e-backed/admin.setup.ts",
+          "line": 12,
+          "column": 6
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/registration-approval.spec.ts",
+      "file": "../e2e-backed/registration-approval.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a signup files a pending request; approving it creates the account",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 14669,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('approved', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('approved', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('approved', { exact: true })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('approved', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('approved', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('approved', { exact: true })\u001b[22m\n\n    at /root/vidra-user/e2e-backed/registration-approval.spec.ts:80:61",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                      "column": 61,
+                      "line": 80
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 78 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m`Approve ${username}`\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 79 |\u001b[39m   \u001b[36mawait\u001b[39m approved\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 80 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m\"approved\"\u001b[39m\u001b[33m,\u001b[39m { exact\u001b[33m:\u001b[39m \u001b[36mtrue\u001b[39m }))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                             \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 81 |\u001b[39m\n \u001b[90m 82 |\u001b[39m   \u001b[90m// Persisted across a fresh refetch (filter switch re-reads from the backend).\u001b[39m\n \u001b[90m 83 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"All\"\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                        "column": 61,
+                        "line": 80
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('approved', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('approved', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('approved', { exact: true })\u001b[22m\n\n\n  78 |   await page.getByRole(\"button\", { name: `Approve ${username}` }).click();\n  79 |   await approved;\n> 80 |   await expect(page.getByText(\"approved\", { exact: true })).toBeVisible();\n     |                                                             ^\n  81 |\n  82 |   // Persisted across a fresh refetch (filter switch re-reads from the backend).\n  83 |   await page.getByRole(\"button\", { name: \"All\" }).click();\n    at /root/vidra-user/e2e-backed/registration-approval.spec.ts:80:61"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T06:00:53.452Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/registration-approval-a-si-67445-ving-it-creates-the-account-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/registration-approval-a-si-67445-ving-it-creates-the-account-backend-backed/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                    "column": 61,
+                    "line": 80
+                  }
+                },
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 14616,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('approved', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('approved', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('approved', { exact: true })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('approved', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('approved', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('approved', { exact: true })\u001b[22m\n\n    at /root/vidra-user/e2e-backed/registration-approval.spec.ts:80:61",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                      "column": 61,
+                      "line": 80
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 78 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m`Approve ${username}`\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 79 |\u001b[39m   \u001b[36mawait\u001b[39m approved\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 80 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m\"approved\"\u001b[39m\u001b[33m,\u001b[39m { exact\u001b[33m:\u001b[39m \u001b[36mtrue\u001b[39m }))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                             \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 81 |\u001b[39m\n \u001b[90m 82 |\u001b[39m   \u001b[90m// Persisted across a fresh refetch (filter switch re-reads from the backend).\u001b[39m\n \u001b[90m 83 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"All\"\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                        "column": 61,
+                        "line": 80
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('approved', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('approved', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('approved', { exact: true })\u001b[22m\n\n\n  78 |   await page.getByRole(\"button\", { name: `Approve ${username}` }).click();\n  79 |   await approved;\n> 80 |   await expect(page.getByText(\"approved\", { exact: true })).toBeVisible();\n     |                                                             ^\n  81 |\n  82 |   // Persisted across a fresh refetch (filter switch re-reads from the backend).\n  83 |   await page.getByRole(\"button\", { name: \"All\" }).click();\n    at /root/vidra-user/e2e-backed/registration-approval.spec.ts:80:61"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 1,
+                  "startTime": "2026-09-15T06:01:09.585Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/registration-approval-a-si-67445-ving-it-creates-the-account-backend-backed-retry1/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/registration-approval-a-si-67445-ving-it-creates-the-account-backend-backed-retry1/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                    "column": 61,
+                    "line": 80
+                  }
+                },
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 14377,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('approved', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('approved', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('approved', { exact: true })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('approved', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('approved', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('approved', { exact: true })\u001b[22m\n\n    at /root/vidra-user/e2e-backed/registration-approval.spec.ts:80:61",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                      "column": 61,
+                      "line": 80
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 78 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m`Approve ${username}`\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 79 |\u001b[39m   \u001b[36mawait\u001b[39m approved\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 80 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m\"approved\"\u001b[39m\u001b[33m,\u001b[39m { exact\u001b[33m:\u001b[39m \u001b[36mtrue\u001b[39m }))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                             \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 81 |\u001b[39m\n \u001b[90m 82 |\u001b[39m   \u001b[90m// Persisted across a fresh refetch (filter switch re-reads from the backend).\u001b[39m\n \u001b[90m 83 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"All\"\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                        "column": 61,
+                        "line": 80
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('approved', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('approved', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('approved', { exact: true })\u001b[22m\n\n\n  78 |   await page.getByRole(\"button\", { name: `Approve ${username}` }).click();\n  79 |   await approved;\n> 80 |   await expect(page.getByText(\"approved\", { exact: true })).toBeVisible();\n     |                                                             ^\n  81 |\n  82 |   // Persisted across a fresh refetch (filter switch re-reads from the backend).\n  83 |   await page.getByRole(\"button\", { name: \"All\" }).click();\n    at /root/vidra-user/e2e-backed/registration-approval.spec.ts:80:61"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 2,
+                  "startTime": "2026-09-15T06:01:25.511Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/registration-approval-a-si-67445-ving-it-creates-the-account-backend-backed-retry2/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/registration-approval-a-si-67445-ving-it-creates-the-account-backend-backed-retry2/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                    "column": 61,
+                    "line": 80
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "2064448062305c732414-0845c0a899297fa0a94c",
+          "file": "../e2e-backed/registration-approval.spec.ts",
+          "line": 34,
+          "column": 5
+        },
+        {
+          "title": "rejecting a request records the note and creates no account",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 13177,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('rejected', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('rejected', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('rejected', { exact: true })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('rejected', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('rejected', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('rejected', { exact: true })\u001b[22m\n\n    at /root/vidra-user/e2e-backed/registration-approval.spec.ts:126:61",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                      "column": 61,
+                      "line": 126
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 124 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m`Reject ${username}`\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 125 |\u001b[39m   \u001b[36mawait\u001b[39m rejected\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 126 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m\"rejected\"\u001b[39m\u001b[33m,\u001b[39m { exact\u001b[33m:\u001b[39m \u001b[36mtrue\u001b[39m }))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                             \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 127 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m`spam signup ${id}`\u001b[39m))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m 128 |\u001b[39m\n \u001b[90m 129 |\u001b[39m   \u001b[90m// DB effect: status flipped to rejected AND no account was created.\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                        "column": 61,
+                        "line": 126
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('rejected', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('rejected', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('rejected', { exact: true })\u001b[22m\n\n\n  124 |   await page.getByRole(\"button\", { name: `Reject ${username}` }).click();\n  125 |   await rejected;\n> 126 |   await expect(page.getByText(\"rejected\", { exact: true })).toBeVisible();\n      |                                                             ^\n  127 |   await expect(page.getByText(`spam signup ${id}`)).toBeVisible();\n  128 |\n  129 |   // DB effect: status flipped to rejected AND no account was created.\n    at /root/vidra-user/e2e-backed/registration-approval.spec.ts:126:61"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T06:01:41.218Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/registration-approval-reje-d22d0-note-and-creates-no-account-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/registration-approval-reje-d22d0-note-and-creates-no-account-backend-backed/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                    "column": 61,
+                    "line": 126
+                  }
+                },
+                {
+                  "workerIndex": 5,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 13331,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('rejected', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('rejected', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('rejected', { exact: true })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('rejected', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('rejected', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('rejected', { exact: true })\u001b[22m\n\n    at /root/vidra-user/e2e-backed/registration-approval.spec.ts:126:61",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                      "column": 61,
+                      "line": 126
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 124 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m`Reject ${username}`\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 125 |\u001b[39m   \u001b[36mawait\u001b[39m rejected\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 126 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m\"rejected\"\u001b[39m\u001b[33m,\u001b[39m { exact\u001b[33m:\u001b[39m \u001b[36mtrue\u001b[39m }))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                             \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 127 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m`spam signup ${id}`\u001b[39m))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m 128 |\u001b[39m\n \u001b[90m 129 |\u001b[39m   \u001b[90m// DB effect: status flipped to rejected AND no account was created.\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                        "column": 61,
+                        "line": 126
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('rejected', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('rejected', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('rejected', { exact: true })\u001b[22m\n\n\n  124 |   await page.getByRole(\"button\", { name: `Reject ${username}` }).click();\n  125 |   await rejected;\n> 126 |   await expect(page.getByText(\"rejected\", { exact: true })).toBeVisible();\n      |                                                             ^\n  127 |   await expect(page.getByText(`spam signup ${id}`)).toBeVisible();\n  128 |\n  129 |   // DB effect: status flipped to rejected AND no account was created.\n    at /root/vidra-user/e2e-backed/registration-approval.spec.ts:126:61"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 1,
+                  "startTime": "2026-09-15T06:01:55.765Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/registration-approval-reje-d22d0-note-and-creates-no-account-backend-backed-retry1/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/registration-approval-reje-d22d0-note-and-creates-no-account-backend-backed-retry1/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                    "column": 61,
+                    "line": 126
+                  }
+                },
+                {
+                  "workerIndex": 6,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 13442,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('rejected', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('rejected', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('rejected', { exact: true })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('rejected', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('rejected', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('rejected', { exact: true })\u001b[22m\n\n    at /root/vidra-user/e2e-backed/registration-approval.spec.ts:126:61",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                      "column": 61,
+                      "line": 126
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 124 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m`Reject ${username}`\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 125 |\u001b[39m   \u001b[36mawait\u001b[39m rejected\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 126 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m\"rejected\"\u001b[39m\u001b[33m,\u001b[39m { exact\u001b[33m:\u001b[39m \u001b[36mtrue\u001b[39m }))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                             \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 127 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m`spam signup ${id}`\u001b[39m))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m 128 |\u001b[39m\n \u001b[90m 129 |\u001b[39m   \u001b[90m// DB effect: status flipped to rejected AND no account was created.\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                        "column": 61,
+                        "line": 126
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('rejected', { exact: true })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('rejected', { exact: true }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('rejected', { exact: true })\u001b[22m\n\n\n  124 |   await page.getByRole(\"button\", { name: `Reject ${username}` }).click();\n  125 |   await rejected;\n> 126 |   await expect(page.getByText(\"rejected\", { exact: true })).toBeVisible();\n      |                                                             ^\n  127 |   await expect(page.getByText(`spam signup ${id}`)).toBeVisible();\n  128 |\n  129 |   // DB effect: status flipped to rejected AND no account was created.\n    at /root/vidra-user/e2e-backed/registration-approval.spec.ts:126:61"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 2,
+                  "startTime": "2026-09-15T06:02:10.485Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/registration-approval-reje-d22d0-note-and-creates-no-account-backend-backed-retry2/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/registration-approval-reje-d22d0-note-and-creates-no-account-backend-backed-retry2/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/registration-approval.spec.ts",
+                    "column": 61,
+                    "line": 126
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "2064448062305c732414-2b50ec09cd93b04512f0",
+          "file": "../e2e-backed/registration-approval.spec.ts",
+          "line": 95,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-15T06:00:49.176Z",
+    "duration": 95296.52500000001,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}

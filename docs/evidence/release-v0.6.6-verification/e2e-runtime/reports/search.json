@@ -1,0 +1,428 @@
+{
+  "config": {
+    "argv": [
+      "/usr/local/bin/node",
+      "/root/vidra-user/node_modules/.bin/playwright",
+      "test",
+      "--project=backend-backed",
+      "--workers=1",
+      "e2e-backed/search-discovery.spec.ts"
+    ],
+    "configFile": "/root/vidra-user/playwright.config.ts",
+    "rootDir": "/root/vidra-user/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": true,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/root/vidra-user/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "backed-setup",
+        "name": "backed-setup",
+        "testDir": "/root/vidra-user/e2e-backed",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.setup\\.ts/"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "backend-backed",
+        "name": "backend-backed",
+        "testDir": "/root/vidra-user/e2e-backed",
+        "testIgnore": [
+          "/.*\\.setup\\.ts/"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        {
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/root/reports/search.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run start -- -p 3000",
+      "url": "http://localhost:3000",
+      "env": {
+        "INTERNAL_API_BASE_URL": "http://localhost:8080",
+        "PUBLIC_BASE_URL": ""
+      },
+      "reuseExistingServer": false,
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "../e2e-backed/admin.setup.ts",
+      "file": "../e2e-backed/admin.setup.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "ensure a deterministic admin exists",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backed-setup",
+              "projectName": "backed-setup",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 381,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:52:57.253Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d1b667611c786c59191e-fdb025ffe23e3e8d3ea6",
+          "file": "../e2e-backed/admin.setup.ts",
+          "line": 12,
+          "column": 6
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/search-discovery.spec.ts",
+      "file": "../e2e-backed/search-discovery.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "the header autocomplete suggests an indexed public video title",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 15567,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('listbox', { name: 'Search suggestions' })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('listbox', { name: 'Search suggestions' }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('listbox', { name: 'Search suggestions' })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('listbox', { name: 'Search suggestions' })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('listbox', { name: 'Search suggestions' }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('listbox', { name: 'Search suggestions' })\u001b[22m\n\n    at /root/vidra-user/e2e-backed/search-discovery.spec.ts:53:25",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/search-discovery.spec.ts",
+                      "column": 25,
+                      "line": 53
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 51 |\u001b[39m   \u001b[36mawait\u001b[39m box\u001b[33m.\u001b[39mfill(prefix)\u001b[33m;\u001b[39m\n \u001b[90m 52 |\u001b[39m   \u001b[36mconst\u001b[39m listbox \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"listbox\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"Search suggestions\"\u001b[39m })\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 53 |\u001b[39m   \u001b[36mawait\u001b[39m expect(listbox)\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                         \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 54 |\u001b[39m   \u001b[36mawait\u001b[39m expect(listbox\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"option\"\u001b[39m)\u001b[33m.\u001b[39mfilter({ hasText\u001b[33m:\u001b[39m seeded\u001b[33m.\u001b[39mvideoTitle }))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m 55 |\u001b[39m })\u001b[33m;\u001b[39m\n \u001b[90m 56 |\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/search-discovery.spec.ts",
+                        "column": 25,
+                        "line": 53
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('listbox', { name: 'Search suggestions' })\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('listbox', { name: 'Search suggestions' }) with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('listbox', { name: 'Search suggestions' })\u001b[22m\n\n\n  51 |   await box.fill(prefix);\n  52 |   const listbox = page.getByRole(\"listbox\", { name: \"Search suggestions\" });\n> 53 |   await expect(listbox).toBeVisible();\n     |                         ^\n  54 |   await expect(listbox.getByRole(\"option\").filter({ hasText: seeded.videoTitle })).toBeVisible();\n  55 | });\n  56 |\n    at /root/vidra-user/e2e-backed/search-discovery.spec.ts:53:25"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:52:58.483Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/search-discovery-the-heade-11f7f--indexed-public-video-title-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/search-discovery-the-heade-11f7f--indexed-public-video-title-backend-backed/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/search-discovery.spec.ts",
+                    "column": 25,
+                    "line": 53
+                  }
+                },
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3107,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 1,
+                  "startTime": "2026-09-15T05:53:15.180Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/search-discovery-the-heade-11f7f--indexed-public-video-title-backend-backed-retry1/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "flaky"
+            }
+          ],
+          "id": "6551b6d109bf51b0db7b-a1b97c62a468ed9a0bce",
+          "file": "../e2e-backed/search-discovery.spec.ts",
+          "line": 29,
+          "column": 5
+        },
+        {
+          "title": "a signed-in user can delete a search-history entry",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 23033,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('history-1789451600347', { exact: true })\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('history-1789451600347', { exact: true }) with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByText('history-1789451600347', { exact: true })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('history-1789451600347', { exact: true })\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('history-1789451600347', { exact: true }) with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByText('history-1789451600347', { exact: true })\u001b[22m\n\n    at /root/vidra-user/e2e-backed/search-discovery.spec.ts:74:23",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/search-discovery.spec.ts",
+                      "column": 23,
+                      "line": 74
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m   \u001b[36mconst\u001b[39m entry \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mgetByText(query\u001b[33m,\u001b[39m { exact\u001b[33m:\u001b[39m \u001b[36mtrue\u001b[39m })\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 74 |\u001b[39m   \u001b[36mawait\u001b[39m expect(entry)\u001b[33m.\u001b[39mtoBeVisible({ timeout\u001b[33m:\u001b[39m \u001b[35m20\u001b[39m_000 })\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                       \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 75 |\u001b[39m\n \u001b[90m 76 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[36mnew\u001b[39m \u001b[33mRegExp\u001b[39m(\u001b[32m`Remove .*${query}.* from your search history`\u001b[39m) })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 77 |\u001b[39m   \u001b[36mawait\u001b[39m expect(entry)\u001b[33m.\u001b[39mtoBeHidden()\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/search-discovery.spec.ts",
+                        "column": 23,
+                        "line": 74
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('history-1789451600347', { exact: true })\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('history-1789451600347', { exact: true }) with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByText('history-1789451600347', { exact: true })\u001b[22m\n\n\n  72 |\n  73 |   const entry = page.getByText(query, { exact: true });\n> 74 |   await expect(entry).toBeVisible({ timeout: 20_000 });\n     |                       ^\n  75 |\n  76 |   await page.getByRole(\"button\", { name: new RegExp(`Remove .*${query}.* from your search history`) }).click();\n  77 |   await expect(entry).toBeHidden();\n    at /root/vidra-user/e2e-backed/search-discovery.spec.ts:74:23"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:53:18.553Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/search-discovery-a-signed--4c605-lete-a-search-history-entry-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/search-discovery-a-signed--4c605-lete-a-search-history-entry-backend-backed/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/search-discovery.spec.ts",
+                    "column": 23,
+                    "line": 74
+                  }
+                },
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 23214,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('history-1789451624819', { exact: true })\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('history-1789451624819', { exact: true }) with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByText('history-1789451624819', { exact: true })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('history-1789451624819', { exact: true })\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('history-1789451624819', { exact: true }) with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByText('history-1789451624819', { exact: true })\u001b[22m\n\n    at /root/vidra-user/e2e-backed/search-discovery.spec.ts:74:23",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/search-discovery.spec.ts",
+                      "column": 23,
+                      "line": 74
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m   \u001b[36mconst\u001b[39m entry \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mgetByText(query\u001b[33m,\u001b[39m { exact\u001b[33m:\u001b[39m \u001b[36mtrue\u001b[39m })\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 74 |\u001b[39m   \u001b[36mawait\u001b[39m expect(entry)\u001b[33m.\u001b[39mtoBeVisible({ timeout\u001b[33m:\u001b[39m \u001b[35m20\u001b[39m_000 })\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                       \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 75 |\u001b[39m\n \u001b[90m 76 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[36mnew\u001b[39m \u001b[33mRegExp\u001b[39m(\u001b[32m`Remove .*${query}.* from your search history`\u001b[39m) })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 77 |\u001b[39m   \u001b[36mawait\u001b[39m expect(entry)\u001b[33m.\u001b[39mtoBeHidden()\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/search-discovery.spec.ts",
+                        "column": 23,
+                        "line": 74
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('history-1789451624819', { exact: true })\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('history-1789451624819', { exact: true }) with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByText('history-1789451624819', { exact: true })\u001b[22m\n\n\n  72 |\n  73 |   const entry = page.getByText(query, { exact: true });\n> 74 |   await expect(entry).toBeVisible({ timeout: 20_000 });\n     |                       ^\n  75 |\n  76 |   await page.getByRole(\"button\", { name: new RegExp(`Remove .*${query}.* from your search history`) }).click();\n  77 |   await expect(entry).toBeHidden();\n    at /root/vidra-user/e2e-backed/search-discovery.spec.ts:74:23"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 1,
+                  "startTime": "2026-09-15T05:53:42.679Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/search-discovery-a-signed--4c605-lete-a-search-history-entry-backend-backed-retry1/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/search-discovery-a-signed--4c605-lete-a-search-history-entry-backend-backed-retry1/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/search-discovery.spec.ts",
+                    "column": 23,
+                    "line": 74
+                  }
+                },
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 23470,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('history-1789451649275', { exact: true })\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('history-1789451649275', { exact: true }) with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByText('history-1789451649275', { exact: true })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('history-1789451649275', { exact: true })\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('history-1789451649275', { exact: true }) with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByText('history-1789451649275', { exact: true })\u001b[22m\n\n    at /root/vidra-user/e2e-backed/search-discovery.spec.ts:74:23",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/search-discovery.spec.ts",
+                      "column": 23,
+                      "line": 74
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m   \u001b[36mconst\u001b[39m entry \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mgetByText(query\u001b[33m,\u001b[39m { exact\u001b[33m:\u001b[39m \u001b[36mtrue\u001b[39m })\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 74 |\u001b[39m   \u001b[36mawait\u001b[39m expect(entry)\u001b[33m.\u001b[39mtoBeVisible({ timeout\u001b[33m:\u001b[39m \u001b[35m20\u001b[39m_000 })\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                       \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 75 |\u001b[39m\n \u001b[90m 76 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[36mnew\u001b[39m \u001b[33mRegExp\u001b[39m(\u001b[32m`Remove .*${query}.* from your search history`\u001b[39m) })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 77 |\u001b[39m   \u001b[36mawait\u001b[39m expect(entry)\u001b[33m.\u001b[39mtoBeHidden()\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/search-discovery.spec.ts",
+                        "column": 23,
+                        "line": 74
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('history-1789451649275', { exact: true })\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('history-1789451649275', { exact: true }) with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByText('history-1789451649275', { exact: true })\u001b[22m\n\n\n  72 |\n  73 |   const entry = page.getByText(query, { exact: true });\n> 74 |   await expect(entry).toBeVisible({ timeout: 20_000 });\n     |                       ^\n  75 |\n  76 |   await page.getByRole(\"button\", { name: new RegExp(`Remove .*${query}.* from your search history`) }).click();\n  77 |   await expect(entry).toBeHidden();\n    at /root/vidra-user/e2e-backed/search-discovery.spec.ts:74:23"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 2,
+                  "startTime": "2026-09-15T05:54:07.172Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/search-discovery-a-signed--4c605-lete-a-search-history-entry-backend-backed-retry2/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/search-discovery-a-signed--4c605-lete-a-search-history-entry-backend-backed-retry2/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/search-discovery.spec.ts",
+                    "column": 23,
+                    "line": 74
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "6551b6d109bf51b0db7b-40a99cb0e0b4ce581950",
+          "file": "../e2e-backed/search-discovery.spec.ts",
+          "line": 57,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-15T05:52:54.832Z",
+    "duration": 96348.035,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 1
+  }
+}
