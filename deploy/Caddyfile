@@ -119,6 +119,7 @@ example.com {
 	# TWO MORE are routed by Accept rather than by path — see 3a below:
 	#   /videos/{uuid}          AP Video object id
 	#   /comments/{uuid}        AP Note object id
+	#   /remote-comments/{uuid} AP authored-remote-comment Note object id
 	#
 	# NOTE on /.well-known: only the two paths the api actually serves are
 	# listed, NOT the whole namespace — /.well-known/acme-challenge/* must stay
@@ -221,11 +222,11 @@ example.com {
 	# written, so this must sit ABOVE the frontend fallthrough (section 4) and
 	# it does not interfere with section 3 (/api/*) which shares no path.
 	@ap_object {
-		path /videos/* /comments/*
+		path /videos/* /comments/* /remote-comments/*
 		header Accept *application/activity+json*
 	}
 	@ap_object_ld {
-		path /videos/* /comments/*
+		path /videos/* /comments/* /remote-comments/*
 		header Accept *application/ld+json*
 	}
 	handle @ap_object {
