@@ -1,0 +1,464 @@
+{
+ "account-export.spec.ts": {
+  "row": "AUTH",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "admin-audit.spec.ts": {
+  "row": "ADM-04",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "admin-comments.spec.ts": {
+  "row": "ADM",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "admin-system.spec.ts": {
+  "row": "ADM-03/04",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "admin-users.spec.ts": {
+  "row": "ADM",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "admin-videos.spec.ts": {
+  "row": "ADM",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "atproto.spec.ts": {
+  "row": "(skip:INT-06)",
+  "first_pass": "SKIP (0/0/0/1)",
+  "rerun": "-",
+  "verdict": "SKIP"
+ },
+ "auth-persistence.spec.ts": {
+  "row": "AUTH",
+  "first_pass": "PASS (2/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "avatar.spec.ts": {
+  "row": "(other)",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "blocked-videos.spec.ts": {
+  "row": "ADM",
+  "first_pass": "PASS (3/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "blocks.spec.ts": {
+  "row": "ADM",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "captions-watch.spec.ts": {
+  "row": "(other)",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "captions.spec.ts": {
+  "row": "(other)",
+  "first_pass": "FAIL(load)",
+  "rerun": "PASS(indiv-unloaded)",
+  "verdict": "FLAKE->PASS"
+ },
+ "channel-banner.spec.ts": {
+  "row": "(other)",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "channel-management.spec.ts": {
+  "row": "PUB",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "channel-sync.spec.ts": {
+  "row": "(skip:own-lane)",
+  "first_pass": "SKIP (0/0/0/1)",
+  "rerun": "-",
+  "verdict": "SKIP"
+ },
+ "comment-replies.spec.ts": {
+  "row": "SOC-02",
+  "first_pass": "PASS (2/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "comments.spec.ts": {
+  "row": "SOC-02",
+  "first_pass": "PASS (2/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "continue-watching.spec.ts": {
+  "row": "SOC-01",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "deactivate.spec.ts": {
+  "row": "AUTH",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "delete-account.spec.ts": {
+  "row": "AUTH",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "donations.spec.ts": {
+  "row": "INT-11",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "e2ee.spec.ts": {
+  "row": "MSG-03",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "email-verify.spec.ts": {
+  "row": "AUTH",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "embed.spec.ts": {
+  "row": "PLAY",
+  "first_pass": "PASS (2/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "error-messaging.spec.ts": {
+  "row": "(other)",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "featured-banner.spec.ts": {
+  "row": "(other)",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "history.spec.ts": {
+  "row": "SOC-01",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "hls-playback.spec.ts": {
+  "row": "PLAY",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "instance-mutes.spec.ts": {
+  "row": "ADM",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "instance-settings.spec.ts": {
+  "row": "ADM-03/04",
+  "first_pass": "PASS (2/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "ipfs-privacy-fence.spec.ts": {
+  "row": "(skip:@ipfs)",
+  "first_pass": "NOT-RUN (-)",
+  "rerun": "-",
+  "verdict": "NOT-RUN"
+ },
+ "ipfs.spec.ts": {
+  "row": "(skip:@ipfs)",
+  "first_pass": "NOT-RUN (-)",
+  "rerun": "-",
+  "verdict": "NOT-RUN"
+ },
+ "live-replay.spec.ts": {
+  "row": "(other)",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "message-compose.spec.ts": {
+  "row": "MSG-01/02",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "messaging.spec.ts": {
+  "row": "MSG-01/02",
+  "first_pass": "PASS (3/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "mfa.spec.ts": {
+  "row": "(other AUTH/TOTP)",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "moderation-instances.spec.ts": {
+  "row": "ADM",
+  "first_pass": "PASS (2/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "moderation.spec.ts": {
+  "row": "ADM",
+  "first_pass": "PASS (2/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "mutes.spec.ts": {
+  "row": "ADM",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "notification-prefs.spec.ts": {
+  "row": "SOC-02",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "notifications.spec.ts": {
+  "row": "SOC-02",
+  "first_pass": "FAIL(load)",
+  "rerun": "PASS(serial-rerun)",
+  "verdict": "FLAKE->PASS"
+ },
+ "oauth-identities.spec.ts": {
+  "row": "(other AUTH/OIDC)",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "owner-claim.spec.ts": {
+  "row": "AUTH",
+  "first_pass": "PASS (4/0/0/1)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "password-reset-confirm.spec.ts": {
+  "row": "AUTH",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "password-reset.spec.ts": {
+  "row": "AUTH",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "peertube-import.spec.ts": {
+  "row": "(skip:INT-02)",
+  "first_pass": "SKIP (0/0/0/1)",
+  "rerun": "-",
+  "verdict": "SKIP"
+ },
+ "player-settings.spec.ts": {
+  "row": "PLAY",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "playlist-thumbnail.spec.ts": {
+  "row": "(other)",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "playlists.spec.ts": {
+  "row": "SOC-01",
+  "first_pass": "PASS (5/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "profile-edit.spec.ts": {
+  "row": "AUTH",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "quarantine.spec.ts": {
+  "row": "ADM",
+  "first_pass": "SKIP(main)",
+  "rerun": "PASS(isolated QUARANTINE_NEW_UPLOADS)",
+  "verdict": "PASS"
+ },
+ "rating.spec.ts": {
+  "row": "SOC-02",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "registration-approval.spec.ts": {
+  "row": "AUTH",
+  "first_pass": "SKIP(main)",
+  "rerun": "both tests FAIL 3/3 (UI label mismatch)",
+  "verdict": "FAIL (UI drops row from Pending vs expected 'approved' text; approve/reject API 200)"
+ },
+ "report.spec.ts": {
+  "row": "SOC-02",
+  "first_pass": "PASS (4/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "required-controls.spec.ts": {
+  "row": "QLT-02",
+  "first_pass": "FAIL(2 axe tests timeout@90s)",
+  "rerun": "PASS 8/8 @300s timeout; axe clean",
+  "verdict": "PASS* (host 90s budget too small; NOT an a11y/product defect)"
+ },
+ "save.spec.ts": {
+  "row": "SOC-01",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "schedule.spec.ts": {
+  "row": "PUB",
+  "first_pass": "FAIL(load)",
+  "rerun": "PASS(indiv-unloaded)",
+  "verdict": "FLAKE->PASS"
+ },
+ "search-discovery.spec.ts": {
+  "row": "SRC",
+  "first_pass": "SKIP(main)",
+  "rerun": "autocomplete FLAKY->PASS; history-delete FAIL 3/3",
+  "verdict": "FAIL (history-delete: real)"
+ },
+ "sensitive-content.spec.ts": {
+  "row": "ADM-03/04",
+  "first_pass": "PASS (2/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "session.spec.ts": {
+  "row": "AUTH",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "studio.spec.ts": {
+  "row": "CRT",
+  "first_pass": "FAIL(load)",
+  "rerun": "PASS 9/9 (indiv-unloaded)",
+  "verdict": "FLAKE->PASS"
+ },
+ "subscribe.spec.ts": {
+  "row": "SOC-01",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "subscriptions.spec.ts": {
+  "row": "SOC-01",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "upload-batch.spec.ts": {
+  "row": "PUB",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "upload-cancel.spec.ts": {
+  "row": "PUB",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "upload-draft-recovery.spec.ts": {
+  "row": "PUB",
+  "first_pass": "FAIL(load)",
+  "rerun": "PASS(indiv-unloaded)",
+  "verdict": "FLAKE->PASS"
+ },
+ "upload-thumbnail.spec.ts": {
+  "row": "CRT",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "video-description.spec.ts": {
+  "row": "CRT",
+  "first_pass": "FAIL(load)",
+  "rerun": "PASS(indiv-unloaded)",
+  "verdict": "FLAKE->PASS"
+ },
+ "video-import-url.spec.ts": {
+  "row": "(other PUB/import)",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "video-password.spec.ts": {
+  "row": "PUB",
+  "first_pass": "FAIL(load)",
+  "rerun": "PASS(serial-rerun)",
+  "verdict": "FLAKE->PASS"
+ },
+ "video-tags.spec.ts": {
+  "row": "CRT",
+  "first_pass": "FAIL(load)",
+  "rerun": "PASS(serial-rerun)",
+  "verdict": "FLAKE->PASS"
+ },
+ "video-taxonomy.spec.ts": {
+  "row": "CRT",
+  "first_pass": "FAIL(load)",
+  "rerun": "PASS(serial-rerun)",
+  "verdict": "FLAKE->PASS"
+ },
+ "watched-word-matches.spec.ts": {
+  "row": "ADM",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "watched-words.spec.ts": {
+  "row": "ADM",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ },
+ "whisper-captions.spec.ts": {
+  "row": "(skip:captions)",
+  "first_pass": "SKIP (0/0/0/1)",
+  "rerun": "-",
+  "verdict": "SKIP"
+ },
+ "white-label.spec.ts": {
+  "row": "(other/branding)",
+  "first_pass": "PASS (1/0/0/0)",
+  "rerun": "-",
+  "verdict": "PASS"
+ }
+}

@@ -1,0 +1,1718 @@
+{
+  "config": {
+    "argv": [
+      "/usr/local/bin/node",
+      "/root/vidra-user/node_modules/.bin/playwright",
+      "test",
+      "--project=backend-backed",
+      "--workers=1",
+      "e2e-backed/captions.spec.ts",
+      "e2e-backed/notifications.spec.ts",
+      "e2e-backed/required-controls.spec.ts",
+      "e2e-backed/schedule.spec.ts",
+      "e2e-backed/studio.spec.ts",
+      "e2e-backed/upload-draft-recovery.spec.ts",
+      "e2e-backed/video-description.spec.ts",
+      "e2e-backed/video-password.spec.ts",
+      "e2e-backed/video-tags.spec.ts",
+      "e2e-backed/video-taxonomy.spec.ts"
+    ],
+    "configFile": "/root/vidra-user/playwright.config.ts",
+    "rootDir": "/root/vidra-user/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/root/vidra-user/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "backed-setup",
+        "name": "backed-setup",
+        "testDir": "/root/vidra-user/e2e-backed",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.setup\\.ts/"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "backend-backed",
+        "name": "backend-backed",
+        "testDir": "/root/vidra-user/e2e-backed",
+        "testIgnore": [
+          "/.*\\.setup\\.ts/"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        {
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/root/reports/main-rerun1.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run start -- -p 3000",
+      "url": "http://localhost:3000",
+      "env": {
+        "INTERNAL_API_BASE_URL": "http://localhost:8080",
+        "PUBLIC_BASE_URL": ""
+      },
+      "reuseExistingServer": false,
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "../e2e-backed/admin.setup.ts",
+      "file": "../e2e-backed/admin.setup.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "ensure a deterministic admin exists",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backed-setup",
+              "projectName": "backed-setup",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 412,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:19:47.214Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d1b667611c786c59191e-fdb025ffe23e3e8d3ea6",
+          "file": "../e2e-backed/admin.setup.ts",
+          "line": 12,
+          "column": 6
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/captions.spec.ts",
+      "file": "../e2e-backed/captions.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a creator uploads and removes a caption in the studio",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 10421,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Published!')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Published!') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Published!')\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Published!')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Published!') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Published!')\u001b[22m\n\n    at /root/vidra-user/e2e-backed/captions.spec.ts:41:46",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/captions.spec.ts",
+                      "column": 46,
+                      "line": 41
+                    },
+                    "snippet": "  39 |   });\n  40 |   await publishViaStudioUI(page);\n> 41 |   await expect(page.getByText(\"Published!\")).toBeVisible();\n     |                                              ^\n  42 |\n  43 |   // Open the video's edit surface (the captions manager lives there).\n  44 |   await page.getByRole(\"button\", { name: \"Refresh\" }).click();"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/captions.spec.ts",
+                        "column": 46,
+                        "line": 41
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Published!')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Published!') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Published!')\u001b[22m\n\n\n  39 |   });\n  40 |   await publishViaStudioUI(page);\n> 41 |   await expect(page.getByText(\"Published!\")).toBeVisible();\n     |                                              ^\n  42 |\n  43 |   // Open the video's edit surface (the captions manager lives there).\n  44 |   await page.getByRole(\"button\", { name: \"Refresh\" }).click();\n    at /root/vidra-user/e2e-backed/captions.spec.ts:41:46"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:19:48.565Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/captions-a-creator-uploads-b1a54-ves-a-caption-in-the-studio-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/captions-a-creator-uploads-b1a54-ves-a-caption-in-the-studio-backend-backed/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/captions.spec.ts",
+                    "column": 46,
+                    "line": 41
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "a29363d2ea53566227bb-9ee510656221d5463b26",
+          "file": "../e2e-backed/captions.spec.ts",
+          "line": 19,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/notifications.spec.ts",
+      "file": "../e2e-backed/notifications.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a follow notifies the channel owner, who can read and clear it",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5935,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:20:00.295Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/notifications-a-follow-not-d7257-r-who-can-read-and-clear-it-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "be7d0958780d1a4666e5-4fef93379af3270d9cba",
+          "file": "../e2e-backed/notifications.spec.ts",
+          "line": 19,
+          "column": 5
+        },
+        {
+          "title": "a direct message notifies the recipient, who can open the thread",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3779,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:20:06.710Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/notifications-a-direct-mes-06e24-ent-who-can-open-the-thread-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "be7d0958780d1a4666e5-325893fbd0e1e3462f26",
+          "file": "../e2e-backed/notifications.spec.ts",
+          "line": 77,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/required-controls.spec.ts",
+      "file": "../e2e-backed/required-controls.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "required screens neither pan nor clip their controls at 390px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "slow",
+                  "location": {
+                    "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                    "line": 203,
+                    "column": 10
+                  }
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 55904,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:20:10.795Z",
+                  "annotations": [
+                    {
+                      "type": "slow",
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "line": 203,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-required-2a2be-lip-their-controls-at-390px-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-bbb5df99dad803ccfb8b",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 202,
+          "column": 7
+        },
+        {
+          "title": "required screens neither pan nor clip their controls at 640px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "slow",
+                  "location": {
+                    "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                    "line": 203,
+                    "column": 10
+                  }
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 55162,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:21:08.453Z",
+                  "annotations": [
+                    {
+                      "type": "slow",
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "line": 203,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-required-77ac1-lip-their-controls-at-640px-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-bc1b5db63aad878b09e6",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 202,
+          "column": 7
+        },
+        {
+          "title": "required screens carry no serious accessibility violation in light",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "slow",
+                  "location": {
+                    "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                    "line": 230,
+                    "column": 10
+                  }
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "timedOut",
+                  "duration": 93510,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 90000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 90000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 90000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "column": 19,
+                        "line": 152
+                      },
+                      "message": "Error: page.evaluate: Test timeout of 90000ms exceeded.\n Please check out https://github.com/dequelabs/axe-core-npm/blob/develop/packages/playwright/error-handling.md\n\n  150 |\n  151 | async function severeAxe(page: Page) {\n> 152 |   const results = await new AxeBuilder({ page })\n      |                   ^\n  153 |     .withTags([\"wcag2a\", \"wcag2aa\", \"wcag21a\", \"wcag21aa\"])\n  154 |     .analyze();\n  155 |   return results.violations\n    at AxeBuilder.analyze (/root/vidra-user/node_modules/@axe-core/playwright/dist/index.js:253:13)\n    at severeAxe (/root/vidra-user/e2e-backed/required-controls.spec.ts:152:19)\n    at /root/vidra-user/e2e-backed/required-controls.spec.ts:243:23"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:22:03.997Z",
+                  "annotations": [
+                    {
+                      "type": "slow",
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "line": 230,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/required-controls-required-86d2d-sibility-violation-in-light-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-required-86d2d-sibility-violation-in-light-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-7d0854449535daffde16",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 229,
+          "column": 7
+        },
+        {
+          "title": "required screens carry no serious accessibility violation in dark",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "slow",
+                  "location": {
+                    "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                    "line": 230,
+                    "column": 10
+                  }
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "timedOut",
+                  "duration": 93398,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 90000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 90000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 90000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "column": 19,
+                        "line": 152
+                      },
+                      "message": "Error: page.evaluate: Test timeout of 90000ms exceeded.\n Please check out https://github.com/dequelabs/axe-core-npm/blob/develop/packages/playwright/error-handling.md\n\n  150 |\n  151 | async function severeAxe(page: Page) {\n> 152 |   const results = await new AxeBuilder({ page })\n      |                   ^\n  153 |     .withTags([\"wcag2a\", \"wcag2aa\", \"wcag21a\", \"wcag21aa\"])\n  154 |     .analyze();\n  155 |   return results.violations\n    at AxeBuilder.analyze (/root/vidra-user/node_modules/@axe-core/playwright/dist/index.js:253:13)\n    at severeAxe (/root/vidra-user/e2e-backed/required-controls.spec.ts:152:19)\n    at /root/vidra-user/e2e-backed/required-controls.spec.ts:243:23"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:23:42.232Z",
+                  "annotations": [
+                    {
+                      "type": "slow",
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "line": 230,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/required-controls-required-acf61-ssibility-violation-in-dark-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-required-acf61-ssibility-violation-in-dark-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-302f9f54902c9ac4fe42",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 229,
+          "column": 7
+        },
+        {
+          "title": "the account menu opens by keyboard, closes on Escape and hands focus back",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1938,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:25:21.155Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-the-acco-5022e-Escape-and-hands-focus-back-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-bef9774d118a468ee8a2",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 249,
+          "column": 5
+        },
+        {
+          "title": "a watch page whose media cannot be fetched says so and offers a retry",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "slow",
+                  "location": {
+                    "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                    "line": 277,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2191,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:25:24.613Z",
+                  "annotations": [
+                    {
+                      "type": "slow",
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "line": 277,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-a-watch--832d7--says-so-and-offers-a-retry-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-1d32d9052af12a785c89",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 271,
+          "column": 5
+        },
+        {
+          "title": "player speed and volume survive a reload and a second tab",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "slow",
+                  "location": {
+                    "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                    "line": 312,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2524,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:25:26.899Z",
+                  "annotations": [
+                    {
+                      "type": "slow",
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "line": 312,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-player-s-235fc-e-a-reload-and-a-second-tab-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-79ecae107d0f05004298",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 311,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/schedule.spec.ts",
+      "file": "../e2e-backed/schedule.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a scheduled publish persists publish_at and parks the video as scheduled",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 9422,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('is scheduled — it will publish automatically')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('is scheduled — it will publish automatically') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('is scheduled — it will publish automatically')\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('is scheduled — it will publish automatically')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('is scheduled — it will publish automatically') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('is scheduled — it will publish automatically')\u001b[22m\n\n    at /root/vidra-user/e2e-backed/schedule.spec.ts:66:5",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/schedule.spec.ts",
+                      "column": 5,
+                      "line": 66
+                    },
+                    "snippet": "  64 |   await expect(\n  65 |     page.getByText(\"is scheduled — it will publish automatically\", { exact: false }),\n> 66 |   ).toBeVisible();\n     |     ^\n  67 |   await expect(page.getByText(\"Published!\")).toHaveCount(0);\n  68 |\n  69 |   // Persisted: the owner's API read shows state=scheduled with the exact"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/schedule.spec.ts",
+                        "column": 5,
+                        "line": 66
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('is scheduled — it will publish automatically')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('is scheduled — it will publish automatically') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('is scheduled — it will publish automatically')\u001b[22m\n\n\n  64 |   await expect(\n  65 |     page.getByText(\"is scheduled — it will publish automatically\", { exact: false }),\n> 66 |   ).toBeVisible();\n     |     ^\n  67 |   await expect(page.getByText(\"Published!\")).toHaveCount(0);\n  68 |\n  69 |   // Persisted: the owner's API read shows state=scheduled with the exact\n    at /root/vidra-user/e2e-backed/schedule.spec.ts:66:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:25:29.586Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/schedule-a-scheduled-publi-42362-arks-the-video-as-scheduled-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/schedule-a-scheduled-publi-42362-arks-the-video-as-scheduled-backend-backed/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/schedule.spec.ts",
+                    "column": 5,
+                    "line": 66
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "0c763654641d7f9e8f11-adb64caf33977df201c0",
+          "file": "../e2e-backed/schedule.spec.ts",
+          "line": 19,
+          "column": 5
+        },
+        {
+          "title": "moving a schedule from the edit surface persists the new publish_at",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 5,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 9203,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('is scheduled — it will publish automatically')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('is scheduled — it will publish automatically') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('is scheduled — it will publish automatically')\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('is scheduled — it will publish automatically')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('is scheduled — it will publish automatically') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('is scheduled — it will publish automatically')\u001b[22m\n\n    at /root/vidra-user/e2e-backed/schedule.spec.ts:135:5",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/schedule.spec.ts",
+                      "column": 5,
+                      "line": 135
+                    },
+                    "snippet": "  133 |   await expect(\n  134 |     page.getByText(\"is scheduled — it will publish automatically\", { exact: false }),\n> 135 |   ).toBeVisible();\n      |     ^\n  136 |\n  137 |   // Move the schedule from the edit surface.\n  138 |   await page.getByRole(\"button\", { name: \"Refresh\" }).click();"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/schedule.spec.ts",
+                        "column": 5,
+                        "line": 135
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('is scheduled — it will publish automatically')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('is scheduled — it will publish automatically') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('is scheduled — it will publish automatically')\u001b[22m\n\n\n  133 |   await expect(\n  134 |     page.getByText(\"is scheduled — it will publish automatically\", { exact: false }),\n> 135 |   ).toBeVisible();\n      |     ^\n  136 |\n  137 |   // Move the schedule from the edit surface.\n  138 |   await page.getByRole(\"button\", { name: \"Refresh\" }).click();\n    at /root/vidra-user/e2e-backed/schedule.spec.ts:135:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:25:39.868Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/schedule-moving-a-schedule-55aa4-persists-the-new-publish-at-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/schedule-moving-a-schedule-55aa4-persists-the-new-publish-at-backend-backed/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/schedule.spec.ts",
+                    "column": 5,
+                    "line": 135
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "0c763654641d7f9e8f11-4009abb31bb09b4da3f1",
+          "file": "../e2e-backed/schedule.spec.ts",
+          "line": 94,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/studio.spec.ts",
+      "file": "../e2e-backed/studio.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a creator can create a channel and publish a video (chunked upload)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 6,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8072,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:25:50.362Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-creat-92390-ish-a-video-chunked-upload--backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-b338c9900a2af5568116",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 23,
+          "column": 5
+        },
+        {
+          "title": "a creator can edit and delete their video",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 6,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 10225,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Published!')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Published!') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Published!')\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Published!')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Published!') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Published!')\u001b[22m\n\n    at /root/vidra-user/e2e-backed/studio.spec.ts:86:46",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/studio.spec.ts",
+                      "column": 46,
+                      "line": 86
+                    },
+                    "snippet": "  84 |   });\n  85 |   await publishViaStudioUI(page);\n> 86 |   await expect(page.getByText(\"Published!\")).toBeVisible();\n     |                                              ^\n  87 |\n  88 |   // Refresh \"Your videos\" to pick up the just-published video, then edit its title\n  89 |   // (privacy stays public so the public read-back can see it). Scope to the list row"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/studio.spec.ts",
+                        "column": 46,
+                        "line": 86
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Published!')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Published!') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Published!')\u001b[22m\n\n\n  84 |   });\n  85 |   await publishViaStudioUI(page);\n> 86 |   await expect(page.getByText(\"Published!\")).toBeVisible();\n     |                                              ^\n  87 |\n  88 |   // Refresh \"Your videos\" to pick up the just-published video, then edit its title\n  89 |   // (privacy stays public so the public read-back can see it). Scope to the list row\n    at /root/vidra-user/e2e-backed/studio.spec.ts:86:46"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:25:58.965Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-edit-and-delete-their-video-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-edit-and-delete-their-video-backend-backed/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/studio.spec.ts",
+                    "column": 46,
+                    "line": 86
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-5e317cdefca10043a0d4",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 62,
+          "column": 5
+        },
+        {
+          "title": "a creator can add chapters that persist and show on the watch page",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 7,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9567,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:26:10.220Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-add-c-89c27--and-show-on-the-watch-page-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-2ebd92c7c36beb13d66e",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 129,
+          "column": 5
+        },
+        {
+          "title": "a creator can replace their video's thumbnail",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 7,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 8966,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Published!')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Published!') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Published!')\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Published!')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Published!') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Published!')\u001b[22m\n\n    at /root/vidra-user/e2e-backed/studio.spec.ts:224:46",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/studio.spec.ts",
+                      "column": 46,
+                      "line": 224
+                    },
+                    "snippet": "  222 |   });\n  223 |   await publishViaStudioUI(page);\n> 224 |   await expect(page.getByText(\"Published!\")).toBeVisible();\n      |                                              ^\n  225 |\n  226 |   // Open the edit surface for the just-published video and upload a PNG poster.\n  227 |   await page.getByRole(\"button\", { name: \"Refresh\" }).click();"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/studio.spec.ts",
+                        "column": 46,
+                        "line": 224
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Published!')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Published!') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Published!')\u001b[22m\n\n\n  222 |   });\n  223 |   await publishViaStudioUI(page);\n> 224 |   await expect(page.getByText(\"Published!\")).toBeVisible();\n      |                                              ^\n  225 |\n  226 |   // Open the edit surface for the just-published video and upload a PNG poster.\n  227 |   await page.getByRole(\"button\", { name: \"Refresh\" }).click();\n    at /root/vidra-user/e2e-backed/studio.spec.ts:224:46"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:26:20.321Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-replace-their-video-s-thumbnail-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-replace-their-video-s-thumbnail-backend-backed/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/studio.spec.ts",
+                    "column": 46,
+                    "line": 224
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-44eadeb5cc816ccab07a",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 203,
+          "column": 5
+        },
+        {
+          "title": "a creator can publish a video by importing from a URL (async job)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 8,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 16019,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:26:30.532Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-publi-202ce-rting-from-a-URL-async-job--backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-2412f1405678d605e8db",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 267,
+          "column": 5
+        },
+        {
+          "title": "a rejected upload is reported as failed, not published",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 8,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 10252,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Processing failed — the file could not be published')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Processing failed — the file could not be published') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Processing failed — the file could not be published')\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Processing failed — the file could not be published')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Processing failed — the file could not be published') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Processing failed — the file could not be published')\u001b[22m\n\n    at /root/vidra-user/e2e-backed/studio.spec.ts:349:5",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/studio.spec.ts",
+                      "column": 5,
+                      "line": 349
+                    },
+                    "snippet": "  347 |   await expect(\n  348 |     page.getByText(\"Processing failed — the file could not be published\", { exact: false }),\n> 349 |   ).toBeVisible();\n      |     ^\n  350 |   await expect(page.getByText(\"Published!\")).toHaveCount(0);\n  351 |\n  352 |   // Persisted: the owner's channel list shows the video in state \"failed\". The"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/studio.spec.ts",
+                        "column": 5,
+                        "line": 349
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Processing failed — the file could not be published')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Processing failed — the file could not be published') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Processing failed — the file could not be published')\u001b[22m\n\n\n  347 |   await expect(\n  348 |     page.getByText(\"Processing failed — the file could not be published\", { exact: false }),\n> 349 |   ).toBeVisible();\n      |     ^\n  350 |   await expect(page.getByText(\"Published!\")).toHaveCount(0);\n  351 |\n  352 |   // Persisted: the owner's channel list shows the video in state \"failed\". The\n    at /root/vidra-user/e2e-backed/studio.spec.ts:349:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:26:47.450Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/studio-a-rejected-upload-is-reported-as-failed-not-published-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-rejected-upload-is-reported-as-failed-not-published-backend-backed/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/studio.spec.ts",
+                    "column": 5,
+                    "line": 349
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-a23b78a900b918b6bc53",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 314,
+          "column": 5
+        },
+        {
+          "title": "a non-http import URL shows an inline url field error",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 9,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4683,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:26:58.791Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-non-http-import-URL-shows-an-inline-url-field-error-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-e08bc5a732757bc530e7",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 364,
+          "column": 5
+        },
+        {
+          "title": "a creator can create, rekey, and delete a live stream",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 9,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4992,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:27:03.846Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-creator-can-create-rekey-and-delete-a-live-stream-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-3769d5fa535290f228d6",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 402,
+          "column": 5
+        },
+        {
+          "title": "a live stream shows LIVE after the ingest hook flips it",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 9,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4506,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:27:09.021Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/studio-a-live-stream-shows-f61d6-er-the-ingest-hook-flips-it-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "64bdea7002f9c9cea9f4-9ef2c36e862f308e8b03",
+          "file": "../e2e-backed/studio.spec.ts",
+          "line": 463,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/upload-draft-recovery.spec.ts",
+      "file": "../e2e-backed/upload-draft-recovery.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a server-side upload session appears in the recovery card after reload and resumes to a persisted video",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 9,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 9109,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Upload finished.')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Upload finished.') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Upload finished.')\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Upload finished.')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Upload finished.') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Upload finished.')\u001b[22m\n\n    at /root/vidra-user/e2e-backed/upload-draft-recovery.spec.ts:99:52",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/upload-draft-recovery.spec.ts",
+                      "column": 52,
+                      "line": 99
+                    },
+                    "snippet": "   97 |   });\n   98 |   await completed;\n>  99 |   await expect(page.getByText(\"Upload finished.\")).toBeVisible();\n      |                                                    ^\n  100 |\n  101 |   // 5. Persisted: the owner-authed channel list carries the finalised video after\n  102 |   //    a fresh API read — the draft became a real, no-longer-draft video row."
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/upload-draft-recovery.spec.ts",
+                        "column": 52,
+                        "line": 99
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Upload finished.')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Upload finished.') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Upload finished.')\u001b[22m\n\n\n   97 |   });\n   98 |   await completed;\n>  99 |   await expect(page.getByText(\"Upload finished.\")).toBeVisible();\n      |                                                    ^\n  100 |\n  101 |   // 5. Persisted: the owner-authed channel list carries the finalised video after\n  102 |   //    a fresh API read — the draft became a real, no-longer-draft video row.\n    at /root/vidra-user/e2e-backed/upload-draft-recovery.spec.ts:99:52"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:27:13.705Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/upload-draft-recovery-a-se-b24c1-esumes-to-a-persisted-video-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/upload-draft-recovery-a-se-b24c1-esumes-to-a-persisted-video-backend-backed/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/upload-draft-recovery.spec.ts",
+                    "column": 52,
+                    "line": 99
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "8d1dffc4452e0004216e-18995353a30820bfb12b",
+          "file": "../e2e-backed/upload-draft-recovery.spec.ts",
+          "line": 25,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/video-description.spec.ts",
+      "file": "../e2e-backed/video-description.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a creator sets and edits a video description",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 10,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 9748,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Published!')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Published!') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Published!')\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Published!')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Published!') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Published!')\u001b[22m\n\n    at /root/vidra-user/e2e-backed/video-description.spec.ts:42:46",
+                    "location": {
+                      "file": "/root/vidra-user/e2e-backed/video-description.spec.ts",
+                      "column": 46,
+                      "line": 42
+                    },
+                    "snippet": "  40 |   await page.getByLabel(\"Video description\").fill(description);\n  41 |   await publishViaStudioUI(page);\n> 42 |   await expect(page.getByText(\"Published!\")).toBeVisible();\n     |                                              ^\n  43 |\n  44 |   const videoId = (await channelVideos(request, handle)).find((v) => v.title === title)!.id;\n  45 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/video-description.spec.ts",
+                        "column": 46,
+                        "line": 42
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Published!')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByText('Published!') with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Published!')\u001b[22m\n\n\n  40 |   await page.getByLabel(\"Video description\").fill(description);\n  41 |   await publishViaStudioUI(page);\n> 42 |   await expect(page.getByText(\"Published!\")).toBeVisible();\n     |                                              ^\n  43 |\n  44 |   const videoId = (await channelVideos(request, handle)).find((v) => v.title === title)!.id;\n  45 |\n    at /root/vidra-user/e2e-backed/video-description.spec.ts:42:46"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:27:23.916Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/root/vidra-user/test-results/video-description-a-creato-64dc4-d-edits-a-video-description-backend-backed/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/video-description-a-creato-64dc4-d-edits-a-video-description-backend-backed/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/root/vidra-user/e2e-backed/video-description.spec.ts",
+                    "column": 46,
+                    "line": 42
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "94bcdebce0f143002668-421ba6e547fb16debcb1",
+          "file": "../e2e-backed/video-description.spec.ts",
+          "line": 18,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/video-password.spec.ts",
+      "file": "../e2e-backed/video-password.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a set password gates the watch page: prompt, wrong password rejected, right password plays",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 11,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10403,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:27:35.083Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/video-password-a-set-passw-7104a-jected-right-password-plays-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c13271df9992521c8fbe-ef3e27ff087543da8da0",
+          "file": "../e2e-backed/video-password.spec.ts",
+          "line": 54,
+          "column": 5
+        },
+        {
+          "title": "embed privacy persists and the embed page enforces it (disabled)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 11,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8414,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:27:46.037Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/video-password-embed-priva-e2379--page-enforces-it-disabled--backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c13271df9992521c8fbe-c3ccf73528fcb4717013",
+          "file": "../e2e-backed/video-password.spec.ts",
+          "line": 126,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/video-tags.spec.ts",
+      "file": "../e2e-backed/video-tags.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a creator sets and edits a video's tags, and the tag filter finds it",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 11,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10289,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:27:54.759Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/video-tags-a-creator-sets--3f8bd-and-the-tag-filter-finds-it-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c4f6721e103e4a632d13-801788d7edcd803260a5",
+          "file": "../e2e-backed/video-tags.spec.ts",
+          "line": 19,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/video-taxonomy.spec.ts",
+      "file": "../e2e-backed/video-taxonomy.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a creator sets and edits a video's category/language/license",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 11,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7658,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:28:05.447Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/video-taxonomy-a-creator-s-5e24f-s-category-language-license-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "227c73c2e30c4c7baa77-72275ca445df48ed805e",
+          "file": "../e2e-backed/video-taxonomy.spec.ts",
+          "line": 18,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-15T05:19:44.286Z",
+    "duration": 509145.22000000003,
+    "expected": 18,
+    "skipped": 0,
+    "unexpected": 10,
+    "flaky": 0
+  }
+}

@@ -1,0 +1,564 @@
+{
+  "config": {
+    "argv": [
+      "/usr/local/bin/node",
+      "/root/vidra-user/node_modules/.bin/playwright",
+      "test",
+      "--project=backend-backed",
+      "--workers=1",
+      "--timeout=300000",
+      "e2e-backed/required-controls.spec.ts"
+    ],
+    "configFile": "/root/vidra-user/playwright.config.ts",
+    "rootDir": "/root/vidra-user/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": true,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/root/vidra-user/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 300000
+      },
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "backed-setup",
+        "name": "backed-setup",
+        "testDir": "/root/vidra-user/e2e-backed",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.setup\\.ts/"
+        ],
+        "timeout": 300000
+      },
+      {
+        "outputDir": "/root/vidra-user/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "backend-backed",
+        "name": "backend-backed",
+        "testDir": "/root/vidra-user/e2e-backed",
+        "testIgnore": [
+          "/.*\\.setup\\.ts/"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 300000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        {
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/root/reports/reqctl-extended.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run start -- -p 3000",
+      "url": "http://localhost:3000",
+      "env": {
+        "INTERNAL_API_BASE_URL": "http://localhost:8080",
+        "PUBLIC_BASE_URL": ""
+      },
+      "reuseExistingServer": false,
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "../e2e-backed/admin.setup.ts",
+      "file": "../e2e-backed/admin.setup.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "ensure a deterministic admin exists",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backed-setup",
+              "projectName": "backed-setup",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 396,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:46:43.167Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d1b667611c786c59191e-fdb025ffe23e3e8d3ea6",
+          "file": "../e2e-backed/admin.setup.ts",
+          "line": 12,
+          "column": 6
+        }
+      ]
+    },
+    {
+      "title": "../e2e-backed/required-controls.spec.ts",
+      "file": "../e2e-backed/required-controls.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "required screens neither pan nor clip their controls at 390px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 900000,
+              "annotations": [
+                {
+                  "type": "slow",
+                  "location": {
+                    "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                    "line": 203,
+                    "column": 10
+                  }
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 55638,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:46:44.570Z",
+                  "annotations": [
+                    {
+                      "type": "slow",
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "line": 203,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-required-2a2be-lip-their-controls-at-390px-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-bbb5df99dad803ccfb8b",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 202,
+          "column": 7
+        },
+        {
+          "title": "required screens neither pan nor clip their controls at 640px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 900000,
+              "annotations": [
+                {
+                  "type": "slow",
+                  "location": {
+                    "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                    "line": 203,
+                    "column": 10
+                  }
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 55715,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:47:41.994Z",
+                  "annotations": [
+                    {
+                      "type": "slow",
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "line": 203,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-required-77ac1-lip-their-controls-at-640px-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-bc1b5db63aad878b09e6",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 202,
+          "column": 7
+        },
+        {
+          "title": "required screens carry no serious accessibility violation in light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 900000,
+              "annotations": [
+                {
+                  "type": "slow",
+                  "location": {
+                    "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                    "line": 230,
+                    "column": 10
+                  }
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 97036,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:48:38.158Z",
+                  "annotations": [
+                    {
+                      "type": "slow",
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "line": 230,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-required-86d2d-sibility-violation-in-light-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-7d0854449535daffde16",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 229,
+          "column": 7
+        },
+        {
+          "title": "required screens carry no serious accessibility violation in dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 900000,
+              "annotations": [
+                {
+                  "type": "slow",
+                  "location": {
+                    "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                    "line": 230,
+                    "column": 10
+                  }
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 95340,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:50:19.185Z",
+                  "annotations": [
+                    {
+                      "type": "slow",
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "line": 230,
+                        "column": 10
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-required-acf61-ssibility-violation-in-dark-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-302f9f54902c9ac4fe42",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 229,
+          "column": 7
+        },
+        {
+          "title": "the account menu opens by keyboard, closes on Escape and hands focus back",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1763,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:51:57.790Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-the-acco-5022e-Escape-and-hands-focus-back-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-bef9774d118a468ee8a2",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 249,
+          "column": 5
+        },
+        {
+          "title": "a watch page whose media cannot be fetched says so and offers a retry",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 900000,
+              "annotations": [
+                {
+                  "type": "slow",
+                  "location": {
+                    "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                    "line": 277,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2217,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:51:59.665Z",
+                  "annotations": [
+                    {
+                      "type": "slow",
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "line": 277,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-a-watch--832d7--says-so-and-offers-a-retry-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-1d32d9052af12a785c89",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 271,
+          "column": 5
+        },
+        {
+          "title": "player speed and volume survive a reload and a second tab",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 900000,
+              "annotations": [
+                {
+                  "type": "slow",
+                  "location": {
+                    "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                    "line": 312,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "backend-backed",
+              "projectName": "backend-backed",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3696,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-15T05:52:02.054Z",
+                  "annotations": [
+                    {
+                      "type": "slow",
+                      "location": {
+                        "file": "/root/vidra-user/e2e-backed/required-controls.spec.ts",
+                        "line": 312,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/root/vidra-user/test-results/required-controls-player-s-235fc-e-a-reload-and-a-second-tab-backend-backed/trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f6851d306b39d56cd9ef-79ecae107d0f05004298",
+          "file": "../e2e-backed/required-controls.spec.ts",
+          "line": 311,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-15T05:46:40.526Z",
+    "duration": 325584.46400000004,
+    "expected": 8,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

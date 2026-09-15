@@ -1,0 +1,25 @@
+{
+  "note": "sha256 of every committed file in this e2e-runtime tree except this file itself, computed over the bytes as committed. This index is authoritative for the committed bytes. Covers matrix.json, backend-proof.txt, the derived disposition.json, and the Playwright JSON reports under reports/. The reports, matrix.json and backend-proof.txt were scanned for credentials before commit; no test-account email, owner/admin password, token or process.env value appears (the only 'password'/'.fill(...)' strings are Playwright selector code in error snippets). No file was redacted or omitted. See docs/runtime-acceptance-e2e-v0.6.6.md.",
+  "candidate": "v0.6.6",
+  "facet": "e2e-runtime",
+  "date_utc": "2026-09-15",
+  "count": 16,
+  "files": {
+    "backend-proof.txt": "05c727f746fbe7c603c0a8e4ee2f7e6cad2a09fd87a621a747de3b5eb0a672a0",
+    "disposition.json": "c89564142cd587d76221c1e779deb2352ae3ad5f21cd0be7c863d31b8c42399f",
+    "matrix.json": "867e194dbf5e4fc94b914d35da8403201722a2518c9dd82d7d4ebdb475191acc",
+    "reports/indiv-captions.json": "74ee5822c88c884e1e65ca5cd3fd38ebca62c1f0cb3e6a4a651b49ba5675eb43",
+    "reports/indiv-required-controls.json": "12f9542e5f6bbd80dd17a53480d8b1e5290a889ab665e0b445ce28491eb4bd86",
+    "reports/indiv-schedule.json": "02e23ea7353d6ba0f8f27ca339be6348a45795cb106371b755592d2ae933e52b",
+    "reports/indiv-studio.json": "0e89d3cbd8e6ae86cbd1c28d8449c3a05b8763c6f52d90cdeda9b59f00bc21cf",
+    "reports/indiv-upload-draft-recovery.json": "cab9664bb01f8cab1db2fc4e898ff54d7a43eae479884bfdd692b8e764401476",
+    "reports/indiv-video-description.json": "7015f3b9c67aeb60cadfe5aad2c33ab013e3fce6cd5452fe49206efe46a71dbd",
+    "reports/main-pass1.json": "c982f482771d4ed9b9c450e39b83ad0dec3336c0927f9f9624b2fb8414f7b3eb",
+    "reports/main-rerun1.json": "7c7bdc37963bd37298b990e7b67b2c35c5c9c3b9b0b55a8f0b88bc9566dcfc9a",
+    "reports/quarantine.json": "82940f0499f268cbdf9f856b3d0f8908963d73d09c73a56822da0633a150fbdf",
+    "reports/regapproval.json": "57d025897aaa3ce88ea319f7b15cf8cbee2c105d7d9c56ea51809b07fb0cb31f",
+    "reports/reqctl-extended.json": "c22b59631eeeef72189f37c38fbc697432952405da10ccc32e076a0757c7f5bb",
+    "reports/search-hist.json": "a475520515a1d699414a76ecbc431aad6f78fdb0be8a8ee9a178770e8c6b5f69",
+    "reports/search.json": "80e46fb9ea74af8ff5266d0da6ec7f5afc5693ccea836df56b9c0d7f8a79263b"
+  }
+}
