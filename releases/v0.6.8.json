@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "release": "v0.6.8",
+  "meta_commit": "5fc3ae32ea9009f16d6605b71818de99e9a4f14c",
+  "core_schema_version": 147,
+  "search_schema_version": 18,
+  "components": {
+    "core": {
+      "tag": "v0.6.8",
+      "commit": "66eaef46bfae24421cba27d45b381dbe3f6da9bd",
+      "image": {
+        "repository": "ghcr.io/yegamble/vidra-core",
+        "index_digest": "sha256:5c82e2103bd60b55d55e01801bee9b8b6f172adc2377e17c3f28e05cb3fedcdb",
+        "platforms": {
+          "linux/amd64": "sha256:9f10d712c96c891e3d5e9d5c9f82303730d2b56b0a0706346ee76770ec024333"
+        }
+      }
+    },
+    "user": {
+      "tag": "v0.6.8",
+      "commit": "736db292f8479221c50b92f43d6ceb6888e25035",
+      "image": {
+        "repository": "ghcr.io/yegamble/vidra-user",
+        "index_digest": "sha256:a78c62e49fe7d780f7be29eb60ccf0b9fc5c73f2c0706971eacbc5e9766972b3",
+        "platforms": {
+          "linux/amd64": "sha256:c1c7969ff0af7853024c3fce0ece76b43bfbf35b6d900747c771a7b7bfb828e0"
+        }
+      }
+    },
+    "search": {
+      "tag": "v0.6.8",
+      "commit": "4daed1850a4289e297bd7cd40a4310f20ccd1c44",
+      "image": {
+        "repository": "ghcr.io/yegamble/vidra-search",
+        "index_digest": "sha256:1d75da2912579afe00e4ff5d54698632c188b9c73dc1892aafbc3f2ae58329a9",
+        "platforms": {
+          "linux/amd64": "sha256:169555db3fca36139d85be8b9313d1c204732272e5bdea58fff9be18e4795f99"
+        }
+      }
+    }
+  },
+  "evidence": "docs/evidence/release-v0.6.8-verification/manifest.json"
+}
