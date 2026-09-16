@@ -1,0 +1,4 @@
+node_modules/
+worker.bundle.mjs
+.dev.vars
+wrangler.jsonc
