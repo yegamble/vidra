@@ -1,0 +1,17 @@
+{
+  "name": "vidra-b2-delivery",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-09-15",
+  "account_id": "REPLACE_WITH_ACCOUNT_ID",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "limits": { "cpu_ms": 50 },
+  "routes": [{ "pattern": "b2.example.com", "custom_domain": true }],
+  "vars": {
+    "PUBLIC_HOST": "b2.example.com",
+    "B2_ENDPOINT": "s3.us-east-005.backblazeb2.com",
+    "REGION": "us-east-005",
+    "BUCKET": "example-private-media"
+  }
+}
