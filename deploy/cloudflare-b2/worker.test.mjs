@@ -20,7 +20,8 @@ test('authenticated reads preserve byte ranges and stay on the fixed B2 origin',
     assert.equal(new URL(target).hostname, env.B2_ENDPOINT);
     assert.equal(options.headers.get('Range'), 'bytes=5-8');
     assert.equal(options.redirect, 'manual');
-    assert.equal(options.cf.cacheTtl, 0);
+    assert.equal(options.cache, 'no-store');
+    assert.deepEqual(options.cf.cacheTtlByStatus, { '100-599': -1 });
     const upstream = new Request(target, options);
     assert.equal(await authorized(upstream, env), true);
     return new Response('part', { status: 206, headers: { 'Content-Range': 'bytes 5-8/20' } });
@@ -81,4 +82,17 @@ test('an unsigned copy-source header cannot gain an upstream signature', async (
   const tampered = new Request(input, { headers });
   const output = await handle(tampered, env, () => assert.fail('unsigned copy source'));
   assert.equal(output.status, 403);
+});
+test('HEAD remains an authenticated HEAD and explicitly bypasses origin caching', async () => {
+  const input = await request({ method: 'HEAD', headers: { 'X-Amz-Content-Sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' } });
+  const output = await handle(input, env, async (target, options) => {
+    assert.equal(options.method, 'HEAD');
+    assert.equal(options.cache, 'no-store');
+    assert.equal(options.cf.cacheTtl, undefined);
+    assert.equal(options.cf.cacheTtlByStatus['100-599'], -1);
+    assert.equal(await authorized(new Request(target, options), env), true);
+    return new Response(null, { headers: { 'Content-Length': '42' } });
+  });
+  assert.equal(output.status, 200);
+  assert.equal(output.headers.get('Content-Length'), '42');
 });

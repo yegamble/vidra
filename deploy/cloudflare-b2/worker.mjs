@@ -102,7 +102,10 @@ export async function handle(request, env, originFetch = fetch) {
     }).sign();
     const response = await originFetch(signed.url.href, {
       method: signed.method, headers: signed.headers, body: request.body,
-      redirect: 'manual', duplex: 'half', cf: { cacheTtl: 0, cacheEverything: false },
+      // A zero TTL still forces caching and can turn HEAD into an origin GET,
+      // invalidating its SigV4 method. Bypass the cache, including on misses.
+      redirect: 'manual', duplex: 'half', cache: 'no-store',
+      cf: { cacheTtlByStatus: { '100-599': -1 }, cacheEverything: false },
     });
     // A redirect would send the viewer outside Cloudflare or expose credentials.
     if (response.status >= 300 && response.status < 400 && response.status !== 304) return reject(502);
