@@ -10,7 +10,9 @@ socket is never mounted into those application containers.
 Enable this only on a Linux/systemd Docker host whose public node uses the
 reference `ipfs/kubo:v0.43.0` image and local `ipfs_data` volume. Configure
 `IPFS_MANAGED_NODE=true` and the authorized public
-`IPFS_GATEWAY_URL=https://ipfs.your-domain.example` in the production env, then run:
+`IPFS_GATEWAY_URL=https://ipfs.your-domain.example` in the production env. On first
+adoption, run these with `IPFS_ENABLED=false`; save the paused policy described
+below before enabling it:
 
 ```sh
 sudo ENV_FILE=/opt/vidra/env/production.env /opt/vidra/deploy/install-ipfs-manager.sh --yes
@@ -34,6 +36,25 @@ updates cannot replace its configuration. The managed overlay fixes API/worker R
 explicit public gateway URL even when admissions are paused; it must not inherit
 the development-only localhost gateway. Installation does not open a firewall, start Kubo, change
 public gateway routes, restart the application, or publish media.
+
+In v0.7.1, `IPFS_ENABLED=true` registers automatic publication hooks for new
+uploads and completed transcodes when the API/worker starts. Managed
+`enabled=false` pauses new copies at runtime while retaining privacy withdrawals
+and authorized reads. Bootstrap them in this order:
+
+1. Install the manager and restart the API/worker with its socket overlay while
+   `IPFS_ENABLED=false`.
+2. Save an explicit Internal policy in Admin → IPFS with publication and
+   catalogue backfill disabled. Reload to confirm policy adoption is saved
+   (`policy_active=true`).
+3. Set `IPFS_ENABLED=true` and redeploy/recreate the API and worker. Saving the
+   paused policy first prevents an unadopted legacy worker starting a catalogue
+   scan. Confirm that the desired and applied revisions agree and capacity
+   observations are current before enabling publication in the admin UI.
+
+Changing the admin policy alone does not register boot-time hooks in a process
+started without that capability. IPFS delivery remains a separate setting;
+enable it only after validating the authorized gateway below.
 
 Before enabling public delivery, install the site block in
 `Caddyfile.ipfs-managed.example` at the actual gateway hostname. It allows only
