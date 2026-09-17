@@ -82,6 +82,9 @@ budget survives manager restarts and resets only after an explicit new admin
 operation. Exhaustion is visible as `ipfs_recovery_exhausted`; inspect
 `journalctl -u vidra-ipfs-manager` and the fixed `ipfs` container before retrying.
 The manager itself has bounded systemd restart limits.
+Its runtime socket directory survives explicit stops so existing API/worker
+bind mounts still reach the replacement socket after a restart or paired backup.
+Do not remove that directory while application containers are using it.
 
 Back up the root-owned manager configuration and state together with the normal
 application/host backups. Rollback snapshots include the IPFS peer identity and
@@ -111,3 +114,6 @@ The harness removes its own containers, network and empty test volume, and
 refuses to report success when Linux/root prerequisites are missing.
 `python3 tests/ipfs_manager_smoke.py --gateway-only` runs the Caddy portion on
 Docker Desktop too; that narrower result does not certify host lifecycle.
+`sudo python3 tests/ipfs_manager_runtime_smoke.py` separately uses isolated
+systemd units and offline clients to reproduce a lost bind mount without
+directory preservation, then prove socket access survives explicit stop/start.

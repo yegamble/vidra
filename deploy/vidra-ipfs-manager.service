@@ -15,6 +15,8 @@ RestartSec=10
 TimeoutStopSec=20
 RuntimeDirectory=vidra-ipfs-control
 RuntimeDirectoryMode=0755
+# API/worker bind mounts must keep this inode across explicit stop/start backups.
+RuntimeDirectoryPreserve=yes
 StateDirectory=vidra-ipfs-control
 StateDirectoryMode=0700
 UMask=0077
