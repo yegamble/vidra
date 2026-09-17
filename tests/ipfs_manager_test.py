@@ -175,6 +175,24 @@ class RepositoryTests(unittest.TestCase):
 
 
 class InstallModelTests(unittest.TestCase):
+    def test_install_creates_early_boot_directory_rule_before_applying_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'tmpfiles.d'
+            def apply(args):
+                self.assertEqual(args, ['systemd-tmpfiles', '--create', str(root/'vidra-ipfs-control.conf')])
+                self.assertEqual((root/'vidra-ipfs-control.conf').read_text(),
+                                 'd /run/vidra-ipfs-control 0755 root root -\n')
+                self.assertEqual((root/'vidra-ipfs-control.conf').stat().st_mode & 0o777, 0o644)
+            command = Mock(side_effect=apply)
+            manager.install_runtime_directory(command, root)
+            command.assert_called_once()
+
+    def test_failed_early_boot_directory_creation_aborts_installation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            command = Mock(side_effect=RuntimeError('tmpfiles failed'))
+            with self.assertRaisesRegex(RuntimeError, 'tmpfiles failed'):
+                manager.install_runtime_directory(command, Path(directory))
+
     def test_runtime_socket_directory_survives_explicit_stop_for_container_bind_mounts(self):
         import configparser
         unit=configparser.ConfigParser(interpolation=None)

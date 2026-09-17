@@ -6,11 +6,13 @@ Creates only random test units/runtime paths and resource-limited, offline clien
 The negative control proves the old unit loses its existing Docker bind mount.
 """
 import json
+import importlib.util
 import os
 from pathlib import Path
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import uuid
 
@@ -43,6 +45,44 @@ def wait_host(runtime):
             pass
         time.sleep(0.1)
     raise AssertionError('restarted host socket did not become ready')
+
+
+def check_cold_boot():
+    name = 'vidra-ipfs-cold-boot-' + uuid.uuid4().hex[:12]
+    runtime = Path('/run') / name
+    config_dir = Path('/run') / (name + '-config')
+    spec = importlib.util.spec_from_file_location('cold_boot_manager', ROOT/'deploy/ipfs-manager.py')
+    manager = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = manager
+    spec.loader.exec_module(manager)
+    args = ['docker','run','--rm','--name',name,'--network','none','--read-only',
+            '--user','10001:10001','--cap-drop','ALL','--security-opt','no-new-privileges',
+            '--pids-limit','32','--memory','64m','--cpus','0.25',
+            '--mount','type=bind,src='+str(runtime)+',dst=/control,readonly',
+            IMAGE,'python3','-c',"import os; assert os.path.isdir('/control')"]
+    try:
+        absent = command(args, check=False)
+        assert absent.returncode != 0 and 'bind source path does not exist' in absent.stderr
+        if command(['docker','container','inspect',name],check=False).returncode == 0:
+            command(['docker','rm','-f',name])
+        def apply_rule(argv):
+            # Exercise the installer's real rule in an isolated /run namespace.
+            config = Path(argv[-1])
+            source = config.read_text()
+            assert source.count('/run/vidra-ipfs-control') == 1
+            config.write_text(source.replace('/run/vidra-ipfs-control',str(runtime)))
+            command(argv)
+        manager.install_runtime_directory(apply_rule, config_dir)
+        assert runtime.is_dir() and runtime.stat().st_mode & 0o777 == 0o755
+        # Docker can restore the API bind mount before any manager is running.
+        command(args)
+        return {'missing_directory_blocks_container':True,
+                'tmpfiles_allows_container_before_manager':True}
+    finally:
+        if command(['docker','container','inspect',name],check=False).returncode == 0:
+            command(['docker','rm','-f',name])
+        for path in (runtime, config_dir):
+            if path.exists(): shutil.rmtree(path)
 
 
 def check_case(preserve):
@@ -115,4 +155,4 @@ if __name__ == '__main__':
     if command(['docker','image','inspect',IMAGE],check=False).returncode:
         command(['docker','pull',IMAGE])
     print(json.dumps({'ok':True,'scope':'isolated systemd socket only; no production manager or IPFS publication',
-                      'cases':[check_case('no'),check_case('yes')]},indent=2))
+                      'cold_boot':check_cold_boot(), 'cases':[check_case('no'),check_case('yes')]},indent=2))
