@@ -175,6 +175,14 @@ class RepositoryTests(unittest.TestCase):
 
 
 class InstallModelTests(unittest.TestCase):
+    def test_runtime_socket_directory_survives_explicit_stop_for_container_bind_mounts(self):
+        import configparser
+        unit=configparser.ConfigParser(interpolation=None)
+        unit.read(Path(__file__).resolve().parents[1]/'deploy/vidra-ipfs-manager.service')
+        self.assertEqual(unit['Service']['RuntimeDirectory'],'vidra-ipfs-control')
+        # 'restart' is insufficient: paired backups explicitly stop then start.
+        self.assertEqual(unit['Service'].get('RuntimeDirectoryPreserve'),'yes')
+
     def test_snapshot_resolves_only_fixed_service_storage_network_and_loopback_ports(self):
         stack={'name':'vidra','services':{'api':{'environment':{'PASSWORD':'SECRET'}},'ipfs':{
             'image':manager.IMAGE,'volumes':[{'type':'volume','source':'ipfs_data','target':'/data/ipfs'}],
