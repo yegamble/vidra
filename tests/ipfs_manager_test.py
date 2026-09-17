@@ -243,6 +243,17 @@ class BackendTests(unittest.TestCase):
             self.node.apply('restart',envelope())
         self.assertEqual(json.loads((self.repo/'config').read_text())['Datastore']['StorageMax'],'21474836480B')
 
+    def test_success_durably_removes_snapshot_before_reporting_applied(self):
+        self.node.probe=Mock(return_value={'observed_state':'running'})
+        synchronized=[]
+        real_fsync=manager.os.fsync
+        def sync(descriptor):
+            synchronized.append(bool(list(self.path.glob('before-*.json'))))
+            real_fsync(descriptor)
+        with patch.object(manager.os,'fsync',side_effect=sync):
+            self.node.apply('apply',envelope())
+        self.assertFalse(synchronized[-1], 'snapshot removal must survive power loss before the applied revision is committed')
+
     def test_nonempty_unknown_repo_never_runs_init_or_stops_the_node(self):
         (self.repo/'config').unlink(); (self.repo/'datastore').write_text('private data')
         with self.assertRaises(manager.Rejected): self.node.apply('apply',envelope())

@@ -6,16 +6,19 @@ ipfs.example.com {
 		method GET HEAD
 		path /ipfs/*
 	}
-	header Cache-Control "no-store"
+	header >Cache-Control "no-store"
 	handle @gateway {
 		forward_auth api:8080 {
 			uri /api/v1/ipfs/gateway/authorize
 			# Overwrite client-supplied values with the original request facts.
 			header_up X-Forwarded-Uri {uri}
 			header_up X-Forwarded-Method {method}
+			header_up -Authorization
+			header_up -Cookie
 		}
 		reverse_proxy ipfs:8080 {
-			header_down Cache-Control "no-store"
+			header_up -Authorization
+			header_up -Cookie
 		}
 	}
 	handle {

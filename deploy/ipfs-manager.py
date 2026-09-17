@@ -409,6 +409,11 @@ class Node:
                 try:
                     if self.probe()['observed_state'] == 'running':
                         backup.unlink()
+                        # Commit removal before the ledger can say applied; a
+                        # resurrected old snapshot could undo a later recovery.
+                        directory = os.open(backup.parent, os.O_RDONLY)
+                        try: os.fsync(directory)
+                        finally: os.close(directory)
                         return
                 except Exception: pass
                 time.sleep(1)

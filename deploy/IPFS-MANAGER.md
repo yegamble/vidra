@@ -36,8 +36,10 @@ public gateway routes, restart the application, or publish media.
 Before enabling public delivery, install the site block in
 `Caddyfile.ipfs-managed.example` at the actual gateway hostname. It allows only
 GET/HEAD `/ipfs/` requests, asks core's ledger/eligibility gate before every read,
-and overwrites forwarded URI/method headers. Configure Cloudflare to bypass
-cache for this hostname. Keep the gateway's loopback origin inaccessible from
+overwrites forwarded URI/method headers, strips credentials to both upstreams,
+and defers `Cache-Control: no-store` until every response is written, including
+denials. Use DNS-only routing or a verified cache-bypass rule for this hostname;
+an edge rule must never override withdrawal authorization. Keep the gateway's loopback origin inaccessible from
 the internet, and remove any direct route around the gate. The API must be at
 the release that implements `/api/v1/ipfs/gateway/authorize`; an older API fails
 closed. `Gateway.NoFetch=true` prevents remote fetching but does not authorize
@@ -94,3 +96,13 @@ signed-int64 sequence/revision values are required. Budget is 1 MiB–1 PiB, fre
 floor 0–1 PiB, copy rate 64 KiB–1 GiB/s, workers 1–8. Capacity is measured from the
 actual local Docker-volume filesystem, not the web container's overlay. External
 nodes and Docker user-namespace remapping are not managed by this installer.
+
+Verification: `python3 -m unittest discover -s tests -p '*_test.py'` includes the
+manager protocol, durable fencing, recovery and rollback unit tests. On a
+disposable Linux Docker host, `sudo python3 tests/ipfs_manager_smoke.py` exercises
+real Kubo init/apply/restart/rollback and the Caddy gate using only unique test
+resources. Its Kubo network is internal, so no content is globally published.
+The harness removes its own containers, network and empty test volume, and
+refuses to report success when Linux/root prerequisites are missing.
+`python3 tests/ipfs_manager_smoke.py --gateway-only` runs the Caddy portion on
+Docker Desktop too; that narrower result does not certify host lifecycle.
