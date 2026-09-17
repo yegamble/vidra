@@ -274,6 +274,17 @@ def install_settings(stack, repo_dir):
             'swarm_port':swarm,'rpc_port':port(5001),'gateway_port':port(8080)}
 
 
+def install_runtime_directory(command, config_dir=Path('/etc/tmpfiles.d')):
+    # /run is cleared at boot. Docker restores existing API/worker containers
+    # before the manager (which starts After=docker.service), so its readonly
+    # bind-mount source must exist during sysinit, before Docker starts.
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config = config_dir / 'vidra-ipfs-control.conf'
+    atomic(config, b'd /run/vidra-ipfs-control 0755 root root -\n')
+    os.chmod(config, 0o644)
+    command(['systemd-tmpfiles', '--create', str(config)])
+
+
 def install(project_dir, env_file):
     if os.geteuid() != 0 or not hasattr(socket,'SO_PEERCRED'): raise SystemExit('requires Linux root')
     root = Path(project_dir).resolve()
@@ -313,6 +324,7 @@ def install(project_dir, env_file):
     program = Path('/usr/local/lib/vidra/ipfs-manager.py')
     program.parent.mkdir(parents=True,exist_ok=True)
     atomic(program,Path(__file__).read_bytes())
+    install_runtime_directory(command)
     unit = (root/'deploy/vidra-ipfs-manager.service').read_text().replace('@@IPFS_REPO@@',config['repo_dir'])
     atomic(Path('/etc/systemd/system/vidra-ipfs-manager.service'),unit.encode())
     command(['systemctl','daemon-reload'])
