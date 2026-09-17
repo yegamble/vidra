@@ -33,7 +33,7 @@ EVIDENCE = ROOT / 'docs/evidence/release-v0.6.4-verification'
 # is not one: its manifest carries a hand-added platform digest and a runtime
 # ledger file, so it keeps a test of its own. Every record must be covered by one
 # or the other -- test_every_record_has_an_evidence_cross_check enforces that.
-RAW_PREFLIGHT_RELEASES = {'v0.6.5', 'v0.6.6', 'v0.7.0', 'v0.7.1', 'v0.7.2'}
+RAW_PREFLIGHT_RELEASES = {'v0.6.5', 'v0.6.6', 'v0.7.0', 'v0.7.1', 'v0.7.2', 'v0.7.3'}
 
 OK, REFUSED, UNVERIFIED = 0, 1, 3
 SECRET = 'SECRET_MUST_NOT_APPEAR'
