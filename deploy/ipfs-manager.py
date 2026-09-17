@@ -23,6 +23,8 @@ import time
 import uuid
 
 IMAGE = 'ipfs/kubo:v0.43.0'
+# Never inherit a root user's remote Docker context or caller-selected daemon.
+DOCKER_ENV = {'PATH':'/usr/local/bin:/usr/bin:/bin', 'DOCKER_HOST':'unix:///var/run/docker.sock'}
 SOCKET = Path('/run/vidra-ipfs-control/manager.sock')
 STATE = Path('/var/lib/vidra-ipfs-control')
 SETTINGS = Path('/etc/vidra-ipfs-control')
@@ -147,7 +149,9 @@ class Controller:
                 if not row: return False
                 db.execute("UPDATE operations SET state='running' WHERE sequence=?", (row['sequence'],))
             error = None
-            try: self.backend.apply(row['kind'], json.loads(row['envelope']))
+            try:
+                self.finalize_committed()
+                self.backend.apply(row['kind'], json.loads(row['envelope']))
             except Rejected as exc: error = exc.code
             except Exception: error = 'ipfs_apply_failed'
             with self.db() as db:
@@ -157,9 +161,19 @@ class Controller:
                 if not error:
                     self.put(db, 'applied_revision', row['revision'])
                     self.put(db, 'last_working', json.loads(row['envelope']))
+            if not error:
+                try: self.finalize_committed()
+                except Exception:
+                    with self.db() as db: self.put(db,'last_error_code','ipfs_snapshot_cleanup_failed')
             self.observe()
             return True
         finally: self.lock.release()
+
+    def finalize_committed(self):
+        # A crash before this commit needs the original rollback snapshot; a
+        # crash after it must never let that older config undo confirmed success.
+        with self.db() as db: applied = self.get(db,'last_working')
+        if applied: self.backend.finalize(applied)
 
     def observe(self):
         try: self.observation = self.backend.probe()
@@ -193,7 +207,10 @@ class Controller:
             # Restarting this daemon must not turn three failed attempts into a loop.
             recovery = {'attempts': recovery['attempts'] + 1, 'after': clock + 60 * 2**recovery['attempts']}
             with self.db() as db: self.put(db, 'recovery', recovery)
-            try: self.backend.apply('restart', desired)
+            try:
+                self.finalize_committed()
+                self.backend.apply('restart', desired)
+                self.backend.finalize(desired)
             except Exception:
                 with self.db() as db: self.put(db, 'last_error_code', 'ipfs_recovery_failed')
             self.observe()
@@ -261,7 +278,7 @@ def install(project_dir, env_file):
     if os.geteuid() != 0 or not hasattr(socket,'SO_PEERCRED'): raise SystemExit('requires Linux root')
     root = Path(project_dir).resolve()
     def command(args):
-        return subprocess.run(args,check=True,text=True,stdout=subprocess.PIPE,timeout=120).stdout
+        return subprocess.run(args,check=True,text=True,stdout=subprocess.PIPE,timeout=120,env=DOCKER_ENV).stdout
     # A render is read only. Its complete output may contain secrets, so it is
     # kept in memory and discarded after extracting the one fixed public node.
     rendered = json.loads(command(['docker','compose','--project-directory',str(root),
@@ -270,11 +287,11 @@ def install(project_dir, env_file):
     # Validate every field BEFORE creating a volume or installing anything.
     draft = install_settings(rendered,'/pending')
     volume = draft['volume']
-    inspected = subprocess.run(['docker','volume','inspect',volume],capture_output=True,text=True,timeout=15)
+    inspected = subprocess.run(['docker','volume','inspect',volume],capture_output=True,text=True,timeout=15,env=DOCKER_ENV)
     if inspected.returncode:
         command(['docker','volume','create','--label','com.docker.compose.project='+draft['project'],
                  '--label','com.docker.compose.volume=ipfs_data',volume])
-        inspected = subprocess.run(['docker','volume','inspect',volume],capture_output=True,text=True,check=True,timeout=15)
+        inspected = subprocess.run(['docker','volume','inspect',volume],capture_output=True,text=True,check=True,timeout=15,env=DOCKER_ENV)
     disk = json.loads(inspected.stdout)[0]
     if disk['Driver'] != 'local' or disk.get('Options'):
         raise SystemExit('managed IPFS requires a local Docker volume with measurable host headroom')
@@ -329,7 +346,7 @@ class Node:
 
     def command(self, args, timeout=30):
         result = self.runner(args, capture_output=True, text=True, timeout=timeout,
-                             env={'PATH':'/usr/local/bin:/usr/bin:/bin'})
+                             env=DOCKER_ENV)
         if result.returncode: raise Rejected('ipfs_node_command_failed', 503)
         return result.stdout
 
@@ -384,6 +401,14 @@ class Node:
         info['observed_at'] = now()
         return info
 
+    def finalize(self, envelope):
+        backup = self.directory / ('before-' + envelope['operation_id'] + '.json')
+        if not backup.exists(): return
+        backup.unlink()
+        directory = os.open(backup.parent, os.O_RDONLY)
+        try: os.fsync(directory)
+        finally: os.close(directory)
+
     def apply(self, kind, envelope):
         policy = envelope['config']
         backup = self.directory / ('before-' + envelope['operation_id'] + '.json')
@@ -409,13 +434,7 @@ class Node:
                 if time.monotonic() >= deadline: break
                 try:
                     if self.probe()['observed_state'] == 'running':
-                        backup.unlink()
-                        # Commit removal before the ledger can say applied; a
-                        # resurrected old snapshot could undo a later recovery.
-                        directory = os.open(backup.parent, os.O_RDONLY)
-                        try: os.fsync(directory)
-                        finally: os.close(directory)
-                        return
+                        return  # Controller finalizes only after the SQLite success commit.
                 except Exception: pass
                 time.sleep(1)
             raise Rejected('ipfs_readiness_timeout',503)

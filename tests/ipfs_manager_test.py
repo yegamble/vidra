@@ -243,30 +243,58 @@ class BackendTests(unittest.TestCase):
             self.assertEqual(call.args[0][-1],'ipfs')
             self.assertNotIn('down',call.args[0])
 
-    def test_success_removes_rollback_snapshot_so_later_recovery_cannot_restore_old_config(self):
+    def test_crash_after_readiness_keeps_original_until_ledger_commits(self):
+        control=manager.Controller(self.path,self.node)
+        control.accept('apply',envelope())
+        with control.db() as db: db.execute("UPDATE operations SET state='running'")
         self.node.probe=Mock(return_value={'observed_state':'running'})
-        self.node.apply('apply',envelope())
-        self.assertFalse(list(self.path.glob('before-*.json')))
+        self.node.apply('apply',envelope())  # simulated crash before SQLite success
+        self.assertTrue(list(self.path.glob('before-*.json')))
+        reopened=manager.Controller(self.path,self.node)
+        self.node.probe.side_effect=RuntimeError('replay readiness failure')
+        with patch.object(manager.time,'sleep'): reopened.process_next()
+        self.assertEqual(json.loads((self.repo/'config').read_text()),self.original)
+        self.assertEqual(reopened.status()['applied_config_revision'],0)
+
+    def test_crash_after_ledger_commit_cannot_rollback_a_later_recovery_to_old_config(self):
+        control=manager.Controller(self.path,self.node)
+        control.accept('apply',envelope())
+        self.node.probe=Mock(return_value={'observed_state':'running'})
+        with patch.object(self.node,'finalize',side_effect=KeyboardInterrupt,create=True):
+            with self.assertRaises(KeyboardInterrupt): control.process_next()
+        self.assertEqual(control.status()['applied_config_revision'],1)
+        self.assertTrue(list(self.path.glob('before-*.json')))
+        reopened=manager.Controller(self.path,self.node)
         self.node.probe.side_effect=RuntimeError('failed recovery')
-        with patch.object(manager.time,'sleep'), self.assertRaises(manager.Rejected):
-            self.node.apply('restart',envelope())
+        with patch.object(manager.time,'sleep'): reopened.watchdog(1000)
         self.assertEqual(json.loads((self.repo/'config').read_text())['Datastore']['StorageMax'],'21474836480B')
 
-    def test_success_durably_removes_snapshot_before_reporting_applied(self):
+    def test_finalization_durably_removes_snapshot_only_after_ledger_success(self):
+        control=manager.Controller(self.path,self.node)
+        control.accept('apply',envelope())
         self.node.probe=Mock(return_value={'observed_state':'running'})
         synchronized=[]
         real_fsync=manager.os.fsync
         def sync(descriptor):
-            synchronized.append(bool(list(self.path.glob('before-*.json'))))
+            with control.db() as db: revision=control.get(db,'applied_revision',0)
+            synchronized.append((bool(list(self.path.glob('before-*.json'))),revision))
             real_fsync(descriptor)
-        with patch.object(manager.os,'fsync',side_effect=sync):
-            self.node.apply('apply',envelope())
-        self.assertFalse(synchronized[-1], 'snapshot removal must survive power loss before the applied revision is committed')
+        with patch.object(manager.os,'fsync',side_effect=sync): control.process_next()
+        self.assertEqual(synchronized[-1],(False,1))
 
     def test_nonempty_unknown_repo_never_runs_init_or_stops_the_node(self):
         (self.repo/'config').unlink(); (self.repo/'datastore').write_text('private data')
         with self.assertRaises(manager.Rejected): self.node.apply('apply',envelope())
         self.node.command.assert_not_called()
+
+    def test_docker_target_cannot_inherit_a_remote_operator_context(self):
+        runner=Mock(return_value=Mock(returncode=0,stdout='ok'))
+        node=manager.Node(self.node.settings,self.path,runner=runner)
+        with patch.dict(manager.os.environ,{'DOCKER_HOST':'tcp://elsewhere:2375','DOCKER_CONTEXT':'remote'}):
+            self.assertEqual(node.command(['docker','info']),'ok')
+        environment=runner.call_args.kwargs['env']
+        self.assertEqual(environment.get('DOCKER_HOST'),'unix:///var/run/docker.sock')
+        self.assertNotIn('DOCKER_CONTEXT',environment)
 
     def test_actual_headroom_is_from_repo_filesystem_and_measurement_failure_is_not_zero(self):
         self.node.container.return_value=None

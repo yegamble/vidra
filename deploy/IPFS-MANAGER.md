@@ -103,7 +103,10 @@ Verification: `python3 -m unittest discover -s tests -p '*_test.py'` includes th
 manager protocol, durable fencing, recovery and rollback unit tests. On a
 disposable Linux Docker host, `sudo python3 tests/ipfs_manager_smoke.py` exercises
 real Kubo init/apply/restart/rollback and the Caddy gate using only unique test
-resources. Its Kubo network is internal, so no content is globally published.
+resources. Its Kubo network is internal, so no content is globally published. Because
+Docker does not publish ports on an internal network, the harness exposes only
+the two read-only status probes through a temporary host-loopback relay; it does
+not grant Kubo a public network.
 The harness removes its own containers, network and empty test volume, and
 refuses to report success when Linux/root prerequisites are missing.
 `python3 tests/ipfs_manager_smoke.py --gateway-only` runs the Caddy portion on

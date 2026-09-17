@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -68,9 +69,37 @@ def wait_running(node):
     raise AssertionError('isolated Kubo did not become ready')
 
 
+def rpc_relay(node, network, listen):
+    # Docker internal networks intentionally do not publish ports. Keep Kubo
+    # offline and relay only the two read-only probes from host loopback to its
+    # test-network address; no extra network, container privilege, or API proxy.
+    class Relay(http.server.BaseHTTPRequestHandler):
+        def log_message(self,*_): pass
+        def do_POST(self):
+            connection=None
+            try:
+                if self.path not in ('/api/v0/id','/api/v0/repo/stat?size-only=true'):
+                    self.send_error(404); return
+                container=node.container()
+                address=container['NetworkSettings']['Networks'][network]['IPAddress']
+                connection=http.client.HTTPConnection(address,5001,timeout=3)
+                connection.request('POST',self.path,body=b'')
+                response=connection.getresponse(); body=response.read(1048577)
+                if len(body)>1048576: raise ValueError('oversized probe')
+                self.send_response(response.status)
+                self.send_header('Content-Type','application/json')
+                self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body)
+            except Exception: self.send_error(503)
+            finally:
+                if connection: connection.close()
+    server=http.server.ThreadingHTTPServer(('127.0.0.1',listen),Relay)
+    threading.Thread(target=server.serve_forever,daemon=True).start()
+    return server
+
+
 def lifecycle(directory, name):
     volume, network = name+'-data', name+'-network'
-    node = None; created_volume = False; created_network = False
+    node = None; relay = None; created_volume = False; created_network = False
     ensure_image(manager.IMAGE)
     try:
         command(['docker','network','create','--internal',network]); created_network=True
@@ -83,13 +112,36 @@ def lifecycle(directory, name):
         model=manager.compose_model(name,volume,network,settings['swarm_port'],settings['rpc_port'],settings['gateway_port'])
         # The production swarm can receive peers; the disposable smoke must not.
         model['services']['ipfs']['ports']=[p if p.startswith('127.0.0.1:') else '127.0.0.1:'+p
-                                           for p in model['services']['ipfs']['ports']]
+                                           for p in model['services']['ipfs']['ports'] if not p.endswith(':5001')]
         manager.atomic(directory/'compose.json',json.dumps(model).encode())
         node = manager.Node(settings,directory)
+        relay=rpc_relay(node,network,settings['rpc_port'])
+        observations=[]
+        real_probe=node.probe
+        def probe():
+            try:
+                value=real_probe(); observations.append({'state':value['observed_state']}); return value
+            except Exception as error:
+                observed={'error_class':type(error).__name__,'code':getattr(error,'code',None),
+                          'target_rpc_port':settings['rpc_port']}
+                container=node.container()
+                if container:
+                    observed.update({'running':container['State']['Running'],
+                                     'port_bindings':container['HostConfig'].get('PortBindings'),
+                                     'network_ports':container['NetworkSettings'].get('Ports')})
+                observations.append(observed)
+                raise
+        node.probe=probe
         control = manager.Controller(directory,node)
         request = envelope(1)
         control.accept('apply',request); control.process_next()
         state = control.status()
+        if state['operation']['state'] != 'succeeded':
+            # Disposable-node logs only: never dump its config or private identity.
+            logs=command(node.compose+['logs','--no-color','--tail','100','ipfs'])
+            lines=[line for line in logs.splitlines() if not any(key in line for key in ('PrivKey','PrivateKey','Authorization','Cookie'))]
+            print(json.dumps({'failure_status':state,'recent_probes':observations[-8:],
+                              'disposable_node_logs':'\n'.join(lines)[-12000:]},indent=2),file=sys.stderr)
         assert state['operation']['state'] == 'succeeded', state
         assert state['observed_state'] == 'running', state
         assert state['repo_used_bytes'] is not None and state['filesystem_free_bytes'] > 0
@@ -119,8 +171,9 @@ def lifecycle(directory, name):
         assert json.loads((repo/'config').read_text()) == private
         return {'apply':True,'durable_idempotence':True,'restart_preserves_identity':True,
                 'rollback':True,'private_conversion_refused':True,'no_fetch':True,
-                'isolated_network':True,'actual_capacity':True}
+                'isolated_network':True,'isolated_readonly_rpc_relay':True,'actual_capacity':True}
     finally:
+        if relay: relay.shutdown(); relay.server_close()
         commands=[]
         if node: commands.append(node.compose+['down','--timeout','10'])
         if created_volume: commands.append(['docker','volume','rm',volume])
