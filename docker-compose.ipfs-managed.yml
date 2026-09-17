@@ -1,0 +1,24 @@
+# Opt-in through IPFS_MANAGED_NODE=true and deploy/lib.sh. Install the root-owned
+# manager first; refusing a missing source avoids creating a writable fake socket.
+x-ipfs-control: &ipfs-control
+  type: bind
+  source: /run/vidra-ipfs-control
+  target: /run/vidra-ipfs-control
+  read_only: true
+  bind:
+    create_host_path: false
+services:
+  api:
+    environment:
+      IPFS_MANAGER_SOCKET: /run/vidra-ipfs-control/manager.sock
+    volumes:
+      - *ipfs-control
+  worker:
+    environment:
+      IPFS_MANAGER_SOCKET: /run/vidra-ipfs-control/manager.sock
+    volumes:
+      - *ipfs-control
+  # The manager owns this node's lifecycle. Normal deploys must not apply the
+  # unmanaged init hook or implicitly start the node via the full/ipfs profiles.
+  ipfs:
+    profiles: !override [ipfs-managed]

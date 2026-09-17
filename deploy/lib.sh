@@ -112,6 +112,10 @@ vidra_compose_chain() {
     -f docker-compose.yml
     -f docker-compose.prod.yml)
 
+  if is_true "$(env_get IPFS_MANAGED_NODE false)"; then
+    COMPOSE+=(-f docker-compose.ipfs-managed.yml)
+  fi
+
   # External/managed datastores. Each overlay parks the bundled service on a
   # profile nothing enables and deletes every depends_on edge that named it —
   # leaving one in place makes the whole project INVALID, not merely wasteful

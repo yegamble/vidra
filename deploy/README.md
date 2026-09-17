@@ -1928,3 +1928,9 @@ archive checksums; missing credentials or services fail rather than skip.
 Retain the crypt recovery config separately from the encrypted bucket. These
 helpers do not configure production durability, replace a restore drill, or
 select retention policy for an operator.
+
+## Optional managed IPFS node
+
+See [IPFS-MANAGER.md](IPFS-MANAGER.md) for the host manager, admin control boundary,
+capacity policy, gateway authorization, and recovery. It is opt-in and leaves
+B2 authoritative; it does not bulk-publish an existing catalogue.

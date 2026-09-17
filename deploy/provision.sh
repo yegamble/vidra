@@ -315,6 +315,12 @@ else
   log "prove the backup itself works before you rely on it: sudo systemctl start vidra-backup.service && journalctl -u vidra-backup.service -n 50"
 fi
 
+# The opt-in manager is installed as root, independently of the deploy user.
+# A missing manager is a configuration error, never a silent UI success.
+if [ -f "$ENV_FILE" ] && is_true "$(env_get IPFS_MANAGED_NODE false)"; then
+  ENV_FILE="$ENV_FILE" "$REPO_ROOT/deploy/install-ipfs-manager.sh" --yes
+fi
+
 # --- 6/6 what this script refuses to change for you ----------------------------
 step "6/6 checks (nothing below is modified)"
 
