@@ -1009,6 +1009,8 @@ cat <<EOF
 
   Swap, the 'vidra' service user, ${DIR}'s ownership, the docker log cap,
   unattended-upgrades and the nightly backup timer - installed AND verified. It
+  With IPFS_MANAGED_NODE=true, provisioning also installs the host IPFS manager.
+  It exposes a narrow local socket; the API never receives the Docker socket.
   opens no port and never touches sshd; it prints the exact list your CLOUD
   firewall must allow (a host ufw does not filter Docker-published ports).
 
