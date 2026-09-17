@@ -11,11 +11,15 @@ services:
   api:
     environment:
       IPFS_MANAGER_SOCKET: /run/vidra-ipfs-control/manager.sock
+      IPFS_API_URL: http://ipfs:5001
+      IPFS_GATEWAY_URL: ${IPFS_GATEWAY_URL:?set the authorized public IPFS gateway URL}
     volumes:
       - *ipfs-control
   worker:
     environment:
       IPFS_MANAGER_SOCKET: /run/vidra-ipfs-control/manager.sock
+      IPFS_API_URL: http://ipfs:5001
+      IPFS_GATEWAY_URL: ${IPFS_GATEWAY_URL:?set the authorized public IPFS gateway URL}
     volumes:
       - *ipfs-control
   # The manager owns this node's lifecycle. Normal deploys must not apply the

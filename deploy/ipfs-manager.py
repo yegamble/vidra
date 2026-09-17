@@ -202,7 +202,8 @@ class Controller:
 
 def require_public(config, private_key):
     denied = {'/ip4/0.0.0.0/ipcidr/0', '/ip6/::/ipcidr/0'}
-    if (private_key or config.get('Routing', {}).get('Type') not in ('auto', 'dht', 'dhtclient')
+    # Kubo 0.43 uses optionalString: omitted/null means the public auto default.
+    if (private_key or config.get('Routing', {}).get('Type') not in (None, 'auto', 'dht', 'dhtclient')
         or not config.get('Bootstrap') or config.get('Provide', {}).get('Enabled') is False
         or denied.intersection(config.get('Swarm', {}).get('AddrFilters', []))):
         raise Rejected('ipfs_existing_repo_not_public', 409)

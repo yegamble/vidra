@@ -9,7 +9,8 @@ socket is never mounted into those application containers.
 
 Enable this only on a Linux/systemd Docker host whose public node uses the
 reference `ipfs/kubo:v0.43.0` image and local `ipfs_data` volume. Configure
-`IPFS_MANAGED_NODE=true` in the production env, then run:
+`IPFS_MANAGED_NODE=true` and the authorized public
+`IPFS_GATEWAY_URL=https://ipfs.your-domain.example` in the production env, then run:
 
 ```sh
 sudo ENV_FILE=/opt/vidra/env/production.env /opt/vidra/deploy/install-ipfs-manager.sh --yes
@@ -29,8 +30,9 @@ been pulled by the installer; API operations never pull or select images.
 The manager is dormant until an explicit admin apply. Do not keep `ipfs` or
 `full` in `EXTRA_COMPOSE_PROFILES` when managed mode owns the node; the managed
 overlay parks the ordinary service on a separate profile so routine stack
-updates cannot replace its configuration. Only API/worker socket mounts change
-on a normal deploy. Installation does not open a firewall, start Kubo, change
+updates cannot replace its configuration. The managed overlay fixes API/worker RPC to `http://ipfs:5001` and requires an
+explicit public gateway URL even when admissions are paused; it must not inherit
+the development-only localhost gateway. Installation does not open a firewall, start Kubo, change
 public gateway routes, restart the application, or publish media.
 
 Before enabling public delivery, install the site block in

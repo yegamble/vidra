@@ -145,6 +145,15 @@ class RepositoryTests(unittest.TestCase):
                             ({**public,'Swarm':{'AddrFilters':['/ip4/0.0.0.0/ipcidr/0']}}, False)]:
             with self.assertRaises(manager.Rejected): manager.require_public(config, key)
 
+    def test_kubo_043_implicit_public_routing_defaults_are_safe_to_adopt(self):
+        # Actual offline `ipfs init --profile server` output omits Routing.Type.
+        fresh={'Routing':{'DelegatedRouters':['auto']},'Bootstrap':['auto'],'Provide':{'DHT':{}}}
+        manager.require_public(fresh,False)
+        manager.require_public({**fresh,'Routing':{'Type':None}},False)
+        for routing in ['none','custom','',False]:
+            with self.subTest(routing=routing), self.assertRaises(manager.Rejected):
+                manager.require_public({**fresh,'Routing':{'Type':routing}},False)
+
     def test_managed_config_keeps_identity_and_enables_public_providing_without_fetch(self):
         original = {'Identity':{'PeerID':'keep'}, 'Routing':{'Type':'auto'}, 'Bootstrap':['auto']}
         configured = manager.public_config(original, envelope()['config'])
