@@ -33,7 +33,7 @@ EVIDENCE = ROOT / 'docs/evidence/release-v0.6.4-verification'
 # is not one: its manifest carries a hand-added platform digest and a runtime
 # ledger file, so it keeps a test of its own. Every record must be covered by one
 # or the other -- test_every_record_has_an_evidence_cross_check enforces that.
-RAW_PREFLIGHT_RELEASES = {'v0.6.5', 'v0.6.6', 'v0.7.0', 'v0.7.1', 'v0.7.2', 'v0.7.3'}
+RAW_PREFLIGHT_RELEASES = {'v0.6.5', 'v0.6.6', 'v0.7.0', 'v0.7.1', 'v0.7.2', 'v0.7.3', 'v0.7.4'}
 
 OK, REFUSED, UNVERIFIED = 0, 1, 3
 SECRET = 'SECRET_MUST_NOT_APPEAR'
@@ -696,8 +696,8 @@ class CommittedRecordTests(unittest.TestCase):
         # `docker buildx imagetools inspect` prints them.
         transcript = (evidence / 'platform-digests.txt').read_text()
         platform_digests = {}
-        for match in re.finditer(rf'Name:\s+(ghcr\.io/yegamble/vidra-[a-z]+):{re.escape(tag)}@(sha256:[0-9a-f]{{64}})\s+MediaType:.*?\s+Platform:\s+(\S+)', transcript):
-            platform_digests[(match.group(1), match.group(3))] = match.group(2)
+        for match in re.finditer(r'Name:\s+(ghcr\.io/yegamble/vidra-[a-z]+):(v[0-9]+\.[0-9]+\.[0-9]+)@(sha256:[0-9a-f]{64})\s+MediaType:.*?\s+Platform:\s+(\S+)', transcript):
+            platform_digests[(match.group(1), match.group(2), match.group(4))] = match.group(3)
         # Keyed by the DIGEST that was asked, never by the component name: an
         # answer counts only if it came from the image this record pins. Keying
         # by name let v0.6.5's transcript satisfy v0.6.6 (both say 146 and 18).
@@ -715,7 +715,7 @@ class CommittedRecordTests(unittest.TestCase):
                 self.assertEqual(f"{component['image']['repository']}@{component['image']['index_digest']}",
                                  image['reference'])
                 self.assertEqual(component['image']['platforms'],
-                                 {'linux/amd64': platform_digests[(component['image']['repository'], 'linux/amd64')]})
+                                 {'linux/amd64': platform_digests[(component['image']['repository'], component['tag'], 'linux/amd64')]})
         for key in ('core', 'search'):
             with self.subTest(schema=key):
                 asked = record['components'][key]['image']['platforms']['linux/amd64']
