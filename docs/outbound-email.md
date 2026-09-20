@@ -3,9 +3,11 @@
 **Status (2026-09-20).** The admin-panel email configuration described in
 [Two places mail can be configured](#two-places-mail-can-be-configured) lives in
 [vidra-core#265](https://github.com/yegamble/vidra-core/pull/265) (transports),
-[vidra-core#266](https://github.com/yegamble/vidra-core/pull/266) (store + API) and
-[vidra-user#253](https://github.com/yegamble/vidra-user/pull/253) (the panel), being merged to
-`main`; it ships in the **first releases of those components after core v0.7.5**. Until you run those releases, the environment keys are the only way to
+[vidra-core#266](https://github.com/yegamble/vidra-core/pull/266) (store + API),
+[vidra-core#268](https://github.com/yegamble/vidra-core/pull/268) (system-page status fix) and
+[vidra-user#253](https://github.com/yegamble/vidra-user/pull/253) (the panel), all **merged to
+`main` on 2026-09-20 and in no release yet**; it ships in the **first releases of those
+components after core v0.7.5**. Until you run those releases, the environment keys are the only way to
 configure mail and the rest of this doc still applies to them. Every provider request shape was
 verified against the vendor's own published API documentation and against local test servers —
 **nothing here was exercised against a live vendor API**, so treat provider quotas, prices and
@@ -209,6 +211,14 @@ delivery — mail goes out exactly as it did before — but the instance now say
 was always doing: password-reset links cross that hop unencrypted, where anything on the path
 can read them. Fix it by pointing at a relay that offers STARTTLS, or one that speaks implicit
 TLS on 465; the amber state is a description, not a fault to wait out.
+
+### Mail reads `ok` with a note about unproven credentials
+
+That is the expected reading for a **send-only API key** — a Mailgun domain sending key, a
+Resend restricted key — which is the kind of key you should be using. Such a key is not allowed
+to read the account, so the instance can reach the provider but cannot prove the credential
+without sending. The row stays `ok` and says so; the test message button on the Email page is
+the only check that settles it. (A key the provider actively rejects reads `down`.)
 
 ### Rolling back
 
