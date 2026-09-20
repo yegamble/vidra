@@ -32,7 +32,13 @@
 #                              ledger versions the drill actually captured: a contradiction is
 #                              refused in BOTH directions, so the phase can neither be skipped
 #                              when it applies nor demanded when it cannot.
-#   REC03_ROOT                 where logs/facts/state live. Default /root/rec03.
+#   REC03_ROOT                 where logs/facts/state live. Default /root/rec03; validated as an
+#                              absolute path that is not `/` and carries no `..` or whitespace,
+#                              since it reaches mkdir/tee/chmod before any phase runs.
+#
+# Set every one of these INSIDE the remote command — `ssh HOST "REC03_OLD=… bash -s -- <phase>"`.
+# To the left of `ssh` they are set on the local client, and OpenSSH forwards nothing outside
+# SendEnv/AcceptEnv, so the host would see them unset and every phase would be refused.
 #   REC03_ALLOW_DOCKER=1       proceed on a host that already has Docker (i.e. not a blank host).
 #
 # The recovery `force` target is DERIVED, never typed: the clean pre-upgrade ledger version the
@@ -53,7 +59,10 @@ set -uo pipefail
 # (the same trick tests/scanner_profile_test.py uses on deploy.sh). The drill itself cannot run
 # without a paid host, so these guards are the only part of it CI can honestly keep true. Nothing
 # between the markers may touch the host.
-R="${REC03_ROOT:-/root/rec03}"
+# `-` and not `:-`: an UNSET variable takes the default, an explicitly EMPTY one is an operator
+# mistake and reaches require_root_dir, which refuses it. $R is interpolated into mkdir, tee and
+# chmod before any phase runs, so a typo should die cleanly rather than litter the filesystem.
+R="${REC03_ROOT-/root/rec03}"
 DOMAIN=rec03.video.test
 API=http://127.0.0.1:8080/api/v1
 DIR=/opt/vidra
@@ -74,12 +83,27 @@ IDENT_RE='^[a-z_][a-z0-9_]{0,62}$'
 # clause or a second statement could ride in behind something that still looks like a type.
 TYPE_RE='^(UUID|TEXT|BOOLEAN|SMALLINT|INT|INTEGER|BIGINT|REAL|NUMERIC|JSONB|DATE|TIMESTAMP|TIMESTAMPTZ)$'
 TAG_RE='^v[0-9]+\.[0-9]+\.[0-9]+$'
+# $PHASE becomes a path component of the log and the facts file before the case below can reject
+# it, so it is shaped here rather than trusted there.
+PHASE_RE='^[a-z][a-z0-9-]*$'
 
 log() { printf '[rec03 %s %s] %s\n' "${PHASE:-init}" "$(date -u +%H:%M:%S)" "$*"; }
 # REFUSED, not "error": every one of these fires before the thing it guards has happened.
 die() { log "REFUSED: $*" >&2; exit 1; }
 # The second argument is a regex, so it is deliberately unquoted.
 matches() { [[ "$1" =~ $2 ]]; }
+
+require_root_dir() {
+  case "$R" in
+    /)  die "REC03_ROOT=/ — the drill writes its logs, facts and state under this directory; refusing to use the filesystem root." ;;
+    /*) ;;
+    *)  die "REC03_ROOT=\"$R\" is not an absolute path. It is interpolated into mkdir, tee and the facts paths before any phase runs, so a relative or empty value would scatter the drill's evidence wherever the shell happened to be." ;;
+  esac
+  case "$R" in
+    *..*)          die "REC03_ROOT=\"$R\" contains '..'; give the drill directory by its real path." ;;
+    *[[:space:]]*) die "REC03_ROOT=\"$R\" contains whitespace; the drill's paths are used unquoted by the operator's own ssh command lines." ;;
+  esac
+}
 
 require_release_pair() {
   { [ -n "$OLD" ] && [ -n "$NEW" ]; } || die "REC03_OLD and REC03_NEW are required, e.g. REC03_OLD=v0.6.6 REC03_NEW=v0.7.5. There is no default: this driver shipped wired to one pair, and a forgotten export would silently drill that pair instead of the candidate."
@@ -133,25 +157,38 @@ force_target() {
   printf '%s' "$pre"
 }
 
-# check_same_schema_expectation <pre-upgrade core schema> <post-upgrade core schema>
+# check_same_schema_expectation <pre core> <post core> <pre search> <post search>
 #
 # REC03_SAME_SCHEMA decides whether `restore-refuse` runs, and it used to be a bare operator
 # claim. Set it on a migrating pair and the one case that proves restore.sh refuses a dump AHEAD
 # of the pinned binary is quietly skipped; leave it unset on a non-migrating pair and the drill
 # demands a refusal that has no possible input. Both readings are now checked against the ledger
 # versions the drill itself captured.
+#
+# BOTH ledgers count. deploy/restore.sh runs its schema preflight over `schema_migrations` AND
+# `vidra_search_migrations` (deploy/restore.sh, the two preflight_schema calls), so a pair whose
+# core is flat while SEARCH moves still produces a dump ahead of the pinned binaries. Checking
+# core alone would force REC03_SAME_SCHEMA=1 on such a pair and skip a refusal that has a real
+# input — the same silence this guard exists to end.
 check_same_schema_expectation() {
-  local pre="$1" post="$2" same="${REC03_SAME_SCHEMA:-0}"
-  if [ "$pre" != "$post" ] && [ "$same" = 1 ]; then
-    die "REC03_SAME_SCHEMA=1, but this drill captured core schema $pre -> $post: the pair DOES migrate, so a dump taken after the upgrade IS ahead of the $OLD binary and restore-refuse has a real input. Unset REC03_SAME_SCHEMA and run it."
+  local pre_core="$1" post_core="$2" pre_search="$3" post_search="$4" same="${REC03_SAME_SCHEMA:-0}" moved=''
+  [ "$pre_core" = "$post_core" ] || moved="core $pre_core -> $post_core"
+  if [ "$pre_search" != "$post_search" ]; then
+    [ -z "$moved" ] || moved="$moved and "
+    moved="${moved}search $pre_search -> $post_search"
   fi
-  if [ "$pre" = "$post" ] && [ "$same" != 1 ]; then
-    die "REC03_SAME_SCHEMA is unset, but this drill captured core schema $pre -> $post (unchanged): no dump can be ahead of the $OLD binary, so restore-refuse has no input and cannot be run. Set REC03_SAME_SCHEMA=1 so it is recorded not applicable."
+  if [ -n "$moved" ] && [ "$same" = 1 ]; then
+    die "REC03_SAME_SCHEMA=1, but this drill captured $moved: the pair DOES migrate, so a dump taken after the upgrade IS ahead of the $OLD binaries — restore.sh gates on both ledgers — and restore-refuse has a real input. Unset REC03_SAME_SCHEMA and run it."
+  fi
+  if [ -z "$moved" ] && [ "$same" != 1 ]; then
+    die "REC03_SAME_SCHEMA is unset, but this drill captured core $pre_core and search $pre_search unchanged across the upgrade: no dump can be ahead of the $OLD binaries, so restore-refuse has no input and cannot be run. Set REC03_SAME_SCHEMA=1 so it is recorded not applicable."
   fi
 }
 # <<< END validators
 
 [ -n "$PHASE" ] || { echo "usage: bash -s -- <phase>   (install|data|fp <label>|backup|inject|upgrade-fail|recover|backup2|rollback|restore-refuse|repin|restore-ok|split|report)" >&2; exit 1; }
+matches "$PHASE" "$PHASE_RE" || { echo "\"$PHASE\" is not a phase name; it becomes a path component of the log and the facts file" >&2; exit 2; }
+require_root_dir
 shift; set -- "$PHASE" "${1:-}"
 F="$R/facts/$PHASE.json"; mkdir -p "$R/facts" "$R/state"
 exec > >(tee -a "$R/$PHASE.log") 2>&1
@@ -168,6 +205,7 @@ psq() { su - vidra -c "cd $DIR && ./deploy/compose.sh exec -T postgres psql -U v
 imgs() { docker ps --format '{{.Names}} {{.Image}}' | grep -E 'api|frontend|search' | sort | tr '\n' ';'; }
 ledger() { echo "core=$(psq 'SELECT version||chr(58)||dirty FROM schema_migrations') search=$(psq 'SELECT version||chr(58)||dirty FROM vidra_search_migrations')"; }
 core_version() { psq 'SELECT version FROM schema_migrations'; }
+search_version() { psq 'SELECT version FROM vidra_search_migrations'; }
 counts() { echo "users=$(psq 'SELECT count(*) FROM users') channels=$(psq 'SELECT count(*) FROM channels') videos=$(psq 'SELECT count(*) FROM videos') titles=$(psq 'SELECT string_agg(title, chr(124) ORDER BY title) FROM videos')"; }
 token() { curl -sf -X POST "$API/auth/login" -H 'content-type: application/json' -d "$(cat "$R/owner.json")" | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])'; }
 # The captured ledger versions, written by `backup` (pre) and `recover` (post). They are state,
@@ -176,11 +214,12 @@ token() { curl -sf -X POST "$API/auth/login" -H 'content-type: application/json'
 remembered() { cat "$R/state/$1" 2>/dev/null; }
 remember() { printf '%s\n' "$2" > "$R/state/$1"; }
 assert_schema_expectation() {
-  local pre post
+  local pre post pre_s post_s
   pre="$(remembered pre_core_version)"; post="$(remembered post_core_version)"
-  [ -n "$pre" ] || die "no pre-upgrade core schema recorded — run the 'backup' phase, which captures the clean ledger one phase before 'inject' mutates anything."
-  [ -n "$post" ] || die "no post-upgrade core schema recorded — run the 'recover' phase, which captures the ledger the upgrade actually reached."
-  check_same_schema_expectation "$pre" "$post"
+  pre_s="$(remembered pre_search_version)"; post_s="$(remembered post_search_version)"
+  { [ -n "$pre" ] && [ -n "$pre_s" ]; } || die "no pre-upgrade schema pair recorded — run the 'backup' phase, which captures both clean ledgers one phase before 'inject' mutates anything."
+  { [ -n "$post" ] && [ -n "$post_s" ]; } || die "no post-upgrade schema pair recorded — run the 'recover' phase, which captures both ledgers the upgrade actually reached."
+  check_same_schema_expectation "$pre" "$post" "$pre_s" "$post_s"
 }
 fingerprint() {  # original + master playlist + first segment sha256, via the api proxy
   local vid t; vid="$(cat "$R/video_id")"; t="$(token)"
@@ -219,7 +258,12 @@ install)
   ( cd $DIR && vidra setup --non-interactive --yes --domain $DOMAIN --instance-name "REC-03 drill" --registration closed --tls-mode internal --storage local --scan=false --release-tag "$OLD" --template env/production.env.example ); log "setup exit=$?"
   ( cd $DIR && vidra setup --check env/production.env ); log "setup --check exit=$?"
   grep -E '^(VIDRA_[A-Z_]*TAG|VIDRA_TLS_MODE|VIDRA_COMPOSE_PROFILES|STORAGE_BACKEND|MALWARE_SCAN_MODE|HTTP_PORT|PUBLIC_BASE_URL)=' $DIR/env/production.env || true
-  python3 "$(dirname "$0")/rec03-envfix.py" 2>/dev/null || python3 /root/rec03-envfix.py   # F2: setup --scan=false leaves CLAMAV_ADDR + fail-closed; apply beta's posture before the first deploy
+  # F2: `vidra setup --scan=false` leaves CLAMAV_ADDR set with MALWARE_SCAN_MODE=fail-closed, and
+  # deploy.sh's preflight refuses that pair. Only THIS file crosses the `bash -s` pipe, so the
+  # helper has to have been staged separately; under `bash -s` $0 is `bash`, so both paths below
+  # resolve to the login directory's copy. Refuse loudly here rather than let the first deploy
+  # fail 20 lines later with a message about a scanner profile.
+  python3 "$(dirname "$0")/rec03-envfix.py" 2>/dev/null || python3 /root/rec03-envfix.py || die "the scan-posture helper is not on this host. Only the driver itself crosses the 'bash -s' pipe, so stage it first: scp tests/rec03-envfix.py root@HOST:/root/"
   grep -nE '^MALWARE_SCAN_MODE=|CLAMAV_ADDR unset' "$DIR/env/production.env"
   log "provision.sh --yes (vidra user, chown, docker group)"
   ( cd $DIR && ./deploy/provision.sh --yes ); log "provision exit=$?"
@@ -256,12 +300,13 @@ backup)
   # Capture the clean pre-upgrade ledger HERE: this is the last phase before `inject` mutates the
   # database, and it is what `recover` forces back to. Read off the host rather than typed,
   # because a typed version becomes another release's fact the moment the candidate changes.
-  pre="$(core_version)"; predirty="$(psq 'SELECT dirty FROM schema_migrations')"
+  pre="$(core_version)"; predirty="$(psq 'SELECT dirty FROM schema_migrations')"; pre_s="$(search_version)"
   [ -n "$pre" ] || die "cannot read schema_migrations — the pre-upgrade version is what recover forces back to, so the drill cannot continue without it."
+  [ -n "$pre_s" ] || die "cannot read vidra_search_migrations — restore.sh gates on the search ledger too, so REC03_SAME_SCHEMA cannot be checked without it."
   [ "$predirty" = f ] || die "the core ledger is already dirty at $pre; this drill starts from a clean $OLD install."
-  remember pre_core_version "$pre"
-  log "dump_pre=$d exit=$rc pre_core_version=$pre"
-  facts "backup_exit=$rc" "dump_pre=$d" "pre_core_version=$pre"
+  remember pre_core_version "$pre"; remember pre_search_version "$pre_s"
+  log "dump_pre=$d exit=$rc pre_core_version=$pre pre_search_version=$pre_s"
+  facts "backup_exit=$rc" "dump_pre=$d" "pre_core_version=$pre" "pre_search_version=$pre_s"
   ;;
 inject)
   if [ "$INJECT" = dirty ]; then
@@ -315,8 +360,9 @@ recover)
   asv "./deploy/compose.sh run --rm migrate migrate force $target --yes-i-know"; log "force $target exit=$?"
   asv ./deploy/deploy.sh; rc=$?; log "deploy.sh exit=$rc"
   post="$(core_version)"; [ -n "$post" ] && remember post_core_version "$post"
+  post_s="$(search_version)"; [ -n "$post_s" ] && remember post_search_version "$post_s"
   imgs; ledger; probe; fingerprint | tee "$R/fp.recover"; counts
-  facts deploy_exit=$rc "force_target=$target" "post_core_version=$post" "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)" "fp=$(cat "$R/fp.recover")" "counts=$(counts)"
+  facts deploy_exit=$rc "force_target=$target" "post_core_version=$post" "post_search_version=$post_s" "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)" "fp=$(cat "$R/fp.recover")" "counts=$(counts)"
   ;;
 backup2)
   # Both ledger versions are known by now, so this is the first moment REC03_SAME_SCHEMA can be
@@ -335,11 +381,13 @@ rollback)
   ;;
 restore-refuse)
   assert_schema_expectation
-  if [ "${REC03_SAME_SCHEMA:-0}" = 1 ]; then log "not applicable: $OLD and $NEW both carry core schema $(remembered pre_core_version), so no dump can be ahead of the pinned binary"; facts not_applicable=same_schema "pre_core_version=$(remembered pre_core_version)" "post_core_version=$(remembered post_core_version)"; exit 0; fi
+  if [ "${REC03_SAME_SCHEMA:-0}" = 1 ]; then log "not applicable: $OLD and $NEW both carry core schema $(remembered pre_core_version) and search schema $(remembered pre_search_version), so no dump can be ahead of the pinned binaries"; facts not_applicable=same_schema "pre_core_version=$(remembered pre_core_version)" "post_core_version=$(remembered post_core_version)" "pre_search_version=$(remembered pre_search_version)" "post_search_version=$(remembered post_search_version)"; exit 0; fi
   log "restore.sh of the newer-schema dump under $OLD pins — expected refusal BEFORE dropdb"; before="$(counts)"
   asv "./deploy/restore.sh --yes $(cat "$R/dump_post")"; rc=$?; log "restore.sh exit=$rc"
   imgs; ledger; probe; after="$(counts)"; if [ "$before" = "$after" ]; then log "counts unchanged"; else log "COUNTS CHANGED: $before -> $after"; fi
-  facts restore_exit=$rc "counts_before=$before" "counts_after=$after" "ledger=$(ledger)" "probe=$(probe)"
+  # The ledger pair the verdict rests on goes in this phase's OWN facts: a reader of
+  # restore-refuse.json should not have to reconstruct what "ahead of the binary" meant.
+  facts restore_exit=$rc "counts_before=$before" "counts_after=$after" "ledger=$(ledger)" "probe=$(probe)" "pre_core_version=$(remembered pre_core_version)" "post_core_version=$(remembered post_core_version)" "pre_search_version=$(remembered pre_search_version)" "post_search_version=$(remembered post_search_version)"
   ;;
 repin)
   log "re-pin $NEW + deploy (roll forward)"

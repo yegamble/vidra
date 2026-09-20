@@ -19,7 +19,9 @@ separately, by running real phases with $REC03_ROOT redirected and `su` replaced
 Nothing here skips.
 """
 from pathlib import Path
+import json
 import os
+import re
 import shlex
 import subprocess
 import tempfile
@@ -78,21 +80,64 @@ def helpers(snippet, **env):
                           env=child, stdin=subprocess.DEVNULL)
 
 
-def phase(name, root, **env):
+def phase(name, root, cwd=None, **env):
     """Run a real phase with $REC03_ROOT redirected and `su` replaced by a recorder.
 
     `su` is how every database and deploy call leaves this script (`psq`, `asv`), so a
     recorder on PATH is a direct probe for "did this phase touch the host at all".
+    `docker` and `curl` are stubbed out so the run is hermetic and fast.
     """
     fake = Path(root) / 'bin'
     fake.mkdir(parents=True, exist_ok=True)
     (fake / 'su').write_text('#!/bin/sh\necho "$@" >> "$REC03_ROOT/su-called"\n')
-    (fake / 'su').chmod(0o755)
+    for inert in ('docker', 'curl'):
+        (fake / inert).write_text('#!/bin/sh\nexit 0\n')
+    for stub in ('su', 'docker', 'curl'):
+        (fake / stub).chmod(0o755)
     child = {'PATH': f'{fake}:' + os.environ.get('PATH', '/usr/bin:/bin'), 'REC03_ROOT': str(root)}
     child.update(env)
     done = subprocess.run(['bash', str(SCRIPT), name], capture_output=True, text=True,
-                          env=child, stdin=subprocess.DEVNULL)
+                          env=child, cwd=cwd, stdin=subprocess.DEVNULL)
     return done, Path(root)
+
+
+def tracked_docs():
+    out = subprocess.run(['git', 'ls-files', '--', 'docs/*.md', 'docs/**/*.md'],
+                         cwd=SCRIPT.parents[1], capture_output=True, text=True, check=True).stdout
+    return sorted(set(line for line in out.splitlines() if line))
+
+
+def logical_lines(text):
+    r"""(first line number, command) pairs with `\`-continuations joined."""
+    out, buf, start = [], '', 1
+    for n, line in enumerate(text.splitlines(), 1):
+        if not buf:
+            start = n
+        stripped = line.rstrip()
+        if stripped.endswith('\\'):
+            buf += stripped[:-1] + ' '
+            continue
+        out.append((start, buf + line))
+        buf = ''
+    if buf:
+        out.append((start, buf))
+    return out
+
+
+# `ssh` as a command word, not as part of a path or a longer word.
+SSH = re.compile(r'(?<![\w/.-])ssh\s')
+REC03_ASSIGN = re.compile(r'\bREC03_[A-Z0-9_]+=')
+
+
+def env_before_ssh(text):
+    """Invocations that set REC03_* to the LEFT of `ssh`, as `<line>: <command>`.
+
+    OpenSSH forwards nothing but what SendEnv/AcceptEnv allow (LANG/LC_* by default), so
+    an assignment before the `ssh` word sets the variable on the LOCAL client and the drill
+    host sees it unset. With the driver's defaults gone, that now refuses every phase.
+    """
+    return [f'{lineno}: {line.strip()}' for lineno, line in logical_lines(text)
+            if (m := SSH.search(line)) and REC03_ASSIGN.search(line[:m.start()])]
 
 
 class BashSyntax(unittest.TestCase):
@@ -212,25 +257,42 @@ class GeneratedSQL(unittest.TestCase):
 
 
 class SameSchemaExpectation(unittest.TestCase):
-    """`restore-refuse` may be neither skipped when it applies nor demanded when it cannot."""
+    """`restore-refuse` may be neither skipped when it applies nor demanded when it cannot.
 
-    def test_claiming_the_same_schema_across_a_migrating_pair_is_refused(self):
-        r = helpers('check_same_schema_expectation 146 150', REC03_SAME_SCHEMA='1', **PAIR)
-        self.assertNotEqual(r.returncode, 0)
-        out = r.stdout + r.stderr
-        self.assertIn('146', out)
-        self.assertIn('150', out)
-        self.assertIn('REC03_SAME_SCHEMA', out)
+    Both ledgers count. deploy/restore.sh:373-374 runs its preflight over `schema_migrations`
+    AND `vidra_search_migrations`, so a pair whose core is flat and whose SEARCH schema moves
+    still produces a dump that is ahead of the pinned binaries — and a core-only check would
+    force REC03_SAME_SCHEMA=1 and skip a refusal that has a real input.
+    """
 
-    def test_omitting_it_on_a_pair_that_does_not_migrate_is_refused(self):
-        r = helpers('check_same_schema_expectation 146 146', **PAIR)
+    def check(self, core, search, **env):
+        return helpers('check_same_schema_expectation %d %d %d %d' % (core + search), **env)
+
+    def test_a_migrating_pair_may_not_claim_the_same_schema(self):
+        for core, search, moved in (((146, 150), (18, 18), '150'),     # today's v0.6.6 -> v0.7.5
+                                    ((146, 146), (18, 19), '19'),      # search-only, core flat
+                                    ((146, 150), (18, 19), '150')):    # both move
+            with self.subTest(core=core, search=search):
+                r = self.check(core, search, REC03_SAME_SCHEMA='1', **PAIR)
+                self.assertNotEqual(r.returncode, 0, (core, search))
+                out = r.stdout + r.stderr
+                self.assertIn('REC03_SAME_SCHEMA', out)
+                self.assertIn(moved, out, 'the refusal must name the ledger that moved')
+
+    def test_a_pair_that_migrates_nothing_may_not_omit_it(self):
+        r = self.check((146, 146), (18, 18), **PAIR)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('REC03_SAME_SCHEMA', r.stdout + r.stderr)
 
-    def test_the_two_honest_combinations_pass(self):
-        self.assertEqual(helpers('check_same_schema_expectation 146 150', **PAIR).returncode, 0)
-        self.assertEqual(helpers('check_same_schema_expectation 146 146',
-                                 REC03_SAME_SCHEMA='1', **PAIR).returncode, 0)
+    def test_the_honest_combinations_pass(self):
+        for core, search in ((146, 150), (18, 18)), ((146, 146), (18, 19)), ((146, 150), (18, 19)):
+            with self.subTest(core=core, search=search):
+                self.assertEqual(self.check(core, search, **PAIR).returncode, 0)
+        self.assertEqual(self.check((146, 146), (18, 18), REC03_SAME_SCHEMA='1', **PAIR).returncode, 0)
+
+    def test_the_search_ledger_names_itself_in_the_refusal(self):
+        r = self.check((146, 146), (18, 19), REC03_SAME_SCHEMA='1', **PAIR)
+        self.assertIn('search', (r.stdout + r.stderr).lower())
 
 
 class ForceTarget(unittest.TestCase):
@@ -254,6 +316,137 @@ class ForceTarget(unittest.TestCase):
             with self.subTest(pre=pre, dirty_at=dirty_at):
                 r = helpers(f'force_target {shlex.quote(pre)} {shlex.quote(dirty_at)}', **PAIR)
                 self.assertNotEqual(r.returncode, 0, (pre, dirty_at))
+
+
+class DocumentedInvocation(unittest.TestCase):
+    """A runbook must show an invocation that can actually pass its own parameters.
+
+    `REC03_OLD=... ssh host 'bash -s -- phase'` sets the variable on the LOCAL ssh client.
+    OpenSSH forwards only what SendEnv/AcceptEnv allow — LANG/LC_* by default — so the drill
+    host sees every REC03_* unset. While the driver still defaulted to one pair that was
+    invisible; now it refuses every phase. The assignments belong INSIDE the remote command.
+    """
+
+    def test_the_predicate_reads_the_command_the_way_the_shell_does(self):
+        wrong = ("REC03_OLD=v0.6.6 \\\n  REC03_NEW=v0.7.5 \\\n"
+                 "  ssh root@HOST 'bash -s -- install' < tests/rec03-upgrade-rollback.sh\n")
+        right = ('ssh root@HOST "REC03_OLD=v0.6.6 REC03_NEW=v0.7.5 bash -s -- install" '
+                 '< tests/rec03-upgrade-rollback.sh\n')
+        self.assertEqual([f.split(':')[0] for f in env_before_ssh(wrong)], ['1'])
+        self.assertEqual(env_before_ssh(right), [])
+        # Prose naming the variables, and an scp of the helper, are not invocations.
+        self.assertEqual(env_before_ssh('REC03_SAME_SCHEMA must stay unset.\n'), [])
+        self.assertEqual(env_before_ssh('scp tests/rec03-envfix.py root@HOST:/root/\n'), [])
+
+    def test_the_continuation_joiner_keeps_separate_commands_separate(self):
+        self.assertEqual([n for n, _ in logical_lines('a \\\nb\nc\n')], [1, 3])
+
+    def test_no_tracked_doc_sets_the_drill_env_outside_the_remote_command(self):
+        docs = tracked_docs()
+        self.assertTrue(docs, 'no tracked docs found; the scan has drifted')
+        offenders = []
+        for rel in docs:
+            for found in env_before_ssh((SCRIPT.parents[1] / rel).read_text()):
+                offenders.append(f'{rel}:{found}')
+        self.assertEqual(offenders, [], 'REC03_* assigned to the left of `ssh`, where the drill '
+                         'host will never see it; move them inside the quoted remote command:\n'
+                         + '\n'.join(offenders))
+
+
+class EnvfixStaging(unittest.TestCase):
+    """Only the driver crosses the `bash -s` pipe; the scan-posture helper must be staged."""
+
+    def test_a_missing_helper_refuses_and_says_how_to_stage_it(self):
+        line = next(ln for ln in SCRIPT.read_text().splitlines() if 'rec03-envfix.py' in ln)
+        self.assertIn('|| die', line, 'a missing helper falls through, and the failure surfaces '
+                                      'later as deploy.sh refusing the scanner combination')
+        for expected in ('scp', 'rec03-envfix.py', '/root'):
+            self.assertIn(expected, line, f'the refusal does not name {expected}')
+
+    def test_the_runbook_names_the_staging_step(self):
+        runbook = SCRIPT.parents[1] / 'docs' / 'runtime-acceptance-rec03-v0.7.5-prepared.md'
+        text = runbook.read_text()
+        self.assertIn('scp', text)
+        self.assertIn('rec03-envfix.py', text)
+
+
+class RootAndPhaseNames(unittest.TestCase):
+    """$REC03_ROOT and $PHASE reach mkdir/tee/chmod, so they are checked before they do."""
+
+    def test_a_bad_root_dies_without_creating_it(self):
+        for bad in ('relative/root', '/', '/root/../etc/rec03', '/root/rec 03', ''):
+            with self.subTest(bad=bad):
+                r = helpers('require_root_dir', REC03_ROOT=bad, **PAIR)
+                self.assertNotEqual(r.returncode, 0, bad)
+                self.assertIn('REC03_ROOT', r.stdout + r.stderr)
+        for good in ('/root/rec03', '/tmp/rec03-drill_2'):
+            with self.subTest(good=good):
+                self.assertEqual(helpers('require_root_dir', REC03_ROOT=good, **PAIR).returncode, 0)
+
+    def test_a_relative_root_is_refused_before_the_directory_appears(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            env = dict(PAIR, PATH=os.environ.get('PATH', '/usr/bin:/bin'),
+                       REC03_ROOT='litter-here')
+            done = subprocess.run(['bash', str(SCRIPT), 'backup'], capture_output=True, text=True,
+                                  cwd=cwd, stdin=subprocess.DEVNULL, env=env)
+            self.assertNotEqual(done.returncode, 0)
+            self.assertFalse((Path(cwd) / 'litter-here').exists(), 'a typo littered the filesystem')
+
+    def test_a_phase_name_that_is_not_a_phase_name_is_refused(self):
+        # The root is nested so that "one level up" is this test's own directory: a shared
+        # /tmp would let an escapee from an earlier run read as this run's failure.
+        with tempfile.TemporaryDirectory() as outer:
+            root = Path(outer) / 'run'
+            root.mkdir()
+            done, r = phase('../escape', str(root), **PAIR)
+            self.assertNotEqual(done.returncode, 0)
+            self.assertIn('phase', (done.stdout + done.stderr).lower())
+            self.assertEqual(list(r.parent.glob('*escape*')), [])
+
+    def test_a_well_formed_unknown_phase_still_exits_2(self):
+        with tempfile.TemporaryDirectory() as root:
+            done, _ = phase('bogus', root, **PAIR)
+            self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
+
+
+class RestoreRefuseEvidence(unittest.TestCase):
+    """The phase's own facts must carry the ledger pair its verdict rests on."""
+
+    def stage(self, root, core=('146', '150'), search=('18', '18')):
+        state = Path(root) / 'state'
+        state.mkdir(parents=True, exist_ok=True)
+        for key, value in (('pre_core_version', core[0]), ('post_core_version', core[1]),
+                           ('pre_search_version', search[0]), ('post_search_version', search[1])):
+            (state / key).write_text(value + '\n')
+        (Path(root) / 'dump_post').write_text('/opt/vidra/backups/vidra-post.dump.gz\n')
+
+    def test_the_refusal_run_records_both_ledger_pairs(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.stage(root)
+            done, r = phase('restore-refuse', root, **PAIR)
+            facts = r / 'facts' / 'restore-refuse.json'
+            self.assertTrue(facts.exists(), done.stdout + done.stderr)
+            recorded = json.loads(facts.read_text())
+            self.assertEqual(recorded.get('pre_core_version'), '146')
+            self.assertEqual(recorded.get('post_core_version'), '150')
+            self.assertEqual(recorded.get('pre_search_version'), '18')
+            self.assertEqual(recorded.get('post_search_version'), '18')
+
+    def test_the_not_applicable_run_records_them_too(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.stage(root, core=('146', '146'))
+            done, r = phase('restore-refuse', root, REC03_SAME_SCHEMA='1', **PAIR)
+            self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+            recorded = json.loads((r / 'facts' / 'restore-refuse.json').read_text())
+            self.assertEqual(recorded.get('not_applicable'), 'same_schema')
+            self.assertEqual(recorded.get('post_search_version'), '18')
+
+    def test_a_contradiction_stops_the_phase_before_the_restore(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.stage(root)  # core 146 -> 150
+            done, r = phase('restore-refuse', root, REC03_SAME_SCHEMA='1', **PAIR)
+            self.assertNotEqual(done.returncode, 0)
+            self.assertFalse((r / 'su-called').exists(), 'restore.sh ran despite a contradiction')
 
 
 class NoReleaseLiterals(unittest.TestCase):

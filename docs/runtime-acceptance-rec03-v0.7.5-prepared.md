@@ -26,21 +26,43 @@ dirty-ledger shape v0.6.5 already covered.
 
 ## The invocation
 
+**Prerequisite, once per host, before the `install` phase:**
+
 ```
-REC03_OLD=v0.6.6 \
-REC03_NEW=v0.7.5 \
-REC03_INJECT=column \
+scp tests/rec03-envfix.py root@HOST:/root/
+```
+
+Only the driver itself crosses the `bash -s` pipe. The scan-posture helper is a
+separate file, and without it `install` refuses: `vidra setup --scan=false`
+leaves `CLAMAV_ADDR` set with `MALWARE_SCAN_MODE=fail-closed`, and `deploy.sh`'s
+preflight rejects that pair (finding F2 of the v0.6.4 record). The v0.6.5 run
+staged it at `/root` for exactly this reason.
+
+Then, per phase:
+
+```
+ssh root@HOST "REC03_OLD=v0.6.6 REC03_NEW=v0.7.5 REC03_INJECT=column \
 REC03_INJECT_TABLE=federation_deliveries \
 REC03_INJECT_COLUMN=authored_remote_comment_id \
-REC03_INJECT_TYPE=UUID \
-  ssh root@HOST 'bash -s -- <phase>' < tests/rec03-upgrade-rollback.sh
+REC03_INJECT_TYPE=UUID bash -s -- <phase>" < tests/rec03-upgrade-rollback.sh
 ```
+
+**The assignments belong inside the quoted remote command.** Written to the left
+of `ssh` they set the variables on the *local* ssh client, and OpenSSH forwards
+nothing beyond what `SendEnv`/`AcceptEnv` permit (`LANG`/`LC_*` by default), so
+the drill host would see every `REC03_*` unset. While the driver still defaulted
+to v0.6.3 → v0.6.4 that mistake was invisible — it silently drilled the wrong
+pair; now it refuses every phase. `tests/rec03_script_test.py` fails the build if
+any tracked doc reintroduces the left-of-`ssh` form.
 
 `REC03_SAME_SCHEMA` **must stay unset**: 146 ≠ 150. The driver now refuses the
 contradiction in both directions — setting it on this pair aborts `backup2` with
-the captured `146 -> 150` in the message, so the ahead-of-binary refusal cannot be
-skipped by accident, and leaving it unset on a non-migrating pair aborts for the
-mirror-image reason.
+the captured `core 146 -> 150` in the message, so the ahead-of-binary refusal
+cannot be skipped by accident, and leaving it unset on a pair that migrates
+neither ledger aborts for the mirror-image reason. Both ledgers are compared, not
+just core: `restore.sh` runs its schema preflight over `schema_migrations` **and**
+`vidra_search_migrations`, so a future pair with a flat core and a moving search
+schema still has a real `restore-refuse` input.
 
 Phases, in order: `install → data → fp <label> → backup → inject → upgrade-fail →
 recover → backup2 → rollback → restore-refuse → repin → restore-ok → split →
@@ -113,16 +135,24 @@ dirty ledger. So:
 - **`--yes-i-know` stays operator-invoked**, per `cmd/api/migrate.go`; no down
   migration runs anywhere in the drill.
 
-**One expectation this PR did not verify, to check on the host before the force.**
-0147's clashing `ALTER` is its *fourth* statement: `CREATE TABLE
-authored_remote_comments` and two indexes precede it. golang-migrate's postgres
-driver executes a migration file as a single multi-statement `Exec`, which
-PostgreSQL runs as one implicit transaction, so the expectation is that the whole
-of 0147 rolls back and the generated `DROP COLUMN` is the only undo needed. That
-was **not** proven here. During `recover`, before forcing: confirm
-`authored_remote_comments` does **not** exist. If it does, the file was not
-atomic — drop it (its two indexes go with it) and note the finding, because the
-re-run would otherwise die on `CREATE TABLE … already exists`.
+**0147 rolls back whole, so `DROP COLUMN` is the complete undo.** Its clashing
+`ALTER` is the *fourth* statement — `CREATE TABLE authored_remote_comments` and
+two indexes precede it — so whether those survive the failure decides whether the
+generated undo is sufficient. They do not. `dbmigrate.open()` builds the migrator
+with no `x-multi-statement` parameter, so golang-migrate's postgres driver runs
+with `MultiStatementEnabled=false` and hands the whole file to one
+`ExecContext`; PostgreSQL's simple query protocol wraps a multi-statement string
+in a single implicit transaction, and none of 0147–0150 contains `CONCURRENTLY`
+or any transaction-control statement that would break out of it. Reproduced
+against `postgres:18-alpine` with the injection pre-applied: the `ALTER` fails and
+`to_regclass('authored_remote_comments')` comes back NULL — nothing of 0147
+persists. The ledger row is written by a *separate* transaction, which is why it
+is left at **147 dirty** while the schema is untouched.
+
+Belt and braces, during `recover` before forcing: confirm
+`authored_remote_comments` does not exist. If it somehow does, drop it (its two
+indexes go with it) and record the finding, because the re-run would then die on
+`CREATE TABLE … already exists`.
 
 ## What each phase is expected to show
 
@@ -131,13 +161,13 @@ re-run would otherwise die on `CREATE TABLE … already exists`.
 | `install` | v0.6.6 installed from its released `install.sh` via the git path, `deploy.sh` exit 0, ledgers **146 / 18** |
 | `data` | fixture published, fingerprint recorded (original + HLS master + first segment) |
 | `fp <label>` | the same fingerprint at every later checkpoint — the drill's "no data was harmed" assertion |
-| `backup` | pre-upgrade dump at 146; `pre_core_version=146` captured into the facts (this is what `recover` forces back to) |
+| `backup` | pre-upgrade dump at 146; `pre_core_version=146` and `pre_search_version=18` captured into the facts (the core one is what `recover` forces back to) |
 | `inject` | the `ADD COLUMN` above succeeds; ledger still 146 clean |
 | `upgrade-fail` | deploy aborts in the migrate step, **no restart**; ledger 147 dirty; v0.6.6 still serving |
-| `recover` | `migrate version` → `version=147 dirty=true`; undo; `force 146`; re-run applies 147–150; ledger **150 / 18**; `post_core_version=150` |
+| `recover` | `migrate version` → `version=147 dirty=true`; undo; `force 146`; re-run applies 147–150; ledger **150 / 18**; `post_core_version=150`, `post_search_version=18` |
 | `backup2` | post-upgrade dump at 150 + a marker rename, so the two later restores are distinguishable |
 | `rollback` | `rollback.sh v0.6.6` exit 0 on schema 150 — **the claim the owner needs.** The v0.6.6 migrator should log `schema version 150 is newer than this binary's newest migration 146; nothing to apply` (`LedgerAheadMessage`) and change nothing. This is the one-release schema-compat policy being exercised rather than inferred; 0147–0150 are all additive (new tables, nullable or defaulted columns, one *widened* CHECK), so v0.6.6 code has nothing renamed, dropped or narrowed under it |
-| `restore-refuse` | the 150 dump refused under v0.6.6 pins **before** the drop, counts byte-identical, stack still serving. First time this case has had an input since v0.6.3 → v0.6.4 |
+| `restore-refuse` | the 150 dump refused under v0.6.6 pins **before** the drop, counts byte-identical, stack still serving; `facts/restore-refuse.json` carries both ledger pairs, so the evidence is self-contained. First time this case has had an input since v0.6.3 → v0.6.4 |
 | `repin` | back to v0.7.5, `deploy.sh` → already at 150 |
 | `restore-ok` | the 146 dump restored under v0.7.5, migrations applied 146 → 150, marker rename gone, fingerprint identical |
 | `split` | OPS-01 subset: `EXTRA_COMPOSE_PROFILES=worker` + `API_ROLE=api`, second upload transcoded by the worker |
@@ -156,12 +186,16 @@ evidence.
 
 ```
 # v0.6.3 -> v0.6.4  (core 144 -> 146; the column-conflict injection)
-REC03_OLD=v0.6.3 REC03_NEW=v0.6.4 REC03_INJECT=column \
-REC03_INJECT_TABLE=storage_migrations REC03_INJECT_COLUMN=paused_reason REC03_INJECT_TYPE=TEXT
+ssh root@HOST "REC03_OLD=v0.6.3 REC03_NEW=v0.6.4 REC03_INJECT=column \
+REC03_INJECT_TABLE=storage_migrations REC03_INJECT_COLUMN=paused_reason \
+REC03_INJECT_TYPE=TEXT bash -s -- <phase>" < tests/rec03-upgrade-rollback.sh
 
 # v0.6.4 -> v0.6.5  (core 146 -> 146; nothing to migrate, so a dirty ledger)
-REC03_OLD=v0.6.4 REC03_NEW=v0.6.5 REC03_INJECT=dirty REC03_SAME_SCHEMA=1
+ssh root@HOST "REC03_OLD=v0.6.4 REC03_NEW=v0.6.5 REC03_INJECT=dirty \
+REC03_SAME_SCHEMA=1 bash -s -- <phase>" < tests/rec03-upgrade-rollback.sh
 ```
+
+Both need `scp tests/rec03-envfix.py root@HOST:/root/` first, as above.
 
 Two honest differences from what those runs actually executed:
 
