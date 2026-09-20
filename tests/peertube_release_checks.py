@@ -15,6 +15,7 @@ import time
 import urllib.parse
 import urllib.request
 
+import recovery_release_acceptance as recovery
 import release_acceptance as runtime
 from blank_server_smoke import require, sha
 from peertube_release_acceptance import (DEFAULT_B2_KEY, DEFAULT_BASELINE, DEFAULT_ROOT,
@@ -36,6 +37,45 @@ def match_assets(source, destination, field):
     actual = {(row['source_id'], row[field]) for row in destination}
     require(len(expected) == len(source) == len(actual) == len(destination) and actual == expected,
             'media assigned to wrong video, missing, or duplicated')
+
+
+def reboot_state(run, baseline):
+    """The catalogue and ledgers a host reboot must preserve, unchanged.
+
+    Both halves are chosen by the CANDIDATE, from the one `expected-ledgers.json`
+    the stage froze from the source migrations — the catalogue by its core schema
+    version, the ledgers by both. This used to be inline, with its own 13-table
+    literal beside the recovery drill's 15-table one; two hand-maintained lists
+    of the same thing drift, and these had, neither having heard of the five
+    tables core migrations 0147-0150 added. It is a function so the wiring — not
+    just the shared helpers underneath it — is covered by a test.
+    """
+    ledgers = recovery.expected_ledgers(baseline)
+    # The catalogue is defined by recovery_release_acceptance.py, not by this
+    # file, so THAT is the revision a later comparison has to match — and this
+    # file's own `tool_sha256` would not notice it changing underneath.
+    state = {'catalogue_tool_sha256': recovery.harness_revision(),
+             'catalogue': recovery.fingerprint(run, recovery.core_schema_version(ledgers)), 'ledgers': {}}
+    for table, spec in ledgers.items():
+        actual = run.sql(f'SELECT version, dirty FROM {table}')
+        runtime.check_ledger(actual, spec['version'])
+        state['ledgers'][table] = actual
+    return state
+
+
+def check_reboot_preserved(before, after):
+    """Nothing persisted may differ across the host restart.
+
+    One host, but the two fingerprints straddle a REBOOT, and the drill tools
+    are a directory the operator staged by hand — re-staging them between the
+    two halves is exactly the window in which the comparison stops being
+    like-for-like. A different catalogue revision would surface here as
+    "reboot changed persisted catalogue/media state", i.e. as data loss.
+    """
+    recovery.check_recorded_harness('restart-before evidence', before.get('catalogue_tool_sha256'),
+                                    after['catalogue_tool_sha256'])
+    require(before['catalogue'] == after['catalogue'] and before['ledgers'] == after['ledgers'],
+            'reboot changed persisted catalogue/media state')
 
 
 def execute(stage, action, label=None, baseline=DEFAULT_BASELINE, root=DEFAULT_ROOT, b2_key=DEFAULT_B2_KEY):
@@ -76,18 +116,11 @@ def execute(stage, action, label=None, baseline=DEFAULT_BASELINE, root=DEFAULT_R
         if action in ('restart-before', 'restart-after'):
             require(json.loads((stage / 'disconnect/result.json').read_text())['status'] == 'PASS', 'disconnect first')
             result['boot_id'] = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
-            tables = ('users', 'channels', 'videos', 'comments', 'playlists', 'playlist_items',
-                      'channel_follows', 'video_ratings', 'video_tags', 'video_chapters', 'streaming_playlists', 'video_files', 'captions')
-            result['catalogue'] = {table: run.sql(f"SELECT count(*)||'|'||md5(COALESCE(string_agg(row::text,E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM {table} t) s") for table in tables}
-            result['ledgers'] = {}
-            for table, spec in json.loads((baseline / 'expected-ledgers.json').read_text()).items():
-                actual = run.sql(f'SELECT version, dirty FROM {table}')
-                runtime.check_ledger(actual, spec['version'])
-                result['ledgers'][table] = actual
+            result.update(reboot_state(run, baseline))
             if action == 'restart-after':
                 before = json.loads((stage / 'restart-before/result.json').read_text())
                 require(before['status'] == 'PASS' and before['boot_id'] != result['boot_id'], 'host reboot unproved')
-                require(before['catalogue'] == result['catalogue'] and before['ledgers'] == result['ledgers'], 'reboot changed persisted catalogue/media state')
+                check_reboot_preserved(before, result)
                 result['checks']['host_restart_state_preserved'] = 'PASS'
         elif action in ('schema-unsupported', 'schema-restore'):
             version = 1040 if action == 'schema-unsupported' else 970
