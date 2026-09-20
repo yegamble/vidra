@@ -1,0 +1,27 @@
+--- a/deploy/release-preflight.py
++++ b/deploy/release-preflight.py
+@@ -76,18 +76,20 @@
+     source = out / 'source'
+     source.mkdir()
+     for repo in REPOS:
++        component_tag = 'v0.7.3' if repo in ('vidra-user', 'vidra-search') else args.tag
+         remote = f'https://github.com/{args.owner}/{repo}.git'
+         dest = source / repo
+         # A private detached checkout avoids moving operator release pins or
+         # silently reading ignored/uncommitted files from nested workspaces.
+-        run(['git', 'clone', '--quiet', '--depth', '1', '--branch', args.tag, remote, str(dest)])
+-        revision = run(['git', 'rev-parse', '--verify', f'refs/tags/{args.tag}^{{commit}}'], cwd=dest).strip()
++        run(['git', 'clone', '--quiet', '--depth', '1', '--branch', component_tag, remote, str(dest)])
++        revision = run(['git', 'rev-parse', '--verify', f'refs/tags/{component_tag}^{{commit}}'], cwd=dest).strip()
+         run(['git', 'checkout', '--quiet', '--detach', revision], cwd=dest)
+-        manifest['repositories'][repo] = {'remote': remote, 'tag': args.tag, 'revision': revision}
++        manifest['repositories'][repo] = {'remote': remote, 'tag': component_tag, 'revision': revision}
+         save(out, manifest)
+     for repo in REPOS[1:]:
+         name = f'{args.owner}/{repo}'
+-        tagged = f'ghcr.io/{name}:{args.tag}'
++        component_tag = manifest['repositories'][repo]['tag']
++        tagged = f'ghcr.io/{name}:{component_tag}'
+         resolved = json.loads(run(['docker', 'buildx', 'imagetools', 'inspect', tagged,
+                                    '--format', '{{json .}}']))
+         digest = resolved['manifest']['digest']
