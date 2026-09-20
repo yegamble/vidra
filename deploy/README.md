@@ -133,8 +133,10 @@ The first form leaves the env file naming a release the tree is not on. `vidra
 deploy` will happily pull those images and run them against the previous
 revision's compose files. [`pin-release.sh`](./pin-release.sh) moves the tree
 first and rewrites the pins second, so a refused checkout leaves the pins
-alone; it snapshots the env file outside the checkout before touching it; and
-it **refuses to run as root** before its first git command.
+alone; it snapshots the env file outside the checkout before touching it; it
+sets each `VIDRA_*_TAG` to the tag `releases/<tag>.json` pairs that component
+at, so a core-only release pins correctly (see "Everyday operations"); and it
+**refuses to run as root** before its first git command.
 
 **Do not switch the refusal off.** Adding `safe.directory` for root makes
 root's `git fetch` succeed in a checkout it does not own, and every object it
@@ -764,9 +766,43 @@ sudo -u vidra ./deploy/pin-release.sh v0.6.5     # this and every later release
 Pinning *back* to a pre-v0.6.5 tag from a newer tree works (the snapshot is
 taken with the newer tree's helper before the checkout moves it).
 
+**`pin-release.sh` does not write one tag into all three keys.** It reads
+`releases/<tag>.json` — this tree's copy, else the copy it downloads (see
+"What the tree cannot prove, the deploy fetches" in
+[`releases/README.md`](../releases/README.md)) — and writes each
+`VIDRA_*_TAG` at the tag the release pairs that component at, so a **core-only**
+release such as v0.7.4 or v0.7.5 pins `VIDRA_CORE_TAG=v0.7.5` beside
+`VIDRA_USER_TAG=v0.7.3` and `VIDRA_SEARCH_TAG=v0.7.3`. It prints the table
+before it writes anything. `deploy.sh`'s checkout sync then moves each nested
+checkout to its own key, which is also what keeps its independent ledger
+assertion honest: the expected migration version is read from
+`vidra-core/migrations` in a checkout pinned to the same `VIDRA_CORE_TAG` the
+api and migrate images are pulled at.
+
+If the pairing cannot be determined — an airgapped host, `VIDRA_RECORD_FETCH=off`,
+or the window between the release publishing and its record PR merging, when
+the record exists nowhere yet — it pins all three keys to `<tag>` exactly as it
+always did and **warns**. That is right for the uniform releases that are the
+norm; for a core-only one the next `deploy.sh` then fails at `compose pull`
+with nothing deployed. State the pairing by hand in that case:
+
+```bash
+./deploy/pin-release.sh v0.7.5 --component-tag user=v0.7.3 --component-tag search=v0.7.3
+```
+
+`--component-tag <role>=<tag>` is repeatable, takes `core`, `user` or `search`,
+and is validated before the first git command: an unknown role, a tag that is
+not `vX.Y.Z` (leading zeros included — `v0.07.3` is not a tag `release.sh` ever
+cut but parses to the same numbers as one), a role named twice with different
+tags, or a component newer than the release all stop the run with the tree
+unmoved, no env snapshot taken and the env file byte-for-byte unchanged. A flag
+that **contradicts** a record that loaded is refused the same way, naming both
+values; `--force` obeys the flag anyway, with a WARNING, for the case where the
+record itself is wrong.
+
 ```bash
 # UPGRADE — tag a release in the component repo, wait for GHCR, then, AS vidra:
-./deploy/pin-release.sh v0.2.0                 # tree to v0.2.0 + VIDRA_*_TAG=v0.2.0; env snapshot first; CHECKOUT TREES ONLY
+./deploy/pin-release.sh v0.2.0                 # tree to v0.2.0 + each VIDRA_*_TAG at the tag the RECORD pairs it at; env snapshot first; CHECKOUT TREES ONLY
 ./deploy/deploy.sh                             # dump -> pull -> gated migrate -> up -> probe
 
 # ROLLBACK — app only; fine across an ADDITIVE migration (one-release rule below):
@@ -909,12 +945,27 @@ fails, and it does **not** deploy anything — on the host, as the deploy user,
 `./deploy/pin-release.sh <tag>` then `./deploy/deploy.sh` when you want the
 release live.
 
-**Release the three repos at the same version.** Nothing enforces it, but
-`./deploy/rollback.sh v0.2.0` sets all three `VIDRA_*_TAG` values from one
-argument, staging→production promotion copies three identical lines, and "which
-build is running?" during an incident has one answer instead of three. Skipping
-a component that did not change means its tag no longer exists — release it
-anyway.
+**Prefer releasing the three repos at the same version.** Nothing enforces it,
+staging→production promotion copies three identical lines, and "which build is
+running?" during an incident has one answer instead of three.
+
+v0.7.4 and v0.7.5 did not: both re-released **vidra-core alone**, and
+`releases/<tag>.json` is where the pairing is written down. `pin-release.sh`
+reads it (above) and `deploy/release-preflight.py` resolves it (see
+"Core-only releases: the components are not all at `--tag`" below), so the
+upgrade path handles that shape.
+**`rollback.sh` does not.** `./deploy/rollback.sh v0.7.5` still sets all three
+`VIDRA_*_TAG` values from one argument, so rolling back *to* a core-only
+release that way pins `ghcr.io/yegamble/vidra-user:v0.7.5`, which does not
+exist, and the rollback fails at the pull with the broken release still
+serving. Spell the pairing out with the per-component flags it already has:
+
+```bash
+./deploy/rollback.sh --core v0.7.5 --user v0.7.3 --search v0.7.3
+```
+
+A rollback between two **uniform** releases, and a rollback *from* a core-only
+release to a uniform one (`./deploy/rollback.sh v0.6.6`), are unaffected.
 
 **This repository is tagged too — first, and without a release.** vidra-core's
 `release-assets.yml` builds `vidra-bundle_<tag>.tar.gz` by checking *this* repo

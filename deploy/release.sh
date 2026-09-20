@@ -539,4 +539,14 @@ else
 fi
 
 log "released ${TAG} in: ${REPOS[*]}"
-log "to ship it, on the host AS THE DEPLOY USER: ./deploy/pin-release.sh ${TAG} && ./deploy/deploy.sh"
+if [ "$FULL_RELEASE" = 1 ]; then
+  log "to ship it, on the host AS THE DEPLOY USER: ./deploy/pin-release.sh ${TAG} && ./deploy/deploy.sh"
+else
+  # A SUBSET RELEASE HAS NO RECORD YET, and pin-release.sh reads the record to
+  # learn which tag each component carries. With none it falls back to pinning
+  # all three keys at ${TAG} — correct for a uniform release, and for this one
+  # a pin of images that were never built: the deploy would die at
+  # `compose pull`. So the hint names the flags rather than the bare form, and
+  # stops naming deploy.sh: the tags have to be filled in first.
+  log "to ship it, on the host AS THE DEPLOY USER — ${REPOS[*]} moved to ${TAG} and the others did NOT, and ${RECORD_REL} does not exist yet to say so, so name the tags the other components stay at: ./deploy/pin-release.sh ${TAG} --component-tag <role>=<their tag> ... && ./deploy/deploy.sh"
+fi

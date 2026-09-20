@@ -64,6 +64,14 @@ are then held against the real record after all, and a **contradiction stops
 the run** exactly as it would for a record on disk. The fetched copy is used
 for that one run and written nowhere.
 
+The same record, and the same fetch, is what `deploy/pin-release.sh` reads to
+decide what to WRITE into the three `VIDRA_*_TAG` keys — it pins each component
+at the tag the record pairs it at, rather than putting one tag in all three (it
+used to, and a core-only release then pinned an image that does not exist). With
+no record it falls back to the uniform pin and warns; `--component-tag
+<role>=<tag>` states the pairing by hand. See "Everyday operations" in
+`deploy/README.md`.
+
 That covers **both** shapes the newest release takes. A uniform triple
 (`vN vN vN`) is the obvious one. A **core-only** release is the one that
 actually shipped twice: v0.7.4 and v0.7.5 re-released vidra-core alone, so
