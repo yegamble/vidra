@@ -46,12 +46,39 @@ deploying `vN-rc1`. A typo'd uniform tag is still caught by the checkout sync
 and `compose pull`. The record for `vN` reaches hosts through the next meta tag
 or bundle. That is also what rollbacks to `vN` read.
 
-**This is an open gap.** An upgrade to the newest release compares only the tag
-strings, and a wrong digest pin only warns. It closes when the record ships
-**inside the release artifact**. vidra-core's release-assets workflow (or
-`deploy/release.sh`) would emit `releases/vN.json` after the images publish, and
-the vN bundle would carry it. `deploy.sh` on a vN bundle would then verify the
-digests against a record that shipped with vN.
+**What the tree cannot prove, the deploy fetches.** When the checker answers
+UNVERIFIED for a triple whose record this tree has no copy of,
+`deploy/lib.sh`'s `fetch_release_record` downloads `releases/<tag>.json` from
+this repository over https during preflight — before the checkout sync, the
+dump, the pull and the migrations — and re-runs the checker with
+`--extra-record`. The pairing and any digest pin are then held against the
+real record after all, and a **contradiction stops the run** exactly as it
+would for a record on disk. The fetched copy is used for that one run and
+written nowhere.
+
+`VIDRA_RECORD_FETCH=off` skips it entirely (airgapped hosts attempt no
+request), and `VIDRA_RECORD_BASE_URL` points it at a fork's or a mirror's
+records; both are read through `env_get`, from the env file or the
+environment. curl, not git: a bundle host has no git anywhere.
+
+**What is still not verified**, and nothing here can change either:
+
+- **Offline.** No egress, no curl, or `VIDRA_RECORD_FETCH=off` — the run keeps
+  today's WARNING naming what was not checked, plus the exact `curl` to try by
+  hand. A record that cannot be fetched predicts nothing about the images, so
+  it may not stop a deploy.
+- **The window before the record merges.** Between a release publishing and
+  its record PR landing on `main`, the record does not exist *anywhere* yet.
+  That closes only when the record ships **inside the release artifact** —
+  vidra-core's release-assets workflow (or `deploy/release.sh`) emitting
+  `releases/vN.json` after the images publish, so the vN bundle carries it.
+
+One more honest limit on the digest half: images are pulled **by tag**, and
+`deploy.sh`'s `require_embedded_migrate_tag` refuses a `<tag>@sha256:<digest>`
+spelling for `VIDRA_CORE_TAG` and `VIDRA_SEARCH_TAG` before the checker runs
+(see "Format" below). So the digest comparison this fetch makes reachable is
+today reachable only for `VIDRA_USER_TAG`. The **pairing** assertion covers all
+three. Pulling by the recorded digests remains the separate follow-up.
 
 ## Overriding a refusal: `VIDRA_RELEASE_MAPPING=warn`
 

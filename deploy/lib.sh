@@ -427,9 +427,14 @@ fetch_release_record() {
 # bundle's own tag, are passed along so the checker can tell "this tree's own
 # release, record not yet possible" (a WARNING) from "a release this tree knows
 # nothing about" (a refusal in deploy mode). `git tag --points-at` only READS
-# the checkout; a failure there just forfeits that allowance. The consequence is
-# a known gap: the NEWEST release, deployed from its own tree, is compared by
-# tag string only until the record ships inside the release artifact.
+# the checkout; a failure there just forfeits that allowance.
+#
+# What the tree cannot prove is then FETCHED: see the second pass at the bottom
+# of this function, which downloads that record and asks the checker again. So
+# the newest release is compared by tag string only on a host that cannot
+# reach the record — offline, or in the window before the record PR merges,
+# when it does not exist anywhere yet. That last case closes only when the
+# record ships inside the release artifact.
 #
 # Exit 3 is the checker's UNVERIFIED code; see the header of
 # deploy/release-mapping.py for the full contract.

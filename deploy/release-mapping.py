@@ -26,12 +26,20 @@ Exit codes are the contract deploy/lib.sh's release_mapping_check reads:
      that cannot be trusted, a stale bundle, a triple no record pairs.
   2  usage error (argparse)
 
-WHAT THIS DOES NOT VERIFY: the newest release. deploy/release.sh tags this
-repository before any image exists, so a tree at vN (or the vN bundle) cannot
-carry releases/vN.json, and deploying vN there only checks that all three tags
-say vN. That stays open until the record ships inside the release artifact.
+THE NEWEST RELEASE, AND WHAT STILL DOES NOT VERIFY IT. deploy/release.sh tags
+this repository before any image exists, so a tree at vN (or the vN bundle)
+cannot carry releases/vN.json, and this script ALONE then only checks that all
+three tags say vN. deploy/lib.sh closes that for a host with egress: it fetches
+the record from the repository and re-runs this script with --extra-record, so
+the pairing and any digest pin are held against the real record after all. Two
+cases remain, and neither is reachable by any check: an airgapped host
+(VIDRA_RECORD_FETCH=off, no route, no curl), and the window between a release
+publishing and its record PR merging, when the record exists nowhere yet. The
+second closes when the record ships inside the release artifact.
 
-Stdlib only, no network, and it reads nothing from the env file except the
+Stdlib only and NO NETWORK — the fetch lives in deploy/lib.sh, which hands the
+result here as a file; this script only ever reads paths it is given. It reads
+nothing from the env file except the
 three VIDRA_*_TAG keys and the two image-source keys (VIDRA_IMAGE_REGISTRY,
 VIDRA_IMAGE_OWNER): that file holds every production secret, and this output
 is printed to a terminal and to logs.
@@ -514,8 +522,10 @@ def check(args):
                            'lands. ')
                         + 'NOT verified: that these three images were released together, and their '
                         'digests. Only the tag strings were compared; a tag that does not exist still '
-                        'fails the checkout sync or the pull. This gap closes when the record ships '
-                        'inside the release artifact.' + pinned_note(pins))
+                        'fails the checkout sync or the pull. deploy/lib.sh asks again with the record '
+                        'fetched from the repository, so this verdict is the one that STANDS only '
+                        'where that cannot happen: an airgapped host, or the window before the '
+                        "record's PR merges, when it exists nowhere yet." + pinned_note(pins))
         return (REFUSED if errors else UNVERIFIED), errors, warnings, notes
 
     findings = []
