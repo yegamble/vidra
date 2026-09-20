@@ -1,9 +1,11 @@
 # Outbound email — why it fails on a VPS, and how to configure it
 
 **Status (2026-09-20).** The admin-panel email configuration described in
-[Two places mail can be configured](#two-places-mail-can-be-configured) is being merged to
-`main` in `vidra-core` and `vidra-user`; it ships in the **first releases of those components
-after core v0.7.5**. Until you run those releases, the environment keys are the only way to
+[Two places mail can be configured](#two-places-mail-can-be-configured) lives in
+[vidra-core#265](https://github.com/yegamble/vidra-core/pull/265) (transports),
+[vidra-core#266](https://github.com/yegamble/vidra-core/pull/266) (store + API) and
+[vidra-user#253](https://github.com/yegamble/vidra-user/pull/253) (the panel), being merged to
+`main`; it ships in the **first releases of those components after core v0.7.5**. Until you run those releases, the environment keys are the only way to
 configure mail and the rest of this doc still applies to them. Every provider request shape was
 verified against the vendor's own published API documentation and against local test servers —
 **nothing here was exercised against a live vendor API**, so treat provider quotas, prices and
@@ -50,7 +52,13 @@ right answer for an operator who configures the host from files. Generic SMTP on
 **(b) Admin → Configuration → Email** — a form in the running instance: pick a transport
 (generic SMTP, or one of the HTTPS API providers below), enter the credentials, send a test
 mail, save. No redeploy, no restart; the change reaches every process within about ten seconds.
-This is the only way to use an API transport.
+This is the only way to use an API transport. Test sends are budgeted at **10 per admin per
+hour** — enough to iterate on a configuration, not enough to turn the form into a mail cannon.
+
+**The sender address is a bare address** — `no-reply@example.org`. The display name goes in the
+separate "Sender name" field; `Vidra <no-reply@example.org>` typed into the address field (or
+into `SMTP_FROM`) is refused as `sender_rejected`, because a header-shaped value in an address
+field is how header injection starts.
 
 ### Precedence
 
@@ -131,17 +139,23 @@ Vidra's SMTP transport makes the encryption mode explicit rather than guessing: 
 (required — the send fails if the server does not offer it), `tls` (implicit TLS, port 465) or
 `none`. There is no "skip certificate verification" option and there will not be one.
 
-Settings we have confirmed from the vendor's own documentation:
+The panel offers exactly two one-click SMTP presets — the two settings pairs confirmed from the
+vendor's own documentation:
 
 | Provider | Host | Port | Encryption | Source |
 |---|---|---|---|---|
-| Resend | `smtp.resend.com` | 2587 (also 25, 587, and 465/2465 for implicit TLS) | STARTTLS; username `resend`, password = the API key | [Resend SMTP docs](https://resend.com/docs/send-with-smtp) |
-| Brevo | `smtp-relay.brevo.com` | 587 | STARTTLS; the credential is an **SMTP key**, not your account password | Brevo's own docs, read 2026-09-20. Their help centre refuses automated requests, so the link is omitted rather than cited blind — the same values are shown in your Brevo dashboard. |
-| SMTP2GO | `mail.smtp2go.com` | **2525** (also 8025, 587, 80; implicit TLS on 465, 8465, 443) | STARTTLS | [SMTP settings](https://support.smtp2go.com/hc/en-gb/articles/223087627-SMTP-Settings) — documented as open "at almost all locations". The page returns 403 to automated checks; open it in a browser. |
+| SMTP2GO | `mail.smtp2go.com` | **2525** | STARTTLS | [SMTP settings](https://support.smtp2go.com/hc/en-gb/articles/223087627-SMTP-Settings) — documented as open "at almost all locations". The page returns 403 to automated checks; open it in a browser. |
+| Resend | `smtp.resend.com` | **2587** | STARTTLS; username `resend`, password = the API key | [Resend SMTP docs](https://resend.com/docs/send-with-smtp) |
 
-SMTP host/port settings for **Mailgun, Postmark, Mailjet, MailerSend, Mailtrap, ZeptoMail and
-Scaleway TEM** are widely repeated online but **unverified — check the vendor's docs** (or your
-dashboard, which is authoritative for your account) before entering them.
+Everything else you type by hand. SMTP settings for **Brevo** (whose HTTPS API transport is
+unaffected and needs none of this), **Mailgun, Postmark, Mailjet, MailerSend, Mailtrap,
+ZeptoMail and Scaleway TEM** are widely repeated online but **unverified — check the vendor's
+docs** (or your dashboard, which is authoritative for your account) before entering them.
+
+**Changing the SMTP server address makes you re-enter the password.** A saved credential is
+never re-pointed at a different server — that is how a password gets handed to a host it was
+not issued for. Changing the username, the port or the encryption mode keeps the stored
+password.
 
 ## DNS: SPF, DKIM and DMARC
 
@@ -177,7 +191,7 @@ The panel's test send reports a machine-readable reason. Read it before changing
 | `connect_failed` or `timeout` on another port | Wrong host, wrong port, or a firewall of your own. | Verify host and port against the provider's dashboard; check the droplet's egress rules. |
 | `tls_failed` | The server did not offer STARTTLS (and the mode requires it), or the certificate did not verify. | Confirm the encryption mode matches the port: 465 is implicit `tls`, 587/2525/2587 are `starttls`. A self-signed relay certificate will fail, by design. |
 | `auth_failed` | The credential was rejected. | Most providers want an **API key or SMTP key**, not your account password (Brevo, Resend, SES all do). Re-copy the key; check you are not using a sandbox/test key against the live endpoint. |
-| `sender_rejected` | The provider accepted your credential but refused the `From:` address. | The sending domain is not verified yet, or the address is not an allowed sender. Finish the provider's domain verification (SPF/DKIM records) and use a From: address on that domain. |
+| `sender_rejected` | The provider accepted your credential but refused the `From:` address — or the address itself was not a bare address. | Enter `no-reply@example.org`, not `Vidra <no-reply@example.org>`; the display name belongs in "Sender name". Otherwise the sending domain is not verified yet, or the address is not an allowed sender: finish the provider's domain verification (SPF/DKIM records) and use a From: address on that domain. |
 | Mailgun: "domain not found in this region" | Your Mailgun domain lives in one region and you selected the other. | Mailgun's US and EU stacks are separate. Flip the region field to match where the domain was created. |
 | `rate_limited` | Free-tier daily/monthly cap, or a provider throttle. | Check the day's volume against the free tiers above; a fresh account is also throttled while it warms up. Vidra separately limits **test** sends to 10 per hour per admin, so a long configuration session can hit that instead. |
 | `secret_undecryptable` | The stored credential can no longer be decrypted — the KEK (`MFA_KEY_KEK` / `FEDERATION_KEY_KEK`) changed or was lost. | Re-enter the credential in the panel. Nothing else is broken; the app is running normally. |
@@ -186,3 +200,18 @@ The panel's test send reports a machine-readable reason. Read it before changing
 If mail works from the panel's test send but users still report nothing arriving, the problem is
 DNS or reputation, not transport: check SPF/DKIM for the From: domain, and look in the
 provider's own delivery log, which tells you whether the recipient bounced or filtered it.
+
+### Mail reads `degraded` on Admin → System after the upgrade
+
+If your relay is configured in the **environment** and does not offer STARTTLS, the mail
+component turns amber the first time you run a release with this feature. Nothing changed about
+delivery — mail goes out exactly as it did before — but the instance now says out loud what it
+was always doing: password-reset links cross that hop unencrypted, where anything on the path
+can read them. Fix it by pointing at a relay that offers STARTTLS, or one that speaks implicit
+TLS on 465; the amber state is a description, not a fault to wait out.
+
+### Rolling back
+
+An app-only rollback to a release from before this feature ignores the panel configuration
+entirely, so an instance configured only from the panel has **no outbound mail** until it rolls
+forward again or is given working `SMTP_*` keys in `env/production.env`.
