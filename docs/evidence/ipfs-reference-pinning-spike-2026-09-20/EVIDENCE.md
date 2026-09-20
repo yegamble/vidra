@@ -4,6 +4,16 @@ Measured 2026-09-20 against the exact Kubo version vidra pins. Every figure belo
 is copied from a real run; transcripts live in `out/` (`out/RUN.txt` is the whole
 end-to-end run). Reproduce with `bash run.sh`; clean up with `bash run.sh teardown`.
 
+What is committed in `out/`: the 48 text transcripts, with the local spike
+directory, scratch paths, home directory and username replaced by `<spike>`,
+`<scratch>`, `<home>` and `<user>` — nothing else was altered. Not committed: the
+payload and read-back `.bin` files (429 MB) and `origin-requests.txt`, the origin's
+full 487 KB request log; the per-test origin excerpts that matter are in the
+transcripts.
+
+One run of each test, one machine (arm64, Docker Desktop), an offline node, a
+Python origin, random payloads. This establishes what Kubo does, not how fast.
+
 ## Environment
 
 ```

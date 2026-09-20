@@ -1,0 +1,132 @@
+t4 CID: bafybeieuqbx3r5o66zrqyojy54zunlk45zxz333jzecg6ebauk4nbqidiq (4 MiB, 16 chunks)
+sanity read http=200 size=4194304
+sanity: MATCH
+
+=== T4a origin STOPPED ===
+ready: origin down (after 0 polls)
+--- RPC cat ---
+http=200 size=0
+real 0.03
+user 0.00
+sys 0.00
+response head:
+HTTP/1.1 200 OK
+Trailer: X-Stream-Error
+X-Stream-Error: failed to fetch all nodes
+body (first 400 bytes, may be partial data + error):
+
+--- gateway ---
+http=500 size=54
+real 0.03
+user 0.00
+sys 0.00
+cannot detect content-type: failed to fetch all nodes
+
+--- filestore/verify (whole store) while origin is down, first 8 lines ---
+real 0.31
+user 0.00
+sys 0.00
+{"Status":10,"ErrorMsg":"Get \"http://host.docker.internal:18090/payload1.bin\": dial tcp 192.168.65.254:18090: connect: connection refused","Key":{"/":"bafkreiaohsapmqdamm4pjprs6ckiks24bbj67k3r325gtp3ljfl2htdlp4"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":6815744,"Size":262144}
+{"Status":10,"ErrorMsg":"Get \"http://host.docker.internal:18090/hls/720p/seg-1.m4s\": dial tcp 192.168.65.254:18090: connect: connection refused","Key":{"/":"bafkreiapo3jkgddtxsdwlfhwrzkhdlbo5lehrn6abq7bqqjfknzq7ojyba"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":0,"Size":262144}
+{"Status":10,"ErrorMsg":"Get \"http://host.docker.internal:18090/payload1.bin\": dial tcp 192.168.65.254:18090: connect: connection refused","Key":{"/":"bafkreiap7gl5opb5p42zajlw6jc3lird4r7bkwwjqs4trlh6tt56wpgbvq"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offs
+status histogram:
+256 (10, 'Get "http://host.docker.internal:18090/payload1.bin": dial t')
+16 (10, 'Get "http://host.docker.internal:18090/t4.bin": dial tcp 192')
+12 (10, 'Get "http://host.docker.internal:18090/hls/720p/seg-1.m4s": ')
+12 (10, 'Get "http://host.docker.internal:18090/mid1.bin": dial tcp 1')
+12 (10, 'Get "http://host.docker.internal:18090/hls2/720p/seg-1.m4s":')
+4 (10, 'Get "http://host.docker.internal:18090/mc_pin_true.bin": dia')
+2 (10, 'Get "http://host.docker.internal:18090/mc_justover.bin": dia')
+1 (10, 'Get "http://host.docker.internal:18090/tiny1.bin": dial tcp ')
+1 (10, 'Get "http://host.docker.internal:18090/sc_pin_true.bin": dia')
+1 (10, 'Get "http://host.docker.internal:18090/hls2/720p/init.mp4": ')
+1 (10, 'Get "http://host.docker.internal:18090/hls2/master.m3u8": di')
+1 (10, 'Get "http://host.docker.internal:18090/hls/master.m3u8": dia')
+1 (10, 'Get "http://host.docker.internal:18090/sc_exact.bin": dial t')
+1 (10, 'Get "http://host.docker.internal:18090/sc_pin_false.bin": di')
+1 (10, 'Get "http://host.docker.internal:18090/hls/720p/init.mp4": d')
+
+=== T4a-recover: restart origin, no re-add ===
+ready: origin up (after 1 polls)
+http=200 size=4194304
+RECOVERED without re-add: MATCH
+
+=== T4b origin serves DIFFERENT bytes at the same URL ===
+--- RPC cat ---
+http=200 size=0
+real 3.20
+user 0.00
+sys 0.00
+response head:
+HTTP/1.1 200 OK
+Trailer: X-Stream-Error
+X-Stream-Error: failed to fetch all nodes
+body (first 400 bytes, may be partial data + error):
+
+--- gateway ---
+http=500 size=54
+real 3.19
+user 0.00
+sys 0.00
+cannot detect content-type: failed to fetch all nodes
+
+--- filestore/verify for just this CID ---
+{"Status":30,"ErrorMsg":"ipld: could not find bafkreieuqbx3r5o66zrqyojy54zunlk45zxz333jzecg6ebauk4nbqidiq","Key":{"/":"bafkreieuqbx3r5o66zrqyojy54zunlk45zxz333jzecg6ebauk4nbqidiq"},"FilePath":"","Offset":0,"Size":0}
+
+
+=== T4c origin returns 404 ===
+--- RPC cat ---
+http=200 size=0
+real 0.03
+user 0.00
+sys 0.00
+response head:
+HTTP/1.1 200 OK
+Trailer: X-Stream-Error
+X-Stream-Error: failed to fetch all nodes
+body (first 400 bytes, may be partial data + error):
+
+--- gateway ---
+http=500 size=54
+real 0.04
+user 0.00
+sys 0.00
+cannot detect content-type: failed to fetch all nodes
+
+
+=== T4d origin returns 307 to a path that serves the right bytes ===
+--- RPC cat ---
+http=200 size=4194304
+real 0.04
+user 0.00
+sys 0.01
+response head:
+HTTP/1.1 200 OK
+Trailer: X-Stream-Error
+body (first 400 bytes, may be partial data + error):
+@.f#......>.&.n.N$NI..X...e......m\|e..%'....H(SZ..)n.).P....E..&z._.9.z..-....S..z........RTl..]....72".'.....5....4*XJJ#
+........y7..x;:rX.Q.=....^S.b.W...e;../. .....Nh.F]oC...Q.......b.8+c.&....R.Ky....[....Q.....sXd..kd...@5..J......]+.~.....?u.l....m.\.`.J....M...7...............4Pp...u.t.Y[..2a.fX......ml.\......&^..M2Y.3s~............T]..M$.G...!:>Y.......9..r.....$..yC...QaeO.z..v..E. .?F
+--- gateway ---
+http=200 size=4194304
+real 0.04
+user 0.00
+sys 0.00
+@.f#......>.&.n.N$NI..X...e......m\|e..%'....H(SZ..)n.).P....E..&z._.9.z..-....S..z........RTl..]....72".'.....5....4*XJJ#
+........y7..x;:rX.Q.=....^S.b.W...e;../. .....Nh.F]oC...Q.......b.8+c.&....R.Ky....[....Q.....sXd..kd...@5..J......]+.~.....?u.l....m.\.`.J....M...7...............4Pp...u.t.Y[..
+--- origin log for the redirect test (does Range survive?) ---
+2026-09-20T13:36:02.247 127.0.0.1 "GET /t4.bin" Range=bytes=0-262143 mode=redirect -> 307 bytes=0
+2026-09-20T13:36:02.248 127.0.0.1 "GET /redir/t4.bin" Range=bytes=0-262143 mode=redirect -> 206 bytes=262144
+2026-09-20T13:36:02.249 127.0.0.1 "GET /t4.bin" Range=bytes=262144-524287 mode=redirect -> 307 bytes=0
+2026-09-20T13:36:02.250 127.0.0.1 "GET /redir/t4.bin" Range=bytes=262144-524287 mode=redirect -> 206 bytes=262144
+2026-09-20T13:36:02.251 127.0.0.1 "GET /t4.bin" Range=bytes=524288-786431 mode=redirect -> 307 bytes=0
+2026-09-20T13:36:02.252 127.0.0.1 "GET /redir/t4.bin" Range=bytes=524288-786431 mode=redirect -> 206 bytes=262144
+2026-09-20T13:36:02.253 127.0.0.1 "GET /t4.bin" Range=bytes=786432-1048575 mode=redirect -> 307 bytes=0
+2026-09-20T13:36:02.254 127.0.0.1 "GET /redir/t4.bin" Range=bytes=786432-1048575 mode=redirect -> 206 bytes=262144
+2026-09-20T13:36:02.255 127.0.0.1 "GET /t4.bin" Range=bytes=1048576-1310719 mode=redirect -> 307 bytes=0
+2026-09-20T13:36:02.258 127.0.0.1 "GET /redir/t4.bin" Range=bytes=1048576-1310719 mode=redirect -> 206 bytes=262144
+2026-09-20T13:36:02.260 127.0.0.1 "GET /t4.bin" Range=bytes=1310720-1572863 mode=redirect -> 307 bytes=0
+2026-09-20T13:36:02.261 127.0.0.1 "GET /redir/t4.bin" Range=bytes=1310720-1572863 mode=redirect -> 206 bytes=262144
+
+=== back to normal + does it heal by itself? ===
+http=200 size=4194304
+HEALED: MATCH

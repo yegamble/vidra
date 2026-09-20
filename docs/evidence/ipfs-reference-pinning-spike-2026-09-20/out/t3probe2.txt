@@ -1,0 +1,8 @@
+sc_pin_true.bin (400 B)      pin=true           -> 1 origin read(s)
+    2026-09-20T13:35:54.368 127.0.0.1 "GET /sc_pin_true.bin" Range=bytes=0-399 mode=normal -> 206 bytes=400
+sc_pin_false.bin (400 B)     pin=false          -> 1 origin read(s)
+    2026-09-20T13:35:54.419 127.0.0.1 "GET /sc_pin_false.bin" Range=bytes=0-399 mode=normal -> 206 bytes=400
+sc_exact.bin (262144 B)      pin=false          -> 1 origin read(s)
+    2026-09-20T13:35:54.474 127.0.0.1 "GET /sc_exact.bin" Range=bytes=0-262143 mode=normal -> 206 bytes=262144
+mc_justover.bin (262145 B)   pin=false          -> 0 origin read(s)
+mc_pin_true.bin (1000000 B)  pin=true           -> 0 origin read(s)

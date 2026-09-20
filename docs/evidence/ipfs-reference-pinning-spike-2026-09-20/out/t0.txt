@@ -1,0 +1,21 @@
+
+=== config state before T0 ===
+{
+  "FilestoreEnabled": false,
+  "Libp2pStreamMounting": false,
+  "OptimisticProvide": false,
+  "OptimisticProvideJobsPoolSize": 0,
+  "P2pHttpProxy": false,
+  "UrlstoreEnabled": false
+}
+
+=== T0 add nocopy=true with URL Abspath, urlstore DISABLED ===
+curl_exit_status_code=500
+--- response status line + trailers ---
+HTTP/1.1 100 Continue
+HTTP/1.1 500 Internal Server Error
+Trailer: X-Stream-Error
+--- body ---
+{"Message":"either the filestore or the urlstore must be enabled to use nocopy, see: https://github.com/ipfs/kubo/blob/master/docs/experimental-features.md#ipfs-filestore","Code":0,"Type":"error"}
+
+--- origin requests during T0 (expect none) ---

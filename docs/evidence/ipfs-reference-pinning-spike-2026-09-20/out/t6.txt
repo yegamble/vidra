@@ -1,0 +1,28 @@
+
+=== T6a repo/gc WITH the nocopy pin in place ===
+refs before gc: 256
+gc removed 1 entries
+refs after gc:  256
+read after gc: http=200 size=67108864
+SURVIVES GC: MATCH
+{"Keys":{"bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i":{"Type":"recursive","Name":""}}}
+
+
+=== T6b pin/rm then repo/gc ===
+{"Pins":["bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i"]}
+
+gc removed 259 entries
+refs after unpin+gc: 0
+--- does the gc output name the filestore refs it dropped? ---
+{"Key":{"/":"bafkreibys35boserwnz5ncad43jnt3h75i2ehvfkbd4ypsdm32vacutwpy"}}
+{"Key":{"/":"bafkreigojler2iv2jtyg5756tb7sckxlqx6flicf4ctmqkkhhc64s5o3li"}}
+{"Key":{"/":"bafkreifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i"}}
+--- read attempt (node is OFFLINE, so no network fallback exists) ---
+http=404 size=273 time=0.001056s
+failed to resolve /ipfs/bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i: block was not found locally (offline): ipld: could not find bafkreifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffne
+--- RPC cat attempt ---
+http=500 size=158
+HTTP/1.1 500 Internal Server Error
+--- repo/stat ---
+{"RepoSize":1176265,"StorageMax":10000000000,"NumObjects":333,"RepoPath":"/data/ipfs","Version":"fs-repo@18"}
+
