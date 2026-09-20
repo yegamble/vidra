@@ -312,8 +312,6 @@ env_set_key() {
 # run with exactly the verdict it already had, plus a warning naming the URL.
 # The one thing that stops a deploy is a record that LOADS and CONTRADICTS the
 # pins, and that verdict belongs to deploy/release-mapping.py, not here.
-#
-# shellcheck disable=SC2154  # log() is the caller's, per the contract above.
 fetch_release_record() {
   local tag="$1" dest="$2" base url tmp bytes prefix why rc=0
   local max=262144   # 256 KiB. A record is ~2 KiB; anything near this is a page, not a record.
@@ -392,7 +390,7 @@ fetch_release_record() {
       why="the body is $bytes bytes, too large for a release record (cap $max)"
     else
       case "$prefix" in
-        \{*) cat "$tmp" > "$dest" ;;
+        \{*) cat "$tmp" > "$dest" || why="the body could not be written to $dest" ;;
         *) why='the body does not begin with a JSON object, so it is not a release record (an error page, a captive portal, or a redirect target)' ;;
       esac
     fi
