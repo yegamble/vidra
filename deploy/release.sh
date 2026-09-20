@@ -539,4 +539,23 @@ else
 fi
 
 log "released ${TAG} in: ${REPOS[*]}"
-log "to ship it, on the host AS THE DEPLOY USER: ./deploy/pin-release.sh ${TAG} && ./deploy/deploy.sh"
+if [ "$FULL_RELEASE" = 1 ]; then
+  log "to ship it, on the host AS THE DEPLOY USER: ./deploy/pin-release.sh ${TAG} && ./deploy/deploy.sh"
+else
+  # A SUBSET RELEASE HAS NO RECORD YET, and pin-release.sh reads the record to
+  # learn which tag each component carries. With none it falls back to pinning
+  # all three keys at ${TAG} — correct for a uniform release, and for this one
+  # a pin of images that were never built.
+  #
+  # BUT THE BY-HAND PIN IS NOT ENOUGH ON ITS OWN, and an earlier version of
+  # this hint stopped there. The mixed triple it writes is one NO record
+  # pairs, so deploy.sh's release-mapping preflight refuses it outright
+  # ("core=vN user=v(N-k) search=v(N-k) is not a recorded release ... Nothing
+  # was changed", exit 1) — the second half of the chain this line printed
+  # could not run. Two honest ways forward, and this names both: land the
+  # record and let a plain pin resolve it (the only route that ends VERIFIED),
+  # or waive the pairing check for that one run.
+  log "to ship it, on the host AS THE DEPLOY USER — ${REPOS[*]} moved to ${TAG} and the others did NOT, and ${RECORD_REL} does not exist yet to say so."
+  log "  PREFERRED: land ${RECORD_REL} on main first, then plain './deploy/pin-release.sh ${TAG} && ./deploy/deploy.sh' — pin-release fetches that record, pins each component at its own tag, and the deploy verifies the pairing."
+  log "  BEFORE THE RECORD EXISTS: './deploy/pin-release.sh ${TAG} --component-tag <role>=<their tag> ...' then 'VIDRA_RELEASE_MAPPING=warn ./deploy/deploy.sh'. That override WAIVES the pairing check for that one run — the deploy then proves nothing about these images having been released together. Unset it once the record lands."
+fi

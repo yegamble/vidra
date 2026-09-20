@@ -54,13 +54,30 @@ import re
 import sys
 
 OK, REFUSED, UNVERIFIED = 0, 1, 3
+# `resolve`'s own code for "this script fell over". 1 is what a shell — and an
+# uncaught traceback — returns for ANY failure, so sharing it between "your
+# flag contradicts the record" and "the resolver broke" makes the two
+# indistinguishable to the caller, which then blames the operator's flag for a
+# bug in here. The same reasoning that gave the --extra-record re-check its own
+# 65 in deploy/lib.sh.
+CRASHED = 70
 
 COMPONENTS = (('core', 'VIDRA_CORE_TAG', 'vidra-core'),
               ('user', 'VIDRA_USER_TAG', 'vidra-user'),
               ('search', 'VIDRA_SEARCH_TAG', 'vidra-search'))
+# Repository name -> role, so `resolve --component-tag` takes the spelling
+# deploy/release-preflight.py's flag of the same name uses as well as its own.
+ROLE_ALIASES = {repo: name for name, _, repo in COMPONENTS}
 
 # The shape deploy/release.sh cuts, and the only one a record may name.
 RELEASE_TAG = re.compile(r'v[0-9]+\.[0-9]+\.[0-9]+')
+# The same shape, minus leading zeros, for values an OPERATOR types at
+# `resolve` — records are machine-generated, flags are not. v0.07.3 parses to
+# the same (0, 7, 3) as v0.7.3, so it compares equal to the real tag, passes
+# the newer-than-the-release gate, and only fails at `compose pull` with the
+# wrong value already written into the env file. Same rule, and the same
+# reason, as deploy/release-preflight.py's RELEASE_TAG.
+STRICT_RELEASE_TAG = re.compile(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
 COMMIT = re.compile(r'[0-9a-f]{40}')
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
 PLATFORM = re.compile(r'[a-z0-9]+/[a-z0-9]+(/[a-z0-9]+)?')
@@ -169,6 +186,40 @@ def validate(path, data):
     return problems
 
 
+def release_shape_problem(release, triple, described):
+    """Why `triple` cannot be release `release`'s components, or '' when it can.
+
+    THE STRUCTURAL RULE. A record is a statement about ONE release, and
+    deploy/release.sh cuts every component of a release at or below the
+    release's own version — v0.7.4 and v0.7.5 re-released vidra-core alone, so
+    `core=v0.7.5 user=v0.7.3 search=v0.7.3` is a perfectly ordinary record, but
+    nothing may be ABOVE the release tag and something must EQUAL it. A file
+    claiming release v0.7.0 while pairing v0.9.0 images describes a release
+    that cannot exist; admitting it would let a record vouch for images from a
+    release it does not name.
+
+    NOT a defence against whoever controls the record source (see the trust
+    model in releases/README.md) — it is the shape check that keeps an honest
+    mistake, or a record served from the wrong path, from being read as a
+    verification it is not.
+
+    Shared by --extra-record and by `resolve`, which reads the same rule from
+    the other side: it derives the triple from the record instead of holding a
+    pinned triple against it, and a record that fails this must not be allowed
+    to decide what a host pins.
+    """
+    release_version = semver(release)
+    versions = [semver(tag) for tag in triple]
+    if any(version > release_version for version in versions):
+        return (f'names release {release} but pairs {described}, which is NEWER than the release '
+                'it claims to be. A release cannot contain an image from a later one, so this is '
+                f'not a record {release} could have produced.')
+    if not any(version == release_version for version in versions):
+        return (f'names release {release} but pairs {described}, none of which is {release}. A '
+                'release record names the release at least one of its own components was cut as.')
+    return ''
+
+
 def load_extra_record(path, records, env):
     """One record from OUTSIDE releases/, for this run only: (record, why-not).
 
@@ -239,30 +290,9 @@ def load_extra_record(path, records, env):
         return None, (f'--extra-record ({path}) pairs {described}, exactly like a record already in '
                       'this tree. It was IGNORED rather than added: two records pairing one triple '
                       'cannot say which release is being deployed.')
-    # THE STRUCTURAL RULE. A record is a statement about ONE release, and
-    # deploy/release.sh cuts every component of a release at or below the
-    # release's own version — v0.7.4 and v0.7.5 re-released vidra-core alone,
-    # so `core=v0.7.5 user=v0.7.3 search=v0.7.3` is a perfectly ordinary
-    # record, but nothing may be ABOVE the release tag and something must
-    # EQUAL it. A file claiming release v0.7.0 while pairing v0.9.0 images
-    # describes a release that cannot exist; admitting it would let a record
-    # vouch for images from a release it does not name.
-    #
-    # NOT a defence against whoever controls the record source (see the trust
-    # model in releases/README.md) — it is the shape check that keeps an
-    # honest mistake, or a record served from the wrong path, from being read
-    # as a verification it is not.
-    release_version = semver(data['release'])
-    versions = [semver(tag) for tag in triple]
-    if any(version > release_version for version in versions):
-        return None, (f'--extra-record ({path}) names release {data["release"]} but pairs '
-                      f'{described}, which is NEWER than the release it claims to be. A release '
-                      'cannot contain an image from a later one, so this is not a record '
-                      f'{data["release"]} could have produced. It was IGNORED.')
-    if not any(version == release_version for version in versions):
-        return None, (f'--extra-record ({path}) names release {data["release"]} but pairs '
-                      f'{described}, none of which is {data["release"]}. A release record names '
-                      'the release at least one of its own components was cut as. It was IGNORED.')
+    problem = release_shape_problem(data['release'], triple, described)
+    if problem:
+        return None, f'--extra-record ({path}) {problem} It was IGNORED.'
     return data, ''
 
 
@@ -742,11 +772,236 @@ def bundle_findings(bundle, record, where, path):
     return findings
 
 
+def parse_component_tag(value, overrides):
+    """One `--component-tag <role>=<tag>` into `overrides`, or a reason not to.
+
+    BOTH SPELLINGS of a role are accepted and normalised to the role name:
+    `user` and `vidra-user` alike. deploy/release-preflight.py's flag of the
+    same name takes repository names, this one is named after the env keys it
+    feeds (VIDRA_USER_TAG is `user`), and deploy/README.md now documents the
+    two a few paragraphs apart — so a reader who carries the wrong spelling
+    across gets the pin they meant rather than a refusal. Normalising BEFORE
+    the duplicate check is what makes `user=v0.7.3 --component-tag
+    vidra-user=v0.7.2` the contradiction it plainly is.
+    """
+    role, sep, tag = value.partition('=')
+    role = ROLE_ALIASES.get(role, role)
+    if not sep or role not in {name for name, _, _ in COMPONENTS}:
+        return (f'--component-tag {value!r}: expected <role>=<tag> where role is one of '
+                + ', '.join(f'{name} (or {repo})' for name, _, repo in COMPONENTS))
+    if not STRICT_RELEASE_TAG.fullmatch(tag):
+        return (f'--component-tag {role}={tag!r} is not a vMAJOR.MINOR.PATCH release tag. '
+                'Leading zeros are refused too: v0.07.3 is not a tag deploy/release.sh ever '
+                'cut, but it parses to the same (0, 7, 3) as the real one, so it would compare '
+                'equal here and only fail at `compose pull`')
+    if overrides.setdefault(role, tag) != tag:
+        return (f'--component-tag names {role} twice, as {overrides[role]} and {tag}; one of '
+                'them is wrong and guessing which is not this script\'s job')
+    return ''
+
+
+def resolve(args):
+    """`resolve`, guarded. See _resolve below for what it answers.
+
+    THE CRASH GUARD LIVES HERE, not at the call site, so "resolve never
+    raises, and says so with its own exit code" is a property of the function
+    every caller uses rather than of one caller's plumbing. Everything
+    _resolve reads is already guarded exception-by-exception, so reaching this
+    except means a BUG IN THIS FILE, not a hostile record — and a bug must
+    still be told apart from the verdicts, because the shell names a different
+    fix for each. Without it an uncaught traceback exits 1, which in this
+    contract means "your --component-tag contradicts the record": the operator
+    would be sent to correct a flag that was never wrong.
+    """
+    try:
+        return _resolve(args)
+    except Exception as error:  # noqa: BLE001 - see above
+        print(f'[release-mapping] ERROR: resolve crashed ({type(error).__name__}: {error}). '
+              'This is a bug in deploy/release-mapping.py, not something the caller did. '
+              'Nothing was resolved.', file=sys.stderr)
+        return CRASHED
+
+
+def _resolve(args):
+    """`resolve`: which tag each of the three keys carries for one release.
+
+    WHY IT LIVES IN THE CHECKER. deploy/pin-release.sh wrote ONE tag into all
+    three VIDRA_*_TAG keys, which is right only while every release moves
+    every component. v0.7.4 and v0.7.5 re-released vidra-core ALONE and pair
+    user and search at v0.7.3, so the documented upgrade command pinned
+    ghcr.io/yegamble/vidra-user:v0.7.5 — an image that has never existed — for
+    exactly the release beta is running, and hand-editing the env file was the
+    only way to deploy it. releases/<tag>.json already states the pairing;
+    this reads it, with `validate()` above and nothing new, so the shell never
+    grows a second record parser that can drift from this one.
+
+    THE EXIT CODE IS THE ANSWER, and every code means ONE thing. stdout
+    carries the triple for the two codes that have one, and nothing at all
+    for the rest — a caller that reads stdout must never act on a half-answer:
+      0   a record decided it (per-component pins)
+      3   no usable record: the uniform fallback, byte-for-byte the behaviour
+          before this existed, plus any --component-tag. The caller warns.
+      1   refused: a flag is not a release tag, or contradicts a record that
+          loaded. The operator has to change something.
+      2   argparse — including an older copy of this script that has no
+          `resolve` command at all, which is what a mixed-revision tree looks
+          like from the shell.
+      70  this script fell over. Its own code, never 1: see CRASHED above.
+    Anything else is undefined, and the caller may not guess past it.
+
+    TWO RECORDS, AND WHICH WINS. deploy/pin-release.sh reads the record off
+    the tree the run STARTS on and then checks that tree out at the release
+    tag — which carries no record for itself. deploy.sh, running from the
+    moved tree, therefore fetches the canonical copy. If the two disagree the
+    pin is made from one record and judged against another: the host is moved
+    and the deploy is refused. So --fetched-record WINS over --record, and a
+    disagreement is named rather than quietly resolved.
+
+    ABSENCE IS NOT A REFUSAL — the standing severity ruling, that a finding
+    may only stop what it PREDICTS. A record that could not be read predicts
+    nothing about the pairing: most releases are uniform, so falling back is
+    right far more often than it is wrong, and an operator who cannot fetch a
+    record must not be locked out of pinning. What DOES predict the wrong
+    bytes is a flag that contradicts a record that loaded — one of the two
+    values names an image the release does not contain — so that stops, names
+    both values, and names --force.
+    """
+    overrides, stdout, stderr = {}, [], []
+    # semver(), not STRICT_RELEASE_TAG: --release carries whatever the caller's
+    # own shape gate let through, and deploy/pin-release.sh has always accepted
+    # a prerelease (`v0.7.5-rc1`) because that is what a rehearsal lab pins.
+    # Such a tag has no record anywhere and never will, so it lands on the
+    # uniform fallback — exactly where it landed before this command existed.
+    # Tightening it here would lock every lab out of the script. The strict
+    # pattern is for OPERATOR-TYPED --component-tag values, which go straight
+    # into an image reference.
+    if args.release is None or semver(args.release) is None:
+        print(f'[release-mapping] ERROR: --release {args.release!r} is not a vMAJOR.MINOR.PATCH '
+              'release tag', file=sys.stderr)
+        return REFUSED
+    for value in args.component_tag:
+        problem = parse_component_tag(value, overrides)
+        if problem:
+            print(f'[release-mapping] ERROR: {problem}', file=sys.stderr)
+            return REFUSED
+    for role, tag in overrides.items():
+        if semver(tag) > semver(args.release):
+            print(f'[release-mapping] ERROR: --component-tag {role}={tag} is newer than the '
+                  f'release {args.release} being pinned. A release cannot contain an image built '
+                  'after it, so one of the two is wrong.', file=sys.stderr)
+            return REFUSED
+
+    # THE RECORDS, held to exactly the rules --extra-record is held to: the
+    # checker's own validate(), the filename/identity agreement inside it, and
+    # the structural rule. Anything either cannot answer is reported and
+    # dropped — an unusable copy never costs a usable one.
+    tree, why = ({}, '') if not args.record else record_pairing(Path(args.record), args.release)
+    if why:
+        stderr.append(f'WARNING: {why}')
+    fetched, why = (({}, '') if not args.fetched_record
+                    else record_pairing(Path(args.fetched_record), args.release))
+    if why:
+        stderr.append(f'WARNING: {why}')
+
+    if fetched and tree and fetched != tree:
+        stderr.append(
+            'WARNING: this tree\'s release record and the canonical copy fetched for this run '
+            f'pair {args.release} DIFFERENTLY. This tree says '
+            + ' '.join(f'{r}={t}' for r, t in tree.items())
+            + f' ({args.record}); the fetched copy says '
+            + ' '.join(f'{r}={t}' for r, t in fetched.items())
+            + f' ({args.fetched_record}). The FETCHED copy is used, because that is the one the '
+              'next deploy will check these pins against — this tree is about to move to '
+              f'{args.release}, which carries no record of its own. If the tree copy is the '
+              'right one, the record on main is wrong and needs correcting before anyone '
+              'deploys this release.')
+    recorded = fetched or tree
+    origin = 'record-fetched' if fetched else 'record-tree'
+
+    for role, _, _ in COMPONENTS:
+        if role in overrides and role in recorded and overrides[role] != recorded[role]:
+            if not args.force:
+                print(f'[release-mapping] ERROR: --component-tag {role}={overrides[role]} '
+                      f'contradicts the release record for {args.release}, which pairs {role} at '
+                      f'{recorded[role]}. One of them names an image {args.release} does not '
+                      'contain, so nothing was resolved and nothing should be written. Fix the '
+                      'flag, or pass --force if you are deliberately correcting a bad record.',
+                      file=sys.stderr)
+                return REFUSED
+            stderr.append(f'WARNING: --component-tag {role}={overrides[role]} overrides the '
+                          f'release record for {args.release}, which pairs {role} at '
+                          f'{recorded[role]}. --force was given, so the flag wins; if the record '
+                          'is right, this host is about to run an image the release never had.')
+        if role in overrides:
+            tag, source = overrides[role], '--component-tag'
+        elif role in recorded:
+            tag, source = recorded[role], origin
+        else:
+            tag, source = args.release, '--release'
+        stdout.append(f'{role} {tag} {source}')
+
+    for line in stdout:
+        print(line)
+    for line in stderr:
+        print(f'[release-mapping] {line}', file=sys.stderr)
+    return OK if recorded else UNVERIFIED
+
+
+def record_pairing(path, release):
+    """({role: tag}, why-not) for one release record. Never raises.
+
+    The record is read for the SAME reasons --extra-record is, and refused for
+    the same ones, so the two cannot drift: validate() checks the shape and
+    that the filename matches the release the record names, and
+    release_shape_problem() checks that the components could belong to it.
+    Every failure is a string, never an exception: this decides whether a host
+    can pin at all, and a traceback here would be a refusal nobody chose.
+    """
+    where = f'{path.parent.name}/{path.name}'
+    unusable = (f'{release}\'s release record ({where}) is unusable: %s. The pairing it might '
+                'have stated was not used.')
+    try:
+        if path.stat().st_size > MAX_EXTRA_RECORD_BYTES:
+            return {}, unusable % (f'it is {path.stat().st_size} bytes, far too large for a '
+                                   f'release record (cap {MAX_EXTRA_RECORD_BYTES})')
+        data = json.loads(path.read_text())
+        problems = validate(path, data)
+    except Exception as error:  # noqa: BLE001 - a crash here would refuse a pin nobody may refuse
+        return {}, unusable % f'{type(error).__name__}: {error}'
+    if problems:
+        return {}, unusable % '; '.join(problems)
+    if data['release'] != release:
+        return {}, (f'the record at {where} names release {data["release"]}, not {release}. It '
+                    f'was IGNORED: a record for one release must not pair another.')
+    triple = {name: data['components'][name]['tag'] for name, _, _ in COMPONENTS}
+    described = ' '.join(f'{name}={tag}' for name, tag in triple.items())
+    problem = release_shape_problem(data['release'], list(triple.values()), described)
+    if problem:
+        return {}, f'the record at {where} {problem} It was IGNORED.'
+    return triple, ''
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0],
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('command', choices=('check',))
-    parser.add_argument('--mode', choices=('deploy', 'rollback'), required=True,
+    parser.add_argument('command', choices=('check', 'resolve'))
+    parser.add_argument('--release', help='resolve: the release being pinned')
+    parser.add_argument('--record', type=Path,
+                        help='resolve: this tree\'s releases/<tag>.json, when it has one. '
+                             'Absent or unusable means the uniform fallback, never a refusal')
+    parser.add_argument('--fetched-record', type=Path,
+                        help='resolve: the canonical copy downloaded for this run. WINS over '
+                             '--record, because it is the copy the deploy that follows will '
+                             'check the pins against; a disagreement between the two is warned '
+                             'about, naming both')
+    parser.add_argument('--component-tag', action='append', metavar='ROLE=TAG', default=[],
+                        help='resolve: pin ONE role by hand (repeatable), for the window before '
+                             'the record exists anywhere. ROLE is core/user/search or the '
+                             'matching vidra-* repository name. Refused when it contradicts a '
+                             'record that loaded, unless --force')
+    parser.add_argument('--force', action='store_true',
+                        help='resolve: let --component-tag override a record that contradicts it')
+    parser.add_argument('--mode', choices=('deploy', 'rollback'),
                         help='rollback skips the bundle comparison and warns (instead of refusing) '
                              'on a triple no record pairs and on a releases/ that cannot be used; '
                              'an unparseable tag and a digest contradicting a loaded record stay fatal')
@@ -783,6 +1038,15 @@ def main():
                              'reaches an unparseable tag, a broken releases/, a digest contradiction '
                              'or a stale bundle')
     args = parser.parse_args()
+    if args.command == 'resolve':
+        return resolve(args)   # guarded: never raises, see its docstring
+    # --mode stopped being argparse-`required` when `resolve`, which has no
+    # mode, joined the same parser. It is still required for `check`: a
+    # default here would silently pick a severity (deploy refuses what
+    # rollback warns about) that no caller asked for. parser.error produces
+    # the identical message and exit 2 argparse produced before.
+    if args.mode is None:
+        parser.error('the following arguments are required: --mode')
     found = {}
 
     # --print-missing-release is a QUESTION, not a verdict: it prints one tag
