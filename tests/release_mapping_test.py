@@ -1985,5 +1985,206 @@ sys.exit(int(os.environ.get('PASS1', '3')))
         self.assertIn('interrupted', out.lower())
 
 
+class ResolveTests(Fixture):
+    """`resolve`: WHICH tag each of the three keys should carry for a release.
+
+    `check` answers "may this triple run?". Nothing answered "what IS the
+    triple for release vN?", so deploy/pin-release.sh wrote one tag into all
+    three VIDRA_*_TAG keys. v0.7.4 and v0.7.5 re-released vidra-core alone and
+    pair user and search at v0.7.3, so the documented upgrade command pinned
+    ghcr.io/yegamble/vidra-user:v0.7.5 — an image that does not exist — for
+    exactly the release running on beta. The record already says what the
+    pairing is; this command is the single reader of it, so the shell never
+    grows a second record parser of its own.
+
+    Absence is never a refusal (the standing severity ruling: a finding may
+    only stop what it predicts). No record, an unreadable one, one naming
+    another release: exit 3 with the uniform triple on stdout and a warning,
+    which is byte-for-byte what pin-release.sh did before this existed. Exit 1
+    is reserved for what DOES predict the wrong bytes: a flag value that is not
+    a release tag, and a flag that contradicts a record that loaded.
+    """
+
+    def resolve(self, release, *args, record=None):
+        argv = ['python3', str(CHECKER), 'resolve', '--release', release]
+        if record is not None:
+            argv += ['--record', str(record)]
+        result = subprocess.run([*argv, *args], capture_output=True, text=True)
+        return result.returncode, result.stdout, result.stderr
+
+    def triple(self, stdout):
+        """{role: tag} from the three `<role> <tag> <source>` lines."""
+        return {line.split()[0]: line.split()[1] for line in stdout.split('\n') if line.strip()}
+
+    def sources(self, stdout):
+        return {line.split()[0]: line.split()[2] for line in stdout.split('\n') if line.strip()}
+
+    def written(self, record, name=None):
+        path = self.base / (name or record['release'] + '.json')
+        path.write_text(json.dumps(record, indent=2))
+        return path
+
+    def test_the_real_core_only_record_resolves_each_key_to_its_own_tag(self):
+        """THE DEFECT, stated as the shipped release it breaks. Not a synthetic
+        fixture: releases/v0.7.5.json is the record on beta today."""
+        real = RECORDS / 'v0.7.5.json'
+        self.assertTrue(real.is_file(), 'releases/v0.7.5.json is gone; this test guards it')
+        code, out, err = self.resolve('v0.7.5', record=real)
+        self.assertEqual(code, OK, out + err)
+        self.assertEqual(self.triple(out), {'core': 'v0.7.5', 'user': 'v0.7.3', 'search': 'v0.7.3'})
+        self.assertEqual(set(self.sources(out).values()), {'record'})
+
+    def test_a_uniform_record_resolves_all_three_to_the_release(self):
+        path = self.written(synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9))
+        code, out, err = self.resolve('v0.9.0', record=path)
+        self.assertEqual(code, OK, out + err)
+        self.assertEqual(self.triple(out), {'core': 'v0.9.0', 'user': 'v0.9.0', 'search': 'v0.9.0'})
+
+    def test_no_record_at_all_falls_back_to_the_release_for_all_three(self):
+        """The behaviour every caller had before records were consulted, and
+        the one an offline host must keep: UNVERIFIED, never refused."""
+        code, out, err = self.resolve('v0.9.0')
+        self.assertEqual(code, UNVERIFIED, out + err)
+        self.assertEqual(self.triple(out), {'core': 'v0.9.0', 'user': 'v0.9.0', 'search': 'v0.9.0'})
+        self.assertEqual(set(self.sources(out).values()), {'--release'})
+
+    def test_a_record_path_that_does_not_exist_is_unverified_not_a_crash(self):
+        code, out, err = self.resolve('v0.9.0', record=self.base / 'nope.json')
+        self.assertEqual(code, UNVERIFIED, out + err)
+        self.assertNotIn('Traceback', out + err)
+        self.assertEqual(self.triple(out), {'core': 'v0.9.0', 'user': 'v0.9.0', 'search': 'v0.9.0'})
+
+    def test_a_record_for_another_release_is_ignored_not_obeyed(self):
+        """The filename is not the record's identity, and a record served from
+        the wrong path must not pair a release it does not name."""
+        path = self.written(synthetic('v0.7.0', 'v0.7.0', 'v0.7.0', 'v0.7.0', seed=7),
+                            name='v0.9.0.json')
+        code, out, err = self.resolve('v0.9.0', record=path)
+        self.assertEqual(code, UNVERIFIED, out + err)
+        self.assertEqual(self.triple(out), {'core': 'v0.9.0', 'user': 'v0.9.0', 'search': 'v0.9.0'})
+        self.assertIn('v0.7.0', err)
+
+    def test_malformed_bodies_are_ignored_not_crashes_and_never_refusals(self):
+        cases = {'truncated': '{"schema_version": 1, "release": "v0.9.0", "comp',
+                 'html error page': '<!DOCTYPE html><html>404: Not Found</html>\n',
+                 'empty': '',
+                 'not a record': json.dumps({'hello': 'world'}),
+                 'deeply nested': '{"a":' + '[' * 30000 + ']' * 30000 + '}'}
+        for label, text in cases.items():
+            with self.subTest(body=label):
+                path = self.base / 'v0.9.0.json'
+                path.write_text(text)
+                code, out, err = self.resolve('v0.9.0', record=path)
+                self.assertEqual(code, UNVERIFIED, out + err)
+                self.assertNotIn('Traceback', out + err, 'it crashed instead of reporting')
+                self.assertEqual(self.triple(out),
+                                 {'core': 'v0.9.0', 'user': 'v0.9.0', 'search': 'v0.9.0'})
+
+    def test_a_record_whose_component_outranks_its_release_is_ignored(self):
+        bad = synthetic('v0.9.0', 'v0.9.1', 'v0.9.0', 'v0.9.0', seed=9)
+        code, out, err = self.resolve('v0.9.0', record=self.written(bad))
+        self.assertEqual(code, UNVERIFIED, out + err)
+        self.assertEqual(self.triple(out), {'core': 'v0.9.0', 'user': 'v0.9.0', 'search': 'v0.9.0'})
+        self.assertIn('NEWER', err)
+
+    def test_a_record_no_component_of_which_is_its_release_is_ignored(self):
+        code, out, err = self.resolve(
+            'v0.9.0', record=self.written(synthetic('v0.9.0', 'v0.7.3', 'v0.7.3', 'v0.7.3', seed=7)))
+        self.assertEqual(code, UNVERIFIED, out + err)
+        self.assertEqual(self.triple(out), {'core': 'v0.9.0', 'user': 'v0.9.0', 'search': 'v0.9.0'})
+
+    def test_a_component_tag_pins_by_hand_where_no_record_can_be_had(self):
+        """The by-hand path the WARNING points at: an airgapped host, or the
+        window before the record PR merges."""
+        code, out, err = self.resolve('v0.9.0', '--component-tag', 'user=v0.7.3',
+                                      '--component-tag', 'search=v0.7.3')
+        self.assertEqual(code, UNVERIFIED, out + err)
+        self.assertEqual(self.triple(out), {'core': 'v0.9.0', 'user': 'v0.7.3', 'search': 'v0.7.3'})
+        self.assertEqual(self.sources(out)['user'], '--component-tag')
+        self.assertEqual(self.sources(out)['core'], '--release')
+
+    def test_a_component_tag_that_agrees_with_the_record_is_not_a_contradiction(self):
+        code, out, err = self.resolve('v0.7.5', '--component-tag', 'user=v0.7.3',
+                                      record=RECORDS / 'v0.7.5.json')
+        self.assertEqual(code, OK, out + err)
+        self.assertEqual(self.triple(out), {'core': 'v0.7.5', 'user': 'v0.7.3', 'search': 'v0.7.3'})
+
+    def test_a_component_tag_contradicting_a_usable_record_is_refused(self):
+        """A contradiction DOES predict the wrong bytes — one of the two values
+        pulls an image the release never contained — so this one stops, and the
+        message has to name both so the operator can see which is wrong."""
+        code, out, err = self.resolve('v0.7.5', '--component-tag', 'user=v0.7.4',
+                                      record=RECORDS / 'v0.7.5.json')
+        self.assertEqual(code, REFUSED, out + err)
+        self.assertEqual(out, '', 'a refusal printed a triple a caller could act on')
+        self.assertIn('v0.7.4', err)
+        self.assertIn('v0.7.3', err)
+        self.assertIn('--force', err, 'the refusal does not name its own escape')
+
+    def test_force_lets_a_component_tag_beat_the_record_but_never_quietly(self):
+        code, out, err = self.resolve('v0.7.5', '--component-tag', 'user=v0.7.4', '--force',
+                                      record=RECORDS / 'v0.7.5.json')
+        self.assertEqual(code, OK, out + err)
+        self.assertEqual(self.triple(out)['user'], 'v0.7.4')
+        self.assertIn('WARNING', err)
+        self.assertIn('v0.7.3', err, 'the warning does not name the value it overrode')
+
+    def test_nonsense_flag_values_are_refused_and_print_no_triple(self):
+        """Every one of these would otherwise be written into the env file and
+        die at `compose pull` — or, worse, pull something real and wrong.
+        Leading zeros are their own case: v0.07.3 parses to the same (0, 7, 3)
+        as v0.7.3, sails through the ordering gate and is not a tag
+        deploy/release.sh ever cut."""
+        cases = ('frontend=v0.7.3', 'user', 'user=v0.07.3', 'user=latest', 'user=0.7.3',
+                 'user=v0.7', 'user=v0.7.3 v0.7.4', '=v0.7.3', 'USER=v0.7.3')
+        for value in cases:
+            with self.subTest(flag=value):
+                code, out, err = self.resolve('v0.9.0', '--component-tag', value)
+                self.assertEqual(code, REFUSED, out + err)
+                self.assertEqual(out, '')
+                self.assertNotIn('Traceback', err)
+
+    def test_a_component_tag_newer_than_the_release_is_refused(self):
+        """A release cannot contain an image built after it, with or without a
+        record to say so — and v0.7.10 is newer than v0.7.9, not older."""
+        for release, override in (('v0.9.0', 'user=v0.9.1'), ('v0.7.9', 'user=v0.7.10')):
+            with self.subTest(release=release):
+                code, out, err = self.resolve(release, '--component-tag', override)
+                self.assertEqual(code, REFUSED, out + err)
+                self.assertEqual(out, '')
+                self.assertIn('newer', err.lower())
+
+    def test_one_role_named_twice_with_different_tags_is_refused(self):
+        code, out, err = self.resolve('v0.9.0', '--component-tag', 'user=v0.7.3',
+                                      '--component-tag', 'user=v0.7.2')
+        self.assertEqual(code, REFUSED, out + err)
+        self.assertEqual(out, '')
+
+    def test_a_release_that_is_not_a_tag_is_refused(self):
+        for release in ('latest', 'v0.7', '0.7.5', 'v0.7.5/../x'):
+            with self.subTest(release=release):
+                code, out, err = self.resolve(release)
+                self.assertEqual(code, REFUSED, out + err)
+                self.assertEqual(out, '')
+
+    def test_a_prerelease_release_still_resolves_uniformly(self):
+        """A rehearsal lab pins vN-rc1, which has no record anywhere and never
+        will. pin-release.sh has always accepted it, so this must answer with
+        the uniform triple rather than refusing and locking the lab out."""
+        code, out, err = self.resolve('v0.7.5-rc1')
+        self.assertEqual(code, UNVERIFIED, out + err)
+        self.assertEqual(self.triple(out),
+                         {'core': 'v0.7.5-rc1', 'user': 'v0.7.5-rc1', 'search': 'v0.7.5-rc1'})
+
+    def test_check_still_requires_a_mode(self):
+        """resolve takes no --mode, so --mode stopped being argparse-required.
+        `check` must still refuse to run without one rather than default to a
+        severity nobody asked for."""
+        result = subprocess.run(['python3', str(CHECKER), 'check', '--releases',
+                                 str(self.releases)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn('--mode', result.stderr)
+
+
 if __name__ == '__main__':
     unittest.main()
