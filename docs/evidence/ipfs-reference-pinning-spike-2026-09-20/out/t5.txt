@@ -1,0 +1,39 @@
+0. before anything                         RepoSize=186579  NumObjects=347
+
+=== T5.1 COPY-mode add of payload2 (64 MiB), pinned ===
+copy-mode CID: bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i
+1. after copy add                          RepoSize=68218129  NumObjects=607
+filestore refs mentioning payload2.bin: 0
+
+=== T5.2 nocopy RE-ADD of the very same bytes with a URL Abspath ===
+{"Name":"payload2.bin","Hash":"bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i","Size":"67121797"}
+2. after nocopy re-add                     RepoSize=68218660  NumObjects=607
+filestore refs mentioning payload2.bin: 0
+--- filestore/dups ---
+dups lines: 0
+--- origin hits during the re-add ---
+count: 0
+
+=== T5.3 pin/rm ===
+{"Pins":["bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i"]}
+
+3. after pin/rm                            RepoSize=68218940  NumObjects=607
+filestore refs mentioning payload2.bin: 0
+
+=== T5.4 repo/gc ===
+gc removed 274 entries
+4. after repo/gc                           RepoSize=1119793  NumObjects=333
+filestore refs mentioning payload2.bin: 0
+
+=== T5.5 nocopy re-add after the blocks are gone ===
+CID after migration: bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i
+CID UNCHANGED across the migration
+5. after nocopy re-add                     RepoSize=1166408  NumObjects=593
+filestore refs mentioning payload2.bin: 256
+origin hits during migration re-add: 0
+--- pin still there? ---
+{"Keys":{"bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i":{"Type":"recursive","Name":""}}}
+
+--- readback ---
+http=200 size=67108864
+READBACK MATCH

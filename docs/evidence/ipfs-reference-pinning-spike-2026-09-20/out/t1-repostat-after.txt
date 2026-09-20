@@ -1,0 +1,1 @@
+{"RepoSize":89246,"StorageMax":10000000000,"NumObjects":261,"RepoPath":"/data/ipfs","Version":"fs-repo@18"}

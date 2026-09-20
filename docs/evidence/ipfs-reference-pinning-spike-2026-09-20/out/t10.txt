@@ -1,0 +1,79 @@
+clean slate: 0 filestore refs, RepoSize=1191341
+
+=== T10.1 nocopy add, Abspath .../a/dup.bin, pinned ===
+CID X = bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq   (8 MiB => 32 chunks)
+     32 refs -> http://host.docker.internal:18090/a/dup.bin
+leaf blocks: 32   first: bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi
+
+=== T10.2 nocopy add of the SAME bytes, Abspath .../b/dup.bin ===
+{"Name":"dup.bin","Hash":"bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq","Size":"8390218"}
+reference sources after the second add:
+     32 refs -> http://host.docker.internal:18090/a/dup.bin
+
+=== T10.3 /a/dup.bin now 404s; /b/dup.bin still healthy ===
+   origin /a/dup.bin -> 404
+   origin /b/dup.bin -> 200
+   gateway: http=500 size=54 time=0.026570s
+cannot detect content-type: failed to fetch all nodes
+
+
+=== T10.3b filestore/verify: whole store vs a single root CID ===
+real 0.04
+user 0.00
+sys 0.00
+   lines: 32   bad: 32
+{"Status":10,"ErrorMsg":"expected HTTP 200 or 206 got 404","Key":{"/":"bafkreiagpzyitxtyaing6n466ee4zuigtxvxf2bdxdqx3patjcvbje27oa"},"FilePath":"http://host.docker.internal:18090/a/dup.bin","Offset":4194304,"Size":262144}
+{"Status":10,"ErrorMsg":"expected HTTP 200 or 206 got 404","Key":{"/":"bafkreiaybkrm2jlobwjxmf7ocivlufmoifcmr7cvnvc33xxmwbfuhwnlgq"},"FilePath":"http://host.docker.internal:18090/a/dup.bin","Offset":6291456,"Size":262144}
+   -- verify?arg=<root CID> --
+real 0.00
+user 0.00
+sys 0.00
+{"Status":30,"ErrorMsg":"ipld: could not find bafkreieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq","Key":{"/":"bafkreieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq"},"FilePath":"","Offset":0,"Size":0}
+   -- verify?arg=<one leaf key> --
+   leaf: bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi
+{"Status":10,"ErrorMsg":"expected HTTP 200 or 206 got 404","Key":{"/":"bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi"},"FilePath":"http://host.docker.internal:18090/a/dup.bin","Offset":0,"Size":262144}
+
+
+=== T10.4-i heal attempt (i): plain nocopy re-add from /b, nothing else ===
+{"Name":"dup.bin","Hash":"bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq","Size":"8390218"}
+reference sources after:
+     32 refs -> http://host.docker.internal:18090/a/dup.bin
+   gateway: http=500 size=54
+
+=== T10.4-ii heal attempt (ii): block/rm while X is STILL PINNED ===
+   block/rm (no force):
+{"Hash":"bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi","Error":"pinned via bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq"}
+
+   block/rm force=true:
+{"Hash":"bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi","Error":"pinned via bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq"}
+
+   leaf still in filestore/ls? 1
+
+=== T10.4-iii does a SECOND pin (wrapping dir) keep block/rm refusing? ===
+   wrapping dir CID: bafybeifckcfh6kzetpggf6vlcan6sjkwrsmcma4o7pczyewtiy5v4ffeji
+{"Pins":["bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq"]}
+   (X unpinned; only the directory pin now covers the leaf)
+   block/rm force:
+{"Hash":"bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi","Error":"pinned via bafybeifckcfh6kzetpggf6vlcan6sjkwrsmcma4o7pczyewtiy5v4ffeji"}
+
+   leaf still present? 1
+
+=== T10.4-iv unpin everything, block/rm ALL 32 leaves, re-add from /b ===
+   dir unpinned
+   leaf count: 32
+   block/rm results: 32 lines, errors: 0
+{"Hash":"bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi"}
+{"Hash":"bafkreichq7zvoanjqabzsqbsk2zqtxm2pdqiftacf45xl7uh7kkiuqtxmm"}
+   root block too:
+{"Hash":"bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq"}
+
+reference sources after block/rm:
+   (no dup.bin references)   re-add from /b:
+   CID after heal: bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq
+   CID UNCHANGED
+reference sources after heal:
+     32 refs -> http://host.docker.internal:18090/b/dup.bin
+   gateway: http=200 size=8388608
+   HEALED: MATCH (no daemon restart needed)
+{"Keys":{"bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq":{"Type":"recursive","Name":""}}}
+
