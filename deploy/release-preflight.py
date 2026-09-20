@@ -19,6 +19,134 @@ import tarfile
 
 REPOS = ('vidra', 'vidra-core', 'vidra-user', 'vidra-search')
 
+# Platform release records name components by ROLE; this script works in
+# repository names. The meta repository is the release itself, so it is never
+# in a record's components and is always frozen at --tag.
+RECORD_COMPONENT = {'vidra-core': 'core', 'vidra-user': 'user', 'vidra-search': 'search'}
+# The ONE spelling of a release tag, and deliberately strict about leading
+# zeros: v0.07.3 is not a tag deploy/release.sh ever cut, but it parses to the
+# same (0, 7, 3) as the real one. It would compare equal to v0.7.3, sail
+# through the newer-than-the-release gate, and only die at `git clone` -- after
+# the output directory and a checkout already existed.
+RELEASE_TAG = re.compile(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
+RELEASES = Path(__file__).resolve().parent.parent / 'releases'
+
+
+def release_order(tag, what='tag'):
+    """(major, minor, patch), so v0.7.10 is correctly NEWER than v0.7.9. A
+    lexical comparison inverts that and would wave through a component built
+    from a later release than the one being frozen. Anything that is not a
+    release-shaped string -- a number out of a JSON record included -- is a
+    ValueError here, never a TypeError three frames away."""
+    match = RELEASE_TAG.fullmatch(tag) if isinstance(tag, str) else None
+    if not match:
+        raise ValueError(f'{what}: expected a vX.Y.Z release tag with no leading zeros, '
+                         f'got {tag!r}')
+    return tuple(int(part) for part in match.groups())
+
+
+def parse_component_tags(values):
+    """`--component-tag <repo>=<tag>`, repeatable, as {repo: tag}.
+
+    WHY IT EXISTS. A core-only release (v0.7.4, v0.7.5) pairs vidra-user and
+    vidra-search at an OLDER tag, and the record that says so lands in the same
+    PR as this preflight's own evidence. This flag covers that window; once the
+    record is on the tree it is redundant.
+    """
+    overrides = {}
+    for value in values or ():
+        repo, sep, tag = value.partition('=')
+        if not sep or repo not in RECORD_COMPONENT:
+            raise ValueError(f'--component-tag {value!r}: expected <repo>=<tag> where repo is '
+                             f'one of {", ".join(sorted(RECORD_COMPONENT))}')
+        release_order(tag, f'--component-tag {repo}')
+        if overrides.setdefault(repo, tag) != tag:
+            raise ValueError(f'--component-tag names {repo} twice, as {overrides[repo]} and '
+                             f'{tag}; one of them is wrong and guessing which is not this '
+                             'script\'s job')
+    return overrides
+
+
+def record_component_tags(releases, tag):
+    """Component tags from releases/<tag>.json, or {} when no record exists.
+
+    A record that exists but cannot answer the question is NOT treated as
+    absent, and a PARTIAL answer is not accepted either. Falling back to a
+    uniform tag for a role the record does not name is exactly the drift this
+    lookup is here to prevent, and it would be invisible: the manifest would
+    still read `tag_source: releases/<tag>.json` for the roles that did parse.
+    """
+    path = Path(releases) / f'{tag}.json'
+    if not path.is_file():
+        return {}
+    where = f'releases/{path.name}'
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError) as error:
+        raise ValueError(f'{where}: unusable release record ({error})') from None
+    if not isinstance(data, dict):
+        raise ValueError(f'{where}: unusable release record (not a JSON object)')
+    # The filename is not the record's identity. A record copied to a new
+    # filename and not edited would otherwise freeze the OLD release's
+    # components under the new tag, and say the record authorised it.
+    if data.get('release') != tag:
+        raise ValueError(f'{where}: names release {data.get("release")!r}, not {tag}. Refusing '
+                         'to freeze one release from another release\'s record')
+    components = data.get('components')
+    if not isinstance(components, dict):
+        raise ValueError(f'{where}: unusable release record (components is not an object)')
+    resolved = {}
+    for repo, name in RECORD_COMPONENT.items():
+        entry = components.get(name)
+        if not isinstance(entry, dict) or 'tag' not in entry:
+            raise ValueError(f'{where}: names no usable {name!r} component, so {repo} would '
+                             'silently fall back to --tag -- the drift this record is read '
+                             'to prevent')
+        release_order(entry['tag'], f'{where} {name} tag')
+        resolved[repo] = entry['tag']
+    return resolved
+
+
+def resolve_component_tags(tag, overrides, releases=None):
+    """({repo: tag}, {repo: where it came from}, [warnings]) for every REPO.
+
+    Precedence: an explicit --component-tag, then the platform release record,
+    then --tag for everything (byte-for-byte the behaviour before records were
+    consulted). Raises ValueError on anything nonsensical, and the caller runs
+    this BEFORE the first clone so no network or output directory is touched.
+    """
+    release_order(tag, '--tag')
+    # Looked up at CALL time, not bound as a default: a default would freeze
+    # this repository's own releases/ into the signature, and no caller could
+    # ever point the resolver anywhere else.
+    recorded = record_component_tags(RELEASES if releases is None else releases, tag)
+    tags, sources, warnings = {}, {}, []
+    for repo in REPOS:
+        if repo in overrides:
+            tags[repo] = overrides[repo]
+            sources[repo] = '--component-tag'
+            if repo in recorded and recorded[repo] != overrides[repo]:
+                # The operator may be correcting a bad record, so the flag wins
+                # -- but never quietly: the wrong choice freezes the wrong bytes.
+                sources[repo] = (f'--component-tag (overrides releases/{tag}.json '
+                                 f'{recorded[repo]})')
+                warnings.append(
+                    f'--component-tag {repo}={overrides[repo]} contradicts '
+                    f'releases/{tag}.json, which pairs {repo} at {recorded[repo]}. '
+                    f'Freezing {overrides[repo]} because the flag wins; if the record is '
+                    'right, this candidate is not the release.')
+        elif repo in recorded:
+            tags[repo] = recorded[repo]
+            sources[repo] = f'releases/{tag}.json'
+        else:
+            tags[repo] = tag
+            sources[repo] = '--tag'
+        if release_order(tags[repo], repo) > release_order(tag):
+            raise ValueError(f'{repo}: {tags[repo]} is newer than the release {tag} being '
+                             f'frozen ({sources[repo]}); a release cannot contain a component '
+                             'built after it')
+    return tags, sources, warnings
+
 
 def image_pin(data, repo, revision, platform):
     digest = data['manifest']['digest']
@@ -76,18 +204,25 @@ def freeze(args, out, manifest):
     source = out / 'source'
     source.mkdir()
     for repo in REPOS:
+        # Not every component moves in every release: a core-only release pairs
+        # the others at an older tag, and cloning those at --tag finds no ref.
+        component_tag = args.component_tags[repo]
         remote = f'https://github.com/{args.owner}/{repo}.git'
         dest = source / repo
         # A private detached checkout avoids moving operator release pins or
         # silently reading ignored/uncommitted files from nested workspaces.
-        run(['git', 'clone', '--quiet', '--depth', '1', '--branch', args.tag, remote, str(dest)])
-        revision = run(['git', 'rev-parse', '--verify', f'refs/tags/{args.tag}^{{commit}}'], cwd=dest).strip()
+        run(['git', 'clone', '--quiet', '--depth', '1', '--branch', component_tag, remote, str(dest)])
+        revision = run(['git', 'rev-parse', '--verify', f'refs/tags/{component_tag}^{{commit}}'], cwd=dest).strip()
         run(['git', 'checkout', '--quiet', '--detach', revision], cwd=dest)
-        manifest['repositories'][repo] = {'remote': remote, 'tag': args.tag, 'revision': revision}
+        manifest['repositories'][repo] = {'remote': remote, 'tag': component_tag,
+                                          'tag_source': args.component_tag_sources[repo],
+                                          'revision': revision}
         save(out, manifest)
     for repo in REPOS[1:]:
         name = f'{args.owner}/{repo}'
-        tagged = f'ghcr.io/{name}:{args.tag}'
+        # The image must be the one THIS component's tag published, or the
+        # digest would belong to bytes the frozen source never built.
+        tagged = f'ghcr.io/{name}:{manifest["repositories"][repo]["tag"]}'
         resolved = json.loads(run(['docker', 'buildx', 'imagetools', 'inspect', tagged,
                                    '--format', '{{json .}}']))
         digest = resolved['manifest']['digest']
@@ -174,9 +309,27 @@ def main():
     parser.add_argument('--owner', default='yegamble')
     parser.add_argument('--platform', choices=['linux/amd64', 'linux/arm64'], default='linux/amd64')
     parser.add_argument('--out', required=True, type=Path, help='new disposable directory (must not exist)')
+    parser.add_argument('--component-tag', action='append', metavar='REPO=TAG', default=[],
+                        help='freeze one component at its own tag, for a release whose '
+                             'releases/<tag>.json has not landed yet (repeatable)')
     args = parser.parse_args()
-    if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', args.tag) or not re.fullmatch(r'[A-Za-z0-9-]+', args.owner):
-        parser.error('expected vX.Y.Z tag and GitHub owner name')
+    if not re.fullmatch(r'[A-Za-z0-9-]+', args.owner):
+        parser.error(f'expected a GitHub owner name, got {args.owner!r}')
+    # --tag is checked by release_order below, against the SAME RELEASE_TAG
+    # pattern every component tag is held to. A second inline spelling here
+    # drifted from it once already and let v0.07.5 through.
+    # Resolved BEFORE the output directory exists: a nonsensical pairing must
+    # cost nothing, not half an evidence tree and a cloned repository.
+    try:
+        args.component_tags, args.component_tag_sources, warnings = resolve_component_tags(
+            args.tag, parse_component_tags(args.component_tag))
+    except ValueError as error:
+        parser.error(str(error))
+    for warning in warnings:
+        print(f'[preflight] WARNING: {warning}', file=sys.stderr, flush=True)
+    for repo in REPOS:
+        print(f'[preflight] {repo}: {args.component_tags[repo]} '
+              f'(from {args.component_tag_sources[repo]})', flush=True)
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
     manifest = {'schema_version': 1, 'status': 'UNVERIFIED', 'tag': args.tag, 'platform': args.platform,
