@@ -1,0 +1,5 @@
+# Digest-bound linux/amd64 embedded schema maxima; no database environment or mounts.
+$ docker run --rm --platform linux/amd64 --network none ghcr.io/yegamble/vidra-core@sha256:1757b1d7249db59a6e5966f86bbbf979f637880ab44e7767fcb37c279d65bbaa migrate embedded-max
+147
+$ docker run --rm --platform linux/amd64 --network none ghcr.io/yegamble/vidra-search@sha256:03d6df18751043592b2adef20526b14e469211ebd64884f4811ca2c4a0aded83 migrate embedded-max
+18

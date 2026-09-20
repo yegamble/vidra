@@ -1,0 +1,39 @@
+[Unit]
+Description=Vidra managed public IPFS node control
+Requires=docker.service
+After=docker.service network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/lib/vidra/ipfs-manager.py
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=20
+RuntimeDirectory=vidra-ipfs-control
+RuntimeDirectoryMode=0755
+# The installer also creates this directory via tmpfiles during early boot,
+# before Docker restores containers whose bind mounts require it.
+# API/worker bind mounts must keep this inode across explicit stop/start backups.
+RuntimeDirectoryPreserve=yes
+StateDirectory=vidra-ipfs-control
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+# The installer substitutes the fixed Docker volume mount point, never API input.
+ReadWritePaths=@@IPFS_REPO@@
+
+[Install]
+WantedBy=multi-user.target
