@@ -117,6 +117,35 @@ class RebootCatalogueTests(unittest.TestCase):
                       'ipfs_capacity', 'ipfs_copy_cleanup'):
             self.assertIn(table, state['catalogue'])
 
+    # One host, but the pair straddles a REBOOT and the drill tools are a
+    # hand-staged directory: re-staging between the halves is the window in
+    # which "reboot changed persisted catalogue/media state" would really mean
+    # "the two halves used different catalogues".
+    def test_the_reboot_state_stamps_the_catalogue_harness(self):
+        state = checks.reboot_state(FakeRun(), self.baseline(core=146))
+        self.assertEqual(state['catalogue_tool_sha256'], recovery.harness_revision())
+
+    def test_a_restart_pair_from_two_catalogue_revisions_is_refused(self):
+        after = {'catalogue_tool_sha256': recovery.harness_revision(), 'catalogue': {'users': '1|a'},
+                 'ledgers': {'schema_migrations': '146|f'}}
+        before = dict(after, catalogue_tool_sha256='e' * 64)
+        with self.assertRaises(ValueError) as raised:
+            checks.check_reboot_preserved(before, after)
+        self.assertIn('restart-before', str(raised.exception))
+        self.assertIn('e' * 12, str(raised.exception))
+        # An unstamped half (written before this change) is refused too.
+        with self.assertRaises(ValueError) as raised:
+            checks.check_reboot_preserved({k: v for k, v in after.items() if k != 'catalogue_tool_sha256'}, after)
+        self.assertIn('no harness stamp', str(raised.exception))
+
+    def test_a_matched_pair_still_compares_the_catalogue_itself(self):
+        after = {'catalogue_tool_sha256': recovery.harness_revision(), 'catalogue': {'users': '1|a'},
+                 'ledgers': {'schema_migrations': '146|f'}}
+        checks.check_reboot_preserved(dict(after), after)
+        with self.assertRaises(ValueError) as raised:
+            checks.check_reboot_preserved(dict(after, catalogue={'users': '2|b'}), after)
+        self.assertIn('reboot changed persisted', str(raised.exception))
+
     def test_a_relation_lost_across_the_reboot_is_named(self):
         run = FakeRun(present=[r for r in FakeRun().relations(146) if r != 'public.user_mfa'],
                       ledgers={'schema_migrations': 146, 'vidra_search_migrations': 18})

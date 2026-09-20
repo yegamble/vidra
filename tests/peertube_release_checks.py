@@ -51,12 +51,31 @@ def reboot_state(run, baseline):
     just the shared helpers underneath it — is covered by a test.
     """
     ledgers = recovery.expected_ledgers(baseline)
-    state = {'catalogue': recovery.fingerprint(run, recovery.core_schema_version(ledgers)), 'ledgers': {}}
+    # The catalogue is defined by recovery_release_acceptance.py, not by this
+    # file, so THAT is the revision a later comparison has to match — and this
+    # file's own `tool_sha256` would not notice it changing underneath.
+    state = {'catalogue_tool_sha256': recovery.harness_revision(),
+             'catalogue': recovery.fingerprint(run, recovery.core_schema_version(ledgers)), 'ledgers': {}}
     for table, spec in ledgers.items():
         actual = run.sql(f'SELECT version, dirty FROM {table}')
         runtime.check_ledger(actual, spec['version'])
         state['ledgers'][table] = actual
     return state
+
+
+def check_reboot_preserved(before, after):
+    """Nothing persisted may differ across the host restart.
+
+    One host, but the two fingerprints straddle a REBOOT, and the drill tools
+    are a directory the operator staged by hand — re-staging them between the
+    two halves is exactly the window in which the comparison stops being
+    like-for-like. A different catalogue revision would surface here as
+    "reboot changed persisted catalogue/media state", i.e. as data loss.
+    """
+    recovery.check_recorded_harness('restart-before evidence', before.get('catalogue_tool_sha256'),
+                                    after['catalogue_tool_sha256'])
+    require(before['catalogue'] == after['catalogue'] and before['ledgers'] == after['ledgers'],
+            'reboot changed persisted catalogue/media state')
 
 
 def execute(stage, action, label=None, baseline=DEFAULT_BASELINE, root=DEFAULT_ROOT, b2_key=DEFAULT_B2_KEY):
@@ -101,7 +120,7 @@ def execute(stage, action, label=None, baseline=DEFAULT_BASELINE, root=DEFAULT_R
             if action == 'restart-after':
                 before = json.loads((stage / 'restart-before/result.json').read_text())
                 require(before['status'] == 'PASS' and before['boot_id'] != result['boot_id'], 'host reboot unproved')
-                require(before['catalogue'] == result['catalogue'] and before['ledgers'] == result['ledgers'], 'reboot changed persisted catalogue/media state')
+                check_reboot_preserved(before, result)
                 result['checks']['host_restart_state_preserved'] = 'PASS'
         elif action in ('schema-unsupported', 'schema-restore'):
             version = 1040 if action == 'schema-unsupported' else 970

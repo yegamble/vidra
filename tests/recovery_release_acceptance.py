@@ -220,6 +220,34 @@ def identifier(name, kind='table'):
     return name
 
 
+def harness_revision():
+    """The sha256 of THIS file — the revision that defines the catalogue."""
+    return sha(Path(__file__))
+
+
+def check_recorded_harness(name, recorded, revision):
+    """Evidence a restore consumes must come from the harness revision reading it.
+
+    `release_acceptance prepare` stages six harness files and NOT this one, so
+    the source host and the replacement host each run whatever copy the
+    operator put there, and `candidate_tag` cannot tell them apart — both hosts
+    drill the same release. A data point taken with another revision of this
+    file can carry a DIFFERENT CATALOGUE: a key this revision added, a table it
+    did not have, a column it excludes. `differing()` would then name those
+    keys and `restore` would die as "restored catalogue differs from the backup
+    data point" — a harness mismatch reading as DATA LOSS, at the end of a paid
+    host-day. Refuse up front, print both revisions, and say which it is.
+    """
+    require(recorded, f'{name} carries no harness stamp, so it was written before harness revisions '
+                      f'were stamped and cannot be compared with this one ({revision[:12]}). This is '
+                      'not data loss: re-run the source actions with the files staged on this host.')
+    require(recorded == revision,
+            f'{name} was written by harness revision {recorded[:12]}, but this host runs '
+            f'{revision[:12]}. Two revisions can fingerprint different catalogues, so comparing them '
+            'would report a harness mismatch as lost data. This is not data loss: re-run the source '
+            'actions with the files staged on this host.')
+
+
 def fingerprint_sql(table, volatile=()):
     """count(*) plus an order-independent md5 over one table's stable content.
 
@@ -558,7 +586,14 @@ def source_loss(run, candidate, baseline, result):
 
 def restore(run, candidate, baseline, stage, handoff, source_loss_result, result):
     installer = baseline / 'install.sh'
+    revision = harness_revision()
     check_recorded_tag('source-loss evidence', source_loss_result, candidate)
+    # Both records cross hosts, and this action is the only place either is
+    # consumed: the source-loss record supplies the recorded recovery timeline
+    # and the backup record supplies the catalogue this restore is compared
+    # against. Guarding only one would let a half-re-staged drill publish a
+    # measurement from one revision beside a comparison from another.
+    check_recorded_harness('source-loss evidence', source_loss_result.get('tool_sha256'), revision)
     # The same blank-host guard the runtime milestone used: native Ubuntu 24.04
     # AMD64, root in a systemd VM, and no deployment tree, CLI or container
     # runtime. A populated original destination can never pass as a replacement.
@@ -576,6 +611,10 @@ def restore(run, candidate, baseline, stage, handoff, source_loss_result, result
     # release would be restored under the wrong images and still match the
     # catalogue it was taken with.
     check_recorded_tag('source backup', expected, candidate)
+    # Before the installer, and long before the catalogue comparison at the end
+    # of this action: a revision mismatch here is what would otherwise surface
+    # as "restored catalogue differs from the backup data point".
+    check_recorded_harness('source backup', expected.get('tool_sha256'), revision)
     for name, digest in expected['handoff'].items():
         require(sha(files[name]) == digest, f'{name}: transferred bytes differ from the source backup')
     result['timeline'] = {'source_stopped_at': source_loss_result['stopped_at'], 'install_started_at': time.time()}
@@ -670,6 +709,11 @@ def main(argv=None):
         raise
     finally:
         result['finished_at'] = time.time()
+        # Stamped on EVERY result, the way peertube_release_checks already
+        # does: a record can only be checked against the harness that reads it
+        # if it says which harness wrote it. Set in `finally` so a failed
+        # action is stamped too — its evidence is retained and read later.
+        result['tool_sha256'] = harness_revision()
         runtime.save(stage / 'result.json', result)
     print(json.dumps({'status': result['status'], 'checks': result['checks']}))
 

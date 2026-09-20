@@ -476,6 +476,99 @@ class RecordedTagTest(unittest.TestCase):
         self.assertIn('re-run the source actions', str(raised.exception))
 
 
+class HarnessRevisionTest(unittest.TestCase):
+    """Evidence must come from the harness revision that reads it.
+
+    `release_acceptance prepare` stages six harness files and NOT this one, so
+    the source host and the replacement host each run whatever copy the
+    operator put there. A backup data point taken with an older revision can
+    carry a different CATALOGUE — a key this revision adds, or a table it did
+    not have — and `differing()` then names those keys and the run dies as
+    "restored catalogue differs from the backup data point". That reads as DATA
+    LOSS, at the end of a paid host-day, when it is only a harness mismatch.
+    """
+
+    def test_evidence_from_this_harness_revision_is_accepted(self):
+        recovery.check_recorded_harness('source backup', 'a' * 64, 'a' * 64)
+
+    def test_a_record_from_another_revision_names_both_revisions(self):
+        with self.assertRaises(ValueError) as raised:
+            recovery.check_recorded_harness('source backup', 'a' * 64, 'b' * 64)
+        message = str(raised.exception)
+        self.assertIn('a' * 12, message)
+        self.assertIn('b' * 12, message)
+        self.assertIn('source backup', message)
+        # It must not read as data loss, and it must say what to do.
+        self.assertIn('re-run the source actions', message)
+
+    def test_a_record_with_no_stamp_says_it_predates_stamping(self):
+        for absent in (None, ''):
+            with self.subTest(absent=absent), self.assertRaises(ValueError) as raised:
+                recovery.check_recorded_harness('source backup', absent, 'b' * 64)
+            self.assertIn('no harness stamp', str(raised.exception))
+            self.assertIn('b' * 12, str(raised.exception))
+
+    def test_the_revision_is_this_files_own_hash(self):
+        self.assertEqual(recovery.harness_revision(),
+                         recovery.sha(Path(recovery.__file__)))
+
+
+class HarnessRevisionWiringTest(unittest.TestCase):
+    """The stamp and the guard must be wired into the actions, not just exist."""
+
+    def setUp(self):
+        self.addCleanup(os.umask, os.umask(0o022))
+
+    def test_every_result_stamps_the_harness_that_wrote_it(self):
+        stage = Path(tempfile.mkdtemp()) / 'attempt'
+        with self.assertRaises(Exception):
+            recovery.main(['snapshot', '--stage', str(stage), '--baseline', str(baseline_with(CANDIDATE))])
+        result = json.loads((stage / 'result.json').read_text())
+        self.assertEqual(result['tool_sha256'], recovery.harness_revision())
+
+    def restore_with(self, backup_stamp):
+        handoff = Path(tempfile.mkdtemp()) / 'handoff'
+        handoff.mkdir()
+        (handoff / 'vidra-20260913T030813Z.dump.gz').write_bytes(b'dump')
+        (handoff / 'vidra-config-20260913T030813Z.tar.gz').write_bytes(b'config')
+        record = {'status': 'PASS', 'candidate_tag': 'v0.6.5'}
+        if backup_stamp is not None:
+            record['tool_sha256'] = backup_stamp
+        (handoff.parent / 'backup-result.json').write_text(json.dumps(record))
+        run = mock.Mock(**{'run.return_value': ''})
+        source_loss = {'status': 'PASS', 'candidate_tag': 'v0.6.5',
+                       'tool_sha256': recovery.harness_revision()}
+        with mock.patch.object(runtime, 'host_facts', return_value={}), \
+                mock.patch.object(runtime, 'check_host'):
+            with self.assertRaises(ValueError) as raised:
+                recovery.restore(run, CANDIDATE, Path('/nonexistent'), Path(tempfile.mkdtemp()), handoff,
+                                 source_loss, {})
+        # Nothing may have been installed: the refusal must land before the
+        # host is touched, let alone before a fingerprint is compared.
+        self.assertNotIn('install', [call.args[1] for call in run.run.call_args_list if len(call.args) > 1])
+        return str(raised.exception)
+
+    def test_restore_refuses_a_foreign_harness_before_touching_the_host(self):
+        message = self.restore_with('c' * 64)
+        self.assertIn('source backup', message)
+        self.assertIn('c' * 12, message)
+        self.assertIn(recovery.harness_revision()[:12], message)
+
+    def test_restore_refuses_an_unstamped_backup_record(self):
+        self.assertIn('no harness stamp', self.restore_with(None))
+
+    def test_restore_also_checks_the_source_loss_record(self):
+        # Both records cross hosts and both are consumed by this action; a
+        # half-re-staged drill must not contribute a timeline from one revision
+        # and a catalogue from another.
+        run = mock.Mock(**{'run.return_value': ''})
+        with self.assertRaises(ValueError) as raised:
+            recovery.restore(run, CANDIDATE, Path('/nonexistent'), None, None,
+                             {'status': 'PASS', 'candidate_tag': 'v0.6.5', 'tool_sha256': 'd' * 64}, {})
+        self.assertIn('source-loss', str(raised.exception))
+        self.assertIn('d' * 12, str(raised.exception))
+
+
 class WiringTest(unittest.TestCase):
     """The guards above are pure functions; these pin them to the real call sites."""
 
@@ -513,11 +606,14 @@ class WiringTest(unittest.TestCase):
         (handoff / 'vidra-config-20260913T030813Z.tar.gz').write_bytes(b'config')
         (handoff.parent / 'backup-result.json').write_text(json.dumps({'status': 'PASS', 'candidate_tag': 'v0.6.4'}))
         run = mock.Mock(**{'run.return_value': ''})
+        # The source-loss record has to satisfy BOTH of its own guards, or the
+        # refusal this test is about never gets reached.
+        source_loss = {'status': 'PASS', 'candidate_tag': 'v0.6.5', 'tool_sha256': recovery.harness_revision()}
         with mock.patch.object(runtime, 'host_facts', return_value={}), \
                 mock.patch.object(runtime, 'check_host'):
             with self.assertRaises(ValueError) as raised:
                 recovery.restore(run, CANDIDATE, Path('/nonexistent'), Path(tempfile.mkdtemp()), handoff,
-                                 {'status': 'PASS', 'candidate_tag': 'v0.6.5'}, {})
+                                 source_loss, {})
         self.assertIn('source backup', str(raised.exception))
 
 
