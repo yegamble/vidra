@@ -153,16 +153,39 @@ jobs:
           # MALWARE_SCAN_ENABLED is deliberately ABSENT: it is deprecated and no
           # longer read, and a non-empty value only earns a boot WARN.
 
-      # api brings up postgres, redis and the core migrate one-shot through
-      # depends_on; search brings up the vidra-search migrate one-shot (which
-      # owns the only vidra-search build) through
-      # service_completed_successfully. VIDRA_ROLE defaults to "all", so the api
+      # TWO `up` COMMANDS, NOT ONE, AND THE ORDER IS LOAD-BEARING.
+      #
+      # `up -d api search` in a single command starts BOTH migration one-shots
+      # at once: core's `migrate` and `search-migrate` each depend only on
+      # postgres being healthy, so Compose runs them in parallel. Both apply a
+      # 0001 that does `CREATE EXTENSION IF NOT EXISTS pg_trgm`, and that
+      # statement is NOT concurrency-safe — each passes the existence check,
+      # then one loses the insert and dies on
+      #   duplicate key value violates unique constraint "pg_extension_name_index"
+      # Measured here, not theorised: run 35503808175 failed exactly that way on
+      # a cold database, with core's migrate the loser. (The deploy scripts are
+      # unaffected — deploy.sh runs the two as discrete exit-code-gated steps
+      # for its own reasons — and so is `boot`, which never starts
+      # search-migrate alongside migrate.)
+      #
+      # So: `up -d api` first — boot's proven shape, and Compose waits for core's
+      # `migrate` to complete successfully before starting the api — and only
+      # then `up -d search`, which runs `search-migrate` to completion and
+      # starts the search service. Two migrators, never at the same time.
+      #
+      # search-migrate owns this chain's only vidra-search build; `search` runs
+      # the same image by name. VIDRA_ROLE defaults to "all", so the api
       # container runs the in-process transcode worker AND the search outbox
       # drainer — there is no separate worker service to start.
-      - name: Boot api + search in production mode
+      - name: Boot the api in production mode (core migrations first)
         run: |
           docker compose -f docker-compose.yml --env-file env/ci-stack-e2e.env --profile core \
-            up -d --build api search
+            up -d --build api
+
+      - name: Boot vidra-search (its migrations run after core's, never beside them)
+        run: |
+          docker compose -f docker-compose.yml --env-file env/ci-stack-e2e.env --profile core \
+            up -d --build search
 
       - name: api /readyz and vidra-search /healthz answer 200
         run: |
