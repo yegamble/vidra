@@ -440,9 +440,15 @@ fetch_release_record() {
   # apostrophe elsewhere re-balances the count, and shellcheck passes them too.
   # Only running the function fails — which is why every explanation lives out
   # here and the substitution below is kept comment-free.
+  #
+  # The traps expand "$tmp" INTO the trap string (shellcheck's SC2064 case,
+  # deliberately): `tmp` is a `local`, and an EXIT handler runs after the
+  # shell begins unwinding, when that local is already gone — under `set -u`
+  # the handler would then fail and take the exit status with it.
+  # shellcheck disable=SC2064
   why="$(
-    trap 'rm -f "$tmp"' EXIT
-    trap 'rm -f "$tmp"; exit 130' HUP INT TERM
+    trap "rm -f '$tmp'" EXIT
+    trap "rm -f '$tmp'; exit 130" HUP INT TERM
     rc=0
     curl -q --proto '=https' --proto-redir '=https' --tlsv1.2 \
          --fail --silent --show-error --location --max-redirs 3 \
@@ -600,47 +606,89 @@ EOF
   if [ -n "$wanted" ] && [ ! -f "$root/releases/$wanted.json" ]; then
     # A directory, so the file can carry the name the checker validates it by
     # (<release>.json), and one `rm -rf` cleans up every path below.
-    record_dir="$(mktemp -d 2>/dev/null)" || record_dir=''
+    # Same convention as the download's own temp file. A BARE `mktemp -d`
+    # ignores TMPDIR on BSD — measured: with TMPDIR exported it still made the
+    # directory under /var/folders — so half of this feature honoured the
+    # operator's choice of scratch space and half did not.
+    record_dir="$(mktemp -d "${TMPDIR:-/tmp}/vidra-record.XXXXXX" 2>/dev/null)" || record_dir=''
     if [ -z "$record_dir" ]; then
       log "could not create a temporary directory, so ${wanted}'s release record was not fetched; the verdict above stands"
-    elif fetch_release_record "$wanted" "$record_dir/$wanted.json"; then
-      log "the verdict above was reached before that record was available — the one below supersedes it"
-      rc2=0
-      python3 "$root/deploy/release-mapping.py" "${args[@]}" \
-        --extra-record "$record_dir/$wanted.json" \
-        > "$record_dir/out" 2> "$record_dir/err" || rc2=$?
-      cat "$record_dir/out"
-      cat "$record_dir/err" >&2
-      # THE VERDICT MAY ONLY MOVE ON A RECORD THAT WAS USED. Two guards, and
-      # the pass-1 verdict survives both failing:
-      #   * the checker must SAY it admitted the record. The marker is printed
-      #     on stdout, where no text from the fetched record can appear
-      #     (record content only ever reaches warnings and errors, on stderr),
-      #     so a crafted body cannot forge it.
-      #   * the exit must be one this contract defines. `rc` used to be
-      #     reassigned unconditionally, so argparse's exit 2 from an older
-      #     checker — or any crash — fell through to `return 1` and KILLED a
-      #     deploy pass 1 had allowed. A feature that can only ever ADD
-      #     verification must not be able to subtract a deploy.
-      if ! grep -q '^\[release-mapping\] extra-record-admitted ' "$record_dir/out"; then
-        log "WARNING: the re-check ended $rc2 without using ${wanted}'s fetched record, so the verdict above stands unchanged."
-      else
-        case "$rc2" in
-          0|1|3)
-            if [ "$rc2" -eq 1 ]; then
-              # D4. A wrong — or forged — remote record must never trap an
-              # operator mid-incident with no way out but reading this source.
-              log "WARNING: this stop rests on the record FETCHED from $RECORD_FETCHED_FROM, not on anything in this tree. If that record is wrong, or you cannot reach a copy you trust, re-run with VIDRA_RECORD_FETCH=off: the check then falls back to this tree alone and reports UNVERIFIED (it does NOT report verified)."
-            else
-              log "the verdict above rests on the record fetched from $RECORD_FETCHED_FROM, not on anything in this tree"
-            fi
-            rc="$rc2" ;;
-          *)
-            log "WARNING: the re-check with ${wanted}'s fetched record ended $rc2, which is not a verdict this check knows (an older deploy/release-mapping.py, or a crash). It was IGNORED and the verdict above stands unchanged." ;;
-        esac
-      fi
-      rm -rf "$record_dir"
     else
+      # THE WHOLE SECOND PASS RUNS IN A SUBSHELL THAT OWNS THE DIRECTORY, for
+      # the same reason the download owns its file: lib.sh is SOURCED, so a
+      # `trap ... EXIT` at function scope would replace the caller's. Ctrl-C
+      # during the re-check used to leave the directory (and the record in it)
+      # behind. A plain ( ) subshell, unlike $( ), passes stdout and stderr
+      # straight through, so every line below still reaches the operator live.
+      #
+      # The verdict comes back as the exit status:
+      #   0|1|3  the re-check's verdict, reached with the record ADMITTED
+      #   64     keep the first pass's verdict, unchanged
+      #   130    interrupted
+      (
+        # The path is expanded INTO the trap string, not referenced from it.
+        # `record_dir` is a `local`, and an EXIT trap runs after the shell has
+        # started unwinding, by which point the local is gone: under `set -u`
+        # the handler then died with "record_dir: unbound variable", and a
+        # failed EXIT trap makes the subshell exit 1 — which this function
+        # read as the checker's REFUSED. A cleanup bug became a fabricated
+        # refusal, on every path through the second pass.
+        # shellcheck disable=SC2064  # expanding now is the point, see above
+        trap "rm -rf '$record_dir'" EXIT
+        # shellcheck disable=SC2064
+        trap "rm -rf '$record_dir'; exit 130" HUP INT TERM
+        fetch_release_record "$wanted" "$record_dir/$wanted.json" || exit 64
+        log "the verdict above was reached before that record was available — the one below supersedes it"
+        rc2=0
+        python3 "$root/deploy/release-mapping.py" "${args[@]}" \
+          --extra-record "$record_dir/$wanted.json" \
+          > "$record_dir/out" 2> "$record_dir/err" || rc2=$?
+        cat "$record_dir/out"
+        cat "$record_dir/err" >&2
+        # THE VERDICT MAY ONLY MOVE ON A RECORD THAT WAS USED. Two guards, and
+        # the pass-1 verdict survives both failing:
+        #   * the checker must SAY it admitted the record. The marker is printed
+        #     on stdout, where no text from the fetched record can appear
+        #     (record content only ever reaches warnings and errors, on stderr),
+        #     so a crafted body cannot forge it.
+        #   * the exit must be one this contract defines. `rc` used to be
+        #     reassigned unconditionally, so argparse's exit 2 from an older
+        #     checker — or any crash — fell through to `return 1` and KILLED a
+        #     deploy pass 1 had allowed. A feature that can only ever ADD
+        #     verification must not be able to subtract a deploy.
+        if ! grep -q '^\[release-mapping\] extra-record-admitted ' "$record_dir/out"; then
+          log "WARNING: the re-check ended $rc2 without using ${wanted}'s fetched record, so the verdict above stands unchanged."
+          exit 64
+        fi
+        case "$rc2" in
+          1)
+            # D4. A wrong — or forged — remote record must never trap an
+            # operator mid-incident with no way out but reading this source.
+            # BOTH knobs are named because one is not enough: turning the
+            # fetch off falls back to the tree alone, which can never report
+            # verified for a release it has no record for, and for a
+            # core-only triple (v0.7.4, v0.7.5) the pairing refusal then
+            # stands. Measured, not assumed.
+            log "WARNING: this stop rests on the record FETCHED from $RECORD_FETCHED_FROM, not on anything in this tree. If that record is wrong, or you cannot reach a copy you trust, re-run with VIDRA_RECORD_FETCH=off. That falls back to this tree alone, which can NEVER report verified for a release the tree has no record for: a UNIFORM vN triple then continues UNVERIFIED with a warning, but a triple the tree cannot pair — a core-only release such as v0.7.4/v0.7.5 — is still REFUSED by the pairing check, and VIDRA_RELEASE_MAPPING=warn is the override that waives that check for one run. Neither knob makes this report verified."
+            exit 1 ;;
+          0|3)
+            log "the verdict above rests on the record fetched from $RECORD_FETCHED_FROM, not on anything in this tree"
+            exit "$rc2" ;;
+          *)
+            log "WARNING: the re-check with ${wanted}'s fetched record ended $rc2, which is not a verdict this check knows (an older deploy/release-mapping.py, or a crash). It was IGNORED and the verdict above stands unchanged."
+            exit 64 ;;
+        esac
+      )
+      rc2=$?
+      case "$rc2" in
+        64) ;;   # the first pass's verdict stands, and it is already in `rc`
+        130)
+          # Interrupted before anything mutated. Stopping is the honest
+          # answer: continuing would deploy on a preflight nobody finished.
+          log "the release-record re-check was interrupted — nothing was changed"
+          rc=1 ;;
+        *) rc="$rc2" ;;
+      esac
       rm -rf "$record_dir"
     fi
   fi

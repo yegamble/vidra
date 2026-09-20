@@ -104,10 +104,19 @@ Two consequences are deliberate:
 - Pointing `VIDRA_RECORD_BASE_URL` anywhere but the default logs a distinct
   **NON-CANONICAL** warning, because the verdict then rests on a source the
   operator chose rather than on the one that published the release.
-- A stop caused by a fetched record names `VIDRA_RECORD_FETCH=off` in the
-  message. A wrong — or forged — remote record must never trap an operator
-  mid-incident with no way out; turning the fetch off falls back to this tree
-  alone, which reports UNVERIFIED, never "verified".
+- A stop caused by a fetched record names **both** escape knobs in the
+  message, because one is not enough. A wrong — or forged — remote record must
+  never trap an operator mid-incident with no way out. Turning the fetch off
+  (`VIDRA_RECORD_FETCH=off`) falls back to this tree alone, which can **never**
+  report verified for a release it has no record for — but what that means
+  depends on the shape:
+  - a **uniform** `vN vN vN` triple continues **UNVERIFIED** with the warning;
+  - a triple the tree cannot pair — a **core-only** release such as v0.7.4 or
+    v0.7.5 — is **still refused** by the pairing check, because pass 1's
+    refusal stands once the fetch is off. `VIDRA_RELEASE_MAPPING=warn` is the
+    override for that one, and it **waives the pairing check** for that run:
+    the deploy then proceeds having verified nothing about whether these
+    images were released together.
 
 **What is still not verified**, and nothing here can change either:
 

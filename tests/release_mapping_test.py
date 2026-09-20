@@ -1485,12 +1485,21 @@ class FetchedRecordThroughLibTests(unittest.TestCase):
         # warn" half of a two-part test re-read the mirror line it had just
         # set, and pass or fail for the wrong reason.
         self.env_file.write_text(f'JWT_SECRET={SECRET}\n' + env_extra)
+        # The caller's EXIT trap is installed in EVERY run, not just one test:
+        # deploy.sh and rollback.sh source lib.sh, so any `trap ... EXIT` this
+        # code adds at function scope would silently replace theirs, and the
+        # second pass now installs traps of its own. Asserted below on every
+        # path through the checker rather than in one test that could stop
+        # covering the path that grows the next trap.
         script = ('set -euo pipefail\n'
                   'log() { printf "[deploy] %s\\n" "$*"; }\n'
+                  'trap \'echo "CALLER-EXIT-TRAP-RAN"\' EXIT\n'
                   f'ENV_FILE="{self.env_file}"\n'
                   f'. "{self.tree}/deploy/lib.sh"\n'
+                  'before="$(trap -p EXIT)"\n'
                   'rc=0\n'
                   f'release_mapping_check "{self.tree}" {mode} "{core}" "{user}" "{search}" || rc=$?\n'
+                  '[ "$before" = "$(trap -p EXIT)" ] || echo "CALLER-EXIT-TRAP-CLOBBERED"\n'
                   'echo "RC=$rc"\n')
         environ = {'PATH': f'{self.bin}:{os.environ["PATH"]}', 'STUB_LOG': str(self.log),
                    'CURL_EXIT': str(exit_code), 'TMPDIR': str(self.tmpdir),
@@ -1503,6 +1512,10 @@ class FetchedRecordThroughLibTests(unittest.TestCase):
         result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=environ)
         out = result.stdout + result.stderr
         self.assertNotIn(SECRET, out)
+        self.assertNotIn('CALLER-EXIT-TRAP-CLOBBERED', out,
+                         'release_mapping_check replaced the caller\'s EXIT trap')
+        self.assertEqual(out.count('CALLER-EXIT-TRAP-RAN'), 1,
+                         f'the caller\'s EXIT trap did not run exactly once:\n{out}')
         calls = self.log.read_text() if self.log.exists() else ''
         self.assertIn('RC=', out, out)
         return int(out.split('RC=')[1].split('\n')[0]), out, calls
@@ -1745,6 +1758,109 @@ sys.exit(3)
         self.assertEqual(rc, 1, out)
         self.assertIn('VIDRA_RECORD_FETCH=off', out)
         self.assertIn('fetched', out)
+
+    def test_the_stop_names_both_knobs_because_one_is_not_enough(self):
+        """THE 3AM PATH, and the reason the message needs two names.
+
+        Turning the fetch off falls back to the tree alone, which can never
+        report VERIFIED for a release the tree has no record for. For a
+        UNIFORM triple that lands on UNVERIFIED and the run continues, so
+        naming one knob was enough. For a CORE-ONLY triple — the shape v0.7.4
+        and v0.7.5 actually shipped — pass 1's PAIRING REFUSAL stands, so an
+        operator who follows the advice hits a second refusal with nothing to
+        follow. VIDRA_RELEASE_MAPPING=warn is what clears that one, and the
+        message has to say so."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.7.3', 'v0.7.3', seed=9)
+        rc, out, _ = self.run_check('v0.9.0', f'v0.7.3@{digest(99)}', 'v0.7.3',
+                                    body=json.dumps(record))
+        self.assertEqual(rc, 1, out)
+        # Asserted against THE STOP MESSAGE ITSELF, not the whole transcript:
+        # pass 1's own refusal text happens to mention the mapping override
+        # further up, so a whole-output assertion passes while the line the
+        # operator is actually told to act on says nothing about it.
+        stop = [line for line in out.splitlines() if 'this stop rests on the record FETCHED' in line]
+        self.assertEqual(len(stop), 1, f'the stop message is missing or duplicated:\n{out}')
+        self.assertIn('VIDRA_RECORD_FETCH=off', stop[0])
+        self.assertIn('VIDRA_RELEASE_MAPPING=warn', stop[0])
+
+    def test_following_that_advice_does_what_the_message_says_for_both_shapes(self):
+        """The assertions behind the wording. Without these the message is a
+        claim about behaviour with nothing holding it true."""
+        # Uniform: the fetch off leaves UNVERIFIED, and the run continues.
+        rc, out, calls = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0',
+                                        env_extra='VIDRA_RECORD_FETCH=off\n')
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(calls, '')
+        self.assertIn('release mapping NOT verified', out)
+        # Core-only: the fetch off leaves the PAIRING REFUSAL in place.
+        self.log.unlink(missing_ok=True)
+        rc, out, calls = self.run_check('v0.9.0', 'v0.7.3', 'v0.7.3',
+                                        env_extra='VIDRA_RECORD_FETCH=off\n')
+        self.assertEqual(rc, 1, out)
+        self.assertEqual(calls, '')
+        self.assertIn('not a recorded release', out)
+        # ...and the mapping override is what clears it.
+        self.log.unlink(missing_ok=True)
+        rc, out, _ = self.run_check(
+            'v0.9.0', 'v0.7.3', 'v0.7.3',
+            env_extra='VIDRA_RECORD_FETCH=off\nVIDRA_RELEASE_MAPPING=warn\n')
+        self.assertEqual(rc, 0, out)
+        self.assertIn('VIDRA_RELEASE_MAPPING=warn', out)
+
+    # --- the second pass's temp directory ----------------------------------
+
+    def test_the_second_pass_directory_is_made_under_tmpdir(self):
+        """A bare `mktemp -d` ignores TMPDIR on BSD, so the directory landed
+        somewhere the operator did not choose while the download's own temp
+        file honoured it. One convention, or a host that points TMPDIR at a
+        big disk gets half of it."""
+        # curl's --output is the download's own temp FILE, which already
+        # followed the convention — the directory under test is only ever
+        # visible as the checker's --extra-record argument, so that is what
+        # this records. The stub logs argv and then runs the real checker, so
+        # the verdict is still genuine.
+        self.stub_checker(
+            '#!/usr/bin/env python3\n'
+            'import os, subprocess, sys\n'
+            'open(os.environ["STUB_LOG"], "a").write("checker " + " ".join(sys.argv[1:]) + "\\n")\n'
+            'sys.exit(subprocess.run([sys.executable, os.environ["REAL_CHECKER"], *sys.argv[1:]]).returncode)\n')
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, calls = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', body=json.dumps(record),
+                                        process_env={'REAL_CHECKER': str(CHECKER)})
+        self.assertEqual(rc, 0, out)
+        used = [line.split('--extra-record ', 1)[1].split(' ', 1)[0]
+                for line in calls.splitlines() if '--extra-record ' in line]
+        self.assertTrue(used, f'the checker was never given an --extra-record path:\n{calls}')
+        for path in used:
+            self.assertTrue(path.startswith(str(self.tmpdir)),
+                            f'the record landed in {path}, outside TMPDIR {self.tmpdir}')
+            # A bare `mktemp -d` names its directory `tmp.XXXXXXXX`. The
+            # prefix is how this asserts the ONE convention rather than
+            # whichever default the host's mktemp happens to pick.
+            self.assertIn('vidra-record', path,
+                          'the second-pass directory does not follow the same '
+                          '"${TMPDIR:-/tmp}/vidra-record.XXXXXX" convention as the '
+                          f'download temp file: {path}')
+
+    def test_an_interrupt_during_the_second_pass_leaves_no_directory(self):
+        """Ctrl-C while the re-check is running. The download already cleaned
+        up after itself; the directory holding it did not."""
+        self.stub_checker('#!/usr/bin/env python3\n'
+                          'import os, signal, sys\n'
+                          "if '--print-missing-release' in sys.argv:\n"
+                          "    print('v0.9.0'); sys.exit(0)\n"
+                          "if '--extra-record' in sys.argv:\n"
+                          '    os.kill(os.getppid(), signal.SIGINT)\n'
+                          '    sys.exit(0)\n'
+                          "sys.stderr.write('[release-mapping] WARNING: unverified\\n')\n"
+                          'sys.exit(3)\n')
+        before = {p.name for p in self.tmpdir.iterdir()}
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, _ = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', body=json.dumps(record))
+        leaked = sorted({p.name for p in self.tmpdir.iterdir()} - before)
+        self.assertEqual(leaked, [], f'an interrupted re-check left {leaked} behind')
+        self.assertEqual(rc, 1, f'an interrupted preflight must stop the run:\n{out}')
+        self.assertIn('interrupted', out.lower())
 
 
 if __name__ == '__main__':
