@@ -790,14 +790,16 @@ with nothing deployed. State the pairing by hand in that case:
 ./deploy/pin-release.sh v0.7.5 --component-tag user=v0.7.3 --component-tag search=v0.7.3
 ```
 
-`--component-tag <role>=<tag>` is repeatable, takes `core`, `user` or `search`,
-and is validated before the first git command: an unknown role, a tag that is
-not `vX.Y.Z` (leading zeros included — `v0.07.3` is not a tag `release.sh` ever
-cut but parses to the same numbers as one), a role named twice with different
-tags, or a component newer than the release all stop the run with the tree
-unmoved, no env snapshot taken and the env file byte-for-byte unchanged. A flag
-that **contradicts** a record that loaded is refused the same way, naming both
-values; `--force` obeys the flag anyway, with a WARNING, for the case where the
+`--component-tag <role>=<tag>` is repeatable and takes `core`, `user` or
+`search`. Its *shape* is checked before the first git command — an unknown
+role, a tag that is not `vX.Y.Z` (leading zeros included: `v0.07.3` is not a
+tag `release.sh` ever cut but parses to the same numbers as one), a role named
+twice with different tags, or a component newer than the release stops the run
+before even `git fetch`. A flag that **contradicts** a record can only be
+caught once that record has loaded, so that refusal comes after the fetch — but
+still before the first mutation, and it names both values. Either way the tree
+has not moved, no env snapshot was taken and the env file is byte-for-byte what
+it was. `--force` obeys the flag anyway, with a WARNING, for the case where the
 record itself is wrong.
 
 ```bash
