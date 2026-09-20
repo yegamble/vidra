@@ -743,7 +743,14 @@ class ExtraRecordTests(Fixture):
         well-formed file that is not a valid record must each leave the run
         exactly where it would have been, saying the fetched record was
         unusable. Turning absence into a refusal would stop the first deploy of
-        every release."""
+        every release.
+
+        'deeply nested' is the one that was NOT merely unusable: 60 KB of
+        `{"a":[[[[...]]]]}` passes every size and shape guard in lib.sh and
+        makes json.loads raise RecursionError, which is not a ValueError. It
+        escaped the except clause, printed a traceback and exited 1 — turning
+        a body chosen by whoever answers the request into a dead deploy AND a
+        dead rollback. Every other entry here is a control for it."""
         cases = {
             'truncated': '{"schema_version": 1, "release": "v0.7.0", "comp',
             'html error page': '<!DOCTYPE html><html><body>404: Not Found</body></html>\n',
@@ -751,6 +758,8 @@ class ExtraRecordTests(Fixture):
             'not a record': json.dumps({'hello': 'world'}),
             'unknown key': json.dumps({**synthetic('v0.7.0', 'v0.7.0', 'v0.7.0', 'v0.7.0'),
                                        'index_digets': 'typo'}),
+            'deeply nested': '{"a":' + '[' * 30000 + ']' * 30000 + '}',
+            'utf-8 BOM': '﻿' + json.dumps(synthetic('v0.7.0', 'v0.7.0', 'v0.7.0', 'v0.7.0')),
         }
         env_file = self.env('v0.7.0', 'v0.7.0', 'v0.7.0')
         for label, text in cases.items():
@@ -758,9 +767,92 @@ class ExtraRecordTests(Fixture):
                 path = self.outside(None, name='v0.7.0.json', text=text)
                 code, out = self.check('--extra-record', str(path), env_file=env_file)
                 self.assertEqual(code, UNVERIFIED, out)
+                self.assertNotIn('Traceback', out, 'the checker crashed instead of reporting')
                 self.assertIn('unusable', out)
                 self.assertIn('newer than every record', out)
                 self.assertNotIn('ERROR', out)
+
+    def test_bytes_that_are_not_utf8_are_unusable_not_a_crash(self):
+        path = self.base / 'fetched'
+        path.mkdir(exist_ok=True)
+        target = path / 'v0.7.0.json'
+        target.write_bytes(b'{"release": "v0.7.0", "\xff\xfe": 1}')
+        code, out = self.check('--extra-record', str(target),
+                               env_file=self.env('v0.7.0', 'v0.7.0', 'v0.7.0'))
+        self.assertEqual(code, UNVERIFIED, out)
+        self.assertNotIn('Traceback', out)
+        self.assertIn('unusable', out)
+
+    def test_an_oversized_extra_record_is_refused_without_being_parsed(self):
+        """--extra-record takes any path, so the size cap cannot live only in
+        lib.sh's curl. A hostile body is cheapest to refuse by its size."""
+        path = self.outside(None, name='v0.7.0.json', text='{"x":"' + 'y' * (300 * 1024) + '"}')
+        code, out = self.check('--extra-record', str(path),
+                               env_file=self.env('v0.7.0', 'v0.7.0', 'v0.7.0'))
+        self.assertEqual(code, UNVERIFIED, out)
+        self.assertIn('unusable', out)
+        self.assertIn('large', out.lower())
+
+    def test_a_record_whose_components_outrank_its_own_release_is_ignored(self):
+        """STRUCTURAL RULE. A record is a statement about ONE release, so no
+        component in it may carry a tag newer than the release it names, and at
+        least one must equal it. A record claiming release v0.7.0 while pairing
+        v0.9.0 images describes something release.sh cannot cut, and admitting
+        it would let a record vouch for images from a release it is not."""
+        bad = synthetic('v0.7.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=7)
+        bad['release'] = 'v0.7.0'
+        path = self.outside(None, name='v0.7.0.json', text=json.dumps(bad))
+        code, out = self.check('--extra-record', str(path),
+                               env_file=self.env('v0.9.0', 'v0.9.0', 'v0.9.0'))
+        self.assertEqual(code, UNVERIFIED, out)
+        self.assertIn('ignored', out.lower())
+        self.assertNotIn('ERROR', out)
+
+    def test_a_record_no_component_of_which_is_its_own_release_is_ignored(self):
+        older = synthetic('v0.9.0', 'v0.7.0', 'v0.7.0', 'v0.7.0', seed=7)
+        older['release'] = 'v0.9.0'
+        path = self.outside(None, name='v0.9.0.json', text=json.dumps(older))
+        code, out = self.check('--extra-record', str(path),
+                               env_file=self.env('v0.7.0', 'v0.7.0', 'v0.7.0'))
+        self.assertEqual(code, UNVERIFIED, out)
+        self.assertIn('ignored', out.lower())
+
+    def test_a_core_only_release_is_verified_by_its_fetched_record(self):
+        """THE SHAPE VIDRA ACTUALLY SHIPS. v0.7.4 and v0.7.5 re-released
+        vidra-core alone, so their records pair a new core with the previous
+        user and search. Such a triple is not uniform, and must verify from a
+        fetched record exactly as a uniform one does."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.7.3', 'v0.7.3', seed=9)
+        path = self.outside(record)
+        code, out = self.check('--extra-record', str(path),
+                               env_file=self.env('v0.9.0', 'v0.7.3', 'v0.7.3'))
+        self.assertEqual(code, OK, out)
+        self.assertIn(str(path), out)
+
+    def test_the_admitted_marker_is_printed_on_stdout_only_when_admitted(self):
+        """deploy/lib.sh reads this line to decide whether the second pass may
+        replace the first pass's verdict. It goes on STDOUT, where no text from
+        the fetched record can ever appear (record content only reaches
+        warnings and errors, which go to stderr), so a crafted record cannot
+        forge it."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        path = self.outside(record)
+        env_file = self.env('v0.9.0', 'v0.9.0', 'v0.9.0')
+        result = subprocess.run(
+            ['python3', str(CHECKER), 'check', '--mode', 'deploy', '--releases', str(self.releases),
+             '--env', str(env_file), '--extra-record', str(path)],
+            capture_output=True, text=True, env={'PATH': os.environ['PATH']})
+        self.assertEqual(result.returncode, OK, result.stdout + result.stderr)
+        self.assertIn('[release-mapping] extra-record-admitted v0.9.0', result.stdout)
+        self.assertNotIn('extra-record-admitted', result.stderr)
+        # Ignored: no marker at all.
+        other = self.outside(synthetic('v0.7.1', 'v0.7.1', 'v0.7.1', 'v0.7.1', seed=7))
+        result = subprocess.run(
+            ['python3', str(CHECKER), 'check', '--mode', 'deploy', '--releases', str(self.releases),
+             '--env', str(env_file), '--extra-record', str(other)],
+            capture_output=True, text=True, env={'PATH': os.environ['PATH']})
+        self.assertNotIn('extra-record-admitted', result.stdout + result.stderr)
+
 
     def test_a_path_that_does_not_exist_is_unusable_not_fatal(self):
         code, out = self.check('--extra-record', str(self.base / 'nope/v0.7.0.json'),
@@ -789,6 +881,115 @@ class ExtraRecordTests(Fixture):
                                env_file=self.env('v0.7.0', 'v0.7.0', 'v0.7.0'))
         self.assertEqual(code, REFUSED, out)
         self.assertIn('vidra-bundle.manifest tag is v0.6.4', out)
+
+    def test_a_genuine_bundle_and_its_genuine_fetched_record_verify(self):
+        """H. The beta host IS a bundle tree, and the fetched record now
+        reaches bundle_findings — a refusal path that was previously
+        unreachable for the newest release, because no record ever loaded for
+        it. A genuine vN bundle beside vN's genuine record must therefore
+        VERIFY: if this ever refused, the fetch would have turned every
+        bundle-host upgrade into a stopped deploy."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9, core_schema=151)
+        record['components']['core']['commit'] = hexsha(9)
+        path = self.outside(record)
+        manifest = self.bundle(tag='v0.9.0', schema='0151', core_commit=hexsha(9))
+        code, out = self.check('--extra-record', str(path), '--bundle-manifest', str(manifest),
+                               env_file=self.env('v0.9.0', 'v0.9.0', 'v0.9.0'))
+        self.assertEqual(code, OK, out)
+        self.assertNotIn('ERROR', out)
+        self.assertIn('151', out, 'the note does not carry the core schema the ledger will assert')
+
+    def test_a_core_only_release_bundle_is_compared_against_the_records_core_tag(self):
+        """A core-only release ships a new bundle at the CORE tag, which is
+        also the release tag; the user/search pins stay behind. The bundle
+        comparison must use the record's core tag, not the platform tag."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.7.3', 'v0.7.3', seed=9, core_schema=151)
+        record['components']['core']['commit'] = hexsha(9)
+        path = self.outside(record)
+        manifest = self.bundle(tag='v0.9.0', schema='0151', core_commit=hexsha(9))
+        code, out = self.check('--extra-record', str(path), '--bundle-manifest', str(manifest),
+                               env_file=self.env('v0.9.0', 'v0.7.3', 'v0.7.3'))
+        self.assertEqual(code, OK, out)
+
+    def test_a_bundle_whose_provenance_disagrees_with_the_fetched_record_is_refused(self):
+        """The other direction, and why the path above must stay reachable:
+        deploy.sh takes the expected schema number from this manifest, so a
+        manifest describing another build would make the ledger assertion pass
+        or fail against the wrong number AFTER the migrations have run."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9, core_schema=151)
+        record['components']['core']['commit'] = hexsha(9)
+        path = self.outside(record)
+        for label, manifest in (
+                ('schema', self.bundle(tag='v0.9.0', schema='0150', core_commit=hexsha(9))),
+                ('commit', self.bundle(tag='v0.9.0', schema='0151', core_commit=hexsha(4)))):
+            with self.subTest(disagrees_on=label):
+                code, out = self.check('--extra-record', str(path),
+                                       '--bundle-manifest', str(manifest),
+                                       env_file=self.env('v0.9.0', 'v0.9.0', 'v0.9.0'))
+                self.assertEqual(code, REFUSED, out)
+                self.assertIn('vidra-bundle.manifest', out)
+
+
+class MissingReleaseTests(Fixture):
+    """`--print-missing-release`: the checker, and ONLY the checker, decides
+    which release's record would settle a run.
+
+    deploy/lib.sh needs that answer to know what to fetch, and re-deriving
+    "newest of the three pinned tags" in bash would be a second semver
+    implementation drifting against this one — the first cut of this feature
+    used the CORE tag, which is right for a core-only release by accident and
+    wrong for any other shape. It prints the tag and nothing else, and exits 0
+    whatever the verdict: an older checker that does not know the flag exits 2
+    and prints nothing, which is exactly the "do not fetch, keep the first
+    pass's verdict" answer.
+    """
+
+    def missing(self, *args, mode='deploy', env_file=None):
+        env_file = env_file or self.env()
+        result = subprocess.run(
+            ['python3', str(CHECKER), 'check', '--mode', mode, '--releases', str(self.releases),
+             '--env', str(env_file), '--print-missing-release', *args],
+            capture_output=True, text=True, env={'PATH': os.environ['PATH']})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return result.stdout.strip()
+
+    def test_a_uniform_release_newer_than_every_record_is_named(self):
+        self.assertEqual(self.missing(env_file=self.env('v0.9.0', 'v0.9.0', 'v0.9.0')), 'v0.9.0')
+
+    def test_a_core_only_release_names_its_newest_pin_not_its_core_by_position(self):
+        """v0.7.4/v0.7.5 are core-only, so the newest pin is the core tag —
+        but the rule is `newest`, not `core`, so a user-only release would
+        name the user tag."""
+        self.assertEqual(self.missing(env_file=self.env('v0.9.0', 'v0.6.4', 'v0.6.4')), 'v0.9.0')
+        self.assertEqual(self.missing(env_file=self.env('v0.6.4', 'v0.9.0', 'v0.6.4')), 'v0.9.0')
+        self.assertEqual(self.missing(env_file=self.env('v0.6.4', 'v0.6.4', 'v0.9.0')), 'v0.9.0')
+
+    def test_a_recorded_release_names_nothing(self):
+        self.assertEqual(self.missing(), '')
+
+    def test_a_triple_whose_newest_pin_is_already_recorded_names_nothing(self):
+        """Fetching cannot help: the record for the newest pin is right here,
+        and it is what produced the refusal."""
+        self.add(synthetic('v0.6.5', 'v0.6.5', 'v0.6.5', 'v0.6.5'))
+        self.assertEqual(self.missing(env_file=self.env('v0.6.4', 'v0.6.5', 'v0.6.4')), '')
+
+    def test_a_release_older_than_every_record_names_nothing(self):
+        """Nothing before the first record has one anywhere; a GET per deploy
+        of a historical release would 404 every time."""
+        self.assertEqual(self.missing(env_file=self.env('v0.5.0', 'v0.5.0', 'v0.5.0')), '')
+
+    def test_an_unparseable_tag_names_nothing(self):
+        self.assertEqual(self.missing(env_file=self.env('latest', 'latest', 'latest')), '')
+
+    def test_a_rollback_of_an_unpaired_triple_names_its_newest_pin(self):
+        self.assertEqual(self.missing(mode='rollback',
+                                      env_file=self.env('v0.9.0', 'v0.9.0', 'v0.9.0')), 'v0.9.0')
+
+    def test_it_prints_only_the_tag_and_never_a_verdict(self):
+        out = self.missing(env_file=self.env('v0.9.0', 'v0.6.4', 'v0.6.4'))
+        self.assertEqual(out, 'v0.9.0')
+        self.assertNotIn('WARNING', out)
+        self.assertNotIn('ERROR', out)
 
 
 class CommittedRecordTests(unittest.TestCase):
@@ -1279,8 +1480,11 @@ class FetchedRecordThroughLibTests(unittest.TestCase):
 
     def run_check(self, core, user, search, mode='deploy', body=None, exit_code=0,
                   env_extra='', process_env=None):
-        if env_extra:
-            self.env_file.write_text(f'JWT_SECRET={SECRET}\n' + env_extra)
+        # ALWAYS rewritten, never only when env_extra is given: leaving the
+        # previous call's keys in place made the "and the default does NOT
+        # warn" half of a two-part test re-read the mirror line it had just
+        # set, and pass or fail for the wrong reason.
+        self.env_file.write_text(f'JWT_SECRET={SECRET}\n' + env_extra)
         script = ('set -euo pipefail\n'
                   'log() { printf "[deploy] %s\\n" "$*"; }\n'
                   f'ENV_FILE="{self.env_file}"\n'
@@ -1332,7 +1536,8 @@ class FetchedRecordThroughLibTests(unittest.TestCase):
         rc, out, calls = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', exit_code=22)
         self.assertEqual(rc, 0, out)
         self.assertIn('could not fetch', out)
-        self.assertIn('curl --proto', out, 'the warning does not name a curl to run by hand')
+        self.assertIn("curl -q --proto '=https'", out,
+                      'the warning does not name a curl to run by hand')
         self.assertIn('release mapping NOT verified', out)
         self.assertIn('releases/v0.9.0.json', calls)
 
@@ -1380,6 +1585,166 @@ class FetchedRecordThroughLibTests(unittest.TestCase):
         self.assertFalse((self.tree / 'releases/v0.9.0.json').exists())
         self.assertEqual(sorted(p.name for p in self.tmpdir.iterdir()), [],
                          'the fetch left its temporary files behind')
+
+    # --- C: the release shape vidra actually ships -------------------------
+
+    def test_a_core_only_release_is_fetched_and_verified(self):
+        """v0.7.4 and v0.7.5 are core-only. With the record absent, pass 1
+        answers REFUSED (not UNVERIFIED — the triple is not uniform), and the
+        first cut of this feature only fetched on UNVERIFIED. So the operator's
+        only route past the newest release was the blanket
+        VIDRA_RELEASE_MAPPING=warn override, with the proving record one GET
+        away."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.7.3', 'v0.7.3', seed=9)
+        rc, out, calls = self.run_check('v0.9.0', 'v0.7.3', 'v0.7.3', body=json.dumps(record))
+        self.assertEqual(rc, 0, out)
+        self.assertIn('releases/v0.9.0.json', calls, 'the core-only shape attempted no fetch')
+        self.assertIn('is release v0.9.0', out)
+
+    def test_a_core_only_release_whose_fetch_fails_keeps_the_refusal(self):
+        """This PR may never be LOOSER than main without an admitted record:
+        a refusal stays a refusal when nothing was fetched."""
+        rc, out, calls = self.run_check('v0.9.0', 'v0.7.3', 'v0.7.3', exit_code=22)
+        self.assertEqual(rc, 1, out)
+        self.assertIn('could not fetch', out)
+        self.assertIn('not a recorded release', out)
+        self.assertNotEqual(calls, '')
+
+    def test_a_fetched_record_that_does_not_pair_the_triple_keeps_the_refusal(self):
+        """The record is fetched for the newest pin; if it does not pair what
+        is actually pinned, the operator has a genuinely unreleased mapping
+        and the refusal must stand."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, _ = self.run_check('v0.9.0', 'v0.6.4', 'v0.9.0', body=json.dumps(record))
+        self.assertEqual(rc, 1, out)
+        self.assertIn('ignored', out.lower())
+        self.assertIn('not a recorded release', out)
+
+    def test_a_release_older_than_every_record_reaches_out_for_nothing(self):
+        """Nothing before the first record has one anywhere, so a GET here
+        would 404 on every historical deploy."""
+        rc, out, calls = self.run_check('v0.5.0', 'v0.5.0', 'v0.5.0')
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(calls, '', f'a pre-record release reached out: {calls}')
+
+    # --- B: an unexpected exit from the second pass may not become a die ---
+
+    def stub_checker(self, body):
+        (self.tree / 'deploy/release-mapping.py').write_text(body)
+
+    REJECTS_EXTRA_RECORD = '''#!/usr/bin/env python3
+"""An older release-mapping.py: it knows --print-missing-release (so the fetch
+is attempted) but not --extra-record. A hand-patched NO-GIT bundle tree really
+can hold a new lib.sh beside an older checker."""
+import sys
+if '--print-missing-release' in sys.argv:
+    print('v0.9.0')
+    sys.exit(0)
+if '--extra-record' in sys.argv:
+    sys.stderr.write('usage: release-mapping.py\\nrelease-mapping.py: error: '
+                     'unrecognized arguments: --extra-record\\n')
+    sys.exit(2)
+sys.stderr.write('[release-mapping] WARNING: pass one said UNVERIFIED\\n')
+sys.exit(3)
+'''
+
+    CRASHES_ON_EXTRA_RECORD = REJECTS_EXTRA_RECORD.replace('sys.exit(2)', 'sys.exit(9)')
+
+    def test_a_checker_that_rejects_the_flag_keeps_the_first_passs_verdict(self):
+        """The second pass may only REPLACE a verdict, never invent one. Before
+        this, rc was reassigned from the second run unconditionally, so
+        argparse's exit 2 fell through to `return 1` and KILLED a deploy that
+        pass 1 had allowed — a mixed-revision tree turned into an outage by a
+        feature whose whole contract is that it can only ever add
+        verification."""
+        for label, stub, code in (('rejects the flag', self.REJECTS_EXTRA_RECORD, 2),
+                                  ('crashes', self.CRASHES_ON_EXTRA_RECORD, 9)):
+            with self.subTest(second_pass=label):
+                self.log.unlink(missing_ok=True)
+                self.stub_checker(stub)
+                rc, out, calls = self.run_check(
+                    'v0.9.0', 'v0.9.0', 'v0.9.0',
+                    body=json.dumps(synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)))
+                self.assertEqual(rc, 0, f'exit {code} from the second pass became a die:\n{out}')
+                self.assertIn('release mapping NOT verified', out)
+                self.assertIn(str(code), out, 'the warning does not say how the second pass ended')
+                self.assertNotEqual(calls, '', 'control: the fetch was attempted')
+
+    def test_a_checker_that_never_admits_the_record_keeps_the_first_passs_verdict(self):
+        """Exit 0 alone is not enough. Only a run that says it ADMITTED the
+        fetched record may speak for it."""
+        self.stub_checker('#!/usr/bin/env python3\n'
+                          'import sys\n'
+                          "if '--print-missing-release' in sys.argv:\n"
+                          "    print('v0.9.0'); sys.exit(0)\n"
+                          "if '--extra-record' in sys.argv:\n"
+                          "    print('[release-mapping] nothing was admitted'); sys.exit(0)\n"
+                          "sys.stderr.write('[release-mapping] WARNING: unverified\\n'); sys.exit(3)\n")
+        rc, out, _ = self.run_check(
+            'v0.9.0', 'v0.9.0', 'v0.9.0',
+            body=json.dumps(synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)))
+        self.assertEqual(rc, 0, out)
+        self.assertIn('release mapping NOT verified', out)
+
+    def test_a_checker_too_old_to_name_a_missing_release_never_fetches(self):
+        self.stub_checker('#!/usr/bin/env python3\n'
+                          'import sys\n'
+                          "sys.stderr.write('usage error\\n')\n"
+                          "sys.exit(2 if '--print-missing-release' in sys.argv else 3)\n")
+        rc, out, calls = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0')
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(calls, '', 'an older checker still triggered a fetch')
+
+    # --- A: a hostile body may not kill the run ----------------------------
+
+    def test_a_deeply_nested_body_cannot_kill_a_deploy_or_a_rollback(self):
+        """60 KB of nested arrays passes every guard in lib.sh and used to
+        raise RecursionError inside the checker: traceback, exit 1, dead run.
+        Whoever answers the request must not be able to do that."""
+        hostile = '{"a":' + '[' * 30000 + ']' * 30000 + '}'
+        for mode, expected in (('deploy', 0), ('rollback', 0)):
+            with self.subTest(mode=mode):
+                self.log.unlink(missing_ok=True)
+                rc, out, _ = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', mode=mode, body=hostile)
+                self.assertEqual(rc, expected, out)
+                self.assertNotIn('Traceback', out)
+                self.assertIn('release mapping NOT verified', out)
+
+    # --- D: the trust model, made visible ----------------------------------
+
+    def test_a_verdict_resting_on_a_fetched_record_says_so_and_names_the_url(self):
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, _ = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', body=json.dumps(record))
+        self.assertEqual(rc, 0, out)
+        self.assertIn('raw.githubusercontent.com/yegamble/vidra/main/releases/v0.9.0.json', out)
+        self.assertIn('fetched', out)
+
+    def test_a_non_canonical_record_source_is_a_distinct_warning(self):
+        """Pointing the fetch at a mirror moves the trust anchor off the one
+        that delivered the bundle. That is legitimate and the operator's
+        choice, and it must be visible in the log that records the verdict."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, _ = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', body=json.dumps(record),
+                                    env_extra='VIDRA_RECORD_BASE_URL=https://mirror.internal/rel\n')
+        self.assertEqual(rc, 0, out)
+        self.assertIn('NON-CANONICAL', out)
+        self.assertIn('mirror.internal', out)
+        # And the canonical default must NOT raise it.
+        self.log.unlink(missing_ok=True)
+        rc, out, _ = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', body=json.dumps(record))
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn('NON-CANONICAL', out)
+
+    def test_a_die_caused_by_a_fetched_record_names_the_way_out(self):
+        """A forged or simply wrong remote record must never trap an operator
+        mid-incident: the stop it causes has to carry its own one-line
+        override, or the only way out is reading this source."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, _ = self.run_check('v0.9.0', f'v0.9.0@{digest(99)}', 'v0.9.0',
+                                    mode='rollback', body=json.dumps(record))
+        self.assertEqual(rc, 1, out)
+        self.assertIn('VIDRA_RECORD_FETCH=off', out)
+        self.assertIn('fetched', out)
 
 
 if __name__ == '__main__':

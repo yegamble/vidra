@@ -77,6 +77,12 @@ RECORD_KEYS = {'schema_version', 'release', 'meta_commit', 'core_schema_version'
                'search_schema_version', 'components'}
 OPTIONAL_RECORD_KEYS = {'evidence'}
 
+# --extra-record comes from OUTSIDE this tree — deploy/lib.sh downloads it — so
+# its size is refused before it is parsed, and by this script as well as by the
+# curl that fetched it: the flag takes any path, and a guard that lives only in
+# the caller is not a guard. A real record is ~2 KiB.
+MAX_EXTRA_RECORD_BYTES = 262144
+
 
 def semver(tag):
     """(major, minor, patch) of a vX.Y.Z tag, ignoring a prerelease/build
@@ -183,11 +189,32 @@ def load_extra_record(path, records, env):
                 'might have said was used, and this run is exactly where it would have been '
                 'without it. A record that cannot be read predicts nothing about the images '
                 'being deployed.')
+    path = Path(path)
+    # SIZE FIRST, and cheaply. Refusing by length costs a stat() and cannot be
+    # provoked into anything; parsing first is what hands the attacker a lever.
     try:
-        data = json.loads(Path(path).read_text())
-    except (OSError, ValueError) as error:
+        size = path.stat().st_size
+    except OSError as error:
         return None, unusable % error
-    problems = validate(Path(path), data)
+    if size > MAX_EXTRA_RECORD_BYTES:
+        return None, unusable % (f'it is {size} bytes, far too large for a release record '
+                                 f'(cap {MAX_EXTRA_RECORD_BYTES})')
+    # EVERY exception, not (OSError, ValueError). json.loads raises
+    # RecursionError — which is NOT a ValueError — on a deeply nested body, and
+    # 60 KB of `{"a":[[[[...]]]]}` fits inside every size and shape guard the
+    # fetch applies. That escaped this clause, printed a traceback and exited
+    # 1, so deploy.sh and rollback.sh BOTH died: whoever answered the request
+    # could stop a deploy, and worse, block a rollback mid-incident. The whole
+    # contract of this flag is that it can only ever ADD verification, so there
+    # is no failure of any kind here that may be louder than "unusable".
+    try:
+        data = json.loads(path.read_text())
+    except Exception as error:  # noqa: BLE001 - see above; a crash here is a dead deploy
+        return None, unusable % f'{type(error).__name__}: {error}'
+    try:
+        problems = validate(path, data)
+    except Exception as error:  # noqa: BLE001 - same reasoning, for a hostile SHAPE
+        return None, unusable % f'{type(error).__name__}: {error}'
     if problems:
         return None, unusable % '; '.join(problems)
     triple = tuple(data['components'][name]['tag'] for name, _, _ in COMPONENTS)
@@ -209,7 +236,51 @@ def load_extra_record(path, records, env):
         return None, (f'--extra-record ({path}) pairs {described}, exactly like a record already in '
                       'this tree. It was IGNORED rather than added: two records pairing one triple '
                       'cannot say which release is being deployed.')
+    # THE STRUCTURAL RULE. A record is a statement about ONE release, and
+    # deploy/release.sh cuts every component of a release at or below the
+    # release's own version — v0.7.4 and v0.7.5 re-released vidra-core alone,
+    # so `core=v0.7.5 user=v0.7.3 search=v0.7.3` is a perfectly ordinary
+    # record, but nothing may be ABOVE the release tag and something must
+    # EQUAL it. A file claiming release v0.7.0 while pairing v0.9.0 images
+    # describes a release that cannot exist; admitting it would let a record
+    # vouch for images from a release it does not name.
+    #
+    # NOT a defence against whoever controls the record source (see the trust
+    # model in releases/README.md) — it is the shape check that keeps an
+    # honest mistake, or a record served from the wrong path, from being read
+    # as a verification it is not.
+    release_version = semver(data['release'])
+    versions = [semver(tag) for tag in triple]
+    if any(version > release_version for version in versions):
+        return None, (f'--extra-record ({path}) names release {data["release"]} but pairs '
+                      f'{described}, which is NEWER than the release it claims to be. A release '
+                      'cannot contain an image from a later one, so this is not a record '
+                      f'{data["release"]} could have produced. It was IGNORED.')
+    if not any(version == release_version for version in versions):
+        return None, (f'--extra-record ({path}) names release {data["release"]} but pairs '
+                      f'{described}, none of which is {data["release"]}. A release record names '
+                      'the release at least one of its own components was cut as. It was IGNORED.')
     return data, ''
+
+
+def wanted_record_tag(env, records):
+    """The release whose record, if it could be obtained, would settle this
+    run — or None when fetching one cannot help.
+
+    THE NEWEST OF THE THREE PINNED TAGS, and this is the only place that
+    decides it. deploy/lib.sh asks for the answer rather than re-deriving it,
+    because a second semver implementation in bash drifts against this one:
+    the first cut of the fetch used the CORE tag, which is right for a
+    core-only release (v0.7.4, v0.7.5) purely by accident and wrong for any
+    other shape a future release takes.
+
+    None when a record here already names that release: it is present, it is
+    what produced the verdict, and a GET cannot change it.
+    """
+    candidate = max(env.values(), key=semver)
+    if any(record['release'] == candidate for record in records):
+        return None
+    return candidate
 
 
 def load_records(directory):
@@ -295,8 +366,18 @@ def bundle_manifest(path):
     return values
 
 
-def check(args):
-    """(exit code, errors, warnings, notes)."""
+def check(args, found=None):
+    """(exit code, errors, warnings, notes).
+
+    `found`, when a dict is passed, is filled with the two facts
+    deploy/lib.sh's second pass needs and cannot safely re-derive:
+      wanted    the release whose MISSING record would settle this run
+      admitted  the release an --extra-record was actually allowed to speak for
+    Kept out of the return tuple so every existing `return` stays as it is.
+    """
+    found = found if found is not None else {}
+    found.setdefault('wanted', None)
+    found.setdefault('admitted', None)
     errors, warnings, notes = [], [], []
     records, problems = load_records(args.releases)
 
@@ -382,6 +463,7 @@ def check(args):
             warnings.append(why)
         else:
             records = records + [extra]
+            found['admitted'] = extra['release']
             notes.append(f'{releases}/{extra["release"]}.json is not in this tree (release.sh tags '
                          'this repository before any image exists, so a tree at a release cannot '
                          f'carry its own record); the copy at {args.extra_record} was supplied with '
@@ -499,6 +581,15 @@ def check(args):
                            'Continuing, because refusing would make every historical release '
                            'undeployable and un-rollback-able.') + pinned_note(pins))
         return (REFUSED if errors else UNVERIFIED), errors, warnings, notes
+
+    # FROM HERE DOWN, no record pairs this triple, whatever the verdict turns
+    # out to be — the tree's own release, a rollback to an unpaired triple, the
+    # VIDRA_RELEASE_MAPPING=warn override, or a refusal. Every one of them is a
+    # verdict reached for want of ONE record, so this is the single place that
+    # names which record that is. The pre-floor branch returned above on
+    # purpose: nothing before the first record has one anywhere, and asking
+    # would 404 on every deploy of a historical release.
+    found['wanted'] = wanted_record_tag(env, records)
 
     # A UNIFORM triple newer than every record: the tree's own release (tag vN
     # or the vN bundle), or vN deployed from main by a fresh `install.sh --git`
@@ -675,6 +766,12 @@ def main():
                              'pairs the pinned triple and names a release the tree has no record '
                              'for; otherwise it is IGNORED with a warning. Never a refusal on its '
                              'own: a record that could not be read predicts nothing')
+    parser.add_argument('--print-missing-release', action='store_true',
+                        help='print ONLY the release tag whose missing record would settle this '
+                             'run (the newest of the three pinned tags), or nothing, and exit 0 '
+                             'whatever the verdict. deploy/lib.sh asks this before fetching, so '
+                             '"which record" is decided here and not by a second semver '
+                             'implementation in shell')
     parser.add_argument('--tree-tag', action='append',
                         help='a tag pointing at this checkout\'s HEAD (repeatable)')
     parser.add_argument('--unrecorded', choices=('refuse', 'warn'), default='refuse',
@@ -683,10 +780,32 @@ def main():
                              'reaches an unparseable tag, a broken releases/, a digest contradiction '
                              'or a stale bundle')
     args = parser.parse_args()
+    found = {}
+
+    # --print-missing-release is a QUESTION, not a verdict: it prints one tag
+    # or nothing and always exits 0, so the caller's `$(...)` can never turn
+    # "I could not work out what to fetch" into a failed deploy. Any exception
+    # is the same answer as no answer.
+    if args.print_missing_release:
+        try:
+            check(args, found)
+        except Exception:  # noqa: BLE001 - "do not fetch" is the safe answer to everything
+            return 0
+        if found.get('wanted'):
+            print(found['wanted'])
+        return 0
+
     try:
-        code, errors, warnings, notes = check(args)
+        code, errors, warnings, notes = check(args, found)
     except OSError as error:
         code, errors, warnings, notes = REFUSED, [f'cannot read {error.filename}: {error.strerror}'], [], []
+    # THE ADMISSION MARKER, on STDOUT and on a line of its own. deploy/lib.sh
+    # reads it to decide whether the second pass may replace the first pass's
+    # verdict. Stdout is the point: text from the fetched record only ever
+    # reaches warnings and errors, which go to stderr, so no crafted record can
+    # forge this line.
+    if found.get('admitted'):
+        print(f'[release-mapping] extra-record-admitted {found["admitted"]}')
     for note in notes:
         print(f'[release-mapping] {note}')
     for warning in warnings:

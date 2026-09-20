@@ -26,6 +26,7 @@ proved rather than asserted.
 """
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -34,11 +35,23 @@ import unittest
 BASH = shutil.which('bash') or '/bin/bash'
 # A PATH holding everything the function needs EXCEPT curl, so "this host has
 # no curl" can be rehearsed without also hiding bash, grep and mktemp from it.
-NEEDED = ('grep', 'mktemp', 'wc', 'head', 'tr', 'cat', 'rm')
+NEEDED = ('grep', 'mktemp', 'wc', 'head', 'tr', 'cat', 'rm', 'sed', 'sleep', 'kill')
 
 LIB = Path(__file__).resolve().parents[1] / 'deploy/lib.sh'
 
-DEFAULT_BASE = 'https://raw.githubusercontent.com/yegamble/vidra/main/releases'
+
+def extract_const(name):
+    """A single-quoted top-level assignment out of deploy/lib.sh."""
+    match = re.search(rf"^{name}='([^']*)'$", LIB.read_text(), re.M)
+    if not match:
+        raise AssertionError(f'deploy/lib.sh no longer defines {name}')
+    return match.group(1)
+
+
+# Read from lib.sh, never restated here: a test that hardcodes the default
+# stops noticing when the real one changes, which is the one change about this
+# knob that would matter.
+DEFAULT_BASE = extract_const('VIDRA_RECORD_DEFAULT_BASE_URL')
 
 # Records every argv it is given, then answers with $CURL_BODY (written to the
 # path after --output) and exits $CURL_EXIT. A stub that logs is the only way
@@ -52,6 +65,15 @@ for arg in "$@"; do
   if [ "$prev" = "--output" ]; then dest="$arg"; fi
   prev="$arg"
 done
+# Rehearse Ctrl-C mid-download: write a partial body, then interrupt the shell
+# that invoked us — which is the subshell the download is supposed to own — so
+# the cleanup runs against a temp file that really exists.
+if [ -n "${CURL_INTERRUPT:-}" ]; then
+  [ -n "$dest" ] && printf '{"partial":' > "$dest"
+  kill -INT "$PPID"
+  sleep 5
+  exit 0
+fi
 if [ "${CURL_EXIT:-0}" = "0" ] && [ -n "$dest" ] && [ -n "${CURL_BODY_FILE:-}" ]; then
   cat "$CURL_BODY_FILE" > "$dest"
 fi
@@ -114,15 +136,26 @@ class FetchReleaseRecord(unittest.TestCase):
             (self.nocurl / tool).symlink_to(found)
         self.assertIsNone(shutil.which('curl', path=str(self.nocurl)))
 
-    def fetch(self, tag='v0.9.0', body=None, exit_code=0, env=None, with_curl=True):
-        """Run fetch_release_record TAG <dest>, and report what it did."""
-        dest = self.dest_dir / f'{tag}.json'
-        script = HARNESS + extract('fetch_release_record') + \
-            f'\nrc=0\nfetch_release_record {tag!r} "$1" || rc=$?\necho "RC=$rc"\n'
+    def fetch(self, tag='v0.9.0', body=None, exit_code=0, env=None, with_curl=True,
+              interrupt=False):
+        """Run fetch_release_record TAG <dest>, and report what it did.
+
+        The tag travels in the ENVIRONMENT, never interpolated into the script
+        text: `repr()` renders a newline as a literal backslash-n, which bash
+        inside single quotes hands on unchanged, so a test written that way
+        would silently exercise a 12-character string instead of the two-line
+        one it meant to."""
+        safe = tag if re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', tag) else 'unused'
+        dest = self.dest_dir / f'{safe}.json'
+        script = (HARNESS + f"VIDRA_RECORD_DEFAULT_BASE_URL='{DEFAULT_BASE}'\n"
+                  + extract('fetch_release_record')
+                  + '\nrc=0\nfetch_release_record "$TAG" "$1" || rc=$?\necho "RC=$rc"\n')
         environ = {
             'PATH': f'{self.bin}:{self.nocurl}' if with_curl else str(self.nocurl),
             'CURL_LOG': str(self.curl_log),
             'CURL_EXIT': str(exit_code),
+            'CURL_INTERRUPT': '1' if interrupt else '',
+            'TAG': tag,
             'HOME': str(self.base),
             'TMPDIR': str(self.base),
         }
@@ -140,6 +173,37 @@ class FetchReleaseRecord(unittest.TestCase):
         rc = int(out.split('RC=')[1].split('\n')[0]) if 'RC=' in out else None
         return rc, out, calls, dest
 
+    def test_the_function_parses_on_its_own(self):
+        """`bash -n deploy/lib.sh` is NOT enough to know this function parses.
+
+        Two constructs inside the `why="$( ... )"` download end the command
+        substitution early — a backslash-escaped `case` pattern, whose `)`
+        closes it, and a comment containing an apostrophe, which the
+        substitution scanner counts as an opening quote because it does not
+        treat comments as comments. Both were written here and both passed
+        `bash -n` on the whole file AND `shellcheck -x`, because a later
+        apostrophe elsewhere in lib.sh re-balanced the count. Parsing the
+        function ALONE is what catches it, so the suite does that explicitly
+        rather than relying on it being a side effect of the tests below."""
+        script = extract('fetch_release_record')
+        result = subprocess.run([BASH, '-n', '-c', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0,
+                         f'fetch_release_record does not parse in isolation:\n{result.stderr}')
+
+    def test_the_download_substitution_carries_no_comments(self):
+        """The rule that keeps the above true, stated directly. Explanations
+        belong immediately ABOVE `why="$(`, never between it and its `)`: one
+        apostrophe in a remark in there opens a string the parser never
+        closes, and the file-level gates do not notice."""
+        body = extract('fetch_release_record')
+        inside = body.split('why="$(', 1)
+        self.assertEqual(len(inside), 2, 'the download substitution was renamed or removed')
+        inside = inside[1].split('\n  )"', 1)[0]
+        offenders = [line for line in inside.splitlines() if line.lstrip().startswith('#')]
+        self.assertEqual(offenders, [],
+                         'comments inside the download command substitution:\n'
+                         + '\n'.join(offenders))
+
     # --- the happy path, and the control every negative below needs ---------
 
     def test_a_good_record_is_downloaded_and_the_url_is_logged(self):
@@ -154,9 +218,44 @@ class FetchReleaseRecord(unittest.TestCase):
         """An operator's deploy must not hang on a black-holed host, follow a
         redirect off TLS, or stream an unbounded body into a preflight."""
         _, _, calls, _ = self.fetch(body=json.dumps(record()))
-        for flag in ('--proto', '--tlsv1.2', '--fail', '--location', '--max-time', '--max-filesize'):
+        for flag in ('--proto', '--proto-redir', '--tlsv1.2', '--fail', '--location',
+                     '--max-time', '--max-filesize', '--connect-timeout', '--max-redirs'):
             self.assertIn(flag, calls, f'curl was invoked without {flag}: {calls}')
         self.assertIn('=https', calls, 'the request does not restrict the protocol to https')
+
+    def test_curl_ignores_the_hosts_curlrc(self):
+        """~/.curlrc can add --insecure, a --proxy, even another --output, and
+        a deploy host's curl config is not this preflight's to trust. -q must
+        be the FIRST argument — curl applies the config before any later flag
+        can disable it."""
+        _, _, calls, _ = self.fetch(body=json.dumps(record()))
+        self.assertTrue(calls.startswith('-q '), f'-q is not curl\'s first argument: {calls}')
+
+    def test_credentials_in_a_base_url_are_masked_in_every_log_line(self):
+        """An operator who puts a token in VIDRA_RECORD_BASE_URL should not
+        find it in the deploy log, the terminal scrollback, or the
+        copy-pasteable curl the failure prints."""
+        base = 'https://deploybot:s3cr3t-token@mirror.internal/releases'
+        for label, kwargs in (('success', dict(body=json.dumps(record()))),
+                              ('failure', dict(exit_code=22))):
+            with self.subTest(path=label):
+                rc, out, _, _ = self.fetch(env={'ENV_VIDRA_RECORD_BASE_URL': base}, **kwargs)
+                self.assertNotIn('s3cr3t-token', out, 'the log leaked the credential')
+                self.assertIn('mirror.internal', out, 'control: the host is still named')
+                self.assertIn('***', out)
+
+    def test_a_non_canonical_base_url_is_called_out_as_such(self):
+        """The record decides what the deploy verifies. Fetching it from
+        somewhere other than the repository that shipped the bundle is
+        legitimate and the operator's choice — and must be visible in the log
+        that records the verdict, not inferred from the URL."""
+        rc, out, _, _ = self.fetch(body=json.dumps(record()),
+                                   env={'ENV_VIDRA_RECORD_BASE_URL': 'https://mirror.internal/rel'})
+        self.assertEqual(rc, 0, out)
+        self.assertIn('NON-CANONICAL', out)
+        rc, out, _, _ = self.fetch(body=json.dumps(record()))
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn('NON-CANONICAL', out)
 
     # --- 6: the airgapped switch --------------------------------------------
 
@@ -171,9 +270,18 @@ class FetchReleaseRecord(unittest.TestCase):
         self.assertIn('VIDRA_RECORD_FETCH', out)
 
     def test_the_spellings_of_no_an_operator_types_all_turn_it_off(self):
-        """Same reasoning as is_true's word list: an env file is hand-edited."""
-        for value in ('off', 'OFF', 'Off', '0', 'false', 'no'):
-            with self.subTest(value=value):
+        """Same reasoning as is_true's word list: an env file is hand-edited.
+
+        The commented and padded spellings are the ones that silently DEFEATED
+        the switch: env_get returns the raw remainder of the line, so
+        `VIDRA_RECORD_FETCH=off  # airgapped` arrives as the whole string
+        'off  # airgapped', matched none of the words, and the host reached out
+        anyway — the one thing an operator who wrote that line was trying to
+        prevent. Compose reads an unquoted value the same way this now does."""
+        for value in ('off', 'OFF', 'Off', '0', 'false', 'no', 'NO', 'False',
+                      'off ', ' off', '  off  ', 'off # airgapped',
+                      'off  # no egress from this VLAN', 'off\t'):
+            with self.subTest(value=repr(value)):
                 self.curl_log.unlink(missing_ok=True)
                 rc, out, calls, _ = self.fetch(body=json.dumps(record()),
                                                env={'ENV_VIDRA_RECORD_FETCH': value})
@@ -289,7 +397,12 @@ class FetchReleaseRecord(unittest.TestCase):
         for tag in ('main', 'latest', 'v1.2', 'v1.2.3.4', 'v0.7.0-rc1',
                     'v0.7.0@sha256:' + 'a' * 64, '../../../etc/passwd',
                     'v1.2.3/../../evil', 'v1.2.3?x=1', 'v1.2.3#f', 'v1.2.3%2e%2e',
-                    'v1.2.3 v1.2.4', '', 'sha-abc1234', 'V1.2.3'):
+                    'v1.2.3 v1.2.4', '', 'sha-abc1234', 'V1.2.3',
+                    # A LINE-anchored `grep -Eq '^...$'` accepts all three of
+                    # these: grep matches per LINE, so a newline in the value
+                    # smuggles an arbitrary second line past a check that looks
+                    # airtight. The match has to be against the whole string.
+                    'v1.2.3\nevil', 'evil\nv1.2.3', 'v1.2.3\n../../etc/passwd'):
             with self.subTest(tag=tag):
                 self.curl_log.unlink(missing_ok=True)
                 rc, out, calls, _ = self.fetch(tag=tag, body=json.dumps(record()))
@@ -306,6 +419,47 @@ class FetchReleaseRecord(unittest.TestCase):
                 self.assertIn(f'/{tag}.json', calls)
 
     # --- the temp file ------------------------------------------------------
+
+    def test_an_interrupt_mid_download_leaves_no_temp_file(self):
+        """Ctrl-C during the curl is the likeliest interruption of all — a
+        preflight is exactly when an operator changes their mind — and it used
+        to leak the partially written temp file into TMPDIR on every press."""
+        before = {p.name for p in self.base.iterdir()}
+        self.fetch(interrupt=True)
+        leaked = [n for n in {p.name for p in self.base.iterdir()} - before
+                  if n.startswith('vidra-record')]
+        self.assertEqual(leaked, [], f'an interrupted download leaked {leaked}')
+
+    def test_the_callers_own_exit_trap_is_neither_replaced_nor_fired_early(self):
+        """lib.sh is SOURCED by deploy.sh and rollback.sh, which own EXIT
+        traps; a `trap ... EXIT` added at function scope here would silently
+        replace one of those. The cleanup therefore belongs to a subshell that
+        owns its own trap. This asserts both halves: the caller's trap is still
+        installed afterwards, and it did not fire during the fetch."""
+        script = (HARNESS
+                  + f"VIDRA_RECORD_DEFAULT_BASE_URL='{DEFAULT_BASE}'\n"
+                  + 'trap \'echo "CALLER-EXIT-TRAP-RAN"\' EXIT\n'
+                  + extract('fetch_release_record')
+                  + '\nbefore="$(trap -p EXIT)"\n'
+                    'rc=0\nfetch_release_record "$TAG" "$1" || rc=$?\n'
+                    'after="$(trap -p EXIT)"\n'
+                    'echo "RC=$rc"\n'
+                    '[ "$before" = "$after" ] && echo "TRAP-UNCHANGED" || echo "TRAP-CLOBBERED: $after"\n'
+                    'echo "STILL-RUNNING"\n')
+        body_file = self.base / 'body'
+        body_file.write_text(json.dumps(record()))
+        result = subprocess.run(
+            [BASH, '-c', script, 'harness', str(self.dest_dir / 'v0.9.0.json')],
+            capture_output=True, text=True,
+            env={'PATH': f'{self.bin}:{self.nocurl}', 'CURL_LOG': str(self.curl_log),
+                 'CURL_EXIT': '0', 'CURL_BODY_FILE': str(body_file), 'TAG': 'v0.9.0',
+                 'HOME': str(self.base), 'TMPDIR': str(self.base)})
+        out = result.stdout + result.stderr
+        self.assertIn('RC=0', out, out)
+        self.assertIn('TRAP-UNCHANGED', out, out)
+        self.assertIn('STILL-RUNNING', out, 'the caller exited during the fetch')
+        self.assertEqual(out.count('CALLER-EXIT-TRAP-RAN'), 1,
+                         f'the caller\'s EXIT trap did not run exactly once:\n{out}')
 
     def test_no_temp_file_is_left_behind_on_any_path(self):
         """The download lands in a temp file first, so a partial or oversized
