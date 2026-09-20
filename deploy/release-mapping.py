@@ -153,6 +153,58 @@ def validate(path, data):
     return problems
 
 
+def load_extra_record(path, records, env):
+    """One record from OUTSIDE releases/, for this run only: (record, why-not).
+
+    deploy/lib.sh fetches releases/<tag>.json from the repository when this
+    tree cannot carry it yet, and passes it here as --extra-record. The whole
+    point is that it may only ever ADD verification, so every rejection below
+    returns a WARNING string and leaves the caller's verdict exactly where it
+    was.
+
+    ADMITTED only when it pairs EXACTLY the triple this run pins, and only
+    when releases/ does not already speak for that release. A record for some
+    other release must not join the set: `newest`, the recorded-release list
+    and the per-component findings are all computed over it, so widening it
+    silently changes verdicts about releases nobody fetched anything for. A
+    record the tree already carries must not be replaced either — releases/ on
+    disk is this tree's own statement, and a file handed in for one run does
+    not get to overrule it.
+    """
+    pinned = tuple(env[name] for name, _, _ in COMPONENTS)
+    unusable = (f'the record supplied with --extra-record ({path}) is unusable: %s. Nothing it '
+                'might have said was used, and this run is exactly where it would have been '
+                'without it. A record that cannot be read predicts nothing about the images '
+                'being deployed.')
+    try:
+        data = json.loads(Path(path).read_text())
+    except (OSError, ValueError) as error:
+        return None, unusable % error
+    problems = validate(Path(path), data)
+    if problems:
+        return None, unusable % '; '.join(problems)
+    triple = tuple(data['components'][name]['tag'] for name, _, _ in COMPONENTS)
+    described = ' '.join(f'{name}={tag}' for (name, _, _), tag in zip(COMPONENTS, triple))
+    if any(record['release'] == data['release'] for record in records):
+        return None, (f'--extra-record ({path}) is another copy of release {data["release"]}, which '
+                      'this tree already carries a record for. It was IGNORED: the record on disk '
+                      'is this tree\'s own statement, and a file supplied for one run does not '
+                      'replace it.')
+    if triple != pinned:
+        return None, (f'--extra-record ({path}) is release {data["release"]}, pairing {described}, '
+                      'which is not the triple this run pins ('
+                      + ' '.join(f'{name}={env[name]}' for name, _, _ in COMPONENTS)
+                      + '). It was IGNORED: a record for another release would join the set every '
+                        'verdict here is computed against, and a file fetched for one release must '
+                        'not change the answer for a different one. It is not an override.')
+    if any(tuple(record['components'][name]['tag'] for name, _, _ in COMPONENTS) == triple
+           for record in records):
+        return None, (f'--extra-record ({path}) pairs {described}, exactly like a record already in '
+                      'this tree. It was IGNORED rather than added: two records pairing one triple '
+                      'cannot say which release is being deployed.')
+    return data, ''
+
+
 def load_records(directory):
     """(records, problems). Every file is read and every problem collected, so
     one run names every broken record instead of one per attempt."""
@@ -309,6 +361,33 @@ def check(args):
     registry = compose_value(args.registry or env_file_value(args.env, 'VIDRA_IMAGE_REGISTRY')) or 'ghcr.io'
     owner = compose_value(args.owner or env_file_value(args.env, 'VIDRA_IMAGE_OWNER')) or 'yegamble'
     source = f'{registry}/{owner}'
+
+    # THE FETCHED RECORD (--extra-record). Absent, nothing below changes at
+    # all. Present and admitted, it joins `records` for this run only, and
+    # because it pairs the pinned triple exactly it can only ever reach the
+    # `matches` branch below: the pairing is verified, any digest pin is held
+    # against it, and a contradiction is as fatal as it is for a tree record.
+    # Rejected, it is a WARNING and the run keeps the verdict it already had.
+    extra = None
+    if args.extra_record:
+        extra, why = load_extra_record(args.extra_record, records, env)
+        if extra is None:
+            warnings.append(why)
+        else:
+            records = records + [extra]
+            notes.append(f'{releases}/{extra["release"]}.json is not in this tree (release.sh tags '
+                         'this repository before any image exists, so a tree at a release cannot '
+                         f'carry its own record); the copy at {args.extra_record} was supplied with '
+                         '--extra-record and is used for THIS RUN ONLY. Nothing was written to '
+                         f'{releases}/.')
+
+    def where_of(record):
+        """Provenance, per record: a fetched record must never be reported as
+        if this tree had vouched for it."""
+        if extra is not None and record['release'] == extra['release']:
+            return f'{args.extra_record} (fetched for this run, not {releases}/)'
+        return f'{releases}/{record["release"]}.json'
+
     matches = [r for r in records if all(r['components'][n]['tag'] == env[n] for n, _, _ in COMPONENTS)]
 
     if not records:
@@ -321,7 +400,7 @@ def check(args):
         return UNVERIFIED, errors, warnings, notes
 
     if matches:
-        where = ', '.join(f'{releases}/{r["release"]}.json' for r in matches)
+        where = ', '.join(where_of(r) for r in matches)
         # THE IMAGE SOURCE (M5). docker-compose.prod.yml pulls
         # ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/<repo>:<tag>.
         # A record describes the images at ITS repository; a fork's or a
@@ -356,7 +435,7 @@ def check(args):
             for record in matches:
                 image = record['components'][name]['image']
                 allowed += [image['index_digest'], *image['platforms'].values()]
-                recorded.append(f'{releases}/{record["release"]}.json records {repo} {env[name]} as '
+                recorded.append(f'{where_of(record)} records {repo} {env[name]} as '
                                 f'index {image["index_digest"]} '
                                 f'({", ".join(f"{p} {d}" for p, d in image["platforms"].items())})')
             if pinned not in allowed:
@@ -580,6 +659,13 @@ def main():
                                         'empty or absent = yegamble, as the compose file defaults it)')
     parser.add_argument('--bundle-manifest', type=Path,
                         help="this tree's vidra-bundle.manifest, when it is an unpacked bundle")
+    parser.add_argument('--extra-record', type=Path,
+                        help='ONE release record from outside --releases, used for this run only '
+                             '(deploy/lib.sh fetches the record this tree cannot carry yet). It is '
+                             'validated exactly like a record in the tree and admitted only when it '
+                             'pairs the pinned triple and names a release the tree has no record '
+                             'for; otherwise it is IGNORED with a warning. Never a refusal on its '
+                             'own: a record that could not be read predicts nothing')
     parser.add_argument('--tree-tag', action='append',
                         help='a tag pointing at this checkout\'s HEAD (repeatable)')
     parser.add_argument('--unrecorded', choices=('refuse', 'warn'), default='refuse',

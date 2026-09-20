@@ -644,6 +644,153 @@ class RegistryOwnerTests(Fixture):
         self.assertIn('core_schema_version', out)
 
 
+class ExtraRecordTests(Fixture):
+    """`--extra-record`: ONE record from outside releases/, for this run only.
+
+    The gap it exists for: deploy/release.sh pushes this repository's tag
+    BEFORE any image (and so any digest) exists, so a vN tree and the vN bundle
+    carry records only up to v(N-1), and deploying vN compares tag strings
+    only. deploy/lib.sh fetches releases/vN.json from the repository at deploy
+    time and hands it over here.
+
+    The flag may only ever ADD verification. It is admitted when it pairs
+    exactly the triple being deployed and releases/ does not already speak for
+    that release; anything else — another release, an unreadable file, a file
+    that is not a valid record — is IGNORED with a warning and the verdict is
+    the one the run would have reached without it. Absence must never become a
+    refusal: a record that could not be fetched predicts nothing about the
+    bytes, and the fetch is best-effort by design.
+    """
+
+    def outside(self, record, name=None, text=None):
+        """A record written OUTSIDE releases/, the way lib.sh's fetch writes
+        it: into its own temp directory, named <release>.json."""
+        directory = self.base / 'fetched'
+        directory.mkdir(exist_ok=True)
+        path = directory / (name or (record['release'] + '.json') if record else name)
+        path.write_text(text if text is not None else json.dumps(record, indent=2))
+        return path
+
+    def test_a_fetched_record_verifies_the_newest_release_and_names_its_provenance(self):
+        """The whole point: the release whose record cannot be in this tree."""
+        record = synthetic('v0.7.0', 'v0.7.0', 'v0.7.0', 'v0.7.0', seed=7)
+        path = self.outside(record)
+        env_file = self.env('v0.7.0', 'v0.7.0', 'v0.7.0')
+        code, out = self.check(env_file=env_file)
+        self.assertEqual(code, UNVERIFIED, out)          # control: without it
+        self.assertIn('newer than every record', out)
+        code, out = self.check('--extra-record', str(path), env_file=env_file)
+        self.assertEqual(code, OK, out)
+        self.assertNotIn('ERROR', out)
+        self.assertIn(str(path), out, 'the output does not name where the record came from')
+        self.assertIn('v0.7.0', out)
+
+    def test_a_matching_digest_pin_is_held_against_the_fetched_record(self):
+        """VIDRA_USER_TAG is the one pin that reaches the digest comparison
+        today (deploy.sh's embedded-migrator floor refuses the core/search
+        spelling first), so it is the one this must verify."""
+        record = synthetic('v0.7.0', 'v0.7.0', 'v0.7.0', 'v0.7.0', seed=7)
+        path = self.outside(record)
+        pinned = record['components']['user']['image']['index_digest']
+        code, out = self.check('--extra-record', str(path),
+                               env_file=self.env('v0.7.0', f'v0.7.0@{pinned}', 'v0.7.0'))
+        self.assertEqual(code, OK, out)
+        self.assertNotIn('Digest pins not checked', out)
+
+    def test_a_contradicting_digest_in_a_fetched_record_is_fatal_in_both_modes(self):
+        """A contradiction is what predicts wrong bytes: docker pulls by
+        digest, so this would run bytes that release never shipped."""
+        record = synthetic('v0.7.0', 'v0.7.0', 'v0.7.0', 'v0.7.0', seed=7)
+        path = self.outside(record)
+        env_file = self.env('v0.7.0', f'v0.7.0@{digest(99)}', 'v0.7.0')
+        for mode in ('deploy', 'rollback'):
+            with self.subTest(mode=mode):
+                code, out = self.check('--extra-record', str(path), mode=mode, env_file=env_file)
+                self.assertEqual(code, REFUSED, out)
+                self.assertIn('VIDRA_USER_TAG pins digest', out)
+
+    def test_a_record_for_another_release_is_ignored_and_changes_no_verdict(self):
+        """NO SILENT WIDENING. A record for some other release would join the
+        set every verdict is computed against — it would move `newest`, the
+        recorded-release list and which findings are reported. Here admitting
+        v0.7.1 would make v0.7.0 no longer newer than every record and turn a
+        WARNING into a refusal."""
+        other = self.outside(synthetic('v0.7.1', 'v0.7.1', 'v0.7.1', 'v0.7.1', seed=7))
+        env_file = self.env('v0.7.0', 'v0.7.0', 'v0.7.0')
+        without_code, without_out = self.check(env_file=env_file)
+        code, out = self.check('--extra-record', str(other), env_file=env_file)
+        self.assertEqual(code, without_code, out)
+        self.assertEqual(code, UNVERIFIED, out)
+        self.assertIn('newer than every record', out)
+        self.assertIn('v0.7.1', out)
+        self.assertIn('ignored', out.lower())
+        self.assertNotIn('ERROR', out)
+        self.assertIn('newer than every record', without_out)
+
+    def test_a_record_the_tree_already_carries_is_ignored(self):
+        """releases/ on disk is the tree's own statement; a file handed in for
+        one run may not quietly replace it."""
+        forged = dict(json.loads((self.releases / 'v0.6.4.json').read_text()))
+        forged['core_schema_version'] = 999
+        path = self.outside(forged)
+        code, out = self.check('--extra-record', str(path))
+        self.assertEqual(code, OK, out)
+        self.assertIn('ignored', out.lower())
+        self.assertNotIn('999', out)
+
+    def test_an_unusable_fetched_record_keeps_todays_unverified_verdict(self):
+        """The fetch is best-effort. Truncated JSON, an HTML error page and a
+        well-formed file that is not a valid record must each leave the run
+        exactly where it would have been, saying the fetched record was
+        unusable. Turning absence into a refusal would stop the first deploy of
+        every release."""
+        cases = {
+            'truncated': '{"schema_version": 1, "release": "v0.7.0", "comp',
+            'html error page': '<!DOCTYPE html><html><body>404: Not Found</body></html>\n',
+            'empty': '',
+            'not a record': json.dumps({'hello': 'world'}),
+            'unknown key': json.dumps({**synthetic('v0.7.0', 'v0.7.0', 'v0.7.0', 'v0.7.0'),
+                                       'index_digets': 'typo'}),
+        }
+        env_file = self.env('v0.7.0', 'v0.7.0', 'v0.7.0')
+        for label, text in cases.items():
+            with self.subTest(body=label):
+                path = self.outside(None, name='v0.7.0.json', text=text)
+                code, out = self.check('--extra-record', str(path), env_file=env_file)
+                self.assertEqual(code, UNVERIFIED, out)
+                self.assertIn('unusable', out)
+                self.assertIn('newer than every record', out)
+                self.assertNotIn('ERROR', out)
+
+    def test_a_path_that_does_not_exist_is_unusable_not_fatal(self):
+        code, out = self.check('--extra-record', str(self.base / 'nope/v0.7.0.json'),
+                               env_file=self.env('v0.7.0', 'v0.7.0', 'v0.7.0'))
+        self.assertEqual(code, UNVERIFIED, out)
+        self.assertIn('unusable', out)
+        self.assertNotIn('ERROR', out)
+
+    def test_a_mixed_triple_is_still_refused_in_a_deploy(self):
+        """The fetched record is not an override. The record for v0.7.0 cannot
+        vouch for a v0.7.0 core beside a v0.6.4 user, and must not be read as
+        if it could."""
+        path = self.outside(synthetic('v0.7.0', 'v0.7.0', 'v0.7.0', 'v0.7.0', seed=7))
+        code, out = self.check('--extra-record', str(path),
+                               env_file=self.env('v0.7.0', 'v0.6.4', 'v0.7.0'))
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn('VIDRA_USER_TAG', out)
+
+    def test_a_fetched_record_does_not_excuse_a_stale_bundle(self):
+        """The bundle comparison is about THIS tree's compose files and the
+        ledger number deploy.sh will assert; a record cannot speak for it."""
+        record = synthetic('v0.7.0', 'v0.7.0', 'v0.7.0', 'v0.7.0', seed=7, core_schema=150)
+        path = self.outside(record)
+        code, out = self.check('--extra-record', str(path),
+                               '--bundle-manifest', str(self.bundle(tag='v0.6.4', schema='0146')),
+                               env_file=self.env('v0.7.0', 'v0.7.0', 'v0.7.0'))
+        self.assertEqual(code, REFUSED, out)
+        self.assertIn('vidra-bundle.manifest tag is v0.6.4', out)
+
+
 class CommittedRecordTests(unittest.TestCase):
     def test_v064_record_matches_the_release_evidence(self):
         """releases/v0.6.4.json was copied from the frozen verification
