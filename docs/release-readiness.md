@@ -11,25 +11,39 @@ the only evidence that exists on these digests — no scan, no runtime milestone
 no e2e, no storage or disaster-recovery lane has run on them — and nothing from
 v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
 
-- **Contents: a core-only release.** Core moves to `v0.7.5` (`ce3eb0a4`);
-  **user and search stay at `v0.7.3`** (`c7dbea44` / `4daed185`) and were not
-  rebuilt for it. Measured delta since v0.6.6: **41 core commits**, 151 files
-  changed (+12,133 / −454); excluding `*_test.go` files and every path under a
-  `testdata/` directory, **103 files and +7,822 / −423 lines**. New surfaces:
-  a managed IPFS node with bounded admission and capacity accounting
-  (`80967d8`, `39deee3`, `d7de8ac`), an IPFS-HLS playback path advertised with
-  authoritative fallback (`d86495e`), locally-authored comments on **remote**
-  videos that the author's home instance hosts and federates (`0cf21ad`), the
-  PeerTube importer re-run sync (`core#262`/`#263`/`#264`), a storyboard
+- **Contents: a core-only release, and a small one.** Core moves to `v0.7.5`
+  (`ce3eb0a4`); **user and search stay at `v0.7.3`** (`c7dbea44` /
+  `4daed185`) and were not rebuilt for it — v0.7.4 paired the same way.
+  **v0.7.5's own delta over v0.7.4 is 3 commits, 12 files, +1,088 / −42**, all
+  three the PeerTube importer re-run sync (`core#262`/`#263`/`#264`).
+- **But the unaccepted delta is the whole v0.6.6 → v0.7.5 range**, because
+  v0.6.6 is the last release carrying any runtime evidence. v0.7.0, v0.7.1,
+  v0.7.2, v0.7.3 and v0.7.4 were each cut and each paired in `releases/`, and
+  **not one of them was ever recorded in this document**; core additionally
+  carries v0.6.7, v0.6.8 and v0.6.9 release tags with no pairing record and no
+  evidence directory at all. Measured **cumulatively across v0.6.6 → v0.7.5**,
+  not as v0.7.5's own work: **41 core commits**, 151 files changed
+  (+12,133 / −454); excluding `*_test.go` files and every path under a
+  `testdata/` directory, **103 files and +7,822 / −423 lines**. Surfaces added
+  over that range: a managed IPFS node with bounded admission and capacity
+  accounting (`80967d8`, `39deee3`, `d7de8ac`), an IPFS-HLS playback path
+  advertised with authoritative fallback (`d86495e`), locally-authored
+  comments on **remote** videos that the author's home instance hosts and
+  federates (`0cf21ad`), the PeerTube importer re-run sync, a storyboard
   backfill from PeerTube HLS objects (`91a012d`), a `/search/suggestions`
   authorization re-check (`1a4b8a9`), and five Go dependency bumps.
-- **Schema moves for the first time since v0.6.4.** Core **146 → 150**: the
-  four new migrations are `0147_authored_remote_comments`, `0148_ipfs_control`,
-  `0149_ipfs_admission` and `0150_ipfs_copy_cleanup`. Search stays **18**. Both
-  numbers were asked of the **released images themselves** (`migrate
-  embedded-max` by linux/amd64 digest,
+- **Schema has moved since v0.6.6 — but not in v0.7.5.** Core **146 → 150**
+  across two earlier releases: **v0.7.0** added
+  `0147_authored_remote_comments` (record `core_schema_version` 147) and
+  **v0.7.1** added `0148_ipfs_control`, `0149_ipfs_admission` and
+  `0150_ipfs_copy_cleanup` (record 150). v0.7.2, v0.7.3, v0.7.4 and **v0.7.5
+  itself add no migration**. Search stays **18** throughout. v0.7.5's numbers
+  were asked of the **released images themselves** (`migrate embedded-max` by
+  linux/amd64 digest,
   `docs/evidence/release-v0.7.5-verification/embedded-max.txt`) rather than
-  read off the source tree.
+  read off the source tree, and answer **150 / 18** — matching every record
+  from v0.7.1 onward. The point for acceptance is unchanged: **no runtime
+  evidence exists on any schema past 146.**
 - **Frozen and recorded:** `releases/v0.7.5.json` (meta#230) — core `ce3eb0a4`
   / index `sha256:e785501e…3d0d` / amd64 `sha256:49974ded…b6de`; user
   `c7dbea44` / `d78526c2…0e29` / `814df264…3995`; search `4daed185` /
@@ -66,9 +80,10 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   on this basis, quoted: *"v0.6.6 = v0.6.5 + one admin-only branding flag with
   **no schema change** and the **same deploy, storage, media, backup and
   recovery code**"* ([v0.6.6 runtime
-  record](runtime-acceptance-v0.6.6.md)). v0.7.5 breaks every clause of it:
-  four migrations rather than no schema change, a changed playback path
-  (`d86495e`), a new managed-IPFS runtime surface, and changed **meta deploy
+  record](runtime-acceptance-v0.6.6.md)). The **v0.6.6 → v0.7.5 range** breaks
+  every clause of it: four migrations rather than no schema change (added in
+  v0.7.0 and v0.7.1), a changed playback path (`d86495e`), a new managed-IPFS
+  runtime surface, and changed **meta deploy
   inputs** — `docker-compose.ipfs-managed.yml` did not exist at v0.6.6 and
   does at v0.7.5, `deploy/Caddyfile` gained the `/remote-comments/*`
   ActivityPub-object route (`5fc3ae3`), and two managed-IPFS host fixes landed
@@ -80,13 +95,15 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   this section deliberately states no v0.7.5 count, and the workflow register
   is unchanged: no row moves, because there is no v0.7.5 evidence to move one
   with.
-- **Rollback posture — analysis, not evidence.** All four new migrations were
-  read in full at the `v0.7.5` tag and are **additive**: `0147` adds a table
-  plus two **nullable** columns on existing tables and *widens* the
+- **Rollback posture — analysis, not evidence.** The four migrations that
+  separate v0.6.6 from v0.7.5 — added in v0.7.0 and v0.7.1 — were read in full
+  at the `v0.7.5` tag and are **additive**: `0147` adds a table plus two
+  **nullable** columns on existing tables and *widens* the
   `watched_word_matches_one_target` CHECK; `0148` adds two tables and a
   partial index and touches no existing table; `0149` adds eleven columns to
   `media_ipfs_pins` (every `NOT NULL` one carrying a `DEFAULT`), two partial
-  indexes and a table; `0150` adds a table, five defaulted columns and one
+  indexes and a table; `0150` adds a table, five columns on `ipfs_capacity`
+  (three `NOT NULL` with defaults, two nullable with no default) and one
   `INSERT … ON CONFLICT DO NOTHING`. Nothing is renamed, dropped or narrowed,
   so on paper the documented policy — app-only rollback supported from v0.6.3
   onward (register row REC-03) — should hold for a v0.7.5 → v0.6.6 rollback.
@@ -106,10 +123,12 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   unexpected source/tag`; the one clause gates the runtime, storage, migration
   and recovery harnesses alike. Separately, the disposable acceptance hosts
   and the dedicated acceptance storage bucket that carried the v0.6.5/v0.6.6
-  lanes **no longer exist** (checked this session — only the production and
-  beta hosts remain). So no runtime lane can run until the harness accepts a
-  core-only release **and** the owner authorises new disposable
-  infrastructure.
+  lanes appear to be **gone** — only the production and beta hosts were
+  listed. That last observation is **session-observed on 2026-09-20 from the
+  provider listings and is not reconstructible from any committed artifact**,
+  the same evidence class as the beta-deployment claim above. So no runtime
+  lane can run until the harness accepts a core-only release **and** the owner
+  authorises new disposable infrastructure.
 - **Next executable — a plan, not progress. None of it has been started.** In
   order: (1) teach the candidate validator and the preflight a per-component
   tag, so a core-only release validates and its frozen tree regenerates from
