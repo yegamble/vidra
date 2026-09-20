@@ -16,6 +16,8 @@ from release_acceptance import check_host, execute, minimal_browser_lock, pin_im
 ROOT = Path(__file__).resolve().parent.parent
 CANDIDATE = json.loads((ROOT / 'docs/evidence/release-v0.6.4-verification/manifest.json').read_text())
 CANDIDATE_V065 = json.loads((ROOT / 'docs/evidence/release-v0.6.5-verification/manifest.json').read_text())
+# A core-only release: vidra-core at v0.7.5, vidra-user and vidra-search at v0.7.3.
+CANDIDATE_V075 = json.loads((ROOT / 'docs/evidence/release-v0.7.5-verification/manifest.json').read_text())
 
 
 class ReleaseAcceptanceTests(unittest.TestCase):
@@ -150,6 +152,22 @@ class CandidateSelectionTests(unittest.TestCase):
             evidence = json.loads((stage / 'result.json').read_text())
             self.assertEqual(evidence['status'], 'FAIL')
             self.assertIn('wrong candidate', evidence['error'])
+
+    def test_prepare_accepts_the_committed_core_only_candidate(self):
+        # v0.7.5 ships core alone (user and search stay at v0.7.3). prepare()
+        # validates the candidate before it touches the frozen tree, so the
+        # release's whole runtime lane died on that check, not on missing inputs.
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            evidence = base / 'docs/evidence/release-v0.7.5-verification'
+            evidence.mkdir(parents=True)
+            (evidence / 'manifest.json').write_text(json.dumps(CANDIDATE_V075))
+            with patch.object(release_acceptance, 'ROOT', base), self.assertRaises(subprocess.CalledProcessError) as later:
+                prepare(base / 'frozen', base / 'out', base / 'node.tar.xz', base / 'sums.txt',
+                        candidate_path=evidence / 'manifest.json')
+            # Past the candidate guard: the failure is the absent frozen tree,
+            # i.e. prepare reached the git rev-parse of the frozen sources.
+            self.assertEqual(later.exception.cmd[:2], ['git', '-C'])
 
     def test_prepare_refuses_a_manifest_outside_the_committed_evidence_tree(self):
         with tempfile.TemporaryDirectory() as directory:

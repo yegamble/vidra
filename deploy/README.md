@@ -1644,7 +1644,7 @@ primitives and must never be copied into a production env file.
 
 ## Release-readiness preflight (A01)
 
-Before a fresh-host rehearsal, freeze an **existing** common release tag in a
+Before a fresh-host rehearsal, freeze an **existing** platform release in a
 new disposable directory. Requires Python >=3.9, Node >=24 with npm, git,
 authenticated `gh`, and Docker buildx registry access. This reads GitHub/GHCR;
 it does not publish, run containers, or change the operator's nested checkouts.
@@ -1660,7 +1660,8 @@ and `bundle-provenance.txt` with the acceptance evidence. A nonzero exit or
 anything other than `status: PASS` blocks the next acceptance. Failures preserve
 partial evidence; retries use a new directory. A PASS covers:
 
-- Four detached source commits resolved from the requested release tag.
+- Four detached source commits, each resolved from **its own** component tag
+  (see "Core-only releases" below; for a uniform release that is `--tag`).
 - Three immutable registry digest references, selected Linux platform, and OCI
   revision/source labels matching those commits (label correspondence, not
   an independent reproducible-image build).
@@ -1678,6 +1679,66 @@ do not resolve moving `main` or image tags again and call that the same candidat
 manifest is the portable identity record. A01 does not certify runtime workflows,
 image startup, blank-host installation, search, or browser/media behavior. The
 v0.6.2 example is a rehearsal candidate, not a change to production pins.
+
+### Core-only releases: the components are not all at `--tag`
+
+v0.7.4 and v0.7.5 re-released **vidra-core alone**. The platform pairs each of
+them with vidra-user and vidra-search at **v0.7.3**, and `releases/<tag>.json`
+is where that pairing is written down. vidra-user has no `v0.7.5` tag at all,
+so cloning every repository at `--tag` cannot freeze such a release. The
+preflight therefore resolves each component's tag, in this order:
+
+1. `--component-tag <repo>=<tag>` (repeatable) — wins over everything.
+2. `releases/<tag>.json` on the tree the script runs from, when it exists.
+3. `--tag` for every repository otherwise. This is the original behaviour and
+   is unchanged for a uniform release.
+
+Every run prints the tag it chose for each repository and where that came from,
+and the manifest carries the same string at `repositories.<repo>.tag_source`
+beside the `tag` actually used. A flag that contradicts a record is obeyed —
+the operator may be correcting a bad record — but never silently: it prints a
+WARNING naming both values, and `tag_source` records the value it overrode.
+
+Nonsense is refused with **exit 2 before the first clone**, before any network
+call and before the output directory is created:
+
+- an unknown repository name, or one repository named twice with different
+  tags (twice with the same tag contradicts nothing and is allowed);
+- a tag — `--tag`, a flag, or one read out of a record — that is not `vX.Y.Z`.
+  Leading zeros are rejected: `v0.07.3` is not a tag `deploy/release.sh` ever
+  cut, but it parses to the same `(0, 7, 3)` as the real one, so it used to
+  compare equal, pass the gate below and die at `git clone` with a half-built
+  `--out`. There is one pattern, `RELEASE_TAG`, and everything is held to it;
+- a component **newer** than the release being frozen, compared numerically so
+  `v0.7.10` is newer than `v0.7.9` rather than older;
+- a `releases/<tag>.json` that exists but cannot answer the question. An
+  unreadable record is never treated as an absent one, and a *partial* answer
+  is not accepted either: the record must be an object whose `release` field
+  equals the tag being frozen (the filename is not its identity — a record
+  copied to a new name and not edited would otherwise freeze the old release's
+  components and claim the record authorised it), and it must name all three
+  of `core`, `user` and `search` with a release-shaped tag. A role it does not
+  name would silently fall back to `--tag`, which is the exact drift the
+  record is read to prevent, and the manifest would still credit the record.
+
+Reach for the flag only in the window before the record exists, since the
+record and this preflight's evidence land in the same PR:
+
+```bash
+python3 deploy/release-preflight.py --tag v0.7.6 --platform linux/amd64 \
+  --component-tag vidra-user=v0.7.3 --component-tag vidra-search=v0.7.3 \
+  --out /tmp/vidra-candidate-unique > /tmp/vidra-candidate-unique.log 2>&1
+```
+
+Once `releases/v0.7.6.json` is on the tree, drop the flags: `--tag v0.7.6`
+alone then reproduces the same frozen tree.
+
+**History, stated plainly:** the committed v0.7.4 and v0.7.5 evidence was
+produced *before* this existed, by hand-applying the `component-tags.patch`
+kept beside each `manifest.json` to a working copy of this script. Those
+evidence directories are the historical record and are left exactly as they
+are; from this change onwards the run is reproducible from `main` with no
+patch, and the patch files should not be applied again.
 
 ## Blank-server installer smoke (A02)
 

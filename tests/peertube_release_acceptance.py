@@ -41,7 +41,9 @@ def release_tag(candidate):
     one.
     """
     tag = candidate.get('tag')
-    require(isinstance(tag, str) and re.fullmatch(r'v\d+\.\d+\.\d+', tag) is not None,
+    # ASCII digits: unicode \d matches 'v٦.٥.٤', which names no tag, no release
+    # asset and no container, but would pass the shape check and be used as one.
+    require(isinstance(tag, str) and re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', tag) is not None,
             f'baseline candidate carries no release tag: {tag!r}')
     return tag
 
