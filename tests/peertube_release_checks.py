@@ -15,6 +15,7 @@ import time
 import urllib.parse
 import urllib.request
 
+import recovery_release_acceptance as recovery
 import release_acceptance as runtime
 from blank_server_smoke import require, sha
 from peertube_release_acceptance import (DEFAULT_B2_KEY, DEFAULT_BASELINE, DEFAULT_ROOT,
@@ -76,11 +77,17 @@ def execute(stage, action, label=None, baseline=DEFAULT_BASELINE, root=DEFAULT_R
         if action in ('restart-before', 'restart-after'):
             require(json.loads((stage / 'disconnect/result.json').read_text())['status'] == 'PASS', 'disconnect first')
             result['boot_id'] = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
-            tables = ('users', 'channels', 'videos', 'comments', 'playlists', 'playlist_items',
-                      'channel_follows', 'video_ratings', 'video_tags', 'video_chapters', 'streaming_playlists', 'video_files', 'captions')
-            result['catalogue'] = {table: run.sql(f"SELECT count(*)||'|'||md5(COALESCE(string_agg(row::text,E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM {table} t) s") for table in tables}
+            # The reboot check kept its OWN 13-table literal here. Two
+            # hand-maintained lists of the same thing drift, and these did: the
+            # recovery drill grew the two MFA tables and this one did not, and
+            # neither learned about the five tables core migrations 0147-0150
+            # added — so a reboot that lost all five read as unchanged state.
+            # There is now one catalogue, and which tables it demands follows
+            # the candidate's own frozen ledgers rather than this file's age.
+            ledgers = recovery.expected_ledgers(baseline)
+            result['catalogue'] = recovery.fingerprint(run, recovery.core_schema_version(ledgers))
             result['ledgers'] = {}
-            for table, spec in json.loads((baseline / 'expected-ledgers.json').read_text()).items():
+            for table, spec in ledgers.items():
                 actual = run.sql(f'SELECT version, dirty FROM {table}')
                 runtime.check_ledger(actual, spec['version'])
                 result['ledgers'][table] = actual

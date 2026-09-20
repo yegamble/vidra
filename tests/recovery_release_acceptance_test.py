@@ -11,13 +11,12 @@ import release_acceptance as runtime
 import recovery_release_acceptance as recovery
 import recovery_release_export as export
 
+ROOT = Path(__file__).resolve().parents[1]
 # The committed manifest of a real release: validate_candidate checks every
 # repository revision, image digest and A01 check, so a hand-written stub is not
 # a candidate and a mutated copy is not this one (the lesson of #200).
-CANDIDATE = json.loads(
-    (Path(__file__).resolve().parent.parent / 'docs/evidence/release-v0.6.5-verification/manifest.json').read_text())
-CANDIDATE_V075 = json.loads(
-    (Path(__file__).resolve().parent.parent / 'docs/evidence/release-v0.7.5-verification/manifest.json').read_text())
+CANDIDATE = json.loads((ROOT / 'docs/evidence/release-v0.6.5-verification/manifest.json').read_text())
+CANDIDATE_V075 = json.loads((ROOT / 'docs/evidence/release-v0.7.5-verification/manifest.json').read_text())
 
 
 def baseline_with(candidate):
@@ -105,6 +104,15 @@ class FingerprintTest(unittest.TestCase):
         self.assertIn('user_mfa', recovery.CATALOGUE)
         self.assertIn('mfa_recovery_codes', recovery.CATALOGUE)
 
+    # The catalogue was written for core schema 146. Migrations 0147-0150 added
+    # five tables it had never heard of, so a restore that lost every one of
+    # them reproduced 15/15 fingerprints and PASSED the recovery objective.
+    def test_the_tables_0147_to_0150_added_are_part_of_the_data_point(self):
+        for table in ('authored_remote_comments', 'ipfs_control_config', 'ipfs_control_operations',
+                      'ipfs_capacity', 'ipfs_copy_cleanup'):
+            with self.subTest(table=table):
+                self.assertIn(table, recovery.CATALOGUE)
+
     def test_table_names_are_never_interpolated_unchecked(self):
         with self.assertRaises(ValueError):
             recovery.fingerprint_sql('users; DROP TABLE users')
@@ -112,6 +120,142 @@ class FingerprintTest(unittest.TestCase):
     def test_differences_are_reported_by_name(self):
         self.assertEqual(recovery.differing({'users': '1|a', 'videos': '2|b'}, {'users': '1|a', 'videos': '3|c'}), ['videos'])
         self.assertEqual(recovery.differing({'users': '1|a'}, {}), ['users'])
+
+    # A table with nothing volatile keeps the SQL the v0.6.x drills recorded, so
+    # this change cannot move a fingerprint for a reason nobody asked for.
+    def test_a_table_with_nothing_excluded_is_fingerprinted_exactly_as_before(self):
+        self.assertEqual(recovery.fingerprint_sql('users'),
+                         "SELECT count(*)||'|'||md5(COALESCE(string_agg(r::text,E'\\n' ORDER BY r::text),'')) "
+                         "FROM (SELECT to_jsonb(t) AS r FROM users t) s")
+
+    # A background worker rewriting a column between the backup and the restore
+    # comparison would fail the drill for a reason that predicts nothing, so the
+    # volatile columns are deleted from the row's jsonb. Everything NOT named
+    # stays in the fingerprint, so a future migration's new column is asserted
+    # the day it lands and a lost one changes the hash.
+    def test_volatile_columns_are_deleted_from_the_row_before_hashing(self):
+        sql = recovery.fingerprint_sql('ipfs_capacity', ('reserved_bytes', 'measure_after'))
+        self.assertIn("to_jsonb(t) - ARRAY['reserved_bytes','measure_after']::text[] AS r", sql)
+        self.assertIn('FROM ipfs_capacity t', sql)
+
+    def test_column_names_are_never_interpolated_unchecked(self):
+        with self.assertRaises(ValueError):
+            recovery.fingerprint_sql('ipfs_capacity', ("x'; DROP TABLE users; --",))
+
+    # "exists and empty" is a PASS (the table survived and the fixture never
+    # populated it); "missing" is the loss the whole catalogue exists to catch.
+    # psql's own `relation does not exist` reaches the operator as `exit 1; see
+    # 0NN-compose-exec.log`, so the table is named here or nowhere.
+    def test_a_missing_table_is_named_and_an_empty_one_is_not(self):
+        self.assertEqual(recovery.missing_tables(('users', 'ipfs_capacity'), ('users',)), ['ipfs_capacity'])
+        self.assertEqual(recovery.missing_tables(('users', 'ipfs_capacity'), ('ipfs_capacity', 'users')), [])
+
+
+class CatalogueSchemaTest(unittest.TestCase):
+    """The catalogue is a function of the CANDIDATE's schema, not of the host.
+
+    The same two harness files drill candidates at different schema versions. A
+    v0.6.x stage has none of the 0147-0150 tables, so demanding them would fail
+    a correct drill; fingerprinting "whatever tables happen to exist" would pass
+    a restore that lost them. The expected ledgers the stage already carries —
+    computed from the frozen source migrations, never typed by hand — are what
+    says which schema this candidate is.
+    """
+
+    def ledgers(self, core=150, search=18):
+        return {'schema_migrations': {'version': core}, 'vidra_search_migrations': {'version': search}}
+
+    def test_the_schema_version_comes_from_the_frozen_expected_ledgers(self):
+        self.assertEqual(recovery.core_schema_version(self.ledgers(core=146)), 146)
+
+    def test_a_stage_that_names_no_core_ledger_cannot_choose_a_catalogue(self):
+        with self.assertRaises(ValueError):
+            recovery.core_schema_version({'vidra_search_migrations': {'version': 18}})
+
+    def test_the_expected_ledgers_are_read_from_the_baseline_the_drill_was_pointed_at(self):
+        baseline = Path(tempfile.mkdtemp())
+        (baseline / 'expected-ledgers.json').write_text(json.dumps(self.ledgers(core=150)))
+        self.assertEqual(recovery.core_schema_version(recovery.expected_ledgers(baseline)), 150)
+
+    def test_a_v066_candidate_is_not_asked_for_tables_its_schema_never_had(self):
+        catalogue = recovery.catalogue_for(146)
+        self.assertIn('user_mfa', catalogue)
+        for table in ('authored_remote_comments', 'ipfs_control_config', 'ipfs_capacity', 'ipfs_copy_cleanup'):
+            self.assertNotIn(table, catalogue)
+
+    def test_a_v075_candidate_is_asked_for_every_table_its_schema_requires(self):
+        catalogue = recovery.catalogue_for(150)
+        for table in ('authored_remote_comments', 'ipfs_control_config', 'ipfs_control_operations',
+                      'ipfs_capacity', 'ipfs_copy_cleanup'):
+            self.assertIn(table, catalogue)
+
+    def test_each_table_appears_at_the_migration_that_created_it(self):
+        self.assertNotIn('ipfs_copy_cleanup', recovery.catalogue_for(149))
+        self.assertIn('ipfs_capacity', recovery.catalogue_for(149))
+        self.assertNotIn('ipfs_capacity', recovery.catalogue_for(148))
+
+    # Fail-closed: drilling a candidate whose schema is newer than the catalogue
+    # was audited against must REFUSE, naming the migrations to read. Certifying
+    # "the restored database is the same database" while silently ignoring every
+    # table a newer migration added is the failure this whole change closes.
+    def test_a_candidate_newer_than_the_audit_refuses_the_drill(self):
+        with self.assertRaises(ValueError) as raised:
+            recovery.catalogue_for(recovery.CATALOGUE_AUDITED_THROUGH + 1)
+        self.assertIn(str(recovery.CATALOGUE_AUDITED_THROUGH + 1), str(raised.exception))
+        self.assertIn('0151', str(raised.exception))
+
+
+class CatalogueRotTest(unittest.TestCase):
+    """The catalogue cannot silently fall behind vidra-core's migrations again.
+
+    A migration reaches a drill only through a RELEASE, and every release this
+    repo has published is recorded in `releases/<tag>.json` with the core schema
+    version it embeds. So the audit is pinned to that record: landing a release
+    whose schema is newer than the audit fails here until someone reads the new
+    migrations. `TABLES_ADDED` is what "read them" means — one line per schema
+    version from the floor up, listing the tables its migration CREATEs (empty
+    when it creates none) — and the audit ceiling is derived from it, so the
+    ceiling cannot be advanced by editing a number alone.
+    """
+
+    def records(self):
+        found = [json.loads(p.read_text()) for p in sorted((ROOT / 'releases').glob('v*.json'))]
+        self.assertTrue(found, 'no release records found at all; this guard has drifted')
+        return found
+
+    def test_the_audit_covers_every_release_this_repo_records(self):
+        newest = max(self.records(), key=lambda record: record['core_schema_version'])
+        self.assertLessEqual(
+            newest['core_schema_version'], recovery.CATALOGUE_AUDITED_THROUGH,
+            f"release {newest['release']} embeds core schema {newest['core_schema_version']} but the "
+            f'drill catalogue is audited only through {recovery.CATALOGUE_AUDITED_THROUGH}: read the new '
+            'vidra-core migrations and add a TABLES_ADDED line for each schema version they introduce')
+
+    def test_the_audit_leaves_no_migration_between_the_floor_and_the_ceiling_unread(self):
+        self.assertEqual(sorted(recovery.TABLES_ADDED),
+                         list(range(recovery.CATALOGUE_AUDIT_FLOOR, recovery.CATALOGUE_AUDITED_THROUGH + 1)))
+
+    def test_a_table_a_migration_creates_that_nobody_classified_is_named(self):
+        self.assertEqual(recovery.unclassified_tables({151: ('ipfs_swarm_peers', 'ipfs_capacity')}),
+                         ['ipfs_swarm_peers'])
+
+    def test_every_table_the_audit_read_is_catalogued_or_excluded_with_a_reason(self):
+        self.assertEqual(recovery.unclassified_tables(), [],
+                         'a vidra-core migration CREATEs these tables and the drill catalogue knows '
+                         'neither to fingerprint them nor why it should not: add each to CATALOGUE '
+                         'with the columns a worker rewrites, or to EXCLUDED_TABLES with the reason')
+        for table, (since, reason) in recovery.EXCLUDED_TABLES.items():
+            with self.subTest(table=table):
+                self.assertNotIn(table, recovery.CATALOGUE)
+                self.assertIn(table, recovery.TABLES_ADDED[since])
+                self.assertTrue(reason.strip(), f'{table} is excluded with no written reason')
+
+    def test_the_catalogue_and_the_audit_agree_on_when_a_table_appeared(self):
+        for version, tables in recovery.TABLES_ADDED.items():
+            for table in tables:
+                if table in recovery.CATALOGUE:
+                    with self.subTest(table=table):
+                        self.assertEqual(recovery.CATALOGUE[table][0], version)
 
 
 # The drill was written for v0.6.4 and read its candidate, expected ledgers,

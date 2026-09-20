@@ -10,7 +10,9 @@ import unittest
 from unittest.mock import patch
 
 import peertube_release_acceptance as p
+import peertube_release_checks as checks
 import peertube_release_export as export_tool
+import recovery_release_acceptance as recovery
 from peertube_release_checks import execute, original_files, match_assets
 from peertube_release_export import collect_secrets, env_secrets, json_values, owner_password, reject_secrets
 
@@ -73,6 +75,27 @@ class PeerTubeReleaseTests(unittest.TestCase):
         for bad in ('', original + original):
             with self.assertRaises(ValueError):
                 p.source_mount(bad, '/root/rehearsal/source-media8')
+
+
+class RebootCatalogueTests(unittest.TestCase):
+    """The reboot check fingerprints the SAME catalogue the recovery drill does.
+
+    It used to keep its own 13-table literal here. Two hand-maintained lists of
+    the same thing drift, and they did: the recovery drill grew `user_mfa` and
+    `mfa_recovery_codes` and this one did not, and NEITHER learned about the
+    five tables migrations 0147-0150 added. One list, chosen by the candidate's
+    schema version, is the only shape that cannot rot in two places at once.
+    """
+
+    def test_the_reboot_check_uses_the_shared_catalogue(self):
+        self.assertIs(checks.recovery.CATALOGUE, recovery.CATALOGUE)
+        self.assertIs(checks.recovery.fingerprint, recovery.fingerprint)
+
+    def test_the_reboot_check_keeps_no_table_list_of_its_own(self):
+        source = (ROOT / 'tests/peertube_release_checks.py').read_text()
+        # The 13-table literal, by a fragment no shared-catalogue call can contain.
+        self.assertNotIn("'channel_follows', 'video_ratings'", source)
+        self.assertIn('recovery.fingerprint(', source)
 
 
 class MigrationDrillCandidateTests(unittest.TestCase):
