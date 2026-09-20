@@ -275,10 +275,17 @@ jobs:
           mkdir -p ci-report
           COMPOSE=(docker compose -f docker-compose.yml --env-file env/ci-stack-e2e.env --profile core)
           "${COMPOSE[@]}" logs --no-color > ci-report/stack-e2e-compose.log 2>&1 || true
+          # `payload` and `suppressed_reason` are here because the first search
+          # failure this lane produced could not be diagnosed without them: the
+          # document existed with the right title and eligible=false, and
+          # nothing in either service's log said which dimension (privacy or
+          # state) the event carried. vidra-search derives eligibility from the
+          # payload alone, so the payload IS the diagnosis.
           "${COMPOSE[@]}" exec -T postgres psql -U vidra -d vidra \
             -c 'SELECT id, video_id, state, attempts, created_at, updated_at FROM transcode_jobs ORDER BY created_at;' \
-            -c "SELECT id, event_type, state, attempts FROM search_outbox ORDER BY id;" \
-            -c 'SELECT video_id, title, eligible FROM search.documents;' \
+            -c 'SELECT id, title, privacy, state, publish_at, publish_after_transcode FROM videos ORDER BY created_at;' \
+            -c 'SELECT id, event_type, state, attempts, payload FROM search_outbox ORDER BY id;' \
+            -c 'SELECT video_id, title, eligible, suppressed_reason, indexed_at FROM search.documents;' \
             > ci-report/stack-e2e-pipeline-rows.txt 2>&1 || true
           cat ci-report/stack-e2e-pipeline-rows.txt || true
 
