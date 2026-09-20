@@ -26,15 +26,25 @@ Exit codes are the contract deploy/lib.sh's release_mapping_check reads:
      that cannot be trusted, a stale bundle, a triple no record pairs.
   2  usage error (argparse)
 
-WHAT THIS DOES NOT VERIFY: the newest release. deploy/release.sh tags this
-repository before any image exists, so a tree at vN (or the vN bundle) cannot
-carry releases/vN.json, and deploying vN there only checks that all three tags
-say vN. That stays open until the record ships inside the release artifact.
+THE NEWEST RELEASE, AND WHAT STILL DOES NOT VERIFY IT. deploy/release.sh tags
+this repository before any image exists, so a tree at vN (or the vN bundle)
+cannot carry releases/vN.json, and this script ALONE then compares tag strings
+only (for a uniform triple) or refuses outright (for the core-only shape
+v0.7.4 and v0.7.5 shipped). deploy/lib.sh closes both for a host with egress:
+--print-missing-release names the record that would settle the run, lib.sh
+fetches it and re-runs this script with --extra-record, and the pairing and
+any digest pin are held against the real record after all. A fetch that fails
+changes nothing, so a refusal stays a refusal. Two cases remain, and neither
+is reachable by any check: an airgapped host (VIDRA_RECORD_FETCH=off, no
+route, no curl), and the window between a release publishing and its record PR
+merging, when the record exists nowhere yet. The second closes when the record
+ships inside the release artifact.
 
-Stdlib only, no network, and it reads nothing from the env file except the
-three VIDRA_*_TAG keys and the two image-source keys (VIDRA_IMAGE_REGISTRY,
-VIDRA_IMAGE_OWNER): that file holds every production secret, and this output
-is printed to a terminal and to logs.
+Stdlib only and NO NETWORK — the fetch lives in deploy/lib.sh, which hands the
+result here as a file; this script only ever reads paths it is given. It reads
+nothing from the env file except the three VIDRA_*_TAG keys and the two
+image-source keys (VIDRA_IMAGE_REGISTRY, VIDRA_IMAGE_OWNER): that file holds
+every production secret, and this output is printed to a terminal and to logs.
 """
 import argparse
 import json
@@ -69,6 +79,12 @@ SEMVER = re.compile(r'v([0-9]+)\.([0-9]+)\.([0-9]+)([-+].*)?')
 RECORD_KEYS = {'schema_version', 'release', 'meta_commit', 'core_schema_version',
                'search_schema_version', 'components'}
 OPTIONAL_RECORD_KEYS = {'evidence'}
+
+# --extra-record comes from OUTSIDE this tree — deploy/lib.sh downloads it — so
+# its size is refused before it is parsed, and by this script as well as by the
+# curl that fetched it: the flag takes any path, and a guard that lives only in
+# the caller is not a guard. A real record is ~2 KiB.
+MAX_EXTRA_RECORD_BYTES = 262144
 
 
 def semver(tag):
@@ -151,6 +167,123 @@ def validate(path, data):
             if not isinstance(value, str) or not DIGEST.fullmatch(value):
                 bad(f'{label}.image.platforms[{platform}] {value!r} is not a sha256 digest')
     return problems
+
+
+def load_extra_record(path, records, env):
+    """One record from OUTSIDE releases/, for this run only: (record, why-not).
+
+    deploy/lib.sh fetches releases/<tag>.json from the repository when this
+    tree cannot carry it yet, and passes it here as --extra-record. The whole
+    point is that it may only ever ADD verification, so every rejection below
+    returns a WARNING string and leaves the caller's verdict exactly where it
+    was.
+
+    ADMITTED only when it pairs EXACTLY the triple this run pins, and only
+    when releases/ does not already speak for that release. A record for some
+    other release must not join the set: `newest`, the recorded-release list
+    and the per-component findings are all computed over it, so widening it
+    silently changes verdicts about releases nobody fetched anything for. A
+    record the tree already carries must not be replaced either — releases/ on
+    disk is this tree's own statement, and a file handed in for one run does
+    not get to overrule it.
+    """
+    pinned = tuple(env[name] for name, _, _ in COMPONENTS)
+    unusable = (f'the record supplied with --extra-record ({path}) is unusable: %s. Nothing it '
+                'might have said was used, and this run is exactly where it would have been '
+                'without it. A record that cannot be read predicts nothing about the images '
+                'being deployed.')
+    path = Path(path)
+    # SIZE FIRST, and cheaply. Refusing by length costs a stat() and cannot be
+    # provoked into anything; parsing first is what hands the attacker a lever.
+    try:
+        size = path.stat().st_size
+    except OSError as error:
+        return None, unusable % error
+    if size > MAX_EXTRA_RECORD_BYTES:
+        return None, unusable % (f'it is {size} bytes, far too large for a release record '
+                                 f'(cap {MAX_EXTRA_RECORD_BYTES})')
+    # EVERY exception, not (OSError, ValueError). json.loads raises
+    # RecursionError — which is NOT a ValueError — on a deeply nested body, and
+    # 60 KB of `{"a":[[[[...]]]]}` fits inside every size and shape guard the
+    # fetch applies. That escaped this clause, printed a traceback and exited
+    # 1, so deploy.sh and rollback.sh BOTH died: whoever answered the request
+    # could stop a deploy, and worse, block a rollback mid-incident. The whole
+    # contract of this flag is that it can only ever ADD verification, so there
+    # is no failure of any kind here that may be louder than "unusable".
+    try:
+        data = json.loads(path.read_text())
+    except Exception as error:  # noqa: BLE001 - see above; a crash here is a dead deploy
+        return None, unusable % f'{type(error).__name__}: {error}'
+    try:
+        problems = validate(path, data)
+    except Exception as error:  # noqa: BLE001 - same reasoning, for a hostile SHAPE
+        return None, unusable % f'{type(error).__name__}: {error}'
+    if problems:
+        return None, unusable % '; '.join(problems)
+    triple = tuple(data['components'][name]['tag'] for name, _, _ in COMPONENTS)
+    described = ' '.join(f'{name}={tag}' for (name, _, _), tag in zip(COMPONENTS, triple))
+    if any(record['release'] == data['release'] for record in records):
+        return None, (f'--extra-record ({path}) is another copy of release {data["release"]}, which '
+                      'this tree already carries a record for. It was IGNORED: the record on disk '
+                      'is this tree\'s own statement, and a file supplied for one run does not '
+                      'replace it.')
+    if triple != pinned:
+        return None, (f'--extra-record ({path}) is release {data["release"]}, pairing {described}, '
+                      'which is not the triple this run pins ('
+                      + ' '.join(f'{name}={env[name]}' for name, _, _ in COMPONENTS)
+                      + '). It was IGNORED: a record for another release would join the set every '
+                        'verdict here is computed against, and a file fetched for one release must '
+                        'not change the answer for a different one. It is not an override.')
+    if any(tuple(record['components'][name]['tag'] for name, _, _ in COMPONENTS) == triple
+           for record in records):
+        return None, (f'--extra-record ({path}) pairs {described}, exactly like a record already in '
+                      'this tree. It was IGNORED rather than added: two records pairing one triple '
+                      'cannot say which release is being deployed.')
+    # THE STRUCTURAL RULE. A record is a statement about ONE release, and
+    # deploy/release.sh cuts every component of a release at or below the
+    # release's own version — v0.7.4 and v0.7.5 re-released vidra-core alone,
+    # so `core=v0.7.5 user=v0.7.3 search=v0.7.3` is a perfectly ordinary
+    # record, but nothing may be ABOVE the release tag and something must
+    # EQUAL it. A file claiming release v0.7.0 while pairing v0.9.0 images
+    # describes a release that cannot exist; admitting it would let a record
+    # vouch for images from a release it does not name.
+    #
+    # NOT a defence against whoever controls the record source (see the trust
+    # model in releases/README.md) — it is the shape check that keeps an
+    # honest mistake, or a record served from the wrong path, from being read
+    # as a verification it is not.
+    release_version = semver(data['release'])
+    versions = [semver(tag) for tag in triple]
+    if any(version > release_version for version in versions):
+        return None, (f'--extra-record ({path}) names release {data["release"]} but pairs '
+                      f'{described}, which is NEWER than the release it claims to be. A release '
+                      'cannot contain an image from a later one, so this is not a record '
+                      f'{data["release"]} could have produced. It was IGNORED.')
+    if not any(version == release_version for version in versions):
+        return None, (f'--extra-record ({path}) names release {data["release"]} but pairs '
+                      f'{described}, none of which is {data["release"]}. A release record names '
+                      'the release at least one of its own components was cut as. It was IGNORED.')
+    return data, ''
+
+
+def wanted_record_tag(env, records):
+    """The release whose record, if it could be obtained, would settle this
+    run — or None when fetching one cannot help.
+
+    THE NEWEST OF THE THREE PINNED TAGS, and this is the only place that
+    decides it. deploy/lib.sh asks for the answer rather than re-deriving it,
+    because a second semver implementation in bash drifts against this one:
+    the first cut of the fetch used the CORE tag, which is right for a
+    core-only release (v0.7.4, v0.7.5) purely by accident and wrong for any
+    other shape a future release takes.
+
+    None when a record here already names that release: it is present, it is
+    what produced the verdict, and a GET cannot change it.
+    """
+    candidate = max(env.values(), key=semver)
+    if any(record['release'] == candidate for record in records):
+        return None
+    return candidate
 
 
 def load_records(directory):
@@ -236,8 +369,18 @@ def bundle_manifest(path):
     return values
 
 
-def check(args):
-    """(exit code, errors, warnings, notes)."""
+def check(args, found=None):
+    """(exit code, errors, warnings, notes).
+
+    `found`, when a dict is passed, is filled with the two facts
+    deploy/lib.sh's second pass needs and cannot safely re-derive:
+      wanted    the release whose MISSING record would settle this run
+      admitted  the release an --extra-record was actually allowed to speak for
+    Kept out of the return tuple so every existing `return` stays as it is.
+    """
+    found = found if found is not None else {}
+    found.setdefault('wanted', None)
+    found.setdefault('admitted', None)
     errors, warnings, notes = [], [], []
     records, problems = load_records(args.releases)
 
@@ -309,6 +452,34 @@ def check(args):
     registry = compose_value(args.registry or env_file_value(args.env, 'VIDRA_IMAGE_REGISTRY')) or 'ghcr.io'
     owner = compose_value(args.owner or env_file_value(args.env, 'VIDRA_IMAGE_OWNER')) or 'yegamble'
     source = f'{registry}/{owner}'
+
+    # THE FETCHED RECORD (--extra-record). Absent, nothing below changes at
+    # all. Present and admitted, it joins `records` for this run only, and
+    # because it pairs the pinned triple exactly it can only ever reach the
+    # `matches` branch below: the pairing is verified, any digest pin is held
+    # against it, and a contradiction is as fatal as it is for a tree record.
+    # Rejected, it is a WARNING and the run keeps the verdict it already had.
+    extra = None
+    if args.extra_record:
+        extra, why = load_extra_record(args.extra_record, records, env)
+        if extra is None:
+            warnings.append(why)
+        else:
+            records = records + [extra]
+            found['admitted'] = extra['release']
+            notes.append(f'{releases}/{extra["release"]}.json is not in this tree (release.sh tags '
+                         'this repository before any image exists, so a tree at a release cannot '
+                         f'carry its own record); the copy at {args.extra_record} was supplied with '
+                         '--extra-record and is used for THIS RUN ONLY. Nothing was written to '
+                         f'{releases}/.')
+
+    def where_of(record):
+        """Provenance, per record: a fetched record must never be reported as
+        if this tree had vouched for it."""
+        if extra is not None and record['release'] == extra['release']:
+            return f'{args.extra_record} (fetched for this run, not {releases}/)'
+        return f'{releases}/{record["release"]}.json'
+
     matches = [r for r in records if all(r['components'][n]['tag'] == env[n] for n, _, _ in COMPONENTS)]
 
     if not records:
@@ -321,7 +492,7 @@ def check(args):
         return UNVERIFIED, errors, warnings, notes
 
     if matches:
-        where = ', '.join(f'{releases}/{r["release"]}.json' for r in matches)
+        where = ', '.join(where_of(r) for r in matches)
         # THE IMAGE SOURCE (M5). docker-compose.prod.yml pulls
         # ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/<repo>:<tag>.
         # A record describes the images at ITS repository; a fork's or a
@@ -356,7 +527,7 @@ def check(args):
             for record in matches:
                 image = record['components'][name]['image']
                 allowed += [image['index_digest'], *image['platforms'].values()]
-                recorded.append(f'{releases}/{record["release"]}.json records {repo} {env[name]} as '
+                recorded.append(f'{where_of(record)} records {repo} {env[name]} as '
                                 f'index {image["index_digest"]} '
                                 f'({", ".join(f"{p} {d}" for p, d in image["platforms"].items())})')
             if pinned not in allowed:
@@ -414,6 +585,15 @@ def check(args):
                            'undeployable and un-rollback-able.') + pinned_note(pins))
         return (REFUSED if errors else UNVERIFIED), errors, warnings, notes
 
+    # FROM HERE DOWN, no record pairs this triple, whatever the verdict turns
+    # out to be — the tree's own release, a rollback to an unpaired triple, the
+    # VIDRA_RELEASE_MAPPING=warn override, or a refusal. Every one of them is a
+    # verdict reached for want of ONE record, so this is the single place that
+    # names which record that is. The pre-floor branch returned above on
+    # purpose: nothing before the first record has one anywhere, and asking
+    # would 404 on every deploy of a historical release.
+    found['wanted'] = wanted_record_tag(env, records)
+
     # A UNIFORM triple newer than every record: the tree's own release (tag vN
     # or the vN bundle), or vN deployed from main by a fresh `install.sh --git`
     # or a rehearsal lab. Neither can carry releases/vN.json yet: release.sh
@@ -435,8 +615,10 @@ def check(args):
                            'lands. ')
                         + 'NOT verified: that these three images were released together, and their '
                         'digests. Only the tag strings were compared; a tag that does not exist still '
-                        'fails the checkout sync or the pull. This gap closes when the record ships '
-                        'inside the release artifact.' + pinned_note(pins))
+                        'fails the checkout sync or the pull. deploy/lib.sh asks again with the record '
+                        'fetched from the repository, so this verdict is the one that STANDS only '
+                        'where that cannot happen: an airgapped host, or the window before the '
+                        "record's PR merges, when it exists nowhere yet." + pinned_note(pins))
         return (REFUSED if errors else UNVERIFIED), errors, warnings, notes
 
     findings = []
@@ -580,6 +762,19 @@ def main():
                                         'empty or absent = yegamble, as the compose file defaults it)')
     parser.add_argument('--bundle-manifest', type=Path,
                         help="this tree's vidra-bundle.manifest, when it is an unpacked bundle")
+    parser.add_argument('--extra-record', type=Path,
+                        help='ONE release record from outside --releases, used for this run only '
+                             '(deploy/lib.sh fetches the record this tree cannot carry yet). It is '
+                             'validated exactly like a record in the tree and admitted only when it '
+                             'pairs the pinned triple and names a release the tree has no record '
+                             'for; otherwise it is IGNORED with a warning. Never a refusal on its '
+                             'own: a record that could not be read predicts nothing')
+    parser.add_argument('--print-missing-release', action='store_true',
+                        help='print ONLY the release tag whose missing record would settle this '
+                             'run (the newest of the three pinned tags), or nothing, and exit 0 '
+                             'whatever the verdict. deploy/lib.sh asks this before fetching, so '
+                             '"which record" is decided here and not by a second semver '
+                             'implementation in shell')
     parser.add_argument('--tree-tag', action='append',
                         help='a tag pointing at this checkout\'s HEAD (repeatable)')
     parser.add_argument('--unrecorded', choices=('refuse', 'warn'), default='refuse',
@@ -588,10 +783,32 @@ def main():
                              'reaches an unparseable tag, a broken releases/, a digest contradiction '
                              'or a stale bundle')
     args = parser.parse_args()
+    found = {}
+
+    # --print-missing-release is a QUESTION, not a verdict: it prints one tag
+    # or nothing and always exits 0, so the caller's `$(...)` can never turn
+    # "I could not work out what to fetch" into a failed deploy. Any exception
+    # is the same answer as no answer.
+    if args.print_missing_release:
+        try:
+            check(args, found)
+        except Exception:  # noqa: BLE001 - "do not fetch" is the safe answer to everything
+            return 0
+        if found.get('wanted'):
+            print(found['wanted'])
+        return 0
+
     try:
-        code, errors, warnings, notes = check(args)
+        code, errors, warnings, notes = check(args, found)
     except OSError as error:
         code, errors, warnings, notes = REFUSED, [f'cannot read {error.filename}: {error.strerror}'], [], []
+    # THE ADMISSION MARKER, on STDOUT and on a line of its own. deploy/lib.sh
+    # reads it to decide whether the second pass may replace the first pass's
+    # verdict. Stdout is the point: text from the fetched record only ever
+    # reaches warnings and errors, which go to stderr, so no crafted record can
+    # forge this line.
+    if found.get('admitted'):
+        print(f'[release-mapping] extra-record-admitted {found["admitted"]}')
     for note in notes:
         print(f'[release-mapping] {note}')
     for warning in warnings:

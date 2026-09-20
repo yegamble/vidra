@@ -31,6 +31,8 @@
 #   is_bundle_tree ROOT    exit 0 when ROOT was unpacked, not cloned
 #   bundle_manifest_get ROOT KEY [DEFAULT]   one value from vidra-bundle.manifest
 #   env_snapshot FILE ROOT keeps 10 timestamped generations of an env file
+#   fetch_release_record TAG DEST   best-effort https download of a release
+#                          record this tree cannot carry yet; never fatal
 #   release_mapping_check ROOT MODE CORE USER SEARCH
 #                          exit 0 when releases/ allows this tag triple
 
@@ -284,6 +286,208 @@ env_set_key() {
   log "set ${key}=${val}"
 }
 
+# fetch_release_record TAG DEST — download releases/TAG.json to DEST. Exit 0
+# with the record there, 1 otherwise, having LOGGED why and the exact curl to
+# run by hand. Uses the caller's log(), per the contract above.
+#
+# WHY A PREFLIGHT REACHES THE NETWORK AT ALL. deploy/release.sh pushes this
+# repository's tag BEFORE it publishes the component releases, because
+# vidra-core's release-assets workflow checks the meta repo out at that tag to
+# build vidra-bundle_<TAG>.tar.gz and fails the job if the tag is not there. No
+# image — and so no digest — exists at that moment, so releases/<TAG>.json is
+# written after the publish and lands on main in a PR. A vN tree and the vN
+# bundle therefore carry records only up to v(N-1), and deploying the NEWEST
+# release compared three tag strings and nothing else: not that these images
+# were released together, and not a digest pin on any of them. Downloading the
+# record is the only way to close that without rewriting a published,
+# checksummed release asset out from under whoever already downloaded it.
+#
+# curl and not git, deliberately: the beta host runs an UNPACKED bundle tree
+# with no git anywhere, and it is the host this has to work on.
+#
+# WHY NO FAILURE HERE MAY BE FATAL. A record that could not be downloaded
+# predicts nothing about the images being deployed, and a finding may only stop
+# what it predicts. 404 (the record PR has not merged yet), a timeout, an
+# airgapped host, a captive portal, no curl at all: every one of them leaves the
+# run with exactly the verdict it already had, plus a warning naming the URL.
+# The one thing that stops a deploy is a record that LOADS and CONTRADICTS the
+# pins, and that verdict belongs to deploy/release-mapping.py, not here.
+# The record source the bundle's own TLS trust anchor already covers: the same
+# GitHub repository that served vidra-bundle_<TAG>.tar.gz. Anything else is the
+# operator's deliberate choice and is logged as such (see releases/README.md,
+# "Trust model").
+VIDRA_RECORD_DEFAULT_BASE_URL='https://raw.githubusercontent.com/yegamble/vidra/main/releases'
+
+fetch_release_record() {
+  local tag="$1" dest="$2" base url safe_url tmp why switch sub=0 semver_re bytes
+  local max=262144   # 256 KiB. A record is ~2 KiB; anything near this is a page, not a record.
+  RECORD_FETCHED_FROM=''
+
+  # THE AIRGAPPED SWITCH, read through env_get so it works from the env file
+  # and the process environment alike, exactly like VIDRA_SKIP_DNS_PREFLIGHT.
+  # Checked FIRST, so a host that turned it off is never seen reaching out and
+  # never pays the timeout.
+  #
+  # NORMALISED HERE, not in env_get. env_get hands back the raw remainder of
+  # the line, so `VIDRA_RECORD_FETCH=off  # airgapped` arrived as the whole
+  # string "off  # airgapped", matched none of the words and FETCHED ANYWAY —
+  # silently doing the one thing the operator wrote that line to prevent. A
+  # trailing space did it too. Compose reads an unquoted value the same way
+  # this now does (cut at ` #`, trim); the word list mirrors is_true's, because
+  # env files are hand-edited and "no" gets typed several ways. Deliberately
+  # local: env_get is read by a dozen other keys whose values legitimately
+  # contain `#`, and widening it in this change would be a blind edit.
+  switch="$(env_get VIDRA_RECORD_FETCH '')"
+  switch="${switch%%#*}"
+  switch="${switch#"${switch%%[![:space:]]*}"}"
+  switch="${switch%"${switch##*[![:space:]]}"}"
+  switch="$(printf '%s' "$switch" | tr '[:upper:]' '[:lower:]')"
+  case "$switch" in
+    off|false|0|no)
+      log "VIDRA_RECORD_FETCH is off — not fetching ${tag}'s release record. This run verifies only what the tree itself can prove."
+      return 1 ;;
+  esac
+
+  # STRICT SEMVER BEFORE ANYTHING IS INTERPOLATED. The tag comes from a
+  # VIDRA_*_TAG in an operator-edited env file and goes into BOTH a URL and a
+  # filename, so `v1.2.3/../../evil`, `v1.2.3?ref=x` and `v1.2.3 v1.2.4` must be
+  # stopped before either. Releases are only ever cut as vMAJOR.MINOR.PATCH
+  # (deploy/release.sh), so nothing legitimate is excluded: a prerelease a
+  # rehearsal lab deploys has no record upstream to fetch in the first place.
+  #
+  # `[[ =~ ]]` and not `grep -Eq '^...$'`: grep matches per LINE, so a value
+  # containing a newline passes a check that looks airtight — "v1.2.3\nevil"
+  # matched, and the second line went on to be interpolated. Bash's =~ anchors
+  # against the whole string.
+  semver_re='^v[0-9]+\.[0-9]+\.[0-9]+$'
+  if [[ ! $tag =~ $semver_re ]]; then
+    log "not fetching a release record: this tag is not a vMAJOR.MINOR.PATCH release tag, and only those have records."
+    return 1
+  fi
+
+  # The fork/mirror knob, alongside VIDRA_IMAGE_REGISTRY/VIDRA_IMAGE_OWNER: a
+  # fork publishes its own records, and an egress-filtered network mirrors them.
+  base="$(env_get VIDRA_RECORD_BASE_URL "$VIDRA_RECORD_DEFAULT_BASE_URL")"
+  base="${base%/}"
+  # HTTPS ONLY, here as well as in curl's own --proto below. This record decides
+  # what the deploy will verify, so a channel anyone on the path can rewrite is
+  # worse than no record at all. Named here rather than left to a curl error, so
+  # the message says which key to fix.
+  case "$base" in
+    https://*) ;;
+    *)
+      log "not fetching a release record: VIDRA_RECORD_BASE_URL is not an https:// URL, and this record decides what the deploy verifies."
+      return 1 ;;
+  esac
+  url="$base/$tag.json"
+  # Credentials in the URL are masked in EVERY line this function logs, the
+  # hand-run curl included: a deploy log is read, pasted into tickets and
+  # shipped to a log collector, and a token that reaches it is a token to
+  # rotate. curl still receives the real URL.
+  safe_url="$(printf '%s' "$url" | sed -e 's#://[^/@]*@#://***@#')"
+
+  if [ "$base" != "${VIDRA_RECORD_DEFAULT_BASE_URL%/}" ]; then
+    # Not a refusal — a mirror is exactly what VIDRA_RECORD_BASE_URL is for.
+    # But the verdict below will rest on bytes from a source the operator
+    # chose, not on the one that shipped the bundle, and that has to be in the
+    # log beside the verdict rather than inferred from a URL.
+    log "WARNING: VIDRA_RECORD_BASE_URL points at a NON-CANONICAL record source ($safe_url). Whatever this run verifies about the release mapping rests on that source, not on the repository this release was published from."
+  fi
+
+  if ! command -v curl >/dev/null 2>&1; then
+    log "not fetching a release record: curl is not installed on this host. ${tag}'s pairing and digests stay unverified; install curl, or fetch $safe_url by hand onto this tree as releases/${tag}.json."
+    return 1
+  fi
+
+  # Into a TEMP FILE, never straight to DEST: a truncated, oversized or HTML
+  # body must not end up at the path the checker is then pointed at.
+  tmp="$(mktemp "${TMPDIR:-/tmp}/vidra-record.XXXXXX" 2>/dev/null)" || tmp=''
+  if [ -z "$tmp" ]; then
+    log "not fetching a release record: could not create a temporary file."
+    return 1
+  fi
+
+  # THE DOWNLOAD RUNS IN ITS OWN SUBSHELL so it can own a cleanup trap.
+  # lib.sh is SOURCED by deploy.sh and rollback.sh, which install their own
+  # EXIT traps; a `trap ... EXIT` at function scope would silently REPLACE
+  # one of those. A command substitution is already a subshell, and a trap set
+  # inside it is neither seen nor inherited by the caller — so Ctrl-C during
+  # the curl (a preflight is exactly when someone changes their mind) removes
+  # the partial download instead of leaking it into TMPDIR.
+  #
+  # curl flags, and why each is load-bearing:
+  #   -q FIRST          ignore ~/.curlrc. A deploy host's curl config can add
+  #                     --insecure, a --proxy, even another --output, and it is
+  #                     not this preflight's to trust. It must precede every
+  #                     other argument or the config is applied before them.
+  #   --proto/--proto-redir '=https'  TLS on the first hop AND across redirects
+  #   --max-redirs      a redirect chain is not a record
+  #   --connect-timeout bounds a host that accepts nothing
+  #   --max-time        bounds a black-holed host; this runs before anything
+  #                     has changed and must never turn a deploy into a hang
+  #   --max-filesize    refuses an oversized body at the wire; the byte count
+  #                     below catches a chunked response that declares none
+  # TWO THINGS MUST NOT APPEAR BETWEEN THE $( AND ITS ), and both cost an hour
+  # to find because the gates do not catch either:
+  #   * a `case` pattern written with a backslash escape. Its `)` closes the
+  #     substitution, and bash then reads the remaining branches as shell
+  #     source. The prefix test below is a plain parameter expansion instead.
+  #   * a COMMENT CONTAINING AN APOSTROPHE. The substitution scanner does not
+  #     treat comments as comments when tracking quotes, so one apostrophe in
+  #     a remark opens a string that never closes. (A bare `)` in a comment is
+  #     harmless; an apostrophe is not.)
+  # `bash -n` passes BOTH of these on the whole file, because a later
+  # apostrophe elsewhere re-balances the count, and shellcheck passes them too.
+  # Only running the function fails — which is why every explanation lives out
+  # here and the substitution below is kept comment-free.
+  #
+  # The traps expand "$tmp" INTO the trap string (shellcheck's SC2064 case,
+  # deliberately): `tmp` is a `local`, and an EXIT handler runs after the
+  # shell begins unwinding, when that local is already gone — under `set -u`
+  # the handler would then fail and take the exit status with it.
+  # shellcheck disable=SC2064
+  why="$(
+    trap "rm -f '$tmp'" EXIT
+    trap "rm -f '$tmp'; exit 130" HUP INT TERM
+    rc=0
+    curl -q --proto '=https' --proto-redir '=https' --tlsv1.2 \
+         --fail --silent --show-error --location --max-redirs 3 \
+         --connect-timeout 5 --max-time 10 --max-filesize "$max" \
+         --output "$tmp" "$url" || rc=$?
+    bytes="$(wc -c < "$tmp" | tr -d '[:space:]')"
+    prefix="$(head -c 512 "$tmp" | tr -d '[:space:]')"
+    if [ "$rc" -ne 0 ]; then
+      printf 'curl exited %s' "$rc"
+    elif [ ! -s "$tmp" ]; then
+      printf 'the response was empty'
+    elif [ "$bytes" -gt "$max" ]; then
+      printf 'the body is %s bytes, too large for a release record (cap %s)' "$bytes" "$max"
+    elif [ "${prefix#\{}" != "$prefix" ]; then
+      cat "$tmp" > "$dest" || printf 'the body could not be written to %s' "$dest"
+    else
+      printf 'the body does not begin with a JSON object, so it is not a release record (an error page, a captive portal, or a redirect target)'
+    fi
+  )" || sub=$?
+
+  # An interrupted or killed subshell prints no reason at all, so its exit
+  # status is checked too — otherwise "no reason" would read as success.
+  if [ -z "$why" ] && [ "$sub" -ne 0 ]; then
+    why="the download ended abnormally (exit $sub)"
+  fi
+  if [ -z "$why" ] && [ ! -s "$dest" ]; then
+    why='nothing was written'
+  fi
+
+  if [ -n "$why" ]; then
+    log "WARNING: could not fetch ${tag}'s release record from $safe_url ($why). Its pairing and any digest pin on it stay UNVERIFIED, exactly as they were before this fetch existed — an absent record predicts nothing about the images. To see why by hand (credentials masked): curl -q --proto '=https' --tlsv1.2 --fail --location --max-time 10 '$safe_url'"
+    return 1
+  fi
+  RECORD_FETCHED_FROM="$safe_url"
+  bytes="$(wc -c < "$dest" | tr -d '[:space:]')"
+  log "fetched ${tag}'s release record from $safe_url ($bytes bytes) — re-checking the pinned triple against it"
+  return 0
+}
+
 # release_mapping_check ROOT MODE CORE USER SEARCH — hold the tag triple a run
 # is about to use against releases/<tag>.json, via deploy/release-mapping.py.
 # Returns 0 to continue (verified, or UNVERIFIED with the checker's WARNING
@@ -304,14 +508,19 @@ env_set_key() {
 # bundle's own tag, are passed along so the checker can tell "this tree's own
 # release, record not yet possible" (a WARNING) from "a release this tree knows
 # nothing about" (a refusal in deploy mode). `git tag --points-at` only READS
-# the checkout; a failure there just forfeits that allowance. The consequence is
-# a known gap: the NEWEST release, deployed from its own tree, is compared by
-# tag string only until the record ships inside the release artifact.
+# the checkout; a failure there just forfeits that allowance.
+#
+# What the tree cannot prove is then FETCHED: see the second pass at the bottom
+# of this function, which downloads that record and asks the checker again. So
+# the newest release is compared by tag string only on a host that cannot
+# reach the record — offline, or in the window before the record PR merges,
+# when it does not exist anywhere yet. That last case closes only when the
+# record ships inside the release artifact.
 #
 # Exit 3 is the checker's UNVERIFIED code; see the header of
 # deploy/release-mapping.py for the full contract.
 release_mapping_check() {
-  local root="$1" mode="$2" rc=0 t tags override
+  local root="$1" mode="$2" rc=0 t tags override wanted='' record_dir rc2
   # The image source goes along with the tags, resolved the same way: the
   # compose file pulls ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/<repo>,
   # and a record can only vouch for the images at ITS repository. A fork or a
@@ -365,6 +574,162 @@ EOF
     fi
   fi
   python3 "$root/deploy/release-mapping.py" "${args[@]}" || rc=$?
+
+  # THE SECOND PASS — the record this tree CANNOT carry.
+  #
+  # Pass 1 above is untouched, and its verdict is the FLOOR: the second pass
+  # may only ever replace it with one reached using a record that actually
+  # loaded. release.sh tags this repository before any image, and so any
+  # digest, exists, so releases/vN.json is written after the publish and lands
+  # on main in a PR — a vN tree carries records only up to v(N-1), and the
+  # pairing and any digest pin on vN were compared against nothing at all.
+  #
+  # WHICH RELEASE TO FETCH IS THE CHECKER'S ANSWER, not a rule re-derived
+  # here. `--print-missing-release` prints the newest of the three pinned tags
+  # when the verdict turns on that record being absent, and nothing otherwise
+  # (a recorded triple, a release older than every record, an unparseable
+  # tag). The first cut of this asked for the CORE tag on rc==3 only, which
+  # was wrong twice over: v0.7.4 and v0.7.5 re-released vidra-core ALONE, so
+  # their triples are not uniform, pass 1 answers REFUSED (1) rather than
+  # UNVERIFIED (3), and no fetch was attempted at all — the operator's only
+  # route past the two newest releases was the blanket
+  # VIDRA_RELEASE_MAPPING=warn override, with the proving record one GET away.
+  #
+  # An OLDER release-mapping.py does not know the flag, exits 2 and prints
+  # nothing, so `wanted` is empty and nothing is fetched. That is the correct
+  # degradation and it is not hypothetical: the beta host is a hand-patched
+  # NO-GIT bundle tree, where a new lib.sh beside an older checker is a state
+  # that really occurs.
+  if [ "$rc" -ne 0 ]; then
+    wanted="$(python3 "$root/deploy/release-mapping.py" "${args[@]}" --print-missing-release 2>/dev/null | tr -d '\r\n')" || wanted=''
+  fi
+  if [ -n "$wanted" ] && [ ! -f "$root/releases/$wanted.json" ]; then
+    # A directory, so the file can carry the name the checker validates it by
+    # (<release>.json), and one `rm -rf` cleans up every path below.
+    # Same convention as the download's own temp file. A BARE `mktemp -d`
+    # ignores TMPDIR on BSD — measured: with TMPDIR exported it still made the
+    # directory under /var/folders — so half of this feature honoured the
+    # operator's choice of scratch space and half did not.
+    record_dir="$(mktemp -d "${TMPDIR:-/tmp}/vidra-record.XXXXXX" 2>/dev/null)" || record_dir=''
+    if [ -z "$record_dir" ]; then
+      log "could not create a temporary directory, so ${wanted}'s release record was not fetched; the verdict above stands"
+    else
+      # THE WHOLE SECOND PASS RUNS IN A SUBSHELL THAT OWNS THE DIRECTORY, for
+      # the same reason the download owns its file: lib.sh is SOURCED, so a
+      # `trap ... EXIT` at function scope would replace the caller's. Ctrl-C
+      # during the re-check used to leave the directory (and the record in it)
+      # behind. A plain ( ) subshell, unlike $( ), passes stdout and stderr
+      # straight through, so every line below still reaches the operator live.
+      #
+      # THE EXIT STATUS IS A CHANNEL, AND EVERY CODE ON IT MEANS ONE THING:
+      #   0    admitted, VERIFIED
+      #   3    admitted, UNVERIFIED
+      #   65   admitted, CONTRADICTED — the caller turns this into a stop
+      #   64   keep the first pass's verdict, unchanged
+      #   130  interrupted
+      # anything else — only an uncatchable signal can produce it — is read as
+      # "unknown", and the first pass's verdict stands.
+      #
+      # 65 rather than 1 because 1 is what a shell returns for ANY failure.
+      # Sharing it made "the record contradicts the pins" indistinguishable
+      # from "something in here broke", and the caller turned both into a
+      # refusal — a stop that also blocks a rollback, for a reason that may
+      # predict nothing at all.
+      #
+      # `st` carries the status the subshell MEANS to return, and the EXIT
+      # trap exits it explicitly. That is load-bearing, not tidiness:
+      # `set -euo pipefail` is in force here (deploy.sh and rollback.sh set it
+      # and this file is sourced into them), and under errexit a FAILING
+      # COMMAND IN AN EXIT TRAP rewrites the status to 1. Measured on bash
+      # 3.2: with a cleanup that fails, intended 0, 3, 64 and 65 ALL came back
+      # as 1, so an undeletable temp directory silently turned a verified
+      # re-check into a refusal. `st` defaults to 64, so any incidental
+      # failure — errexit, an unset variable, a missing binary — leaves the
+      # first pass's verdict alone; 0, 3 and 65 are reachable only from the
+      # explicit branches below, after the admission marker was found.
+      (
+        st=64
+        # The path is expanded INTO the trap string, not referenced from it:
+        # `record_dir` is a `local` and an EXIT trap runs after the shell has
+        # begun unwinding, when that local is already gone — under `set -u`
+        # the handler then died, which is the same fabricated refusal by
+        # another route. The cleanup cannot fail the trap either: it is
+        # swallowed and reported, never allowed to reach the exit status.
+        # shellcheck disable=SC2064  # expanding now is the point, see above
+        trap "rm -rf '$record_dir' 2>/dev/null || printf 'WARNING: the temporary directory %s could not be removed; remove it by hand.\\n' '$record_dir' >&2; exit \${st:-64}" EXIT
+        trap 'st=130; exit 130' HUP INT TERM
+        fetch_release_record "$wanted" "$record_dir/$wanted.json" || { st=64; exit 64; }
+        log "the verdict above was reached before that record was available — the one below supersedes it"
+        rc2=0
+        python3 "$root/deploy/release-mapping.py" "${args[@]}" \
+          --extra-record "$record_dir/$wanted.json" \
+          > "$record_dir/out" 2> "$record_dir/err" || rc2=$?
+        cat "$record_dir/out"
+        cat "$record_dir/err" >&2
+        # THE VERDICT MAY ONLY MOVE ON A RECORD THAT WAS USED. Two guards, and
+        # the pass-1 verdict survives both failing:
+        #   * the checker must SAY it admitted the record. The marker is printed
+        #     on stdout, where no text from the fetched record can appear
+        #     (record content only ever reaches warnings and errors, on stderr),
+        #     so a crafted body cannot forge it.
+        #   * the exit must be one this contract defines. `rc` used to be
+        #     reassigned unconditionally, so argparse's exit 2 from an older
+        #     checker — or any crash — fell through to `return 1` and KILLED a
+        #     deploy pass 1 had allowed. A feature that can only ever ADD
+        #     verification must not be able to subtract a deploy.
+        if ! grep -q '^\[release-mapping\] extra-record-admitted ' "$record_dir/out"; then
+          log "WARNING: the re-check ended $rc2 without using ${wanted}'s fetched record, so the verdict above stands unchanged."
+          st=64
+          exit 64
+        fi
+        case "$rc2" in
+          1)
+            # D4. A wrong — or forged — remote record must never trap an
+            # operator mid-incident with no way out but reading this source.
+            # BOTH knobs are named because one is not enough: turning the
+            # fetch off falls back to the tree alone, which can never report
+            # verified for a release it has no record for, and for a
+            # core-only triple (v0.7.4, v0.7.5) the pairing refusal then
+            # stands. Measured, not assumed.
+            log "WARNING: this stop rests on the record FETCHED from $RECORD_FETCHED_FROM, not on anything in this tree. If that record is wrong, or you cannot reach a copy you trust, re-run with VIDRA_RECORD_FETCH=off. That falls back to this tree alone, which can NEVER report verified for a release the tree has no record for: a UNIFORM vN triple then continues UNVERIFIED with a warning, but a triple the tree cannot pair — a core-only release such as v0.7.4/v0.7.5 — is still REFUSED by the pairing check, and VIDRA_RELEASE_MAPPING=warn is the override that waives that check for one run. Neither knob makes this report verified."
+            st=65
+            exit 65 ;;
+          0|3)
+            log "the verdict above rests on the record fetched from $RECORD_FETCHED_FROM, not on anything in this tree"
+            st="$rc2"
+            exit "$rc2" ;;
+          *)
+            log "WARNING: the re-check with ${wanted}'s fetched record ended $rc2, which is not a verdict this check knows (an older deploy/release-mapping.py, or a crash). It was IGNORED and the verdict above stands unchanged."
+            st=64
+            exit 64 ;;
+        esac
+      )
+      rc2=$?
+      case "$rc2" in
+        0|3) rc="$rc2" ;;
+        65)
+          # Admitted, and the record CONTRADICTS the pins. The only outcome
+          # here that predicts the wrong bytes on disk, and the only one that
+          # turns into a stop. Its own message named both escapes above.
+          rc=1 ;;
+        64) ;;   # the first pass's verdict stands, and it is already in `rc`
+        130)
+          # Interrupted before anything mutated. Stopping is the honest
+          # answer: continuing would deploy on a preflight nobody finished.
+          log "the release-record re-check was interrupted — nothing was changed"
+          rc=1 ;;
+        *)
+          # Only an uncatchable signal reaches here: the EXIT trap pins every
+          # other route to a code above. Whatever it was, it is not a verdict
+          # about the images, so it may not become one.
+          log "WARNING: the release-record re-check ended $rc2 unexpectedly, which is not one of this check's outcomes. It was IGNORED and the verdict above stands unchanged." ;;
+      esac
+      # Belt and braces for the one case the subshell's own trap cannot cover
+      # (it was killed outright). Never allowed to affect the verdict.
+      rm -rf "$record_dir" 2>/dev/null || true
+    fi
+  fi
+
   case "$rc" in
     0) return 0 ;;
     3) log "release mapping NOT verified (WARNING above) — continuing"; return 0 ;;

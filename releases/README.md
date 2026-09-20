@@ -55,12 +55,96 @@ deploying `vN-rc1`. A typo'd uniform tag is still caught by the checkout sync
 and `compose pull`. The record for `vN` reaches hosts through the next meta tag
 or bundle. That is also what rollbacks to `vN` read.
 
-**This is an open gap.** An upgrade to the newest release compares only the tag
-strings, and a wrong digest pin only warns. It closes when the record ships
-**inside the release artifact**. vidra-core's release-assets workflow (or
-`deploy/release.sh`) would emit `releases/vN.json` after the images publish, and
-the vN bundle would carry it. `deploy.sh` on a vN bundle would then verify the
-digests against a record that shipped with vN.
+**What the tree cannot prove, the deploy fetches.** When a verdict turns on a
+record this tree has no copy of, `deploy/lib.sh`'s `fetch_release_record`
+downloads `releases/<tag>.json` from this repository over https during
+preflight — before the checkout sync, the dump, the pull and the migrations —
+and re-runs the checker with `--extra-record`. The pairing and any digest pin
+are then held against the real record after all, and a **contradiction stops
+the run** exactly as it would for a record on disk. The fetched copy is used
+for that one run and written nowhere.
+
+That covers **both** shapes the newest release takes. A uniform triple
+(`vN vN vN`) is the obvious one. A **core-only** release is the one that
+actually shipped twice: v0.7.4 and v0.7.5 re-released vidra-core alone, so
+their triples are `core vN / user v(N-k) / search v(N-k)` — not uniform, and
+refused rather than merely unverified when the record is missing. The record
+to fetch is the **newest of the three pinned tags**, which
+`deploy/release-mapping.py --print-missing-release` decides (there is
+deliberately no second semver implementation in shell). It names nothing —
+and nothing is fetched — when a record here already names that release, when
+every pin predates the first record, or when a tag is not release-shaped.
+
+A fetch that fails, or a record that is fetched and then not admitted, leaves
+the first verdict exactly as it was: **a refusal stays a refusal.** Nothing
+here is ever looser than it would be without the fetch, and nothing is ever
+stricter on absence.
+
+`VIDRA_RECORD_FETCH=off` skips it entirely (airgapped hosts attempt no
+request), and `VIDRA_RECORD_BASE_URL` points it at a fork's or a mirror's
+records; both are read through `env_get`, from the env file or the
+environment. curl, not git: a bundle host has no git anywhere.
+
+### Trust model
+
+A record fetched from the default URL has **the same trust anchor as a record
+in the tree**: the same GitHub repository, over the same TLS, that delivered
+the bundle this host is running. So the pairing check is what it always was —
+a catcher for operator error (a user image from one release beside a core
+image from another), not a defence against an adversary who controls that
+anchor. Whoever controls the record source can block a deploy or bless one,
+exactly as whoever controls the bundle source can; there is no additional
+exposure here, and this feature does not pretend to remove the original.
+
+What the admission rules do enforce is that a record is used only for what it
+actually is. A fetched record is admitted only when it passes the same
+`validate()` as a tree record, names the release that was asked for, pairs the
+pinned triple **exactly**, describes a release this tree has no record for,
+and is structurally a release: **no component tag newer than the release it
+names, and at least one equal to it**. Anything else is ignored with a
+warning and changes no verdict. It is not an override — a mixed triple no
+record pairs is still refused, and a stale bundle still stops a deploy.
+
+Two consequences are deliberate:
+
+- Every log line reporting a verdict that rests on a fetched record **says so
+  and names the source URL** (credentials masked), so "verified" is never
+  silently a statement about bytes from somewhere else.
+- Pointing `VIDRA_RECORD_BASE_URL` anywhere but the default logs a distinct
+  **NON-CANONICAL** warning, because the verdict then rests on a source the
+  operator chose rather than on the one that published the release.
+- A stop caused by a fetched record names **both** escape knobs in the
+  message, because one is not enough. A wrong — or forged — remote record must
+  never trap an operator mid-incident with no way out. Turning the fetch off
+  (`VIDRA_RECORD_FETCH=off`) falls back to this tree alone, which can **never**
+  report verified for a release it has no record for — but what that means
+  depends on the shape:
+  - a **uniform** `vN vN vN` triple continues **UNVERIFIED** with the warning;
+  - a triple the tree cannot pair — a **core-only** release such as v0.7.4 or
+    v0.7.5 — is **still refused** by the pairing check, because pass 1's
+    refusal stands once the fetch is off. `VIDRA_RELEASE_MAPPING=warn` is the
+    override for that one, and it **waives the pairing check** for that run:
+    the deploy then proceeds having verified nothing about whether these
+    images were released together.
+
+**What is still not verified**, and nothing here can change either:
+
+- **Offline.** No egress, no curl, or `VIDRA_RECORD_FETCH=off` — the run keeps
+  today's WARNING naming what was not checked, plus the exact `curl` to try by
+  hand. A record that cannot be fetched predicts nothing about the images, so
+  it may not stop a deploy.
+- **The window before the record merges.** Between a release publishing and
+  its record PR landing on `main`, the record does not exist *anywhere* yet.
+  That closes only when the record ships **inside the release artifact** —
+  vidra-core's release-assets workflow (or `deploy/release.sh`) emitting
+  `releases/vN.json` after the images publish, so the vN bundle carries it.
+
+One more honest limit on the digest half: images are pulled **by tag**, and
+`deploy.sh`'s `require_embedded_migrate_tag` refuses a `<tag>@sha256:<digest>`
+spelling for `VIDRA_CORE_TAG` and `VIDRA_SEARCH_TAG` before the checker runs
+(see "Format" below). So the digest comparison this fetch makes reachable is
+today reachable only for `VIDRA_USER_TAG`. The **pairing** assertion covers all
+three. Pulling by the recorded digests remains the separate follow-up.
 
 ## Overriding a refusal: `VIDRA_RELEASE_MAPPING=warn`
 
