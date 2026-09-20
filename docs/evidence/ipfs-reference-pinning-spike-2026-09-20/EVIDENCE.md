@@ -4,9 +4,9 @@ Measured 2026-09-20 against the exact Kubo version vidra pins. Every figure belo
 is copied from a real run; transcripts live in `out/` (`out/RUN.txt` is the whole
 end-to-end run). Reproduce with `bash run.sh`; clean up with `bash run.sh teardown`.
 
-What is committed in `out/`: the 48 text transcripts, with the local spike
-directory, scratch paths, home directory and username replaced by `<spike>`,
-`<scratch>`, `<home>` and `<user>` — nothing else was altered. Not committed: the
+What is committed in `out/`: the 48 text transcripts, with the local username
+replaced by `<user>` (it appeared only in `ls -l` listings; no other local path
+occurs in them) — nothing else was altered. Not committed: the
 payload and read-back `.bin` files (429 MB) and `origin-requests.txt`, the origin's
 full 487 KB request log; the per-test origin excerpts that matter are in the
 transcripts.
@@ -471,7 +471,8 @@ rule as T5/T10, used deliberately). The playlist then serves with the origin dow
 survives `repo/gc` because the tree pin covers it, while the 2 MiB segment and the
 un-pre-copied 700-byte `init.mp4` remain origin-dependent. This is the lever for keeping
 playlists/init segments/VTTs locally resident while large media stays by reference — and it
-also removes those files' add-time origin read from the T3 probe.
+should also remove those files' add-time origin read from the T3 probe, but this test did
+**not** count origin reads during the tree add, so that part is unverified.
 
 ## T12 — which maintenance operations read origin bytes
 
