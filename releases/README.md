@@ -33,6 +33,15 @@ Copy the values from the frozen verification manifest (`deploy/release-preflight
 writes it), and extend `tests/release_mapping_test.py`'s evidence cross-check to
 the new file.
 
+The preflight also **reads** this directory: `releases/<tag>.json` is how it
+learns which tag each component carries, so a core-only release (v0.7.4,
+v0.7.5, which pair vidra-user and vidra-search at v0.7.3) can be frozen at all.
+That is circular for exactly one run — the record does not exist yet while its
+own evidence is being produced — so that first run passes
+`--component-tag vidra-user=<tag> --component-tag vidra-search=<tag>` instead.
+Afterwards the record makes the flags unnecessary and `--tag <release>` alone
+reproduces the same tree. See "Core-only releases" in `deploy/README.md`.
+
 The record cannot live inside the release's own meta tag. `deploy/release.sh`
 pushes this repository's tag **before** it creates the component releases, because
 vidra-core's release-assets workflow builds the bundle from that tag. No image
