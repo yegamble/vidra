@@ -12,8 +12,17 @@ name: stack-e2e
 # lane named in .github/required-checks.txt fails, is cancelled, times out, or
 # never runs. A media pipeline on a shared 4-vCPU runner is the slowest and
 # flakiest thing this repo could run, and one transcode flake must never block
-# an unrelated PR. Keeping it in its own workflow, out of the manifest, makes
-# "cannot block a merge" a property of the file rather than a promise.
+# an unrelated PR. This workflow is in neither that file nor that manifest, so
+# a VALID run of this lane — red or green — cannot block a merge.
+#
+# That is the accurate claim, and it is narrower than "this file cannot block a
+# merge". scripts/ci/require-checks.sh fails `ci-required` on ANY workflow run
+# for the commit that concluded failure/startup_failure with ZERO jobs,
+# explicitly "whether or not the manifest lists the lane" — the guard against
+# GitHub silently REJECTING a malformed workflow file and the lane vanishing.
+# So a stack-e2e.yml that GitHub refuses to parse WILL block merges, by design.
+# Validate this file with a duplicate-key-rejecting YAML load before pushing;
+# PyYAML's default loader keeps the last duplicate and tells you nothing.
 #
 # WHY IT ALSO RUNS ON pull_request (and not only nightly + dispatch): a lane
 # that runs on neither push nor PR cannot go red in the PR that breaks it.
@@ -110,10 +119,12 @@ jobs:
           SEARCH_INTERNAL_SECRET=$(openssl rand -hex 32 | tr -d '\n')
 
           # --- what makes this lane different from boot ------------------------
-          # vidra-core docker-compose.yml: SEARCH_HTTP_PORT publishes the search
-          # container's fixed :8080 on the host. The driver signs and calls
-          # /internal/v1/search there; without a published port it would have to
-          # docker-inspect the container's IP the way the lab harness does.
+          # META docker-compose.yml, the \`search\` service's own
+          # \`ports: "\${SEARCH_HTTP_PORT:-8081}:8080"\` (NOT vidra-core's file —
+          # meta owns the search service). It publishes the container's fixed
+          # :8080 on the host. The driver signs and calls /internal/v1/search
+          # there; without a published port it would have to docker-inspect the
+          # container's IP the way the lab harness does.
           SEARCH_HTTP_PORT=8098
           # vidra-core docker-compose.yml \`SEARCH_SERVICE_URL: \${SEARCH_SERVICE_URL:-}\`.
           # EMPTY DISABLES THE WHOLE INTEGRATION — that empty default is exactly
@@ -255,25 +266,44 @@ jobs:
 
       # No fixture video is committed anywhere in these four repos, and none
       # should be: the api image already carries ffmpeg (for ffprobe), so the
-      # lane mints its own. 4s / 320x240 is not an arbitrary size — the ladder
-      # planner skips every rung taller than the source, so the default
-      # {1080,720,480,360} ladder collapses to ONE rung at the source's own
-      # size. That is how the ladder is pinned to a single low rendition
-      # without inventing a config knob. `sine` gives it a real audio stream:
-      # the CMAF packager treats a missing audio track as a failure, not an
-      # option.
+      # lane mints its own. Three properties of this command are deliberate.
+      #
+      # 320x240 pins the ladder. The planner skips every rung taller than the
+      # source, so the default {1080,720,480,360} collapses to ONE rung at the
+      # source's own size — a single low rendition without inventing a knob.
+      #
+      # `sine` gives it a real audio stream: the CMAF packager treats a missing
+      # audio track as a failure, not an option.
+      #
+      # LOSSLESS (-qp 0) OVER HEAVY NOISE MAKES THE FILE BIG ON PURPOSE.
+      # vidra's only upload API is the resumable one, its chunk size is a
+      # compile-time 8 MiB constant, and a 300 KB fixture is ONE chunk — which
+      # exercises neither "every chunk but the last must be exactly chunk_size"
+      # nor the server-side in-order assembly. Noise is incompressible, so
+      # lossless 320x240 at 30 fps for 4 s lands well past 8 MiB and the upload
+      # is genuinely multi-chunk. The transcode still has one 240p rung to
+      # produce, so this costs upload bytes over loopback, not encode time.
       - name: Generate the upload fixture inside the api container
         run: |
           mkdir -p ci-report
           COMPOSE=(docker compose -f docker-compose.yml --env-file env/ci-stack-e2e.env --profile core)
           "${COMPOSE[@]}" exec -T api ffmpeg -nostdin -loglevel error \
-            -f lavfi -i testsrc2=size=320x240:rate=15 \
+            -f lavfi -i testsrc2=size=320x240:rate=30 \
             -f lavfi -i sine=frequency=440:sample_rate=48000 \
-            -t 4 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -b:a 64k \
+            -t 4 -vf noise=alls=100:allf=t+u \
+            -c:v libx264 -preset ultrafast -qp 0 -pix_fmt yuv420p -c:a aac -b:a 64k \
             -movflags +faststart -y /tmp/stack-e2e.mp4
           "${COMPOSE[@]}" cp api:/tmp/stack-e2e.mp4 ci-report/stack-e2e.mp4
           ls -l ci-report/stack-e2e.mp4
-          test -s ci-report/stack-e2e.mp4
+          # Fail HERE, naming the cause, rather than letting the driver's
+          # total_chunks >= 2 assertion fail with "the multi-chunk path is not
+          # being tested" and leave a reader guessing why the fixture shrank.
+          bytes=$(wc -c < ci-report/stack-e2e.mp4)
+          if [ "$bytes" -le 8388608 ]; then
+            echo "::error::the fixture is ${bytes} bytes, not larger than the 8 MiB upload chunk size — the upload would be a single chunk" >&2
+            exit 1
+          fi
+          echo "OK: ${bytes}-byte fixture, larger than the 8 MiB chunk size, so the upload is multi-chunk."
 
       - name: Upload -> transcode -> HLS -> searchable
         env:

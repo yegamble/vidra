@@ -71,18 +71,27 @@ production mode with transcoding disabled and no search integration, so a green
 [`tests/stack-e2e.mjs`](tests/stack-e2e.mjs)) now walks the rest of that chain
 against a live stack with `TRANSCODING_ENABLED=true` and
 `SEARCH_SERVICE_URL` wired to the compose `search` service: owner claim →
-login → channel → chunked upload of an ffmpeg-generated 4 s 320×240 fixture →
-transcode polled to `published` with `packaging_format=cmaf` and a rendition →
-`#EXTM3U` master playlist → a variant playlist → the CMAF init segment and the
-first media segment fetched anonymously, 200 with non-zero bytes → the video
-returned by a signed `/internal/v1/search` against vidra-search **and** by the
-public `/api/v1/videos/search` the frontend calls.
+login → channel → **multi-chunk** resumable upload of an ffmpeg-generated 4 s
+320×240 fixture (deliberately larger than the 8 MiB chunk size, and the driver
+fails if it is not, so the ≥2-chunk path is real) → transcode polled to
+`published` with `packaging_format=cmaf` and a rendition → `#EXTM3U` master
+playlist → a variant playlist → the CMAF init segment (`ftyp` box) and the
+first media segment (`styp`/`moof` box) fetched anonymously, 200 with a real
+ISOBMFF header → the video returned by a signed `/internal/v1/search` against
+vidra-search, **and** by the public `/api/v1/videos/search` *with* `search_total`
+and `total_is_lower_bound`, the two fields core's local SQL trigram fallback
+cannot produce — so the read path is proven to have been served BY
+vidra-search, not merely to have returned the right id. It then waits for
+`vidra_queue_depth{queue="search_outbox",state="pending"}` to reach zero and
+re-asserts the video is still indexed, because "indexed" must survive every
+event still queued behind it.
 
 **What it still does NOT prove — do not over-read a green run:**
 
-- **No browser and no decoder.** It asserts playlist text and segment BYTE
-  COUNTS. Bytes that arrive are not bytes that decode; real playback stays
-  `tests/release-acceptance.mjs`'s job, on a prepared lab host.
+- **No browser and no decoder.** It asserts playlist text plus the first
+  ISOBMFF box type and a size floor on each segment. That rules out an empty
+  body or an error page; it does not make the bytes decodable. Real playback
+  stays `tests/release-acceptance.mjs`'s job, on a prepared lab host.
 - **Rate limiting is off** (`RATE_LIMIT_ENABLED=false`), so it proves nothing
   about the shipped limits, and **scanning is off**
   (`MALWARE_SCAN_MODE=disabled` — without it every ingestion route answers

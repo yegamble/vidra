@@ -194,6 +194,18 @@ const session = expectStatus(
   'open upload session',
 ).json;
 log(`upload session ${session.upload_id}: ${fixture.length} bytes in ${session.total_chunks} chunk(s) of ${session.chunk_size}`);
+// THE UPLOAD MUST REALLY BE CHUNKED. vidra's only upload API is the resumable
+// one, and its contract — "every chunk but the last must be exactly chunk_size
+// bytes", then an in-order server-side assembly — is not exercised at all by a
+// single-chunk upload. chunk_size is a compile-time 8 MiB constant
+// (vidra-core internal/upload/service.go), so the workflow deliberately mints a
+// fixture larger than that. If this ever fails, the fixture shrank and the word
+// "chunked" stopped being true, which is exactly what it is here to catch.
+assert.ok(
+  session.total_chunks >= 2,
+  `the fixture is ${fixture.length} bytes against a ${session.chunk_size}-byte chunk size, so this upload is ` +
+  `${session.total_chunks} chunk(s): the multi-chunk path is NOT being tested. Grow the fixture or stop calling it chunked.`,
+);
 
 for (let n = 0; n < session.total_chunks; n += 1) {
   const slice = fixture.subarray(n * session.chunk_size, Math.min((n + 1) * session.chunk_size, fixture.length));
@@ -278,6 +290,24 @@ assert.ok(variant.text.startsWith('#EXTM3U'), `variant playlist is not an HLS pl
 log(`variant playlist ${variants[0]}: 200, ${variant.bytes.length} bytes, ${variants.length} variant(s) advertised`);
 
 const variantLines = variant.text.split('\n').map(line => line.trim());
+
+// A 200 WITH BYTES IS NOT A SEGMENT. `bytes.length > 0` accepts one byte, or an
+// HTML error page an upstream proxy substituted. Every ISOBMFF file is a
+// sequence of boxes, each `[uint32 size][4-char type]`, so the four bytes at
+// offset 4 are the first box's type: that is the cheapest real structural check
+// there is, and no error page passes it.
+const boxTypeAt4 = bytes => (bytes.length >= 8 ? bytes.toString('latin1', 4, 8) : `<only ${bytes.length} bytes>`);
+const assertISOBMFF = (bytes, allowed, minBytes, what) => {
+  const type = boxTypeAt4(bytes);
+  assert.ok(
+    allowed.includes(type),
+    `${what}: first ISOBMFF box type is ${JSON.stringify(type)}, expected one of ${allowed.join('/')}. ` +
+    `This is not fMP4 — first 32 bytes: ${bytes.subarray(0, 32).toString('hex')}`,
+  );
+  assert.ok(bytes.length >= minBytes, `${what}: only ${bytes.length} bytes, below the ${minBytes}-byte floor`);
+  return type;
+};
+
 // CMAF/fMP4 carries an initialisation segment in #EXT-X-MAP; a decoder is
 // useless without it, so an empty one is a failure even though the playlist
 // parses. TS packaging has no MAP tag, and the lane must not pretend otherwise.
@@ -285,8 +315,10 @@ const mapMatch = variant.text.match(/#EXT-X-MAP:[^\n]*URI="([^"]+)"/);
 if (mapMatch) {
   const initURL = new URL(mapMatch[1], variantURL);
   const init = expectStatus(await call(initURL.href, { binary: true }), 200, `GET the CMAF init segment ${mapMatch[1]}`);
-  assert.ok(init.bytes.length > 0, `the init segment ${mapMatch[1]} came back 200 with ZERO bytes`);
-  log(`init segment ${mapMatch[1]}: 200, ${init.bytes.length} bytes`);
+  // An init segment is `ftyp` then `moov` — it declares the brand and the
+  // track, and nothing else can stand in for it.
+  const initBox = assertISOBMFF(init.bytes, ['ftyp'], 256, `init segment ${mapMatch[1]}`);
+  log(`INIT SEGMENT PROVEN: ${mapMatch[1]}: 200, ${init.bytes.length} bytes, first box '${initBox}'`);
 } else {
   log('no #EXT-X-MAP in the variant playlist (not CMAF packaging) — no init segment to fetch');
 }
@@ -295,8 +327,14 @@ const segments = variantLines.filter((line, i) => line && !line.startsWith('#') 
 assert.ok(segments.length >= 1, `the variant playlist lists no media segment. Playlist:\n${variant.text}`);
 const segmentURL = new URL(segments[0], variantURL);
 const segment = expectStatus(await call(segmentURL.href, { binary: true }), 200, `GET the first media segment ${segments[0]}`);
-assert.ok(segment.bytes.length > 0, `the media segment ${segments[0]} came back 200 with ZERO bytes`);
-log(`SEGMENT PROVEN: first media segment ${segments[0]}: 200, ${segment.bytes.length} bytes (${segments.length} segment(s) in the variant)`);
+// The packager is ffmpeg's dash muxer with `-dash_segment_type mp4` and
+// `movflags=+cmaf` (vidra-core internal/media/cmaf.go), and a CMAF segment
+// opens with a segment-type box. `moof` is accepted alongside `styp` because a
+// plain fMP4 fragment without the CMAF brand box is still a legal segment and
+// that difference is a packager detail, not a broken pipeline; the box actually
+// served is logged either way so a silent change is visible in the run.
+const segmentBox = assertISOBMFF(segment.bytes, ['styp', 'moof'], 1024, `media segment ${segments[0]}`);
+log(`SEGMENT PROVEN: first media segment ${segments[0]}: 200, ${segment.bytes.length} bytes, first box '${segmentBox}' (${segments.length} segment(s) in the variant)`);
 
 // -------------------------------------------------------------------- search
 // The load-bearing search proof. /api/v1/videos/search has a LOCAL SQL FALLBACK
@@ -327,34 +365,111 @@ const indexed = await until('vidra-search indexing', { deadlineMs: 180000 }, asy
   const ids = (result.json?.ids ?? []).map(hit => hit.video_id);
   return { done: ids.includes(videoID), status: result.status, returned_ids: ids };
 });
-log(`SEARCH PROVEN (vidra-search): signed /internal/v1/search returned ${videoID} — ${JSON.stringify(indexed)}`);
+log(`WRITE PATH PROVEN (core -> vidra-search): the signed /internal/v1/search returned ${videoID} out of vidra-search's own index — ${JSON.stringify(indexed)}`);
 
+// THE READ PATH, AND WHY A RETURNED ID IS NOT ENOUGH. handleSearchVideos has
+// two backends: vidra-search, and a local SQL trigram fallback it takes on ANY
+// search-client error (vidra-core internal/httpapi/videos.go). Both answer the
+// identical public contract, and a one-word title matches trigram search
+// trivially — so "the id came back" stays green with the service unreachable,
+// the breaker open, or the query HMAC wrong. That is the whole integration this
+// lane exists to cover, silently untested.
+//
+// `search_total` and `total_is_lower_bound` are the discriminator. Both are
+// filled ONLY from searchServicePaging on the service branch; the SQL branch
+// leaves them nil and `omitempty` drops them. vidra-search's own contract makes
+// `total_is_lower_bound` REQUIRED and computes `total` unless skip_count is
+// asked for (core never asks), so on the service path both are always present.
+// No SQL fallback can produce either field.
 const publicSearch = await until('public search API', { deadlineMs: 60000 }, async () => {
   const result = await api(`/api/v1/videos/search?q=${encodeURIComponent(title)}&limit=20`);
   if (result.status !== 200) return { done: false, status: result.status, body: (result.text ?? '').slice(0, 300) };
   const ids = (result.json?.videos ?? []).map(entry => entry.id);
-  return { done: ids.includes(videoID), status: result.status, returned_ids: ids };
+  return {
+    done: ids.includes(videoID),
+    status: result.status,
+    returned_ids: ids,
+    search_total: result.json?.search_total ?? null,
+    total_is_lower_bound: result.json?.total_is_lower_bound ?? null,
+    body_keys: Object.keys(result.json ?? {}),
+  };
 });
-log(`SEARCH PROVEN (public API): /api/v1/videos/search returned ${videoID} — ${JSON.stringify(publicSearch)}`);
+assert.notEqual(
+  publicSearch.search_total, null,
+  'the public search answered with the video but WITHOUT search_total — core served it from its local SQL trigram ' +
+  `fallback, not from vidra-search. Response keys: ${JSON.stringify(publicSearch.body_keys)}`,
+);
+assert.notEqual(
+  publicSearch.total_is_lower_bound, null,
+  'the public search answered without total_is_lower_bound — vidra-search makes that field mandatory, so this ' +
+  `response did not come from it. Response keys: ${JSON.stringify(publicSearch.body_keys)}`,
+);
+log(`READ PATH PROVEN (browser -> core -> vidra-search): /api/v1/videos/search returned ${videoID} and carries ` +
+    `search_total=${publicSearch.search_total} total_is_lower_bound=${publicSearch.total_is_lower_bound}, ` +
+    'neither of which the local SQL fallback can produce');
 
-// A SECOND LOOK, DELIBERATELY LATE. "Indexed" has to mean "still indexed a
-// moment later", because this lane has already produced the opposite: on run
+// A SECOND LOOK, AFTER THE QUEUE IS EMPTY — NOT AFTER A GUESSED INTERVAL.
+//
+// "Indexed" has to mean "still indexed once every queued event has been
+// applied", because this lane has already produced the opposite: on run
 // 35504619907 the document was suppressed (eligible=false,
 // suppressed_reason=reconcile_orphan) 130 ms AFTER the assertion above passed,
 // by a reconcile.end that a failed first drain had pushed behind the upsert.
-// The bring-up order in the workflow removes that cause; this re-check is what
-// notices if it ever comes back, instead of shipping a green that was a race.
-const settleSeconds = 10;
-log(`re-checking after ${settleSeconds}s that the document is still indexed (guards the reconcile_orphan race)`);
-await sleep(settleSeconds * 1000);
+//
+// The first attempt at this guard slept 10 s, which was calibrated to nothing:
+// a failed drain reschedules at drainBaseBackoff = 30 s, doubling
+// (vidra-core internal/searchevents/drainer.go), so a re-delivery cannot arrive
+// sooner than ~30 s plus a 5 s tick and a 10 s sleep could only ever pass. A
+// longer sleep would be the same mistake with a bigger number, so the condition
+// is read instead of waited out: the api exports the outbox depth by state as
+// vidra_queue_depth{queue="search_outbox",state=...} (scrape-time, from
+// SearchOutboxDepth), and a rescheduled row is still `pending`. Zero pending
+// rows means nothing is left to apply.
+const outboxPending = async () => {
+  const metrics = expectStatus(await api('/metrics'), 200, 'GET /metrics');
+  let familySeen = false;
+  let pending = 0;
+  for (const line of metrics.text.split('\n')) {
+    if (!line.startsWith('vidra_queue_depth{')) continue;
+    const labelEnd = line.indexOf('}');
+    if (labelEnd < 0) continue;
+    const labels = Object.fromEntries(
+      [...line.slice('vidra_queue_depth{'.length, labelEnd).matchAll(/([a-zA-Z_][a-zA-Z0-9_]*)="((?:[^"\\]|\\.)*)"/g)]
+        .map(m => [m[1], m[2]]),
+    );
+    if (labels.queue !== 'search_outbox') continue;
+    familySeen = true;
+    if (labels.state === 'pending') pending += Number(line.slice(labelEnd + 1).trim());
+  }
+  return { familySeen, pending };
+};
+
+// GROUP BY produces no row for a state with no rows, so "drained" shows up as
+// the `pending` series DISAPPEARING, not as a 0. That makes an absent series
+// indistinguishable from an absent METRIC — so the family has to be seen at
+// least once (there are always delivered rows to anchor it) or this check would
+// pass vacuously against a renamed or disabled gauge. That is the failure this
+// whole item is about, so it fails loudly rather than assuming.
+const drained = await until('search outbox drains to zero pending', { deadlineMs: 180000, intervalMs: 2000 }, async () => {
+  const { familySeen, pending } = await outboxPending();
+  return { done: familySeen && pending === 0, family_seen: familySeen, pending_rows: pending };
+});
+assert.ok(
+  drained.family_seen,
+  'vidra_queue_depth{queue="search_outbox"} was never exported, so "the queue drained" was never actually observed. ' +
+  'Check METRICS_ENABLED and the gauge name before trusting any green from this step.',
+);
+log(`OUTBOX DRAINED: vidra_queue_depth{queue="search_outbox",state="pending"} is 0 — ${JSON.stringify(drained)}`);
+
 const stillIndexed = await signedSearch(title);
-expectStatus(stillIndexed, 200, `re-check /internal/v1/search after ${settleSeconds}s`);
+expectStatus(stillIndexed, 200, 're-check /internal/v1/search after the outbox drained');
 const stillIDs = (stillIndexed.json?.ids ?? []).map(hit => hit.video_id);
 assert.ok(
   stillIDs.includes(videoID),
-  `the video was indexed and then DISAPPEARED within ${settleSeconds}s — vidra-search returned ${JSON.stringify(stillIDs)}. ` +
-  'Read search.documents.suppressed_reason in the evidence artifact: a late, out-of-order event suppressed it.',
+  'the video was indexed and then DISAPPEARED once the outbox finished draining — vidra-search returned ' +
+  `${JSON.stringify(stillIDs)}. Read search.documents.suppressed_reason in the evidence artifact: a late, ` +
+  'out-of-order event suppressed it.',
 );
-log(`SEARCH STILL INDEXED after ${settleSeconds}s — ${JSON.stringify(stillIDs)}`);
+log(`SEARCH STILL INDEXED with an empty outbox — ${JSON.stringify(stillIDs)}`);
 
 log(`PASS — upload -> transcode -> HLS bytes -> searchable, video ${videoID}, title ${title}`);
