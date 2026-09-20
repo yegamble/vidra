@@ -88,6 +88,30 @@ record is deployed and rolled back with a WARNING, so historical releases keep
 working. A pre-v0.6.4 tag next to a recorded one is refused in a deploy, because
 no record pairs them, and warned about in a rollback.
 
+### Deliberately unrecorded releases
+
+**v0.6.7 — superseded by v0.6.8 before any deployment.** Its vidra-user image
+was cut one merge short of the change the release existed to ship, so the
+triple it names documents an incomplete release; it was re-cut as v0.6.8 from
+the same meta commit and never deployed. The record PR `deploy/release.sh`
+opened for it (#218) was closed unmerged by the owner on 2026-09-15 as
+"Superseded — do not merge". **`deploy.sh` refusing a v0.6.7 triple is the
+intended behaviour, not a missing record**; a rollback to it still proceeds
+with the WARNING above. Do not add `releases/v0.6.7.json`.
+
+### Records frozen retroactively
+
+**v0.6.8 and v0.6.9** were recorded on **2026-09-20**, days after they were
+cut; their manifests' `created_at` says so. Their evidence is what the
+preflight and the registry could still be asked on that date — the
+source/image/asset/contract freeze, the `imagetools inspect` transcript and
+the images' own `migrate embedded-max` answers. **Neither release was scanned,
+drilled, or — as far as any committed artifact shows — deployed, and both are
+superseded by v0.7.x.** A record makes a triple *verifiable*; it does not make
+it accepted. What the records buy is narrow and real: a rollback to either now
+verifies its digests instead of warning that nothing was checked, and a deploy
+of either is no longer refused for want of a pairing.
+
 ## Format (`schema_version` 1)
 
 Validated strictly by `deploy/release-mapping.py`. An unknown key, a short commit,

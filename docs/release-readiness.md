@@ -20,8 +20,13 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   v0.6.6 is the last release carrying any runtime evidence. v0.7.0, v0.7.1,
   v0.7.2, v0.7.3 and v0.7.4 were each cut and each paired in `releases/`, and
   **not one of them was ever recorded in this document**; core additionally
-  carries v0.6.7, v0.6.8 and v0.6.9 release tags with no pairing record and no
-  evidence directory at all. Measured **cumulatively across v0.6.6 → v0.7.5**,
+  carries v0.6.7, v0.6.8 and v0.6.9 release tags, of which **v0.6.8 and v0.6.9
+  were paired in `releases/` only retroactively, on 2026-09-20, with
+  preflight-only evidence** (source/image/asset/contract freeze plus the
+  images' own `migrate embedded-max` answers — no scan, no runtime milestone,
+  no drill, and no committed artifact showing either was ever deployed), and
+  **v0.6.7 is deliberately unrecorded** (superseded by v0.6.8 before any
+  deployment; see `releases/README.md`). Measured **cumulatively across v0.6.6 → v0.7.5**,
   not as v0.7.5's own work: **41 core commits**, 151 files changed
   (+12,133 / −454); excluding `*_test.go` files and every path under a
   `testdata/` directory, **103 files and +7,822 / −423 lines**. Surfaces added

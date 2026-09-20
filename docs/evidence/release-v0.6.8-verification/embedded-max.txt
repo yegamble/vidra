@@ -1,0 +1,8 @@
+# The released images' own answers to `migrate embedded-max`, asked by linux/amd64 digest
+# on 2026-09-20. Digest-bound, no database environment, no mounts, no network.
+# Run on an arm64 host under linux/amd64 emulation; each image was pulled by digest first,
+# so what follows is the command and its answer verbatim, with no pull progress lines.
+$ docker run --rm --platform linux/amd64 --network none --read-only --cap-drop ALL ghcr.io/yegamble/vidra-core@sha256:9f10d712c96c891e3d5e9d5c9f82303730d2b56b0a0706346ee76770ec024333 migrate embedded-max
+147
+$ docker run --rm --platform linux/amd64 --network none --read-only --cap-drop ALL ghcr.io/yegamble/vidra-search@sha256:169555db3fca36139d85be8b9313d1c204732272e5bdea58fff9be18e4795f99 migrate embedded-max
+18
