@@ -221,6 +221,42 @@ class ComponentTagTests(unittest.TestCase):
         for repo in p.COMPONENTS:
             self.assertEqual(p.expected_image(uniform, repo), f'ghcr.io/yegamble/{repo}:v0.6.6')
 
+    def test_setup_pins_are_read_and_asserted_before_they_are_corrected(self):
+        # Rewriting the pins without first reading them would silently absorb a
+        # `setup --release-tag` that wrote the wrong tag — the runtime half of
+        # the regression tests/install_test.sh guards for install.sh. setup
+        # writes that ONE tag for all three services, so that is what A02 must
+        # observe before correcting it for the core-only case.
+        template = (Path(__file__).resolve().parents[1] / 'env/production.env.example').read_text()
+        self.assertEqual(p.check_setup_pins(template, 'v0.7.3'),
+                         {'VIDRA_CORE_TAG': 'v0.7.3', 'VIDRA_USER_TAG': 'v0.7.3',
+                          'VIDRA_SEARCH_TAG': 'v0.7.3'})
+        wrong = template.replace('VIDRA_SEARCH_TAG=v0.7.3', 'VIDRA_SEARCH_TAG=v0.6.6')
+        with self.assertRaises(ValueError) as refused:
+            p.check_setup_pins(wrong, 'v0.7.3')
+        for fragment in ('VIDRA_SEARCH_TAG', 'v0.6.6', 'v0.7.3'):
+            self.assertIn(fragment, str(refused.exception))
+        missing = template.replace('VIDRA_USER_TAG=v0.7.3', '# VIDRA_USER_TAG removed')
+        with self.assertRaises(ValueError) as absent:
+            p.check_setup_pins(missing, 'v0.7.3')
+        self.assertIn('VIDRA_USER_TAG', str(absent.exception))
+
+    def test_the_env_temp_file_is_private_from_creation(self):
+        # The env file carries secrets; it must never exist, even briefly, at
+        # whatever mode the umask would have given it.
+        previous = os.umask(0)
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / 'production.env.tmp'
+                p.write_private(path, 'VIDRA_CORE_TAG=v0.7.5\n')
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(path.read_text(), 'VIDRA_CORE_TAG=v0.7.5\n')
+                # O_EXCL: a leftover temp file is a surprise, not a target.
+                with self.assertRaises(FileExistsError):
+                    p.write_private(path, 'x')
+        finally:
+            os.umask(previous)
+
     def test_pin_component_tags_rewrites_every_service_tag(self):
         template = (Path(__file__).resolve().parents[1] / 'env/production.env.example').read_text()
         pinned = p.pin_component_tags(template, manifest('v0.7.5'))

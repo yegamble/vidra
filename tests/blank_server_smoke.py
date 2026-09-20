@@ -51,6 +51,38 @@ def expected_image(candidate, repo):
     return f'ghcr.io/yegamble/{repo}:{candidate["repositories"][repo]["tag"]}'
 
 
+def check_setup_pins(text, tag):
+    """What `vidra setup --release-tag` wrote, read and asserted before it is
+    corrected — and returned so the evidence can carry it.
+
+    setup writes that ONE tag for all three services. Correcting the pins
+    without first reading them would silently absorb a setup that wrote the
+    WRONG tag: the runtime half of the regression `tests/install_test.sh`
+    guards for install.sh, where a stale template becomes the pinned release.
+    Exactly one assignment per key, so a renamed key or a second assignment
+    that would win at render time fails here instead of passing unseen.
+    """
+    pins = {}
+    for key in COMPONENT_TAG_KEYS.values():
+        found = re.findall(f'(?m)^{key}=(.*)$', text)
+        require(len(found) == 1, f'{key}: expected exactly one assignment, found {len(found)}')
+        pins[key] = found[0].strip()
+        require(pins[key] == tag, f'{key}: setup wrote {pins[key]!r}, expected the release tag {tag!r}')
+    return pins
+
+
+def write_private(path, text):
+    """Create `path` at 0600 from the first byte.
+
+    An env file carries secrets, so it must never exist even briefly at the
+    umask's default mode. O_EXCL as well: a leftover temp file is a surprise to
+    investigate, never a target to overwrite.
+    """
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, 'w') as handle:
+        handle.write(text)
+
+
 def pin_component_tags(text, candidate):
     """Rewrite the three image tags in an env file to the candidate's own.
 
@@ -254,12 +286,16 @@ sys.exit(result.returncode)
     # before rendering. Done AFTER the reinstall-idempotence comparison above,
     # which must see exactly the bytes the installer and setup produced.
     env_file = root / 'env/production.env'
+    written = env_file.read_text()
+    # Read and assert what setup wrote BEFORE correcting it, or this rewrite
+    # would quietly absorb a setup that pinned the wrong release.
+    evidence['setup_component_tags'] = check_setup_pins(written, tag)
     temporary = root / 'env/production.env.tmp'
-    temporary.write_text(pin_component_tags(env_file.read_text(), candidate))
-    temporary.chmod(0o600)
+    write_private(temporary, pin_component_tags(written, candidate))
     temporary.replace(env_file)
     evidence['component_tags'] = {repo: candidate['repositories'][repo]['tag'] for repo in COMPONENTS}
-    evidence['checks']['component_tag_pins'] = 'PASS (env rewritten to the per-component release tags)'
+    evidence['checks']['component_tag_pins'] = ('PASS (setup pinned the release tag for all three; '
+                                                'env corrected to the per-component release tags)')
     evidence['docker_version'] = command(['docker', '--version'], private, 'docker-version').strip()
     evidence['compose_version'] = command(['docker', 'compose', 'version', '--short'], private, 'compose-version').strip()
     command(['systemctl', 'is-active', '--quiet', 'docker'], private, 'docker-active')
