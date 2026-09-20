@@ -327,13 +327,16 @@ const segments = variantLines.filter((line, i) => line && !line.startsWith('#') 
 assert.ok(segments.length >= 1, `the variant playlist lists no media segment. Playlist:\n${variant.text}`);
 const segmentURL = new URL(segments[0], variantURL);
 const segment = expectStatus(await call(segmentURL.href, { binary: true }), 200, `GET the first media segment ${segments[0]}`);
-// The packager is ffmpeg's dash muxer with `-dash_segment_type mp4` and
-// `movflags=+cmaf` (vidra-core internal/media/cmaf.go), and a CMAF segment
-// opens with a segment-type box. `moof` is accepted alongside `styp` because a
-// plain fMP4 fragment without the CMAF brand box is still a legal segment and
-// that difference is a packager detail, not a broken pipeline; the box actually
-// served is logged either way so a silent change is visible in the run.
-const segmentBox = assertISOBMFF(segment.bytes, ['styp', 'moof'], 1024, `media segment ${segments[0]}`);
+// `styp`, exactly, because that is what this packager emits and it was
+// measured, not assumed: run 35505921660 served
+// `chunk-0-00001.m4s: 508516 bytes, first box 'styp'`. The packager is
+// ffmpeg's dash muxer with `-dash_segment_type mp4` and `movflags=+cmaf`
+// (vidra-core internal/media/cmaf.go), and the segment-type box is what the
+// `+cmaf` brand requires. A bare `moof` here would still be a legal fMP4
+// fragment — which is exactly why it must not pass: it would mean the CMAF
+// brand box stopped being written, a real change in what the tree claims to
+// be, and one nothing else in CI would notice.
+const segmentBox = assertISOBMFF(segment.bytes, ['styp'], 1024, `media segment ${segments[0]}`);
 log(`SEGMENT PROVEN: first media segment ${segments[0]}: 200, ${segment.bytes.length} bytes, first box '${segmentBox}' (${segments.length} segment(s) in the variant)`);
 
 // -------------------------------------------------------------------- search
