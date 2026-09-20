@@ -63,10 +63,61 @@ had been committed and wired to nothing until A39:
 (`meta-validate-python-unit`, `meta-boot-compose-log`) so a green check's
 console record outlives the run page.
 
-**Known gap, unchanged by A39 (finding F04):** the `boot` lane starts the stack
-in production mode with transcoding disabled and no search integration, so a
-green meta CI cannot certify upload → real transcode → browser decode → search
-indexing. That is stack coverage, not a CI gate, and stays open.
+**Finding F04, half closed:** the required `boot` lane starts the stack in
+production mode with transcoding disabled and no search integration, so a green
+**required** set still certifies nothing about the media path. The
+**non-required** `stack-e2e` lane
+([`.github/workflows/stack-e2e.yml`](.github/workflows/stack-e2e.yml) +
+[`tests/stack-e2e.mjs`](tests/stack-e2e.mjs)) now walks the rest of that chain
+against a live stack with `TRANSCODING_ENABLED=true` and
+`SEARCH_SERVICE_URL` wired to the compose `search` service: owner claim →
+login → channel → **multi-chunk** resumable upload of an ffmpeg-generated 4 s
+320×240 fixture (deliberately larger than the 8 MiB chunk size, and the driver
+fails if it is not, so the ≥2-chunk path is real) → transcode polled to
+`published` with `packaging_format=cmaf` and a rendition → `#EXTM3U` master
+playlist → a variant playlist → the CMAF init segment (first ISOBMFF box
+`ftyp`) and the first media segment (first box `styp`, the CMAF brand box the
+`movflags=+cmaf` packager writes — a bare `moof` is deliberately NOT accepted)
+fetched anonymously, 200 with a real
+ISOBMFF header → the video returned by a signed `/internal/v1/search` against
+vidra-search, **and** by the public `/api/v1/videos/search` *with* `search_total`
+and `total_is_lower_bound`, the two fields core's local SQL trigram fallback
+cannot produce — so the read path is proven to have been served BY
+vidra-search, not merely to have returned the right id. It then waits for
+`vidra_queue_depth{queue="search_outbox",state="pending"}` to reach zero —
+requiring `state="dead"` to be zero as well, since a dead-lettered event also
+empties the queue without ever having been applied — and re-asserts the video
+is still indexed, because "indexed" must survive every event still queued
+behind it.
+
+**What it still does NOT prove — do not over-read a green run:**
+
+- **No browser and no decoder.** It asserts playlist text plus the first
+  ISOBMFF box type and a size floor on each segment. That rules out an empty
+  body or an error page; it does not make the bytes decodable. Real playback
+  stays `tests/release-acceptance.mjs`'s job, on a prepared lab host.
+- **Rate limiting is off** (`RATE_LIMIT_ENABLED=false`), so it proves nothing
+  about the shipped limits, and **scanning is off**
+  (`MALWARE_SCAN_MODE=disabled` — without it every ingestion route answers
+  503 `scanner_not_configured`), so it proves nothing about scanning.
+- **Source builds of the three default branches**, not released images or
+  pinned digests: stack coverage, never release qualification.
+- **Local storage**, not S3/Spaces/MinIO, and no CDN, presign or federation.
+- **No degraded-dependency coverage.** The lane boots vidra-search to healthy
+  *before* the api, because an api whose first outbox drain fails reschedules
+  its boot events behind later ones and `reconcile.end` then suppresses the
+  freshly indexed video (`suppressed_reason=reconcile_orphan`) — a real
+  core↔search defect, measured on this branch, that the lane deliberately does
+  not exercise. A green says nothing about recovery from a search outage.
+- **Not required for merge.** It lives in its own workflow, outside
+  `.github/required-checks.txt`, precisely so one transcode flake on a shared
+  runner cannot block an unrelated PR. It runs nightly, on `workflow_dispatch`,
+  and on a PR that touches its own inputs — a lane that runs on neither push
+  nor PR cannot go red in the PR that breaks it. If it earns promotion after
+  several weeks of green nightlies, the manifest already supports the
+  graduation: a `?name` entry means "required only IF it ran", which fits a
+  path-filtered lane exactly. That is a separate, diff-visible decision and is
+  deliberately not taken here.
 
 ## Hard rules
 

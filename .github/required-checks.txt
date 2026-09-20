@@ -31,4 +31,9 @@ bundle
 # probed, and BOTH migration one-shots run from the service images themselves.
 boot
 
-# NOT required — nothing else here runs on pull_request today.
+# NOT required. `stack-e2e` (.github/workflows/stack-e2e.yml) also runs on
+# pull_request — path-filtered to its own inputs — but is deliberately absent
+# from this manifest: it boots a real media stack, and one transcode flake on a
+# shared runner must not block an unrelated PR. If nightly runs earn it a
+# promotion, the `?stack-e2e` form above ("required only IF it ran") is the fit
+# for a path-filtered lane. That is a separate, diff-visible decision.

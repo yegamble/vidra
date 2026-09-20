@@ -1,0 +1,362 @@
+name: stack-e2e
+
+# The cheap, honest half of finding F04.
+#
+# The REQUIRED `boot` lane (meta-ci.yml) starts the stack in production mode
+# with TRANSCODING_ENABLED=false and no SEARCH_SERVICE_URL. It proves the api
+# boots and both migration one-shots apply their schema from their own service
+# images — and nothing about upload -> real transcode -> fetchable HLS ->
+# indexed in vidra-search. This lane walks that chain for real.
+#
+# WHY A SEPARATE FILE, NOT A JOB IN meta-ci.yml: `ci-required` fails when any
+# lane named in .github/required-checks.txt fails, is cancelled, times out, or
+# never runs. A media pipeline on a shared 4-vCPU runner is the slowest and
+# flakiest thing this repo could run, and one transcode flake must never block
+# an unrelated PR. This workflow is in neither that file nor that manifest, so
+# a VALID run of this lane — red or green — cannot block a merge.
+#
+# That is the accurate claim, and it is narrower than "this file cannot block a
+# merge". scripts/ci/require-checks.sh fails `ci-required` on ANY workflow run
+# for the commit that concluded failure/startup_failure with ZERO jobs,
+# explicitly "whether or not the manifest lists the lane" — the guard against
+# GitHub silently REJECTING a malformed workflow file and the lane vanishing.
+# So a stack-e2e.yml that GitHub refuses to parse WILL block merges, by design.
+# Validate this file with a duplicate-key-rejecting YAML load before pushing;
+# PyYAML's default loader keeps the last duplicate and tells you nothing.
+#
+# WHY IT ALSO RUNS ON pull_request (and not only nightly + dispatch): a lane
+# that runs on neither push nor PR cannot go red in the PR that breaks it.
+# vidra-user's optional e2e lane was born red for exactly that reason and
+# nobody noticed for two weeks. The `paths:` filter below is therefore
+# deliberately narrow — the lane's OWN inputs, nothing else — so it runs on the
+# PRs that can break it and stays out of the way of every other PR.
+on:
+  workflow_dispatch:
+  schedule:
+    # Nightly, off-peak and off the hour: GitHub's scheduler queues heavily at
+    # :00 and a 20-minute job that starts 30 minutes late is a job that reports
+    # nothing useful.
+    - cron: "23 5 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/stack-e2e.yml"
+      - "tests/stack-e2e.mjs"
+      - "docker-compose.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stack-e2e:
+    runs-on: ubuntu-latest
+    # boot is measured at ~2m; this adds the vidra-search build, an upload, a
+    # single-rung transcode and an indexing poll. 20 minutes is a ceiling, not
+    # an expectation — a run that reaches it has hung, and the driver's own
+    # deadlines fire first with a diagnosis.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The same three checkouts `boot` makes, at their DEFAULT BRANCHES: this
+      # lane tests main-of-everything built from source. It pulls no released
+      # GHCR tag and no pinned digest, so it is stack coverage, never release
+      # qualification.
+      - name: Check out vidra-core (build context + compose include)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yegamble/vidra-core
+          path: vidra-core
+          persist-credentials: false
+
+      - name: Check out vidra-search (the search service + its migrations)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yegamble/vidra-search
+          path: vidra-search
+          persist-credentials: false
+
+      # Not built here, but docker-compose.yml declares its build context, so the
+      # directory has to exist for the model to load.
+      - name: Check out vidra-user (frontend build context)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yegamble/vidra-user
+          path: vidra-user
+          persist-credentials: false
+
+      # Dummy secrets, real shapes — the same posture `boot` uses. Every value
+      # here is a throwaway CI literal generated on the runner; nothing in this
+      # file is or resembles a real credential.
+      #
+      # EVERY KEY BELOW HAS A COMPOSE CONSUMER. A key compose does not pass
+      # through is silently dead (there is no wildcard passthrough), and this
+      # repo has been bitten by exactly that. The consumer is named per key.
+      - name: Write the CI env file
+        run: |
+          cat > env/ci-stack-e2e.env <<EOF
+          # --- proven by the boot lane; unchanged here -------------------------
+          VIDRA_ENV=production
+          HTTP_PORT=8099
+          PUBLIC_BASE_URL=https://ci.example.invalid
+          CORS_ALLOWED_ORIGINS=https://ci.example.invalid
+          JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
+          MFA_KEY_KEK=$(openssl rand -base64 32 | tr -d '\n')
+          POSTGRES_USER=vidra
+          POSTGRES_PASSWORD=ci-dummy-password
+          POSTGRES_DB=vidra
+          STORAGE_BACKEND=local
+          MAIL_ENABLED=false
+          FEDERATION_ENABLED=false
+          REGISTRATION_ENABLED=false
+          METRICS_ENABLED=true
+          LOG_FORMAT=json
+          SEARCH_INTERNAL_SECRET=$(openssl rand -hex 32 | tr -d '\n')
+
+          # --- what makes this lane different from boot ------------------------
+          # META docker-compose.yml, the \`search\` service's own
+          # \`ports: "\${SEARCH_HTTP_PORT:-8081}:8080"\` (NOT vidra-core's file —
+          # meta owns the search service). It publishes the container's fixed
+          # :8080 on the host. The driver signs and calls /internal/v1/search
+          # there; without a published port it would have to docker-inspect the
+          # container's IP the way the lab harness does.
+          SEARCH_HTTP_PORT=8098
+          # vidra-core docker-compose.yml \`SEARCH_SERVICE_URL: \${SEARCH_SERVICE_URL:-}\`.
+          # EMPTY DISABLES THE WHOLE INTEGRATION — that empty default is exactly
+          # why boot's green tells you nothing about search. The in-container
+          # port is fixed at 8080 by meta docker-compose.yml's search service.
+          # This lane uses an explicit \`-f docker-compose.yml\`, so the
+          # auto-loaded docker-compose.override.yml (which would inject this key
+          # plus RATE_LIMIT_ENABLED=false) is NOT loaded and every value is the
+          # one written here.
+          SEARCH_SERVICE_URL=http://search:8080
+          # vidra-core docker-compose.yml \`TRANSCODING_ENABLED: \${TRANSCODING_ENABLED:-true}\`.
+          # boot sets this false; the whole point of this lane is that it is true.
+          TRANSCODING_ENABLED=true
+          # vidra-core docker-compose.yml \`TRANSCODING_MIN_FREE_SCRATCH_MB: \${…:-0}\`,
+          # and 0 means "use the built-in default", which is 10 GiB
+          # (internal/config/config.go). A GitHub runner sits close enough to
+          # that floor that an unset value fails INTERMITTENTLY, and it fails by
+          # the worker declining to claim the job — which reads like a transcode
+          # bug, not a disk policy. Pinned low and explicitly.
+          TRANSCODING_MIN_FREE_SCRATCH_MB=256
+          # vidra-core docker-compose.yml \`MALWARE_SCAN_MODE: \${MALWARE_SCAN_MODE:-fail-closed}\`.
+          # Without this, config.IngestionRefusedForScanner() makes every
+          # ingestion route answer 503 scanner_not_configured (no CLAMAV_ADDR and
+          # no explicit opt-out), so the upload would never even be accepted.
+          # Starting clamav instead is not an option here: ~1.5-2 GiB resident, a
+          # 120s start_period and a first-boot freshclam download.
+          # SAY IT PLAINLY: THIS LANE PROVES NOTHING ABOUT MALWARE SCANNING.
+          MALWARE_SCAN_MODE=disabled
+          # vidra-core docker-compose.yml \`RATE_LIMIT_ENABLED: \${RATE_LIMIT_ENABLED:-true}\`
+          # with AUTH_RATE_LIMIT_REQUESTS=10/min. A scripted client that claims,
+          # logs in, creates a channel and then polls is 429'd by the shipped
+          # limiter, and a driver that retried around it would be measuring its
+          # own backoff. SAY IT PLAINLY: THIS LANE PROVES NOTHING ABOUT THE
+          # SHIPPED RATE LIMITS.
+          RATE_LIMIT_ENABLED=false
+          EOF
+          # MALWARE_SCAN_ENABLED is deliberately ABSENT: it is deprecated and no
+          # longer read, and a non-empty value only earns a boot WARN.
+
+      # SEARCH FIRST, THEN THE API, IN TWO `up` COMMANDS. Both halves of that
+      # sentence are load-bearing and both were measured on this branch, not
+      # theorised.
+      #
+      # TWO COMMANDS, because `up -d api search` starts BOTH migration one-shots
+      # at once: core's `migrate` and `search-migrate` each depend only on
+      # postgres being healthy, so Compose runs them in parallel. Both apply a
+      # 0001 that does `CREATE EXTENSION IF NOT EXISTS pg_trgm`, and that
+      # statement is NOT concurrency-safe — each passes the existence check,
+      # then one loses the insert and dies on
+      #   duplicate key value violates unique constraint "pg_extension_name_index"
+      # Run 35503808175 failed exactly that way on a cold database. (deploy.sh
+      # is unaffected: it runs the two as discrete exit-code-gated steps. So is
+      # `boot`, which never starts search-migrate alongside migrate.)
+      #
+      # SEARCH FIRST, because an api that boots while `search` does not yet
+      # resolve fails its first outbox drain, and a FAILED early event is
+      # rescheduled BEHIND events enqueued after it. The api's three boot events
+      # (search.config_updated, reconcile.begin, reconcile.end) then land AFTER
+      # the video.upsert this lane is waiting on, and `reconcile.end` suppresses
+      # every document its run never listed — so the freshly indexed video is
+      # marked eligible=false, suppressed_reason=reconcile_orphan, and search
+      # never returns it. Run 35504120067 timed out that way; run 35504619907
+      # "passed" by 130 ms, its evidence file showing the suppression landing
+      # immediately AFTER the assertion. A green with that shape is a coin flip,
+      # so the ordering is fixed here rather than retried around.
+      #
+      # TO BE PLAIN ABOUT WHAT THAT MEANS: the out-of-order retry is a real
+      # vidra-core/vidra-search integration defect — the outbox claim query goes
+      # out of its way to restate an "oldest first" contract that the RETRY path
+      # then breaks — and this lane does NOT exercise it. It boots the two
+      # services in the order a running deployment already has them in, and a
+      # green here says nothing about recovery from a search outage.
+      #
+      # search-migrate owns this chain's only vidra-search build; `search` runs
+      # the same image by name. VIDRA_ROLE defaults to "all", so the api
+      # container runs the in-process transcode worker AND the search outbox
+      # drainer — there is no separate worker service to start.
+      - name: Boot vidra-search (its migrations run alone)
+        run: |
+          docker compose -f docker-compose.yml --env-file env/ci-stack-e2e.env --profile core \
+            up -d --build search
+
+      # The api must find a HEALTHY search service on its first drain tick, not
+      # merely a started container — see the ordering note above.
+      - name: vidra-search /healthz answers 200 before the api boots
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS -m 5 http://127.0.0.1:8098/healthz >/dev/null; then
+              echo "OK: vidra-search is healthy before the api starts."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::vidra-search never became healthy on 127.0.0.1:8098" >&2
+          docker compose -f docker-compose.yml --env-file env/ci-stack-e2e.env --profile core \
+            logs --tail=100 search >&2
+          exit 1
+
+      - name: Boot the api in production mode (core migrations run alone)
+        run: |
+          docker compose -f docker-compose.yml --env-file env/ci-stack-e2e.env --profile core \
+            up -d --build api
+
+      - name: api /readyz answers 200
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS -m 5 http://127.0.0.1:8099/readyz >/dev/null; then
+              echo "OK: the api booted with VIDRA_ENV=production and /readyz is 200."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::the api never became ready on 127.0.0.1:8099" >&2
+          docker compose -f docker-compose.yml --env-file env/ci-stack-e2e.env --profile core \
+            logs --tail=100 api >&2
+          exit 1
+
+      # The one-time owner-claim token is printed once, at boot, by the api that
+      # has no accounts yet (cmd/api/main.go). It is the credential the driver
+      # redeems. Masked so it never lands in the console; it is a throwaway for
+      # a stack this job destroys, and it is in the uploaded compose log for the
+      # same reason boot's log is uploaded — postmortem value on a stack made of
+      # dummies.
+      - name: Read the first-run owner-claim token from the api log
+        run: |
+          token=$(
+            docker compose -f docker-compose.yml --env-file env/ci-stack-e2e.env --profile core \
+              logs --no-color api \
+              | grep -oE 'owner_claim_required until claimed\): [A-Za-z0-9_-]+' \
+              | tail -n 1 | sed 's/.*: //'
+          )
+          if [ -z "$token" ]; then
+            echo "::error::no first-run setup token in the api log — the instance is not unclaimed" >&2
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "VIDRA_SETUP_TOKEN=$token" >> "$GITHUB_ENV"
+          echo "OK: captured the one-time owner-claim token ($(printf '%s' "$token" | wc -c) chars)."
+
+      # No fixture video is committed anywhere in these four repos, and none
+      # should be: the api image already carries ffmpeg (for ffprobe), so the
+      # lane mints its own. Three properties of this command are deliberate.
+      #
+      # 320x240 pins the ladder. The planner skips every rung taller than the
+      # source, so the default {1080,720,480,360} collapses to ONE rung at the
+      # source's own size — a single low rendition without inventing a knob.
+      #
+      # `sine` gives it a real audio stream: the CMAF packager treats a missing
+      # audio track as a failure, not an option.
+      #
+      # LOSSLESS (-qp 0) OVER HEAVY NOISE MAKES THE FILE BIG ON PURPOSE.
+      # vidra's only upload API is the resumable one, its chunk size is a
+      # compile-time 8 MiB constant, and a 300 KB fixture is ONE chunk — which
+      # exercises neither "every chunk but the last must be exactly chunk_size"
+      # nor the server-side in-order assembly. Noise is incompressible, so
+      # lossless 320x240 at 30 fps for 4 s lands well past 8 MiB and the upload
+      # is genuinely multi-chunk. The transcode still has one 240p rung to
+      # produce, so this costs upload bytes over loopback, not encode time.
+      - name: Generate the upload fixture inside the api container
+        run: |
+          mkdir -p ci-report
+          COMPOSE=(docker compose -f docker-compose.yml --env-file env/ci-stack-e2e.env --profile core)
+          "${COMPOSE[@]}" exec -T api ffmpeg -nostdin -loglevel error \
+            -f lavfi -i testsrc2=size=320x240:rate=30 \
+            -f lavfi -i sine=frequency=440:sample_rate=48000 \
+            -t 4 -vf noise=alls=100:allf=t+u \
+            -c:v libx264 -preset ultrafast -qp 0 -pix_fmt yuv420p -c:a aac -b:a 64k \
+            -movflags +faststart -y /tmp/stack-e2e.mp4
+          "${COMPOSE[@]}" cp api:/tmp/stack-e2e.mp4 ci-report/stack-e2e.mp4
+          ls -l ci-report/stack-e2e.mp4
+          # Fail HERE, naming the cause, rather than letting the driver's
+          # total_chunks >= 2 assertion fail with "the multi-chunk path is not
+          # being tested" and leave a reader guessing why the fixture shrank.
+          bytes=$(wc -c < ci-report/stack-e2e.mp4)
+          if [ "$bytes" -le 8388608 ]; then
+            echo "::error::the fixture is ${bytes} bytes, not larger than the 8 MiB upload chunk size — the upload would be a single chunk" >&2
+            exit 1
+          fi
+          echo "OK: ${bytes}-byte fixture, larger than the 8 MiB chunk size, so the upload is multi-chunk."
+
+      - name: Upload -> transcode -> HLS -> searchable
+        env:
+          VIDRA_BASE_URL: http://127.0.0.1:8099
+          VIDRA_SEARCH_URL: http://127.0.0.1:8098
+        run: |
+          # pipefail is NOT on by default in a `run:` block, and the driver's
+          # output is piped into tee — without this, a FAILED driver would exit
+          # through tee's 0 and this lane would report green on a broken stack.
+          set -o pipefail
+          # The HMAC secret is read out of the env file rather than re-echoed,
+          # so the only copy in this job is the one compose already handed the
+          # two containers.
+          SEARCH_INTERNAL_SECRET=$(sed -n 's/^SEARCH_INTERNAL_SECRET=//p' env/ci-stack-e2e.env)
+          echo "::add-mask::${SEARCH_INTERNAL_SECRET}"
+          export SEARCH_INTERNAL_SECRET
+          node tests/stack-e2e.mjs ci-report/stack-e2e.mp4 2>&1 | tee ci-report/stack-e2e-driver.log
+
+      # Evidence, on success AND failure. The driver asserts over the public
+      # API; these rows are the independent second opinion that the transcode
+      # really was a job that ran and that the event really reached the search
+      # schema. They are captured, never asserted on — a psql hiccup must not
+      # turn a green run red.
+      - name: Capture the stack's logs and pipeline rows
+        if: always()
+        run: |
+          mkdir -p ci-report
+          COMPOSE=(docker compose -f docker-compose.yml --env-file env/ci-stack-e2e.env --profile core)
+          "${COMPOSE[@]}" logs --no-color > ci-report/stack-e2e-compose.log 2>&1 || true
+          # `payload` and `suppressed_reason` are here because the first search
+          # failure this lane produced could not be diagnosed without them: the
+          # document existed with the right title and eligible=false, and
+          # nothing in either service's log said which dimension (privacy or
+          # state) the event carried. vidra-search derives eligibility from the
+          # payload alone, so the payload IS the diagnosis.
+          "${COMPOSE[@]}" exec -T postgres psql -U vidra -d vidra \
+            -c 'SELECT id, video_id, state, attempts, created_at, updated_at FROM transcode_jobs ORDER BY created_at;' \
+            -c 'SELECT id, title, privacy, state, publish_at, publish_after_transcode FROM videos ORDER BY created_at;' \
+            -c 'SELECT id, event_type, state, attempts, last_error, payload FROM search_outbox ORDER BY id;' \
+            -c 'SELECT video_id, title, eligible, suppressed_reason, indexed_at FROM search.documents;' \
+            > ci-report/stack-e2e-pipeline-rows.txt 2>&1 || true
+          cat ci-report/stack-e2e-pipeline-rows.txt || true
+
+      - name: Upload stack-e2e evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: meta-stack-e2e
+          path: ci-report/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose -f docker-compose.yml --env-file env/ci-stack-e2e.env --profile core down -v
