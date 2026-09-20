@@ -16,6 +16,8 @@ import recovery_release_export as export
 # a candidate and a mutated copy is not this one (the lesson of #200).
 CANDIDATE = json.loads(
     (Path(__file__).resolve().parent.parent / 'docs/evidence/release-v0.6.5-verification/manifest.json').read_text())
+CANDIDATE_V075 = json.loads(
+    (Path(__file__).resolve().parent.parent / 'docs/evidence/release-v0.7.5-verification/manifest.json').read_text())
 
 
 def baseline_with(candidate):
@@ -119,6 +121,11 @@ class FingerprintTest(unittest.TestCase):
 class BaselineTest(unittest.TestCase):
     def test_candidate_is_read_from_the_chosen_baseline(self):
         self.assertEqual(recovery.load_candidate(baseline_with(CANDIDATE))['tag'], 'v0.6.5')
+
+    # The recovery drill inherits A01 validation, so a core-only release was
+    # unrunnable here too: v0.7.5 pins vidra-user and vidra-search at v0.7.3.
+    def test_a_core_only_candidate_is_read_like_any_other(self):
+        self.assertEqual(recovery.load_candidate(baseline_with(CANDIDATE_V075))['tag'], 'v0.7.5')
 
     def test_a_baseline_without_a_candidate_manifest_is_refused(self):
         with self.assertRaises(FileNotFoundError):

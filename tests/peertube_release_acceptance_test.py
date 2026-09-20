@@ -92,8 +92,12 @@ class MigrationDrillCandidateTests(unittest.TestCase):
         self.assertEqual(p.release_tag(candidate), 'v0.6.5')
         self.assertEqual(p.frozen_cli_sha256(candidate, 'v0.6.5'),
                          candidate['assets']['vidra_v0.6.5_linux_amd64']['sha256'])
-        for bad in ({'tag': 'v0.6'}, {'tag': 'main'}, {'tag': 'v0.6.5-rc1'}, {'tag': None}, {}):
-            with self.assertRaises(ValueError):
+        # 'v٦.٥.٤' is Arabic-Indic digits: unicode \d matches them, so the tag
+        # would pass shape-checking and then name no release, no asset and no
+        # container. Release tags are ASCII.
+        for bad in ({'tag': 'v0.6'}, {'tag': 'main'}, {'tag': 'v0.6.5-rc1'}, {'tag': None}, {},
+                    {'tag': 'v٦.٥.٤'}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
                 p.release_tag(bad)
 
     def test_frozen_cli_asset_key_is_keyed_to_the_tag(self):
