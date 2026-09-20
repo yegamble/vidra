@@ -12,6 +12,9 @@ import sys
 
 
 REPOS = ('vidra', 'vidra-core', 'vidra-user', 'vidra-search')
+# The repositories that ship an image. A release must move at least one of them.
+COMPONENTS = ('vidra-core', 'vidra-user', 'vidra-search')
+RELEASE_TAG = re.compile(r'v([0-9]+)\.([0-9]+)\.([0-9]+)')
 
 
 def require(ok, message):
@@ -19,17 +22,43 @@ def require(ok, message):
         raise ValueError(message)
 
 
+def release_version(tag):
+    """(major, minor, patch) of a strict vX.Y.Z tag; None when it is not one.
+
+    Ordering release tags as STRINGS is wrong in both directions — 'v0.7.10'
+    sorts below 'v0.7.9' — so every comparison here goes through these tuples.
+    The shape admitted is exactly the shape the release tag itself must have:
+    no prerelease or build suffix is a release in this repo.
+    """
+    match = RELEASE_TAG.fullmatch(tag) if isinstance(tag, str) else None
+    return tuple(int(part) for part in match.groups()) if match else None
+
+
 def validate_candidate(candidate):
     require(candidate.get('schema_version') == 1 and candidate.get('status') == 'PASS', 'requires PASS A01 manifest')
     tag = candidate.get('tag', '')
-    require(re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', tag), 'invalid release tag')
+    release = release_version(tag)
+    require(release is not None, 'invalid release tag')
     for name in ('assets', 'paths', 'generated_types', 'resolver_skew_rejected'):
         require(candidate.get('checks', {}).get(name) == 'PASS', f'A01 {name} not verified')
+    # A core-only release (v0.7.4, v0.7.5) pins vidra-user and vidra-search at
+    # the older tag they were last cut at, so demanding tag == release tag
+    # refused a legitimate manifest and gated every runtime, B2, migration and
+    # recovery lane on it. The structural rule that replaces it still refuses
+    # nonsense: a tag that is not a release tag at all, a component AHEAD of the
+    # release that claims to contain it, and (below) a release nothing shipped
+    # in. Image and revision stay bound to the source by the checks that follow.
+    shipped = []
     for repo in REPOS:
         source = candidate.get('repositories', {}).get(repo, {})
         require(re.fullmatch(r'[0-9a-f]{40}', source.get('revision', '')), f'{repo}: missing commit')
-        require(source.get('remote') == f'https://github.com/yegamble/{repo}.git' and source.get('tag') == tag,
-                f'{repo}: unexpected source/tag')
+        require(source.get('remote') == f'https://github.com/yegamble/{repo}.git', f'{repo}: unexpected source remote')
+        component = release_version(source.get('tag'))
+        require(component is not None,
+                f'{repo}: tag {source.get("tag")!r} is not a release tag (release {tag})')
+        require(component <= release, f'{repo}: tag {source["tag"]} is newer than release {tag}')
+        if repo in COMPONENTS and source['tag'] == tag:
+            shipped.append(repo)
         if repo == 'vidra':
             continue
         image = candidate.get('images', {}).get(repo, {})
@@ -39,6 +68,10 @@ def validate_candidate(candidate):
         require(image.get('revision') == source['revision'], f'{repo}: image/source mismatch')
         require(image.get('platform') == candidate.get('platform') in ('linux/amd64', 'linux/arm64'),
                 f'{repo}: unsupported platform')
+    # A release in which no shipped component carries the release tag released
+    # nothing: every component is a carry-over and the tag names no new image.
+    pinned = ', '.join(f'{repo}={candidate["repositories"][repo]["tag"]}' for repo in COMPONENTS)
+    require(shipped, f'no component was released at {tag} ({pinned})')
     for name in ('SHA256SUMS', f'vidra-bundle_{tag}.tar.gz', f'vidra_{tag}_{candidate["platform"].replace("/", "_")}'):
         asset = candidate.get('assets', {}).get(name, {})
         require(re.fullmatch(r'[0-9a-f]{64}', asset.get('sha256', '')), f'{name}: missing checksum')
