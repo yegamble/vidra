@@ -113,8 +113,10 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   files alone — no `native-runtime/`, `e2e-runtime/`,
   `ios-runtime/`, `b2-runtime/`, `migration-runtime/`, `recovery-runtime/`,
   `rec03-runtime/` or `offsite-runtime/` subtree exists for any v0.7.x
-  release (re-listed on `328de23`; v0.7.5 adds only `dependency-scan/` and
-  `component-tags.patch` to that shape). **The remaining blocker for every one
+  release (re-listed on `328de23`: the only additions to that shape anywhere in
+  the v0.7.x range are v0.7.5's `dependency-scan/` and the
+  `component-tags.patch` that v0.7.4 and v0.7.5 each keep beside their
+  manifest). **The remaining blocker for every one
   of these lanes is no longer harness code** (next bullet) **but
   owner-authorised disposable infrastructure**: the disposable acceptance
   hosts and the dedicated acceptance storage bucket that carried the
