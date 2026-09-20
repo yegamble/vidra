@@ -157,7 +157,10 @@ const token = login.token;
 log('owner logged in through /api/v1/auth/login');
 
 // -------------------------------------------------------------------- channel
-const handle = `e2e${nonce}`;
+// A DIFFERENT prefix from the username on purpose: accounts and channels share
+// ONE handle namespace on an instance (ActivityPub gives them one), so reusing
+// the owner's username here is a 409 handle_reserved, not a fresh handle.
+const handle = `chan${nonce}`;
 const channel = expectStatus(
   await api('/api/v1/channels', { method: 'POST', token, body: { handle, display_name: `Stack E2E ${nonce}` } }),
   201,
