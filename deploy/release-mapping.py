@@ -39,10 +39,9 @@ second closes when the record ships inside the release artifact.
 
 Stdlib only and NO NETWORK — the fetch lives in deploy/lib.sh, which hands the
 result here as a file; this script only ever reads paths it is given. It reads
-nothing from the env file except the
-three VIDRA_*_TAG keys and the two image-source keys (VIDRA_IMAGE_REGISTRY,
-VIDRA_IMAGE_OWNER): that file holds every production secret, and this output
-is printed to a terminal and to logs.
+nothing from the env file except the three VIDRA_*_TAG keys and the two
+image-source keys (VIDRA_IMAGE_REGISTRY, VIDRA_IMAGE_OWNER): that file holds
+every production secret, and this output is printed to a terminal and to logs.
 """
 import argparse
 import json
