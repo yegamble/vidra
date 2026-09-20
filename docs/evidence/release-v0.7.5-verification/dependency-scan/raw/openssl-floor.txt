@@ -1,0 +1,26 @@
+### host Darwin arm64 ; images are linux/amd64 -> these runs require emulation
+### date 2026-09-20T09:53:37Z
+
+=== vidra-core  apk list -I | grep -E '^(libssl3|libcrypto3)-'
+libcrypto3-3.5.8-r0 x86_64 {openssl} (Apache-2.0) [installed]
+libssl3-3.5.8-r0 x86_64 {openssl} (Apache-2.0) [installed]
+exit=0
+--- alpine release ---
+3.24.2
+exit=0
+
+=== vidra-user  apk list -I | grep -E '^(libssl3|libcrypto3)-'
+libcrypto3-3.5.8-r0 x86_64 {openssl} (Apache-2.0) [installed]
+libssl3-3.5.8-r0 x86_64 {openssl} (Apache-2.0) [installed]
+exit=0
+--- alpine release ---
+3.24.2
+exit=0
+
+=== vidra-search  apk list -I | grep -E '^(libssl3|libcrypto3)-'
+libcrypto3-3.5.8-r0 x86_64 {openssl} (Apache-2.0) [installed]
+libssl3-3.5.8-r0 x86_64 {openssl} (Apache-2.0) [installed]
+exit=0
+--- alpine release ---
+3.24.2
+exit=0

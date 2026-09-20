@@ -1,0 +1,111 @@
+{
+  "candidate": "v0.7.5",
+  "date_utc": "2026-09-20",
+  "baseline_compared_against": "v0.6.6 (security-scan-v0.6.6-2026-09-14.md)",
+  "components": {
+    "core": { "tag": "v0.7.5", "commit": "ce3eb0a4be680b46fd18c3d317f1703e66e2bd09" },
+    "user": { "tag": "v0.7.3", "commit": "c7dbea44b1f271dfdd37fbbbf3a6f58856ce5070" },
+    "search": { "tag": "v0.7.3", "commit": "4daed1850a4289e297bd7cd40a4310f20ccd1c44" }
+  },
+  "images_by_amd64_digest": {
+    "core": "sha256:49974ded92048d377ec64471be08ed762a01b724af3c76a84feddc620cf8b6de",
+    "user": "sha256:814df2644e7dfdec2b527e1e3eb79db5d733ff127066309c8e9778c58c5c3995",
+    "search": "sha256:a2195eaf9738ff049984db5913372d59dcc4c8736e3a2e4c7bf8a0c77d6046b1"
+  },
+  "digest_verification": "docker image inspect RepoDigests equalled releases/v0.7.5.json for all three; all reported linux/amd64 (raw/digest-verification.txt)",
+  "scanner": {
+    "osv": "2.5.1 (osv-scalibr 0.5.2)",
+    "govulncheck": "v1.8.0 (Go go1.27.1; DB https://vuln.go.dev updated 2026-09-16T18:00:43Z)",
+    "npm_audit": "node v26.8.1 / npm 11.19.0",
+    "trivy": "not used (March 2026 Trivy release/action compromise)"
+  },
+  "host": "Darwin arm64; docker 29.8.0; amd64 image execution via emulation",
+  "scope": "The three first-party images named in releases/v0.7.5.json ONLY. The stack also deploys postgres:18-alpine, redis:8-alpine, alpine:3.24, caddy:2.11.4-alpine and, behind profiles, clamav/clamav:1.5, quay.io/minio/minio, alfg/nginx-rtmp, otel/opentelemetry-collector-contrib:0.160.0, jaegertracing/all-in-one:1.76.0, ipfs/kubo:v0.43.0, ipfs/ipfs-cluster:v1.1.6, and the FIRST-PARTY ghcr.io/yegamble/vidra-whisper:v0.1.0 which appears in no release record. None was scanned by this or any earlier round.",
+  "verdict": "PASS for the three released first-party images — no new advisory since v0.6.6, no v0.6.6 fix regressed, no NEW high/critical anywhere. The PASS does not depend on, and does not constitute, acceptance of the AV1 crate risk.",
+  "exits": {
+    "osv_image_core": 1,
+    "osv_image_user": 0,
+    "osv_image_search": 1,
+    "osv_all_packages_core": 1,
+    "osv_all_packages_user": 0,
+    "osv_all_packages_search": 1,
+    "govulncheck_core_binary": 0,
+    "govulncheck_search_binary": 0,
+    "govulncheck_core_source": 0,
+    "govulncheck_search_source": 0,
+    "npm_audit_user_candidate": 0,
+    "npm_audit_negative_control_v064": 1,
+    "apk_floor_all_three": 0
+  },
+  "osv_image": {
+    "core": [
+      "ALPINE-CVE-2021-27219",
+      "GHSA-cq8v-f236-94qc",
+      "GO-2026-5932",
+      "RUSTSEC-2024-0436",
+      "RUSTSEC-2026-0097",
+      "RUSTSEC-2026-0105",
+      "RUSTSEC-2026-0190",
+      "RUSTSEC-2026-0204"
+    ],
+    "user": [],
+    "search": [
+      "GO-2026-5932"
+    ]
+  },
+  "osv_image_rows": { "core": 9, "user": 0, "search": 1 },
+  "package_inventory": {
+    "core": { "total": 307, "Alpine:v3.24": 138, "Go": 71, "crates.io": 97, "PyPI": 1 },
+    "user": { "total": 18, "Alpine:v3.24": 18, "npm": 0 },
+    "search": { "total": 53, "Alpine:v3.24": 21, "Go": 32 }
+  },
+  "severities_observed": {
+    "ALPINE-CVE-2021-27219": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H = 7.5 HIGH (scanner false positive: installed glib 2.88.1-r1 is far newer than the advisory's fixed 2.66.6-r0)",
+    "GHSA-cq8v-f236-94qc": "LOW",
+    "GO-2026-5932": "no severity published; no fixed version published",
+    "RUSTSEC-2024-0436": "no severity published (unmaintained-crate advisory)",
+    "RUSTSEC-2026-0097": "no severity published (alias of GHSA-cq8v-f236-94qc, LOW)",
+    "RUSTSEC-2026-0105": "no severity published (unmaintained/yanked-crate advisory)",
+    "RUSTSEC-2026-0190": "no severity published (unsoundness advisory)",
+    "RUSTSEC-2026-0204": "no severity published (unsoundness advisory)"
+  },
+  "new_high_or_critical_since_v066": 0,
+  "govulncheck_binary": {
+    "core": "GO-2026-5932 only; 15 finding records (1 module, 7 package, 7 package-wildcard); binary mode cannot prove call-reachability",
+    "search": "GO-2026-5932 only; 15 finding records, same shape"
+  },
+  "govulncheck_source": {
+    "core": "GO-2026-5932 only; 1 finding, MODULE-level, no package and no function frame => 0 reachable, measured on v0.7.5 source (not carried from v0.6.5)",
+    "search": "GO-2026-5932 only; 1 finding, MODULE-level => 0 reachable, measured on v0.7.3 source"
+  },
+  "npm_audit_user": {
+    "vulnerabilities": { "info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 0, "total": 0 },
+    "deps_total": 678,
+    "deps": { "prod": 132, "dev": 501, "optional": 119, "peer": 54, "peerOptional": 0 },
+    "negative_control": "same command, v0.6.4 lockfile, same shell: exit 1, 6 vulnerabilities (1 moderate, 4 high, 1 critical) — the clean answer is a real registry answer"
+  },
+  "openssl_floor": "libcrypto3/libssl3 3.5.8-r0 in all three images, Alpine 3.24.2 — VERIFIED INSIDE THE IMAGES (v0.6.6 recorded this value as session-reported)",
+  "shipped_frontend_versions_read_from_image": {
+    "node": "v26.9.0",
+    "next": "16.3.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "sharp": "0.35.4"
+  },
+  "delta_vs_v066": "osv image ID sets identical for all three components (core 8 IDs, user 0, search 1); Go advisory identical (GO-2026-5932) in both binary and source mode; npm audit clean in both, dependency total 676 -> 678; OpenSSL floor unchanged at 3.5.8-r0. Only movements: core's x/crypto 0.56.0 -> 0.57.0 (same advisory, no fixed version exists), and the npm dependency count.",
+  "delta_method": "The same counter was run over v0.6.6's OWN committed raw evidence and over v0.7.5's, so the comparison is machine-checked rather than prose-to-prose (raw/delta-vs-v066-crosscheck.txt). Result: core rows 9/9 and IDs 8/8, user 0/0, search 1/1, ID sets identical for all three, no ID only in v0.6.6 and none only in v0.7.5. The single per-row difference across all three components is GO-2026-5932@golang.org/x/crypto 0.56.0 -> 0.57.0. Note v0.6.6's raw evidence also yields 9 core rows under this counter; the '8 vulnerable rows' in the v0.6.6 prose is that record's own convention (collapsing the duplicated anyhow row), not a row that appeared since.",
+  "residuals": [
+    "GO-2026-5932 x/crypto/openpgp — genuinely no fixed version published (fixed=[]); module-level only, 0 reachable by source-mode govulncheck on the v0.7.5 source. Caveat: that is a default GOOS=linux GOARCH=amd64 source scan of the stated commits; the source build configuration was not shown to match the release build's tags/flags, and binary mode DOES show openpgp packages present in the shipped binary.",
+    "AV1 codec crate advisories from rav1e 0.8.1 / libdovi 3.3.2. UPSTREAM FIXES EXIST for three of the five — anyhow 1.0.103, crossbeam-epoch 0.9.20, rand 0.8.6/0.9.3/0.10.1 — while core2 and paste have none. What is absent is a fix in ALPINE v3.24's PACKAGE SET: re-queried 2026-09-20 (raw/alpine-3.24-apk-policy.txt), v3.24/community offers only rav1e/rav1e-libs 0.8.1-r0 and libdovi 3.3.2-r0. Reaching the upstream fixes needs an Alpine package update or building without these codecs.",
+    "ALPINE-CVE-2021-27219 glib 2.88.1-r1 — scanner false positive (installed newer than the advisory's fixed 2.66.6-r0; v3.24/main carries only 2.88.1-r1); recorded, not suppressed"
+  ],
+  "av1_owner_decision": "OPEN — NOT MADE. The cited text ('no Alpine v3.24 fix — owner risk decision') names a decision the owner still has to take: accept pending an Alpine update, or build without these codecs. No owner acceptance is recorded anywhere in docs/ (searched 2026-09-20). This record carries the decision forward unchanged and does not make it; the PASS verdict does not depend on it.",
+  "blind_spots": [
+    "This lane scans ONLY the three released first-party images. Every other container the v0.7.5 stack deploys (see `scope`) has never been scanned by any round — including the FIRST-PARTY ghcr.io/yegamble/vidra-whisper:v0.1.0, which is absent from every releases/*.json, so a Vidra-published image ships outside the release-pinning and scanning the other three get.",
+    "The USER image scan sees 18 Alpine packages and ZERO npm packages — osv-scanner detects no node binary or node_modules manifest there, so the image scan is blind to the frontend's JS dependencies. npm audit on the committed lockfile is the only thing covering them, and it audits the LOCKFILE, not the image.",
+    "Binary-mode govulncheck cannot prove call-reachability; the 0-reachable claim here comes from the source-mode runs.",
+    "govulncheck only knows the Go vulnerability database: grpc GHSA-2v4p-qf9q-27wj was invisible to it in the v0.6.4 round and only osv-scanner reported it.",
+    "osv-scanner reports no severity for most RUSTSEC advisories, so a severity-threshold gate would not fire on them either way.",
+    "Artifact evidence only — no Vidra service was started. Nothing here is runtime acceptance of v0.7.5."
+  ]
+}
