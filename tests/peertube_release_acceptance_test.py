@@ -14,6 +14,7 @@ import peertube_release_checks as checks
 import peertube_release_export as export_tool
 import recovery_release_acceptance as recovery
 from peertube_release_checks import execute, original_files, match_assets
+from recovery_release_acceptance_test import FakeRun
 from peertube_release_export import collect_secrets, env_secrets, json_values, owner_password, reject_secrets
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -84,18 +85,44 @@ class RebootCatalogueTests(unittest.TestCase):
     the same thing drift, and they did: the recovery drill grew `user_mfa` and
     `mfa_recovery_codes` and this one did not, and NEITHER learned about the
     five tables migrations 0147-0150 added. One list, chosen by the candidate's
-    schema version, is the only shape that cannot rot in two places at once.
+    schema version, is the shape that cannot rot in two places at once.
+
+    Note this covers the two PYTHON harnesses only. The browser half,
+    `tests/peertube-release-acceptance.mjs`, still keeps an independent
+    13-table list of its own for a count-delta check; unifying that is a
+    separate change and it is NOT what these tests assert.
     """
 
-    def test_the_reboot_check_uses_the_shared_catalogue(self):
-        self.assertIs(checks.recovery.CATALOGUE, recovery.CATALOGUE)
-        self.assertIs(checks.recovery.fingerprint, recovery.fingerprint)
+    def baseline(self, core=146, search=18):
+        directory = Path(tempfile.mkdtemp())
+        (directory / 'expected-ledgers.json').write_text(json.dumps(
+            {'schema_migrations': {'version': core}, 'vidra_search_migrations': {'version': search}}))
+        return directory
 
-    def test_the_reboot_check_keeps_no_table_list_of_its_own(self):
-        source = (ROOT / 'tests/peertube_release_checks.py').read_text()
-        # The 13-table literal, by a fragment no shared-catalogue call can contain.
-        self.assertNotIn("'channel_follows', 'video_ratings'", source)
-        self.assertIn('recovery.fingerprint(', source)
+    # The wiring, not just the shared helpers: reverting `reboot_state` to a
+    # literal list, or to the whole CATALOGUE, has to fail HERE.
+    def test_the_reboot_state_follows_the_candidates_own_ledgers(self):
+        run = FakeRun(present=FakeRun().relations(recovery.CATALOGUE_AUDITED_THROUGH))
+        state = checks.reboot_state(run, self.baseline(core=146))
+        self.assertEqual(set(state['catalogue']) - {'search.documents', recovery.SCHEMA_SHAPE},
+                         set(recovery.catalogue_for(146)))
+        self.assertEqual(state['ledgers'], {'schema_migrations': '146|f', 'vidra_search_migrations': '18|f'})
+        self.assertNotIn('ipfs_copy_cleanup', ' '.join(run.queries))
+
+    def test_a_v075_candidate_gets_every_table_0147_to_0150_added(self):
+        run = FakeRun(present=FakeRun().relations(150),
+                      ledgers={'schema_migrations': 150, 'vidra_search_migrations': 18})
+        state = checks.reboot_state(run, self.baseline(core=150))
+        for table in ('authored_remote_comments', 'ipfs_control_config', 'ipfs_control_operations',
+                      'ipfs_capacity', 'ipfs_copy_cleanup'):
+            self.assertIn(table, state['catalogue'])
+
+    def test_a_relation_lost_across_the_reboot_is_named(self):
+        run = FakeRun(present=[r for r in FakeRun().relations(146) if r != 'public.user_mfa'],
+                      ledgers={'schema_migrations': 146, 'vidra_search_migrations': 18})
+        with self.assertRaises(ValueError) as raised:
+            checks.reboot_state(run, self.baseline(core=146))
+        self.assertIn('public.user_mfa', str(raised.exception))
 
 
 class MigrationDrillCandidateTests(unittest.TestCase):

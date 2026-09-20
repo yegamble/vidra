@@ -19,6 +19,38 @@ CANDIDATE = json.loads((ROOT / 'docs/evidence/release-v0.6.5-verification/manife
 CANDIDATE_V075 = json.loads((ROOT / 'docs/evidence/release-v0.7.5-verification/manifest.json').read_text())
 
 
+class FakeRun:
+    """A `Recorder` stand-in that records every query and answers the probe.
+
+    Shared with the migration-drill tests: both harnesses call the same
+    `fingerprint`, and it is the WIRING into it that no pure-helper test covers.
+    """
+
+    LEDGERS = {'schema_migrations': 146, 'vidra_search_migrations': 18}
+
+    def __init__(self, present=None, ledgers=None):
+        self.present = list(present) if present is not None else None
+        self.ledgers = dict(self.LEDGERS if ledgers is None else ledgers)
+        self.queries = []
+
+    def relations(self, core_version):
+        """Everything a candidate at this schema requires — nothing missing."""
+        return [f'public.{table}' for table in recovery.catalogue_for(core_version)] + ['search.documents']
+
+    def sql(self, query):
+        self.queries.append(query)
+        if 'pg_attribute' in query:                      # the schema-shape key
+            return '812|' + 'c' * 32
+        if 'pg_class' in query:                          # the presence probe
+            found = self.relations(recovery.CATALOGUE_AUDITED_THROUGH) if self.present is None else self.present
+            # Real psql output carries compose's own stderr lines; so does this.
+            return '[compose] docker compose exec -T postgres psql\n' + '\n'.join(found) + '\n'
+        for table, version in self.ledgers.items():
+            if f'FROM {table}' in query:
+                return f'{version}|f'
+        return '0|d41d8cd98f00b204e9800998ecf8427e'
+
+
 def baseline_with(candidate):
     baseline = Path(tempfile.mkdtemp())
     (baseline / 'candidate.json').write_text(json.dumps(candidate))
@@ -142,13 +174,79 @@ class FingerprintTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             recovery.fingerprint_sql('ipfs_capacity', ("x'; DROP TABLE users; --",))
 
+    # The presence probe is the one place a relation name goes into SQL as a
+    # literal rather than as an identifier, so the guard sits there too.
+    def test_probe_names_are_never_interpolated_unchecked(self):
+        for bad in ("public.users'); DROP TABLE users; --", 'public', 'Public.users', 'public.'):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                recovery.split_qualified(bad)
+        self.assertEqual(recovery.split_qualified('search.documents'), ('search', 'documents'))
+
     # "exists and empty" is a PASS (the table survived and the fixture never
     # populated it); "missing" is the loss the whole catalogue exists to catch.
     # psql's own `relation does not exist` reaches the operator as `exit 1; see
     # 0NN-compose-exec.log`, so the table is named here or nowhere.
     def test_a_missing_table_is_named_and_an_empty_one_is_not(self):
-        self.assertEqual(recovery.missing_tables(('users', 'ipfs_capacity'), ('users',)), ['ipfs_capacity'])
-        self.assertEqual(recovery.missing_tables(('users', 'ipfs_capacity'), ('ipfs_capacity', 'users')), [])
+        self.assertEqual(recovery.missing_tables(('public.users', 'public.ipfs_capacity'), ('public.users',)),
+                         ['public.ipfs_capacity'])
+        self.assertEqual(recovery.missing_tables(('public.users',), ('public.users', 'search.documents')), [])
+
+    # `Recorder.run` redirects stderr ONTO stdout and returns the whole log, and
+    # `deploy/compose.sh` prints `[compose] …` there on every call, so the probe's
+    # answer arrives mixed with lines psql never wrote. Splitting the raw text
+    # would turn a NOTICE into a table name and a real absence into a match.
+    def test_the_presence_probe_reads_only_lines_shaped_like_a_table_name(self):
+        polluted = ('[compose] docker compose exec -T postgres psql\n'
+                    'NOTICE:  relation "users" already exists, skipping\n'
+                    'public.users\n'
+                    ' Container vidra-postgres-1  Running\n'
+                    'search.documents\n'
+                    'public.ipfs_capacity\n')
+        self.assertEqual(recovery.present_tables(polluted),
+                         ['public.users', 'search.documents', 'public.ipfs_capacity'])
+        self.assertEqual(recovery.present_tables('[compose] nothing matched\n'), [])
+
+
+class SchemaShapeTest(unittest.TestCase):
+    """One key that notices a table or column lost ANYWHERE in `public`.
+
+    Only 20 of vidra-core's ~109 tables are catalogued, and the audit floor is
+    147, so a restore that lost `instance_settings`, `audit_log`, `reports`,
+    `user_blocks`, `watched_words`, `sessions`, `notifications` or
+    `remote_videos` would still report every catalogued fingerprint intact. This
+    key carries no row data — it is the column inventory of `public` — so it
+    classifies nothing and needs no per-table decision, and it compares a
+    database only with ITSELF across a backup/restore or a reboot, never across
+    releases, so it is schema-version-agnostic by construction.
+    """
+
+    def test_the_shape_key_cannot_collide_with_a_catalogued_table(self):
+        # Table names are [a-z_]+, so a key with a dot is unreachable as one.
+        self.assertNotIn(recovery.SCHEMA_SHAPE, recovery.CATALOGUE)
+        self.assertIn('.', recovery.SCHEMA_SHAPE)
+
+    # Partition children would multiply the parent's columns and, with monthly
+    # partitions, change between the two fingerprints of one drill. vidra-core
+    # and vidra-search create none today (verified at v0.7.5 / v0.7.3: no DDL
+    # outside migrations, no PARTITION OF, no partman), and the query excludes
+    # them anyway so introducing one cannot start a flap.
+    def test_partition_children_and_other_schemas_are_excluded(self):
+        self.assertIn('NOT c.relispartition', recovery.SCHEMA_SHAPE_SQL)
+        self.assertIn("n.nspname = 'public'", recovery.SCHEMA_SHAPE_SQL)
+        # Dropped and system columns are not shape; temp tables live in pg_temp.
+        self.assertIn('a.attnum > 0', recovery.SCHEMA_SHAPE_SQL)
+        self.assertIn('NOT a.attisdropped', recovery.SCHEMA_SHAPE_SQL)
+
+    # A key present on one side only IS a difference, deliberately: a catalogue
+    # key that vanishes between the backup data point and the restored database
+    # is exactly the loss being hunted. Both sides of every comparison in both
+    # harnesses come from one drill on one harness version, so this cannot fire
+    # for a new key alone — and mixing an archived pre-#238 record with a
+    # post-#238 one is already refused in the docstring's terms (re-run the
+    # source actions on this harness), and would be reported by NAME here.
+    def test_a_key_on_one_side_only_is_reported_not_ignored(self):
+        self.assertEqual(recovery.differing({'users': '1|a'}, {'users': '1|a', recovery.SCHEMA_SHAPE: '9|b'}),
+                         [recovery.SCHEMA_SHAPE])
 
 
 class CatalogueSchemaTest(unittest.TestCase):
@@ -205,6 +303,51 @@ class CatalogueSchemaTest(unittest.TestCase):
         self.assertIn('0151', str(raised.exception))
 
 
+class FingerprintWiringTest(unittest.TestCase):
+    """The two fail-closed guards must be WIRED IN, not merely implemented.
+
+    `catalogue_for` and `missing_tables` are covered as pure functions above,
+    and that is exactly the hole: with both helpers correct, deleting the two
+    lines in `fingerprint` that CALL them leaves every other test green. Live,
+    that costs a paid host-day each way — the by-name refusal degrades to an
+    anonymous `exit 1`, and a v0.6.x re-drill demands five tables its schema
+    never had and fails for a reason that predicts nothing.
+    """
+
+    def keys(self, rows):
+        return set(rows) - {'search.documents', recovery.SCHEMA_SHAPE}
+
+    def test_fingerprint_asks_only_for_the_candidates_tables(self):
+        # Everything the newest schema has is present, so nothing can be missing:
+        # this test is only about WHICH tables are asked for.
+        run = FakeRun(present=FakeRun().relations(recovery.CATALOGUE_AUDITED_THROUGH))
+        rows = recovery.fingerprint(run, 146)
+        self.assertEqual(self.keys(rows), set(recovery.catalogue_for(146)))
+        self.assertNotIn('ipfs_copy_cleanup', ' '.join(run.queries))
+        self.assertNotIn('authored_remote_comments', ' '.join(run.queries))
+
+    def test_fingerprint_proves_existence_by_name_before_hashing_anything(self):
+        lost = ('public.authored_remote_comments', 'public.ipfs_control_config')
+        run = FakeRun(present=[r for r in FakeRun().relations(150) if r not in lost])
+        with self.assertRaises(ValueError) as raised:
+            recovery.fingerprint(run, 150)
+        for name in lost:
+            self.assertIn(name, str(raised.exception))
+        self.assertEqual(len(run.queries), 1, 'the probe must refuse before a single row is hashed')
+
+    def test_search_documents_absence_is_named_like_any_other_relation(self):
+        run = FakeRun(present=[r for r in FakeRun().relations(150) if r != 'search.documents'])
+        with self.assertRaises(ValueError) as raised:
+            recovery.fingerprint(run, 150)
+        self.assertIn('search.documents', str(raised.exception))
+
+    def test_the_whole_public_schema_shape_is_part_of_every_fingerprint(self):
+        rows = recovery.fingerprint(FakeRun(), 150)
+        self.assertIn(recovery.SCHEMA_SHAPE, rows)
+        self.assertEqual(rows[recovery.SCHEMA_SHAPE], '812|' + 'c' * 32)
+
+
+
 class CatalogueRotTest(unittest.TestCase):
     """The catalogue cannot silently fall behind vidra-core's migrations again.
 
@@ -232,8 +375,14 @@ class CatalogueRotTest(unittest.TestCase):
             'vidra-core migrations and add a TABLES_ADDED line for each schema version they introduce')
 
     def test_the_audit_leaves_no_migration_between_the_floor_and_the_ceiling_unread(self):
-        self.assertEqual(sorted(recovery.TABLES_ADDED),
-                         list(range(recovery.CATALOGUE_AUDIT_FLOOR, recovery.CATALOGUE_AUDITED_THROUGH + 1)))
+        expected = list(range(recovery.CATALOGUE_AUDIT_FLOOR, recovery.CATALOGUE_AUDITED_THROUGH + 1))
+        self.assertEqual(
+            sorted(recovery.TABLES_ADDED), expected,
+            'TABLES_ADDED must carry one line per core schema version from '
+            f'{recovery.CATALOGUE_AUDIT_FLOOR} to {recovery.CATALOGUE_AUDITED_THROUGH} — an empty tuple '
+            'when that migration creates no table. Missing: '
+            f'{sorted(set(expected) - set(recovery.TABLES_ADDED))}; unexpected: '
+            f'{sorted(set(recovery.TABLES_ADDED) - set(expected))}')
 
     def test_a_table_a_migration_creates_that_nobody_classified_is_named(self):
         self.assertEqual(recovery.unclassified_tables({151: ('ipfs_swarm_peers', 'ipfs_capacity')}),

@@ -70,7 +70,7 @@ FAULT_SERVICES = ('postgres', 'redis', 'search')
 # stage that has none of the 0147-0150 tables and a v0.7.5 stage that must have
 # all of them. Fingerprinting "whatever tables happen to exist" would pass a
 # restore that lost every one of them, which is exactly what used to happen.
-PRE_EXISTING = 0  # in every candidate this harness can drill (v0.6.4 = core schema 144)
+PRE_EXISTING = 0  # in every candidate this harness can drill (v0.6.4, the oldest, is core schema 146)
 CATALOGUE = {
     # The catalogue #187 fingerprinted across a host reboot, plus the two tables
     # that hold the sealed TOTP fixture: a restore that loses them passes every
@@ -100,12 +100,34 @@ CATALOGUE = {
     # a pending row can legitimately be 'failed' with a higher attempts count by
     # the time the restored catalogue is read.
     'authored_remote_comments': (147, ('delivery_state', 'last_error', 'attempts', 'updated_at')),
-    # 0148. The singleton desired-node-configuration document: operator intent,
-    # written only by an admin save (UpdateIPFSControlConfig moves config,
-    # revision, policy_active, updated_by and updated_at in one statement), never
-    # by a tick. Whole row. Note it is also created LAZILY by the first read that
-    # finds none, so "absent in the dump, present afterwards" means the drill
-    # touched managed IPFS after the backup, not that a restore lost anything.
+    # 0148. The singleton desired-node-configuration document: operator intent.
+    # The only writer of a hashed column is an admin save
+    # (UpdateIPFSControlConfig moves config, revision, policy_active, updated_by
+    # and updated_at in one statement); no tick touches it, because the managed
+    # worker's Tick returns before Config() whenever IPFS_MANAGER_SOCKET is
+    # unset. So the row is compared whole.
+    #
+    # The row IS created lazily, and NOT only by an admin: every playback
+    # session for a public, published, non-DRM video calls DemandPublicVideo
+    # (httpapi/playback_session.go), which calls Config() BEFORE it checks
+    # policy_active/enabled/demand_pin (ipfsmirror/admission.go), and Config()
+    # inserts defaults when it finds no row (ipfscontrol/service.go) — managed
+    # IPFS off or on. So the trigger is "someone watched a video", not "the
+    # drill touched managed IPFS". `EnsureIPFSControlConfig`'s conflict branch
+    # is `DO UPDATE SET singleton = true`, which moves no hashed column, so a
+    # second playback cannot change the fingerprint; only 0 rows -> 1 row can.
+    #
+    # That is not a false-failure hazard here, because every comparison in both
+    # harnesses is bracketed by fingerprints taken with no playback between
+    # them: `backup` brackets only deploy/backup.sh (and any write that did land
+    # is already refused by name, "writes landed during the backup"); `fault`
+    # probes only /readyz and the list and search endpoints; `restore` snapshots
+    # immediately after deploy.sh and the /readyz wait, whose probes are
+    # /readyz, the frontend root and the edge /healthz, and before the browser
+    # half runs at all; the migration drill's restart pair brackets a reboot. A
+    # difference here therefore means a video really was played across the
+    # comparison — worth reporting, not noise — and the operator needs this
+    # comment to read it as that rather than as a lost row.
     'ipfs_control_config': (148, ()),
     # 0148. Requested apply/restart operations. Who asked for what, against which
     # config revision and when, is durable — HTTP-retry idempotency depends on
@@ -273,30 +295,96 @@ def missing_tables(expected, present):
     return sorted(set(expected) - set(present))
 
 
+PRESENT_ROW = re.compile(r'[a-z_]+\.[a-z_]+')
+
+
+def present_tables(output):
+    """The qualified names the probe actually found, ignoring everything else.
+
+    `Recorder.run` redirects stderr ONTO stdout and returns the whole log, and
+    `deploy/compose.sh` prints `[compose] …` there on every single call, so the
+    answer always arrives mixed with lines psql never wrote — and a NOTICE would
+    join them. Reading only lines that are exactly `schema.table` means noise
+    cannot become a table name, and a genuinely absent table cannot be matched
+    by a stray line that happens to contain its name.
+    """
+    return [line for line in (raw.strip() for raw in output.splitlines()) if PRESENT_ROW.fullmatch(line)]
+
+
+def qualified(schema, table):
+    return f'{identifier(schema, "schema")}.{identifier(table)}'
+
+
+def split_qualified(name):
+    schema, _, table = str(name).partition('.')
+    return identifier(schema, 'schema'), identifier(table)
+
+
 def check_catalogue_present(run, tables, core_version):
-    names = ','.join(f"'{identifier(table)}'" for table in tables)
-    found = run.sql("SELECT COALESCE(string_agg(c.relname, ',' ORDER BY c.relname), '') FROM pg_class c "
-                    "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' "
-                    f"AND c.relkind IN ('r', 'p') AND c.relname IN ({names})")
-    missing = missing_tables(tables, found.split(',') if found else [])
-    require(not missing, f'core schema {core_version} requires tables this database does not have: '
+    """Prove every required relation EXISTS, by name, before hashing anything.
+
+    Schema-qualified so `search.documents` is covered too: it is the one entry
+    the fingerprint reads through a hand-written query, so without this it is
+    the one entry whose absence still arrives as an anonymous psql `exit 1`.
+    """
+    # Re-validated here, not trusted from the caller: this is the one place a
+    # relation name is interpolated into SQL as a literal rather than as an
+    # identifier, so the guard has to sit at the interpolation.
+    pairs = ', '.join("('%s', '%s')" % split_qualified(name) for name in tables)
+    found = run.sql("SELECT n.nspname||'.'||c.relname FROM pg_class c "
+                    "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                    f"WHERE c.relkind IN ('r', 'p') AND (n.nspname, c.relname) IN ({pairs})")
+    missing = missing_tables(tables, present_tables(found))
+    require(not missing, f'core schema {core_version} requires relations this database does not have: '
                          + ', '.join(missing))
+
+
+# One key for the shape of the WHOLE public schema, so a table or column lost
+# outside the catalogue is still caught. Only 20 of ~109 tables are catalogued
+# and the audit floor is 147, so without this a restore that dropped
+# `instance_settings`, `audit_log`, `reports`, `user_blocks`, `watched_words`,
+# `sessions`, `notifications` or `remote_videos` reported everything intact.
+#
+# It carries no row data, so it classifies nothing and needs no per-table
+# volatility decision, and it only ever compares a database with ITSELF across a
+# backup/restore or a reboot — never across releases — so it is
+# schema-version-agnostic and needs no expected value.
+#
+# Stability was checked before adding it: at v0.7.5 / v0.7.3 neither vidra-core
+# nor vidra-search issues any DDL outside `migrations/` (no CREATE TABLE, no
+# PARTITION OF, no ATTACH PARTITION, no pg_partman), the only extensions are
+# uuid-ossp and pg_trgm (functions and operators, no tables), everything
+# vidra-search creates lives in the `search` schema, and temp tables live in
+# pg_temp. Partition children are excluded regardless, so introducing monthly
+# partitions later cannot start a flap between one drill's two fingerprints.
+SCHEMA_SHAPE = 'public.schema_shape'
+SCHEMA_SHAPE_SQL = (
+    "SELECT count(*)||'|'||md5(COALESCE(string_agg("
+    "c.relname||'.'||a.attname||':'||format_type(a.atttypid, a.atttypmod), E'\\n' "
+    "ORDER BY c.relname, a.attname),'')) "
+    "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+    "JOIN pg_attribute a ON a.attrelid = c.oid "
+    "WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relispartition "
+    "AND a.attnum > 0 AND NOT a.attisdropped")
 
 
 # search.documents carries reconcile timestamps that a healthy sweep rewrites, so
 # only the fields a search result depends on are compared.
+SEARCH_DOCUMENTS = 'search.documents'
 SEARCH_SQL = ("SELECT count(*)||'|'||md5(COALESCE(string_agg(video_id::text||':'||title||':'||eligible::text,"
               "E'\\n' ORDER BY video_id::text),'')) FROM search.documents")
 
 
 def fingerprint(run, core_version):
     tables = catalogue_for(core_version)
-    # Existence first, and in one query: a table the schema requires but the
-    # database lacks must fail by NAME, before a fingerprint query turns it into
-    # an anonymous psql exit 1 buried in a private log.
-    check_catalogue_present(run, tables, core_version)
+    # Existence first, in ONE query, before anything is hashed: a relation the
+    # schema requires but the database lacks must fail by NAME, not as an
+    # anonymous psql exit 1 buried in a private log.
+    check_catalogue_present(run, [qualified('public', table) for table in tables] + [SEARCH_DOCUMENTS],
+                            core_version)
     rows = {table: run.sql(fingerprint_sql(table, volatile)) for table, volatile in tables.items()}
-    rows['search.documents'] = run.sql(SEARCH_SQL)
+    rows[SEARCH_DOCUMENTS] = run.sql(SEARCH_SQL)
+    rows[SCHEMA_SHAPE] = run.sql(SCHEMA_SHAPE_SQL)
     return rows
 
 

@@ -39,6 +39,26 @@ def match_assets(source, destination, field):
             'media assigned to wrong video, missing, or duplicated')
 
 
+def reboot_state(run, baseline):
+    """The catalogue and ledgers a host reboot must preserve, unchanged.
+
+    Both halves are chosen by the CANDIDATE, from the one `expected-ledgers.json`
+    the stage froze from the source migrations — the catalogue by its core schema
+    version, the ledgers by both. This used to be inline, with its own 13-table
+    literal beside the recovery drill's 15-table one; two hand-maintained lists
+    of the same thing drift, and these had, neither having heard of the five
+    tables core migrations 0147-0150 added. It is a function so the wiring — not
+    just the shared helpers underneath it — is covered by a test.
+    """
+    ledgers = recovery.expected_ledgers(baseline)
+    state = {'catalogue': recovery.fingerprint(run, recovery.core_schema_version(ledgers)), 'ledgers': {}}
+    for table, spec in ledgers.items():
+        actual = run.sql(f'SELECT version, dirty FROM {table}')
+        runtime.check_ledger(actual, spec['version'])
+        state['ledgers'][table] = actual
+    return state
+
+
 def execute(stage, action, label=None, baseline=DEFAULT_BASELINE, root=DEFAULT_ROOT, b2_key=DEFAULT_B2_KEY):
     os.umask(0o077)
     require(re.fullmatch(r'[a-z][a-z0-9-]*', label or action), 'invalid attempt label')
@@ -77,20 +97,7 @@ def execute(stage, action, label=None, baseline=DEFAULT_BASELINE, root=DEFAULT_R
         if action in ('restart-before', 'restart-after'):
             require(json.loads((stage / 'disconnect/result.json').read_text())['status'] == 'PASS', 'disconnect first')
             result['boot_id'] = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
-            # The reboot check kept its OWN 13-table literal here. Two
-            # hand-maintained lists of the same thing drift, and these did: the
-            # recovery drill grew the two MFA tables and this one did not, and
-            # neither learned about the five tables core migrations 0147-0150
-            # added — so a reboot that lost all five read as unchanged state.
-            # There is now one catalogue, and which tables it demands follows
-            # the candidate's own frozen ledgers rather than this file's age.
-            ledgers = recovery.expected_ledgers(baseline)
-            result['catalogue'] = recovery.fingerprint(run, recovery.core_schema_version(ledgers))
-            result['ledgers'] = {}
-            for table, spec in ledgers.items():
-                actual = run.sql(f'SELECT version, dirty FROM {table}')
-                runtime.check_ledger(actual, spec['version'])
-                result['ledgers'][table] = actual
+            result.update(reboot_state(run, baseline))
             if action == 'restart-after':
                 before = json.loads((stage / 'restart-before/result.json').read_text())
                 require(before['status'] == 'PASS' and before['boot_id'] != result['boot_id'], 'host reboot unproved')
