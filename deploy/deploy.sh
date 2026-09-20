@@ -521,15 +521,21 @@ log "compose $(docker compose version --short), VIDRA_TLS_MODE=$TLS_MODE serving
 # bundle with only deploy.sh replaced) would otherwise exit 127 with a message
 # blaming the tags.
 #
-# THE NEWEST RELEASE. A UNIFORM triple newer than every record (the tree's own
-# release at tag vN or the vN bundle, or vN deployed from main by a fresh
-# `install.sh --git` or a rehearsal lab) cannot have its record IN THIS TREE:
-# release.sh tags this repository before any image exists. lib.sh therefore
-# fetches releases/vN.json over https from here, still inside this preflight —
-# before the checkout sync, the dump, the pull and the migrations — and
+# THE NEWEST RELEASE cannot have its record IN THIS TREE: release.sh tags this
+# repository before any image, and so any digest, exists. That covers the
+# tree's own release at tag vN, the vN bundle, and vN deployed from main by a
+# fresh `install.sh --git` or a rehearsal lab — and it covers BOTH shapes a
+# release takes, the uniform triple and the core-only one v0.7.4 and v0.7.5
+# actually shipped (core vN with the previous user and search).
+#
+# lib.sh therefore fetches that record over https, still inside this preflight
+# — before the checkout sync, the dump, the pull and the migrations — and
 # re-checks the triple against it; a record that contradicts a pinned digest
-# stops the deploy like any other. Two cases stay unverified and only WARN,
-# because nothing can reach the record in either: an airgapped host
+# stops the deploy like any other, and says so naming VIDRA_RECORD_FETCH=off.
+# A fetch that fails leaves the verdict it already had, so a refusal stays a
+# refusal and an unverified run stays unverified: this can only ever ADD
+# verification. Two cases therefore remain unverified and only WARN, because
+# nothing can reach the record in either: an airgapped host
 # (VIDRA_RECORD_FETCH=off, no route, no curl), and the window between a release
 # publishing and its record PR merging, when the record does not exist
 # anywhere. The second closes when the record ships inside the release

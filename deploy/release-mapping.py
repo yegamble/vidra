@@ -28,14 +28,17 @@ Exit codes are the contract deploy/lib.sh's release_mapping_check reads:
 
 THE NEWEST RELEASE, AND WHAT STILL DOES NOT VERIFY IT. deploy/release.sh tags
 this repository before any image exists, so a tree at vN (or the vN bundle)
-cannot carry releases/vN.json, and this script ALONE then only checks that all
-three tags say vN. deploy/lib.sh closes that for a host with egress: it fetches
-the record from the repository and re-runs this script with --extra-record, so
-the pairing and any digest pin are held against the real record after all. Two
-cases remain, and neither is reachable by any check: an airgapped host
-(VIDRA_RECORD_FETCH=off, no route, no curl), and the window between a release
-publishing and its record PR merging, when the record exists nowhere yet. The
-second closes when the record ships inside the release artifact.
+cannot carry releases/vN.json, and this script ALONE then compares tag strings
+only (for a uniform triple) or refuses outright (for the core-only shape
+v0.7.4 and v0.7.5 shipped). deploy/lib.sh closes both for a host with egress:
+--print-missing-release names the record that would settle the run, lib.sh
+fetches it and re-runs this script with --extra-record, and the pairing and
+any digest pin are held against the real record after all. A fetch that fails
+changes nothing, so a refusal stays a refusal. Two cases remain, and neither
+is reachable by any check: an airgapped host (VIDRA_RECORD_FETCH=off, no
+route, no curl), and the window between a release publishing and its record PR
+merging, when the record exists nowhere yet. The second closes when the record
+ships inside the release artifact.
 
 Stdlib only and NO NETWORK — the fetch lives in deploy/lib.sh, which hands the
 result here as a file; this script only ever reads paths it is given. It reads
