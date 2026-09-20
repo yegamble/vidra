@@ -217,6 +217,92 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   every item above is source and unit tests, and **no drill has run on the
   v0.7.5 digests** — the lane list above is unchanged, no disposition exists,
   and no register row moves.
+- **Standing gaps touched on 2026-09-20 — narrowed, neither closed.** Both are
+  recorded elsewhere in this document and are **not** edited there; the older
+  entries stay as written, under "Findings that change the campaign", the
+  "Workflow readiness register" and "A39 CI gates — supported toolchain, exact
+  manifest, zero silent skips — 2026-09-08".
+  - **F04 (release proof lacks the complete service chain) — HALF closed.**
+    The **required** `boot` lane still runs with `TRANSCODING_ENABLED=false`
+    and no `SEARCH_SERVICE_URL`, so a green **required** set still certifies
+    nothing about the media path. **#236** adds a **non-required** lane,
+    [`stack-e2e`](../.github/workflows/stack-e2e.yml) +
+    [`tests/stack-e2e.mjs`](../tests/stack-e2e.mjs), triggered on
+    `workflow_dispatch`, a nightly `23 5 * * *` cron, and `pull_request`
+    filtered to its own three inputs. Against a live stack with transcoding
+    enabled and search wired, it walks owner claim → login → channel →
+    **multi-chunk** resumable upload of an ffmpeg-generated 4 s 320×240
+    fixture (the driver fails if it is not ≥2 chunks) → transcode polled to
+    `published` with `packaging_format=cmaf` and a rendition → `#EXTM3U`
+    master → a variant playlist → the CMAF init segment (first ISOBMFF box
+    `ftyp`) and first media segment (first box `styp`, a bare `moof`
+    deliberately not accepted), fetched anonymously → the video returned both
+    by a signed `/internal/v1/search` and by the public
+    `/api/v1/videos/search` *with* `search_total` and `total_is_lower_bound`,
+    the two fields core's SQL trigram fallback cannot produce → the
+    `search_outbox` queue drained to zero `pending` **and** zero `dead` → the
+    video still indexed. **One green run exists**, on `main` at `df226ea`
+    ([run 35506702214](https://github.com/yegamble/vidra/actions/runs/35506702214),
+    2026-09-20). **What a green does NOT prove**, per that lane's own
+    statement in [`AGENTS.md`](../AGENTS.md): no browser and no decoder — it
+    asserts playlist text plus the first box type and a size floor, which
+    rules out an empty body or an error page but does not make the bytes
+    decodable (real playback stays `tests/release-acceptance.mjs`'s job on a
+    prepared lab host); **rate limiting is off** (`RATE_LIMIT_ENABLED=false`)
+    and **scanning is off** (`MALWARE_SCAN_MODE=disabled`), so it proves
+    nothing about either; it builds the **three default branches from
+    source**, not released images or pinned digests — stack coverage, never
+    release qualification; **local storage**, no S3, CDN, presign or
+    federation; and **no degraded-dependency coverage** — it boots
+    vidra-search healthy *before* the api precisely so it does not hit the
+    ordering defect vidra-core#267 above, so a green says nothing about
+    recovery from a search outage. It is **not required for merge**, and one
+    green run is not a flake history: promotion is a separate, diff-visible
+    decision and is deliberately not taken.
+  - **"The newest release's record is not inside its own bundle, so a wrong
+    pin only warns" — NARROWED.** A record for `vN` reaches hosts through the
+    *next* meta tag or bundle, so the release that most needs checking is the
+    one the tree cannot check. **#234** makes `release_mapping_check` in
+    [`deploy/lib.sh`](../deploy/lib.sh) — called by **both**
+    `deploy.sh` and `rollback.sh`, before the checkout sync, dump, pull and
+    migrations and before any env rewrite — download the missing
+    `releases/<tag>.json` over https from this repository (curl, not git: a
+    bundle host has no git) and re-run the checker with `--extra-record`. The
+    fetched copy is used for that one run and written nowhere. It is admitted
+    only if it passes the same validation as a tree record, names the release
+    asked for, pairs the pinned triple exactly, describes a release this tree
+    has no record for, and is structurally a release; anything else is
+    ignored with a warning and changes no verdict. A contradiction **stops
+    the run**; a verdict resting on a fetched record says so and names its
+    source URL; and a fetch that fails or a record not admitted **leaves the
+    previous verdict exactly as it was** — a refusal stays a refusal, and
+    nothing is ever stricter on absence. **Residuals, as
+    [`releases/README.md`](../releases/README.md) states them:** nothing is
+    verified offline or with `VIDRA_RECORD_FETCH=off`; nothing is verified in
+    the window before the record's PR merges, since the record then exists
+    nowhere — that closes only when the record ships **inside the release
+    artifact**; images are still pulled **by tag**, and because
+    `require_embedded_migrate_tag` refuses a `<tag>@sha256:<digest>` spelling
+    for core and search, the digest comparison this fetch makes reachable is
+    reachable **only for `VIDRA_USER_TAG`**; and the trust anchor is
+    unchanged — whoever controls the record source can bless or block a
+    deploy exactly as whoever controls the bundle source can, so this is a
+    catcher for operator error, not a defence against that anchor.
+    **It also changes rollback behaviour**, deliberately: a rollback is
+    stopped only by what predicts the wrong bytes or a broken env rewrite,
+    including a digest that contradicts a record **that loaded** — so a
+    fetched record that contradicts a digest pin now stops a rollback that
+    `main` would previously have allowed to continue with a warning. A stop
+    caused by a fetched record names **both** escape knobs in the message, so
+    a wrong or forged remote record cannot trap an operator mid-incident.
+  - **Not a standing gap, though sometimes listed as one:** "malware scanning
+    is off by default" is not the production template's posture —
+    `env/production.env.example` ships `scan` in the default profile set with
+    `CLAMAV_ADDR=clamav:3310` and `MALWARE_SCAN_MODE=fail-closed`, and the
+    rulings are recorded under "Scan hardening — default posture, creator
+    copy, full ingestion scope — 2026-09-08" rather than restated here. The
+    `MALWARE_SCAN_MODE=disabled` settings above are a CI lane's and the
+    recorded labs' deviations, not the template's.
 - **Next executable — a plan, not progress.** The harness-fix and
   scan steps this list opened with are **done** (previous bullet; scan
   2026-09-20); everything that remains needs a host that does not exist yet.
