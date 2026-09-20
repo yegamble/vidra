@@ -31,6 +31,8 @@
 #   is_bundle_tree ROOT    exit 0 when ROOT was unpacked, not cloned
 #   bundle_manifest_get ROOT KEY [DEFAULT]   one value from vidra-bundle.manifest
 #   env_snapshot FILE ROOT keeps 10 timestamped generations of an env file
+#   fetch_release_record TAG DEST   best-effort https download of a release
+#                          record this tree cannot carry yet; never fatal
 #   release_mapping_check ROOT MODE CORE USER SEARCH
 #                          exit 0 when releases/ allows this tag triple
 
@@ -284,6 +286,127 @@ env_set_key() {
   log "set ${key}=${val}"
 }
 
+# fetch_release_record TAG DEST — download releases/TAG.json to DEST. Exit 0
+# with the record there, 1 otherwise, having LOGGED why and the exact curl to
+# run by hand. Uses the caller's log(), per the contract above.
+#
+# WHY A PREFLIGHT REACHES THE NETWORK AT ALL. deploy/release.sh pushes this
+# repository's tag BEFORE it publishes the component releases, because
+# vidra-core's release-assets workflow checks the meta repo out at that tag to
+# build vidra-bundle_<TAG>.tar.gz and fails the job if the tag is not there. No
+# image — and so no digest — exists at that moment, so releases/<TAG>.json is
+# written after the publish and lands on main in a PR. A vN tree and the vN
+# bundle therefore carry records only up to v(N-1), and deploying the NEWEST
+# release compared three tag strings and nothing else: not that these images
+# were released together, and not a digest pin on any of them. Downloading the
+# record is the only way to close that without rewriting a published,
+# checksummed release asset out from under whoever already downloaded it.
+#
+# curl and not git, deliberately: the beta host runs an UNPACKED bundle tree
+# with no git anywhere, and it is the host this has to work on.
+#
+# WHY NO FAILURE HERE MAY BE FATAL. A record that could not be downloaded
+# predicts nothing about the images being deployed, and a finding may only stop
+# what it predicts. 404 (the record PR has not merged yet), a timeout, an
+# airgapped host, a captive portal, no curl at all: every one of them leaves the
+# run with exactly the verdict it already had, plus a warning naming the URL.
+# The one thing that stops a deploy is a record that LOADS and CONTRADICTS the
+# pins, and that verdict belongs to deploy/release-mapping.py, not here.
+#
+# shellcheck disable=SC2154  # log() is the caller's, per the contract above.
+fetch_release_record() {
+  local tag="$1" dest="$2" base url tmp bytes prefix why rc=0
+  local max=262144   # 256 KiB. A record is ~2 KiB; anything near this is a page, not a record.
+
+  # THE AIRGAPPED SWITCH, read through env_get so it works from the env file
+  # and the process environment alike, exactly like VIDRA_SKIP_DNS_PREFLIGHT.
+  # Checked FIRST, so a host that turned it off is never seen reaching out and
+  # never pays the timeout. The word list mirrors is_true's, and for the same
+  # reason: env files are hand-edited and "no" gets typed several ways.
+  case "$(env_get VIDRA_RECORD_FETCH '')" in
+    off|OFF|Off|0|false|FALSE|False|no|NO|No)
+      log "VIDRA_RECORD_FETCH is off — not fetching ${tag}'s release record. This run verifies only what the tree itself can prove."
+      return 1 ;;
+  esac
+
+  # STRICT SEMVER BEFORE ANYTHING IS INTERPOLATED. The tag comes from
+  # VIDRA_CORE_TAG in an operator-edited env file and goes into BOTH a URL and
+  # a filename, so `v1.2.3/../../evil`, `v1.2.3?ref=x` and `v1.2.3 v1.2.4` must
+  # be stopped before either. Releases are only ever cut as vMAJOR.MINOR.PATCH
+  # (deploy/release.sh), so nothing legitimate is excluded: a prerelease a
+  # rehearsal lab deploys has no record upstream to fetch in the first place.
+  if ! grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' <<<"$tag"; then
+    log "not fetching a release record: '$tag' is not a vMAJOR.MINOR.PATCH release tag, and only those have records."
+    return 1
+  fi
+
+  # The fork/mirror knob, alongside VIDRA_IMAGE_REGISTRY/VIDRA_IMAGE_OWNER: a
+  # fork publishes its own records, and an egress-filtered network mirrors them.
+  base="$(env_get VIDRA_RECORD_BASE_URL 'https://raw.githubusercontent.com/yegamble/vidra/main/releases')"
+  base="${base%/}"
+  # HTTPS ONLY, here as well as in curl's own --proto below. This record decides
+  # what the deploy will verify, so a channel anyone on the path can rewrite is
+  # worse than no record at all. Named here rather than left to a curl error, so
+  # the message says which key to fix.
+  case "$base" in
+    https://*) ;;
+    *)
+      log "not fetching a release record: VIDRA_RECORD_BASE_URL=$base is not an https:// URL, and this record decides what the deploy verifies."
+      return 1 ;;
+  esac
+  url="$base/$tag.json"
+
+  if ! command -v curl >/dev/null 2>&1; then
+    log "not fetching a release record: curl is not installed on this host. ${tag}'s pairing and digests stay unverified; install curl, or fetch $url by hand onto this tree as releases/${tag}.json."
+    return 1
+  fi
+
+  # Into a TEMP FILE, never straight to DEST: a truncated, oversized or HTML
+  # body must not end up at the path the checker is then pointed at. One
+  # cleanup point below covers every outcome.
+  tmp="$(mktemp "${TMPDIR:-/tmp}/vidra-record.XXXXXX" 2>/dev/null)" || tmp=''
+  if [ -z "$tmp" ]; then
+    log "not fetching a release record: could not create a temporary file."
+    return 1
+  fi
+
+  # --proto/--proto-redir pin TLS across redirects as well as on the first hop;
+  # --max-time bounds a black-holed host (this runs in preflight, before
+  # anything has changed, and must not turn a deploy into a hang);
+  # --max-filesize refuses an oversized body at the wire, and the byte count
+  # below catches a chunked response that declares no length.
+  curl --proto '=https' --proto-redir '=https' --tlsv1.2 \
+       --fail --silent --show-error --location \
+       --max-time 10 --max-filesize "$max" \
+       --output "$tmp" "$url" || rc=$?
+
+  why=''
+  if [ "$rc" -ne 0 ]; then
+    why="curl exited $rc"
+  elif [ ! -s "$tmp" ]; then
+    why='the response was empty'
+  else
+    bytes="$(wc -c < "$tmp" | tr -d '[:space:]')"
+    prefix="$(head -c 512 "$tmp" | tr -d '[:space:]')"
+    if [ "$bytes" -gt "$max" ]; then
+      why="the body is $bytes bytes, too large for a release record (cap $max)"
+    else
+      case "$prefix" in
+        \{*) cat "$tmp" > "$dest" ;;
+        *) why='the body does not begin with a JSON object, so it is not a release record (an error page, a captive portal, or a redirect target)' ;;
+      esac
+    fi
+  fi
+  rm -f "$tmp"
+
+  if [ -n "$why" ]; then
+    log "WARNING: could not fetch ${tag}'s release record from $url ($why). Its pairing and any digest pin on it stay UNVERIFIED, exactly as they were before this fetch existed — an absent record predicts nothing about the images. To see why by hand: curl --proto '=https' --tlsv1.2 --fail --location --max-time 10 '$url'"
+    return 1
+  fi
+  log "fetched ${tag}'s release record from $url ($bytes bytes) — re-checking the pinned triple against it"
+  return 0
+}
+
 # release_mapping_check ROOT MODE CORE USER SEARCH — hold the tag triple a run
 # is about to use against releases/<tag>.json, via deploy/release-mapping.py.
 # Returns 0 to continue (verified, or UNVERIFIED with the checker's WARNING
@@ -311,7 +434,7 @@ env_set_key() {
 # Exit 3 is the checker's UNVERIFIED code; see the header of
 # deploy/release-mapping.py for the full contract.
 release_mapping_check() {
-  local root="$1" mode="$2" rc=0 t tags override
+  local root="$1" mode="$2" rc=0 t tags override core_tag record_dir
   # The image source goes along with the tags, resolved the same way: the
   # compose file pulls ${VIDRA_IMAGE_REGISTRY:-ghcr.io}/${VIDRA_IMAGE_OWNER:-yegamble}/<repo>,
   # and a record can only vouch for the images at ITS repository. A fork or a
@@ -365,6 +488,52 @@ EOF
     fi
   fi
   python3 "$root/deploy/release-mapping.py" "${args[@]}" || rc=$?
+
+  # THE SECOND PASS — the record this tree CANNOT carry.
+  #
+  # Pass 1 above is untouched. It answers UNVERIFIED (3) for a uniform triple
+  # newer than every record, which is every deploy of the NEWEST release:
+  # release.sh tags this repository before any image, and so any digest,
+  # exists, so releases/vN.json is written after the publish and lands on main
+  # in a PR. Until now that verdict was the end of it — the pairing and any
+  # digest pin on vN were compared against nothing at all.
+  #
+  # So: when pass 1 is UNVERIFIED and this tree genuinely has no record for the
+  # core tag, fetch that record and ASK AGAIN with it. Both conditions matter.
+  # The rc gate keeps this off every ordinary deploy and out of the way of
+  # every refusal (a mixed triple is already REFUSED at 1 and never reaches
+  # here). The file test keeps it off the path where the tree can answer for
+  # itself, so the common case makes no request at all.
+  #
+  # The digest pin is what this buys, and it is worth being precise about how
+  # much: deploy.sh's require_embedded_migrate_tag refuses a `tag@sha256:...`
+  # spelling for VIDRA_CORE_TAG and VIDRA_SEARCH_TAG before this runs, so the
+  # digest comparison is reachable today only for VIDRA_USER_TAG. The pairing
+  # assertion applies to all three. Pulling by the recorded digests stays a
+  # separate follow-up (see releases/README.md).
+  #
+  # Severity is unchanged from what absence has always meant: a fetch that
+  # fails leaves rc at 3 and the run continues, in a deploy and a rollback
+  # alike. Only a record that LOADS and CONTRADICTS the pins turns this into a
+  # 1 — that is the one outcome predicting the wrong bytes on disk.
+  core_tag="${3%%@*}"
+  if [ "$rc" -eq 3 ] && [ ! -f "$root/releases/$core_tag.json" ]; then
+    # A directory, so the file can carry the name the checker validates it by
+    # (<release>.json), and one `rm -rf` cleans up every path below.
+    record_dir="$(mktemp -d 2>/dev/null)" || record_dir=''
+    if [ -z "$record_dir" ]; then
+      log "could not create a temporary directory, so ${core_tag}'s release record was not fetched; the WARNING above stands"
+    else
+      if fetch_release_record "$core_tag" "$record_dir/$core_tag.json"; then
+        log "the WARNING above was printed before that record was available — the verdict below supersedes it"
+        rc=0
+        python3 "$root/deploy/release-mapping.py" "${args[@]}" \
+          --extra-record "$record_dir/$core_tag.json" || rc=$?
+      fi
+      rm -rf "$record_dir"
+    fi
+  fi
+
   case "$rc" in
     0) return 0 ;;
     3) log "release mapping NOT verified (WARNING above) — continuing"; return 0 ;;

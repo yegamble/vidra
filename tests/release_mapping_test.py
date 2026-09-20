@@ -1227,5 +1227,160 @@ class ScriptOrderingTests(unittest.TestCase):
         self.assertLess(check, code.index('env_set_key VIDRA_CORE_TAG'))
 
 
+# --- the second pass: absent record -> fetched -> verified -------------------
+
+FETCH_CURL_STUB = '''#!/bin/sh
+printf 'curl %s\\n' "$*" >> "$STUB_LOG"
+dest=""
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "--output" ]; then dest="$arg"; fi
+  prev="$arg"
+done
+if [ "${CURL_EXIT:-0}" = "0" ] && [ -n "$dest" ] && [ -n "${CURL_BODY_FILE:-}" ]; then
+  cat "$CURL_BODY_FILE" > "$dest"
+fi
+exit "${CURL_EXIT:-0}"
+'''
+
+
+class FetchedRecordThroughLibTests(unittest.TestCase):
+    """release_mapping_check's second pass, end to end through lib.sh.
+
+    Pass 1 is unchanged. When it answers UNVERIFIED (exit 3) AND this tree has
+    no releases/<core tag>.json — the shape of every deploy of the newest
+    release, because release.sh tags this repository before any image exists —
+    the record is fetched and the checker is re-run against it. Verified, the
+    pairing and any digest pin are finally held against something. Not
+    fetched, the run is exactly where it was.
+
+    curl is stubbed: nothing here touches the network.
+    """
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.tree = self.base / 'tree'
+        (self.tree / 'deploy').mkdir(parents=True)
+        (self.tree / 'env').mkdir()
+        for name in ('lib.sh', 'release-mapping.py'):
+            shutil.copyfile(ROOT / 'deploy' / name, self.tree / 'deploy' / name)
+        shutil.copytree(RECORDS, self.tree / 'releases')
+        self.env_file = self.tree / 'env/production.env'
+        self.env_file.write_text(f'JWT_SECRET={SECRET}\n')
+        self.bin = self.base / 'bin'
+        self.bin.mkdir()
+        (self.bin / 'curl').write_text(FETCH_CURL_STUB)
+        (self.bin / 'curl').chmod(0o755)
+        self.log = self.base / 'stub.log'
+        self.tmpdir = self.base / 'tmp'
+        self.tmpdir.mkdir()
+
+    def run_check(self, core, user, search, mode='deploy', body=None, exit_code=0,
+                  env_extra='', process_env=None):
+        if env_extra:
+            self.env_file.write_text(f'JWT_SECRET={SECRET}\n' + env_extra)
+        script = ('set -euo pipefail\n'
+                  'log() { printf "[deploy] %s\\n" "$*"; }\n'
+                  f'ENV_FILE="{self.env_file}"\n'
+                  f'. "{self.tree}/deploy/lib.sh"\n'
+                  'rc=0\n'
+                  f'release_mapping_check "{self.tree}" {mode} "{core}" "{user}" "{search}" || rc=$?\n'
+                  'echo "RC=$rc"\n')
+        environ = {'PATH': f'{self.bin}:{os.environ["PATH"]}', 'STUB_LOG': str(self.log),
+                   'CURL_EXIT': str(exit_code), 'TMPDIR': str(self.tmpdir),
+                   'HOME': str(self.base)}
+        if body is not None:
+            body_file = self.base / 'body.json'
+            body_file.write_text(body)
+            environ['CURL_BODY_FILE'] = str(body_file)
+        environ.update(process_env or {})
+        result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=environ)
+        out = result.stdout + result.stderr
+        self.assertNotIn(SECRET, out)
+        calls = self.log.read_text() if self.log.exists() else ''
+        self.assertIn('RC=', out, out)
+        return int(out.split('RC=')[1].split('\n')[0]), out, calls
+
+    def test_a_record_the_tree_cannot_carry_is_fetched_and_verifies_the_release(self):
+        """The whole gap, closed: v0.9.0 pinned, no releases/v0.9.0.json in the
+        tree, and the pairing checked all the same."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, calls = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0',
+                                        body=json.dumps(record))
+        self.assertEqual(rc, 0, out)
+        self.assertIn('releases/v0.9.0.json', calls, 'the record was not requested')
+        self.assertIn('fetched', out)
+        self.assertIn('used for THIS RUN ONLY', out)
+        self.assertIn('is release v0.9.0', out)
+        self.assertNotIn('release mapping NOT verified', out)
+
+    def test_a_fetched_record_that_contradicts_a_digest_pin_stops_the_run(self):
+        """A pinned digest the release never shipped is the one finding here
+        that predicts wrong bytes: docker pulls by digest."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, calls = self.run_check('v0.9.0', f'v0.9.0@{digest(99)}', 'v0.9.0',
+                                        body=json.dumps(record))
+        self.assertEqual(rc, 1, out)
+        self.assertIn('VIDRA_USER_TAG pins digest', out)
+        self.assertIn('releases/v0.9.0.json', calls)
+
+    def test_a_404_warns_and_the_run_continues_exactly_as_before(self):
+        """The window between publishing a release and its record PR merging.
+        Nothing can verify that pairing, and nothing should stop for it."""
+        rc, out, calls = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', exit_code=22)
+        self.assertEqual(rc, 0, out)
+        self.assertIn('could not fetch', out)
+        self.assertIn('curl --proto', out, 'the warning does not name a curl to run by hand')
+        self.assertIn('release mapping NOT verified', out)
+        self.assertIn('releases/v0.9.0.json', calls)
+
+    def test_a_record_the_tree_already_has_is_never_fetched(self):
+        """No request at all on the overwhelmingly common path: a release the
+        tree records. The second pass exists for the newest release only."""
+        rc, out, calls = self.run_check('v0.6.4', 'v0.6.4', 'v0.6.4')
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(calls, '', f'a deploy of a recorded release reached out: {calls}')
+
+    def test_record_fetch_off_in_the_env_file_reaches_nothing(self):
+        """Airgapped hosts keep exactly today's behaviour, read through
+        env_get like VIDRA_SKIP_DNS_PREFLIGHT."""
+        for source in ('env file', 'process environment'):
+            with self.subTest(source=source):
+                self.log.unlink(missing_ok=True)
+                rc, out, calls = self.run_check(
+                    'v0.9.0', 'v0.9.0', 'v0.9.0', body=json.dumps(synthetic(
+                        'v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)),
+                    env_extra='VIDRA_RECORD_FETCH=off\n' if source == 'env file' else '',
+                    process_env={'VIDRA_RECORD_FETCH': 'off'} if source != 'env file' else None)
+                self.assertEqual(rc, 0, out)
+                self.assertEqual(calls, '', f'curl ran with the fetch off: {calls}')
+                self.assertIn('release mapping NOT verified', out)
+
+    def test_a_rollback_also_gets_the_second_pass_and_absence_still_only_warns(self):
+        """Rollback is not made stricter about absence — mid-incident a missing
+        record must never stop a return to a known-good release."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, calls = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', mode='rollback',
+                                        body=json.dumps(record))
+        self.assertEqual(rc, 0, out)
+        self.assertIn('is release v0.9.0', out)
+        self.log.unlink(missing_ok=True)
+        rc, out, calls = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', mode='rollback',
+                                        exit_code=6)
+        self.assertEqual(rc, 0, out)
+        self.assertIn('could not fetch', out)
+
+    def test_the_fetched_record_is_never_written_into_the_tree(self):
+        """It is evidence for one run, not a record this tree may then cite."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, _ = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', body=json.dumps(record))
+        self.assertEqual(rc, 0, out)
+        self.assertFalse((self.tree / 'releases/v0.9.0.json').exists())
+        self.assertEqual(sorted(p.name for p in self.tmpdir.iterdir()), [],
+                         'the fetch left its temporary files behind')
+
+
 if __name__ == '__main__':
     unittest.main()
