@@ -1141,11 +1141,13 @@ actor keys). Plan it as a user-visible event, not as an ops task.
 
 ### Email
 
-- **DigitalOcean blocks outbound port 25** on new accounts, and does not
-  un-block it on request for most customers. Direct-to-MX delivery will not work.
-  Use a relay (Postmark, SES, Mailgun, Resend, Fastmail…) on **port 587 with
-  STARTTLS + AUTH** — which is what `SMTP_PORT=587` already defaults to and what
-  the mailer implements.
+- **DigitalOcean blocks outbound ports 25, 465 AND 587** on every Droplet,
+  including traffic through a Reserved IP, and documents no appeal path (doc
+  updated 2026-07-13). Direct-to-MX delivery will not work, and neither will the
+  `SMTP_PORT=587` default: on DO, use a relay that listens on a port nobody
+  filters (2525/2587) or an HTTPS API provider. Other hosts block less — the
+  per-host port table, the provider shortlist and a failure-by-failure triage
+  live in [`docs/outbound-email.md`](../docs/outbound-email.md).
 - `SMTP_FROM` must be a domain you control, with **SPF** and **DKIM** published
   for the relay you chose (plus a **DMARC** record once those pass). Without
   them, password-reset and email-verification mail lands in spam and users

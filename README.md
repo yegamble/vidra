@@ -331,6 +331,7 @@ directories are independent git checkouts, git-ignored by this repo.
 | [`.ralph/specs/search.md`](.ralph/specs/search.md) | Cross-repo map of the `vidra-search` service and how it plugs into core and user. |
 | [`.ralph/specs/environments.md`](.ralph/specs/environments.md) | Canonical environment matrix (local / dev / QA / staging / production) and the DX contract. |
 | [`deploy/README.md`](deploy/README.md) | Reference single-host deployment: first-boot ordering, host prerequisites + firewall, droplet sizing, the prod compose overlay + Caddy TLS, deploy/rollback/backup/restore scripts, dirty-migration runbook, secret-rotation table, email. |
+| [`docs/outbound-email.md`](docs/outbound-email.md) | Operator guide to outbound email: which hosts block which SMTP ports (DigitalOcean blocks 25, 465 and 587), environment vs admin-panel configuration and which wins, choosing an API provider or an SMTP relay, SPF/DKIM/DMARC, and triage by test-send failure reason. |
 | [`docs/production-readiness-2026-07.md`](docs/production-readiness-2026-07.md) | **Archival** launch-gate audit (2026-07-28 → 2026-08-02) — superseded by `docs/productionization/`; VERDICT and `101 migrations` count are stale, kept for history. |
 
 ## Autonomous development (Ralph)
