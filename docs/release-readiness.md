@@ -58,13 +58,19 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   (assets, paths, generated types, resolver-skew refusal)
   ([manifest](evidence/release-v0.7.5-verification/manifest.json), created
   `2026-09-20T00:09:35.908895+00:00`); a unit test cross-checks the record
-  against that frozen evidence. **Caveat, recorded because the evidence does
-  not reconstruct without it:** that preflight run required an **uncommitted**
-  per-component-tag patch, kept beside the evidence as `component-tags.patch`,
-  because the preflight clones every repository at the release tag and
-  user/search carry **no `v0.7.5` tag**. The patch is not on `main`, so the
-  frozen source tree the runtime harness consumes cannot be regenerated from
-  `main` today.
+  against that frozen evidence. **Caveat, recorded because it is how the
+  committed evidence was produced:** that preflight run required an
+  **uncommitted** per-component-tag patch, kept beside the evidence as
+  `component-tags.patch`, because the preflight cloned every repository at the
+  release tag and user/search carry **no `v0.7.5` tag**. That is no longer the
+  standing state. Since **#235**, `deploy/release-preflight.py` resolves each
+  component's tag from `releases/<tag>.json` (or a repeatable
+  `--component-tag`); its resolver, called on `main` this session for
+  `v0.7.5`, answers core `v0.7.5`, user `v0.7.3`, search `v0.7.3`, each with
+  source `releases/v0.7.5.json`, no flag and no warning. The committed
+  v0.7.4 and v0.7.5 evidence files were still produced with the patch and were
+  not regenerated here, so the caveat stands for the artifacts on disk while
+  the tooling limitation behind it is closed.
 - **Beta: owner/session-reported as deployed on 2026-09-20, with no committed
   artifact behind it.** No host evidence, no ledger read-back and no
   post-deploy probe record is committed for that deployment, so this record
@@ -107,7 +113,15 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   files alone — no `native-runtime/`, `e2e-runtime/`,
   `ios-runtime/`, `b2-runtime/`, `migration-runtime/`, `recovery-runtime/`,
   `rec03-runtime/` or `offsite-runtime/` subtree exists for any v0.7.x
-  release.
+  release (re-listed on `328de23`; v0.7.5 adds only `dependency-scan/` and
+  `component-tags.patch` to that shape). **The remaining blocker for every one
+  of these lanes is no longer harness code** (next bullet) **but
+  owner-authorised disposable infrastructure**: the disposable acceptance
+  hosts and the dedicated acceptance storage bucket that carried the
+  v0.6.5/v0.6.6 lanes appear to be **gone** — only the production and beta
+  hosts were listed. That observation is **session-observed on 2026-09-20 from
+  the provider listings and is not reconstructible from any committed
+  artifact**, the same evidence class as the beta-deployment claim above.
 - **Carry-forward from v0.6.6 does not apply.** The v0.6.6 delta-carry rested
   on this basis, quoted: *"v0.6.6 = v0.6.5 + one admin-only branding flag with
   **no schema change** and the **same deploy, storage, media, backup and
@@ -145,38 +159,99 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   REC-03 run on the **v0.6.6 → v0.7.5** pair is what would turn this into
   evidence, and it would be the first *migrating* REC-03 pair since
   v0.6.3 → v0.6.4.
-- **Harness state (as of `db9d304`, the commit this section was written
-  against): no runtime lane can be run on v0.7.5 even with a host.** The
-  acceptance harnesses **refuse** the v0.7.5 candidate manifest —
-  `tests/blank_server_smoke.py:31-32` requires every component's recorded tag
-  to equal the release tag, and v0.7.5's user and search entries carry
-  `v0.7.3`. Run against the committed manifests this session, that validator
-  passes v0.6.6 and refuses both v0.7.4 and v0.7.5 with `vidra-user:
-  unexpected source/tag`; the one clause gates the runtime, storage, migration
-  and recovery harnesses alike. Separately, the disposable acceptance hosts
-  and the dedicated acceptance storage bucket that carried the v0.6.5/v0.6.6
-  lanes appear to be **gone** — only the production and beta hosts were
-  listed. That last observation is **session-observed on 2026-09-20 from the
-  provider listings and is not reconstructible from any committed artifact**,
-  the same evidence class as the beta-deployment claim above. So no runtime
-  lane can run until the harness accepts a core-only release **and** the owner
-  authorises new disposable infrastructure.
-- **Next executable — a plan, not progress. Only item (3) has been done.** In
-  order: (1) teach the candidate validator and the preflight a per-component
-  tag, so a core-only release validates and its frozen tree regenerates from
-  `main`; (2) re-point the REC-03 driver, which still defaults to the
-  v0.6.3 → v0.6.4 pair (`tests/rec03-upgrade-rollback.sh:17`) and injects a
-  column `0145` already adds (`:105-106`), so the injection would error
-  instead of the migrator at schema 146; (3) **DONE 2026-09-20** — the
-  dependency and image
-  vulnerability scan — the only lane needing no host; (4) the native runtime
-  milestone on one blank host; (5) REC-03 on v0.6.6 → v0.7.5, the
-  highest-value lane because beta is already on v0.7.5 and no rollback across
-  these four migrations has been rehearsed; (6) the storage → migration →
-  recovery → off-site chain, which must be preceded by extending the recovery
-  catalogue fingerprint (`tests/recovery_release_acceptance.py:52-54`, 15
-  tables) to v0.7.5's new tables, or REC-02 certifies less than the release
-  contains; (7) the backend-backed e2e suite and the iOS/browser matrix.
+- **Harness state (as of `328de23`, the commit this revision was written
+  against): the tooling blockers are fixed; none of it is runtime evidence.**
+  When this section was first written the acceptance harnesses **refused** the
+  v0.7.5 candidate manifest, because `validate_candidate` in
+  `tests/blank_server_smoke.py` required every component's recorded tag to
+  equal the release tag and v0.7.5's user and search entries carry `v0.7.3`.
+  That is no longer true. Five changes merged to `main` on 2026-09-20, each
+  carrying unit tests and **none of them a drill**:
+  - **#233 — the candidate validator accepts a core-only release.** The
+    equality clause is replaced by a structural rule that still refuses
+    nonsense: every component's tag must be a strict `vX.Y.Z`, no component
+    may be **newer** than the release, meta must be **at** the release tag,
+    and a release in which no component shipped is refused. Run against the
+    committed manifests on this branch,
+    `python3 tests/blank_server_smoke.py --validate
+    docs/evidence/release-v0.7.5-verification/manifest.json` **exits 0** and
+    prints the frozen meta revision `478afb7e…`; v0.7.4 and v0.6.6 also exit
+    0, where v0.7.4 and v0.7.5 previously died with `vidra-user: unexpected
+    source/tag`. The blank-server lane now also **reads and asserts** the
+    three tags `vidra setup` wrote before correcting them to the record's
+    per-component tags, so a setup that pinned the wrong release fails there
+    rather than being silently absorbed.
+  - **#235 — the preflight resolves per-component tags** (see the freeze
+    caveat above), so the uncommitted `component-tags.patch` is no longer
+    needed to freeze a core-only release.
+  - **#238 — the recovery/migration catalogue is schema-aware and
+    fail-closed.** `tests/recovery_release_acceptance.py` now selects its
+    catalogue from the **candidate's own** frozen core schema version, and
+    catalogues the five tables core `0147`–`0150` added
+    (`authored_remote_comments`, `ipfs_control_config`,
+    `ipfs_control_operations`, `ipfs_capacity`, `ipfs_copy_cleanup`). A
+    candidate whose schema is newer than the audited ceiling is **refused**
+    rather than drilled against a catalogue that never saw its tables; a
+    whole-`public` schema-shape fingerprint was added alongside the
+    per-table ones; and a data point written by a different revision of the
+    harness file is refused up front, so a harness mismatch can no longer
+    read as data loss at the end of a paid host-day.
+  - **#240 — the REC-03 driver is parametric.**
+    `tests/rec03-upgrade-rollback.sh` now **requires** `REC03_OLD` and
+    `REC03_NEW` with no default (it had shipped wired to one pair), and the
+    failure injection takes its table, column and type as required
+    parameters with no fallback, so it can no longer pre-create a column the
+    upgrade's own migrations never add. A prepared invocation for
+    **v0.6.6 → v0.7.5**, with every expected reading derived from source, is
+    written down at
+    [`runtime-acceptance-rec03-v0.7.5-prepared.md`](runtime-acceptance-rec03-v0.7.5-prepared.md)
+    — whose own first line is that **nothing in it has run**.
+  - **#241 — `deploy/pin-release.sh` pins per component.** It reads
+    `releases/<tag>.json` and writes each `VIDRA_*_TAG` at the tag the record
+    pairs that component at, so pinning a host to v0.7.5 no longer names a
+    `ghcr.io/yegamble/vidra-user:v0.7.5` that was never published.
+
+  **What this does and does not change.** It changes only what *could* be run:
+  every item above is source and unit tests, and **no drill has run on the
+  v0.7.5 digests** — the lane list above is unchanged, no disposition exists,
+  and no register row moves.
+- **Next executable — a plan, not progress.** The harness-fix and
+  scan steps this list opened with are **done** (previous bullet; scan
+  2026-09-20); everything that remains needs a host that does not exist yet.
+  In order: (1) the **native runtime milestone** on one blank host; (2)
+  **REC-03 on v0.6.6 → v0.7.5**, the highest-value lane because beta is
+  already on v0.7.5 and no rollback across these four migrations has been
+  rehearsed — the invocation is prepared at
+  [`runtime-acceptance-rec03-v0.7.5-prepared.md`](runtime-acceptance-rec03-v0.7.5-prepared.md);
+  (3) the **storage → migration → recovery → off-site chain**, whose
+  catalogue prerequisite #238 has now met, so REC-02 would no longer certify
+  less than the release contains; (4) the **backend-backed e2e suite** and the
+  **iOS/browser matrix**. This is an ordering, not a commitment: none of it is
+  scheduled, and none of it is authorised.
+- **Defects found while preparing acceptance — four, all OPEN.** None was
+  found by a drill; each surfaced while making the tooling above accept a
+  core-only release.
+  - [yegamble/vidra#242](https://github.com/yegamble/vidra/issues/242) —
+    `install.sh` resolves one tag from the newest vidra-core release and
+    `vidra setup --release-tag` writes it into all three `VIDRA_*_TAG` keys,
+    so a fresh install of a core-only release (v0.7.4, v0.7.5) pins
+    `vidra-user` and `vidra-search` images that were never published.
+  - [yegamble/vidra-core#267](https://github.com/yegamble/vidra-core/issues/267)
+    — after a failed search-outbox drain the rescheduled events are overtaken
+    by later ones, and the delayed `reconcile.end` then suppresses a freshly
+    published video as `reconcile_orphan`, hiding it from search until the
+    24 h sweep with nothing dead-lettered.
+  - **`deploy/rollback.sh <tag>` still writes one tag for all three
+    services**, so rolling back *to* a core-only release pins a
+    `vidra-user:v0.7.5` that does not exist and fails at the pull with the
+    broken release still serving; the per-component
+    `--core/--user/--search` flags are the documented workaround
+    ([`deploy/README.md`](../deploy/README.md), documented by #241).
+  - **`pin-release.sh` refuses on a no-git bundle tree** — it requires a git
+    checkout and dies with a pointer to "Upgrading a bundle install" — so
+    bundle hosts still move their pins by hand
+    ([`deploy/pin-release.sh`](../deploy/pin-release.sh),
+    [`deploy/README.md`](../deploy/README.md)).
 - **Owner-only inputs are unchanged by v0.7.5.** The broader browser matrix,
   the sanitized representative PeerTube source, the selected identity/mail/CDN
   providers and the deploy decision stay exactly as already recorded in the
