@@ -1444,6 +1444,18 @@ fi
 exit "${CURL_EXIT:-0}"
 '''
 
+RM_STUB = '''#!/bin/sh
+if [ -n "${{RM_FAIL_RF:-}}" ]; then
+  for a in "$@"; do
+    if [ "$a" = "-rf" ]; then
+      echo "rm: permission denied (stub)" >&2
+      exit 1
+    fi
+  done
+fi
+exec {real} "$@"
+'''
+
 
 class FetchedRecordThroughLibTests(unittest.TestCase):
     """release_mapping_check's second pass, end to end through lib.sh.
@@ -1474,6 +1486,11 @@ class FetchedRecordThroughLibTests(unittest.TestCase):
         self.bin.mkdir()
         (self.bin / 'curl').write_text(FETCH_CURL_STUB)
         (self.bin / 'curl').chmod(0o755)
+        # A cleanup that FAILS is the point of two tests below; `rm -f` (the
+        # download's own temp file) is passed straight through so only the
+        # directory removal is affected.
+        (self.bin / 'rm').write_text(RM_STUB.format(real=shutil.which('rm')))
+        (self.bin / 'rm').chmod(0o755)
         self.log = self.base / 'stub.log'
         self.tmpdir = self.base / 'tmp'
         self.tmpdir.mkdir()
@@ -1841,6 +1858,110 @@ sys.exit(3)
                           'the second-pass directory does not follow the same '
                           '"${TMPDIR:-/tmp}/vidra-record.XXXXXX" convention as the '
                           f'download temp file: {path}')
+
+    # --- the second pass's exit-status channel ------------------------------
+
+    def test_a_failing_cleanup_cannot_turn_a_verified_run_into_a_refusal(self):
+        """`set -euo pipefail` is in force inside the subshell, because
+        deploy.sh and rollback.sh set it and lib.sh is sourced into them. Under
+        errexit a FAILING COMMAND IN AN EXIT TRAP rewrites the shell's exit
+        status to 1 — measured on 3.2: intended 0, 3, 65 and 64 all came back
+        as 1. So an undeletable temp directory turned an ADMITTED, VERIFIED
+        re-check into status 1, which the caller read as the checker's
+        REFUSED: a fabricated refusal that also blocks a rollback, for a reason
+        that predicts nothing about the images.
+
+        The status the subshell means to return must therefore be pinned
+        before the trap runs, and the cleanup must not be able to change it."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, _ = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', body=json.dumps(record),
+                                    process_env={'RM_FAIL_RF': '1'})
+        self.assertEqual(rc, 0, f'a failed cleanup fabricated a refusal:\n{out}')
+        self.assertIn('is release v0.9.0', out)
+        self.assertIn('rests on the record fetched from', out)
+        self.assertIn('could not be removed', out,
+                      'a cleanup that failed should say so, not pass silently')
+
+    def test_a_failing_cleanup_does_not_swallow_a_real_contradiction_either(self):
+        """The other direction: pinning the status must not pin it to 'fine'."""
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, _ = self.run_check('v0.9.0', f'v0.9.0@{digest(99)}', 'v0.9.0',
+                                    body=json.dumps(record), process_env={'RM_FAIL_RF': '1'})
+        self.assertEqual(rc, 1, out)
+        self.assertIn('VIDRA_RECORD_FETCH=off', out)
+        self.assertIn('VIDRA_RELEASE_MAPPING=warn', out)
+
+    KILLS_ITS_PARENT = '''#!/usr/bin/env python3
+"""Exits the second pass by a route no trap can catch, so the subshell returns
+a status outside this contract's set."""
+import os, signal, sys
+if '--print-missing-release' in sys.argv:
+    print('v0.9.0')
+    sys.exit(0)
+if '--extra-record' in sys.argv:
+    os.kill(os.getppid(), signal.SIGKILL)
+    sys.exit(0)
+sys.stderr.write('[release-mapping] WARNING: pass one\\n')
+sys.exit(int(os.environ.get('PASS1', '3')))
+'''
+
+    def test_a_status_outside_the_contract_is_ignored_and_pass_one_stands(self):
+        """Status 1 must never again mean two things. With the status pinned,
+        the only way out of that subshell other than 0/3/64/65/130 is a signal
+        no trap can catch — and whatever it is, the first pass's verdict is
+        what stands, in BOTH directions: a run pass 1 allowed still runs, and
+        a run pass 1 refused is still refused."""
+        record = json.dumps(synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9))
+        for label, pass1, expected in (('pass 1 said UNVERIFIED', '3', 0),
+                                       ('pass 1 REFUSED', '1', 1)):
+            with self.subTest(case=label):
+                self.log.unlink(missing_ok=True)
+                self.stub_checker(self.KILLS_ITS_PARENT)
+                rc, out, _ = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', body=record,
+                                            process_env={'PASS1': pass1})
+                self.assertEqual(rc, expected, f'{label}: the verdict moved:\n{out}')
+                self.assertIn('unexpectedly', out)
+                self.assertIn('IGNORED', out)
+
+    def test_an_incidental_errexit_cannot_fabricate_a_verdict(self):
+        """The invariant behind the status channel: 0, 3 and 65 must be
+        reachable ONLY from the branches that found the admission marker.
+        Anything that goes wrong on the way — errexit on a broken binary, an
+        unset variable, a missing file — has to land on 64 and leave the first
+        pass alone. Here `cat` fails, which aborts the subshell under
+        `set -e` BEFORE the marker is ever examined."""
+        cat_stub = self.bin / 'cat'
+        cat_stub.write_text('#!/bin/sh\necho "cat: broken (stub)" >&2\nexit 1\n')
+        cat_stub.chmod(0o755)
+        record = synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9)
+        rc, out, _ = self.run_check('v0.9.0', 'v0.9.0', 'v0.9.0', body=json.dumps(record))
+        self.assertEqual(rc, 0, f'a broken binary produced a verdict:\n{out}')
+        self.assertIn('release mapping NOT verified', out)
+        self.assertNotIn('is release v0.9.0', out,
+                         'a run that never read the marker reported a verified release')
+
+    def test_the_status_channel_is_pinned_before_every_exit(self):
+        """Source-level guard for the same invariant, because the behavioural
+        test above can only reach one of the failure routes. Every `exit` in
+        the second-pass subshell must set `st` first, or the EXIT trap returns
+        a stale code and the caller acts on the wrong verdict."""
+        body = (ROOT / 'deploy/lib.sh').read_text()
+        block = body.split('      (\n        st=64\n', 1)
+        self.assertEqual(len(block), 2, 'the second-pass subshell was restructured')
+        block = block[1].split('\n      )\n', 1)[0]
+        pinned = False
+        for line in block.splitlines():
+            stripped = line.strip()
+            if stripped.startswith('#') or stripped.startswith('trap '):
+                continue
+            if 'exit ' in stripped:
+                # `st=` either on an earlier line, or ahead of the exit on
+                # this one (`... || { st=64; exit 64; }`).
+                self.assertTrue(pinned or 'st=' in stripped.split('exit ', 1)[0],
+                                f'`{stripped}` is not preceded by an st= assignment')
+                pinned = False
+            if stripped.startswith('st='):
+                pinned = True
 
     def test_an_interrupt_during_the_second_pass_leaves_no_directory(self):
         """Ctrl-C while the re-check is running. The download already cleaned

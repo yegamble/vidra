@@ -621,23 +621,44 @@ EOF
       # behind. A plain ( ) subshell, unlike $( ), passes stdout and stderr
       # straight through, so every line below still reaches the operator live.
       #
-      # The verdict comes back as the exit status:
-      #   0|1|3  the re-check's verdict, reached with the record ADMITTED
-      #   64     keep the first pass's verdict, unchanged
-      #   130    interrupted
+      # THE EXIT STATUS IS A CHANNEL, AND EVERY CODE ON IT MEANS ONE THING:
+      #   0    admitted, VERIFIED
+      #   3    admitted, UNVERIFIED
+      #   65   admitted, CONTRADICTED — the caller turns this into a stop
+      #   64   keep the first pass's verdict, unchanged
+      #   130  interrupted
+      # anything else — only an uncatchable signal can produce it — is read as
+      # "unknown", and the first pass's verdict stands.
+      #
+      # 65 rather than 1 because 1 is what a shell returns for ANY failure.
+      # Sharing it made "the record contradicts the pins" indistinguishable
+      # from "something in here broke", and the caller turned both into a
+      # refusal — a stop that also blocks a rollback, for a reason that may
+      # predict nothing at all.
+      #
+      # `st` carries the status the subshell MEANS to return, and the EXIT
+      # trap exits it explicitly. That is load-bearing, not tidiness:
+      # `set -euo pipefail` is in force here (deploy.sh and rollback.sh set it
+      # and this file is sourced into them), and under errexit a FAILING
+      # COMMAND IN AN EXIT TRAP rewrites the status to 1. Measured on bash
+      # 3.2: with a cleanup that fails, intended 0, 3, 64 and 65 ALL came back
+      # as 1, so an undeletable temp directory silently turned a verified
+      # re-check into a refusal. `st` defaults to 64, so any incidental
+      # failure — errexit, an unset variable, a missing binary — leaves the
+      # first pass's verdict alone; 0, 3 and 65 are reachable only from the
+      # explicit branches below, after the admission marker was found.
       (
-        # The path is expanded INTO the trap string, not referenced from it.
-        # `record_dir` is a `local`, and an EXIT trap runs after the shell has
-        # started unwinding, by which point the local is gone: under `set -u`
-        # the handler then died with "record_dir: unbound variable", and a
-        # failed EXIT trap makes the subshell exit 1 — which this function
-        # read as the checker's REFUSED. A cleanup bug became a fabricated
-        # refusal, on every path through the second pass.
+        st=64
+        # The path is expanded INTO the trap string, not referenced from it:
+        # `record_dir` is a `local` and an EXIT trap runs after the shell has
+        # begun unwinding, when that local is already gone — under `set -u`
+        # the handler then died, which is the same fabricated refusal by
+        # another route. The cleanup cannot fail the trap either: it is
+        # swallowed and reported, never allowed to reach the exit status.
         # shellcheck disable=SC2064  # expanding now is the point, see above
-        trap "rm -rf '$record_dir'" EXIT
-        # shellcheck disable=SC2064
-        trap "rm -rf '$record_dir'; exit 130" HUP INT TERM
-        fetch_release_record "$wanted" "$record_dir/$wanted.json" || exit 64
+        trap "rm -rf '$record_dir' 2>/dev/null || printf 'WARNING: the temporary directory %s could not be removed; remove it by hand.\\n' '$record_dir' >&2; exit \${st:-64}" EXIT
+        trap 'st=130; exit 130' HUP INT TERM
+        fetch_release_record "$wanted" "$record_dir/$wanted.json" || { st=64; exit 64; }
         log "the verdict above was reached before that record was available — the one below supersedes it"
         rc2=0
         python3 "$root/deploy/release-mapping.py" "${args[@]}" \
@@ -658,6 +679,7 @@ EOF
         #     verification must not be able to subtract a deploy.
         if ! grep -q '^\[release-mapping\] extra-record-admitted ' "$record_dir/out"; then
           log "WARNING: the re-check ended $rc2 without using ${wanted}'s fetched record, so the verdict above stands unchanged."
+          st=64
           exit 64
         fi
         case "$rc2" in
@@ -670,26 +692,41 @@ EOF
             # core-only triple (v0.7.4, v0.7.5) the pairing refusal then
             # stands. Measured, not assumed.
             log "WARNING: this stop rests on the record FETCHED from $RECORD_FETCHED_FROM, not on anything in this tree. If that record is wrong, or you cannot reach a copy you trust, re-run with VIDRA_RECORD_FETCH=off. That falls back to this tree alone, which can NEVER report verified for a release the tree has no record for: a UNIFORM vN triple then continues UNVERIFIED with a warning, but a triple the tree cannot pair — a core-only release such as v0.7.4/v0.7.5 — is still REFUSED by the pairing check, and VIDRA_RELEASE_MAPPING=warn is the override that waives that check for one run. Neither knob makes this report verified."
-            exit 1 ;;
+            st=65
+            exit 65 ;;
           0|3)
             log "the verdict above rests on the record fetched from $RECORD_FETCHED_FROM, not on anything in this tree"
+            st="$rc2"
             exit "$rc2" ;;
           *)
             log "WARNING: the re-check with ${wanted}'s fetched record ended $rc2, which is not a verdict this check knows (an older deploy/release-mapping.py, or a crash). It was IGNORED and the verdict above stands unchanged."
+            st=64
             exit 64 ;;
         esac
       )
       rc2=$?
       case "$rc2" in
+        0|3) rc="$rc2" ;;
+        65)
+          # Admitted, and the record CONTRADICTS the pins. The only outcome
+          # here that predicts the wrong bytes on disk, and the only one that
+          # turns into a stop. Its own message named both escapes above.
+          rc=1 ;;
         64) ;;   # the first pass's verdict stands, and it is already in `rc`
         130)
           # Interrupted before anything mutated. Stopping is the honest
           # answer: continuing would deploy on a preflight nobody finished.
           log "the release-record re-check was interrupted — nothing was changed"
           rc=1 ;;
-        *) rc="$rc2" ;;
+        *)
+          # Only an uncatchable signal reaches here: the EXIT trap pins every
+          # other route to a code above. Whatever it was, it is not a verdict
+          # about the images, so it may not become one.
+          log "WARNING: the release-record re-check ended $rc2 unexpectedly, which is not one of this check's outcomes. It was IGNORED and the verdict above stands unchanged." ;;
       esac
-      rm -rf "$record_dir"
+      # Belt and braces for the one case the subshell's own trap cannot cover
+      # (it was killed outright). Never allowed to affect the verdict.
+      rm -rf "$record_dir" 2>/dev/null || true
     fi
   fi
 
