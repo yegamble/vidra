@@ -90,6 +90,12 @@ public `/api/v1/videos/search` the frontend calls.
 - **Source builds of the three default branches**, not released images or
   pinned digests: stack coverage, never release qualification.
 - **Local storage**, not S3/Spaces/MinIO, and no CDN, presign or federation.
+- **No degraded-dependency coverage.** The lane boots vidra-search to healthy
+  *before* the api, because an api whose first outbox drain fails reschedules
+  its boot events behind later ones and `reconcile.end` then suppresses the
+  freshly indexed video (`suppressed_reason=reconcile_orphan`) — a real
+  core↔search defect, measured on this branch, that the lane deliberately does
+  not exercise. A green says nothing about recovery from a search outage.
 - **Not required for merge.** It lives in its own workflow, outside
   `.github/required-checks.txt`, precisely so one transcode flake on a shared
   runner cannot block an unrelated PR. It runs nightly, on `workflow_dispatch`,

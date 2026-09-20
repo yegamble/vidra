@@ -337,4 +337,24 @@ const publicSearch = await until('public search API', { deadlineMs: 60000 }, asy
 });
 log(`SEARCH PROVEN (public API): /api/v1/videos/search returned ${videoID} — ${JSON.stringify(publicSearch)}`);
 
+// A SECOND LOOK, DELIBERATELY LATE. "Indexed" has to mean "still indexed a
+// moment later", because this lane has already produced the opposite: on run
+// 35504619907 the document was suppressed (eligible=false,
+// suppressed_reason=reconcile_orphan) 130 ms AFTER the assertion above passed,
+// by a reconcile.end that a failed first drain had pushed behind the upsert.
+// The bring-up order in the workflow removes that cause; this re-check is what
+// notices if it ever comes back, instead of shipping a green that was a race.
+const settleSeconds = 10;
+log(`re-checking after ${settleSeconds}s that the document is still indexed (guards the reconcile_orphan race)`);
+await sleep(settleSeconds * 1000);
+const stillIndexed = await signedSearch(title);
+expectStatus(stillIndexed, 200, `re-check /internal/v1/search after ${settleSeconds}s`);
+const stillIDs = (stillIndexed.json?.ids ?? []).map(hit => hit.video_id);
+assert.ok(
+  stillIDs.includes(videoID),
+  `the video was indexed and then DISAPPEARED within ${settleSeconds}s — vidra-search returned ${JSON.stringify(stillIDs)}. ` +
+  'Read search.documents.suppressed_reason in the evidence artifact: a late, out-of-order event suppressed it.',
+);
+log(`SEARCH STILL INDEXED after ${settleSeconds}s — ${JSON.stringify(stillIDs)}`);
+
 log(`PASS — upload -> transcode -> HLS bytes -> searchable, video ${videoID}, title ${title}`);
