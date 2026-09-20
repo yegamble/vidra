@@ -23,10 +23,10 @@ help pin IPFS videos instead of paying for a large volume?"*, under the constrai
 the moment, pinning stops at a point on local disk"*.
 
 1. **Mounting S3 under the IPFS node does not work** (section 3).
-2. **The mirror pins about three times the bytes a player can ever ask it for, and
+2. **The mirror pins roughly 2.7 times the bytes a player can ever ask it for, and
    reserves twice that again** (section 2). Pinning only what plays and reserving
-   what is measured should let the same disk hold on the order of **six times** the
-   video — by construction, not yet by measurement — with no new mechanism, no new
+   what is measured should let the same disk hold about **five times** the video —
+   by construction, not yet by measurement — with no new mechanism, no new
    cost and nothing for the operator to do. That is **Tier A** (section 5): six
    small fixes, each worth shipping alone. **This document recommends Tier A now.**
 3. **Removing the ceiling altogether is possible**: Kubo can keep references to
@@ -50,17 +50,27 @@ backend into a multipart body (`internal/ipfsmirror/service.go:1590-1630`,
 stream is paced and bounded by `limitedSource` (`limited_source.go:69-173`,
 `admission.go:342-350`); the legacy drain reads the backend directly. **[read]**
 
-**And the tree it pins is about three times what plays.** Per public video the
+**And the tree it pins is roughly 2.7 times what plays.** Per public video the
 mirror wrap-adds the promoted HLS generation directory (`service.go:1420-1468`),
 taking every key under it except `vp9.webm` (`service.go:1433-1448`). That directory
 also holds, in every rendition, `video.mp4` and `video-only.mp4` — *"the two
 required progressive MP4 assets for a rendition"*, remuxed from it without
 re-encoding (`internal/media/cmaf.go:627-651`; names at `internal/media/hls.go:28-32`,
-keys at `:1011-1022`) — and an `audio.*` beside the master. Each is about the size
-of the rendition it was remuxed from. **[read; the ratio is unmeasured]** The HLS
-handler itself refuses those names (`internal/httpapi/hls.go:75-76`), so no player
-ever requests them from the gateway, and the code's own comment says the intent is
-*"a clean playlists+segments tree"* (`service.go:1445-1446`). Thumbnail, storyboard, VTT
+keys at `:1011-1022`) — and, when the source has audio, one `audio.m4a` beside the
+master. Both packagers always emit the two MP4s, under the pinned prefix, with no
+setting or lean mode that skips them (`internal/media/packager.go:497-501`, `:531`;
+`cmaf.go:513-517`, `:530`). Each MP4 is about the size of the rendition it was
+remuxed from; the audio asset is one shared track. Counting the all-intra
+trick-play renditions (`hls.go:679-681`, `:831-846`) as playback, which they are,
+the tree works out to **2.6–2.8 times the playback bytes for a single H.264
+ladder**, falling toward ~2.2 when HEVC or AV1 representations are enabled, since
+the downloads stay H.264-only (`cmaf.go:474-482`). **[read; computed, not
+measured]** No playlist references those files and nothing resolves them through
+the mirror: the gateway URL handed out is the master only
+(`internal/ipfsmirror/playback.go:43`), delivery deliberately has no mirror class
+for downloads (`internal/httpapi/delivery.go:38-42`), and the frontend uses only
+the master URL. The code's own comment says the intent is *"a clean
+playlists+segments tree"* (`service.go:1445-1446`). Thumbnail, storyboard, VTT
 and captions are pinned as separate rows; the original and the WebM are deferred
 while a ready HLS tree exists (`admission.go:196-207`).
 
@@ -130,17 +140,18 @@ before the one that admits more.
 | # | Fix | Why |
 |---|---|---|
 | F2 | Read `X-Stream-Error`, and require the wrap entry, in `ipfs.Client.add` | Kubo reports a late add failure as HTTP 200 plus a trailer (T11a) and the client returns the last hash it saw (`internal/ipfs/client.go:186-211`) — for a wrap add, a segment's CID recorded as the tree's root. `c.post` (`client.go:345-364`) returns only `resp.Body`, so it must hand back the response; Go fills `resp.Trailer` only after the body is read to EOF, and the scanner's line cap (`client.go:186`) can abort before EOF — an unread trailer is a failure, not a pass. T3 shows the wrap entry as `Name: ""`; the code comment at `client.go:154-156` says otherwise, so the PR pins it with a real-Kubo test. Whether a copy-mode add that runs out of disk mid-tree takes this path is **[unverified]** — but a full disk is exactly when it would |
-| F6 | **Pin only what plays** | Section 2: the wrap-add takes every key under the generation but `vp9.webm`, so each rendition's `video.mp4` and `video-only.mp4` and the `audio.*` ride along — about two thirds of the tree, by construction. The wrap-add should admit only what the HLS handlers serve — the master playlist plus names matching the grammar they already enforce (`hlsFileName` / `hlsCMAFFileName`, `internal/httpapi/hls.go:75-76`) — defined in one place so the mirror and the handlers cannot drift; the plan must list every playback file of both packagings (MPEG-TS and CMAF) against it. There is a second reason: those are files the instance otherwise serves only under its download policy (`internal/httpapi/downloads.go:56-82`), which the mirror does not read. Existing rows need a re-pin run — the root CID changes — and the freed blocks return only on a gc (`IPFS_GC_AFTER_UNPIN` defaults to false). Before building: confirm nothing reads a download asset through the gateway (D5) |
+| F6 | **Pin only what plays** | Section 2: the wrap-add takes every key under the generation but `vp9.webm`, so each rendition's `video.mp4` and `video-only.mp4` and the `audio.m4a` ride along — well over half the tree. The wrap-add should admit only what the HLS handlers serve, defined in one place so the mirror and the handlers cannot drift. Three things the definition must get right **[read]**: it matches the **relative path** (rendition directory + file), not the basename; it covers native trees through `hlsFileName` / `hlsCMAFFileName` plus the master (`internal/httpapi/hls.go:75-76`); and it keeps a branch for imported PeerTube trees, which are mirrored on purpose (`internal/ipfsmirror/lookups.go:107-116`), are served by the looser `hlsPeerTubeFileName` (`hls.go:77`) and whose master *"need not be master.m3u8"* (`internal/ipfsmirror/playback.go:20`) — without it every file of such a tree is excluded and the pin fails as `hls tree is empty` (`service.go:1462-1468`). The same filter must go into `admissionInventory` (`admission.go:69-78`), which carries its own copy of the `vp9.webm` exclusion and both sizes the reservation and bounds the copy source (`limited_source.go:69-77`) — filter only `pinDirectory` and managed mode still reserves for files it never adds. There is a second reason to do this: those are files the instance otherwise serves only under its download policy (`internal/httpapi/downloads.go:56-82`), which the mirror does not read. **Nothing consumes them through the mirror** (section 2), so F6 breaks no consumer. Existing rows need a **new** re-pin backfill: `Reconcile` re-arms only `failed` rows (`service.go:1703-1714`), `rearmLatestHLS` fires only when the master key changed (`admission.go:413-425`), and `RepinIPFSObject` (`media_ipfs_pins.sql:112-126`) is the right lever with one caller today. Until its turn comes a row keeps serving from its old root; the re-add is cheap because retained files re-chunk to identical CIDs; the freed blocks return only on a gc (`IPFS_GC_AFTER_UNPIN` defaults to false, `internal/config/config.go:1330`) |
 | F4 | Make a capacity pause visible outside Admin → IPFS | `/admin/system` reports `ok` on a full budget (`system_ipfs_managed.go:29-68`), there is no capacity WARN in the logs, and no metric carries `repo_used_bytes` or the budget. Add gauges and one log line per pause transition. How `/admin/system` shows it needs vidra-user's input: a component that turns `degraded` demotes the whole page, which has broken that repo's backed test harness before |
 | F3 | Give unmanaged mode a ceiling | The legacy drain has none (`service.go:1196-1243`). A `repo/stat`-based budget (`IPFS_REPO_BUDGET_BYTES`) that pauses the drain with the same `capacity_reason` vocabulary. Core cannot `statvfs` an unmanaged node, so this is a repo-size budget, not a free-space floor: the runbook must say it sits below disk − database growth − scratch |
-| F1 | Replace the `2 ×` reservation with a measured factor | T5 measured a copy add of 67,108,864 bytes growing the repo by 68,031,550 — **1.014 ×**. One sample of incompressible data; measure a real HLS tree, then set the factor with stated headroom. It ships after F4 and F3 because it admits more |
+| F1 | Replace the `2 ×` reservation with a measured factor | T5 measured a copy add of 67,108,864 bytes growing the repo by 68,031,550 — **1.014 ×**. One sample of incompressible data, and `repo/stat`'s RepoSize excludes flatfs slack and inodes: measure a real HLS tree, keep the `16 KiB × files` and `1 MiB` terms, then set the factor with stated headroom. `admission.go:110` is the only place it is computed, and it is not the copy bound (`admission.go:338-341`), so under-reserving weakens the budget gate between host polls, not the transfer. It ships after F4 and F3 because it admits more |
 | F5 | Tell the mirror when a pinned object is deleted or replaced | Found while reviewing this design **[read, untested]**: caption delete removes the blob and the row and never unpins (`internal/video/captions.go:114-128`), so a deleted caption stays pinned and retrievable; a replaced poster or storyboard keeps its key, and `fireMediaReplaced` exists *"for exactly one consumer: CDN invalidation"* (`internal/video/service.go:493-520`, `:1670`, `:1724`), so the old bytes stay pinned under the old CID; avatar replacement does unpin the old key, but skips both delete and unpin when the key is unchanged (`internal/profileimage/service.go:448-451`) |
 
 **What Tier A should buy.** Today a budget `B` admits about `B / 2` of a tree that
-is about three times the playback bytes — roughly `B / 6` of playable video. After
+is about 2.7 times the playback bytes — roughly `B / 5.4` of playable video. After
 F6 and F1 it admits about `B / 1.1` of a tree that is only playback bytes. **About
-six-fold, by construction; the first thing to do after F6 and F1 is measure it on
-beta** and record the number in `docs/`.
+five-fold (4.5–5.5) for a single H.264 ladder, nearer three-fold with HEVC or AV1
+representations on — by construction; the first thing to do after F6 and F1 is
+measure it on beta** and record the number in `docs/`.
 
 ## 6. Tier B — reference pinning (a gated option)
 
@@ -702,17 +713,18 @@ release containing any prefix of this list is safe to deploy.
 
 - **D2 — How much to build. Recommendation: Tier A now, and decide Tier B from
   beta's measured number.** Tier A is six small fixes, closes two gaps that exist
-  today, and should multiply what the disk holds about six-fold. Tier B removes the
+  today, and should multiply what the disk holds about five-fold. Tier B removes the
   ceiling, but two review rounds each found blockers in it, its deleter list is
   only as complete as the last search, it needs a manager change before it can be
   switched on safely, it converts disk into bucket egress that must be policed, and
   it rests on experimental features of software whose maintainers stop on
-  2026-09-30. If six-fold is enough for the instances vidra has, Tier B is not
+  2026-09-30. If five-fold is enough for the instances vidra has, Tier B is not
   worth its risk.
 - **D5 — Are the download assets meant to be on IPFS?** F6 assumes not: the pin
-  code's comment asks for *"a clean playlists+segments tree"* and the HLS handler
-  refuses those names. If mirroring downloads is wanted, it should be its own media
-  class with the download policy applied, not a side effect.
+  code's comment asks for *"a clean playlists+segments tree"*, delivery has no
+  mirror class for downloads, and nothing reads them through the mirror today. If
+  mirroring downloads is wanted, it should be its own media class with the download
+  policy applied, not a side effect.
 - **D1 — (Tier B) Is a mirror that depends on the rest of the stack acceptable?** In
   reference mode the mirror depends on primary storage **and on Postgres and on the
   api container**. A Postgres restart, a migration window or `up -d` recreating the
@@ -731,9 +743,10 @@ release containing any prefix of this list is safe to deploy.
 
 ## 13. Risks and open items
 
-- **Tier A's six-fold is arithmetic, not a measurement.** The download assets are
-  "about the size of the rendition" because they are remuxed from it without
-  re-encoding; nobody has sized a real tree. PR 7 exists for that.
+- **Tier A's five-fold is arithmetic, not a measurement.** The MP4s are "about the
+  size of the rendition" because they are remuxed from it without re-encoding, and
+  the trick-play share of playback is an estimate; nobody has sized a real tree. PR 7
+  exists for that.
 - **F6 changes every HLS root CID** as rows are re-pinned. The API hands out the
   current CID, so nothing should hold an old one — to be confirmed (federation
   payloads, cached pages).
@@ -799,3 +812,15 @@ release containing any prefix of this list is safe to deploy.
   limits; cumulative egress in the admin surface; conditions on "re-index all".
 - *Corrected:* F5's avatar case; the amplification figure (a ratio against an
   unmeasured denominator); the B2 sentence; ten citations.
+
+**After revision 3** (one targeted verification of Tier A, since the recommendation
+now rests on it):
+- *Overstated:* "about three times" and "six-fold". Worked through for both
+  packagings with trick-play counted as playback, the tree is 2.6–2.8 times the
+  playback bytes and Tier A is about five-fold — nearer three with HEVC or AV1 on.
+- *F6 as first written would have broken imported trees:* the definition must match
+  the relative path, keep a PeerTube branch, and be applied in `admissionInventory`
+  as well as `pinDirectory`; and the re-pin needs a new backfill — no existing
+  re-arm path fires for it.
+- *Confirmed:* both packagers always emit the two MP4s under the pinned prefix, and
+  nothing consumes a download asset through the mirror, so F6 breaks no consumer.
