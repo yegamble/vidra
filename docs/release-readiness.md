@@ -4,6 +4,133 @@ Audit date: **2026-09-05**. Target: a fresh-server installation, migration of th
 
 This is the authoritative campaign record for this audit, superseding earlier readiness labels **only for the revisions and evidence below**. Historical plans remain requirement sources. The original audit used one agent with no product edits, commits, pushes, merges, deployment, or branch cleanup. The implementation session below authorizes scoped commits/pushes and a draft PR, but prohibits merge, release publication and production deployment. No production database, media bucket, credentials, or running stack was used.
 
+## v0.7.5 candidate — 2026-09-20
+
+**v0.7.5: released and running on beta, NOT accepted.** The preflight record is
+the only evidence that exists on these digests — no scan, no runtime milestone,
+no e2e, no storage or disaster-recovery lane has run on them — and nothing from
+v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
+
+- **Contents: a core-only release.** Core moves to `v0.7.5` (`ce3eb0a4`);
+  **user and search stay at `v0.7.3`** (`c7dbea44` / `4daed185`) and were not
+  rebuilt for it. Measured delta since v0.6.6: **41 core commits**, 151 files
+  changed (+12,133 / −454); excluding `*_test.go` files and every path under a
+  `testdata/` directory, **103 files and +7,822 / −423 lines**. New surfaces:
+  a managed IPFS node with bounded admission and capacity accounting
+  (`80967d8`, `39deee3`, `d7de8ac`), an IPFS-HLS playback path advertised with
+  authoritative fallback (`d86495e`), locally-authored comments on **remote**
+  videos that the author's home instance hosts and federates (`0cf21ad`), the
+  PeerTube importer re-run sync (`core#262`/`#263`/`#264`), a storyboard
+  backfill from PeerTube HLS objects (`91a012d`), a `/search/suggestions`
+  authorization re-check (`1a4b8a9`), and five Go dependency bumps.
+- **Schema moves for the first time since v0.6.4.** Core **146 → 150**: the
+  four new migrations are `0147_authored_remote_comments`, `0148_ipfs_control`,
+  `0149_ipfs_admission` and `0150_ipfs_copy_cleanup`. Search stays **18**. Both
+  numbers were asked of the **released images themselves** (`migrate
+  embedded-max` by linux/amd64 digest,
+  `docs/evidence/release-v0.7.5-verification/embedded-max.txt`) rather than
+  read off the source tree.
+- **Frozen and recorded:** `releases/v0.7.5.json` (meta#230) — core `ce3eb0a4`
+  / index `sha256:e785501e…3d0d` / amd64 `sha256:49974ded…b6de`; user
+  `c7dbea44` / `d78526c2…0e29` / `814df264…3995`; search `4daed185` /
+  `6fb9312e…69f4` / `a2195eaf…46b1`; meta commit `478afb7e`.
+  `deploy/release-preflight.py --tag v0.7.5` → PASS on all four checks
+  (assets, paths, generated types, resolver-skew refusal)
+  ([manifest](evidence/release-v0.7.5-verification/manifest.json), created
+  `2026-09-20T00:09:35.908895+00:00`); a unit test cross-checks the record
+  against that frozen evidence. **Caveat, recorded because the evidence does
+  not reconstruct without it:** that preflight run required an **uncommitted**
+  per-component-tag patch, kept beside the evidence as `component-tags.patch`,
+  because the preflight clones every repository at the release tag and
+  user/search carry **no `v0.7.5` tag**. The patch is not on `main`, so the
+  frozen source tree the runtime harness consumes cannot be regenerated from
+  `main` today.
+- **Beta: owner/session-reported as deployed on 2026-09-20, with no committed
+  artifact behind it.** No host evidence, no ledger read-back and no
+  post-deploy probe record is committed for that deployment, so this record
+  cannot confirm what beta is running or that it came up clean. It also
+  inverts the v0.6.x posture, under which beta deliberately stayed on the last
+  release the campaign had drilled.
+- **Lanes NOT run on the v0.7.5 digests** — named individually so the gap
+  cannot be mistaken for coverage: the dependency and image vulnerability
+  scan; the native runtime milestone; the backend-backed e2e suite; iOS/Safari
+  and the broader browser matrix; B2 / canonical S3 storage; the migration
+  rehearsal; the recovery drill (REC-01/REC-02); the off-site backup
+  retrieval; and **REC-03** upgrade / app-only rollback / restore. Every
+  `docs/evidence/release-v0.7.*-verification/` directory holds the preflight
+  files alone — no `native-runtime/`, `dependency-scan/`, `e2e-runtime/`,
+  `ios-runtime/`, `b2-runtime/`, `migration-runtime/`, `recovery-runtime/`,
+  `rec03-runtime/` or `offsite-runtime/` subtree exists for any v0.7.x
+  release.
+- **Carry-forward from v0.6.6 does not apply.** The v0.6.6 delta-carry rested
+  on this basis, quoted: *"v0.6.6 = v0.6.5 + one admin-only branding flag with
+  **no schema change** and the **same deploy, storage, media, backup and
+  recovery code**"* ([v0.6.6 runtime
+  record](runtime-acceptance-v0.6.6.md)). v0.7.5 breaks every clause of it:
+  four migrations rather than no schema change, a changed playback path
+  (`d86495e`), a new managed-IPFS runtime surface, and changed **meta deploy
+  inputs** — `docker-compose.ipfs-managed.yml` did not exist at v0.6.6 and
+  does at v0.7.5, `deploy/Caddyfile` gained the `/remote-comments/*`
+  ActivityPub-object route (`5fc3ae3`), and two managed-IPFS host fixes landed
+  in the deploy path (`1cfe87b`, `3cca0a0`). No row may be carried onto
+  v0.7.5.
+- **Counts belong to v0.6.6, not to v0.7.5.** **24 PASS / 26 UNVERIFIED / 9
+  BLOCKED** is a statement about the **v0.6.6 digests**. **No disposition
+  exists for the v0.7.5 candidate** — no acceptance run has produced one — so
+  this section deliberately states no v0.7.5 count, and the workflow register
+  is unchanged: no row moves, because there is no v0.7.5 evidence to move one
+  with.
+- **Rollback posture — analysis, not evidence.** All four new migrations were
+  read in full at the `v0.7.5` tag and are **additive**: `0147` adds a table
+  plus two **nullable** columns on existing tables and *widens* the
+  `watched_word_matches_one_target` CHECK; `0148` adds two tables and a
+  partial index and touches no existing table; `0149` adds eleven columns to
+  `media_ipfs_pins` (every `NOT NULL` one carrying a `DEFAULT`), two partial
+  indexes and a table; `0150` adds a table, five defaulted columns and one
+  `INSERT … ON CONFLICT DO NOTHING`. Nothing is renamed, dropped or narrowed,
+  so on paper the documented policy — app-only rollback supported from v0.6.3
+  onward (register row REC-03) — should hold for a v0.7.5 → v0.6.6 rollback.
+  **This is a reading of the SQL, not a drill.** The caution the A38
+  rollback-floor record applies to itself applies here verbatim: such a claim
+  "is a claim about three test suites and a CI lane, not about a deploy".
+  REC-03 run on the **v0.6.6 → v0.7.5** pair is what would turn this into
+  evidence, and it would be the first *migrating* REC-03 pair since
+  v0.6.3 → v0.6.4.
+- **Harness state (as of `db9d304`, the commit this section was written
+  against): no runtime lane can be run on v0.7.5 even with a host.** The
+  acceptance harnesses **refuse** the v0.7.5 candidate manifest —
+  `tests/blank_server_smoke.py:31-32` requires every component's recorded tag
+  to equal the release tag, and v0.7.5's user and search entries carry
+  `v0.7.3`. Run against the committed manifests this session, that validator
+  passes v0.6.6 and refuses both v0.7.4 and v0.7.5 with `vidra-user:
+  unexpected source/tag`; the one clause gates the runtime, storage, migration
+  and recovery harnesses alike. Separately, the disposable acceptance hosts
+  and the dedicated acceptance storage bucket that carried the v0.6.5/v0.6.6
+  lanes **no longer exist** (checked this session — only the production and
+  beta hosts remain). So no runtime lane can run until the harness accepts a
+  core-only release **and** the owner authorises new disposable
+  infrastructure.
+- **Next executable — a plan, not progress. None of it has been started.** In
+  order: (1) teach the candidate validator and the preflight a per-component
+  tag, so a core-only release validates and its frozen tree regenerates from
+  `main`; (2) re-point the REC-03 driver, which still defaults to the
+  v0.6.3 → v0.6.4 pair (`tests/rec03-upgrade-rollback.sh:17`) and injects a
+  column `0145` already adds (`:105-106`), so the injection would error
+  instead of the migrator at schema 146; (3) the dependency and image
+  vulnerability scan — the only lane needing no host; (4) the native runtime
+  milestone on one blank host; (5) REC-03 on v0.6.6 → v0.7.5, the
+  highest-value lane because beta is already on v0.7.5 and no rollback across
+  these four migrations has been rehearsed; (6) the storage → migration →
+  recovery → off-site chain, which must be preceded by extending the recovery
+  catalogue fingerprint (`tests/recovery_release_acceptance.py:52-54`, 15
+  tables) to v0.7.5's new tables, or REC-02 certifies less than the release
+  contains; (7) the backend-backed e2e suite and the iOS/browser matrix.
+- **Owner-only inputs are unchanged by v0.7.5.** The broader browser matrix,
+  the sanitized representative PeerTube source, the selected identity/mail/CDN
+  providers and the deploy decision stay exactly as already recorded in the
+  v0.6.6 section below and under "Inputs still needed before dependent
+  acceptance"; this section adds none and closes none.
+
 ## v0.6.6 candidate — 2026-09-14
 
 **v0.6.6: recorded, scanned and runtime-drilled — storage/DR carried by delta,
