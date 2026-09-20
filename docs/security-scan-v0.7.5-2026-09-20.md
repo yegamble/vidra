@@ -38,7 +38,7 @@ Raw scanner output is under
 [dependency-scan/committed-hashes.json](evidence/release-v0.7.5-verification/dependency-scan/committed-hashes.json)
 carries the SHA-256 of every other file in that tree so the committed evidence can
 be proven byte-identical to the capture; it was regenerated and re-verified against
-the tree (26 files, 0 mismatches) before commit. The evidence was secret-grepped and
+the tree (27 files, 0 mismatches) before commit. The evidence was secret-grepped and
 host-path-scrubbed before commit: scanner stderr had the working directory replaced
 with `<scratch>`, and nothing else in any raw file was edited. The only
 `password`/`secret`/`token` strings in the tree are advisory summaries and Go symbol
@@ -99,7 +99,7 @@ The clean candidate answer is therefore a real registry answer, not a silent no-
 
 | Target | Scanner | Exit | Result |
 |---|---|---|---|
-| core image, by amd64 digest | osv-scanner 2.5.1, image | 1 | **9 vulnerable rows / 8 distinct IDs**: `ALPINE-CVE-2021-27219` (glib), `GO-2026-5932` (x/crypto), `RUSTSEC-2026-0190` (anyhow, reported twice — once via libdovi, once via librav1e), `RUSTSEC-2026-0105` (core2), `RUSTSEC-2026-0204` (crossbeam-epoch), `RUSTSEC-2024-0436` (paste), `GHSA-cq8v-f236-94qc` + `RUSTSEC-2026-0097` (rand, one aliased pair) |
+| core image, by amd64 digest | osv-scanner 2.5.1, image | 1 | **9 vulnerable rows / 8 distinct IDs**: `ALPINE-CVE-2021-27219` (glib), `GO-2026-5932` (x/crypto), `RUSTSEC-2026-0190` (anyhow, reported twice — once via libdovi, once via librav1e), `RUSTSEC-2026-0105` (core2), `RUSTSEC-2026-0204` (crossbeam-epoch), `RUSTSEC-2024-0436` (paste), `GHSA-cq8v-f236-94qc` + `RUSTSEC-2026-0097` (rand, one aliased pair). The v0.6.6 doc writes this as "8 vulnerable rows"; that is a counting convention, not a difference — see the delta cross-check below |
 | user image, by amd64 digest | osv-scanner 2.5.1, image | 0 | **0 vulnerable rows** (`results: []`) |
 | search image, by amd64 digest | osv-scanner 2.5.1, image | 1 | **1 vulnerable row**: `GO-2026-5932` (x/crypto 0.56.0, `/app/api`) |
 | core image inventory | osv-scanner, `--all-packages` | 1 | **307 packages**: Alpine 138, Go 71, crates.io 97, PyPI 1 |
@@ -161,6 +161,28 @@ carries, matching the lockfile.
 
 Every finding, classified. **New: 0. Unchanged: 9. Fixed: 0.**
 
+**The delta is machine-checked, not eyeballed.** The same counter was run over
+v0.6.6's *own committed raw evidence* and over v0.7.5's, so any difference reported
+here is a real difference and not a change of counting method
+([raw/delta-vs-v066-crosscheck.txt](evidence/release-v0.7.5-verification/dependency-scan/raw/delta-vs-v066-crosscheck.txt)):
+
+```
+core    v0.6.6: rows=9 distinctIDs=8   v0.7.5: rows=9 distinctIDs=8   ID sets identical: true
+user    v0.6.6: rows=0 distinctIDs=0   v0.7.5: rows=0 distinctIDs=0   ID sets identical: true
+search  v0.6.6: rows=1 distinctIDs=1   v0.7.5: rows=1 distinctIDs=1   ID sets identical: true
+IDs only in v0.6.6 (FIXED since): (none)     IDs only in v0.7.5 (NEW since): (none)
+per-row diff, all three components:
+  only v0.6.6: GO-2026-5932@golang.org/x/crypto:0.56.0
+  only v0.7.5: GO-2026-5932@golang.org/x/crypto:0.57.0
+```
+
+That last pair is **the only per-row difference in the entire image scan across all
+three components** — a version bump under an advisory that has no fixed version at
+any release. Note also that v0.6.6's raw evidence yields **9 rows** under this
+counter, the same as v0.7.5: the "8 vulnerable rows" in the v0.6.6 prose is that
+record's own convention (collapsing the duplicated anyhow row), not a row that
+appeared since.
+
 | Advisory | Component | v0.6.6 | v0.7.5 | Class |
 |---|---|---|---|---|
 | `GO-2026-5932` (x/crypto/openpgp) | core image + binary | present, module-level | **present, module-level, 0 reachable (source-mode)** | **UNCHANGED** — v0.6.6 disposition: residual with no upstream fix |
@@ -188,11 +210,13 @@ addition
 **The only movements in the whole delta** are core's `golang.org/x/crypto`
 **0.56.0 → 0.57.0** (one of the five Go bumps in the range; the same advisory
 applies, because `GO-2026-5932` is an "unmaintained package" advisory with no fixed
-version at any release) and the npm dependency total 676 → 678. Neither changes a
-finding. The v0.6.6 record does not state an x/crypto version; the 0.56.0 baseline
-above is quoted from the [v0.6.5 record](security-scan-v0.6.5-2026-09-13.md) line
-that reads *"module lists confirm **grpc v1.83.2** (core, 71 modules) and **x/crypto
-v0.56.0** (both)"*.
+version at any release) and the npm dependency total **676 → 678** (dev 499 → 501,
+peer 21 → 54; findings 0/0 in both, read from each round's committed
+`user-npm-audit.json`). Neither changes a finding. The v0.6.6 prose does not state
+an x/crypto version, but its raw evidence does — the 0.56.0 baseline above comes
+from v0.6.6's own `core.json.gz`, and agrees with the
+[v0.6.5 record](security-scan-v0.6.5-2026-09-13.md) line that reads *"module lists
+confirm **grpc v1.83.2** (core, 71 modules) and **x/crypto v0.56.0** (both)"*.
 
 ## Residuals with no upstream fix
 

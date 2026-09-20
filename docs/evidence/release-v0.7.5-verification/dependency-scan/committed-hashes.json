@@ -9,6 +9,7 @@
     "raw/core-source.govulncheck.json.gz": "91685223f21869499d58a466cca3eeb85cfe53110b137ebe0f747a5d736a0397",
     "raw/core.json.gz": "dcda27ceae33652382894e7d6112ac3b0cbc6fbe8ec897339660597a7b1bc166",
     "raw/core.osv.stderr.txt": "8cc7c8543c34b120970102bcb7f5ea926dc435f10266487fd3c4768fd569da2b",
+    "raw/delta-vs-v066-crosscheck.txt": "986ff9b65378cc39abfd9bb2caf6cd1eab6b7388c22ebf520d427f1f6251565e",
     "raw/digest-verification.txt": "a340f953682ba1636bd37091df64e8183b10a7ffc3cdcc0e4f8c440c40b091fd",
     "raw/findings-detail.txt": "204354b36d4c0e18d53c0f98bb063ea5cc885869b276a281a05d238cdc8ca06a",
     "raw/key-package-versions.txt": "9ad7fb53e425f7f9eaeb71b93c9ffc26446e160eac37a811f135bd0623f5e959",
@@ -27,6 +28,6 @@
     "raw/user-npm-audit.txt": "6d8c5c8f3d7684adb070417bd608d01ae90aa3dc26a65af03ffda4955f38d9a3",
     "raw/user.json.gz": "35d92b2dd885fd367b71940b689fe384afbc2c7208c85600d2e2a741403c7bb8",
     "raw/user.osv.stderr.txt": "4ec740dee60e3c0a3c46e645cd33d50060a55ddbd3a0ab7a1a928edc01268d42",
-    "summary.json": "e282fed9a52d98053fce7e3f2634eee01de9d3cf7caa29163a8c48c2cd4ea938"
+    "summary.json": "71af55ef0d61a7ad8e9ee6f630974e934a79c173822401215dcae42f2cd5a2ca"
   }
 }

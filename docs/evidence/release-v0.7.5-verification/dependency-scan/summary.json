@@ -92,6 +92,7 @@
     "sharp": "0.35.4"
   },
   "delta_vs_v066": "osv image ID sets identical for all three components (core 8 IDs, user 0, search 1); Go advisory identical (GO-2026-5932) in both binary and source mode; npm audit clean in both, dependency total 676 -> 678; OpenSSL floor unchanged at 3.5.8-r0. Only movements: core's x/crypto 0.56.0 -> 0.57.0 (same advisory, no fixed version exists), and the npm dependency count.",
+  "delta_method": "The same counter was run over v0.6.6's OWN committed raw evidence and over v0.7.5's, so the comparison is machine-checked rather than prose-to-prose (raw/delta-vs-v066-crosscheck.txt). Result: core rows 9/9 and IDs 8/8, user 0/0, search 1/1, ID sets identical for all three, no ID only in v0.6.6 and none only in v0.7.5. The single per-row difference across all three components is GO-2026-5932@golang.org/x/crypto 0.56.0 -> 0.57.0. Note v0.6.6's raw evidence also yields 9 core rows under this counter; the '8 vulnerable rows' in the v0.6.6 prose is that record's own convention (collapsing the duplicated anyhow row), not a row that appeared since.",
   "residuals_no_fix": [
     "GO-2026-5932 x/crypto/openpgp — no fixed version published; module-level only, 0 reachable by source-mode govulncheck on the v0.7.5 source",
     "AV1 codec crate advisories from rav1e 0.8.1 / libdovi 3.3.2 (RUSTSEC-2026-0190 anyhow, -0105 core2, -0204 crossbeam-epoch, 2024-0436 paste, -0097/GHSA-cq8v-f236-94qc rand) — no Alpine fix; ACCEPTED BY PRIOR OWNER RULING, facts re-checked and unchanged",
