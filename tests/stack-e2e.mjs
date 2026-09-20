@@ -428,10 +428,11 @@ log(`READ PATH PROVEN (browser -> core -> vidra-search): /api/v1/videos/search r
 // vidra_queue_depth{queue="search_outbox",state=...} (scrape-time, from
 // SearchOutboxDepth), and a rescheduled row is still `pending`. Zero pending
 // rows means nothing is left to apply.
-const outboxPending = async () => {
+const outboxDepth = async () => {
   const metrics = expectStatus(await api('/metrics'), 200, 'GET /metrics');
   let familySeen = false;
   let pending = 0;
+  let dead = 0;
   for (const line of metrics.text.split('\n')) {
     if (!line.startsWith('vidra_queue_depth{')) continue;
     const labelEnd = line.indexOf('}');
@@ -442,9 +443,14 @@ const outboxPending = async () => {
     );
     if (labels.queue !== 'search_outbox') continue;
     familySeen = true;
-    if (labels.state === 'pending') pending += Number(line.slice(labelEnd + 1).trim());
+    const value = Number(line.slice(labelEnd + 1).trim());
+    // The three states the schema allows are pending/delivered/dead
+    // (vidra-core migration 0092's CHECK constraint); `dead` is where the
+    // drainer parks an event after maxDrainAttempts.
+    if (labels.state === 'pending') pending += value;
+    if (labels.state === 'dead') dead += value;
   }
-  return { familySeen, pending };
+  return { familySeen, pending, dead };
 };
 
 // GROUP BY produces no row for a state with no rows, so "drained" shows up as
@@ -454,15 +460,27 @@ const outboxPending = async () => {
 // pass vacuously against a renamed or disabled gauge. That is the failure this
 // whole item is about, so it fails loudly rather than assuming.
 const drained = await until('search outbox drains to zero pending', { deadlineMs: 180000, intervalMs: 2000 }, async () => {
-  const { familySeen, pending } = await outboxPending();
-  return { done: familySeen && pending === 0, family_seen: familySeen, pending_rows: pending };
+  const { familySeen, pending, dead } = await outboxDepth();
+  return { done: familySeen && pending === 0, family_seen: familySeen, pending_rows: pending, dead_rows: dead };
 });
 assert.ok(
   drained.family_seen,
   'vidra_queue_depth{queue="search_outbox"} was never exported, so "the queue drained" was never actually observed. ' +
   'Check METRICS_ENABLED and the gauge name before trusting any green from this step.',
 );
-log(`OUTBOX DRAINED: vidra_queue_depth{queue="search_outbox",state="pending"} is 0 — ${JSON.stringify(drained)}`);
+// EMPTY IS NOT THE SAME AS APPLIED. After maxDrainAttempts the drainer moves an
+// event to `dead` and stops retrying it, which takes it out of `pending` — so a
+// dead-lettered upsert leaves this check reading a perfectly clean zero while
+// the event it was waiting on was never applied to the index. Today that is out
+// of reach inside the deadline (10 attempts against a 30 s backoff that
+// doubles), but "currently unreachable" is not a thing to rely on: a smaller
+// attempt cap or a faster backoff would turn it into a silent pass.
+assert.equal(
+  drained.dead_rows, 0,
+  `${drained.dead_rows} search_outbox event(s) were DEAD-LETTERED: the queue reads empty because the drainer gave up ` +
+  'on them, not because they were applied. Read the search_outbox payload and last_error in the evidence artifact.',
+);
+log(`OUTBOX DRAINED: vidra_queue_depth{queue="search_outbox"} pending=0 dead=0 — ${JSON.stringify(drained)}`);
 
 const stillIndexed = await signedSearch(title);
 expectStatus(stillIndexed, 200, 're-check /internal/v1/search after the outbox drained');

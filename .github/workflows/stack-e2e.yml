@@ -342,7 +342,7 @@ jobs:
           "${COMPOSE[@]}" exec -T postgres psql -U vidra -d vidra \
             -c 'SELECT id, video_id, state, attempts, created_at, updated_at FROM transcode_jobs ORDER BY created_at;' \
             -c 'SELECT id, title, privacy, state, publish_at, publish_after_transcode FROM videos ORDER BY created_at;' \
-            -c 'SELECT id, event_type, state, attempts, payload FROM search_outbox ORDER BY id;' \
+            -c 'SELECT id, event_type, state, attempts, last_error, payload FROM search_outbox ORDER BY id;' \
             -c 'SELECT video_id, title, eligible, suppressed_reason, indexed_at FROM search.documents;' \
             > ci-report/stack-e2e-pipeline-rows.txt 2>&1 || true
           cat ci-report/stack-e2e-pipeline-rows.txt || true

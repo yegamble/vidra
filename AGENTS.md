@@ -75,16 +75,20 @@ login → channel → **multi-chunk** resumable upload of an ffmpeg-generated 4 
 320×240 fixture (deliberately larger than the 8 MiB chunk size, and the driver
 fails if it is not, so the ≥2-chunk path is real) → transcode polled to
 `published` with `packaging_format=cmaf` and a rendition → `#EXTM3U` master
-playlist → a variant playlist → the CMAF init segment (`ftyp` box) and the
-first media segment (`styp`/`moof` box) fetched anonymously, 200 with a real
+playlist → a variant playlist → the CMAF init segment (first ISOBMFF box
+`ftyp`) and the first media segment (first box `styp`, the CMAF brand box the
+`movflags=+cmaf` packager writes — a bare `moof` is deliberately NOT accepted)
+fetched anonymously, 200 with a real
 ISOBMFF header → the video returned by a signed `/internal/v1/search` against
 vidra-search, **and** by the public `/api/v1/videos/search` *with* `search_total`
 and `total_is_lower_bound`, the two fields core's local SQL trigram fallback
 cannot produce — so the read path is proven to have been served BY
 vidra-search, not merely to have returned the right id. It then waits for
-`vidra_queue_depth{queue="search_outbox",state="pending"}` to reach zero and
-re-asserts the video is still indexed, because "indexed" must survive every
-event still queued behind it.
+`vidra_queue_depth{queue="search_outbox",state="pending"}` to reach zero —
+requiring `state="dead"` to be zero as well, since a dead-lettered event also
+empties the queue without ever having been applied — and re-asserts the video
+is still indexed, because "indexed" must survive every event still queued
+behind it.
 
 **What it still does NOT prove — do not over-read a green run:**
 
