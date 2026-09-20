@@ -54,10 +54,20 @@ import re
 import sys
 
 OK, REFUSED, UNVERIFIED = 0, 1, 3
+# `resolve`'s own code for "this script fell over". 1 is what a shell — and an
+# uncaught traceback — returns for ANY failure, so sharing it between "your
+# flag contradicts the record" and "the resolver broke" makes the two
+# indistinguishable to the caller, which then blames the operator's flag for a
+# bug in here. The same reasoning that gave the --extra-record re-check its own
+# 65 in deploy/lib.sh.
+CRASHED = 70
 
 COMPONENTS = (('core', 'VIDRA_CORE_TAG', 'vidra-core'),
               ('user', 'VIDRA_USER_TAG', 'vidra-user'),
               ('search', 'VIDRA_SEARCH_TAG', 'vidra-search'))
+# Repository name -> role, so `resolve --component-tag` takes the spelling
+# deploy/release-preflight.py's flag of the same name uses as well as its own.
+ROLE_ALIASES = {repo: name for name, _, repo in COMPONENTS}
 
 # The shape deploy/release.sh cuts, and the only one a record may name.
 RELEASE_TAG = re.compile(r'v[0-9]+\.[0-9]+\.[0-9]+')
@@ -765,14 +775,20 @@ def bundle_findings(bundle, record, where, path):
 def parse_component_tag(value, overrides):
     """One `--component-tag <role>=<tag>` into `overrides`, or a reason not to.
 
-    Same flag spelling as deploy/release-preflight.py's, in ROLES rather than
-    repository names because that is what the env keys this feeds are named
-    after (VIDRA_USER_TAG is `user`).
+    BOTH SPELLINGS of a role are accepted and normalised to the role name:
+    `user` and `vidra-user` alike. deploy/release-preflight.py's flag of the
+    same name takes repository names, this one is named after the env keys it
+    feeds (VIDRA_USER_TAG is `user`), and deploy/README.md now documents the
+    two a few paragraphs apart — so a reader who carries the wrong spelling
+    across gets the pin they meant rather than a refusal. Normalising BEFORE
+    the duplicate check is what makes `user=v0.7.3 --component-tag
+    vidra-user=v0.7.2` the contradiction it plainly is.
     """
     role, sep, tag = value.partition('=')
+    role = ROLE_ALIASES.get(role, role)
     if not sep or role not in {name for name, _, _ in COMPONENTS}:
         return (f'--component-tag {value!r}: expected <role>=<tag> where role is one of '
-                + ', '.join(name for name, _, _ in COMPONENTS))
+                + ', '.join(f'{name} (or {repo})' for name, _, repo in COMPONENTS))
     if not STRICT_RELEASE_TAG.fullmatch(tag):
         return (f'--component-tag {role}={tag!r} is not a vMAJOR.MINOR.PATCH release tag. '
                 'Leading zeros are refused too: v0.07.3 is not a tag deploy/release.sh ever '
@@ -785,6 +801,28 @@ def parse_component_tag(value, overrides):
 
 
 def resolve(args):
+    """`resolve`, guarded. See _resolve below for what it answers.
+
+    THE CRASH GUARD LIVES HERE, not at the call site, so "resolve never
+    raises, and says so with its own exit code" is a property of the function
+    every caller uses rather than of one caller's plumbing. Everything
+    _resolve reads is already guarded exception-by-exception, so reaching this
+    except means a BUG IN THIS FILE, not a hostile record — and a bug must
+    still be told apart from the verdicts, because the shell names a different
+    fix for each. Without it an uncaught traceback exits 1, which in this
+    contract means "your --component-tag contradicts the record": the operator
+    would be sent to correct a flag that was never wrong.
+    """
+    try:
+        return _resolve(args)
+    except Exception as error:  # noqa: BLE001 - see above
+        print(f'[release-mapping] ERROR: resolve crashed ({type(error).__name__}: {error}). '
+              'This is a bug in deploy/release-mapping.py, not something the caller did. '
+              'Nothing was resolved.', file=sys.stderr)
+        return CRASHED
+
+
+def _resolve(args):
     """`resolve`: which tag each of the three keys carries for one release.
 
     WHY IT LIVES IN THE CHECKER. deploy/pin-release.sh wrote ONE tag into all
@@ -797,12 +835,27 @@ def resolve(args):
     this reads it, with `validate()` above and nothing new, so the shell never
     grows a second record parser that can drift from this one.
 
-    THE EXIT CODE IS THE ANSWER, and stdout carries the triple either way:
-      0  a record decided it (per-component pins)
-      3  no usable record: the uniform fallback, byte-for-byte the behaviour
-         before this existed, plus any --component-tag. The caller warns.
-      1  refused. Nothing is printed on stdout, because a caller that reads
-         stdout must never act on a half-answer.
+    THE EXIT CODE IS THE ANSWER, and every code means ONE thing. stdout
+    carries the triple for the two codes that have one, and nothing at all
+    for the rest — a caller that reads stdout must never act on a half-answer:
+      0   a record decided it (per-component pins)
+      3   no usable record: the uniform fallback, byte-for-byte the behaviour
+          before this existed, plus any --component-tag. The caller warns.
+      1   refused: a flag is not a release tag, or contradicts a record that
+          loaded. The operator has to change something.
+      2   argparse — including an older copy of this script that has no
+          `resolve` command at all, which is what a mixed-revision tree looks
+          like from the shell.
+      70  this script fell over. Its own code, never 1: see CRASHED above.
+    Anything else is undefined, and the caller may not guess past it.
+
+    TWO RECORDS, AND WHICH WINS. deploy/pin-release.sh reads the record off
+    the tree the run STARTS on and then checks that tree out at the release
+    tag — which carries no record for itself. deploy.sh, running from the
+    moved tree, therefore fetches the canonical copy. If the two disagree the
+    pin is made from one record and judged against another: the host is moved
+    and the deploy is refused. So --fetched-record WINS over --record, and a
+    disagreement is named rather than quietly resolved.
 
     ABSENCE IS NOT A REFUSAL — the standing severity ruling, that a finding
     may only stop what it PREDICTS. A record that could not be read predicts
@@ -838,14 +891,32 @@ def resolve(args):
                   'after it, so one of the two is wrong.', file=sys.stderr)
             return REFUSED
 
-    # THE RECORD, held to exactly the rules --extra-record is held to: the
+    # THE RECORDS, held to exactly the rules --extra-record is held to: the
     # checker's own validate(), the filename/identity agreement inside it, and
-    # the structural rule. Anything it cannot answer is reported and dropped.
-    recorded, why = {}, ''
-    if args.record:
-        recorded, why = record_pairing(Path(args.record), args.release)
+    # the structural rule. Anything either cannot answer is reported and
+    # dropped — an unusable copy never costs a usable one.
+    tree, why = ({}, '') if not args.record else record_pairing(Path(args.record), args.release)
     if why:
         stderr.append(f'WARNING: {why}')
+    fetched, why = (({}, '') if not args.fetched_record
+                    else record_pairing(Path(args.fetched_record), args.release))
+    if why:
+        stderr.append(f'WARNING: {why}')
+
+    if fetched and tree and fetched != tree:
+        stderr.append(
+            'WARNING: this tree\'s release record and the canonical copy fetched for this run '
+            f'pair {args.release} DIFFERENTLY. This tree says '
+            + ' '.join(f'{r}={t}' for r, t in tree.items())
+            + f' ({args.record}); the fetched copy says '
+            + ' '.join(f'{r}={t}' for r, t in fetched.items())
+            + f' ({args.fetched_record}). The FETCHED copy is used, because that is the one the '
+              'next deploy will check these pins against — this tree is about to move to '
+              f'{args.release}, which carries no record of its own. If the tree copy is the '
+              'right one, the record on main is wrong and needs correcting before anyone '
+              'deploys this release.')
+    recorded = fetched or tree
+    origin = 'record-fetched' if fetched else 'record-tree'
 
     for role, _, _ in COMPONENTS:
         if role in overrides and role in recorded and overrides[role] != recorded[role]:
@@ -864,7 +935,7 @@ def resolve(args):
         if role in overrides:
             tag, source = overrides[role], '--component-tag'
         elif role in recorded:
-            tag, source = recorded[role], 'record'
+            tag, source = recorded[role], origin
         else:
             tag, source = args.release, '--release'
         stdout.append(f'{role} {tag} {source}')
@@ -916,14 +987,18 @@ def main():
     parser.add_argument('command', choices=('check', 'resolve'))
     parser.add_argument('--release', help='resolve: the release being pinned')
     parser.add_argument('--record', type=Path,
-                        help='resolve: that release\'s record — releases/<tag>.json on this tree, '
-                             'or the copy deploy/lib.sh fetched for a release the tree cannot '
-                             'carry yet. Absent or unusable means the uniform fallback, never a '
-                             'refusal')
+                        help='resolve: this tree\'s releases/<tag>.json, when it has one. '
+                             'Absent or unusable means the uniform fallback, never a refusal')
+    parser.add_argument('--fetched-record', type=Path,
+                        help='resolve: the canonical copy downloaded for this run. WINS over '
+                             '--record, because it is the copy the deploy that follows will '
+                             'check the pins against; a disagreement between the two is warned '
+                             'about, naming both')
     parser.add_argument('--component-tag', action='append', metavar='ROLE=TAG', default=[],
                         help='resolve: pin ONE role by hand (repeatable), for the window before '
-                             'the record exists anywhere. Refused when it contradicts a record '
-                             'that loaded, unless --force')
+                             'the record exists anywhere. ROLE is core/user/search or the '
+                             'matching vidra-* repository name. Refused when it contradicts a '
+                             'record that loaded, unless --force')
     parser.add_argument('--force', action='store_true',
                         help='resolve: let --component-tag override a record that contradicts it')
     parser.add_argument('--mode', choices=('deploy', 'rollback'),
@@ -964,7 +1039,7 @@ def main():
                              'or a stale bundle')
     args = parser.parse_args()
     if args.command == 'resolve':
-        return resolve(args)
+        return resolve(args)   # guarded: never raises, see its docstring
     # --mode stopped being argparse-`required` when `resolve`, which has no
     # mode, joined the same parser. It is still required for `check`: a
     # default here would silently pick a severity (deploy refuses what

@@ -124,15 +124,40 @@ trap cleanup_record_tmpdir EXIT
 pin_row() {
   local key="$1" value="$2" source="$3" where="$4" origin
   case "$source" in
-    record)           origin="$where" ;;
-    --component-tag)  origin='--component-tag (by hand, unverified)' ;;
-    *)                origin='the release tag (no pairing record)' ;;
+    record-tree|record-fetched) origin="$where" ;;
+    --component-tag)            origin='--component-tag (by hand, unverified)' ;;
+    *)                          origin='the release tag (no pairing record)' ;;
   esac
   log "  ${key}=${value}  <- ${origin}"
 }
 
+# Why the resolver did not answer. Its exit codes are a contract and each one
+# means exactly ONE thing, so the operator is told which of four different
+# problems they have instead of the single unattributed "nothing was changed"
+# this used to print:
+#   0   a record decided the pairing        (not a failure)
+#   3   no usable record, uniform fallback  (not a failure)
+#   1   refused: a flag is wrong, or contradicts the record
+#   2   this tree's checker has no `resolve` command — mixed revisions
+#   70  the resolver crashed
+# Anything else is undefined. Undefined is NOT a licence to guess a uniform
+# triple: unlike deploy.sh's and rollback.sh's preflight, pinning is not an
+# incident path, nothing is mutated yet, and continuing after the tool that
+# decides the pairing has fallen over is how a host ends up on images nobody
+# released. Absence of a record is a different thing entirely — that is the
+# clean exit 3 above, and it still falls back to uniform with a warning.
+resolve_failure() {
+  case "$1" in
+    1)  printf 'deploy/release-mapping.py refused it — see its message above' ;;
+    2)  printf 'the deploy/release-mapping.py in this tree has no "resolve" command, so it predates this feature. This tree mixes revisions: take deploy/release-mapping.py and deploy/pin-release.sh from the same one' ;;
+    70) printf 'deploy/release-mapping.py crashed while reading the release record. That is a bug in it, not in anything you typed; re-run with the record path it names, and report it' ;;
+    *)  printf 'deploy/release-mapping.py exited %s, which is not an answer this contract defines (0, 1, 2, 3 or 70)' "$1" ;;
+  esac
+}
+
 main() {
-  local tag='' force='' owner snapshot rc=0 resolved record='' record_from='' paired=''
+  local tag='' force='' owner snapshot rc=0 resolved paired='' unpaired_note=''
+  local record='' fetched_record='' record_from=''
   local core_tag='' user_tag='' search_tag=''
   local core_from='' user_from='' search_from='' role value source
   local -a overrides=() resolve_args=()
@@ -187,7 +212,7 @@ main() {
     ${overrides[@]+"${overrides[@]}"} >/dev/null || rc=$?
   case "$rc" in
     0|3) ;;
-    *) die "nothing was changed" ;;
+    *) die "$(resolve_failure "$rc"). Nothing was changed: the tree has not moved and the env file is untouched" ;;
   esac
 
   log "fetching tags from origin"
@@ -196,27 +221,36 @@ main() {
   git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null \
     || die "${tag} is not a tag on origin — was the release cut? (deploy/release.sh --yes ${tag}). Nothing was changed"
 
-  # THE PAIRING, read off the tree the run STARTED on and before the first
-  # mutation. A tree on main carries the records for every published release;
-  # a tree already at vN does not carry vN's, which is why the fetch exists.
+  # THE PAIRING, resolved before the first mutation, from up to TWO copies of
+  # the record.
+  #
+  # The tree copy is read off the revision the run STARTED on — and the
+  # checkout below replaces it with the tag's own tree, which carries no
+  # record for itself (release.sh tags this repository before any image
+  # exists). deploy.sh then runs from that moved tree, finds no record, and
+  # FETCHES the canonical one. So a tree copy that disagrees with main pins
+  # from one record and is judged against another: the host is moved and the
+  # next deploy is refused. That is why the fetch is attempted even when this
+  # tree has a copy, and why the fetched copy wins — the resolver names the
+  # disagreement rather than resolving it silently.
+  #
+  # The fetch is best-effort, bounded, HTTPS-only and never fatal, through the
+  # same helper and the same VIDRA_RECORD_FETCH / VIDRA_RECORD_BASE_URL knobs
+  # deploy.sh uses, so a host configured for one is configured for both. When
+  # it cannot be made, the tree copy is used exactly as before.
   if [ -f "$REPO_ROOT/releases/${tag}.json" ]; then
     record="$REPO_ROOT/releases/${tag}.json"
-    record_from="releases/${tag}.json"
-  else
-    # Best-effort, bounded, HTTPS-only, and never fatal — the same helper and
-    # the same VIDRA_RECORD_FETCH / VIDRA_RECORD_BASE_URL knobs deploy.sh
-    # uses, so a host configured for one is configured for both.
-    RECORD_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/vidra-record.XXXXXX" 2>/dev/null)" || RECORD_TMPDIR=''
-    if [ -z "$RECORD_TMPDIR" ]; then
-      log "could not create a temporary directory, so ${tag}'s release record was not fetched"
-    elif fetch_release_record "$tag" "$RECORD_TMPDIR/${tag}.json"; then
-      record="$RECORD_TMPDIR/${tag}.json"
-      record_from="$RECORD_FETCHED_FROM"
-    fi
+  fi
+  RECORD_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/vidra-record.XXXXXX" 2>/dev/null)" || RECORD_TMPDIR=''
+  if [ -z "$RECORD_TMPDIR" ]; then
+    log "could not create a temporary directory, so ${tag}'s canonical release record was not fetched"
+  elif fetch_release_record "$tag" "$RECORD_TMPDIR/${tag}.json"; then
+    fetched_record="$RECORD_TMPDIR/${tag}.json"
   fi
 
   resolve_args=(resolve --release "$tag")
   [ -z "$record" ] || resolve_args+=(--record "$record")
+  [ -z "$fetched_record" ] || resolve_args+=(--fetched-record "$fetched_record")
   [ -z "$force" ] || resolve_args+=(--force)
   resolve_args+=(${overrides[@]+"${overrides[@]}"})
   # stderr is deliberately NOT captured: the resolver's warnings and its
@@ -227,7 +261,7 @@ main() {
   case "$rc" in
     0) paired=1 ;;
     3) paired='' ;;
-    *) die "could not resolve ${tag}'s component pairing (exit ${rc}) — nothing was changed" ;;
+    *) die "could not resolve ${tag}'s component pairing: $(resolve_failure "$rc"). Nothing was changed: the tree has not moved and the env file is untouched" ;;
   esac
   # A here-document, not a pipe: a `while read` on the right of a pipe runs in
   # a subshell and every variable it sets is gone by the next line.
@@ -244,10 +278,33 @@ EOF
     die "deploy/release-mapping.py resolved no tag for one of core/user/search — nothing was changed. This tree mixes revisions: take deploy/release-mapping.py and deploy/pin-release.sh from the same one"
   fi
 
+  # Which copy of the record actually decided it. Only one of the two ever
+  # does, so one lookup covers every record-sourced row below.
+  case "${core_from}${user_from}${search_from}" in
+    *record-fetched*) record_from="$RECORD_FETCHED_FROM" ;;
+    *record-tree*)    record_from="releases/${tag}.json" ;;
+  esac
+
   if [ -n "$paired" ]; then
     log "${tag} pairs its components as follows (${record_from}):"
   else
-    log "WARNING: ${tag}'s component pairing could not be determined — this tree carries no releases/${tag}.json and none could be fetched. Pinning as shown below, which is what this script has always done and is right for the uniform releases that are the norm. If ${tag} re-released ONE component (v0.7.4 and v0.7.5 re-released vidra-core alone), the images for the other two do not exist at ${tag} and the next deploy will fail at 'compose pull' — nothing is broken by that, but nothing upgrades either. The release notes say which components moved; state the pairing by hand with: $0 ${tag} --component-tag user=<tag> --component-tag search=<tag>"
+    # The failure named here is the one an operator will actually meet.
+    # pin-release.sh only ever runs on a GIT tree, and there deploy.sh's
+    # component checkout sync reaches a tag that does not exist before it
+    # pulls anything: `failed to checkout tag vX in vidra-user`. It used to
+    # say `compose pull`, which is a later step and the wrong line of the log
+    # to go looking at (it is the one a bundle host would see, and a bundle
+    # host cannot run this script at all).
+    #
+    # And the second sentence is conditional: with --component-tag the pins
+    # below are NOT "what this script has always done", and claiming they are
+    # would describe the operator's own correction back at them.
+    if [ "${#overrides[@]}" -eq 0 ]; then
+      unpaired_note="Pinning as shown below, which is what this script has always done and is right for the uniform releases that are the norm. If ${tag} re-released ONE component (v0.7.4 and v0.7.5 re-released vidra-core alone), the images for the other two do not exist at ${tag}: the next deploy stops at the component checkout sync with 'failed to checkout tag ${tag} in vidra-user' before it changes anything. The release notes say which components moved; state the pairing by hand with: $0 ${tag} --component-tag user=<tag> --component-tag search=<tag>"
+    else
+      unpaired_note="The --component-tag values below are taken on trust: nothing here could check them against a record. If one of them is wrong the next deploy stops at the component checkout sync with 'failed to checkout tag <that tag> in <that repo>' before it changes anything."
+    fi
+    log "WARNING: ${tag}'s component pairing could not be determined — this tree carries no releases/${tag}.json and none could be fetched. ${unpaired_note}"
   fi
   pin_row VIDRA_CORE_TAG   "$core_tag"   "$core_from"   "$record_from"
   pin_row VIDRA_USER_TAG   "$user_tag"   "$user_from"   "$record_from"

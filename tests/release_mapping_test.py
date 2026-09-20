@@ -15,6 +15,10 @@ before anything is dumped, synced, pulled, migrated or restarted. Each stubbed
 refusal has a control run through the same stubs that DOES reach those
 commands, so "the log does not contain pull" cannot pass vacuously.
 """
+import argparse
+import contextlib
+import importlib.util
+import io
 import json
 import os
 import re
@@ -24,9 +28,16 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / 'deploy/release-mapping.py'
+# Imported as well as executed: the CLI is the contract the shell reads, but a
+# crash inside the resolver cannot be provoked through the CLI by design, and
+# proving it is answered with its own exit code needs the function itself.
+_spec = importlib.util.spec_from_file_location('release_mapping', CHECKER)
+mapping = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(mapping)
 RECORDS = ROOT / 'releases'
 EVIDENCE = ROOT / 'docs/evidence/release-v0.6.4-verification'
 # Releases whose committed evidence is the RAW release-preflight output. v0.6.4
@@ -2005,10 +2016,12 @@ class ResolveTests(Fixture):
     a release tag, and a flag that contradicts a record that loaded.
     """
 
-    def resolve(self, release, *args, record=None):
+    def resolve(self, release, *args, record=None, fetched=None):
         argv = ['python3', str(CHECKER), 'resolve', '--release', release]
         if record is not None:
             argv += ['--record', str(record)]
+        if fetched is not None:
+            argv += ['--fetched-record', str(fetched)]
         result = subprocess.run([*argv, *args], capture_output=True, text=True)
         return result.returncode, result.stdout, result.stderr
 
@@ -2032,7 +2045,7 @@ class ResolveTests(Fixture):
         code, out, err = self.resolve('v0.7.5', record=real)
         self.assertEqual(code, OK, out + err)
         self.assertEqual(self.triple(out), {'core': 'v0.7.5', 'user': 'v0.7.3', 'search': 'v0.7.3'})
-        self.assertEqual(set(self.sources(out).values()), {'record'})
+        self.assertEqual(set(self.sources(out).values()), {'record-tree'})
 
     def test_a_uniform_record_resolves_all_three_to_the_release(self):
         path = self.written(synthetic('v0.9.0', 'v0.9.0', 'v0.9.0', 'v0.9.0', seed=9))
@@ -2175,6 +2188,95 @@ class ResolveTests(Fixture):
         self.assertEqual(code, UNVERIFIED, out + err)
         self.assertEqual(self.triple(out),
                          {'core': 'v0.7.5-rc1', 'user': 'v0.7.5-rc1', 'search': 'v0.7.5-rc1'})
+
+    def test_a_fetched_record_beats_a_tree_copy_that_disagrees(self):
+        """THE STALE-TREE HAZARD. pin-release.sh reads the record off the tree
+        the run STARTS on, then checks that tree out at the target tag — which
+        does not carry its own record. deploy.sh, running from the moved tree,
+        then fetches the canonical copy. If the two disagree the pin is made
+        from one record and judged against another, and the deploy is refused
+        with the host already moved. The canonical copy wins, and the
+        disagreement is named rather than silently resolved."""
+        # validate() ties a record's identity to its filename, so each copy
+        # needs its own directory rather than its own name.
+        for sub, rec in (('tree', synthetic('v0.9.0', 'v0.9.0', 'v0.7.2', 'v0.7.3', seed=2)),
+                         ('fetched', synthetic('v0.9.0', 'v0.9.0', 'v0.7.3', 'v0.7.3', seed=5))):
+            (self.base / sub).mkdir(exist_ok=True)
+            (self.base / sub / 'v0.9.0.json').write_text(json.dumps(rec, indent=2))
+        code, out, err = self.resolve('v0.9.0', record=self.base / 'tree/v0.9.0.json',
+                                      fetched=self.base / 'fetched/v0.9.0.json')
+        self.assertEqual(code, OK, out + err)
+        self.assertEqual(self.triple(out), {'core': 'v0.9.0', 'user': 'v0.7.3', 'search': 'v0.7.3'})
+        self.assertEqual(set(self.sources(out).values()), {'record-fetched'})
+        self.assertIn('WARNING', err)
+        self.assertIn('v0.7.2', err, 'the warning does not name the tree copy it set aside')
+        self.assertIn('v0.7.3', err, 'the warning does not name the pairing it used')
+
+    def test_two_records_that_agree_raise_no_disagreement_warning(self):
+        for sub in ('tree', 'fetched'):
+            (self.base / sub).mkdir(exist_ok=True)
+            (self.base / sub / 'v0.9.0.json').write_text(
+                json.dumps(synthetic('v0.9.0', 'v0.9.0', 'v0.7.3', 'v0.7.3', seed=5), indent=2))
+        code, out, err = self.resolve('v0.9.0', record=self.base / 'tree/v0.9.0.json',
+                                      fetched=self.base / 'fetched/v0.9.0.json')
+        self.assertEqual(code, OK, out + err)
+        self.assertEqual(set(self.sources(out).values()), {'record-fetched'})
+        self.assertNotIn('WARNING', err)
+
+    def test_an_unusable_fetched_record_falls_back_to_the_tree_copy(self):
+        """A 404 or a captive portal must not cost the pairing this tree can
+        state on its own."""
+        (self.base / 'fetched').mkdir(exist_ok=True)
+        (self.base / 'fetched/v0.7.5.json').write_text('<!DOCTYPE html>not a record')
+        code, out, err = self.resolve('v0.7.5', record=RECORDS / 'v0.7.5.json',
+                                      fetched=self.base / 'fetched/v0.7.5.json')
+        self.assertEqual(code, OK, out + err)
+        self.assertEqual(self.triple(out), {'core': 'v0.7.5', 'user': 'v0.7.3', 'search': 'v0.7.3'})
+        self.assertEqual(set(self.sources(out).values()), {'record-tree'})
+        self.assertIn('unusable', err)
+
+    def test_repository_spellings_of_a_role_are_accepted(self):
+        """deploy/release-preflight.py's flag takes vidra-user, this one takes
+        user, and deploy/README.md now documents them a few paragraphs apart.
+        Both spellings work here so the reader cannot pick the wrong one."""
+        code, out, err = self.resolve('v0.9.0', '--component-tag', 'vidra-user=v0.7.3',
+                                      '--component-tag', 'vidra-search=v0.7.3')
+        self.assertEqual(code, UNVERIFIED, out + err)
+        self.assertEqual(self.triple(out), {'core': 'v0.9.0', 'user': 'v0.7.3', 'search': 'v0.7.3'})
+
+    def test_the_two_spellings_of_one_role_still_cannot_disagree(self):
+        code, out, err = self.resolve('v0.9.0', '--component-tag', 'user=v0.7.3',
+                                      '--component-tag', 'vidra-user=v0.7.2')
+        self.assertEqual(code, REFUSED, out + err)
+        self.assertEqual(out, '')
+        code, out, err = self.resolve('v0.9.0', '--component-tag', 'user=v0.7.3',
+                                      '--component-tag', 'vidra-user=v0.7.3')
+        self.assertEqual(code, UNVERIFIED, out + err)
+
+    def test_the_refusal_lists_the_roles_it_would_accept(self):
+        code, out, err = self.resolve('v0.9.0', '--component-tag', 'frontend=v0.7.3')
+        self.assertEqual(code, REFUSED, out + err)
+        for role in ('core', 'user', 'search'):
+            self.assertIn(role, err)
+
+    def test_a_crash_is_its_own_exit_code_and_not_a_refusal(self):
+        """THE LESSON FROM #234, applied here. `1` is what any failure returns,
+        so sharing it between "this flag contradicts the record" and "the
+        resolver fell over" makes the two indistinguishable to the shell — and
+        the shell's message would then blame the operator's flag for a bug in
+        this file. Forced by making the record reader raise, which is the one
+        thing no crafted input can do now that every path through it is
+        guarded."""
+        args = argparse.Namespace(release='v0.9.0', record=Path('x'), fetched_record=None,
+                                  component_tag=[], force=False)
+        with patch.object(mapping, 'record_pairing', side_effect=RuntimeError('boom')):
+            buf, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+                code = mapping.resolve(args)
+        self.assertEqual(code, mapping.CRASHED)
+        self.assertNotIn(code, (OK, REFUSED, UNVERIFIED, 2))
+        self.assertEqual(buf.getvalue(), '', 'a crash printed a triple a caller could act on')
+        self.assertIn('boom', err.getvalue())
 
     def test_check_still_requires_a_mode(self):
         """resolve takes no --mode, so --mode stopped being argparse-required.

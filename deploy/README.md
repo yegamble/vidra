@@ -779,19 +779,47 @@ assertion honest: the expected migration version is read from
 `vidra-core/migrations` in a checkout pinned to the same `VIDRA_CORE_TAG` the
 api and migrate images are pulled at.
 
-If the pairing cannot be determined — an airgapped host, `VIDRA_RECORD_FETCH=off`,
-or the window between the release publishing and its record PR merging, when
-the record exists nowhere yet — it pins all three keys to `<tag>` exactly as it
-always did and **warns**. That is right for the uniform releases that are the
-norm; for a core-only one the next `deploy.sh` then fails at `compose pull`
-with nothing deployed. State the pairing by hand in that case:
+Both copies of the record are consulted: this tree's, **and** the canonical
+one fetched for the run — even when the tree has a copy. The fetched copy
+wins, and a disagreement is reported naming both pairings and both sources.
+That is not belt-and-braces: the tree copy read here belongs to the revision
+the run *starts* on, and the checkout replaces it with the tag's own tree,
+which carries no record for itself — so `deploy.sh` judges these pins against
+the canonical copy *it* fetches. Pinning from a tree copy that disagrees
+leaves the host moved and the next deploy refused. When the fetch cannot be
+made, the tree copy is used and the provenance line says so.
+
+If the pairing cannot be determined at all — an airgapped host,
+`VIDRA_RECORD_FETCH=off`, or the window between the release publishing and its
+record PR merging, when the record exists nowhere yet — it pins all three keys
+to `<tag>` exactly as it always did and **warns**. That is right for the
+uniform releases that are the norm; for a core-only one the next `deploy.sh`
+stops at the component checkout sync (`failed to checkout tag v0.7.5 in
+vidra-user`) before it changes anything. State the pairing by hand in that
+case:
 
 ```bash
 ./deploy/pin-release.sh v0.7.5 --component-tag user=v0.7.3 --component-tag search=v0.7.3
+VIDRA_RELEASE_MAPPING=warn ./deploy/deploy.sh
 ```
 
+**The override on the second line is not optional there.** A by-hand pin
+writes a triple that no record pairs — because the record does not exist yet —
+and `deploy.sh`'s release-mapping preflight refuses exactly that: *"core=v0.7.6
+user=v0.7.3 search=v0.7.3 is not a recorded release … Nothing was changed"*.
+`VIDRA_RELEASE_MAPPING=warn` waives the **pairing** check for that one run and
+nothing else (an unparseable tag, a digest contradicting a record, a broken
+`releases/` and a stale bundle still stop it), and the deploy then proves
+nothing about these images having been released together. **The better route
+is to land `releases/<tag>.json` on main first** — then a plain
+`./deploy/pin-release.sh <tag>` fetches it, pins each component at its own tag,
+and `deploy.sh` runs verified with no override at all.
+
 `--component-tag <role>=<tag>` is repeatable and takes `core`, `user` or
-`search`. Its *shape* is checked before the first git command — an unknown
+`search` — or the matching repository name (`vidra-user`), the spelling
+[`release-preflight.py`](#core-only-releases-the-components-are-not-all-at---tag)
+uses, so carrying one across does not cost a run. Its *shape* is checked
+before the first git command — an unknown
 role, a tag that is not `vX.Y.Z` (leading zeros included: `v0.07.3` is not a
 tag `release.sh` ever cut but parses to the same numbers as one), a role named
 twice with different tags, or a component newer than the release stops the run
