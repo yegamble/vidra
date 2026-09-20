@@ -7,6 +7,7 @@ import io
 import json
 from unittest.mock import patch
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 
@@ -141,6 +142,77 @@ class ComponentTagTests(unittest.TestCase):
 
     def resolve(self, tag, overrides=None, releases=RELEASES):
         return p.resolve_component_tags(tag, overrides or {}, releases)
+
+    def refuse(self, argv, releases=None):
+        """main() over a stubbed run(): asserts the refusal cost NOTHING -- exit
+        2, no clone attempted, no half-built --out directory, no traceback --
+        and hands the test the stderr so it can check what was named."""
+        stub, stderr = RunStub(), io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'candidate'
+            where = patch.object(p, 'RELEASES', Path(releases)) if releases \
+                else contextlib.nullcontext()
+            with patch.object(p, 'run', stub), contextlib.redirect_stderr(stderr), where, \
+                    patch('sys.argv', ['preflight', '--out', str(out)] + argv):
+                with self.assertRaises(SystemExit) as raised:
+                    p.main()
+            self.assertEqual(raised.exception.code, 2, stderr.getvalue())
+            self.assertEqual(stub.calls, [], 'refused only AFTER running commands')
+            self.assertFalse(out.exists(), 'refused only AFTER creating evidence')
+        self.assertNotIn('Traceback', stderr.getvalue())
+        return stderr.getvalue()
+
+    def test_a_leading_zero_tag_is_not_a_release_tag(self):
+        """v0.07.3 parsed as (0, 7, 3): equal to the real tag, so it passed the
+        newer-than gate and died LATE at git clone -- exit 1, --out half built."""
+        for tag in ['v0.07.3', 'v00.7.5', 'v0.7.05', 'v01.0.0', 'v0.7.3 ', 'v0.7.+3']:
+            with self.assertRaises(ValueError, msg=tag):
+                p.release_order(tag)
+            with self.assertRaises(ValueError, msg=tag):
+                p.parse_component_tags([f'vidra-user={tag}'])
+        self.assertEqual(p.release_order('v0.7.10'), (0, 7, 10))
+        self.assertEqual(p.release_order('v10.0.0'), (10, 0, 0))
+
+    def test_a_leading_zero_tag_is_refused_before_any_clone(self):
+        for tag in ['v0.07.3', 'v00.7.5', 'v0.7.05']:
+            self.assertIn(tag, self.refuse(['--tag', 'v0.7.5',
+                                            '--component-tag', f'vidra-user={tag}']))
+            self.assertIn(tag, self.refuse(['--tag', tag]))
+
+    def test_a_record_that_names_another_release_is_refused(self):
+        """Copy releases/v0.7.5.json to v0.7.6.json, forget to edit `release`,
+        and v0.7.6 froze at v0.7.5's components with tag_source reading
+        authoritative. The filename alone is not the record's identity."""
+        with tempfile.TemporaryDirectory() as rel:
+            shutil.copyfile(RELEASES / 'v0.7.5.json', Path(rel) / 'v0.7.6.json')
+            with self.assertRaises(ValueError) as raised:
+                self.resolve('v0.7.6', releases=rel)
+            for value in ('v0.7.6.json', 'v0.7.5', 'v0.7.6'):
+                self.assertIn(value, str(raised.exception))
+            self.assertIn('v0.7.5', self.refuse(['--tag', 'v0.7.6'], releases=rel))
+
+    def test_a_record_that_does_not_name_every_component_is_refused(self):
+        """A record file that exists but cannot answer the question is never
+        treated as absent: falling back to --tag is the very drift this reads
+        the record to prevent."""
+        records = {
+            'components is a list': {'release': 'v0.7.6', 'components': []},
+            'no user role': {'release': 'v0.7.6', 'components': {
+                'core': {'tag': 'v0.7.6'}, 'search': {'tag': 'v0.7.3'}}},
+            'a non-string tag': {'release': 'v0.7.6', 'components': {
+                'core': {'tag': 'v0.7.6'}, 'user': {'tag': 705},
+                'search': {'tag': 'v0.7.3'}}},
+            'a leading-zero tag': {'release': 'v0.7.6', 'components': {
+                'core': {'tag': 'v0.7.6'}, 'user': {'tag': 'v0.07.3'},
+                'search': {'tag': 'v0.7.3'}}},
+            'the record is not an object': [1, 2],
+        }
+        for label, record in records.items():
+            with tempfile.TemporaryDirectory() as rel:
+                (Path(rel) / 'v0.7.6.json').write_text(json.dumps(record))
+                with self.assertRaises(ValueError, msg=label):
+                    self.resolve('v0.7.6', releases=rel)
+                self.assertIn('v0.7.6.json', self.refuse(['--tag', 'v0.7.6'], releases=rel))
 
     def test_component_tags_come_from_the_platform_release_record(self):
         tags, sources, warnings = self.resolve('v0.7.5')

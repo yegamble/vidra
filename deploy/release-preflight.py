@@ -23,17 +23,25 @@ REPOS = ('vidra', 'vidra-core', 'vidra-user', 'vidra-search')
 # repository names. The meta repository is the release itself, so it is never
 # in a record's components and is always frozen at --tag.
 RECORD_COMPONENT = {'vidra-core': 'core', 'vidra-user': 'user', 'vidra-search': 'search'}
-RELEASE_TAG = re.compile(r'v([0-9]+)\.([0-9]+)\.([0-9]+)')
+# The ONE spelling of a release tag, and deliberately strict about leading
+# zeros: v0.07.3 is not a tag deploy/release.sh ever cut, but it parses to the
+# same (0, 7, 3) as the real one. It would compare equal to v0.7.3, sail
+# through the newer-than-the-release gate, and only die at `git clone` -- after
+# the output directory and a checkout already existed.
+RELEASE_TAG = re.compile(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
 RELEASES = Path(__file__).resolve().parent.parent / 'releases'
 
 
 def release_order(tag, what='tag'):
     """(major, minor, patch), so v0.7.10 is correctly NEWER than v0.7.9. A
     lexical comparison inverts that and would wave through a component built
-    from a later release than the one being frozen."""
-    match = RELEASE_TAG.fullmatch(tag or '')
+    from a later release than the one being frozen. Anything that is not a
+    release-shaped string -- a number out of a JSON record included -- is a
+    ValueError here, never a TypeError three frames away."""
+    match = RELEASE_TAG.fullmatch(tag) if isinstance(tag, str) else None
     if not match:
-        raise ValueError(f'{what}: expected a vX.Y.Z release tag, got {tag!r}')
+        raise ValueError(f'{what}: expected a vX.Y.Z release tag with no leading zeros, '
+                         f'got {tag!r}')
     return tuple(int(part) for part in match.groups())
 
 
@@ -62,22 +70,44 @@ def parse_component_tags(values):
 def record_component_tags(releases, tag):
     """Component tags from releases/<tag>.json, or {} when no record exists.
 
-    A record that exists but cannot be read is NOT treated as absent: falling
-    back to a uniform tag there would freeze the wrong bytes for exactly the
-    releases this lookup exists to serve.
+    A record that exists but cannot answer the question is NOT treated as
+    absent, and a PARTIAL answer is not accepted either. Falling back to a
+    uniform tag for a role the record does not name is exactly the drift this
+    lookup is here to prevent, and it would be invisible: the manifest would
+    still read `tag_source: releases/<tag>.json` for the roles that did parse.
     """
     path = Path(releases) / f'{tag}.json'
     if not path.is_file():
         return {}
+    where = f'releases/{path.name}'
     try:
-        components = json.loads(path.read_text())['components']
-        return {repo: components[name]['tag'] for repo, name in RECORD_COMPONENT.items()
-                if name in components}
-    except (OSError, ValueError, KeyError, TypeError) as error:
-        raise ValueError(f'releases/{path.name}: unusable release record ({error})') from None
+        data = json.loads(path.read_text())
+    except (OSError, ValueError) as error:
+        raise ValueError(f'{where}: unusable release record ({error})') from None
+    if not isinstance(data, dict):
+        raise ValueError(f'{where}: unusable release record (not a JSON object)')
+    # The filename is not the record's identity. A record copied to a new
+    # filename and not edited would otherwise freeze the OLD release's
+    # components under the new tag, and say the record authorised it.
+    if data.get('release') != tag:
+        raise ValueError(f'{where}: names release {data.get("release")!r}, not {tag}. Refusing '
+                         'to freeze one release from another release\'s record')
+    components = data.get('components')
+    if not isinstance(components, dict):
+        raise ValueError(f'{where}: unusable release record (components is not an object)')
+    resolved = {}
+    for repo, name in RECORD_COMPONENT.items():
+        entry = components.get(name)
+        if not isinstance(entry, dict) or 'tag' not in entry:
+            raise ValueError(f'{where}: names no usable {name!r} component, so {repo} would '
+                             'silently fall back to --tag -- the drift this record is read '
+                             'to prevent')
+        release_order(entry['tag'], f'{where} {name} tag')
+        resolved[repo] = entry['tag']
+    return resolved
 
 
-def resolve_component_tags(tag, overrides, releases=RELEASES):
+def resolve_component_tags(tag, overrides, releases=None):
     """({repo: tag}, {repo: where it came from}, [warnings]) for every REPO.
 
     Precedence: an explicit --component-tag, then the platform release record,
@@ -86,7 +116,10 @@ def resolve_component_tags(tag, overrides, releases=RELEASES):
     this BEFORE the first clone so no network or output directory is touched.
     """
     release_order(tag, '--tag')
-    recorded = record_component_tags(releases, tag)
+    # Looked up at CALL time, not bound as a default: a default would freeze
+    # this repository's own releases/ into the signature, and no caller could
+    # ever point the resolver anywhere else.
+    recorded = record_component_tags(RELEASES if releases is None else releases, tag)
     tags, sources, warnings = {}, {}, []
     for repo in REPOS:
         if repo in overrides:
@@ -280,8 +313,11 @@ def main():
                         help='freeze one component at its own tag, for a release whose '
                              'releases/<tag>.json has not landed yet (repeatable)')
     args = parser.parse_args()
-    if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', args.tag) or not re.fullmatch(r'[A-Za-z0-9-]+', args.owner):
-        parser.error('expected vX.Y.Z tag and GitHub owner name')
+    if not re.fullmatch(r'[A-Za-z0-9-]+', args.owner):
+        parser.error(f'expected a GitHub owner name, got {args.owner!r}')
+    # --tag is checked by release_order below, against the SAME RELEASE_TAG
+    # pattern every component tag is held to. A second inline spelling here
+    # drifted from it once already and let v0.07.5 through.
     # Resolved BEFORE the output directory exists: a nonsensical pairing must
     # cost nothing, not half an evidence tree and a cloned repository.
     try:

@@ -1698,11 +1698,26 @@ the operator may be correcting a bad record — but never silently: it prints a
 WARNING naming both values, and `tag_source` records the value it overrode.
 
 Nonsense is refused with **exit 2 before the first clone**, before any network
-call and before the output directory is created: an unknown repository name, a
-tag that is not `vX.Y.Z`, one repository named twice with different tags, a
-component **newer** than the release being frozen (compared numerically, so
-`v0.7.10` is newer than `v0.7.9`), or a `releases/<tag>.json` that exists but
-cannot be read — an unreadable record is never treated as an absent one.
+call and before the output directory is created:
+
+- an unknown repository name, or one repository named twice with different
+  tags (twice with the same tag contradicts nothing and is allowed);
+- a tag — `--tag`, a flag, or one read out of a record — that is not `vX.Y.Z`.
+  Leading zeros are rejected: `v0.07.3` is not a tag `deploy/release.sh` ever
+  cut, but it parses to the same `(0, 7, 3)` as the real one, so it used to
+  compare equal, pass the gate below and die at `git clone` with a half-built
+  `--out`. There is one pattern, `RELEASE_TAG`, and everything is held to it;
+- a component **newer** than the release being frozen, compared numerically so
+  `v0.7.10` is newer than `v0.7.9` rather than older;
+- a `releases/<tag>.json` that exists but cannot answer the question. An
+  unreadable record is never treated as an absent one, and a *partial* answer
+  is not accepted either: the record must be an object whose `release` field
+  equals the tag being frozen (the filename is not its identity — a record
+  copied to a new name and not edited would otherwise freeze the old release's
+  components and claim the record authorised it), and it must name all three
+  of `core`, `user` and `search` with a release-shaped tag. A role it does not
+  name would silently fall back to `--tag`, which is the exact drift the
+  record is read to prevent, and the manifest would still credit the record.
 
 Reach for the flag only in the window before the record exists, since the
 record and this preflight's evidence land in the same PR:
