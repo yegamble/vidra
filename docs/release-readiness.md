@@ -6,8 +6,9 @@ This is the authoritative campaign record for this audit, superseding earlier re
 
 ## v0.7.5 candidate — 2026-09-20
 
-**v0.7.5: released and running on beta, NOT accepted.** The preflight record is
-the only evidence that exists on these digests — no scan, no runtime milestone,
+**v0.7.5: released and running on beta, NOT accepted.** The preflight record
+and the dependency/image vulnerability scan (PASS, 2026-09-20, below) are the
+only evidence that exists on these digests — no runtime milestone,
 no e2e, no storage or disaster-recovery lane has run on them — and nothing from
 v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
 
@@ -70,14 +71,29 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   cannot confirm what beta is running or that it came up clean. It also
   inverts the v0.6.x posture, under which beta deliberately stayed on the last
   release the campaign had drilled.
+- **Security facet: PASS on the v0.7.5 digests**
+  ([scan record](security-scan-v0.7.5-2026-09-20.md), evidence
+  `docs/evidence/release-v0.7.5-verification/dependency-scan/`): all three
+  images were scanned by linux/amd64 digest with osv-scanner 2.5.1 and
+  govulncheck v1.8.0 (binary **and** source mode), and vidra-user's lockfile
+  with npm audit against a firing negative control. Across the whole
+  v0.6.6 → v0.7.5 range the image-scan advisory ID set is **identical** to
+  v0.6.6's (core 8 IDs, user 0, search 1: GO-2026-5932), **no new high or
+  critical** appeared, and no earlier fix regressed — next 16.3.5, openssl
+  **3.5.8-r0 verified inside all three images**, grpc 1.83.2. Residuals are
+  unchanged: GO-2026-5932 (0 reachable, re-measured on v0.7.5 source, no
+  upstream fix), the rav1e 0.8.1 / libdovi 3.3.2 AV1 crate advisories
+  (accepted by the prior owner ruling on facts re-checked as unchanged), and
+  a glib false positive.
 - **Lanes NOT run on the v0.7.5 digests** — named individually so the gap
-  cannot be mistaken for coverage: the dependency and image vulnerability
-  scan; the native runtime milestone; the backend-backed e2e suite; iOS/Safari
+  cannot be mistaken for coverage: the native runtime milestone; the
+  backend-backed e2e suite; iOS/Safari
   and the broader browser matrix; B2 / canonical S3 storage; the migration
   rehearsal; the recovery drill (REC-01/REC-02); the off-site backup
-  retrieval; and **REC-03** upgrade / app-only rollback / restore. Every
+  retrieval; and **REC-03** upgrade / app-only rollback / restore. Apart from
+  v0.7.5's `dependency-scan/`, every
   `docs/evidence/release-v0.7.*-verification/` directory holds the preflight
-  files alone — no `native-runtime/`, `dependency-scan/`, `e2e-runtime/`,
+  files alone — no `native-runtime/`, `e2e-runtime/`,
   `ios-runtime/`, `b2-runtime/`, `migration-runtime/`, `recovery-runtime/`,
   `rec03-runtime/` or `offsite-runtime/` subtree exists for any v0.7.x
   release.
@@ -134,13 +150,14 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   the same evidence class as the beta-deployment claim above. So no runtime
   lane can run until the harness accepts a core-only release **and** the owner
   authorises new disposable infrastructure.
-- **Next executable — a plan, not progress. None of it has been started.** In
+- **Next executable — a plan, not progress. Only item (3) has been done.** In
   order: (1) teach the candidate validator and the preflight a per-component
   tag, so a core-only release validates and its frozen tree regenerates from
   `main`; (2) re-point the REC-03 driver, which still defaults to the
   v0.6.3 → v0.6.4 pair (`tests/rec03-upgrade-rollback.sh:17`) and injects a
   column `0145` already adds (`:105-106`), so the injection would error
-  instead of the migrator at schema 146; (3) the dependency and image
+  instead of the migrator at schema 146; (3) **DONE 2026-09-20** — the
+  dependency and image
   vulnerability scan — the only lane needing no host; (4) the native runtime
   milestone on one blank host; (5) REC-03 on v0.6.6 → v0.7.5, the
   highest-value lane because beta is already on v0.7.5 and no rollback across

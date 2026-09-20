@@ -1,0 +1,29 @@
+
+================ core ================
+ID=GO-2026-5932  pkg=golang.org/x/crypto@0.57.0  eco=Go  aliases=[]  fixed=[]  severity=[]  group_max_severity=n/a
+    summary: The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design, and has known security issues
+ID=ALPINE-CVE-2021-27219  pkg=glib@2.88.1-r1  eco=Alpine:v3.24  aliases=[]  fixed=[2.66.6-r0]  severity=[CVSS_V3:CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H]  group_max_severity=7.5
+    summary: 
+ID=RUSTSEC-2026-0190  pkg=anyhow@1.0.98  eco=crates.io  aliases=[]  fixed=[1.0.103]  severity=[]  group_max_severity=n/a
+    summary: Unsoundness in `Error::downcast_mut()`
+ID=RUSTSEC-2026-0190  pkg=anyhow@1.0.98  eco=crates.io  aliases=[]  fixed=[1.0.103]  severity=[]  group_max_severity=n/a
+    summary: Unsoundness in `Error::downcast_mut()`
+ID=RUSTSEC-2026-0105  pkg=core2@0.4.0  eco=crates.io  aliases=[]  fixed=[]  severity=[]  group_max_severity=n/a
+    summary: core2 is unmaintained, all versions yanked
+ID=RUSTSEC-2026-0204  pkg=crossbeam-epoch@0.9.18  eco=crates.io  aliases=[]  fixed=[0.9.20]  severity=[]  group_max_severity=n/a
+    summary: Invalid pointer dereference in `fmt::Pointer` impl for `Atomic` and `Shared` when the underlying pointer is invalid
+ID=RUSTSEC-2024-0436  pkg=paste@1.0.15  eco=crates.io  aliases=[]  fixed=[]  severity=[]  group_max_severity=n/a
+    summary: paste - no longer maintained
+ID=RUSTSEC-2026-0097  pkg=rand@0.9.1  eco=crates.io  aliases=[GHSA-cq8v-f236-94qc]  fixed=[0.8.6,0.9.3,0.10.1]  severity=[]  group_max_severity=n/a
+    summary: Rand is unsound with a custom logger using `rand::rng()`
+ID=GHSA-cq8v-f236-94qc  pkg=rand@0.9.1  eco=crates.io  aliases=[RUSTSEC-2026-0097]  fixed=[0.9.3,0.10.1,0.8.6]  severity=[db:LOW]  group_max_severity=n/a
+    summary: Rand is unsound with a custom logger using rand::rng()
+-- core: packages inventoried=8, vulnerable rows=9
+
+================ user ================
+-- user: packages inventoried=0, vulnerable rows=0
+
+================ search ================
+ID=GO-2026-5932  pkg=golang.org/x/crypto@0.56.0  eco=Go  aliases=[]  fixed=[]  severity=[]  group_max_severity=n/a
+    summary: The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design, and has known security issues
+-- search: packages inventoried=1, vulnerable rows=1

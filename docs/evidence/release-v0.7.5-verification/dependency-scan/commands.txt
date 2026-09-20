@@ -1,0 +1,149 @@
+v0.7.5 dependency and image vulnerability scan — command and tool-version transcript
+=====================================================================================
+
+Captured 2026-09-20 (UTC). Every command below was run in this session; the file it
+wrote is named beside it. Host paths in the captured stderr were replaced with
+<scratch> before commit; nothing else in any raw file was edited.
+
+HOST AND TOOLING
+----------------
+host                 Darwin arm64 (macOS workstation)
+docker               client 29.8.0 / server 29.8.0
+go (host toolchain)  go1.26.2 darwin/arm64
+GOTOOLCHAIN          go1.27.1   (the release images' own Go version, per the v0.6.6 recipe)
+osv-scanner          2.5.1   (osv-scalibr 0.5.2)      -- `osv-scanner --version`
+govulncheck          v1.8.0, Go go1.27.1,
+                     DB https://vuln.go.dev, DB updated 2026-09-16 18:00:43 +0000 UTC
+node (scan host)     v26.8.1   npm 11.19.0            -- via `nvm use 26.8.1`
+node (in user image) v26.9.0                          -- read out of the image
+
+No Trivy binary or action was used, following the v0.6.4/v0.6.5/v0.6.6 records
+(the March 2026 Trivy release/action compromise).
+
+SCANNER INSTALL (into a private bin, not over the user's tools)
+---------------------------------------------------------------
+export GOBIN=<scratch>/scan-bin
+export GOTOOLCHAIN=go1.27.1
+go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.5.1
+
+TARGETS — pulled BY linux/amd64 PLATFORM DIGEST, never by tag
+--------------------------------------------------------------
+Digests taken from releases/v0.7.5.json:
+  core   ghcr.io/yegamble/vidra-core@sha256:49974ded92048d377ec64471be08ed762a01b724af3c76a84feddc620cf8b6de
+  user   ghcr.io/yegamble/vidra-user@sha256:814df2644e7dfdec2b527e1e3eb79db5d733ff127066309c8e9778c58c5c3995
+  search ghcr.io/yegamble/vidra-search@sha256:a2195eaf9738ff049984db5913372d59dcc4c8736e3a2e4c7bf8a0c77d6046b1
+
+docker pull --platform linux/amd64 ghcr.io/yegamble/vidra-<c>@<digest>
+docker image inspect ghcr.io/yegamble/vidra-<c>@<digest> \
+  --format '{{.Os}}/{{.Architecture}}  RepoDigests={{.RepoDigests}}  ImageID={{.Id}}'
+                                                        -> raw/digest-verification.txt
+docker save ghcr.io/yegamble/vidra-<c>@<digest> -o <c>.tar
+
+Each image's RepoDigests came back equal to the digest in releases/v0.7.5.json and
+each reported linux/amd64. Archive scanning is architecture-neutral, so an arm64
+host reads the amd64 images without emulation.
+
+1. IMAGE SCAN (osv-scanner 2.5.1)
+---------------------------------
+osv-scanner scan image --archive <c>.tar --format json --output raw/<c>.json
+  core   exit 1    -> raw/core.json.gz    + raw/core.osv.stderr.txt
+  user   exit 0    -> raw/user.json.gz    + raw/user.osv.stderr.txt
+  search exit 1    -> raw/search.json.gz  + raw/search.osv.stderr.txt
+(osv-scanner exits 1 when it reports a vulnerable row, 0 otherwise.)
+
+2. PACKAGE INVENTORY (--all-packages)
+-------------------------------------
+Run because the v0.6.6 bundle omitted it, and because the v0.6.4 record found the
+USER image yields Alpine packages only — no npm packages and no node binary
+detected — i.e. the image scanner is blind to the frontend's JS dependencies.
+This re-tests that directly.
+
+osv-scanner scan image --archive <c>.tar --all-packages --format json \
+  --output raw/<c>-all-packages.json
+  core   exit 1  307 packages  (Alpine:v3.24 138, Go 71, crates.io 97, PyPI 1)
+  user   exit 0   18 packages  (Alpine:v3.24 18, and NOTHING else — see blind spots)
+  search exit 1   53 packages  (Alpine:v3.24 21, Go 32)
+
+3. GO BINARIES — extracted from the images, then scanned
+---------------------------------------------------------
+docker create --platform linux/amd64 ghcr.io/yegamble/vidra-<c>@<digest>
+docker cp <cid>:/app/api ./bins/<c>-api          # create does not execute: no emulation
+  core-api    sha256 4c34ace3496d4f957db1aecf111542d1a0f1bb28bbd53629361068d7f3aec6d8
+              ELF 64-bit LSB executable, x86-64, statically linked, stripped, go1.27.1
+  search-api  sha256 82fce0ba7c87ed08899056c535c34d46846307c159395d13f9ff2ee4def3909c
+              ELF 64-bit LSB executable, x86-64, statically linked, stripped, go1.27.1
+
+GOTOOLCHAIN=go1.27.1 govulncheck -mode=binary -json ./bins/<c>-api
+  core   exit 0 -> raw/core-binary.govulncheck.json.gz
+  search exit 0 -> raw/search-binary.govulncheck.json.gz
+(govulncheck in -json mode returns 0 regardless of findings; the finding set, not
+the exit code, is the signal.)
+
+4. SOURCE-MODE GOVULNCHECK — re-measured, not carried
+------------------------------------------------------
+The v0.6.6 record's "0 reachable" claim rested on v0.6.5's source scan plus
+UNCHANGED SOURCE. Core moved 41 commits between v0.6.6 and v0.7.5, so that basis
+is gone and reachability had to be measured again rather than inherited.
+
+git clone --depth 1 --branch v0.7.5 https://github.com/yegamble/vidra-core.git
+  HEAD ce3eb0a4be680b46fd18c3d317f1703e66e2bd09 == releases/v0.7.5.json core commit
+git clone --depth 1 --branch v0.7.3 https://github.com/yegamble/vidra-search.git
+  HEAD 4daed1850a4289e297bd7cd40a4310f20ccd1c44 == releases/v0.7.5.json search commit
+
+GOTOOLCHAIN=go1.27.1 GOOS=linux GOARCH=amd64 govulncheck -mode=source -json ./cmd/api
+  core   exit 0 -> raw/core-source.govulncheck.json.gz
+  search exit 0 -> raw/search-source.govulncheck.json.gz
+
+5. FRONTEND LOCKFILE (npm audit) + NEGATIVE CONTROL
+----------------------------------------------------
+git clone --depth 1 --branch v0.7.3 https://github.com/yegamble/vidra-user.git
+  HEAD c7dbea44b1f271dfdd37fbbbf3a6f58856ce5070 == releases/v0.7.5.json user commit
+
+npm audit --package-lock-only --registry=https://registry.npmjs.org/ --include=dev --json
+  exit 0 -> raw/user-npm-audit.json   (text form: raw/user-npm-audit.txt)
+
+Negative control — the v0.6.6 continuation says to run the same command against a
+known-bad lockfile in the same shell before believing a clean answer. Done here,
+against the v0.6.4 lockfile:
+  git show v0.6.4:package-lock.json  (+ package.json)
+  npm audit --package-lock-only --registry=https://registry.npmjs.org/ --include=dev
+  exit 1, 6 vulnerabilities (1 moderate, 4 high, 1 critical)
+                                     -> raw/negative-control-v064-npm-audit.txt
+So the clean candidate answer is a real registry answer, not a silent no-op.
+
+6. OPENSSL / APK FLOOR — read from INSIDE each image
+------------------------------------------------------
+The v0.6.6 bundle left this SESSION-REPORTED. The host is arm64 and the images are
+amd64, so this step needs qemu emulation; emulation worked, so the floor is
+directly verified here rather than inherited.
+
+docker run --rm --platform linux/amd64 --network none --entrypoint sh \
+  ghcr.io/yegamble/vidra-<c>@<digest> \
+  -c 'apk list -I | grep -E "^(libssl3|libcrypto3)-"'
+docker run ... -c 'cat /etc/alpine-release'
+  all three images: libcrypto3-3.5.8-r0, libssl3-3.5.8-r0, x86_64; Alpine 3.24.2
+                                     -> raw/openssl-floor.txt
+
+7. SHIPPED FRONTEND VERSIONS — read from INSIDE the image
+-----------------------------------------------------------
+Also session-reported in the v0.6.6 record; read out of the artifact here.
+docker run --rm --platform linux/amd64 --network none --entrypoint node <user> --version
+docker run ... -c '<find node_modules/<p>/package.json and print "version">'
+  node v26.9.0; next 16.3.5; react 19.2.8; react-dom 19.2.8; sharp 0.35.4
+                                     -> raw/user-image-next-version.txt
+
+8. FINDINGS EXPANSION
+----------------------
+Each osv result expanded to package / ecosystem / installed version / fixed-in /
+severity / aliases, for the findings table.
+                                     -> raw/findings-detail.txt
+
+WHAT WAS NOT RUN
+----------------
+- No Vidra service was started; no database, bucket, credential or host was touched.
+  This is artifact evidence, not runtime acceptance.
+- No Dependabot or package-graph capture (`go list -deps`) was taken this round;
+  the v0.6.4 record holds core's and search's graphs.
+- vidra-search's `training/uv.lock` (the PyPI tree the v0.6.5 record flagged, not
+  shipped in any image) was not audited this round.

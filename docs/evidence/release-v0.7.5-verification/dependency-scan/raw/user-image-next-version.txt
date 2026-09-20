@@ -1,0 +1,18 @@
+### date 2026-09-20T09:55:40Z
+### shipped node runtime in the user image
+v26.9.0
+exit=0
+
+### next / react / sharp versions inside the image
+next: "version": "16.3.5"
+   (from /app/node_modules/next/package.json)
+react: "version": "19.2.8"
+   (from /app/node_modules/react/package.json)
+react-dom: "version": "19.2.8"
+   (from /app/node_modules/react-dom/package.json)
+sharp: "version": "0.35.4"
+   (from /app/node_modules/sharp/package.json)
+exit=0
+
+### lockfile (source, v0.7.3 / c7dbea44) next version, for comparison
+16.3.5

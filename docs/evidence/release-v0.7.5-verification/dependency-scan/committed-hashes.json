@@ -1,0 +1,32 @@
+{
+  "note": "SHA-256 of every file under this dependency-scan tree except this manifest itself. Generated at commit time; recompute with sha256sum to confirm the committed evidence is byte-identical to the capture.",
+  "algorithm": "sha256",
+  "files": {
+    "commands.txt": "af0efbe98edb6ef69b4c47c23fe107e268ec807a7a8585316206a12130fa9a94",
+    "raw/core-all-packages.json.gz": "7c1cd42e6750b7b9021a823b36da131a4bb076fc28b8bee734cfbb3cc814886a",
+    "raw/core-all-packages.stderr.txt": "0987f3240eb1c78ba06d2ad493a76f2ff2b83901cec3a391c5bf5a89adb7d8ee",
+    "raw/core-binary.govulncheck.json.gz": "e4412b91926262fa8be9d84e72c7afc52545dbd38f6683b3c8bc2106b6628353",
+    "raw/core-source.govulncheck.json.gz": "91685223f21869499d58a466cca3eeb85cfe53110b137ebe0f747a5d736a0397",
+    "raw/core.json.gz": "dcda27ceae33652382894e7d6112ac3b0cbc6fbe8ec897339660597a7b1bc166",
+    "raw/core.osv.stderr.txt": "8cc7c8543c34b120970102bcb7f5ea926dc435f10266487fd3c4768fd569da2b",
+    "raw/digest-verification.txt": "a340f953682ba1636bd37091df64e8183b10a7ffc3cdcc0e4f8c440c40b091fd",
+    "raw/findings-detail.txt": "204354b36d4c0e18d53c0f98bb063ea5cc885869b276a281a05d238cdc8ca06a",
+    "raw/key-package-versions.txt": "9ad7fb53e425f7f9eaeb71b93c9ffc26446e160eac37a811f135bd0623f5e959",
+    "raw/negative-control-v064-npm-audit.txt": "026e062f690db5c8cc0ff197ac8d225826c0622bc67003c40fe4d3ab55701ff0",
+    "raw/openssl-floor.txt": "39695afa9a749930af381df9f4bf8a6ff3a218ef3b5feae8680b618dd3927ed5",
+    "raw/search-all-packages.json.gz": "310a53cacee0770fac6b05e4917edbe08a86875fb89cfce56cf6e6e796a9bbf0",
+    "raw/search-all-packages.stderr.txt": "73bfbd70d1c2b0d6bbe7af0e9e268754c18c69625275b15cda5be5915a3e82b7",
+    "raw/search-binary.govulncheck.json.gz": "f0339a17d6dea6889ef069ed98ce939bf54acedc597acd330b747c838113ff87",
+    "raw/search-source.govulncheck.json.gz": "4fd66f3dac7e578de9b55703689267af76539e81fa0e4c59ae4230bc4c73726c",
+    "raw/search.json.gz": "a591c0a90f6398f4e98e91436102c0176bcd54c2b45752dcdf5ee870670fe852",
+    "raw/search.osv.stderr.txt": "ba97157605af7a83526071ef737d87ec0dea97858799871ef6022ac5a09fab03",
+    "raw/user-all-packages.json.gz": "17643b9ff4fc3498edea5a70f1cbbde11ca163cd938e5787629e69c8986ce409",
+    "raw/user-all-packages.stderr.txt": "4992e3812cddc86a54edf3d2d85813040af4c9781537e665a3d8c6a2291f36b8",
+    "raw/user-image-next-version.txt": "67928d2e7dc8b24429a5872f77151fe2a4ed315d75244884d910fb4313881dde",
+    "raw/user-npm-audit.json": "64d47545ab550e7799560b830f377ca182692f34a1034bc52b639579c4f7834f",
+    "raw/user-npm-audit.txt": "6d8c5c8f3d7684adb070417bd608d01ae90aa3dc26a65af03ffda4955f38d9a3",
+    "raw/user.json.gz": "35d92b2dd885fd367b71940b689fe384afbc2c7208c85600d2e2a741403c7bb8",
+    "raw/user.osv.stderr.txt": "4ec740dee60e3c0a3c46e645cd33d50060a55ddbd3a0ab7a1a928edc01268d42",
+    "summary.json": "e282fed9a52d98053fce7e3f2634eee01de9d3cf7caa29163a8c48c2cd4ea938"
+  }
+}

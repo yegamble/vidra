@@ -1,0 +1,31 @@
+
+### core
+  github.com/grpc-ecosystem/grpc-gateway/v2@2.30.0  [Go]  from /app/api
+  go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@1.46.0  [Go]  from /app/api
+  golang.org/x/crypto@0.57.0  [Go]  from /app/api
+  google.golang.org/grpc@1.83.2  [Go]  from /app/api
+  glib@2.88.1-r1  [Alpine:v3.24]  from /lib/apk/db/installed
+  openssl@3.5.8-r0  [Alpine:v3.24]  from /lib/apk/db/installed
+  libdovi@3.3.2-r0  [Alpine:v3.24]  from /lib/apk/db/installed
+  openssl@3.5.8-r0  [Alpine:v3.24]  from /lib/apk/db/installed
+  rav1e@0.8.1-r0  [Alpine:v3.24]  from /lib/apk/db/installed
+  anyhow@1.0.98  [crates.io]  from /usr/lib/libdovi.so.3.3.2
+  anyhow@1.0.98  [crates.io]  from /usr/lib/librav1e.so.0.8.1
+  core2@0.4.0  [crates.io]  from /usr/lib/librav1e.so.0.8.1
+  crossbeam-epoch@0.9.18  [crates.io]  from /usr/lib/librav1e.so.0.8.1
+  getrandom@0.3.3  [crates.io]  from /usr/lib/librav1e.so.0.8.1
+  paste@1.0.15  [crates.io]  from /usr/lib/librav1e.so.0.8.1
+  pastey@0.1.0  [crates.io]  from /usr/lib/librav1e.so.0.8.1
+  rand@0.9.1  [crates.io]  from /usr/lib/librav1e.so.0.8.1
+  rand_chacha@0.9.0  [crates.io]  from /usr/lib/librav1e.so.0.8.1
+  rand_core@0.9.3  [crates.io]  from /usr/lib/librav1e.so.0.8.1
+  rav1e@0.8.1  [crates.io]  from /usr/lib/librav1e.so.0.8.1
+
+### search
+  golang.org/x/crypto@0.56.0  [Go]  from /app/api
+  openssl@3.5.8-r0  [Alpine:v3.24]  from /lib/apk/db/installed
+  openssl@3.5.8-r0  [Alpine:v3.24]  from /lib/apk/db/installed
+
+### user
+  openssl@3.5.8-r0  [Alpine:v3.24]  from /lib/apk/db/installed
+  openssl@3.5.8-r0  [Alpine:v3.24]  from /lib/apk/db/installed

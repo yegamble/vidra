@@ -1,0 +1,18 @@
+Warning: --output has been deprecated in favor of --output-file
+Scanning local image tarball "<scratch>/core.tar"
+Starting filesystem walk for root: 
+End status: 314 dirs visited, 3202 inodes visited, 1872 Extract calls, 13.967208ms elapsed, 13.967ms wall time
+Starting filesystem walk for root: 
+End status: 0 dirs visited, 1 inodes visited, 1 Extract calls, 211.875µs elapsed, 212µs wall time
+Starting filesystem walk for root: 
+End status: 0 dirs visited, 1 inodes visited, 1 Extract calls, 561.375µs elapsed, 561µs wall time
+Starting filesystem walk for root: 
+End status: 0 dirs visited, 1 inodes visited, 1 Extract calls, 369.75µs elapsed, 370µs wall time
+Starting filesystem walk for root: 
+End status: 0 dirs visited, 1 inodes visited, 1 Extract calls, 57.834µs elapsed, 58µs wall time
+Starting filesystem walk for root: 
+End status: 0 dirs visited, 1 inodes visited, 1 Extract calls, 34.208µs elapsed, 34µs wall time
+Starting filesystem walk for root: 
+End status: 0 dirs visited, 1 inodes visited, 1 Extract calls, 30.959µs elapsed, 31µs wall time
+Starting filesystem walk for root: 
+End status: 0 dirs visited, 1 inodes visited, 1 Extract calls, 144.042µs elapsed, 144µs wall time

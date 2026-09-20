@@ -1,0 +1,8 @@
+Warning: --output has been deprecated in favor of --output-file
+Scanning local image tarball "<scratch>/user.tar"
+Starting filesystem walk for root: 
+End status: 1036 dirs visited, 6311 inodes visited, 221 Extract calls, 9.093417ms elapsed, 9.093ms wall time
+Starting filesystem walk for root: 
+End status: 0 dirs visited, 1 inodes visited, 1 Extract calls, 74.125µs elapsed, 74µs wall time
+Starting filesystem walk for root: 
+End status: 0 dirs visited, 1 inodes visited, 1 Extract calls, 71.833µs elapsed, 71µs wall time

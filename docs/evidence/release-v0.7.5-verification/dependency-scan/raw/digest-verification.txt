@@ -1,0 +1,22 @@
+### capture date (UTC)
+2026-09-20T09:50:48Z
+### docker
+client 29.8.0 / server 29.8.0
+### host
+Darwin arm64
+
+### expected linux/amd64 platform digests, from releases/v0.7.5.json
+vidra-core   sha256:49974ded92048d377ec64471be08ed762a01b724af3c76a84feddc620cf8b6de
+vidra-user   sha256:814df2644e7dfdec2b527e1e3eb79db5d733ff127066309c8e9778c58c5c3995
+vidra-search sha256:a2195eaf9738ff049984db5913372d59dcc4c8736e3a2e4c7bf8a0c77d6046b1
+
+### as pulled (docker image inspect): Os/Arch, RepoDigests, local ImageID
+--- ghcr.io/yegamble/vidra-core@sha256:49974ded92048d377ec64471be08ed762a01b724af3c76a84feddc620cf8b6de
+linux/amd64  RepoDigests=[ghcr.io/yegamble/vidra-core@sha256:49974ded92048d377ec64471be08ed762a01b724af3c76a84feddc620cf8b6de]  ImageID=sha256:49974ded92048d377ec64471be08ed762a01b724af3c76a84feddc620cf8b6de
+exit=0
+--- ghcr.io/yegamble/vidra-user@sha256:814df2644e7dfdec2b527e1e3eb79db5d733ff127066309c8e9778c58c5c3995
+linux/amd64  RepoDigests=[ghcr.io/yegamble/vidra-user@sha256:814df2644e7dfdec2b527e1e3eb79db5d733ff127066309c8e9778c58c5c3995]  ImageID=sha256:814df2644e7dfdec2b527e1e3eb79db5d733ff127066309c8e9778c58c5c3995
+exit=0
+--- ghcr.io/yegamble/vidra-search@sha256:a2195eaf9738ff049984db5913372d59dcc4c8736e3a2e4c7bf8a0c77d6046b1
+linux/amd64  RepoDigests=[ghcr.io/yegamble/vidra-search@sha256:a2195eaf9738ff049984db5913372d59dcc4c8736e3a2e4c7bf8a0c77d6046b1]  ImageID=sha256:a2195eaf9738ff049984db5913372d59dcc4c8736e3a2e4c7bf8a0c77d6046b1
+exit=0
