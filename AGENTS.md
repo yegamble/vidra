@@ -63,10 +63,42 @@ had been committed and wired to nothing until A39:
 (`meta-validate-python-unit`, `meta-boot-compose-log`) so a green check's
 console record outlives the run page.
 
-**Known gap, unchanged by A39 (finding F04):** the `boot` lane starts the stack
-in production mode with transcoding disabled and no search integration, so a
-green meta CI cannot certify upload → real transcode → browser decode → search
-indexing. That is stack coverage, not a CI gate, and stays open.
+**Finding F04, half closed:** the required `boot` lane starts the stack in
+production mode with transcoding disabled and no search integration, so a green
+**required** set still certifies nothing about the media path. The
+**non-required** `stack-e2e` lane
+([`.github/workflows/stack-e2e.yml`](.github/workflows/stack-e2e.yml) +
+[`tests/stack-e2e.mjs`](tests/stack-e2e.mjs)) now walks the rest of that chain
+against a live stack with `TRANSCODING_ENABLED=true` and
+`SEARCH_SERVICE_URL` wired to the compose `search` service: owner claim →
+login → channel → chunked upload of an ffmpeg-generated 4 s 320×240 fixture →
+transcode polled to `published` with `packaging_format=cmaf` and a rendition →
+`#EXTM3U` master playlist → a variant playlist → the CMAF init segment and the
+first media segment fetched anonymously, 200 with non-zero bytes → the video
+returned by a signed `/internal/v1/search` against vidra-search **and** by the
+public `/api/v1/videos/search` the frontend calls.
+
+**What it still does NOT prove — do not over-read a green run:**
+
+- **No browser and no decoder.** It asserts playlist text and segment BYTE
+  COUNTS. Bytes that arrive are not bytes that decode; real playback stays
+  `tests/release-acceptance.mjs`'s job, on a prepared lab host.
+- **Rate limiting is off** (`RATE_LIMIT_ENABLED=false`), so it proves nothing
+  about the shipped limits, and **scanning is off**
+  (`MALWARE_SCAN_MODE=disabled` — without it every ingestion route answers
+  503 `scanner_not_configured`), so it proves nothing about scanning.
+- **Source builds of the three default branches**, not released images or
+  pinned digests: stack coverage, never release qualification.
+- **Local storage**, not S3/Spaces/MinIO, and no CDN, presign or federation.
+- **Not required for merge.** It lives in its own workflow, outside
+  `.github/required-checks.txt`, precisely so one transcode flake on a shared
+  runner cannot block an unrelated PR. It runs nightly, on `workflow_dispatch`,
+  and on a PR that touches its own inputs — a lane that runs on neither push
+  nor PR cannot go red in the PR that breaks it. If it earns promotion after
+  several weeks of green nightlies, the manifest already supports the
+  graduation: a `?name` entry means "required only IF it ran", which fits a
+  path-filtered lane exactly. That is a separate, diff-visible decision and is
+  deliberately not taken here.
 
 ## Hard rules
 
