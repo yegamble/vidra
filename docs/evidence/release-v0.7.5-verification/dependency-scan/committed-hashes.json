@@ -2,7 +2,8 @@
   "note": "SHA-256 of every file under this dependency-scan tree except this manifest itself. Generated at commit time; recompute with sha256sum to confirm the committed evidence is byte-identical to the capture.",
   "algorithm": "sha256",
   "files": {
-    "commands.txt": "af0efbe98edb6ef69b4c47c23fe107e268ec807a7a8585316206a12130fa9a94",
+    "commands.txt": "d144465df5a9370d439b685501074a9a04ebeccceb88e541b1c34c1f67a2cad8",
+    "raw/alpine-3.24-apk-policy.txt": "d77edfc50dcde090b5e74c83d03bd3240df0eb89943c38e76ad943ac7343bab8",
     "raw/core-all-packages.json.gz": "7c1cd42e6750b7b9021a823b36da131a4bb076fc28b8bee734cfbb3cc814886a",
     "raw/core-all-packages.stderr.txt": "0987f3240eb1c78ba06d2ad493a76f2ff2b83901cec3a391c5bf5a89adb7d8ee",
     "raw/core-binary.govulncheck.json.gz": "e4412b91926262fa8be9d84e72c7afc52545dbd38f6683b3c8bc2106b6628353",
@@ -28,6 +29,6 @@
     "raw/user-npm-audit.txt": "6d8c5c8f3d7684adb070417bd608d01ae90aa3dc26a65af03ffda4955f38d9a3",
     "raw/user.json.gz": "35d92b2dd885fd367b71940b689fe384afbc2c7208c85600d2e2a741403c7bb8",
     "raw/user.osv.stderr.txt": "4ec740dee60e3c0a3c46e645cd33d50060a55ddbd3a0ab7a1a928edc01268d42",
-    "summary.json": "71af55ef0d61a7ad8e9ee6f630974e934a79c173822401215dcae42f2cd5a2ca"
+    "summary.json": "30108ea6f7bc3e30df3684ac38afcd3096fad11a556b1d8db041cf4e693aeeba"
   }
 }

@@ -1,16 +1,24 @@
 # v0.7.5 dependency and image vulnerability scan — 2026-09-20
 
-**The security facet of v0.7.5 is PASS.** v0.7.5 is the first release since v0.6.6
-(2026-09-14) to be scanned at all: **41 core commits** and five Go dependency bumps
-landed in between, and every one of v0.7.0–v0.7.4 shipped unscanned. Scanned by
-linux/amd64 image digest with the same scanners the v0.6.6 record used, that whole
-range introduced **no new advisory** and regressed **no v0.6.6 fix**: the image-scan
-advisory ID set is identical to v0.6.6's for all three components, the Go binary
-finding is the same single advisory, the frontend lockfile audit is still clean, and
-the OpenSSL floor still holds at 3.5.8-r0. **Zero new high or critical findings.**
-What remains are the same three residuals with no fix to apply — one Go advisory
-that is not reachable, the AV1 crate advisories with no Alpine fix, and one scanner
-false positive.
+**The security facet of v0.7.5 is PASS for the three released first-party images.**
+v0.7.5 is the first release since v0.6.6 (2026-09-14) to be scanned at all: **41 core
+commits** and five Go dependency bumps landed in between, and every one of
+v0.7.0–v0.7.4 shipped unscanned. Scanned by linux/amd64 image digest with the same
+scanners the v0.6.6 record used, that whole range introduced **no new advisory** and
+regressed **no v0.6.6 fix**: the image-scan advisory ID set is identical to v0.6.6's
+for all three components, the Go binary finding is the same single advisory, the
+frontend lockfile audit is still clean, and the OpenSSL floor still holds at
+3.5.8-r0. **Zero new high or critical findings.** What remains are the same three
+residuals — one Go advisory that is not reachable, the AV1 crate advisories with no
+fix in Alpine v3.24's package set, and one scanner false positive.
+
+**Two things this headline does not cover, stated up front so the scope is not
+overread.** First, **the lane scans only the three first-party images named in
+`releases/v0.7.5.json`.** The v0.7.5 stack also deploys third-party images and one
+*first-party* image that appears in no release record at all; none has ever been
+scanned by any round. Second, **the AV1 crate advisories remain an OPEN owner risk
+decision** — this record carries that decision forward unchanged and does not make
+it. Both are detailed below.
 
 Two claims the v0.6.6 record had to leave inherited or session-reported are
 **measured directly here**, because the basis that let v0.6.6 inherit them is gone:
@@ -38,7 +46,7 @@ Raw scanner output is under
 [dependency-scan/committed-hashes.json](evidence/release-v0.7.5-verification/dependency-scan/committed-hashes.json)
 carries the SHA-256 of every other file in that tree so the committed evidence can
 be proven byte-identical to the capture; it was regenerated and re-verified against
-the tree (27 files, 0 mismatches) before commit. The evidence was secret-grepped and
+the tree (28 files, 0 mismatches) before commit. The evidence was secret-grepped and
 host-path-scrubbed before commit: scanner stderr had the working directory replaced
 with `<scratch>`, and nothing else in any raw file was edited. The only
 `password`/`secret`/`token` strings in the tree are advisory summaries and Go symbol
@@ -188,11 +196,11 @@ appeared since.
 | `GO-2026-5932` (x/crypto/openpgp) | core image + binary | present, module-level | **present, module-level, 0 reachable (source-mode)** | **UNCHANGED** — v0.6.6 disposition: residual with no upstream fix |
 | `GO-2026-5932` | search image + binary | present, module-level | **present, module-level, 0 reachable (source-mode)** | **UNCHANGED** — same disposition |
 | `ALPINE-CVE-2021-27219` (glib 2.88.1-r1) | core image | present, ruled a **false positive** | **present, same version, same ruling** | **UNCHANGED** |
-| `RUSTSEC-2026-0190` (anyhow 1.0.98) | core image | present | **present, same version** | **UNCHANGED** — accepted by prior ruling |
-| `RUSTSEC-2026-0105` (core2 0.4.0) | core image | present | **present, same version** | **UNCHANGED** — accepted by prior ruling |
-| `RUSTSEC-2026-0204` (crossbeam-epoch 0.9.18) | core image | present | **present, same version** | **UNCHANGED** — accepted by prior ruling |
-| `RUSTSEC-2024-0436` (paste 1.0.15) | core image | present | **present, same version** | **UNCHANGED** — accepted by prior ruling |
-| `RUSTSEC-2026-0097` / `GHSA-cq8v-f236-94qc` (rand 0.9.1) | core image | present (aliased pair) | **present, same version** | **UNCHANGED** — accepted by prior ruling |
+| `RUSTSEC-2026-0190` (anyhow 1.0.98) | core image | present | **present, same version** | **UNCHANGED** — open owner risk decision, carried forward |
+| `RUSTSEC-2026-0105` (core2 0.4.0) | core image | present | **present, same version** | **UNCHANGED** — open owner risk decision, carried forward |
+| `RUSTSEC-2026-0204` (crossbeam-epoch 0.9.18) | core image | present | **present, same version** | **UNCHANGED** — open owner risk decision, carried forward |
+| `RUSTSEC-2024-0436` (paste 1.0.15) | core image | present | **present, same version** | **UNCHANGED** — open owner risk decision, carried forward |
+| `RUSTSEC-2026-0097` / `GHSA-cq8v-f236-94qc` (rand 0.9.1) | core image | present (aliased pair) | **present, same version** | **UNCHANGED** — open owner risk decision, carried forward |
 | user image | — | 0 vulnerable rows | **0 vulnerable rows** | **UNCHANGED** |
 | npm audit (user lockfile) | — | 0/0, 676 deps | **0/0, 678 deps** | **UNCHANGED** (dependency count moved, findings did not) |
 
@@ -218,34 +226,68 @@ from v0.6.6's own `core.json.gz`, and agrees with the
 [v0.6.5 record](security-scan-v0.6.5-2026-09-13.md) line that reads *"module lists
 confirm **grpc v1.83.2** (core, 71 modules) and **x/crypto v0.56.0** (both)"*.
 
-## Residuals with no upstream fix
+## Residuals: what a fix would require, and what is still undecided
 
-- **`GO-2026-5932`** (golang.org/x/crypto/openpgp) — **no fixed version published**;
-  the advisory is that the package is unmaintained and unsafe by design. Present as a
-  module in the core and search binaries, **0 reachable** by source-mode govulncheck
-  on this candidate's own source. Nothing to apply.
+The v0.6.6 record grouped these as "residuals with no fix to apply". That phrase is
+too strong to repeat as written, and this record's own raw evidence is what shows it:
+`raw/findings-detail.txt` records **`fixed=[1.0.103]`** for anyhow,
+**`fixed=[0.9.20]`** for crossbeam-epoch and **`fixed=[0.8.6,0.9.3,0.10.1]`** for
+rand. Upstream fixes for three of the five AV1 crates **do exist**. What does not
+exist is a fix Vidra can reach through **Alpine v3.24's package set**, because these
+crates are compiled into Alpine-packaged codec shared objects rather than built here.
+The distinction is stated precisely below.
+
+- **`GO-2026-5932`** (golang.org/x/crypto/openpgp) — **genuinely no fixed version
+  published** (`fixed=[]`); the advisory is that the package is unmaintained and
+  unsafe by design, so no release closes it. Present as a module in the core and
+  search binaries, **0 reachable** by source-mode govulncheck on this candidate's own
+  source. Nothing to apply.
+
+  *Precisely what the reachability evidence supports:* source mode reports
+  `GO-2026-5932` at **module level only** — the vulnerable package is not imported
+  and no symbol is called — for a default `GOOS=linux GOARCH=amd64` scan of the
+  stated commits. The source scan's build configuration was **not shown to match the
+  release build's tags and flags**, and **binary mode does show the `openpgp`
+  packages present in the shipped binary**. So "0 reachable" is a statement about
+  that source configuration, not a proof about the shipped artifact.
+
 - **AV1 codec crate advisories in the core image** — `RUSTSEC-2026-0190` (anyhow
-  1.0.98), `RUSTSEC-2026-0105` (core2 0.4.0), `RUSTSEC-2026-0204` (crossbeam-epoch
-  0.9.18), `RUSTSEC-2024-0436` (paste 1.0.15), `GHSA-cq8v-f236-94qc` /
-  `RUSTSEC-2026-0097` (rand 0.9.1). The inventory scan attributes every one of them
-  to `/usr/lib/librav1e.so.0.8.1` and `/usr/lib/libdovi.so.3.3.2` — i.e. Alpine's
-  `rav1e@0.8.1-r0` and `libdovi@3.3.2-r0`, which is what Alpine v3.24 ships.
+  1.0.98, **fixed upstream in 1.0.103**), `RUSTSEC-2026-0105` (core2 0.4.0, **no
+  fixed version — all versions yanked**), `RUSTSEC-2026-0204` (crossbeam-epoch
+  0.9.18, **fixed upstream in 0.9.20**), `RUSTSEC-2024-0436` (paste 1.0.15, **no
+  fixed version — unmaintained**), `GHSA-cq8v-f236-94qc` / `RUSTSEC-2026-0097` (rand
+  0.9.1, **fixed upstream in 0.8.6 / 0.9.3 / 0.10.1**). The inventory scan attributes
+  every one of them to `/usr/lib/librav1e.so.0.8.1` and `/usr/lib/libdovi.so.3.3.2` —
+  Alpine's `rav1e@0.8.1-r0` and `libdovi@3.3.2-r0`.
 
-  **Accepted by prior owner ruling, re-checked and still applicable.** The standing
-  ruling is recorded in [release-readiness.md](release-readiness.md) as *"the rav1e
-  0.8.1 / libdovi 3.3.2 AV1 crate advisories (no Alpine v3.24 fix — owner risk
-  decision)"*, and the v0.6.6 record states the choice as *"accept pending an Alpine
-  update, or build without these codecs."* The facts that ruling was made on are
-  **unchanged on the v0.7.5 images**: same two Alpine packages, same upstream
-  versions (rav1e 0.8.1, libdovi 3.3.2), same five advisories, same absence of an
-  Alpine fix, and the base image is still Alpine v3.24 (3.24.2). The acceptance is
-  therefore **carried forward by citation, not re-decided here** — and it is not
-  silently dropped either. If Alpine v3.24 later ships a fixed rav1e/libdovi, this
-  stops being an accepted risk and becomes an available fix.
+  **No fix is available from Alpine v3.24, re-queried today — not inherited.** The
+  earlier rounds backed this with a captured `apk policy` read; this round captured
+  its own, the same way
+  ([raw/alpine-3.24-apk-policy.txt](evidence/release-v0.7.5-verification/dependency-scan/raw/alpine-3.24-apk-policy.txt),
+  2026-09-20T10:29:40Z, Alpine 3.24.2, linux/amd64). `v3.24/community` offers
+  **only** `rav1e` / `rav1e-libs 0.8.1-r0` and `libdovi 3.3.2-r0` — exactly the
+  versions the image carries. So reaching the upstream crate fixes above would
+  require **an Alpine package update that does not yet exist, or building the image
+  without these codecs**. Neither is a change this record can make.
+
+  **The owner risk decision is OPEN. It has not been made, and this record does not
+  make it.** The cited text — [release-readiness.md](release-readiness.md), *"the
+  rav1e 0.8.1 / libdovi 3.3.2 AV1 crate advisories (no Alpine v3.24 fix — owner risk
+  decision)"* — names a decision the owner **still has to take**, and both earlier
+  scan records state it as an unresolved choice, not a settled one: the v0.6.4 record
+  puts *"Owner risk decision: accept pending Alpine, or build without these codecs"*
+  in its **mitigation** column, and the v0.6.6 record repeats *"accept pending an
+  Alpine update, or build without these codecs."* **No owner acceptance is recorded
+  anywhere in `docs/`** — searched this session. The decision is therefore **carried
+  forward unchanged and still open**; a PASS on this facet is **not** an acceptance
+  of it, and must not be read as one.
+
 - **`ALPINE-CVE-2021-27219`** on glib 2.88.1-r1 — a scanner **false positive**: the
-  installed version is far newer than the advisory's own fixed version (2.66.6-r0).
-  Recorded, **not suppressed**, as v0.6.6 did. This is the one row carrying a
-  high-band CVSS score (7.5); see the verdict for why it does not fail the candidate.
+  installed version is far newer than the advisory's own fixed version (2.66.6-r0),
+  and today's `apk policy` read confirms `v3.24/main` carries only 2.88.1-r1, so
+  there is nothing newer to move to either. Recorded, **not suppressed**, as v0.6.6
+  did. This is the one row carrying a high-band CVSS score (7.5); see the verdict for
+  why it does not fail the candidate.
 
 ## Verdict, against the criteria v0.6.6 states
 
@@ -270,9 +312,22 @@ Applied to v0.7.5 with v0.6.6 as the baseline, clause by clause, **not softened*
 | "the Go binary finding is the same single advisory" | `GO-2026-5932` only, both binaries | **yes** |
 | "the frontend lockfile audit is clean" | 0/0, and the negative control proves the command reports findings when they exist | **yes** |
 | "the OpenSSL floor is unchanged" | 3.5.8-r0, verified inside all three images | **yes** |
-| "the … residuals have no fix to apply" | true of all three; the AV1 group is accepted by the cited prior ruling on unchanged facts | **yes** |
+| "the … residuals have no fix to apply" | **yes in the sense v0.6.6 meant it, stated more precisely here** — no fix is reachable through Alpine v3.24's package set (re-queried today); upstream crate fixes exist for anyhow, crossbeam-epoch and rand but require an Alpine update or dropping the codecs | **yes, with the wording corrected** |
 
-**Verdict: PASS.** Every clause is met on evidence captured this session.
+**Verdict: PASS**, for the three released first-party images, on evidence captured
+this session.
+
+**Does the verdict depend on the AV1 risk being accepted? No — and it must not.**
+The criterion quoted above tests *change* and *fix availability*: no new advisory, no
+regressed fix, identical ID set, same single Go finding, clean lockfile, unchanged
+OpenSSL floor, and residuals with nothing to apply. **Not one clause asks whether the
+owner accepted a risk.** The AV1 group satisfies its clause because no fix is
+reachable from Alpine v3.24 — a fact re-measured today — and because the position is
+byte-identical to the one v0.6.6 was ruled PASS on: same packages, same versions,
+same five advisories. Had the criterion required owner acceptance, this facet could
+**not** be called PASS, because no such acceptance exists in `docs/`. So the PASS
+stands on the criterion as written, and the open decision stands beside it. A reader
+using this record to argue the AV1 risk has been signed off would be misusing it.
 
 **On the one high-scored row.** The task this scan was run under treats a **new**
 high/critical as failing. There is none: `new_high_or_critical_since_v066` is **0**.
@@ -292,7 +347,9 @@ reports **no severity at all** for the RUSTSEC rows and `GO-2026-5932`, and `LOW
 
 | Criterion | v0.6.6 | v0.7.5 | Why |
 |---|---|---|---|
-| Exact-candidate dependency and image scan | PASS | **PASS** | The v0.6.6 → v0.7.5 range (41 core commits, five Go bumps) introduced no new advisory and regressed no v0.6.6 fix. Image-scan ID sets identical, Go binary finding the same single advisory, lockfile audit clean with a firing negative control, OpenSSL floor verified inside the images at 3.5.8-r0. Reachability re-measured on this candidate's source rather than inherited |
+| Exact-candidate dependency and image scan, **three released first-party images only** | PASS | **PASS** | The v0.6.6 → v0.7.5 range (41 core commits, five Go bumps) introduced no new advisory and regressed no v0.6.6 fix. Image-scan ID sets identical, Go binary finding the same single advisory, lockfile audit clean with a firing negative control, OpenSSL floor verified inside the images at 3.5.8-r0. Reachability re-measured on this candidate's source rather than inherited |
+| AV1 crate risk (rav1e / libdovi) | open owner decision | **still OPEN** | No fix in Alpine v3.24's package set, re-queried 2026-09-20. No owner acceptance exists in `docs/`; this record carries the decision forward and does not make it. The PASS above does not depend on it |
+| Third-party and unreleased first-party containers | never scanned | **still never scanned** | postgres, redis, caddy, alpine, and the profile-gated clamav / minio / nginx-rtmp / otel / jaeger / kubo / ipfs-cluster, plus first-party `vidra-whisper:v0.1.0`, which is in no release record. Out of this lane's scope; newly named so the gap is visible |
 | Everything else | unchanged | unchanged | No runtime acceptance, no workflow row, no release verdict is touched by this record. v0.7.5 stays **NO-GO** |
 
 **No workflow-register row moves**, following the v0.6.6 scan precedent, whose own
@@ -303,6 +360,30 @@ verdict."* One of nine named lanes closing does not move a register row.
 
 Carried forward from the earlier records, plus what this round re-confirmed:
 
+- **This lane scans only the three first-party images in `releases/v0.7.5.json`. The
+  v0.7.5 stack deploys more containers than that, and none of them has ever been
+  scanned by any round** — there is no earlier precedent here, so this bullet is new.
+  Read from `docker-compose.yml` / `docker-compose.prod.yml` at the v0.7.5 meta
+  commit and from vidra-core's `docker-compose.yml` at tag `v0.7.5` (meta's base
+  compose `include:`s it), with each service's gating profile:
+  - **Selected by a standard deploy** — `postgres:18-alpine`, `redis:8-alpine` and
+    `alpine:3.24` (the `prep-volumes` helper) under profile `core`; `caddy:2.11.4-alpine`
+    under profile `edge`.
+  - **Profile-gated, deployed only when the feature is enabled** —
+    `clamav/clamav:1.5` (`scan`), `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`
+    (`storage`), `alfg/nginx-rtmp` (`media`),
+    `otel/opentelemetry-collector-contrib:0.160.0` and
+    `jaegertracing/all-in-one:1.76.0` (`otel`), `ipfs/kubo:v0.43.0` (`ipfs`, `full`,
+    `ipfs-private`, `ipfs-private-cluster`), `ipfs/ipfs-cluster:v1.1.6`
+    (`ipfs-private-cluster`).
+  - **`ghcr.io/yegamble/vidra-whisper:v0.1.0` (profile `captions`) is FIRST-PARTY and
+    appears in no release record at all** — `grep` over `releases/` returns nothing
+    for it. So a Vidra-published image ships to operators outside the release-pinning
+    and scanning that the other three first-party images get. That is a gap in the
+    release process, not just in this scan, and it is recorded here because this is
+    the first round to look.
+
+  Nothing above was scanned in this PR and nothing above is claimed to be clean.
 - **The user image scan is blind to the frontend's JavaScript dependencies.** The
   `--all-packages` pass finds **18 Alpine packages and nothing else** in the user
   image — no npm ecosystem entries, no node binary detected — reproducing the v0.6.4
@@ -330,6 +411,9 @@ Carried forward from the earlier records, plus what this round re-confirmed:
 
 ## What was NOT run, and why
 
+- **Every container in the stack that is not one of the three released first-party
+  images** — the full list is in the blind spots above. Not scanned, not claimed
+  clean, and deliberately not scanned in this PR.
 - **The other eight lanes on the v0.7.5 digests** — native runtime milestone,
   backend-backed e2e, iOS/Safari and the broader browser matrix, B2/canonical S3
   storage, migration rehearsal, recovery drill (REC-01/REC-02), off-site backup
@@ -377,6 +461,12 @@ git clone --depth 1 --branch v0.7.5 https://github.com/yegamble/vidra-core.git s
 # openssl floor and shipped frontend versions, direct from the images
 docker run --rm --platform linux/amd64 --network none --entrypoint sh "$CORE" \
   -c 'apk list -I | grep -E "^(libssl3|libcrypto3)-"'
+
+# Alpine-side FIX AVAILABILITY — re-query it, never inherit it. This is what decides
+# whether the AV1 advisories still have no reachable fix.
+docker run --rm --platform linux/amd64 mirror.gcr.io/library/alpine:3.24 sh -c \
+  'cat /etc/alpine-release; apk --print-arch; apk update >/dev/null && \
+   apk policy libssl3 libcrypto3 openssl rav1e rav1e-libs libdovi glib 2>&1'
 
 # frontend lockfile, at the user tag this release pairs with
 git clone --depth 1 --branch v0.7.3 https://github.com/yegamble/vidra-user.git src-user

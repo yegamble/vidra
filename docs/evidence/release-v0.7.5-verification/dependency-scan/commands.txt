@@ -139,8 +139,41 @@ Each osv result expanded to package / ecosystem / installed version / fixed-in /
 severity / aliases, for the findings table.
                                      -> raw/findings-detail.txt
 
+9. ALPINE FIX AVAILABILITY (apk policy) — re-queried, not inherited
+--------------------------------------------------------------------
+The claim "no Alpine fix exists" for the AV1 codec packages needs a reading of what
+Alpine v3.24 currently offers. The v0.6.4 and v0.6.5 rounds captured one; this round
+captured its own the same way, from the same image source and command shape, so the
+three are comparable.
+
+docker pull --platform linux/amd64 mirror.gcr.io/library/alpine:3.24
+docker run --rm --platform linux/amd64 mirror.gcr.io/library/alpine:3.24 sh -c \
+  'cat /etc/alpine-release; apk --print-arch; apk update >/dev/null && \
+   apk policy libssl3 libcrypto3 openssl rav1e rav1e-libs libdovi glib 2>&1'
+  exit 0, Alpine 3.24.2, x86_64   -> raw/alpine-3.24-apk-policy.txt
+  v3.24/community offers ONLY rav1e / rav1e-libs 0.8.1-r0 and libdovi 3.3.2-r0
+  (the versions the image carries), v3.24/main offers glib 2.88.1-r1 and
+  openssl/libssl3/libcrypto3 3.5.8-r0.
+So no Alpine-packaged fix exists for the AV1 crates as of 2026-09-20, even though
+upstream fixes exist for anyhow (1.0.103), crossbeam-epoch (0.9.20) and rand
+(0.8.6/0.9.3/0.10.1) — reaching them needs an Alpine update or dropping the codecs.
+
+10. DEPLOYED-IMAGE INVENTORY (read, not scanned)
+-------------------------------------------------
+Service/image/profile list read from docker-compose.yml and docker-compose.prod.yml
+at the v0.7.5 meta commit and from vidra-core's docker-compose.yml at tag v0.7.5
+(meta's base compose `include:`s it), to name what this lane does NOT cover. No
+scan was run against any of those images.
+
 WHAT WAS NOT RUN
 ----------------
+- ONLY the three first-party images in releases/v0.7.5.json were scanned. The stack
+  also deploys postgres:18-alpine, redis:8-alpine, alpine:3.24 and caddy:2.11.4-alpine,
+  and behind profiles clamav/clamav:1.5, quay.io/minio/minio, alfg/nginx-rtmp,
+  otel/opentelemetry-collector-contrib:0.160.0, jaegertracing/all-in-one:1.76.0,
+  ipfs/kubo:v0.43.0, ipfs/ipfs-cluster:v1.1.6, and the FIRST-PARTY
+  ghcr.io/yegamble/vidra-whisper:v0.1.0 (which is in no release record). None of
+  these was scanned by this round or any earlier one.
 - No Vidra service was started; no database, bucket, credential or host was touched.
   This is artifact evidence, not runtime acceptance.
 - No Dependabot or package-graph capture (`go list -deps`) was taken this round;

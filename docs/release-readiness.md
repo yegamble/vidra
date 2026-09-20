@@ -71,7 +71,8 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   cannot confirm what beta is running or that it came up clean. It also
   inverts the v0.6.x posture, under which beta deliberately stayed on the last
   release the campaign had drilled.
-- **Security facet: PASS on the v0.7.5 digests**
+- **Security facet: PASS on the v0.7.5 digests — for the three released
+  first-party images only**
   ([scan record](security-scan-v0.7.5-2026-09-20.md), evidence
   `docs/evidence/release-v0.7.5-verification/dependency-scan/`): all three
   images were scanned by linux/amd64 digest with osv-scanner 2.5.1 and
@@ -81,10 +82,20 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
   v0.6.6's (core 8 IDs, user 0, search 1: GO-2026-5932), **no new high or
   critical** appeared, and no earlier fix regressed — next 16.3.5, openssl
   **3.5.8-r0 verified inside all three images**, grpc 1.83.2. Residuals are
-  unchanged: GO-2026-5932 (0 reachable, re-measured on v0.7.5 source, no
-  upstream fix), the rav1e 0.8.1 / libdovi 3.3.2 AV1 crate advisories
-  (accepted by the prior owner ruling on facts re-checked as unchanged), and
-  a glib false positive.
+  unchanged: GO-2026-5932 (module-level only, 0 reachable on a default
+  source-mode scan of the release commits, no fixed version published), the
+  rav1e 0.8.1 / libdovi 3.3.2 AV1 crate advisories, and a glib false
+  positive. **Two scope limits, both recorded in the scan record:** the
+  **AV1 owner risk decision is OPEN, not accepted** — no owner acceptance
+  exists anywhere in `docs/`, upstream fixes exist for anyhow /
+  crossbeam-epoch / rand but none is in Alpine v3.24's package set
+  (re-queried 2026-09-20), so the choice remains accept pending an Alpine
+  update or build without these codecs, and the PASS neither depends on nor
+  supplies that acceptance; and the lane covers **only** the three images in
+  `releases/v0.7.5.json` — postgres, redis, caddy, alpine and the
+  profile-gated clamav / minio / nginx-rtmp / otel / jaeger / kubo /
+  ipfs-cluster, plus the **first-party `vidra-whisper:v0.1.0` that appears in
+  no release record**, have never been scanned by any round.
 - **Lanes NOT run on the v0.7.5 digests** — named individually so the gap
   cannot be mistaken for coverage: the native runtime milestone; the
   backend-backed e2e suite; iOS/Safari
