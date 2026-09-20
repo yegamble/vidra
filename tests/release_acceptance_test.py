@@ -165,8 +165,9 @@ class CandidateSelectionTests(unittest.TestCase):
             with patch.object(release_acceptance, 'ROOT', base), self.assertRaises(subprocess.CalledProcessError) as later:
                 prepare(base / 'frozen', base / 'out', base / 'node.tar.xz', base / 'sums.txt',
                         candidate_path=evidence / 'manifest.json')
-            # Past the candidate guard; what remains is the absent frozen tree.
-            self.assertNotIn('unexpected source/tag', str(later.exception))
+            # Past the candidate guard: the failure is the absent frozen tree,
+            # i.e. prepare reached the git rev-parse of the frozen sources.
+            self.assertEqual(later.exception.cmd[:2], ['git', '-C'])
 
     def test_prepare_refuses_a_manifest_outside_the_committed_evidence_tree(self):
         with tempfile.TemporaryDirectory() as directory:

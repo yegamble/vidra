@@ -14,7 +14,11 @@ import sys
 REPOS = ('vidra', 'vidra-core', 'vidra-user', 'vidra-search')
 # The repositories that ship an image. A release must move at least one of them.
 COMPONENTS = ('vidra-core', 'vidra-user', 'vidra-search')
-RELEASE_TAG = re.compile(r'v([0-9]+)\.([0-9]+)\.([0-9]+)')
+COMPONENT_TAG_KEYS = {'vidra-core': 'VIDRA_CORE_TAG', 'vidra-user': 'VIDRA_USER_TAG',
+                      'vidra-search': 'VIDRA_SEARCH_TAG'}
+# ASCII digits with no leading zeros: 'v0.07.3' is not the release v0.7.3, and
+# unicode \d would admit 'v٦.٥.٤', which names no tag, asset or image anywhere.
+RELEASE_TAG = re.compile(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
 
 
 def require(ok, message):
@@ -34,6 +38,34 @@ def release_version(tag):
     return tuple(int(part) for part in match.groups()) if match else None
 
 
+def expected_image(candidate, repo):
+    """The image reference the Compose render must pin for `repo`.
+
+    A core-only release ships vidra-core at the release tag while vidra-user and
+    vidra-search stay at the older tag they were last cut at, so the pin is the
+    COMPONENT's tag. Asserting the release tag for all three passes happily on
+    `ghcr.io/yegamble/vidra-user:v0.7.5` — an image that was never published —
+    and the digest pulls below cannot contradict it, because they pull by
+    digest. That reads as evidence of a deployable pin and is not.
+    """
+    return f'ghcr.io/yegamble/{repo}:{candidate["repositories"][repo]["tag"]}'
+
+
+def pin_component_tags(text, candidate):
+    """Rewrite the three image tags in an env file to the candidate's own.
+
+    `vidra setup --release-tag` writes ONE tag for all three services, which is
+    correct only for a release that moved all three. Each substitution is
+    asserted: a renamed or duplicated key fails here rather than silently
+    leaving the wrong pin in a render this lane then certifies.
+    """
+    for repo, key in COMPONENT_TAG_KEYS.items():
+        tag = candidate['repositories'][repo]['tag']
+        text, count = re.subn(f'(?m)^{key}=.*$', f'{key}={tag}', text)
+        require(count == 1, f'{key}: expected exactly one assignment, found {count}')
+    return text
+
+
 def validate_candidate(candidate):
     require(candidate.get('schema_version') == 1 and candidate.get('status') == 'PASS', 'requires PASS A01 manifest')
     tag = candidate.get('tag', '')
@@ -51,16 +83,22 @@ def validate_candidate(candidate):
     shipped = []
     for repo in REPOS:
         source = candidate.get('repositories', {}).get(repo, {})
-        require(re.fullmatch(r'[0-9a-f]{40}', source.get('revision', '')), f'{repo}: missing commit')
+        # isinstance first: a null or numeric field is a malformed manifest, and
+        # must read as a named refusal, not as a TypeError out of re.fullmatch.
+        revision = source.get('revision')
+        require(isinstance(revision, str) and re.fullmatch(r'[0-9a-f]{40}', revision), f'{repo}: missing commit')
         require(source.get('remote') == f'https://github.com/yegamble/{repo}.git', f'{repo}: unexpected source remote')
         component = release_version(source.get('tag'))
         require(component is not None,
                 f'{repo}: tag {source.get("tag")!r} is not a release tag (release {tag})')
         require(component <= release, f'{repo}: tag {source["tag"]} is newer than release {tag}')
-        if repo in COMPONENTS and source['tag'] == tag:
-            shipped.append(repo)
         if repo == 'vidra':
+            # Meta is never a carry-over: the bundle is built from meta AT the
+            # release tag, so only the image-bearing components may lag.
+            require(source['tag'] == tag, f'vidra: tag {source["tag"]} is not the release tag {tag}')
             continue
+        if source['tag'] == tag:
+            shipped.append(repo)
         image = candidate.get('images', {}).get(repo, {})
         digest = image.get('digest', '')
         require(re.fullmatch(r'sha256:[0-9a-f]{64}', digest), f'{repo}: missing digest')
@@ -210,6 +248,18 @@ sys.exit(result.returncode)
     require(before == [path.read_bytes() for path in files], 'reinstall changed env, Caddy config or CLI bytes')
     command(['vidra', 'setup', '--check', 'env/production.env'], private, 'setup-check', cwd=root)
     evidence['checks']['configuration_preserved'] = 'PASS'
+    # `setup --release-tag` writes that one tag for all three services. On a
+    # core-only release that pins vidra-user and vidra-search at a tag that was
+    # never published, so correct the env to the candidate's per-component tags
+    # before rendering. Done AFTER the reinstall-idempotence comparison above,
+    # which must see exactly the bytes the installer and setup produced.
+    env_file = root / 'env/production.env'
+    temporary = root / 'env/production.env.tmp'
+    temporary.write_text(pin_component_tags(env_file.read_text(), candidate))
+    temporary.chmod(0o600)
+    temporary.replace(env_file)
+    evidence['component_tags'] = {repo: candidate['repositories'][repo]['tag'] for repo in COMPONENTS}
+    evidence['checks']['component_tag_pins'] = 'PASS (env rewritten to the per-component release tags)'
     evidence['docker_version'] = command(['docker', '--version'], private, 'docker-version').strip()
     evidence['compose_version'] = command(['docker', 'compose', 'version', '--short'], private, 'compose-version').strip()
     command(['systemctl', 'is-active', '--quiet', 'docker'], private, 'docker-active')
@@ -222,8 +272,10 @@ sys.exit(result.returncode)
     for repo, services in [('vidra-core', ['api', 'migrate']), ('vidra-user', ['frontend']),
                            ('vidra-search', ['search', 'search-migrate'])]:
         image = candidate['images'][repo]
+        expected = expected_image(candidate, repo)
         for service in services:
-            require(model['services'][service]['image'] == f'ghcr.io/yegamble/{repo}:{tag}', f'{service}: release pin mismatch')
+            rendered = model['services'][service].get('image')
+            require(rendered == expected, f'{service}: pinned {rendered!r}, expected {expected}')
         command(['docker', 'pull', '--platform', image['platform'], image['reference']], private, f'pull-{repo}')
         info = json.loads(command(['docker', 'image', 'inspect', image['reference']], private, f'inspect-{repo}'))[0]
         require(image['reference'] in info['RepoDigests'], f'{repo}: pulled digest mismatch')

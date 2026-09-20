@@ -159,6 +159,80 @@ class ComponentTagTests(unittest.TestCase):
                 self.assertIn('vidra-search', str(refused.exception))
                 self.assertIn('v0.7.5', str(refused.exception))
 
+    def test_meta_is_never_a_carry_over(self):
+        # The bundle is built from meta AT the release tag, and every committed
+        # manifest has meta there. Only the image-bearing components may lag.
+        candidate = manifest('v0.7.5')
+        candidate['repositories']['vidra']['tag'] = 'v0.1.0'
+        with self.assertRaises(ValueError) as refused:
+            p.validate_candidate(candidate)
+        for fragment in ('vidra', 'v0.1.0', 'v0.7.5'):
+            self.assertIn(fragment, str(refused.exception))
+
+    def test_a_leading_zero_is_not_a_release_tag(self):
+        # 'v0.07.3' is not the tag v0.7.3 and no such release exists; accepting
+        # it would let a typo pass as a legitimate carry-over.
+        for field, bad in (('tag', 'v0.07.3'), ('tag', 'v00.7.3')):
+            with self.subTest(bad=bad):
+                candidate = manifest('v0.7.5')
+                candidate['repositories']['vidra-user'][field] = bad
+                with self.assertRaises(ValueError) as refused:
+                    p.validate_candidate(candidate)
+                self.assertIn('vidra-user', str(refused.exception))
+
+    def test_a_malformed_revision_is_a_named_refusal_not_a_crash(self):
+        # A null revision used to raise TypeError out of re.fullmatch, which is
+        # a harness bug to the reader, not a verdict on the manifest.
+        for bad in (None, 42, ['a' * 40]):
+            with self.subTest(revision=bad):
+                candidate = manifest('v0.7.5')
+                candidate['repositories']['vidra-user']['revision'] = bad
+                with self.assertRaises(ValueError) as refused:
+                    p.validate_candidate(candidate)
+                self.assertIn('vidra-user', str(refused.exception))
+
+    def test_carried_over_components_are_identical_to_their_own_release(self):
+        # A carry-over must be the SAME artifact the older release recorded, not
+        # merely an older-looking tag: compare the recorded source and image.
+        for release in ('v0.7.4', 'v0.7.5'):
+            candidate = manifest(release)
+            carried = [repo for repo in p.COMPONENTS
+                       if candidate['repositories'][repo]['tag'] != release]
+            self.assertTrue(carried, f'{release} is expected to carry components forward')
+            for repo in carried:
+                tag = candidate['repositories'][repo]['tag']
+                with self.subTest(release=release, repo=repo, tag=tag):
+                    path = (Path(__file__).resolve().parents[1]
+                            / f'docs/evidence/release-{tag}-verification/manifest.json')
+                    # No skip: a carry-over whose own release has no committed
+                    # manifest is unverifiable, which is a failure, not a pass.
+                    self.assertTrue(path.exists(),
+                                    f'{release} carries {repo} at {tag}, which has no committed manifest')
+                    origin = manifest(tag)
+                    self.assertEqual(candidate['repositories'][repo], origin['repositories'][repo])
+                    self.assertEqual(candidate['images'][repo], origin['images'][repo])
+
+    def test_expected_image_pins_each_component_at_its_own_tag(self):
+        core_only = manifest('v0.7.5')
+        self.assertEqual(p.expected_image(core_only, 'vidra-core'), 'ghcr.io/yegamble/vidra-core:v0.7.5')
+        self.assertEqual(p.expected_image(core_only, 'vidra-user'), 'ghcr.io/yegamble/vidra-user:v0.7.3')
+        self.assertEqual(p.expected_image(core_only, 'vidra-search'), 'ghcr.io/yegamble/vidra-search:v0.7.3')
+        uniform = manifest('v0.6.6')
+        for repo in p.COMPONENTS:
+            self.assertEqual(p.expected_image(uniform, repo), f'ghcr.io/yegamble/{repo}:v0.6.6')
+
+    def test_pin_component_tags_rewrites_every_service_tag(self):
+        template = (Path(__file__).resolve().parents[1] / 'env/production.env.example').read_text()
+        pinned = p.pin_component_tags(template, manifest('v0.7.5'))
+        for key, tag in (('VIDRA_CORE_TAG', 'v0.7.5'), ('VIDRA_USER_TAG', 'v0.7.3'),
+                         ('VIDRA_SEARCH_TAG', 'v0.7.3')):
+            self.assertIn(f'\n{key}={tag}\n', pinned)
+        # A renamed or duplicated key must fail here, not leave the wrong pin.
+        for broken in (template.replace('VIDRA_USER_TAG=', 'VIDRA_FRONTEND_TAG='),
+                       template + '\nVIDRA_USER_TAG=v9.9.9\n'):
+            with self.subTest(), self.assertRaises(ValueError):
+                p.pin_component_tags(broken, manifest('v0.7.5'))
+
     def test_component_tags_are_ordered_numerically_not_lexically(self):
         # 'v0.7.10' sorts BELOW 'v0.7.9' as a string and ABOVE it as a release.
         # A string comparison gets both of these cases exactly backwards.
