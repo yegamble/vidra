@@ -10,6 +10,11 @@
 
 **Spec:** [`docs/superpowers/specs/2026-09-20-jev-metadata-autofill-design.md`](../specs/2026-09-20-jev-metadata-autofill-design.md) (meta PR #231).
 
+**Revision 3.1:** The final check found three more problems, now fixed:
+- `SetCategoryProvider(nil)` panicked under the atomic provider; nil now restores the built-ins.
+- The shared scratch database now uses `TestMain`, not `sync.Once`.
+- Videos with nothing to ask no longer count as "not confident".
+
 **Revision 3 (2026-09-26):** Both reviewers re-verified revision 2. Every earlier finding was fixed, and they raised 3 new MAJOR and 11 MINOR items, folded in here:
 - One failing video can no longer stall the worker.
 - A video with nothing to ask is recorded once.
@@ -123,7 +128,7 @@ Everything else is gated by the toggle and a key. Nothing is released by this pl
   DATABASE_URL=postgres://vidra:vidra@localhost:5432/vidra?sslmode=disable \
   REDIS_URL=redis://localhost:6379/0 go test -tags=integration ./internal/store/... ./internal/metadatafill/... ./internal/peertubeimport/...
   ```
-  New integration tests that claim or write videos **must use a scratch database**, one per package test binary: create and migrate it once in `TestMain` or a `sync.Once`. Each fixture deletes its own rows in `t.Cleanup`, and these tests do not call `t.Parallel`. Migrating per test would cost 150+ migrations each in the required lane (the pattern at `internal/peertubeimport/importer_integration_test.go:2205` `newScratchDB`). CI runs integration packages in parallel on one database (`Makefile:58`), so a claim over the shared database would take other packages' fixtures. If docker is unavailable, say so in the PR.
+  New integration tests that claim or write videos **must use a scratch database**, one per package test binary: create and migrate it once in a **`TestMain`**, which calls `m.Run()` and then drops the database explicitly. It must pass straight through, with `os.Exit(m.Run())`, when `DATABASE_URL` is unset. Do **not** wrap `newScratchDB` in a `sync.Once`, because it drops the database in its first caller's `t.Cleanup` and every later test would fail. Neither `internal/store` nor `internal/metadatafill` has a `TestMain` today. Each fixture deletes its own rows in `t.Cleanup`, and these tests do not call `t.Parallel`. Migrating per test would cost 150+ migrations each in the required lane (the pattern at `internal/peertubeimport/importer_integration_test.go:2205` `newScratchDB`). CI runs integration packages in parallel on one database (`Makefile:58`), so a claim over the shared database would take other packages' fixtures. If docker is unavailable, say so in the PR.
 - **user:** `npx tsc --noEmit && npm run lint && npm run lint:icons && npm run test`. Do not run the e2e suites locally; CI runs them. Name anything you did not run.
 - **meta:** `bash -n`/`shellcheck` on touched scripts, the compose `config -q` gate, and `python3 -m unittest discover -s tests -p '*_test.py'`.
 
@@ -1454,7 +1459,7 @@ SELECT
   count(*) FILTER (WHERE j.state IN ('pending','running'))::bigint AS waiting,
   count(*) FILTER (WHERE (j.category_applied IS NOT NULL AND j.category_applied = v.category)
                       OR (j.language_applied IS NOT NULL AND j.language_applied = v.language))::bigint AS filled,
-  count(*) FILTER (WHERE j.state = 'done'
+  count(*) FILTER (WHERE j.state = 'done' AND j.model IS NOT NULL  -- asked (not a nothing-to-ask terminal row)
                      AND (j.category_pick IS NULL OR j.category_prob < sqlc.arg('category_bar')::real)
                      AND (j.language_pick IS NULL OR j.language_prob < sqlc.arg('language_bar')::real))::bigint AS not_confident,
   count(*) FILTER (WHERE j.state = 'failed')::bigint AS failed
@@ -3175,7 +3180,15 @@ Add the two notes:
 ```go
 var categoryProvider atomic.Pointer[func() []ConfigOption]
 
-func SetCategoryProvider(f func() []ConfigOption) { categoryProvider.Store(&f) }
+// SetCategoryProvider installs the live taxonomy; nil restores the built-in
+// list (the documented contract config_test.go:49 relies on).
+func SetCategoryProvider(f func() []ConfigOption) {
+	if f == nil {
+		categoryProvider.Store(nil)
+		return
+	}
+	categoryProvider.Store(&f)
+}
 
 func CategoryOptions() []ConfigOption {
 	if p := categoryProvider.Load(); p != nil {
@@ -3187,7 +3200,7 @@ func CategoryOptions() []ConfigOption {
 }
 ```
 
-   Keep the existing doc comment, and add `"sync/atomic"` to the imports. `go test -race ./...` is the proof.
+   Keep the existing doc comment, and add `"sync/atomic"` to the imports. Extend `TestCategoryProviderReplacesBuiltins` (`internal/video/config_test.go`) with `SetCategoryProvider(nil)` followed by `if !IsCategory("1") { t.Fatal("nil must restore the built-ins") }`. Storing a pointer to a nil func would panic there. `go test -race ./...` is the proof.
 
 1. Directly after the `settingssvc.Load(startCtx)` error check (L341):
 
@@ -5348,3 +5361,4 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - N4 → the Task 21 runbook requirement.
   - N5 → Task 12 fetches at the merge SHA.
   - N6 → Task 21 panel-key versioning.
+- Final check: the N5 regression (a nil provider panics) → Task 9; M-a → §0.4 `TestMain`; M-b → Task 4 `not_confident` requires `model IS NOT NULL`.
