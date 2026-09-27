@@ -4,89 +4,126 @@
 
 **Goal:** Fill the empty `category` and `language` of public, published videos with TypeSafe Jev judgments. The feature is operator-enabled, off by default, never overwrites a human value, and marks each fill in Studio.
 
-**Architecture:** vidra-core gets a small Jev HTTP client (`internal/judgment`) and a state-scan worker (`internal/metadatafill`) on `jobloop`. The worker claims eligible videos by inserting into `video_metadata_judgments` and asks Jev one request with two `choice` questions. It stores the raw answer, then applies confident picks through `video.Service.ApplyInferredMetadata`. That is a guarded write that fires the existing `onUpdate` hooks, so search sees the change the same way it sees a human edit. vidra-user adds a toggle, an infrastructure row, a status card and a Studio marker. The meta repo documents the env keys and the runbook, and records the beta measurement that sets the confidence bars.
+**Architecture:** vidra-core gets a small Jev HTTP client (`internal/judgment`) that also owns the TypeSafe account state (the sealed key and the account-wide pause). It also gets a leader-gated state-scan worker (`internal/metadatafill`) on `jobloop`. The worker claims eligible videos by inserting into `video_metadata_judgments` and asks Jev one request with two `choice` questions. A single SQL statement then records the raw answer and writes confident picks into still-empty fields. After that, a narrow `video.Service` hook tells search, and only search. vidra-user adds a toggle, an infrastructure row, a status card and a Studio marker. The meta repo documents the env keys and the runbook, and records the beta measurement that sets the confidence bars.
 
-**Tech Stack:** Go 1.x, Echo v4, sqlc v1.31.1, Postgres, golang-migrate (vidra-core). Next.js 16, Vitest, Playwright (vidra-user). Bash/Compose/Markdown (meta).
+**Tech Stack:** Go, Echo v4, sqlc v1.31.1 (`emit_pointers_for_null_types: true`), Postgres, golang-migrate (vidra-core). Next.js 16, Vitest, Playwright (vidra-user). Bash/Compose/Markdown (meta).
 
 **Spec:** [`docs/superpowers/specs/2026-09-20-jev-metadata-autofill-design.md`](../specs/2026-09-20-jev-metadata-autofill-design.md) (meta PR #231).
+
+**Revision 2 (2026-09-26):** Two fresh reviews against the code (vidra-core engineer and cross-repo architect) found 3 blockers and 17 major problems in revision 1. All of them are fixed below. The design changes are:
+- The worker is leader-gated.
+- Recording a judgment and applying it happen in one statement.
+- A search-only hook replaces the full `onUpdate` fan-out.
+- Outages pause the worker instead of spending attempts.
+- PeerTube re-sync keeps a value its source is silent about.
+- The key and pause live in an account-level `typesafe_state` table.
+- The status card sits on the VOD config page.
+- Every core contract change is followed by a vidra-user codegen PR.
 
 ---
 
 ## 0. Read this first
 
-### 0.1 What the code check changed (2026-09-26)
+### 0.1 What the code check changed
 
-The spec was written against core v0.7.5. The code was re-read at core `400c1a8`, user `8efd7c7` and meta `79a84cd`, together with the live TypeSafe docs and a live API call. Every row below differs from the spec's text. The plan follows the right-hand column.
+The spec was written against core v0.7.5. The code was re-read at core `400c1a8`, user `8efd7c7`, search `fb39a7b` and meta `79a84cd`, together with the live TypeSafe docs and a live API call on 2026-09-26: HTTP 200 in 0.32 s, answered by `jev-1.13.0`, and 401 for a bad key.
 
-| Spec says | Code / vendor fact | Plan does |
+| Spec text | Code / vendor fact | Plan does |
 |---|---|---|
-| Circuit breaker "with `searchclient`'s numbers" | The breaker is private to `internal/searchclient/breaker.go` | Task 1 extracts it into `internal/breaker` so both clients share one implementation. Copying it would break the house "reuse components" rule. |
-| Error codes `auth`, `rate_limited`, `unavailable`, `bad_response` | The API also returns **422** (our request was invalid) and **529** (vendor overloaded) | Two more codes: `invalid_request`, where that video fails and the worker does not pause, and `not_configured`, meaning no key. 529 maps to `unavailable`. |
-| "Laundered through `safeerr`" | `judgment.Error` carries only a closed code; upstream text is never read into it | No `safeerr` wrapping is needed. The HTTP layer maps the code to a typed error. |
-| Reuse "the write-only secret mechanism the admin mail-settings work is building" | That work merged (core #266) as a mail-only store, `internal/mailconfig`, built on `internal/secretbox` and keyed by `MFA_KEY_KEK` | Task 18 reuses `secretbox` and the same cipher instance. It stores the sealed key in a column on `metadata_fill_state` and does not bend `mailconfig` into a general store. |
-| Compose consumers in this repo (PR 5, "M") | The api's env block is the `x-api-env` anchor in **`vidra-core/docker-compose.yml`**, which meta `include:`s | The compose lines ship in core (Task 3). Meta gets only `env/production.env.example` and the runbook. |
-| "Custom categories are sent as label only" beside the 18 built-ins | A non-empty `instance_custom_categories` **replaces** the built-ins | Descriptions attach only when an option's id *and* label match a built-in. |
-| Federation "sees it like a human edit" | The federated video object carries neither category nor language | The Update is still sent through the hook and is harmless, but remote peers learn nothing new. The plan states this and does not change federation. |
-| Search upsert is "an explicit app-level call" | It is also registered as a `video.WithUpdateHook` (`cmd/api/main.go:1386-1398`) | Firing `s.onUpdate` reaches search, federation and the IPFS sync, and that is enough. |
-| Eligibility "mirrors the search index" | The only SQL predicate is `search_outbox.sql:116-118`: public, published, `NOT au.unlisted`, `NOT EXISTS video_blocks` | The claim query copies that predicate exactly. Blocked videos must be excluded by the worker itself, because the incremental search path carries no block flag. |
-| Migration "0150 is the newest" | Newest is `0151_mail_config` | The plan writes `0152`. Take the next free number when the PR is opened. |
-| Leases via `lease_expires_at` | Queue leases here use `next_attempt_at`, and `lease_expires_at` exists only on `job_runs` | The spec's own column is kept, because it is clearer on a table whose `next_attempt_at` means "retry after". `internal/jobrecovery` is **not** extended: expired `running` rows are reclaimed by the worker's own claim query. |
-| One PR for "migration + worker + toggle + infra row + wiring" | Both component repos cap a PR at **< 300 changed lines** | The spec's nine PRs become the smaller PRs in §0.3. |
+| §4.1: breaker "with `searchclient`'s numbers" | The breaker is private (`internal/searchclient/breaker.go`) | Task 1 moves it to `internal/breaker`, so there is one implementation. |
+| §4.1: codes `auth`, `rate_limited`, `unavailable`, `bad_response` | The API also returns 422 (invalid request) and 529 (overloaded). A wrong endpoint path returns 404. | 422/400 map to `invalid_request`; 529, 5xx, 404/405, transport errors and an open breaker map to `unavailable`. `not_configured` means no key. |
+| §4.1: errors "laundered through `safeerr`" | `judgment.Error` carries only a closed code | No `safeerr`; the HTTP layer maps codes to typed errors. |
+| §2.6 / §9: "reusing the write-only secret mechanism the admin mail-settings work is building" | That work merged (core #266) as a **mail-only** store, `internal/mailconfig`, on `internal/secretbox` and the MFA KEK. Three more Jev slices will share one TypeSafe key. | The sealed key and the account pause live in a new `typesafe_state` table owned by `internal/judgment`. It reuses `secretbox`, the same cipher instance, and mail's "sealed or refused" rule. Proposal §0.2.8. |
+| §10: compose consumers in meta (spec §12 PR 5, "M") | The api env block is the `x-api-env` anchor in `vidra-core/docker-compose.yml`, which meta `include:`s | The compose lines ship in core (Task 3). Meta gets the env example and the runbook. |
+| §5: "custom categories are sent as label only" beside the built-ins | A non-empty `instance_custom_categories` **replaces** the built-ins and may reuse their ids (`internal/instancesettings/service.go:1626-1646`) | Descriptions attach only when id *and* label match a built-in. |
+| §5 / §9: the live category list | `video.SetCategoryProvider` is called only in `httpapi.WithSettingsService` (`server.go:943`). A `VIDRA_ROLE=worker` process returns before `httpapi.New` (`cmd/api/main.go:2925-2931`), so its `video.CategoryOptions()` is the 18 built-ins. | Task 9 registers the provider right after `settingssvc.Load` in every role. Otherwise a worker process would write built-in ids on an instance with a custom list. |
+| §4 diagram / §4.5: "existing onUpdate hooks: federation Update, search upsert, …" / "the seam federation uses to send an Update to remote followers" | The federated video object carries neither category nor language. The federation hook fans out one delivery per follower inbox (`internal/federation/outbox.go:56-78,134`). | `ApplyInferredMetadata` is replaced by a single statement plus a **narrow** `WithInferredMetadataHook`, registered only for the search upsert. A 50,000-video backfill would otherwise enqueue 50,000 × followers deliveries that carry nothing new. Proposal §0.2.9. |
+| §4.2: eligibility "mirrors the search index" | The predicate is `search_outbox.sql:116-118`: public, published, `NOT au.unlisted`, no `video_blocks` row. `EnqueueVideoUpsert` carries no block flag (`searchevents/enqueuer.go:96-106`). | The claim **and** the final write both carry the full predicate. |
+| §4.2: "two replicas can never judge the same video" by insert-as-claim, run on every replica | Several global decisions (`enabled_since`, "run done") would be made from one replica's view. Settings reach replicas within one 10 s poll. | The loop is **leader-gated** (`jobloop.Loop{Leader: …}`). The insert-claim and lease remain for crash recovery. "Run done" is decided by a query, never by an empty claim. Proposal §0.2.5. |
+| §4.4: `updated_at >= enabled_since` | PeerTube re-sync writes the source's category and language unconditionally and bumps `updated_at` (`peertubeimport/resync.go:546-575`, `peertube_import.sql:717-729`) | Task 6 applies re-sync's existing "a source that says nothing is not saying clear it" rule to category and language. Otherwise every re-run erases fills that can then never be re-judged. Proposal §0.2.7. |
+| §4.3: "0150 is the newest" | Newest is `0151_mail_config` | The plan writes `0152`; take the next free number when the PR is opened. |
+| §4.3: `lease_expires_at` | Queue leases here use `next_attempt_at`; `lease_expires_at` exists only on `job_runs` | The spec's column is kept (clearer here). `internal/jobrecovery` is not extended: the worker's own claim reclaims expired leases. |
+| §12: nine PRs | Both component repos cap a PR at < 300 changed lines. vidra-user's required `contract-ci` regenerates types from core `main` and fails on any drift (`.github/workflows/contract-ci.yml:52-75`). | 22 PRs (§0.3). Every core PR that changes `api/openapi.yaml` is followed at once by a codegen-only vidra-user PR (Task 12). |
 
-### 0.2 Decisions this plan makes that the owner should confirm
+### 0.2 Proposals the owner should confirm
 
-These are not owner rulings. They are the smallest reasonable choice, and each can be reversed in one task:
+These are the smallest reasonable choices, not owner rulings. The only owner decisions are spec §2. Each proposal can be reversed within one task.
 
-1. **An automatic fill does not bump `videos.updated_at`.** A human edit does. A backfill of tens of thousands of videos must not re-sort any `updated_at`-ordered listing or look like creator activity. Search and federation are reached through the hooks, not through `updated_at`. Before merging Task 5, grep `ORDER BY .*updated_at` in `internal/store/queries/` and record the result in the PR.
-2. **Saving the Studio edit form confirms the shown values.** The edit form resends category and language on every save (`taxonomyFields`, `components/studio/shared.tsx:148-158`), so a save clears the "Set automatically" note even if the creator changed only the title. The creator saw the value and saved it. The alternative is to send only dirty fields, which is a vidra-user behaviour change beyond this slice.
-3. **The marker is `applied IS NOT NULL AND applied = current value`.** A human edit through the API clears `*_applied`. The equality check also hides the marker when a PeerTube re-sync overwrites the field, a path that does not go through `video.Service`.
-4. **The status card lives on the Infrastructure page**, beside `MailTestCard`, not on the VOD config page. `AdminInstanceConfigView` is a generic renderer, and the infrastructure page already hosts the equivalent card. The toggle's warning points there.
-5. **The worker runs on every worker-role replica** (`Jitter: true`) and relies on insert-as-claim for exclusion, as the spec designs. It is not leader-gated like the storyboard backfill.
-6. **Pausing.** When Jev rejects the key (`auth`), every replica waits 15 minutes. When it rate-limits (`rate_limited`), they wait 2 minutes. The pause is stored in `metadata_fill_state` so all replicas and the status endpoint agree. No per-video attempt is spent.
+1. **An automatic fill does not bump `videos.updated_at`.** Search is told through the hook. A backfill must not re-sort `updated_at`-ordered listings or look like creator activity. Task 5 records a grep of `ORDER BY .*updated_at` in its PR.
+2. **Saving the Studio edit form confirms the shown values.** The form resends category and language on every save (`components/studio/shared.tsx:148-158`), so a save clears the note even when only the title changed. Changing that would mean sending only dirty fields, a vidra-user behaviour change outside this slice.
+3. **The marker requires `applied = current value`,** so it also disappears when anything outside `video.Service` changes the field.
+4. **The status card lives on Config → VOD, in the `autofill` section,** through `AdminInstanceConfigView`'s existing `sectionPanel` seam (`:606-640`), beside the toggle. The Infrastructure row deep-links there.
+5. **The worker is leader-gated.** Throughput stays bounded by the vendor (1,200 requests a minute) and the 25-per-tick batch, so one leader loses nothing that matters.
+6. **Pauses.** `auth` pauses the account for 15 minutes. `rate_limited` and `unavailable` pause it for 2 minutes. Claims are released without spending an attempt. Only `bad_response` and `invalid_request` spend attempts, up to 5, and then mark the video `failed`. A successful **Test connection** clears the pause.
+7. **PeerTube re-sync keeps the current category or language when the source has none.** This is the rule re-sync already applies to duration and `originally_published_at`. A source that clears its own category will no longer clear ours.
+8. **The TypeSafe key and pause live in `typesafe_state`,** not in the mail store (see §0.1).
+9. **Auto-fills do not send federation Updates** (see §0.1).
 
 ### 0.3 PR map
 
-Each PR is merged before the next one starts. Each happens in its own worktree (`superpowers-extended-cc:using-git-worktrees`), and `git branch --show-current` runs before every commit and push. Line counts are estimates. If a PR goes over 300 changed lines, split it along the task boundaries listed and never inside one.
+Each PR is merged before the next one starts. Each happens in its own worktree (`superpowers-extended-cc:using-git-worktrees`), and `git branch --show-current` runs before every commit and push. If a PR goes over 300 changed lines, split it along the task's own steps and never across tasks.
 
-| PR | Repo | Tasks | Depends on |
+| PR | Repo | Task | Depends on |
 |---|---|---|---|
 | C1 | core | 1: extract `internal/breaker` | none |
 | C2 | core | 2: `internal/judgment` client | C1 |
 | C3 | core | 3: env config, compose consumers, `.env.example`, denylist | C2 |
-| C4 | core | 4: migration 0152 and sqlc queries | C3 |
-| C5 | core | 5: `video.Service.ApplyInferredMetadata`, human-edit clear, `AutoFilled` | C4 |
-| C6 | core | 6: `metadatafill` request builder and decision (pure) | C5 |
-| C7 | core | 7: `metadatafill.Service.Tick` | C6 |
-| C8 | core | 8: setting toggle, infrastructure row, `main.go` wiring, integration test | C7 |
-| C9 | core | 9: admin endpoints, runs, audit, OpenAPI | C8 |
-| C10 | core | 10: `auto_filled` on the video view, OpenAPI | C9 |
-| C11 | core | 11: `evaluate-metadata` subcommand | C8 |
-| M1 | meta | 12: env example block and runbook | C3 |
-| U1 | user | 13: codegen, toggle and warning, infrastructure labels, API wrappers | C10 |
-| U2 | user | 14: `MetadataFillCard` | U1 |
-| U3 | user | 15: Studio marker and mocked e2e | U1 |
-| C12 | core | 16: `jev-stub` compose profile | C8 |
-| U4 | user | 17: backed e2e spec and optional-workflow job (**touches `.github/workflows`: that is this PR's task**) | U3, C12 |
-| C13 | core | 18: sealed key setting | C9 |
-| U5 | user | 19: key field on the card | U2, C13 |
-| M2 | meta | 20: beta evaluation record, bars, scope-ledger note | C11 released and deployed |
+| C4 | core | 4: migration 0152 and queries | C3 |
+| C5 | core | 5: `video.Service` seams (narrow hook, best-effort clear, `AutoFilled`) | C4 |
+| C6 | core | 6: PeerTube re-sync keeps a value the source is silent about | none (independent; land before beta is enabled) |
+| C7 | core | 7: request builder and decision (pure) | C5 |
+| C8 | core | 8: `judgment.Account` pause and `metadatafill.Service.Tick` | C7 |
+| C9 | core | 9: toggle, infra row, category provider, wiring, metrics | C8 |
+| C10 | core | 10: admin endpoints, runs, audit, **all** OpenAPI prose | C9 |
+| S1 | user | 12: contract sync (codegen only) | C10, merged immediately |
+| C11 | core | 11: `auto_filled` on the video view | S1 |
+| S2 | user | 12: contract sync | C11, merged immediately |
+| C12 | core | 13: `evaluate-metadata` subcommand | C9 |
+| C13 | core | 14: `jev-stub` compose profile | C9 |
+| U1 | user | 16: toggle, warning, infra labels, API wrappers | S2 |
+| U2 | user | 17: `MetadataFillCard` on Config → VOD | U1 |
+| U3 | user | 18: Studio marker and mocked e2e | U1 |
+| U4 | user | 19: backed e2e and optional-workflow job (**touches `.github/workflows`: that is this PR's task**) | U3, C13 |
+| C14 | core | 15: sealed key setting | C10 |
+| S3 | user | 12: contract sync | C14, merged immediately |
+| U5 | user | 20: key field on the card | U2, S3 |
+| M1 | meta | 21: env example and runbook | the first core and user **releases** that contain C9–C13 and U1–U2 |
+| M2 | meta | 22: beta evaluation, bars, scope-ledger note | that release deployed to beta |
 
-Nothing is released by this plan. A core release that contains C1–C11 is safe to deploy because the feature is off by default. Cutting the release is the owner's step (`! ./deploy/release.sh --yes vX.Y.Z`).
+**Contract rule:** C10, C11 and C14 are the only core PRs that change `api/openapi.yaml`. Task 9 deliberately leaves OpenAPI alone and Task 10 carries its prose. After each of those three merges, S1, S2 or S3 respectively lands before any other vidra-user PR. Otherwise vidra-user's required `contract-ci` fails on every PR and every push.
+
+**What runs even with the toggle off**, because "off by default" is not "no effect":
+- C5: a human edit that sets category or language runs one best-effort `UPDATE` on `video_metadata_judgments`.
+- C6: the PeerTube re-sync rule change (§0.2.7) applies on every re-run.
+- C9: the category provider is registered at boot in every role. The elected leader reads `metadata_fill_state` every 30 s and runs an `UPDATE` that matches no rows.
+
+Everything else is gated by the toggle and a key. Nothing is released by this plan: cutting a release is the owner's step (`! ./deploy/release.sh --yes vX.Y.Z`).
 
 ### 0.4 Verification gates (from each repo's AGENTS.md; paste the tail into every PR)
 
-- **core:** `make ci` (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race), plus `go vet -tags=integration ./...`. For Tasks 4, 5 and 8, also run the integration suite against live Postgres:
+- **core:** `make ci` (fmt-check, vet, migrate-lint, openapi-verify, sqlc-verify, test-race) and `go vet -tags=integration ./...`. Tasks 4, 6, 8 and 9 also run integration tests against live Postgres:
   ```
   docker compose --profile core up -d postgres redis
   make migrate-up
   DATABASE_URL=postgres://vidra:vidra@localhost:5432/vidra?sslmode=disable \
-  REDIS_URL=redis://localhost:6379/0 go test -tags=integration ./internal/store/... ./internal/metadatafill/...
+  REDIS_URL=redis://localhost:6379/0 go test -tags=integration ./internal/store/... ./internal/metadatafill/... ./internal/peertubeimport/...
   ```
-  If docker is unavailable, say so in the PR.
+  New integration tests that claim or write videos **must use a scratch database** (the pattern at `internal/peertubeimport/importer_integration_test.go:2205` `newScratchDB`). CI runs integration packages in parallel on one database (`Makefile:58`), so a claim over the shared database would take other packages' fixtures. If docker is unavailable, say so in the PR.
 - **user:** `npx tsc --noEmit && npm run lint && npm run lint:icons && npm run test`. Do not run the e2e suites locally; CI runs them. Name anything you did not run.
 - **meta:** `bash -n`/`shellcheck` on touched scripts, the compose `config -q` gate, and `python3 -m unittest discover -s tests -p '*_test.py'`.
 
 PR titles follow `[claude] <area>: <summary>`. The body opens with a one-line WHY.
+
+### 0.5 Generated sqlc types (determined by `sqlc.yaml`; do not guess)
+
+- A nullable `text` column or `sqlc.narg` gives `*string`.
+- A nullable `real` gives `*float32`.
+- A non-null `timestamptz` (e.g. `next_attempt_at`) gives `time.Time`.
+- A nullable `timestamptz` gives `pgtype.Timestamptz`.
+- `uuid` gives `uuid.UUID`, and a nullable one gives `pgtype.UUID`.
+- `::bool`/`::bigint`/`::int` casts in `SELECT` give `bool`/`int64`/`int32`.
+
+The code below uses these types. After `make sqlc`, read the generated structs once and fix any field *name* that differs.
 
 ---
 
@@ -96,58 +133,49 @@ PR titles follow `[claude] <area>: <summary>`. The body opens with a one-line WH
 
 | File | Responsibility |
 |---|---|
-| `internal/breaker/breaker.go` (new) | Consecutive-failure circuit breaker, moved from searchclient unchanged |
-| `internal/breaker/breaker_test.go` (new) | Open, cooldown, half-open probe, failed probe |
-| `internal/searchclient/breaker.go` (deleted) | none |
-| `internal/searchclient/client.go` | Uses `*breaker.Breaker` |
-| `internal/judgment/judgment.go` (new) | Types, error codes, `Client.Ask` over `POST /v1/systemone` |
-| `internal/judgment/judgment_test.go` (new) | `httptest` stand-in for every outcome |
-| `internal/config/config.go` | `TypeSafe*` and `MetadataAutofillEnabled` fields, parsing, validation |
-| `docker-compose.yml` | `x-api-env` consumers, and the `jev-stub` profile (Task 16) |
-| `.env.example` | Documented keys |
-| `internal/observability/audit.go` | Denylist entries and new audit actions |
-| `migrations/0152_metadata_autofill.{up,down}.sql` (new) | Three tables and the run projection trigger |
-| `internal/store/queries/metadata_fill.sql` (new) | Every query the worker, service, handlers and evaluator use |
-| `internal/video/inferred.go` (new) | `ApplyInferredMetadata`, `AutoFilled`, `InferredApplied` |
-| `internal/video/service.go` | Repository interface additions and the human-edit clear in `UpdateForActor` |
-| `internal/metadatafill/request.go` (new) | Builds state and questions, maps answers back to ids, applies the bars |
-| `internal/metadatafill/service.go` (new) | Tick, claim, judge, record, apply, pause, runs, status |
-| `internal/metadatafill/key.go` (new, Task 18) | Sealed-then-env key resolution |
-| `internal/instancesettings/service.go` | `KeyMetadataAutofillEnabled` registry row and default |
-| `internal/httpapi/admin_infra.go` | `metadata_autofill` feature row and notes |
-| `internal/httpapi/admin_metadata_fill.go` (new) | Status, test, runs, key handlers |
-| `internal/httpapi/errors.go` | `MetadataFillError` typed error |
-| `internal/httpapi/videos.go` | `auto_filled` on the owner/staff detail view |
-| `cmd/api/main.go` | Construction, hooks, worker start, subcommand dispatch |
-| `cmd/api/evaluate_metadata.go` (new) | `api evaluate-metadata` |
-| `api/openapi.yaml` | New routes, schemas, `auto_filled`, infrastructure key list |
-| `scripts/dev/jevstub.py` (new, Task 16) | Deterministic stand-in for `/v1/systemone` |
+| `internal/breaker/breaker.go` (new) | Consecutive-failure breaker, moved unchanged |
+| `internal/searchclient/{client.go,*_test.go}` | Use `*breaker.Breaker` |
+| `internal/judgment/judgment.go` (new) | `Client.Ask` over `POST /v1/systemone`, closed codes |
+| `internal/judgment/account.go` (new) | TypeSafe account state: pause (Task 8), sealed key (Task 15) |
+| `internal/config/config.go`, `docker-compose.yml`, `.env.example` | Four env keys |
+| `internal/observability/audit.go` | Denylist entries, audit actions |
+| `migrations/0152_metadata_autofill.{up,down}.sql` (new) | Four tables, a partial index, the run projection |
+| `internal/store/queries/metadata_fill.sql` (new) | Every query below |
+| `internal/video/inferred.go` (new) | `WithInferredMetadataHook`, `NotifyInferredMetadata`, `AutoFilled` |
+| `internal/video/service.go` | Repository additions; best-effort clear in `UpdateForActor` |
+| `internal/peertubeimport/resync.go` | Keep category/language when the source is silent |
+| `internal/metadatafill/{request.go,service.go,evaluate.go}` (new) | Request/decision, the tick, admin operations, evaluation |
+| `internal/instancesettings/service.go` | `KeyMetadataAutofillEnabled` |
+| `internal/httpapi/{admin_infra.go,admin_metadata_fill.go,errors.go,ratelimit.go,server.go,videos.go}` | Infra row, endpoints, typed error, limiter, `auto_filled` |
+| `cmd/api/{main.go,evaluate_metadata.go}` | Wiring, the subcommand |
+| `api/openapi.yaml` | Routes, schemas, `auto_filled`, key lists |
+| `scripts/dev/jevstub.py` (new) | Deterministic stand-in for backed e2e |
 
 **vidra-user**
 
 | File | Responsibility |
 |---|---|
-| `lib/api/generated.ts` | Regenerated only, never hand-edited |
-| `lib/api/types.ts`, `lib/api/endpoints.ts` | Aliases and four or five wrappers |
-| `lib/admin-config-ia.ts` | VOD `autofill` section and the `metadata_autofill_enabled` META entry with `warn` |
-| `components/AdminInfrastructureView.tsx` | Label, config link, card placement |
-| `components/admin/MetadataFillCard.tsx` (new) | Status, counts, Test connection, Fill existing / Stop, key field (Task 19) |
-| `components/studio/shared.tsx` | `TaxonomySelect` `autoFilled` note |
-| `components/studio/VideoRow.tsx` | Passes the flag |
-| `e2e/studio.spec.ts`, `e2e/admin-infrastructure.spec.ts` | Mocked coverage |
-| `e2e-backed/metadata-autofill.spec.ts` (new) | Real stack against the stub |
+| `lib/api/generated.ts` | Regenerated only (Task 12) |
+| `lib/api/types.ts`, `lib/api/endpoints.ts` | Aliases, wrappers |
+| `lib/admin-config-ia.ts` | VOD `autofill` section and META entry with `warn` |
+| `components/AdminInstanceConfigView.tsx` | `sectionPanel("vod","autofill")` hosts the card |
+| `components/AdminInfrastructureView.tsx` | Label and deep link |
+| `components/admin/MetadataFillCard.tsx` (new) | Status, counts, test, run, key field |
+| `components/studio/{shared.tsx,VideoRow.tsx}` | The marker |
+| `e2e/…`, `e2e-backed/metadata-autofill.spec.ts` | Mocked and backed coverage |
 
 **meta**
 
 | File | Responsibility |
 |---|---|
-| `env/production.env.example` | Four keys with the privacy statement |
+| `env/production.env.example` | Four keys and the privacy statement |
 | `docs/metadata-autofill.md` (new) | Operator runbook |
-| `docs/metadata-autofill-evaluation-<date>.md` (new, Task 20) | The measured bars |
-| `docs/release-readiness.md` | Scope-ledger note (Task 20) |
+| `docs/metadata-autofill-evaluation-<date>.md` (new) | The measured bars |
+| `docs/release-readiness.md` | Scope-ledger note |
+
+**Deferred, deliberately not in this plan:** a served-by-vidra-search assertion for auto-filled values in meta's non-required `stack-e2e` lane. The U4 backed lane has no vidra-search, so its category-filter assertion exercises core's SQL fallback. Adding it means enabling `jev-stub` in `.github/workflows/stack-e2e.yml`, a workflow change that needs its own PR and owner approval. It is recorded here so the gap stays visible.
 
 ---
-
 ## Task 1: Extract the circuit breaker into `internal/breaker` (PR C1, core)
 
 **Goal:** One exported breaker that both `searchclient` and the new `judgment` client use, with searchclient's behaviour unchanged.
@@ -347,7 +375,7 @@ func (b *Breaker) IsOpen() bool {
 }
 ```
 
-- [ ] **Step 4: Point searchclient at it.** Run `git rm internal/searchclient/breaker.go`. In `client.go`, import `github.com/vidra/vidra-core/internal/breaker`, change the field to `breakers map[group]*breaker.Breaker`, construct with `breaker.New(c.now)`, whatever the current `newBreaker` argument is, and rename the call sites `b.allow()`→`b.Allow()`, `b.failure()`→`b.Failure()`, `b.success()`→`b.Success()`, `isOpen()`→`IsOpen()`. In the two test files, rename `.failure()`→`.Failure()` and `breakerCooldown`→`breaker.Cooldown`. Find every site with `grep -rn 'breakerCooldown\|breakerThreshold\|\.allow()\|\.failure()\|\.success()\|isOpen()\|newBreaker' internal/searchclient`.
+- [ ] **Step 4: Point searchclient at it.** Run `git rm internal/searchclient/breaker.go`. In `client.go`, import `github.com/vidra/vidra-core/internal/breaker`, change the field to `breakers map[group]*breaker.Breaker`, construct with `breaker.New(c.now)`, whatever the current `newBreaker` argument is, and rename the call sites `b.allow()`→`b.Allow()`, `b.failure()`→`b.Failure()`, `b.success()`→`b.Success()`, `isOpen()`→`IsOpen()`. In the two test files, rename `.failure()`→`.Failure()` and `breakerCooldown`→`breaker.Cooldown`. Known sites beyond `client.go`: `moderation_test.go:114` (`.isOpen()`), and `breakerThreshold` in `prober_test.go:157` and `searchclient_test.go:202`. Find every site with `grep -rn 'breakerCooldown\|breakerThreshold\|\.allow()\|\.failure()\|\.success()\|isOpen()\|newBreaker' internal/searchclient`.
 
 - [ ] **Step 5: Run everything that touched it**
 
@@ -382,7 +410,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Acceptance Criteria:**
 - [ ] 200 with valid answers returns a `Result` whose picks are in each question's option set.
-- [ ] 401 or 403 gives `auth`. 429 gives `rate_limited`. 400 or 422 gives `invalid_request`. 5xx, 529, a transport error or a timeout gives `unavailable`. A malformed body, a body over the cap, a missing answer, or a pick outside the options gives `bad_response`. An empty key gives `not_configured`, and no request is made.
+- [ ] 401 or 403 gives `auth`. 429 gives `rate_limited`. 400 or 422 gives `invalid_request`. 5xx, 529, 404 or 405 (a wrong `TYPESAFE_ENDPOINT` path), a transport error or a timeout gives `unavailable`. A malformed body, a body over the cap, a missing answer, or a pick outside the options gives `bad_response`. An empty key gives `not_configured`, and no request is made.
 - [ ] Five consecutive transport/5xx failures open the breaker; the next call fails `unavailable` without reaching the server.
 - [ ] The key is sent only as `Authorization: Bearer <key>`. No error string contains the key or the upstream body.
 - [ ] More than 255 options is rejected locally as `invalid_request`.
@@ -469,6 +497,7 @@ func TestAskClassifiesFailures(t *testing.T) {
 		{"429", status(429, `{}`), CodeRateLimited},
 		{"422", status(422, `{"detail":"questions.language.criteria"}`), CodeInvalidRequest},
 		{"500", status(500, `boom`), CodeUnavailable},
+		{"404 wrong endpoint path", status(404, `{}`), CodeUnavailable},
 		{"529", status(529, `{}`), CodeUnavailable},
 		{"malformed", status(200, `{"answers":`), CodeBadResponse},
 		{"missing answer", status(200, `{"model":"jev-1.13.0","answers":{}}`), CodeBadResponse},
@@ -766,7 +795,9 @@ func (c *Client) Ask(ctx context.Context, state any, questions map[string]Questi
 	}
 	defer func() { _ = resp.Body.Close() }()
 	switch {
-	case resp.StatusCode >= 500:
+	// 404/405 means TYPESAFE_ENDPOINT points somewhere that is not the API:
+	// an account-level outage, never a per-video failure.
+	case resp.StatusCode >= 500 || resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed:
 		c.br.Failure()
 		return Result{}, fail(CodeUnavailable)
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
@@ -845,7 +876,7 @@ func validate(wr wireResponse, questions map[string]Question) (Result, error) {
 - [ ] **Step 4: Run the tests**
 
 Run: `go test ./internal/judgment/ -race -v`
-Expected: every test PASSes. `TestAskClassifiesFailures` has 10 subtests.
+Expected: every test PASSes. `TestAskClassifiesFailures` has 11 subtests.
 
 - [ ] **Step 5: Commit** (one small PR: this package only)
 
@@ -1002,34 +1033,33 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-## Task 4: Migration 0152 and the sqlc queries (PR C4, core)
+## Task 4: Migration 0152 and the queries (PR C4, core)
 
-**Goal:** The three tables, the run projection into `job_runs`, and every query the later tasks call, proven against real Postgres.
+**Goal:** Create the four tables, the claim index and the run projection into `job_runs`, plus every query the later tasks call, proven against a scratch Postgres database.
 
 **Files:**
 - Create: `migrations/0152_metadata_autofill.up.sql`, `migrations/0152_metadata_autofill.down.sql`
 - Create: `internal/store/queries/metadata_fill.sql`
-- Generated: `internal/store/sqlcgen/metadata_fill.sql.go`, `models.go` (run `make sqlc`, never hand-edit)
+- Generated: `internal/store/sqlcgen/metadata_fill.sql.go`, `models.go` (run `make sqlc`; never hand-edit)
 - Create: `internal/store/metadata_fill_integration_test.go`
 
 **Acceptance Criteria:**
-- [ ] `make migrate-up` then `migrate down 1` then `migrate up` round-trips cleanly, and `make migrate-lint` passes.
-- [ ] `ClaimNewMetadataJudgments` returns only public, published, unblocked videos of non-unlisted owners with an empty category or language and no judgment row, honouring `since`.
-- [ ] Two concurrent `ClaimNewMetadataJudgments` calls return disjoint sets whose union covers every eligible video.
-- [ ] `ApplyInferredMetadata` writes only empty fields on a still public+published video, reports which fields it wrote, and leaves `updated_at` alone.
-- [ ] Only one `metadata_fill_runs` row can be `running`: a second insert violates `metadata_fill_runs_one_running_idx`.
-- [ ] Inserting and then updating a run produces one `job_runs` row (`queue='metadata_fill_runs'`) whose state follows it.
+- [ ] `make migrate-up`, then `go run ./cmd/api migrate down 1`, then `make migrate-up` round-trips; `make migrate-lint` passes.
+- [ ] `ClaimNewMetadataJudgments` claims only public, published, unblocked videos of non-unlisted owners with an empty category or language and no judgment row. With `since` set, it claims only videos updated at or after `since`.
+- [ ] Two concurrent claimers over a scratch database get disjoint sets.
+- [ ] `RecordAndApplyMetadataJudgment` writes only empty fields, and only on a video that is still fully eligible and still `running`. It records the picks and `*_applied` in the same statement, reports what it wrote, and leaves `updated_at` untouched.
+- [ ] Only one `metadata_fill_runs` row can be `running`. A second `StartMetadataFillRun` fails with a unique violation and requeues nothing.
+- [ ] A run projects to one `job_runs` row (`queue='metadata_fill_runs'`, `actor_id = started_by`) whose state follows the run.
 
-**Verify:** The integration command in §0.4 with `-run MetadataFill`. All tests PASS.
+**Verify:** The §0.4 integration command with `-run 'MetadataFill|RecordAndApply'`. All PASS.
 
 **Steps:**
 
-- [ ] **Step 1: Write `migrations/0152_metadata_autofill.up.sql`**
+- [ ] **Step 1: `migrations/0152_metadata_autofill.up.sql`**
 
 ```sql
 -- Automatic category & language via TypeSafe Jev (meta spec
--- 2026-09-20-jev-metadata-autofill-design.md). Three tables; `videos` and its
--- hot queries are untouched.
+-- 2026-09-20-jev-metadata-autofill-design.md, plan revision 2).
 
 -- One row per video ever sent. A row's EXISTENCE means "already judged",
 -- including when Jev was not confident, so an uncertain video costs one
@@ -1046,32 +1076,48 @@ CREATE TABLE video_metadata_judgments (
     judged_at        TIMESTAMPTZ,
     category_pick    TEXT,   -- category id; NULL = none_of_these or not asked
     category_prob    REAL,
-    language_pick    TEXT,   -- language code; NULL = unclear
+    language_pick    TEXT,   -- language code; NULL = unclear or not asked
     language_prob    REAL,
     category_applied TEXT,   -- what the worker wrote; cleared when a human sets it
     language_applied TEXT,
     last_error_code  TEXT CHECK (last_error_code IS NULL OR last_error_code ~ '^[a-z_]{1,32}$'),
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 CREATE INDEX video_metadata_judgments_due_idx
     ON video_metadata_judgments (next_attempt_at) WHERE state = 'pending';
 CREATE INDEX video_metadata_judgments_lease_idx
     ON video_metadata_judgments (lease_expires_at) WHERE state = 'running';
 
--- Single row. enabled_since is when the feature last became ACTIVE (toggle on
--- AND a key resolves): videos updated at or after it are filled automatically;
--- everything older waits for an operator-started run. The pause columns let
--- every replica, and the status endpoint, agree that Jev rejected the key or
--- rate-limited us.
+-- The claim scans public, published videos with an empty field, newest first,
+-- every 30 s; without this it is a sequential scan and sort of `videos`.
+-- The predicate matches the claim query's text exactly so the planner can use it.
+CREATE INDEX videos_metadata_fill_candidates_idx
+    ON videos (updated_at DESC, id)
+    WHERE privacy = 'public' AND state = 'published'
+      AND (NULLIF(category, '') IS NULL OR NULLIF(language, '') IS NULL);
+
+-- Single row. enabled_since is when the toggle was last seen ON by the
+-- leader: videos updated at or after it are filled automatically; everything
+-- older waits for an operator-started run.
 CREATE TABLE metadata_fill_state (
-    singleton      BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
-    enabled_since  TIMESTAMPTZ,
-    paused_until   TIMESTAMPTZ,
-    paused_code    TEXT CHECK (paused_code IS NULL OR paused_code ~ '^[a-z_]{1,32}$'),
-    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    singleton     BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
+    enabled_since TIMESTAMPTZ,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO metadata_fill_state (singleton) VALUES (TRUE) ON CONFLICT DO NOTHING;
+
+-- TypeSafe ACCOUNT state, shared by every Jev slice (this one and the report-
+-- triage / watched-word slices after it): the account-wide pause after a key
+-- rejection, rate limit or outage, and the admin-panel key, SEALED with
+-- internal/secretbox (MFA KEK) or absent. Never plaintext.
+CREATE TABLE typesafe_state (
+    singleton      BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
+    paused_until   TIMESTAMPTZ,
+    paused_code    TEXT CHECK (paused_code IS NULL OR paused_code ~ '^[a-z_]{1,32}$'),
+    api_key_sealed TEXT CHECK (api_key_sealed IS NULL OR api_key_sealed LIKE 'enc:%'),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO typesafe_state (singleton) VALUES (TRUE) ON CONFLICT DO NOTHING;
 
 -- An operator-started "fill existing videos" run. While one is running the
 -- enabled_since cutoff is lifted.
@@ -1085,13 +1131,14 @@ CREATE TABLE metadata_fill_runs (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     finished_at TIMESTAMPTZ
 );
--- At most one running run; a racing second POST fails on this index (409).
+-- At most one running run (precedent: 0067's ((TRUE)) index). A racing
+-- second start fails here → 409.
 CREATE UNIQUE INDEX metadata_fill_runs_one_running_idx
     ON metadata_fill_runs ((TRUE)) WHERE state = 'running';
 
 -- Operational projection (0083): one job_runs row per RUN, never per video.
--- Its own small function per the 0107/0120 convention: sync_legacy_job_run()
--- raises on an unknown table.
+-- Its own function per the 0107/0120 convention (sync_legacy_job_run() raises
+-- on an unknown table).
 CREATE FUNCTION sync_metadata_fill_run_job_run() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
     canonical_state  TEXT;
@@ -1105,13 +1152,13 @@ BEGIN
     END;
 
     INSERT INTO job_runs (
-        type, queue, source_id, state, stage, progress_percent, priority, attempt,
+        type, queue, source_id, state, stage, progress_percent, priority, attempt, actor_id,
         resource_type, resource_id, input_metadata, output_metadata,
         error_class, error_code, error_detail, error_retryable,
         created_at, started_at, updated_at, finished_at
     ) VALUES (
         'metadata_fill', 'metadata_fill_runs', NEW.id::text, canonical_state,
-        '', NULL, 0, 1, 'instance', '',
+        '', NULL, 0, 1, NEW.started_by, 'instance', '',
         '{}'::jsonb, jsonb_build_object('judged', NEW.judged, 'filled', NEW.filled),
         '', '', '', NULL,
         NEW.created_at, NEW.created_at, NEW.updated_at, NEW.finished_at
@@ -1145,53 +1192,55 @@ AFTER INSERT OR UPDATE ON metadata_fill_runs
 FOR EACH ROW EXECUTE FUNCTION sync_metadata_fill_run_job_run();
 ```
 
-Before running it, check two things against `migrations/0083_operational_job_runs.up.sql` and `0133`: that `job_events.kind` accepts `'started'`/`'cancelled'`/`'succeeded'` (copy the CHECK list if one exists), and that `progress_percent`/`error_retryable` accept NULL. If either CHECK rejects a value, use the nearest allowed one and note it in a comment.
+The reviewer checked these against `0083`/`0133`: `job_events.kind` has no enum, `progress_percent` and `error_retryable` accept NULL, `actor_id` is a column (0083:61), and `inherit_job_run_identity` acts only on child rows.
 
-- [ ] **Step 2: Write `migrations/0152_metadata_autofill.down.sql`**
+- [ ] **Step 2: `migrations/0152_metadata_autofill.down.sql`**
 
 ```sql
 DROP TRIGGER IF EXISTS metadata_fill_runs_operational_projection ON metadata_fill_runs;
 DROP FUNCTION IF EXISTS sync_metadata_fill_run_job_run();
 DELETE FROM job_runs WHERE queue = 'metadata_fill_runs';
 DROP TABLE IF EXISTS metadata_fill_runs;
+DROP TABLE IF EXISTS typesafe_state;
 DROP TABLE IF EXISTS metadata_fill_state;
+DROP INDEX IF EXISTS videos_metadata_fill_candidates_idx;
 DROP TABLE IF EXISTS video_metadata_judgments;
 ```
 
-- [ ] **Step 3: Write `internal/store/queries/metadata_fill.sql`**
+- [ ] **Step 3: `internal/store/queries/metadata_fill.sql`**
 
 ```sql
--- Eligibility mirrors ListVideoSearchDocsPage (search_outbox.sql:116-118): the
--- worker never sends a video the instance does not already serve in discovery.
+-- Eligibility mirrors ListVideoSearchDocsPage (search_outbox.sql:116-118).
 
 -- name: ClaimNewMetadataJudgments :many
--- The INSERT is the claim: the primary key makes two replicas' claims
--- disjoint. `since` NULL lifts the cutoff (an operator run is active).
+-- The INSERT is the claim (primary key). `since` NULL lifts the cutoff (an
+-- operator run is active). The id tie-break keeps two overlapping claimers
+-- in one order, so they cannot deadlock on a bulk import's equal timestamps.
 INSERT INTO video_metadata_judgments (video_id, state, attempts, lease_expires_at)
 SELECT v.id, 'running', 1, now() + interval '5 minutes'
 FROM videos v
 JOIN channels c ON c.id = v.channel_id
 JOIN users au ON au.id = c.owner_id
 WHERE v.privacy = 'public' AND v.state = 'published'
+  AND (NULLIF(v.category, '') IS NULL OR NULLIF(v.language, '') IS NULL)
   AND NOT au.unlisted
   AND NOT EXISTS (SELECT 1 FROM video_blocks b WHERE b.video_id = v.id)
-  AND (NULLIF(v.category, '') IS NULL OR NULLIF(v.language, '') IS NULL)
   AND (sqlc.narg('since')::timestamptz IS NULL OR v.updated_at >= sqlc.narg('since')::timestamptz)
   AND NOT EXISTS (SELECT 1 FROM video_metadata_judgments j WHERE j.video_id = v.id)
-ORDER BY v.updated_at DESC
+ORDER BY v.updated_at DESC, v.id
 LIMIT sqlc.arg('lim')::int
 ON CONFLICT (video_id) DO NOTHING
 RETURNING video_id;
 
 -- name: ClaimDueMetadataJudgments :many
--- Retries whose backoff elapsed, plus claims a dead replica left running.
+-- Retries whose backoff elapsed, plus claims a crashed leader left running.
 UPDATE video_metadata_judgments
 SET state = 'running', attempts = attempts + 1, lease_expires_at = now() + interval '5 minutes'
 WHERE video_id IN (
     SELECT video_id FROM video_metadata_judgments
     WHERE (state = 'pending' AND next_attempt_at <= now())
        OR (state = 'running' AND lease_expires_at <= now())
-    ORDER BY next_attempt_at
+    ORDER BY next_attempt_at, video_id
     LIMIT sqlc.arg('lim')::int
     FOR UPDATE SKIP LOCKED
 )
@@ -1210,57 +1259,71 @@ JOIN channels c ON c.id = v.channel_id
 JOIN users au ON au.id = c.owner_id
 WHERE v.id = $1;
 
--- name: RecordMetadataJudgment :exec
-UPDATE video_metadata_judgments
-SET state = 'done', model = sqlc.arg('model'), judged_at = now(),
-    category_pick = sqlc.narg('category_pick'), category_prob = sqlc.narg('category_prob'),
-    language_pick = sqlc.narg('language_pick'), language_prob = sqlc.narg('language_prob'),
-    lease_expires_at = NULL, last_error_code = NULL
-WHERE video_id = sqlc.arg('video_id');
+-- name: RecordAndApplyMetadataJudgment :one
+-- ONE statement records the judgment and fills the still-empty fields, so no
+-- crash or error can leave "judged but never applied", "applied but no
+-- marker", or a marker on a value a human set in between. `cur` locks the
+-- video (a concurrent human UpdateVideo waits, then its ClearInferredApplied
+-- runs after this commits) and the judgment row, and carries the FULL
+-- eligibility predicate: a video blocked or made private while Jev was
+-- answering is recorded, never written. It deliberately does not bump
+-- videos.updated_at.
+WITH cur AS (
+    SELECT v.id,
+           (NULLIF(v.category, '') IS NULL AND sqlc.narg('category')::text IS NOT NULL) AS write_category,
+           (NULLIF(v.language, '') IS NULL AND sqlc.narg('language')::text IS NOT NULL) AS write_language
+    FROM videos v
+    JOIN channels c ON c.id = v.channel_id
+    JOIN users au ON au.id = c.owner_id
+    JOIN video_metadata_judgments j ON j.video_id = v.id AND j.state = 'running'
+    WHERE v.id = sqlc.arg('video_id')
+      AND v.privacy = 'public' AND v.state = 'published'
+      AND NOT au.unlisted
+      AND NOT EXISTS (SELECT 1 FROM video_blocks b WHERE b.video_id = v.id)
+    FOR UPDATE OF v, j
+),
+upd AS (
+    UPDATE videos v
+    SET category = CASE WHEN cur.write_category THEN sqlc.narg('category')::text ELSE v.category END,
+        language = CASE WHEN cur.write_language THEN sqlc.narg('language')::text ELSE v.language END
+    FROM cur
+    WHERE v.id = cur.id AND (cur.write_category OR cur.write_language)
+    RETURNING cur.write_category AS wc, cur.write_language AS wl
+),
+rec AS (
+    UPDATE video_metadata_judgments j
+    SET state = 'done', model = sqlc.narg('model'), judged_at = now(),
+        category_pick = sqlc.narg('category_pick'), category_prob = sqlc.narg('category_prob'),
+        language_pick = sqlc.narg('language_pick'), language_prob = sqlc.narg('language_prob'),
+        category_applied = CASE WHEN COALESCE((SELECT wc FROM upd), false) THEN sqlc.narg('category')::text END,
+        language_applied = CASE WHEN COALESCE((SELECT wl FROM upd), false) THEN sqlc.narg('language')::text END,
+        lease_expires_at = NULL, last_error_code = NULL
+    WHERE j.video_id = sqlc.arg('video_id') AND j.state = 'running'
+    RETURNING j.video_id
+)
+SELECT COALESCE((SELECT wc FROM upd), false)::bool AS category_written,
+       COALESCE((SELECT wl FROM upd), false)::bool AS language_written,
+       EXISTS (SELECT 1 FROM rec)::bool AS recorded;
 
 -- name: RecordMetadataJudgmentFailure :exec
 UPDATE video_metadata_judgments
 SET state = CASE WHEN attempts >= sqlc.arg('max_attempts')::int THEN 'failed' ELSE 'pending' END,
     next_attempt_at = sqlc.arg('next_attempt_at'), lease_expires_at = NULL,
-    last_error_code = sqlc.arg('code')
-WHERE video_id = sqlc.arg('video_id');
+    last_error_code = sqlc.narg('code')
+WHERE video_id = sqlc.arg('video_id') AND state = 'running';
 
 -- name: ReleaseMetadataJudgment :exec
--- Hand a claim back without spending an attempt (the whole worker paused).
+-- Hand a claim back without spending an attempt (account paused, or the tick
+-- aborted on a database error).
 UPDATE video_metadata_judgments
 SET state = 'pending', attempts = GREATEST(attempts - 1, 0),
     next_attempt_at = sqlc.arg('next_attempt_at'), lease_expires_at = NULL
-WHERE video_id = sqlc.arg('video_id');
+WHERE video_id = sqlc.arg('video_id') AND state = 'running';
 
 -- name: DeleteMetadataJudgment :exec
 -- The video stopped being eligible before it was judged; forget the claim so
 -- it becomes eligible again if it is republished.
-DELETE FROM video_metadata_judgments WHERE video_id = $1;
-
--- name: ApplyInferredMetadata :one
--- Guarded write: fills only EMPTY fields on a video that is STILL public and
--- published, locks the row against a concurrent human edit, reports which
--- fields it wrote, and deliberately does not bump updated_at.
-WITH cur AS (
-    SELECT id,
-           (NULLIF(category, '') IS NULL AND sqlc.narg('category')::text IS NOT NULL) AS write_category,
-           (NULLIF(language, '') IS NULL AND sqlc.narg('language')::text IS NOT NULL) AS write_language
-    FROM videos
-    WHERE id = sqlc.arg('id') AND privacy = 'public' AND state = 'published'
-    FOR UPDATE
-)
-UPDATE videos v
-SET category = CASE WHEN cur.write_category THEN sqlc.narg('category')::text ELSE v.category END,
-    language = CASE WHEN cur.write_language THEN sqlc.narg('language')::text ELSE v.language END
-FROM cur
-WHERE v.id = cur.id AND (cur.write_category OR cur.write_language)
-RETURNING cur.write_category::bool AS category_written, cur.write_language::bool AS language_written;
-
--- name: SetInferredApplied :exec
-UPDATE video_metadata_judgments
-SET category_applied = COALESCE(sqlc.narg('category_applied'), category_applied),
-    language_applied = COALESCE(sqlc.narg('language_applied'), language_applied)
-WHERE video_id = sqlc.arg('video_id');
+DELETE FROM video_metadata_judgments WHERE video_id = $1 AND state = 'running';
 
 -- name: ClearInferredApplied :exec
 -- A human set the field: the Studio marker must never claim their value.
@@ -1278,10 +1341,9 @@ JOIN videos v ON v.id = j.video_id
 WHERE j.video_id = $1;
 
 -- name: GetMetadataFillState :one
-SELECT enabled_since, paused_until, paused_code FROM metadata_fill_state WHERE singleton;
+SELECT enabled_since FROM metadata_fill_state WHERE singleton;
 
 -- name: MarkMetadataFillActive :exec
--- First replica to see the feature active stamps the moment; later ones no-op.
 UPDATE metadata_fill_state SET enabled_since = now(), updated_at = now()
 WHERE singleton AND enabled_since IS NULL;
 
@@ -1289,21 +1351,32 @@ WHERE singleton AND enabled_since IS NULL;
 UPDATE metadata_fill_state SET enabled_since = NULL, updated_at = now()
 WHERE singleton AND enabled_since IS NOT NULL;
 
--- name: SetMetadataFillPause :exec
-UPDATE metadata_fill_state
+-- name: GetTypeSafePause :one
+SELECT paused_until, paused_code FROM typesafe_state WHERE singleton;
+
+-- name: SetTypeSafePause :exec
+UPDATE typesafe_state
 SET paused_until = sqlc.narg('paused_until'), paused_code = sqlc.narg('paused_code'), updated_at = now()
 WHERE singleton;
 
 -- name: GetRunningMetadataFillRun :one
 SELECT * FROM metadata_fill_runs WHERE state = 'running';
 
--- name: CreateMetadataFillRun :one
-INSERT INTO metadata_fill_runs (started_by) VALUES ($1) RETURNING *;
-
--- name: RequeueFailedMetadataJudgments :execrows
-UPDATE video_metadata_judgments
-SET state = 'pending', attempts = 0, next_attempt_at = now(), last_error_code = NULL
-WHERE state = 'failed';
+-- name: StartMetadataFillRun :one
+-- Insert and requeue in ONE statement: a unique violation (a run already
+-- running) rolls back the requeue too, and a requeue failure leaves no run.
+WITH run AS (
+    INSERT INTO metadata_fill_runs (started_by) VALUES (sqlc.narg('started_by')) RETURNING *
+),
+rq AS (
+    UPDATE video_metadata_judgments
+    SET state = 'pending', attempts = 0, next_attempt_at = now(), last_error_code = NULL
+    WHERE state = 'failed'
+    RETURNING 1
+)
+SELECT run.id, run.state, run.judged, run.filled, run.created_at,
+       (SELECT count(*) FROM rq)::bigint AS requeued
+FROM run;
 
 -- name: FinishMetadataFillRun :execrows
 UPDATE metadata_fill_runs
@@ -1315,24 +1388,38 @@ UPDATE metadata_fill_runs
 SET judged = judged + sqlc.arg('judged')::int, filled = filled + sqlc.arg('filled')::int, updated_at = now()
 WHERE id = sqlc.arg('id') AND state = 'running';
 
--- name: CountMetadataJudgments :one
-SELECT
-  count(*) FILTER (WHERE state IN ('pending','running'))::bigint AS waiting,
-  count(*) FILTER (WHERE category_applied IS NOT NULL OR language_applied IS NOT NULL)::bigint AS filled,
-  count(*) FILTER (WHERE state = 'done' AND category_applied IS NULL AND language_applied IS NULL)::bigint AS not_confident,
-  count(*) FILTER (WHERE state = 'failed')::bigint AS failed
-FROM video_metadata_judgments;
-
 -- name: CountUnjudgedEligibleVideos :one
 SELECT count(*)::bigint
 FROM videos v
 JOIN channels c ON c.id = v.channel_id
 JOIN users au ON au.id = c.owner_id
 WHERE v.privacy = 'public' AND v.state = 'published'
+  AND (NULLIF(v.category, '') IS NULL OR NULLIF(v.language, '') IS NULL)
   AND NOT au.unlisted
   AND NOT EXISTS (SELECT 1 FROM video_blocks b WHERE b.video_id = v.id)
-  AND (NULLIF(v.category, '') IS NULL OR NULLIF(v.language, '') IS NULL)
   AND NOT EXISTS (SELECT 1 FROM video_metadata_judgments j WHERE j.video_id = v.id);
+
+-- name: CountOpenMetadataJudgments :one
+SELECT count(*)::bigint FROM video_metadata_judgments WHERE state IN ('pending', 'running');
+
+-- name: CountMetadataJudgments :one
+-- filled = the worker's value is STILL the current value; not_confident is
+-- decided from the stored probabilities against the bars the caller passes,
+-- so a later human edit cannot move a filled video into "not confident".
+SELECT
+  count(*) FILTER (WHERE j.state IN ('pending','running'))::bigint AS waiting,
+  count(*) FILTER (WHERE (j.category_applied IS NOT NULL AND j.category_applied = v.category)
+                      OR (j.language_applied IS NOT NULL AND j.language_applied = v.language))::bigint AS filled,
+  count(*) FILTER (WHERE j.state = 'done'
+                     AND (j.category_pick IS NULL OR j.category_prob < sqlc.arg('category_bar')::real)
+                     AND (j.language_pick IS NULL OR j.language_prob < sqlc.arg('language_bar')::real))::bigint AS not_confident,
+  count(*) FILTER (WHERE j.state = 'failed')::bigint AS failed
+FROM video_metadata_judgments j
+JOIN videos v ON v.id = j.video_id;
+
+-- name: MetadataJudgmentDepth :many
+-- vidra_queue_depth{queue="video_metadata_judgments",state=...}.
+SELECT state, count(*)::bigint AS depth FROM video_metadata_judgments GROUP BY state;
 
 -- name: SampleLabelledVideosForEvaluation :many
 -- Human-labelled public videos for the evaluator. Excludes anything this
@@ -1352,9 +1439,9 @@ ORDER BY md5(v.id::text || sqlc.arg('seed')::text)
 LIMIT sqlc.arg('lim')::int;
 ```
 
-- [ ] **Step 4: Generate** with `make sqlc && make sqlc-verify`. Expected: no diff after generation, and `sqlcgen.ClaimNewMetadataJudgmentsParams{Since pgtype.Timestamptz; Lim int32}` and the other params structs exist. Read the generated names and use them verbatim in Tasks 5–11. The plan's later code assumes the names sqlc derives from the query names above.
+- [ ] **Step 4: Generate** with `make sqlc && make sqlc-verify`. Expected: no diff after generation. Read `internal/store/sqlcgen/metadata_fill.sql.go` once and confirm the field names the later tasks use: `ClaimNewMetadataJudgmentsParams{Since pgtype.Timestamptz; Lim int32}`, `RecordAndApplyMetadataJudgmentParams{VideoID uuid.UUID; Category, Language, Model, CategoryPick, LanguagePick *string; CategoryProb, LanguageProb *float32}` with row `{CategoryWritten, LanguageWritten, Recorded bool}`, `RecordMetadataJudgmentFailureParams{VideoID; MaxAttempts int32; NextAttemptAt time.Time; Code *string}`, `ReleaseMetadataJudgmentParams{VideoID; NextAttemptAt time.Time}`, `SetTypeSafePauseParams{PausedUntil pgtype.Timestamptz; PausedCode *string}`, `StartMetadataFillRunRow{…; Requeued int64}`, `CountMetadataJudgmentsParams{CategoryBar, LanguageBar float32}`. Fix the later tasks' code to the generated names if any differ.
 
-- [ ] **Step 5: Write the failing integration test** `internal/store/metadata_fill_integration_test.go`. It uses the store package's existing `dsn(t)` and fixture helpers (`internal/store/integration_test.go`); find the helpers that insert a user, a channel and a video, which other `*_integration_test.go` files in the package already use.
+- [ ] **Step 5: Failing integration test** `internal/store/metadata_fill_integration_test.go`. Each test builds a **scratch database**: copy `newScratchDB` from `internal/peertubeimport/importer_integration_test.go:2205` into this file, because it is unexported there. Migrate it with `internal/dbmigrate` the way `cmd/api/verify_blobs_integration_test.go:48` does, then open `store.New` on it. The fixture inserts rows with plain SQL through the scratch pool: a user (`unlisted` false/true), a channel, videos with a given privacy, state, category, language and `updated_at`, and a `video_blocks` row.
 
 ```go
 //go:build integration
@@ -1365,6 +1452,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -1372,43 +1460,38 @@ import (
 	"github.com/vidra/vidra-core/internal/store/sqlcgen"
 )
 
-func TestMetadataFillClaimEligibility(t *testing.T) {
+func TestMetadataFillClaimEligibilityAndCutoff(t *testing.T) {
 	ctx := context.Background()
-	st, err := New(ctx, dsn(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	q := st.Queries()
-	f := newMetadataFillFixture(t, ctx, st) // see helper below
-	eligible := f.video(t, "public", "published", nil, nil)
-	_ = f.video(t, "private", "published", nil, nil)          // private
-	_ = f.video(t, "public", "draft", nil, nil)               // not published
-	_ = f.video(t, "public", "published", strp("10"), strp("en")) // nothing empty
-	blocked := f.video(t, "public", "published", nil, nil)
+	f := newMetadataFillFixture(t, ctx) // scratch DB + helpers (see Step 5 prose)
+	q := f.q
+	old := f.video(t, videoSpec{privacy: "public", state: "published", updatedAt: time.Now().Add(-48 * time.Hour)})
+	fresh := f.video(t, videoSpec{privacy: "public", state: "published"})
+	_ = f.video(t, videoSpec{privacy: "private", state: "published"})
+	_ = f.video(t, videoSpec{privacy: "public", state: "draft"})
+	_ = f.video(t, videoSpec{privacy: "public", state: "published", category: "10", language: "en"})
+	_ = f.video(t, videoSpec{privacy: "public", state: "published", ownerUnlisted: true})
+	blocked := f.video(t, videoSpec{privacy: "public", state: "published"})
 	f.block(t, blocked)
 
-	got, err := q.ClaimNewMetadataJudgments(ctx, sqlcgen.ClaimNewMetadataJudgmentsParams{Lim: 100})
+	since := pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true}
+	got, err := q.ClaimNewMetadataJudgments(ctx, sqlcgen.ClaimNewMetadataJudgmentsParams{Since: since, Lim: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !containsOnly(got, eligible, f.all()) {
-		t.Fatalf("claimed %v, want exactly the one eligible video %s among the fixture's", got, eligible)
+	if len(got) != 1 || got[0] != fresh {
+		t.Fatalf("with since: claimed %v, want only %s (the cutoff must exclude %s)", got, fresh, old)
 	}
-	again, _ := q.ClaimNewMetadataJudgments(ctx, sqlcgen.ClaimNewMetadataJudgmentsParams{Lim: 100})
-	if containsAny(again, f.all()) {
-		t.Fatal("a judged video was claimed twice")
+	got, _ = q.ClaimNewMetadataJudgments(ctx, sqlcgen.ClaimNewMetadataJudgmentsParams{Lim: 100})
+	if len(got) != 1 || got[0] != old {
+		t.Fatalf("without since: claimed %v, want only %s", got, old)
 	}
 }
 
 func TestMetadataFillConcurrentClaimsAreDisjoint(t *testing.T) {
 	ctx := context.Background()
-	st, err := New(ctx, dsn(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := newMetadataFillFixture(t, ctx, st)
+	f := newMetadataFillFixture(t, ctx)
 	for i := 0; i < 40; i++ {
-		f.video(t, "public", "published", nil, nil)
+		f.video(t, videoSpec{privacy: "public", state: "published"})
 	}
 	var mu sync.Mutex
 	seen := map[uuid.UUID]int{}
@@ -1417,7 +1500,7 @@ func TestMetadataFillConcurrentClaimsAreDisjoint(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ids, err := st.Queries().ClaimNewMetadataJudgments(ctx, sqlcgen.ClaimNewMetadataJudgmentsParams{Lim: 25})
+			ids, err := f.q.ClaimNewMetadataJudgments(ctx, sqlcgen.ClaimNewMetadataJudgmentsParams{Lim: 25})
 			if err != nil {
 				t.Error(err)
 				return
@@ -1430,222 +1513,218 @@ func TestMetadataFillConcurrentClaimsAreDisjoint(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	for _, id := range f.all() {
-		if seen[id] > 1 {
-			t.Fatalf("video %s claimed %d times", id, seen[id])
+	for id, n := range seen {
+		if n > 1 {
+			t.Fatalf("video %s claimed %d times", id, n)
 		}
 	}
 }
 
-func TestApplyInferredMetadataGuards(t *testing.T) {
+func TestRecordAndApplyGuards(t *testing.T) {
 	ctx := context.Background()
-	st, err := New(ctx, dsn(t))
+	f := newMetadataFillFixture(t, ctx)
+	q := f.q
+	s := func(v string) *string { return &v }
+	p := func(v float32) *float32 { return &v }
+
+	human := f.video(t, videoSpec{privacy: "public", state: "published", category: "10"})
+	f.claim(t, human)
+	before := f.updatedAt(t, human)
+	row, err := q.RecordAndApplyMetadataJudgment(ctx, sqlcgen.RecordAndApplyMetadataJudgmentParams{
+		VideoID: human, Category: s("2"), Language: s("en"), Model: s("jev-1.13.0"),
+		CategoryPick: s("2"), CategoryProb: p(0.9), LanguagePick: s("en"), LanguageProb: p(0.99),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	q := st.Queries()
-	f := newMetadataFillFixture(t, ctx, st)
-	v := f.video(t, "public", "published", strp("10"), nil) // category set by a human
-	before := f.updatedAt(t, v)
-	row, err := q.ApplyInferredMetadata(ctx, sqlcgen.ApplyInferredMetadataParams{ID: v, Category: strp("2"), Language: strp("en")})
-	if err != nil {
-		t.Fatal(err)
+	if row.CategoryWritten || !row.LanguageWritten || !row.Recorded {
+		t.Fatalf("row = %+v, want language only, recorded", row)
 	}
-	if row.CategoryWritten || !row.LanguageWritten {
-		t.Fatalf("written = %+v, want language only", row)
-	}
-	if c, l := f.taxonomy(t, v); c != "10" || l != "en" {
+	if c, l := f.taxonomy(t, human); c != "10" || l != "en" {
 		t.Fatalf("taxonomy = %q/%q, want the human category kept", c, l)
 	}
-	if !f.updatedAt(t, v).Equal(before) {
+	if ca, la := f.applied(t, human); ca != nil || la == nil || *la != "en" {
+		t.Fatalf("applied = %v/%v, want language only", ca, la)
+	}
+	if !f.updatedAt(t, human).Equal(before) {
 		t.Fatal("an automatic fill must not bump updated_at")
 	}
-	priv := f.video(t, "private", "published", nil, nil)
-	if _, err := q.ApplyInferredMetadata(ctx, sqlcgen.ApplyInferredMetadataParams{ID: priv, Language: strp("en")}); err == nil {
-		t.Fatal("a private video was written (want pgx.ErrNoRows)")
+
+	blocked := f.video(t, videoSpec{privacy: "public", state: "published"})
+	f.claim(t, blocked)
+	f.block(t, blocked) // blocked while Jev was answering
+	row, err = q.RecordAndApplyMetadataJudgment(ctx, sqlcgen.RecordAndApplyMetadataJudgmentParams{
+		VideoID: blocked, Language: s("en"), Model: s("jev-1.13.0"), LanguagePick: s("en"), LanguageProb: p(0.99),
+	})
+	if err != nil || row.LanguageWritten || !row.Recorded {
+		t.Fatalf("blocked: row=%+v err=%v, want recorded and nothing written", row, err)
 	}
 }
 
-func TestMetadataFillOneRunningRunAndProjection(t *testing.T) {
+func TestMetadataFillRunsOneRunningAndProjection(t *testing.T) {
 	ctx := context.Background()
-	st, err := New(ctx, dsn(t))
-	if err != nil {
-		t.Fatal(err)
+	f := newMetadataFillFixture(t, ctx)
+	q := f.q
+	actor := pgtype.UUID{Bytes: f.admin, Valid: true}
+	failed := f.video(t, videoSpec{privacy: "public", state: "published"})
+	f.judgmentRow(t, failed, "failed")
+
+	run, err := q.StartMetadataFillRun(ctx, actor)
+	if err != nil || run.Requeued != 1 {
+		t.Fatalf("start: run=%+v err=%v, want 1 requeued", run, err)
 	}
-	q := st.Queries()
-	f := newMetadataFillFixture(t, ctx, st)
-	run, err := q.CreateMetadataFillRun(ctx, pgtype.UUID{Bytes: f.admin, Valid: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := q.CreateMetadataFillRun(ctx, pgtype.UUID{Bytes: f.admin, Valid: true}); err == nil {
+	f.judgmentRow(t, f.video(t, videoSpec{privacy: "public", state: "published"}), "failed")
+	if _, err := q.StartMetadataFillRun(ctx, actor); err == nil {
 		t.Fatal("a second running run was allowed")
 	}
-	if got := f.jobRunState(t, run.ID); got != "running" {
-		t.Fatalf("projected state = %q, want running", got)
+	if n := f.countState(t, "failed"); n != 1 {
+		t.Fatalf("a refused start requeued rows: failed = %d, want 1", n)
+	}
+	if state, actorID := f.jobRun(t, run.ID); state != "running" || actorID != f.admin {
+		t.Fatalf("projection = %q by %s", state, actorID)
 	}
 	if n, _ := q.FinishMetadataFillRun(ctx, sqlcgen.FinishMetadataFillRunParams{ID: run.ID, State: "stopped"}); n != 1 {
 		t.Fatal("stop did not update the run")
 	}
-	if got := f.jobRunState(t, run.ID); got != "cancelled" {
-		t.Fatalf("projected state = %q, want cancelled", got)
+	if state, _ := f.jobRun(t, run.ID); state != "cancelled" {
+		t.Fatalf("projected state = %q, want cancelled", state)
 	}
 }
-
-func strp(s string) *string { return &s }
 ```
 
-Put `newMetadataFillFixture` (methods `video`, `block`, `all`, `updatedAt`, `taxonomy`, `jobRunState`, and an `admin` user id), `containsOnly` and `containsAny` in the same file. Build them on the package's existing insert helpers, or plain `st.Pool().Exec` SQL if there are none. `t.Cleanup` must delete the fixture's rows, and because the claim test shares a database with other tests, assertions stay scoped to the fixture's ids. Fixture videos use unique channel handles (`"mf-" + uuid.NewString()[:8]`).
+The fixture (`newMetadataFillFixture`, `videoSpec`, `video`, `block`, `claim`, `judgmentRow`, `updatedAt`, `taxonomy`, `applied`, `countState`, `jobRun`, and the `admin` user id and `q *sqlcgen.Queries` fields) goes in the same file, about 150 lines of plain SQL over the scratch pool. `claim` inserts a `running` judgment row directly, and `t.Cleanup` drops the scratch database.
 
-- [ ] **Step 6: Run** the §0.4 integration command with `-run 'MetadataFill|ApplyInferred'`. Expected: 4 PASS. Also run `go vet -tags=integration ./...` and `make ci`.
+- [ ] **Step 6: Run** the §0.4 integration command with `-run 'MetadataFill|RecordAndApply'`. Expected: 4 PASS. Then `go vet -tags=integration ./...` and `make ci`.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add migrations/0152_* internal/store/queries/metadata_fill.sql internal/store/sqlcgen internal/store/metadata_fill_integration_test.go
-git commit -m "feat(store): metadata auto-fill tables, run projection and queries (0152)
+git commit -m "feat(store): metadata auto-fill tables, claim index, run projection and queries (0152)
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 5: `video.Service.ApplyInferredMetadata`, the human-edit clear, `AutoFilled` (PR C5, core)
+## Task 5: `video.Service` seams: narrow hook, best-effort clear, `AutoFilled` (PR C5, core)
 
-**Goal:** An automatic fill has the same hook side effects as a human edit, a human edit clears the marker, and callers can ask which fields are auto-filled.
+**Goal:** An automatic fill can notify search, and only search. A human edit clears the marker without ever failing the edit. Callers can ask which fields are auto-filled.
 
 **Files:**
 - Create: `internal/video/inferred.go`, `internal/video/inferred_test.go`
-- Modify: `internal/video/service.go` (`Repository` interface near L134-174; `UpdateForActor` after the `repo.UpdateVideo` call, L2089-2107)
-- Modify: the video package's in-memory fake repo (find it with `grep -rln 'func (f \*fakeRepo) UpdateVideo' internal/video`)
+- Modify: `internal/video/service.go` (`Service` fields L307-343; `Repository` interface ~L134-174; `UpdateForActor` after the `repo.UpdateVideo` call, L2089-2107)
+- Modify: **both** fakes that implement `video.Repository`: `internal/video/service_test.go` (`newFakeRepo(owner uuid.UUID)`, L107) and `internal/httpapi/videos_test.go:56` (`videoFakeRepo`)
 
 **Acceptance Criteria:**
-- [ ] `ApplyInferredMetadata` drops values that are not in the live vocabulary (`IsCategory`, `IsLanguage`) before writing.
-- [ ] It fires every `onUpdate` hook with `wasFederated=true` only when something was written.
-- [ ] It records what it wrote in `*_applied`.
-- [ ] A guarded write that matched nothing (`pgx.ErrNoRows`) returns an empty result and no error, and fires no hooks.
-- [ ] `UpdateForActor` with `Category` and/or `Language` set calls `ClearInferredApplied` for exactly those fields, including when the value equals the current one.
-- [ ] `AutoFilled` returns `[]string{"category","language"}` subsets, and `nil` when there is no judgment row.
+- [ ] `WithInferredMetadataHook(fn)` registers a `func(ctx, videoID)`, and `NotifyInferredMetadata(ctx, id)` calls every such hook and nothing else. The `onUpdate` hooks do not fire.
+- [ ] `UpdateForActor` with `Category` and/or `Language` set calls `ClearInferredApplied` for exactly those fields, including when the value equals the current one. **A failing clear is logged and the edit still succeeds**, with tags replaced and hooks fired.
+- [ ] `AutoFilled` returns subsets of `[]string{"category","language"}`, and `nil` for no row.
+- [ ] `go test ./internal/httpapi/` still compiles and passes (the second fake).
 
-**Verify:** `go test ./internal/video/ -race -run 'Inferred|AutoFilled|ClearsInferred'` shows every test PASS.
+**Verify:** `go test ./internal/video/ ./internal/httpapi/ -race` → PASS.
 
 **Steps:**
 
-- [ ] **Step 1: Add to the `Repository` interface**
+- [ ] **Step 1: Repository additions** in `internal/video/service.go`:
 
 ```go
-	ApplyInferredMetadata(ctx context.Context, arg sqlcgen.ApplyInferredMetadataParams) (sqlcgen.ApplyInferredMetadataRow, error)
-	SetInferredApplied(ctx context.Context, arg sqlcgen.SetInferredAppliedParams) error
 	ClearInferredApplied(ctx context.Context, arg sqlcgen.ClearInferredAppliedParams) error
 	GetVideoAutoFilled(ctx context.Context, videoID uuid.UUID) (sqlcgen.GetVideoAutoFilledRow, error)
 ```
 
-Add the matching methods to the fake repo. They record calls, and `ApplyInferredMetadata` mirrors the SQL: it writes only empty fields on a public+published fake video and returns `pgx.ErrNoRows` when the guard fails.
+Add them to both fakes. In `videoFakeRepo`, `ClearInferredApplied` returns nil and `GetVideoAutoFilled` returns `sqlcgen.GetVideoAutoFilledRow{}, pgx.ErrNoRows` unless a test seeds it through a new `autoFilled map[uuid.UUID][2]bool` field. The video package's `fakeRepo` gets `clearCalls []sqlcgen.ClearInferredAppliedParams`, `clearErr error`, and the same `autoFilled` map.
 
-- [ ] **Step 2: Failing tests** `internal/video/inferred_test.go`. Build the service the way the package's other tests do, with the fake repo, `NewService(repo, nil, WithUpdateHook(...))`, and a helper that seeds a fake video with a privacy, state, category and language.
+- [ ] **Step 2: Failing tests** `internal/video/inferred_test.go`. Create the owner and the video the way the package's existing `Update` tests do (`grep -n 'func TestUpdate' internal/video/service_test.go`, and reuse their seeding helper).
 
 ```go
 package video
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
 )
 
-func TestApplyInferredMetadataFillsEmptyAndFiresHooks(t *testing.T) {
-	repo := newFakeRepo()
-	var fired []bool
-	svc := NewService(repo, nil, WithUpdateHook(func(_ context.Context, _ uuid.UUID, was bool) { fired = append(fired, was) }))
-	id := repo.seedVideo(t, "public", "published", nil, nil)
-
-	got, err := svc.ApplyInferredMetadata(context.Background(), id, ptr("10"), ptr("en"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Category == nil || *got.Category != "10" || got.Language == nil || *got.Language != "en" {
-		t.Fatalf("applied = %+v", got)
-	}
-	if len(fired) != 1 || !fired[0] {
-		t.Fatalf("hooks = %v, want one call with wasFederated=true", fired)
-	}
-	if a := repo.applied[id]; a.CategoryApplied == nil || *a.CategoryApplied != "10" {
-		t.Fatalf("*_applied not recorded: %+v", a)
-	}
-}
-
-func TestApplyInferredMetadataDropsUnknownVocabulary(t *testing.T) {
-	repo := newFakeRepo()
-	svc := NewService(repo, nil)
-	id := repo.seedVideo(t, "public", "published", nil, nil)
-	got, err := svc.ApplyInferredMetadata(context.Background(), id, ptr("9999"), ptr("xx"))
-	if err != nil || got.Category != nil || got.Language != nil || repo.applyCalls != 0 {
-		t.Fatalf("got=%+v err=%v calls=%d; unknown values must never reach the write", got, err, repo.applyCalls)
-	}
-}
-
-func TestApplyInferredMetadataNoOpWhenNoLongerPublic(t *testing.T) {
-	repo := newFakeRepo()
-	hooks := 0
-	svc := NewService(repo, nil, WithUpdateHook(func(context.Context, uuid.UUID, bool) { hooks++ }))
-	id := repo.seedVideo(t, "unlisted", "published", nil, nil)
-	got, err := svc.ApplyInferredMetadata(context.Background(), id, ptr("10"), nil)
-	if err != nil || got.Category != nil || hooks != 0 {
-		t.Fatalf("got=%+v err=%v hooks=%d, want a silent no-op", got, err, hooks)
+func TestNotifyInferredMetadataFiresOnlyTheNarrowHook(t *testing.T) {
+	owner := uuid.New()
+	repo := newFakeRepo(owner)
+	var narrow, update int
+	svc := NewService(repo, nil,
+		WithInferredMetadataHook(func(context.Context, uuid.UUID) { narrow++ }),
+		WithUpdateHook(func(context.Context, uuid.UUID, bool) { update++ }))
+	svc.NotifyInferredMetadata(context.Background(), uuid.New())
+	if narrow != 1 || update != 0 {
+		t.Fatalf("narrow=%d update=%d; an auto-fill must not fan out to federation", narrow, update)
 	}
 }
 
 func TestUpdateClearsInferredAppliedEvenOnSameValue(t *testing.T) {
-	repo := newFakeRepo()
+	owner := uuid.New()
+	repo := newFakeRepo(owner)
 	svc := NewService(repo, nil)
-	id := repo.seedVideo(t, "public", "published", ptr("10"), ptr("en"))
-	owner := repo.videos[id].OwnerID
-	if _, err := svc.Update(context.Background(), owner, id, UpdateInput{Category: ptr("10")}); err != nil {
+	id := seedPublicVideo(t, repo, owner) // the existing seeding helper, renamed here for clarity
+	ten := "10"
+	if _, err := svc.Update(context.Background(), owner, id, UpdateInput{Category: &ten}); err != nil {
 		t.Fatal(err)
 	}
-	c := repo.lastClear
-	if c == nil || c.VideoID != id || !c.Category || c.Language {
-		t.Fatalf("clear = %+v, want category only", c)
+	if len(repo.clearCalls) != 1 || repo.clearCalls[0].VideoID != id || !repo.clearCalls[0].Category || repo.clearCalls[0].Language {
+		t.Fatalf("clear calls = %+v, want category only", repo.clearCalls)
+	}
+}
+
+func TestUpdateSurvivesAFailingClear(t *testing.T) {
+	owner := uuid.New()
+	repo := newFakeRepo(owner)
+	repo.clearErr = errors.New("db blip")
+	hooks := 0
+	svc := NewService(repo, nil, WithUpdateHook(func(context.Context, uuid.UUID, bool) { hooks++ }))
+	id := seedPublicVideo(t, repo, owner)
+	en := "en"
+	if _, err := svc.Update(context.Background(), owner, id, UpdateInput{Language: &en}); err != nil {
+		t.Fatalf("a failed marker clear failed a saved edit: %v", err)
+	}
+	if hooks != 1 {
+		t.Fatalf("hooks = %d; search/federation must still hear about the edit", hooks)
 	}
 }
 
 func TestUpdateWithoutTaxonomyDoesNotClear(t *testing.T) {
-	repo := newFakeRepo()
+	owner := uuid.New()
+	repo := newFakeRepo(owner)
 	svc := NewService(repo, nil)
-	id := repo.seedVideo(t, "public", "published", nil, nil)
-	if _, err := svc.Update(context.Background(), repo.videos[id].OwnerID, id, UpdateInput{Title: ptr("t")}); err != nil {
+	id := seedPublicVideo(t, repo, owner)
+	title := "t"
+	if _, err := svc.Update(context.Background(), owner, id, UpdateInput{Title: &title}); err != nil {
 		t.Fatal(err)
 	}
-	if repo.lastClear != nil {
+	if len(repo.clearCalls) != 0 {
 		t.Fatal("a title-only edit cleared the auto-fill marker")
 	}
 }
 
 func TestAutoFilled(t *testing.T) {
-	repo := newFakeRepo()
+	owner := uuid.New()
+	repo := newFakeRepo(owner)
 	svc := NewService(repo, nil)
-	id := repo.seedVideo(t, "public", "published", nil, nil)
-	if got, _ := svc.AutoFilled(context.Background(), id); got != nil {
-		t.Fatalf("no row: got %v, want nil", got)
+	id := uuid.New()
+	if got, err := svc.AutoFilled(context.Background(), id); got != nil || err != nil {
+		t.Fatalf("no row: got %v err %v, want nil nil", got, err)
 	}
 	repo.autoFilled[id] = [2]bool{false, true}
 	if got, _ := svc.AutoFilled(context.Background(), id); len(got) != 1 || got[0] != "language" {
 		t.Fatalf("got %v, want [language]", got)
 	}
 }
-
-func ptr(s string) *string { return &s }
 ```
 
-If the package already has a `ptr`/`strPtr` helper, use it and drop the duplicate. The fake's fields (`applied`, `applyCalls`, `lastClear`, `autoFilled`, `seedVideo`) are additions to the existing fake. Categories "10" and language "en" are in the built-in lists (`internal/video/config.go:19-38`, `:55-86`).
+If the package's seeding helper has another name, use it and drop `seedPublicVideo`.
 
-- [ ] **Step 3: Run them and watch them fail**
+- [ ] **Step 3: Run them and watch them fail.** `go test ./internal/video/ -run 'Inferred|AutoFilled|Clear'`. Expected: FAIL with `undefined: WithInferredMetadataHook`.
 
-Run: `go test ./internal/video/ -run 'Inferred|AutoFilled|ClearsInferred'`
-Expected: FAIL with `svc.ApplyInferredMetadata undefined`.
-
-- [ ] **Step 4: Write `internal/video/inferred.go`**
+- [ ] **Step 4: Implement.** Add `onInferred []func(context.Context, uuid.UUID)` to the `Service` struct. Then `internal/video/inferred.go`:
 
 ```go
 package video
@@ -1656,56 +1735,24 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-
-	"github.com/vidra/vidra-core/internal/store/sqlcgen"
 )
 
-// InferredApplied reports which values an automatic fill actually wrote.
-type InferredApplied struct {
-	Category *string
-	Language *string
+// WithInferredMetadataHook registers a consumer of machine-filled category/
+// language (the Jev auto-fill). Deliberately NOT the onUpdate seam: those
+// hooks include the federation Update, which fans out one delivery per follower
+// inbox, and the federated object carries neither field. A backfill must reach
+// only what indexes these fields — search.
+func WithInferredMetadataHook(fn func(context.Context, uuid.UUID)) Option {
+	return func(s *Service) { s.onInferred = append(s.onInferred, fn) }
 }
 
-// ApplyInferredMetadata writes machine-chosen category/language into EMPTY
-// fields of a video that is still public and published, then fires the same
-// onUpdate hooks a human edit fires (search upsert, federation Update, IPFS
-// sync). It never overwrites a value, validates against the LIVE vocabulary
-// (a custom category deleted since the judgment is dropped), and does not bump
-// updated_at: a backfill must not look like creator activity.
-func (s *Service) ApplyInferredMetadata(ctx context.Context, id uuid.UUID, category, language *string) (InferredApplied, error) {
-	if category != nil && !IsCategory(*category) {
-		category = nil
+// NotifyInferredMetadata tells the inferred-metadata consumers that videoID's
+// category/language were filled automatically. The write itself is done by
+// internal/metadatafill in one statement with its judgment record.
+func (s *Service) NotifyInferredMetadata(ctx context.Context, videoID uuid.UUID) {
+	for _, fn := range s.onInferred {
+		fn(ctx, videoID)
 	}
-	if language != nil && !IsLanguage(*language) {
-		language = nil
-	}
-	if category == nil && language == nil {
-		return InferredApplied{}, nil
-	}
-	row, err := s.repo.ApplyInferredMetadata(ctx, sqlcgen.ApplyInferredMetadataParams{ID: id, Category: category, Language: language})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return InferredApplied{}, nil // no longer public+published, or a human filled both first
-	}
-	if err != nil {
-		return InferredApplied{}, err
-	}
-	var out InferredApplied
-	if row.CategoryWritten {
-		out.Category = category
-	}
-	if row.LanguageWritten {
-		out.Language = language
-	}
-	if err := s.repo.SetInferredApplied(ctx, sqlcgen.SetInferredAppliedParams{
-		VideoID: id, CategoryApplied: out.Category, LanguageApplied: out.Language,
-	}); err != nil {
-		return out, err
-	}
-	// The guard required public+published, so peers already hold this video.
-	for _, hook := range s.onUpdate {
-		hook(ctx, id, true)
-	}
-	return out, nil
 }
 
 // AutoFilled lists which of "category"/"language" currently hold the value
@@ -1729,38 +1776,130 @@ func (s *Service) AutoFilled(ctx context.Context, id uuid.UUID) ([]string, error
 }
 ```
 
-In `UpdateForActor`, directly after the `if err != nil { return sqlcgen.Video{}, err }` that follows `s.repo.UpdateVideo(...)`, insert:
+If `internal/video` compares no-rows through its own sentinel (`grep -n 'ErrNoRows' internal/video/*.go`), use that. In `UpdateForActor`, directly after the `if err != nil { return sqlcgen.Video{}, err }` that follows `s.repo.UpdateVideo(...)`:
 
 ```go
 	// A human set the field: the Studio "set automatically" marker must never
 	// claim their value, including when they re-selected the machine's pick.
+	// Best-effort, like every other side effect here: the edit has already
+	// committed, and failing it now would skip the tag replace and every hook.
 	if in.Category != nil || in.Language != nil {
 		if err := s.repo.ClearInferredApplied(ctx, sqlcgen.ClearInferredAppliedParams{
 			VideoID: id, Category: in.Category != nil, Language: in.Language != nil,
 		}); err != nil {
-			return sqlcgen.Video{}, err
+			s.logger.Warn("clear inferred-metadata marker failed", "video_id", id, "error", err)
 		}
 	}
 ```
 
-If the video package imports a different `pgx` major or wraps no-rows in its own sentinel (`grep -n 'ErrNoRows' internal/video/service.go`), use that.
+Use the service's existing logger field (`grep -n 'logger' internal/video/service.go`). If it has none, use `slog.Default()`, which is what the other best-effort paths in the file log to.
 
-- [ ] **Step 5: Run them.** `go test ./internal/video/ -race` passes, and so do `make ci` and the §0.4 integration run.
+- [ ] **Step 5: Run.** `go test ./internal/video/ ./internal/httpapi/ -race` → PASS. Then `make ci`.
 
-- [ ] **Step 6: Record decision §0.2.1.** Run `grep -rn 'ORDER BY[^;]*updated_at' internal/store/queries/` and paste the result and one sentence into the PR body.
+- [ ] **Step 6: Record proposal §0.2.1.** Paste the output of `grep -rn 'ORDER BY[^;]*updated_at' internal/store/queries/` and one sentence into the PR body.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add internal/video
-git commit -m "feat(video): ApplyInferredMetadata fires update hooks; human edits clear the marker
+git add internal/video internal/httpapi/videos_test.go
+git commit -m "feat(video): narrow inferred-metadata hook; human edits clear the marker best-effort
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 6: `metadatafill` request builder and decision (PR C6, core)
+## Task 6: PeerTube re-sync keeps a category or language the source is silent about (PR C6, core)
+
+**Goal:** A re-run sync no longer erases a category or language when the PeerTube source has none. Without this fix, every re-run on beta (a PeerTube import) wipes the auto-fills, and their judgment rows then block any re-judge.
+
+**Files:**
+- Modify: `internal/peertubeimport/resync.go` (`resyncVideo` struct L238-253; the load at L325-336; the compare and write at L528-575)
+- Test: `internal/peertubeimport/resync_test.go` (unit), `internal/peertubeimport/importer_integration_test.go` (beside the existing re-sync `originally_published_at` keep test; find it with `grep -n 'origPub\|OriginallyPublishedAt' internal/peertubeimport/importer_integration_test.go`)
+
+**Acceptance Criteria:**
+- [ ] A source video with no category (`v.Category == nil`) or no language (`nil` or `""`) leaves the Vidra value in place. It also does not count as a change: the digest compares against the kept value.
+- [ ] A source that *does* carry a category or language still overwrites, which is today's behaviour.
+- [ ] An existing re-sync integration test still passes; a new one proves the keep.
+
+**Verify:** `go test ./internal/peertubeimport/ -race -run 'Keep|Resync|Digest'`, then the §0.4 integration command with `-run Resync`.
+
+**Steps:**
+
+- [ ] **Step 1: Failing unit test** in `resync_test.go`:
+
+```go
+func TestKeepWhenSourceSilent(t *testing.T) {
+	s := func(v string) *string { return &v }
+	cases := []struct {
+		name     string
+		src      *string
+		cur      string
+		want     *string
+	}{
+		{"silent source keeps ours", nil, "10", s("10")},
+		{"empty source keeps ours", s(""), "en", s("en")},
+		{"source value wins", s("3"), "10", s("3")},
+		{"both empty stays empty", nil, "", nil},
+	}
+	for _, tc := range cases {
+		got := keepWhenSourceSilent(tc.src, tc.cur)
+		if (got == nil) != (tc.want == nil) || (got != nil && *got != *tc.want) {
+			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+```
+
+- [ ] **Step 2: Run it and watch it fail.** Expected: `undefined: keepWhenSourceSilent`.
+
+- [ ] **Step 3: Implement.**
+  - Add `category, language string` to `resyncVideo`, with this comment appended to the struct's existing doc: "category and language join them: a source with none is not saying 'clear it', and Vidra may have filled them itself (metadata auto-fill)". In the load loop (L329-333), set `category: v.Category, language: v.Language`. The query already `COALESCE`s both to `''`.
+  - Then add to `resync.go`:
+
+```go
+// keepWhenSourceSilent returns the source's value, or — when the source has
+// none — the value already standing here. The same rule as duration and
+// originally_published_at: silence is not an instruction to clear.
+func keepWhenSourceSilent(src *string, cur string) *string {
+	if src != nil && *src != "" {
+		return src
+	}
+	if cur == "" {
+		return nil
+	}
+	return &cur
+}
+```
+
+  - Before `desired := videoDigest(...)` (L549):
+
+```go
+	category := keepWhenSourceSilent(intPtrToText(v.Category), cur.category)
+	language := keepWhenSourceSilent(v.Language, cur.language)
+```
+
+  - In the `videoDigest(...)` call, replace `pgconv.Deref(intPtrToText(v.Category)), pgconv.Deref(v.Language)` with `pgconv.Deref(category), pgconv.Deref(language)`. In `ImportUpdateVideoParams`, set `Category: category, Language: language`.
+
+- [ ] **Step 4: Integration test.** Beside the existing re-sync keep test for the original-publication date, add `TestResyncKeepsCategoryAndLanguageWhenSourceHasNone`. It seeds a source video with a NULL category and language and imports it. It then sets the Vidra video's category to `"10"` and its language to `"en"` directly (standing in for an auto-fill), re-runs the sync, and asserts both values survive and the video counts as skipped, with no `updated_at` bump. Copy the existing test's setup exactly and change only these assertions.
+
+- [ ] **Step 5: Run.** The Verify commands pass. Then `make ci`.
+
+- [ ] **Step 6: Commit.** The PR body states the behaviour change in one line (§0.2.7).
+
+```bash
+git add internal/peertubeimport
+git commit -m "fix(peertubeimport): re-sync keeps a category/language the source is silent about
+
+Same rule as duration and originally_published_at. Without it every re-run
+erased values Vidra set itself (and would erase metadata auto-fills).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 7: `metadatafill` request builder and decision (PR C7, core)
 
 **Goal:** Pure functions that turn a video's public fields and the live vocabulary into one Jev request, and turn the answer into raw picks plus the values that clear the bars.
 
@@ -2023,8 +2162,8 @@ type Decision struct {
 	Category, Language         *string // non-nil only when at/over the bar
 }
 
-// Decide reads an answer. Vocabulary validation happens once, at apply time
-// (video.Service.ApplyInferredMetadata), against the live list.
+// Decide reads an answer. Vocabulary validation happens at write time, in the
+// worker (Task 8), against the live list.
 func Decide(res judgment.Result, req Request) Decision {
 	d := Decision{Model: res.Model}
 	if a, ok := res.Answers[QCategory]; ok {
@@ -2067,27 +2206,173 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-## Task 7: `metadatafill.Service.Tick` (PR C7, core)
+## Task 8: `judgment.Account` pause and `metadatafill.Service.Tick` (PR C8, core)
 
-**Goal:** One tick claims up to 25 videos, judges them, records raw answers, applies what clears the bars, backs off on transient failures, pauses the whole worker on `auth`/`rate_limited`, and maintains `enabled_since` and runs.
+**Goal:** One leader-gated tick claims up to 25 videos, judges them, and records-and-applies each answer in one statement. It notifies search, pauses the account on account-level failures without spending attempts, and backs off only on per-video failures. It maintains `enabled_since` and runs from global facts only.
 
 **Files:**
-- Create: `internal/metadatafill/service.go`, `internal/metadatafill/service_test.go`
+- Create: `internal/judgment/account.go`, `internal/judgment/account_test.go`
+- Create: `internal/metadatafill/service.go`, `internal/metadatafill/service_test.go`, `internal/metadatafill/fakes_test.go`
 
 **Acceptance Criteria:**
-- [ ] Inactive (toggle off or no key): no claims, and `enabled_since` is cleared.
-- [ ] Active: `enabled_since` is stamped on first sight, new claims pass `since=enabled_since`, and a running run passes `since=NULL`.
-- [ ] A confident answer records the raw judgment, then calls the applier with the id/code. An unconfident answer records and does not apply.
-- [ ] `unavailable`/`bad_response`/`invalid_request` records a failure with backoff `1m·2^(attempts-1)` capped at 1h; `MaxAttempts`=5 makes it `failed`.
-- [ ] `auth` pauses 15 minutes and `rate_limited` pauses 2 minutes. Every claim still held in the tick is released without spending an attempt, and later ticks do nothing until `paused_until`.
-- [ ] A video that is no longer eligible, or no longer exists, has its claim deleted.
-- [ ] A running run with nothing claimed is finished as `done`, and a run's counts are incremented per tick.
+- [ ] The toggle off (a global DB setting) clears `enabled_since` and stops a running run. A missing key only idles: it never clears the cutoff, because "no key in this process" is not a global fact.
+- [ ] Toggle on with a key: `enabled_since` is stamped once, and new claims pass it as `since`. A running run passes `since = NULL`.
+- [ ] A run finishes `done` only when `CountUnjudgedEligibleVideos` and `CountOpenMetadataJudgments` are both 0. An empty claim alone never finishes it.
+- [ ] `auth` pauses the account for 15 minutes; `rate_limited` and `unavailable` pause it for 2 minutes. Every claim still held is released without spending an attempt, and nothing is sent while paused. An expired pause is cleared.
+- [ ] `bad_response` and `invalid_request` record a failure with backoff of exactly 1, 2, 4 and 8 minutes, capped at 1 h; the 5th failure is `failed`.
+- [ ] A confident answer goes through `RecordAndApplyMetadataJudgment` with the id and code, and `NotifyInferredMetadata` fires only when a field was written. An unconfident answer is recorded with nil `category`/`language`.
+- [ ] Vocabulary is validated against the live lists (`video.IsCategory`, `video.IsLanguage`) before the write.
+- [ ] A database error mid-batch releases the remaining claims and returns the error; run counts for videos already judged are still added.
 
-**Verify:** `go test ./internal/metadatafill/ -race -v` → PASS.
+**Verify:** `go test ./internal/judgment/ ./internal/metadatafill/ -race -v` → PASS.
 
 **Steps:**
 
-- [ ] **Step 1: Failing tests** `internal/metadatafill/service_test.go`, using an in-memory `fakeRepo` that implements `Repository` below. It mirrors the SQL semantics: a claim inserts `running` rows, `ClaimDue` returns due rows, and `ReleaseMetadataJudgment` decrements attempts. `fakeJudge` returns scripted results or errors, and `fakeApplier` records calls.
+- [ ] **Step 1: Failing test** `internal/judgment/account_test.go`:
+
+```go
+package judgment
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/vidra/vidra-core/internal/store/sqlcgen"
+)
+
+type fakeAccountRepo struct{ until pgtype.Timestamptz; code *string }
+
+func (f *fakeAccountRepo) GetTypeSafePause(context.Context) (sqlcgen.GetTypeSafePauseRow, error) {
+	return sqlcgen.GetTypeSafePauseRow{PausedUntil: f.until, PausedCode: f.code}, nil
+}
+func (f *fakeAccountRepo) SetTypeSafePause(_ context.Context, a sqlcgen.SetTypeSafePauseParams) error {
+	f.until, f.code = a.PausedUntil, a.PausedCode
+	return nil
+}
+
+func TestAccountPauseLifecycle(t *testing.T) {
+	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	repo := &fakeAccountRepo{}
+	acct := NewAccount(repo, func() time.Time { return now })
+	ctx := context.Background()
+	if _, paused, err := acct.Paused(ctx); paused || err != nil {
+		t.Fatal("fresh account is paused")
+	}
+	if err := acct.Pause(ctx, CodeAuth); err != nil {
+		t.Fatal(err)
+	}
+	if code, paused, _ := acct.Paused(ctx); !paused || code != CodeAuth || !repo.until.Time.Equal(now.Add(AuthPause)) {
+		t.Fatalf("pause = %q/%v until %v", code, paused, repo.until.Time)
+	}
+	now = now.Add(AuthPause)
+	if _, paused, _ := acct.Paused(ctx); paused {
+		t.Fatal("an expired pause still pauses")
+	}
+	if repo.code != nil {
+		t.Fatal("an expired pause was not cleared")
+	}
+	_ = acct.Pause(ctx, CodeUnavailable)
+	if !repo.until.Time.Equal(now.Add(ShortPause)) {
+		t.Fatalf("unavailable pause until %v, want %v", repo.until.Time, now.Add(ShortPause))
+	}
+	_ = acct.ClearPause(ctx)
+	if _, paused, _ := acct.Paused(ctx); paused {
+		t.Fatal("ClearPause did not clear")
+	}
+}
+```
+
+- [ ] **Step 2: Implement `internal/judgment/account.go`:**
+
+```go
+package judgment
+
+import (
+	"context"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/vidra/vidra-core/internal/store/sqlcgen"
+)
+
+const (
+	// AuthPause: a rejected key will not fix itself within seconds.
+	AuthPause = 15 * time.Minute
+	// ShortPause: rate limits and outages usually clear within minutes.
+	ShortPause = 2 * time.Minute
+)
+
+// AccountRepository is typesafe_state access. *sqlcgen.Queries satisfies it.
+type AccountRepository interface {
+	GetTypeSafePause(ctx context.Context) (sqlcgen.GetTypeSafePauseRow, error)
+	SetTypeSafePause(ctx context.Context, arg sqlcgen.SetTypeSafePauseParams) error
+}
+
+// Account is the TypeSafe account state every Jev slice shares: one key, one
+// rate limit, one outage. Task 15 adds the sealed key to it.
+type Account struct {
+	repo AccountRepository
+	now  func() time.Time
+}
+
+func NewAccount(repo AccountRepository, now func() time.Time) *Account {
+	return &Account{repo: repo, now: now}
+}
+
+// Paused reports an active pause, clearing one that has expired.
+func (a *Account) Paused(ctx context.Context) (Code, bool, error) {
+	row, err := a.repo.GetTypeSafePause(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	if !row.PausedUntil.Valid {
+		return "", false, nil
+	}
+	if a.now().Before(row.PausedUntil.Time) {
+		code := CodeUnavailable
+		if row.PausedCode != nil {
+			code = Code(*row.PausedCode)
+		}
+		return code, true, nil
+	}
+	return "", false, a.ClearPause(ctx)
+}
+
+// Pause stops every caller of this account until the pause expires.
+func (a *Account) Pause(ctx context.Context, code Code) error {
+	d := ShortPause
+	if code == CodeAuth {
+		d = AuthPause
+	}
+	c := string(code)
+	return a.repo.SetTypeSafePause(ctx, sqlcgen.SetTypeSafePauseParams{
+		PausedUntil: pgtype.Timestamptz{Time: a.now().Add(d), Valid: true},
+		PausedCode:  &c,
+	})
+}
+
+// ClearPause ends a pause (an expired one, or after a successful test).
+func (a *Account) ClearPause(ctx context.Context) error {
+	return a.repo.SetTypeSafePause(ctx, sqlcgen.SetTypeSafePauseParams{})
+}
+
+// PausesAccount reports whether a code is about the account, not the video.
+func PausesAccount(c Code) bool {
+	return c == CodeAuth || c == CodeRateLimited || c == CodeUnavailable
+}
+```
+
+Run `go test ./internal/judgment/ -race` → PASS.
+
+- [ ] **Step 3: Failing worker tests** `internal/metadatafill/service_test.go`. The fakes go in `fakes_test.go` (about 180 lines), and all use the service clock:
+  - `fakeRepo` implements `Repository` from Step 4 and mirrors the SQL semantics. It holds eligible videos, judgment rows with state, attempts, next attempt, picks and applied values, `enabledSince *time.Time`, and the run. `ClaimNew` inserts `running` rows, honours `Since`, and records `lastSince`. `ClaimDue` returns rows due at the fake clock. `Release` decrements attempts. `RecordAndApply` fills empty fields and returns the written flags. `CountUnjudgedEligibleVideos` and `CountOpenMetadataJudgments` are computed from its state, and `failNext error` injects one database error.
+  - `fakeJudge` has `configured bool` and `next []any` (each a `judgment.Result` or an `error`), and it counts `calls`.
+  - `fakeAccount` wraps a real `judgment.Account` over an in-memory `AccountRepository`.
+  - `fakeNotifier` records ids.
 
 ```go
 package metadatafill
@@ -2103,14 +2388,28 @@ import (
 	"github.com/vidra/vidra-core/internal/video"
 )
 
-func fixture(t *testing.T) (*Service, *fakeRepo, *fakeJudge, *fakeApplier, *time.Time) {
+type fx struct {
+	svc      *Service
+	repo     *fakeRepo
+	judge    *fakeJudge
+	notify   *fakeNotifier
+	now      *time.Time
+	enabled  *bool
+}
+
+func fixture(t *testing.T) fx {
 	t.Helper()
 	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
-	repo, judge, app := newFakeRepo(), &fakeJudge{configured: true}, &fakeApplier{}
-	svc := New(repo, judge, app, func() bool { return true },
-		WithClock(func() time.Time { return now }),
+	enabled := true
+	clock := func() time.Time { return now }
+	repo := newFakeRepo(clock)
+	judge := &fakeJudge{configured: true}
+	notify := &fakeNotifier{}
+	svc := New(repo, judge, judgment.NewAccount(newFakeAccountRepo(), clock), notify,
+		func() bool { return enabled },
+		WithClock(clock),
 		WithCategories(func() []video.ConfigOption { return video.Categories }))
-	return svc, repo, judge, app, &now
+	return fx{svc, repo, judge, notify, &now, &enabled}
 }
 
 func confident() judgment.Result {
@@ -2120,128 +2419,171 @@ func confident() judgment.Result {
 	}}
 }
 
-func TestTickIdlesAndClearsWhenInactive(t *testing.T) {
-	svc, repo, judge, _, _ := fixture(t)
-	judge.configured = false
-	repo.enabledSince = ptrTime(time.Unix(1, 0))
-	repo.addEligible(uuid.New())
-	n, err := svc.Tick(context.Background())
-	if err != nil || n != 0 || repo.claims != 0 || repo.enabledSince != nil {
-		t.Fatalf("n=%d err=%v claims=%d since=%v", n, err, repo.claims, repo.enabledSince)
+func TestToggleOffClearsCutoffAndStopsRun(t *testing.T) {
+	f := fixture(t)
+	*f.enabled = false
+	f.repo.enabledSince = &time.Time{}
+	f.repo.run = &fakeRun{id: uuid.New(), state: "running"}
+	if _, err := f.svc.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if f.repo.enabledSince != nil || f.repo.run.state != "stopped" || f.repo.claims != 0 {
+		t.Fatalf("since=%v run=%q claims=%d", f.repo.enabledSince, f.repo.run.state, f.repo.claims)
 	}
 }
 
-func TestTickStampsEnabledSinceAndPassesIt(t *testing.T) {
-	svc, repo, judge, _, now := fixture(t)
-	judge.next = []any{confident()}
-	repo.addEligible(uuid.New())
-	_, _ = svc.Tick(context.Background())
-	if repo.enabledSince == nil || !repo.enabledSince.Equal(*now) {
-		t.Fatalf("enabled_since = %v, want %v", repo.enabledSince, *now)
+func TestMissingKeyIdlesButKeepsCutoff(t *testing.T) {
+	f := fixture(t)
+	f.judge.configured = false
+	stamp := f.now.Add(-time.Hour)
+	f.repo.enabledSince = &stamp
+	_, _ = f.svc.Tick(context.Background())
+	if f.repo.enabledSince == nil || f.repo.claims != 0 {
+		t.Fatal("a process without a key must idle, never clear the global cutoff")
 	}
-	if repo.lastSince == nil || !repo.lastSince.Equal(*now) {
+}
+
+func TestStampsEnabledSinceAndCutsOff(t *testing.T) {
+	f := fixture(t)
+	f.repo.addEligible(uuid.New(), f.now.Add(time.Minute))
+	f.judge.next = []any{confident()}
+	_, _ = f.svc.Tick(context.Background())
+	if f.repo.enabledSince == nil || !f.repo.enabledSince.Equal(*f.now) {
+		t.Fatalf("enabled_since = %v, want %v", f.repo.enabledSince, *f.now)
+	}
+	if f.repo.lastSince == nil || !f.repo.lastSince.Equal(*f.now) {
 		t.Fatal("new claims must be cut off at enabled_since")
 	}
 }
 
-func TestTickRunLiftsCutoffAndFinishes(t *testing.T) {
-	svc, repo, judge, _, _ := fixture(t)
-	repo.run = &fakeRun{id: uuid.New()}
-	repo.addEligible(uuid.New())
-	judge.next = []any{confident()}
-	_, _ = svc.Tick(context.Background())
-	if repo.lastSince != nil {
-		t.Fatal("a running run must lift the enabled_since cutoff")
+func TestRunLiftsCutoffAndFinishesOnlyWhenNothingRemains(t *testing.T) {
+	f := fixture(t)
+	f.repo.run = &fakeRun{id: uuid.New(), state: "running"}
+	f.repo.addEligible(uuid.New(), f.now.Add(-48*time.Hour))
+	f.judge.next = []any{confident()}
+	_, _ = f.svc.Tick(context.Background())
+	if f.repo.lastSince != nil {
+		t.Fatal("a running run must lift the cutoff")
 	}
-	if repo.run.judged != 1 || repo.run.filled != 1 {
-		t.Fatalf("run counts = %d/%d", repo.run.judged, repo.run.filled)
+	if f.repo.run.judged != 1 || f.repo.run.filled != 1 {
+		t.Fatalf("run counts = %d/%d", f.repo.run.judged, f.repo.run.filled)
 	}
-	_, _ = svc.Tick(context.Background())
-	if repo.run.state != "done" {
-		t.Fatalf("run state = %q, want done once nothing is left", repo.run.state)
+	// An empty claim while a retry is still pending must NOT finish the run.
+	f.repo.rows[uuid.New()] = &fakeRow{state: "pending", nextAttempt: f.now.Add(time.Hour)}
+	_, _ = f.svc.Tick(context.Background())
+	if f.repo.run.state != "running" {
+		t.Fatal("run finished while a judgment was still pending")
+	}
+	for id := range f.repo.rows {
+		f.repo.rows[id].state = "done"
+	}
+	_, _ = f.svc.Tick(context.Background())
+	if f.repo.run.state != "done" {
+		t.Fatalf("run = %q, want done once nothing remains", f.repo.run.state)
 	}
 }
 
-func TestTickAppliesOnlyConfidentAnswers(t *testing.T) {
-	svc, repo, judge, app, _ := fixture(t)
+func TestAppliesOnlyConfidentAndNotifies(t *testing.T) {
+	f := fixture(t)
 	id := uuid.New()
-	repo.addEligible(id)
+	f.repo.addEligible(id, *f.now)
 	res := confident()
 	res.Answers[QLanguage] = judgment.Answer{Pick: "en", Probabilities: map[string]float64{"en": 0.5}}
-	judge.next = []any{res}
-	_, _ = svc.Tick(context.Background())
-	if repo.rows[id].state != "done" || repo.rows[id].languagePick == nil {
-		t.Fatalf("raw judgment not recorded: %+v", repo.rows[id])
+	f.judge.next = []any{res}
+	_, _ = f.svc.Tick(context.Background())
+	r := f.repo.rows[id]
+	if r.state != "done" || r.languagePick == nil || r.languageApplied != nil || r.categoryApplied == nil {
+		t.Fatalf("row = %+v, want category applied, language recorded only", r)
 	}
-	if len(app.calls) != 1 || app.calls[0].category == nil || app.calls[0].language != nil {
-		t.Fatalf("apply = %+v, want category only", app.calls)
+	if len(f.notify.ids) != 1 || f.notify.ids[0] != id {
+		t.Fatalf("notified %v", f.notify.ids)
 	}
 }
 
-func TestTickBacksOffThenFails(t *testing.T) {
-	svc, repo, judge, _, now := fixture(t)
+func TestBackoffScheduleIsExact(t *testing.T) {
+	f := fixture(t)
 	id := uuid.New()
-	repo.addEligible(id)
-	for attempt := 1; attempt <= MaxAttempts; attempt++ {
-		judge.next = []any{&judgment.Error{Code: judgment.CodeUnavailable}}
-		_, _ = svc.Tick(context.Background())
-		r := repo.rows[id]
-		if attempt < MaxAttempts {
-			want := now.Add(backoff(int32(attempt)))
-			if r.state != "pending" || !r.nextAttempt.Equal(want) || r.code != "unavailable" {
-				t.Fatalf("attempt %d: %+v, want pending until %v", attempt, r, want)
+	f.repo.addEligible(id, *f.now)
+	want := []time.Duration{time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute}
+	for i, d := range want {
+		f.judge.next = []any{&judgment.Error{Code: judgment.CodeBadResponse}}
+		_, _ = f.svc.Tick(context.Background())
+		r := f.repo.rows[id]
+		if r.state != "pending" || !r.nextAttempt.Equal(f.now.Add(d)) {
+			t.Fatalf("attempt %d: %+v, want pending until +%v", i+1, r, d)
+		}
+		*f.now = r.nextAttempt
+	}
+	f.judge.next = []any{&judgment.Error{Code: judgment.CodeBadResponse}}
+	_, _ = f.svc.Tick(context.Background())
+	if f.repo.rows[id].state != "failed" {
+		t.Fatalf("after %d attempts state = %q, want failed", MaxAttempts, f.repo.rows[id].state)
+	}
+	if backoff(20) != time.Hour {
+		t.Fatalf("backoff cap = %v, want 1h", backoff(20))
+	}
+}
+
+func TestOutagePausesWithoutSpendingAttempts(t *testing.T) {
+	for _, code := range []judgment.Code{judgment.CodeAuth, judgment.CodeRateLimited, judgment.CodeUnavailable} {
+		t.Run(string(code), func(t *testing.T) {
+			f := fixture(t)
+			a, b := uuid.New(), uuid.New()
+			f.repo.addEligible(a, *f.now)
+			f.repo.addEligible(b, *f.now)
+			f.judge.next = []any{&judgment.Error{Code: code}}
+			_, _ = f.svc.Tick(context.Background())
+			for _, id := range []uuid.UUID{a, b} {
+				if r := f.repo.rows[id]; r.state != "pending" || r.attempts != 0 {
+					t.Fatalf("%s = %+v, want released with attempts=0", id, r)
+				}
 			}
-			*now = r.nextAttempt
-		} else if r.state != "failed" {
-			t.Fatalf("after %d attempts state = %q, want failed", attempt, r.state)
-		}
+			f.judge.calls = 0
+			_, _ = f.svc.Tick(context.Background())
+			if f.judge.calls != 0 {
+				t.Fatal("a paused account called Jev")
+			}
+		})
 	}
 }
 
-func TestTickPausesOnAuthWithoutSpendingAttempts(t *testing.T) {
-	svc, repo, judge, _, now := fixture(t)
+func TestDatabaseErrorReleasesTheRest(t *testing.T) {
+	f := fixture(t)
+	f.repo.run = &fakeRun{id: uuid.New(), state: "running"}
 	a, b := uuid.New(), uuid.New()
-	repo.addEligible(a)
-	repo.addEligible(b)
-	judge.next = []any{&judgment.Error{Code: judgment.CodeAuth}}
-	_, _ = svc.Tick(context.Background())
-	if repo.pausedCode != "auth" || !repo.pausedUntil.Equal(now.Add(authPause)) {
-		t.Fatalf("pause = %q until %v", repo.pausedCode, repo.pausedUntil)
+	f.repo.addEligible(a, *f.now)
+	f.repo.addEligible(b, *f.now)
+	f.judge.next = []any{confident(), confident()}
+	f.repo.failRecordAfter = 1 // the 2nd RecordAndApply errors
+	if _, err := f.svc.Tick(context.Background()); err == nil {
+		t.Fatal("the database error was swallowed")
 	}
-	for _, id := range []uuid.UUID{a, b} {
-		if r := repo.rows[id]; r.state != "pending" || r.attempts != 0 {
-			t.Fatalf("%s = %+v, want released with attempts=0", id, r)
+	if f.repo.run.judged != 1 {
+		t.Fatalf("run judged = %d, want the 1 already done counted", f.repo.run.judged)
+	}
+	for _, r := range f.repo.rows {
+		if r.state == "running" {
+			t.Fatalf("a claim was stranded running: %+v", r)
 		}
-	}
-	judge.calls = 0
-	_, _ = svc.Tick(context.Background())
-	if judge.calls != 0 {
-		t.Fatal("a paused worker called Jev")
 	}
 }
 
-func TestTickDropsVideosNoLongerEligible(t *testing.T) {
-	svc, repo, judge, _, _ := fixture(t)
+func TestIneligibleVideoIsForgotten(t *testing.T) {
+	f := fixture(t)
 	id := uuid.New()
-	repo.addEligible(id)
-	repo.makeIneligibleAfterClaim[id] = true
-	_, _ = svc.Tick(context.Background())
-	if _, ok := repo.rows[id]; ok || judge.calls != 0 {
+	f.repo.addEligible(id, *f.now)
+	f.repo.makeIneligibleAfterClaim[id] = true
+	_, _ = f.svc.Tick(context.Background())
+	if _, ok := f.repo.rows[id]; ok || f.judge.calls != 0 {
 		t.Fatal("an ineligible video must be forgotten, not judged")
 	}
 }
 
-func ptrTime(t time.Time) *time.Time { return &t }
 ```
 
-Write `fakeRepo`, `fakeRun`, `fakeJudge` (`next []any` popped per `Ask`: a `judgment.Result` or an `error`; `calls` counter; `configured`) and `fakeApplier` (`calls []struct{ id uuid.UUID; category, language *string }`, returning the inputs as `video.InferredApplied`) in `service_fakes_test.go`. They are about 150 lines and implement exactly the `Repository` interface from Step 3.
+- [ ] **Step 4: Run them and watch them fail.** `go test ./internal/metadatafill/`. Expected: FAIL with `undefined: New`.
 
-- [ ] **Step 2: Run them and watch them fail**
-
-Run: `go test ./internal/metadatafill/`
-Expected: FAIL with `undefined: New`.
-
-- [ ] **Step 3: Write `internal/metadatafill/service.go`**
+- [ ] **Step 5: Implement `internal/metadatafill/service.go`**
 
 ```go
 package metadatafill
@@ -2262,44 +2604,43 @@ import (
 )
 
 const (
-	// Batch is the claim size per tick: at 25 per 30 s tick one replica
-	// judges ~50 videos a minute, far under the vendor's 1,200 requests/min.
+	// Batch is the claim size per tick: ~50 videos a minute from the leader,
+	// far under the vendor's 1,200 requests/min.
 	Batch = 25
-	// MaxAttempts transient failures before a video is marked failed. The
-	// next operator run returns failed rows to pending.
+	// MaxAttempts per-video failures (bad_response / invalid_request) before a
+	// video is marked failed. Account-level failures never spend attempts.
 	MaxAttempts = 5
 
-	backoffBase      = time.Minute
-	backoffMax       = time.Hour
-	authPause        = 15 * time.Minute
-	rateLimitedPause = 2 * time.Minute
+	backoffBase = time.Minute
+	backoffMax  = time.Hour
 )
 
 func backoff(attempts int32) time.Duration {
 	d := backoffBase
-	for i := int32(1); i < attempts && d < backoffMax; i++ {
+	for i := int32(1); i < attempts; i++ {
 		d *= 2
-	}
-	if d > backoffMax {
-		d = backoffMax
+		if d >= backoffMax {
+			return backoffMax
+		}
 	}
 	return d
 }
 
 // Repository is the data access the worker needs. *sqlcgen.Queries satisfies it.
 type Repository interface {
-	GetMetadataFillState(ctx context.Context) (sqlcgen.GetMetadataFillStateRow, error)
+	GetMetadataFillState(ctx context.Context) (pgtype.Timestamptz, error)
 	MarkMetadataFillActive(ctx context.Context) error
 	MarkMetadataFillInactive(ctx context.Context) error
-	SetMetadataFillPause(ctx context.Context, arg sqlcgen.SetMetadataFillPauseParams) error
 	GetRunningMetadataFillRun(ctx context.Context) (sqlcgen.MetadataFillRun, error)
 	FinishMetadataFillRun(ctx context.Context, arg sqlcgen.FinishMetadataFillRunParams) (int64, error)
 	AddMetadataFillRunCounts(ctx context.Context, arg sqlcgen.AddMetadataFillRunCountsParams) error
 	ClaimDueMetadataJudgments(ctx context.Context, lim int32) ([]sqlcgen.ClaimDueMetadataJudgmentsRow, error)
 	ClaimNewMetadataJudgments(ctx context.Context, arg sqlcgen.ClaimNewMetadataJudgmentsParams) ([]uuid.UUID, error)
+	CountUnjudgedEligibleVideos(ctx context.Context) (int64, error)
+	CountOpenMetadataJudgments(ctx context.Context) (int64, error)
 	GetMetadataFillSubject(ctx context.Context, id uuid.UUID) (sqlcgen.GetMetadataFillSubjectRow, error)
 	ListVideoTags(ctx context.Context, videoID uuid.UUID) ([]string, error)
-	RecordMetadataJudgment(ctx context.Context, arg sqlcgen.RecordMetadataJudgmentParams) error
+	RecordAndApplyMetadataJudgment(ctx context.Context, arg sqlcgen.RecordAndApplyMetadataJudgmentParams) (sqlcgen.RecordAndApplyMetadataJudgmentRow, error)
 	RecordMetadataJudgmentFailure(ctx context.Context, arg sqlcgen.RecordMetadataJudgmentFailureParams) error
 	ReleaseMetadataJudgment(ctx context.Context, arg sqlcgen.ReleaseMetadataJudgmentParams) error
 	DeleteMetadataJudgment(ctx context.Context, videoID uuid.UUID) error
@@ -2311,16 +2652,18 @@ type Judge interface {
 	Ask(ctx context.Context, state any, qs map[string]judgment.Question) (judgment.Result, error)
 }
 
-// Applier is video.Service's guarded write.
-type Applier interface {
-	ApplyInferredMetadata(ctx context.Context, id uuid.UUID, category, language *string) (video.InferredApplied, error)
+// Notifier is video.Service's narrow inferred-metadata seam (search only).
+type Notifier interface {
+	NotifyInferredMetadata(ctx context.Context, videoID uuid.UUID)
 }
 
-// Service is the state-scan worker.
+// Service is the state-scan worker. Its loop is leader-gated (cmd/api), so
+// every global decision below is made by exactly one process.
 type Service struct {
 	repo       Repository
 	judge      Judge
-	apply      Applier
+	account    *judgment.Account
+	notify     Notifier
 	enabled    func() bool
 	now        func() time.Time
 	categories func() []video.ConfigOption
@@ -2330,13 +2673,13 @@ type Service struct {
 // Option customises a Service.
 type Option func(*Service)
 
-func WithClock(now func() time.Time) Option                    { return func(s *Service) { s.now = now } }
-func WithCategories(f func() []video.ConfigOption) Option      { return func(s *Service) { s.categories = f } }
-func WithLogger(l *slog.Logger) Option                          { return func(s *Service) { s.logger = l } }
+func WithClock(now func() time.Time) Option               { return func(s *Service) { s.now = now } }
+func WithCategories(f func() []video.ConfigOption) Option { return func(s *Service) { s.categories = f } }
+func WithLogger(l *slog.Logger) Option                     { return func(s *Service) { s.logger = l } }
 
 // New builds the worker. enabled is the runtime toggle, re-read every tick.
-func New(repo Repository, judge Judge, apply Applier, enabled func() bool, opts ...Option) *Service {
-	s := &Service{repo: repo, judge: judge, apply: apply, enabled: enabled,
+func New(repo Repository, judge Judge, account *judgment.Account, notify Notifier, enabled func() bool, opts ...Option) *Service {
+	s := &Service{repo: repo, judge: judge, account: account, notify: notify, enabled: enabled,
 		now: time.Now, categories: video.CategoryOptions, logger: slog.Default()}
 	for _, o := range opts {
 		o(s)
@@ -2344,11 +2687,9 @@ func New(repo Repository, judge Judge, apply Applier, enabled func() bool, opts 
 	return s
 }
 
-// Enabled is the toggle; Configured is "a key resolves".
-func (s *Service) Enabled() bool                         { return s.enabled() }
-func (s *Service) Configured(ctx context.Context) bool   { return s.judge.Configured(ctx) }
+func (s *Service) Enabled() bool                       { return s.enabled() }
+func (s *Service) Configured(ctx context.Context) bool { return s.judge.Configured(ctx) }
 
-// claim is one video this tick holds, with its attempt count after claiming.
 type claim struct {
 	id       uuid.UUID
 	attempts int32
@@ -2365,64 +2706,57 @@ const (
 
 // Tick is one jobloop pass. It returns the number of videos judged.
 func (s *Service) Tick(ctx context.Context) (int, error) {
-	if !s.enabled() || !s.judge.Configured(ctx) {
-		return 0, s.repo.MarkMetadataFillInactive(ctx)
+	if !s.enabled() {
+		// The toggle is a GLOBAL setting: only here is the cutoff cleared.
+		if err := s.repo.MarkMetadataFillInactive(ctx); err != nil {
+			return 0, err
+		}
+		return 0, s.stopRunningRun(ctx)
+	}
+	if !s.judge.Configured(ctx) {
+		return 0, nil // idle; a missing key is not a reason to move the cutoff
+	}
+	if _, paused, err := s.account.Paused(ctx); err != nil || paused {
+		return 0, err
 	}
 	if err := s.repo.MarkMetadataFillActive(ctx); err != nil {
 		return 0, err
 	}
-	st, err := s.repo.GetMetadataFillState(ctx)
+	since, err := s.repo.GetMetadataFillState(ctx)
 	if err != nil {
 		return 0, err
-	}
-	if st.PausedUntil.Valid {
-		if s.now().Before(st.PausedUntil.Time) {
-			return 0, nil
-		}
-		if err := s.repo.SetMetadataFillPause(ctx, sqlcgen.SetMetadataFillPauseParams{}); err != nil {
-			return 0, err
-		}
 	}
 	run, err := s.repo.GetRunningMetadataFillRun(ctx)
 	hasRun := err == nil
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return 0, err
 	}
+	if hasRun {
+		since = pgtype.Timestamptz{}
+	}
 
-	var claims []claim
-	due, err := s.repo.ClaimDueMetadataJudgments(ctx, Batch)
+	claims, err := s.claim(ctx, since)
 	if err != nil {
 		return 0, err
 	}
-	for _, d := range due {
-		claims = append(claims, claim{d.VideoID, d.Attempts})
-	}
-	if room := Batch - len(claims); room > 0 {
-		since := st.EnabledSince
-		if hasRun {
-			since = pgtype.Timestamptz{}
-		}
-		ids, err := s.repo.ClaimNewMetadataJudgments(ctx, sqlcgen.ClaimNewMetadataJudgmentsParams{Since: since, Lim: int32(room)})
-		if err != nil {
-			return 0, err
-		}
-		for _, id := range ids {
-			claims = append(claims, claim{id, 1})
-		}
-	}
 	if hasRun && len(claims) == 0 {
-		_, err := s.repo.FinishMetadataFillRun(ctx, sqlcgen.FinishMetadataFillRunParams{ID: run.ID, State: "done"})
-		return 0, err
+		return 0, s.finishIfDrained(ctx, run.ID)
 	}
 
 	judged, filled := 0, 0
+	var tickErr error
 	for i, c := range claims {
-		out, code, err := s.judgeOne(ctx, c.id, c.attempts)
+		out, code, err := s.judgeOne(ctx, c)
 		if err != nil {
-			return judged, err
+			s.release(ctx, claims[i:])
+			tickErr = err
+			break
 		}
 		if out == outcomePause {
-			s.pause(ctx, code, claims[i:])
+			s.release(ctx, claims[i:])
+			if perr := s.account.Pause(ctx, code); perr != nil {
+				tickErr = perr
+			}
 			break
 		}
 		if out == outcomeJudged || out == outcomeFilled {
@@ -2435,22 +2769,85 @@ func (s *Service) Tick(ctx context.Context) (int, error) {
 	if hasRun && judged > 0 {
 		if err := s.repo.AddMetadataFillRunCounts(ctx, sqlcgen.AddMetadataFillRunCountsParams{
 			ID: run.ID, Judged: int32(judged), Filled: int32(filled),
-		}); err != nil {
-			return judged, err
+		}); err != nil && tickErr == nil {
+			tickErr = err
 		}
 	}
-	return judged, nil
+	return judged, tickErr
 }
 
-func (s *Service) judgeOne(ctx context.Context, id uuid.UUID, attempts int32) (outcome, judgment.Code, error) {
-	subj, err := s.repo.GetMetadataFillSubject(ctx, id)
+func (s *Service) claim(ctx context.Context, since pgtype.Timestamptz) ([]claim, error) {
+	var out []claim
+	due, err := s.repo.ClaimDueMetadataJudgments(ctx, Batch)
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range due {
+		out = append(out, claim{d.VideoID, d.Attempts})
+	}
+	if room := Batch - len(out); room > 0 {
+		ids, err := s.repo.ClaimNewMetadataJudgments(ctx, sqlcgen.ClaimNewMetadataJudgmentsParams{Since: since, Lim: int32(room)})
+		if err != nil {
+			s.release(ctx, out)
+			return nil, err
+		}
+		for _, id := range ids {
+			out = append(out, claim{id, 1})
+		}
+	}
+	return out, nil
+}
+
+// finishIfDrained ends a run only when a QUERY says nothing is left — never
+// because one claim came back empty.
+func (s *Service) finishIfDrained(ctx context.Context, runID uuid.UUID) error {
+	unjudged, err := s.repo.CountUnjudgedEligibleVideos(ctx)
+	if err != nil {
+		return err
+	}
+	open, err := s.repo.CountOpenMetadataJudgments(ctx)
+	if err != nil {
+		return err
+	}
+	if unjudged > 0 || open > 0 {
+		return nil
+	}
+	_, err = s.repo.FinishMetadataFillRun(ctx, sqlcgen.FinishMetadataFillRunParams{ID: runID, State: "done"})
+	return err
+}
+
+func (s *Service) stopRunningRun(ctx context.Context) error {
+	run, err := s.repo.GetRunningMetadataFillRun(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	_, err = s.repo.FinishMetadataFillRun(ctx, sqlcgen.FinishMetadataFillRunParams{ID: run.ID, State: "stopped"})
+	return err
+}
+
+// release hands claims back without spending an attempt.
+func (s *Service) release(ctx context.Context, held []claim) {
+	for _, c := range held {
+		if err := s.repo.ReleaseMetadataJudgment(ctx, sqlcgen.ReleaseMetadataJudgmentParams{
+			VideoID: c.id, NextAttemptAt: s.now(),
+		}); err != nil {
+			s.logger.Warn("metadata fill: release claim failed", "video_id", c.id, "error", err)
+		}
+	}
+}
+
+func (s *Service) judgeOne(ctx context.Context, c claim) (outcome, judgment.Code, error) {
+	subj, err := s.repo.GetMetadataFillSubject(ctx, c.id)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !subj.Eligible) {
-		return outcomeSkipped, "", s.repo.DeleteMetadataJudgment(ctx, id)
+		return outcomeSkipped, "", s.repo.DeleteMetadataJudgment(ctx, c.id)
 	}
 	if err != nil {
 		return outcomeSkipped, "", err
 	}
-	tags, err := s.repo.ListVideoTags(ctx, id)
+	tags, err := s.repo.ListVideoTags(ctx, c.id)
 	if err != nil {
 		return outcomeSkipped, "", err
 	}
@@ -2459,65 +2856,43 @@ func (s *Service) judgeOne(ctx context.Context, id uuid.UUID, attempts int32) (o
 		CategoryEmpty: subj.CategoryEmpty, LanguageEmpty: subj.LanguageEmpty,
 	}, s.categories(), video.Languages)
 	if len(req.Questions) == 0 {
-		return outcomeSkipped, "", s.repo.RecordMetadataJudgment(ctx, sqlcgen.RecordMetadataJudgmentParams{VideoID: id, Model: ""})
+		return outcomeSkipped, "", s.repo.DeleteMetadataJudgment(ctx, c.id)
 	}
 	res, err := s.judge.Ask(ctx, req.State, req.Questions)
 	if err != nil {
 		code := judgment.CodeOf(err)
-		switch code {
-		case judgment.CodeAuth, judgment.CodeRateLimited, judgment.CodeNotConfigured:
-			return outcomePause, code, nil
-		}
 		if code == "" {
 			code = judgment.CodeUnavailable
 		}
+		if judgment.PausesAccount(code) || code == judgment.CodeNotConfigured {
+			return outcomePause, code, nil
+		}
+		codeStr := string(code)
 		return outcomeSkipped, code, s.repo.RecordMetadataJudgmentFailure(ctx, sqlcgen.RecordMetadataJudgmentFailureParams{
-			VideoID: id, MaxAttempts: MaxAttempts, NextAttemptAt: pgtype.Timestamptz{Time: s.now().Add(backoff(attempts)), Valid: true},
-			Code: pgtype.Text{String: string(code), Valid: true},
+			VideoID: c.id, MaxAttempts: MaxAttempts, NextAttemptAt: s.now().Add(backoff(c.attempts)), Code: &codeStr,
 		})
 	}
 	d := Decide(res, req)
-	if err := s.repo.RecordMetadataJudgment(ctx, sqlcgen.RecordMetadataJudgmentParams{
-		VideoID: id, Model: d.Model,
+	if d.Category != nil && !video.IsCategory(*d.Category) {
+		d.Category = nil // deleted from the live taxonomy since the question was built
+	}
+	if d.Language != nil && !video.IsLanguage(*d.Language) {
+		d.Language = nil
+	}
+	model := d.Model
+	row, err := s.repo.RecordAndApplyMetadataJudgment(ctx, sqlcgen.RecordAndApplyMetadataJudgmentParams{
+		VideoID: c.id, Model: &model, Category: d.Category, Language: d.Language,
 		CategoryPick: d.CategoryPick, CategoryProb: probPtr(d.CategoryAsked, d.CategoryProb),
 		LanguagePick: d.LanguagePick, LanguageProb: probPtr(d.LanguageAsked, d.LanguageProb),
-	}); err != nil {
+	})
+	if err != nil {
 		return outcomeSkipped, "", err
 	}
-	if d.Category == nil && d.Language == nil {
+	if !row.CategoryWritten && !row.LanguageWritten {
 		return outcomeJudged, "", nil
 	}
-	applied, err := s.apply.ApplyInferredMetadata(ctx, id, d.Category, d.Language)
-	if err != nil {
-		return outcomeJudged, "", err
-	}
-	if applied.Category != nil || applied.Language != nil {
-		return outcomeFilled, "", nil
-	}
-	return outcomeJudged, "", nil
-}
-
-// pause stops every replica until the pause expires and hands back every
-// claim this tick still holds without spending an attempt.
-func (s *Service) pause(ctx context.Context, code judgment.Code, held []claim) {
-	d := rateLimitedPause
-	if code == judgment.CodeAuth {
-		d = authPause
-	}
-	until := s.now().Add(d)
-	for _, c := range held {
-		if err := s.repo.ReleaseMetadataJudgment(ctx, sqlcgen.ReleaseMetadataJudgmentParams{
-			VideoID: c.id, NextAttemptAt: pgtype.Timestamptz{Time: until, Valid: true},
-		}); err != nil {
-			s.logger.Warn("metadata fill: release claim failed", "video_id", c.id, "error", err)
-		}
-	}
-	if err := s.repo.SetMetadataFillPause(ctx, sqlcgen.SetMetadataFillPauseParams{
-		PausedUntil: pgtype.Timestamptz{Time: until, Valid: true},
-		PausedCode:  pgtype.Text{String: string(code), Valid: true},
-	}); err != nil {
-		s.logger.Warn("metadata fill: pause not recorded", "error", err)
-	}
+	s.notify.NotifyInferredMetadata(ctx, c.id)
+	return outcomeFilled, "", nil
 }
 
 func probPtr(asked bool, p float64) *float32 {
@@ -2529,52 +2904,69 @@ func probPtr(asked bool, p float64) *float32 {
 }
 ```
 
-The generated param field types (`*string` versus `pgtype.Text`, `*float32` versus `pgtype.Float4`) depend on sqlc's overrides in `sqlc.yaml`. Match whatever `make sqlc` produced in Task 4, and adjust `probPtr` and the `Code`/`PausedCode` literals to those types. Add `TestTickClearsAnExpiredPause`: seed `pausedUntil` in the past, tick, and assert the pause is cleared and a claim is made.
+`GetMetadataFillState` returns `pgtype.Timestamptz` directly, because a single-column `:one` makes sqlc return the column type. `code == judgment.CodeNotConfigured` releases the claims and pauses the account for 2 minutes. That is reachable only if the key disappears between `Configured` and `Ask`. The `pause` branch passes the code on, and `Account.Pause` maps it to the 2-minute pause.
 
-- [ ] **Step 4: Run them.** `go test ./internal/metadatafill/ -race -v` → PASS. Then `make ci`.
+- [ ] **Step 6: Run.** `go test ./internal/judgment/ ./internal/metadatafill/ -race -v` → PASS. Then `make ci`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add internal/metadatafill
-git commit -m "feat(metadatafill): state-scan worker tick with backoff, pause and runs
+git add internal/judgment internal/metadatafill
+git commit -m "feat(metadatafill): leader-gated tick with atomic record-and-apply and account pauses
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 8: Setting toggle, infrastructure row, wiring (PR C8, core)
+## Task 9: Toggle, infra row, category provider, wiring, metrics (PR C9, core)
 
-**Goal:** The worker runs in the api binary. The admin toggle turns it on at runtime, and the infrastructure snapshot reports it Off, Active or Needs setup.
+**Goal:** The worker runs, leader-gated, in the api binary. It is switched on at runtime through the admin toggle, reports itself on the infrastructure snapshot, sees the instance's own category list in every role, and exports its queue depth.
 
 **Files:**
 - Modify: `internal/instancesettings/service.go` (const near L199; `Defaults` L576-606; `specs` row near L870)
 - Modify: `internal/instancesettings/service_test.go` (`testDefaults()` L47; table L78-103), `internal/httpapi/admin_instance_settings_test.go` (`settingsDefaultsFromConfig` L63; count L199-200 **118 → 119**)
-- Modify: `cmd/api/main.go` (Defaults L309-340; video service hooks ~L1331-1399; worker start after the captions worker L2487-2492; new worker func beside `runCaptionJobWorker` L3414)
-- Modify: `internal/httpapi/admin_infra.go` (`infraFeatures` L379; off notes L688; misconfigured notes L721), `internal/httpapi/admin_infra_test.go` (`wantKeys` L264-268; mutate table ~L306)
+- Modify: `cmd/api/main.go` (Defaults L309-340; after `settingssvc.Load` L341; video service options ~L1331-1399; worker start beside the leader-gated sweeps ~L2443; queue-depth source L2866-2883; new worker func beside `runTranscodeHoldSweepWorker` L3340)
+- Modify: `internal/httpapi/admin_infra.go` (`infraFeatures` L379; off notes L688; misconfigured notes L721), `internal/httpapi/admin_infra_test.go` (`wantKeys` L264-268; `TestInfrastructureFeatureDiscovery` L258)
 - Modify: `internal/httpapi/server.go` (field and `WithMetadataFill` option)
-- Modify: `api/openapi.yaml` (the settings-key prose ~L14270-14280; infrastructure key list ~L23521-23524)
+
+**No `api/openapi.yaml` change in this PR.** The prose updates for the new setting key and infrastructure key ride in Task 10, so that vidra-user's contract check changes once (§0.3).
 
 **Acceptance Criteria:**
-- [ ] `metadata_autofill_enabled` is a `KindBool` setting on `PageVOD`, section `autofill`, whose default is `cfg.MetadataAutofillEnabled`. The settings count is 119.
-- [ ] The api binary always starts the worker when `cfg.Role.RunsWorkers()`, never gated on boot config. Each tick re-reads the toggle and the key.
-- [ ] `infrastructure.features` ends with `{"key":"metadata_autofill","enabled":<toggle>,"configured":<key resolves>}`, with an off note and a missing-key note that names `TYPESAFE_API_KEY`.
-- [ ] `make ci` is green, including `TestOpenAPIContract`.
+- [ ] `metadata_autofill_enabled` is a `KindBool` on `PageVOD`, section `autofill`, whose default is `cfg.MetadataAutofillEnabled`. The settings count is 119.
+- [ ] `video.SetCategoryProvider(settingssvc.Categories)` runs right after the boot `settingssvc.Load`, before any worker goroutine and in every role.
+- [ ] The worker loop is `jobloop.Loop{Interval: 30s, Leader: <the cron leader>}` and starts whenever `runWorkers`.
+- [ ] `infrastructure.features` ends with `metadata_autofill`, and it carries the missing-key note when enabled but not configured.
+- [ ] `vidra_queue_depth{queue="video_metadata_judgments",state=…}` is exported when metrics are on.
+- [ ] The search enqueuer is registered as the `WithInferredMetadataHook` consumer.
 
-**Verify:** `go test ./internal/instancesettings/ ./internal/httpapi/ -race -run 'Settings|Infrastructure|Registry'` → PASS. Then `make ci`.
+**Verify:** `go test ./internal/instancesettings/ ./internal/httpapi/ -race -run 'Registry|Settings|Infrastructure'` → PASS. Then `make ci` and the integration command (Step 5).
 
 **Steps:**
 
 - [ ] **Step 1: Failing tests.**
-  - `service_test.go` table: `{KeyMetadataAutofillEnabled, KindBool, false, PageVOD, "autofill"},`.
-  - `admin_instance_settings_test.go`: bump `118` to `119` in both the condition and the message, and add a line to the comment block above: `// +1 metadata_autofill_enabled (Jev auto-fill, meta spec 2026-09-20)`.
-  - `admin_infra_test.go`: append `"metadata_autofill"` to `wantKeys`, and add a mutate row: `"autofill on without a key": {func(c *config.Config){ c.MetadataAutofillEnabled = true }, "metadata_autofill", "TYPESAFE_API_KEY"}`. That row assumes the test server wires the provider from config. If the infra test builds `Server` without `WithMetadataFill`, construct a stub provider in the test that reports `Enabled()==true`, `Configured()==false`, and pass it via `WithMetadataFill`.
+  - In the `service_test.go` table, add `{KeyMetadataAutofillEnabled, KindBool, false, PageVOD, "autofill"},`.
+  - In `admin_instance_settings_test.go`, change `118` to `119` in the condition and the message, and add to the comment block above: `// +1 metadata_autofill_enabled (Jev auto-fill)`.
+  - In `admin_infra_test.go`, append `"metadata_autofill"` to `wantKeys`. In the mutate table (~L306), the server built there has no fill provider, so the row reads `Enabled:false`. Add a dedicated test instead:
 
-- [ ] **Step 2: Run them and watch them fail**
+```go
+func TestInfrastructureMetadataAutofillRow(t *testing.T) {
+	srv := New(testConfig(), nil, nil, WithMetadataFill(fakeFillFlags{enabled: true, configured: false}))
+	f := findInfraFeature(t, srv, "metadata_autofill") // build on the helper TestInfrastructureFeatureDiscovery uses to GET and decode
+	if !f.Enabled || f.Configured || !strings.Contains(f.Note, "TYPESAFE_API_KEY") {
+		t.Fatalf("row = %+v", f)
+	}
+}
 
-Run: `go test ./internal/instancesettings/ ./internal/httpapi/ -run 'Registry|Settings|Infrastructure'`
-Expected: FAIL (undefined key, count 118, missing feature).
+type fakeFillFlags struct{ enabled, configured bool }
+
+func (f fakeFillFlags) Enabled() bool                   { return f.enabled }
+func (f fakeFillFlags) Configured(context.Context) bool { return f.configured }
+```
+
+  If `TestInfrastructureFeatureDiscovery` inlines its GET-and-decode, extract it into `findInfraFeature` in this PR. The infrastructure route requires an admin, so follow whatever auth setup that test already uses.
+
+- [ ] **Step 2: Run them and watch them fail.** Expected: FAIL (undefined key, count 118, missing row).
 
 - [ ] **Step 3: Implement.**
 
@@ -2593,12 +2985,12 @@ Add `MetadataAutofillEnabled bool` to `Defaults`, and after the transcription ro
 			page: PageVOD, section: "autofill"},
 ```
 
-In `testDefaults()` and `settingsDefaultsFromConfig`, map `MetadataAutofillEnabled`. In `cmd/api/main.go` Defaults: `MetadataAutofillEnabled: cfg.MetadataAutofillEnabled,`.
+Map `MetadataAutofillEnabled` in `testDefaults()`, in `settingsDefaultsFromConfig`, and in `main.go`'s `Defaults` literal (`MetadataAutofillEnabled: cfg.MetadataAutofillEnabled,`).
 
 `internal/httpapi/server.go`:
 
 ```go
-// metadataFillProvider is the admin surface of the auto-fill worker.
+// metadataFillProvider is the admin surface of the Jev auto-fill worker.
 type metadataFillProvider interface {
 	Enabled() bool
 	Configured(ctx context.Context) bool
@@ -2610,9 +3002,9 @@ func WithMetadataFill(p metadataFillProvider) Option {
 }
 ```
 
-Add the `metadatafillsvc metadataFillProvider` field. Task 9 widens the interface.
+Add the field `metadatafillsvc metadataFillProvider`. Task 10 widens the interface.
 
-`internal/httpapi/admin_infra.go`: `infraFeatures()` has no context. Change it to `infraFeatures(ctx context.Context)` and pass `c.Request().Context()` from its caller or callers (`grep -n 'infraFeatures(' internal/httpapi/*.go`). Then append:
+`internal/httpapi/admin_infra.go`: change `infraFeatures()` to `infraFeatures(ctx context.Context)`. It has one caller; pass `c.Request().Context()`. Append:
 
 ```go
 		{
@@ -2622,47 +3014,74 @@ Add the `metadatafillsvc metadataFillProvider` field. Task 9 widens the interfac
 		},
 ```
 
-Notes:
-- `infraFeatureOffNotes["metadata_autofill"] = "Automatic category and language for public videos. Off by default; switch it on under Config → VOD. When on, the title, description, channel name and tags of public videos are sent to TypeSafe (US-hosted)."`
-- `infraFeatureMisconfiguredNotes["metadata_autofill"] = "Switched on, but no TypeSafe API key is set, so nothing is sent and nothing is filled. Set TYPESAFE_API_KEY (or add the key in the admin panel once available) — no restart needed for the panel key."`
-
-`cmd/api/main.go`:
-- Construct the judgment client and the worker next to the captions construction (L2092-2115):
+Add the two notes:
 
 ```go
+	// infraFeatureOffNotes
+	"metadata_autofill": "Automatic category and language for public videos. Off by default; switch it on under Config → VOD. When on, the title, description, channel name and tags of public videos are sent to TypeSafe (US-hosted).",
+	// infraFeatureMisconfiguredNotes
+	"metadata_autofill": "Switched on, but no TypeSafe API key is set, so nothing is sent and nothing is filled. Set TYPESAFE_API_KEY in the env file (the admin-panel key field arrives in a later release).",
+```
+
+`cmd/api/main.go`:
+
+1. Directly after the `settingssvc.Load(startCtx)` error check (L341):
+
+```go
+	// The live category taxonomy, for EVERY role. httpapi also registers it,
+	// but a VIDRA_ROLE=worker process returns before httpapi.New, and the
+	// auto-fill worker must never judge or validate against the built-in list
+	// on an instance whose custom list replaces it (and may reuse its ids).
+	video.SetCategoryProvider(settingssvc.Categories)
+```
+
+2. In the `video.NewService(...)` options (~L1386-1398, inside `if searchEnqueuer != nil`):
+
+```go
+			video.WithInferredMetadataHook(func(ctx context.Context, videoID uuid.UUID) {
+				searchEnqueuer.EnqueueVideoUpsert(ctx, videoID)
+			}),
+```
+
+Search is the only consumer that indexes category and language (vidra-search filters on both: `internal/store/queries/search.sql:33-34,61-62`). Federation is deliberately absent (§0.2.9).
+
+3. Construct the client and the worker after the video service and `settingssvc` exist:
+
+```go
+	typesafeAccount := judgment.NewAccount(db.Queries(), time.Now)
 	judgeClient := judgment.New(cfg.TypeSafeEndpoint, cfg.TypeSafeModel,
 		func(context.Context) string { return cfg.TypeSafeAPIKey })
-	metadatafillsvc := metadatafill.New(q, judgeClient, videosvc,
+	metadatafillsvc := metadatafill.New(db.Queries(), judgeClient, typesafeAccount, videosvc,
 		func() bool { return settingssvc.Bool(instancesettings.KeyMetadataAutofillEnabled) },
 		metadatafill.WithLogger(logger))
 ```
 
-  Use the local names this file actually uses: `q` for `*sqlcgen.Queries`, `videosvc` for `*video.Service`, and `settingssvc` for the settings service (grep for them). `*sqlcgen.Queries` satisfies `metadatafill.Repository` only if `ListVideoTags` has the same signature. It does: the video `Repository` uses `ListVideoTags(ctx, uuid.UUID) ([]string, error)`.
-- Pass `httpapi.WithMetadataFill(metadatafillsvc)` in the server options.
-- After the captions worker start:
+   Use the local name of the `*video.Service` (`grep -n 'video.NewService(' cmd/api/main.go`). Pass `httpapi.WithMetadataFill(metadatafillsvc)` with the other server options.
+
+4. Beside the other leader-gated sweeps (~L2443, after `cronLeader` exists at L2295):
 
 ```go
-	// Always started: its capability can arrive at runtime (a key saved in the
-	// admin panel), so a boot-time gate would strand it. Each tick is a no-op
-	// unless the toggle is on and a key resolves.
 	if runWorkers {
 		workerCtx, workerCancel := context.WithCancel(context.Background())
 		defer workerCancel()
-		go runMetadataFillWorker(workerCtx, logger, metadatafillsvc)
+		go runMetadataFillWorker(workerCtx, logger, cronLeader, metadatafillsvc)
 		logger.Info("metadata auto-fill worker started")
 	}
 ```
 
-- Beside `runCaptionJobWorker`:
+   Use the same leader value passed to `runTranscodeHoldSweepWorker`.
+
+5. Beside `runTranscodeHoldSweepWorker` (L3340):
 
 ```go
-// runMetadataFillWorker drives the Jev auto-fill state scan. Every worker-role
-// replica runs it (Jitter): the INSERT-is-the-claim query keeps replicas
-// disjoint.
-func runMetadataFillWorker(ctx context.Context, logger *slog.Logger, svc *metadatafill.Service) {
+// runMetadataFillWorker drives the Jev auto-fill state scan. Leader-gated:
+// enabled_since, pauses and "run done" are global facts, decided by one
+// process. Always started — the key may arrive at runtime — and each tick is a
+// no-op unless the toggle is on and a key resolves.
+func runMetadataFillWorker(ctx context.Context, logger *slog.Logger, leader jobloop.Leader, svc *metadatafill.Service) {
 	jobloop.Loop{
 		Interval: 30 * time.Second,
-		Jitter:   true,
+		Leader:   leader,
 		Passes: []jobloop.Pass{{
 			FailMsg: "metadata auto-fill tick failed",
 			DoneMsg: "metadata auto-fill judged videos",
@@ -2672,42 +3091,58 @@ func runMetadataFillWorker(ctx context.Context, logger *slog.Logger, svc *metada
 }
 ```
 
-`api/openapi.yaml`: add `metadata_autofill_enabled` to the settings-key prose list, and append `metadata_autofill` to the infrastructure feature key list and order prose.
+6. In the queue-depth source (L2866-2883), after the search-outbox block:
 
-- [ ] **Step 4: Integration proof** (`internal/metadatafill/worker_integration_test.go`, `//go:build integration`). This runs a real `sqlcgen.Queries` against Postgres with an `httptest` Jev that always answers built-in category 1 at 0.95 and `en` at 0.99, and a real `video.Service`. The test seeds one eligible video, calls `svc.Tick`, and asserts that `videos.category='1'`, `language='en'`, and `GetVideoAutoFilled` returns both. It uses the store package's `dsn(t)` idiom: copy `func dsn(t)` locally, because the helper is unexported in `store`.
+```go
+			if rows, derr := db.Queries().MetadataJudgmentDepth(ctx); derr == nil {
+				for _, r := range rows {
+					out = append(out, observability.QueueDepth{Queue: "video_metadata_judgments", State: r.State, Count: r.Depth})
+				}
+			}
+```
 
-- [ ] **Step 5: Run everything.** `make ci`, then `go vet -tags=integration ./...`, then the §0.4 integration command. All green.
+- [ ] **Step 4: Run.** `go test ./internal/instancesettings/ ./internal/httpapi/ -race` → PASS.
+
+- [ ] **Step 5: Integration proof** in `internal/metadatafill/worker_integration_test.go` (`//go:build integration`, scratch database per §0.4). It uses a real `sqlcgen.Queries`, a real `video.Service` with a `WithInferredMetadataHook` that records ids, and an `httptest` Jev that answers built-in category "Music" at 0.95 and `en` at 0.99. Seed one eligible video, call `svc.Tick`, and assert:
+  - `videos.category` is Music's id and `language='en'`;
+  - `GetVideoAutoFilled` returns both;
+  - the hook saw the id exactly once;
+  - `updated_at` is unchanged.
+
+  Run the §0.4 command → PASS. Then `make ci` and `go vet -tags=integration ./...`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add internal/instancesettings internal/httpapi cmd/api api/openapi.yaml internal/metadatafill
-git commit -m "feat(metadatafill): runtime toggle, infrastructure row and worker wiring
+git add internal/instancesettings internal/httpapi cmd/api internal/metadatafill
+git commit -m "feat(metadatafill): runtime toggle, infra row, category provider for every role, leader-gated worker
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 9: Admin endpoints, runs, audit, OpenAPI (PR C9, core)
+## Task 10: Admin endpoints, runs, audit, all OpenAPI prose (PR C10, core)
 
-**Goal:** An admin can read the status, test the connection, start a "fill existing videos" run and stop it. Each action is audited with closed codes.
+**Goal:** An admin can read status, test the connection (which also clears a pause), start a "fill existing videos" run and stop it. Every action is audited with closed codes, and the OpenAPI contract gets all of slice 1's prose in this one PR.
 
 **Files:**
-- Modify: `internal/metadatafill/service.go` (add `Status`, `Test`, `StartRun`, `StopRun`), `internal/metadatafill/service_test.go`
+- Modify: `internal/metadatafill/service.go` (`Status`, `Test`, `StartRun`, `StopRun`), `internal/metadatafill/service_test.go`, `internal/metadatafill/fakes_test.go`
 - Create: `internal/httpapi/admin_metadata_fill.go`, `internal/httpapi/admin_metadata_fill_test.go`
-- Modify: `internal/httpapi/errors.go` (typed error), `internal/httpapi/server.go` (routes near L2225-2259; widen `metadataFillProvider`)
-- Modify: `internal/observability/audit.go` (actions near L111-127)
-- Modify: `api/openapi.yaml` (4 operations, 2 schemas); `internal/httpapi/openapi_contract_test.go` `fullRouteOptions()` (L62) must mount `WithMetadataFill`
+- Modify: `internal/httpapi/errors.go` (typed error, central switch next to `mtf` ~L203), `internal/httpapi/ratelimit.go` (sibling limiter after `mailTestRateLimit` L173-190), `internal/httpapi/server.go` (limiter field and option beside `mailTestLimit` L109/L476; routes beside L2225-2259; widen `metadataFillProvider`)
+- Modify: `cmd/api/main.go` (construct the limiter exactly as the mail-test limiter is constructed; `grep -n 'WithMailTestRateLimit\|mailTestLimit' cmd/api/main.go`)
+- Modify: `internal/observability/audit.go` (actions beside L111-127)
+- Modify: `api/openapi.yaml` (4 operations and 2 schemas; the settings-key prose ~L14270-14280 gains `metadata_autofill_enabled`; the infrastructure key list ~L23521-23524 gains `metadata_autofill`)
+- Modify: `internal/httpapi/openapi_contract_test.go` `fullRouteOptions()` (L62) to mount `WithMetadataFill`
 
 **Contract:**
 
-| Route | 200/2xx body | Errors |
+| Route | Success | Errors |
 |---|---|---|
-| `GET /api/v1/admin/metadata-fill/status` | `MetadataFillStatus` | 401, 403, 501 when not wired |
-| `POST /api/v1/admin/metadata-fill/test` | `{"status":"ok"}` | 409 `metadata_fill_not_configured`, 502 `metadata_fill_test_failed` with `reason` ∈ `auth`/`rate_limited`/`unavailable`/`bad_response`/`invalid_request` |
+| `GET /api/v1/admin/metadata-fill/status` | 200 `MetadataFillStatus` | 401, 403 (the routes are mounted only when the service is wired, else 404) |
+| `POST /api/v1/admin/metadata-fill/test` | 200 `{"status":"ok"}` | 409 `metadata_fill_not_configured`; 502 `metadata_fill_test_failed` with `reason` ∈ `auth`/`rate_limited`/`unavailable`/`bad_response`/`invalid_request`; 429 limiter |
 | `POST /api/v1/admin/metadata-fill/runs` | 201 `MetadataFillRun` | 409 `metadata_fill_run_active`, 409 `metadata_fill_inactive` |
-| `DELETE /api/v1/admin/metadata-fill/runs/current` | 204 | 404 `not_found` |
+| `DELETE /api/v1/admin/metadata-fill/runs/current` | 204 | 404 |
 
 ```yaml
 MetadataFillStatus:
@@ -2717,14 +3152,13 @@ MetadataFillStatus:
     enabled: {type: boolean}
     configured: {type: boolean}
     model: {type: string, example: jev-1.13.0}
-    paused_code: {type: string, nullable: true, enum: [auth, rate_limited, not_configured]}
-    paused_until: {type: string, format: date-time, nullable: true}
+    paused_code: {type: string, nullable: true, enum: [auth, rate_limited, unavailable, not_configured]}
     counts:
       type: object
       required: [waiting, filled, not_confident, failed]
       properties:
         waiting: {type: integer}
-        filled: {type: integer}
+        filled: {type: integer, description: Videos whose category or language still holds the automatic value.}
         not_confident: {type: integer}
         failed: {type: integer}
     unjudged: {type: integer, description: Eligible public videos never judged — the N on "Fill existing videos (N)".}
@@ -2741,69 +3175,73 @@ MetadataFillRun:
 ```
 
 **Acceptance Criteria:**
-- [ ] All four routes require an admin: anonymous gets 401 and a non-admin gets 403.
-- [ ] A successful test sends one fixed, harmless state (language question only), never a real video.
-- [ ] Starting a run returns `failed` rows to `pending`. A second start while one is running gets 409 because of the unique index, including under a race.
-- [ ] Audit actions `admin.metadata_fill.test`, `admin.metadata_fill.run_start` and `admin.metadata_fill.run_stop` are recorded with `Reason` from a closed set only (`ok`, `not_configured`, a judgment code, `run_active`, `inactive`, `no_run`) and metadata `count` for requeued rows. No model output reaches the audit log.
+- [ ] All four routes: anonymous gets 401 and a non-admin gets 403.
+- [ ] Test sends one fixed state and a language-only question, never a real video. On success it clears any account pause.
+- [ ] Start is atomic (Task 4's `StartMetadataFillRun`): a refused start requeues nothing, and a failed requeue leaves no run.
+- [ ] The Test button has its own limiter (`"metadata-fill-test:"+userID`, audit reason `metadata_fill_test_rate_limited`) and never spends the mail probe's budget.
+- [ ] Audit actions: `admin.metadata_fill.test`, `admin.metadata_fill.run_start` and `admin.metadata_fill.run_stop`. `Reason` is always a closed code, and `count` metadata carries requeued rows.
 - [ ] `TestOpenAPIContract` passes in both directions.
 
 **Verify:** `go test ./internal/httpapi/ ./internal/metadatafill/ -race -run 'MetadataFill'` → PASS. Then `make ci`.
 
 **Steps:**
 
-- [ ] **Step 1: Failing service tests.** Append to `internal/metadatafill/service_test.go`:
+- [ ] **Step 1: Failing service tests** appended to `internal/metadatafill/service_test.go`:
 
 ```go
-func TestStartRunRequeuesFailedAndRefusesASecond(t *testing.T) {
-	svc, repo, _, _, _ := fixture(t)
-	repo.rows[uuid.New()] = &fakeRow{state: "failed", attempts: 5}
-	run, requeued, err := svc.StartRun(context.Background(), uuid.New())
-	if err != nil || run.State != "running" || requeued != 1 {
-		t.Fatalf("run=%+v requeued=%d err=%v", run, requeued, err)
-	}
-	if _, _, err := svc.StartRun(context.Background(), uuid.New()); !errors.Is(err, ErrRunActive) {
-		t.Fatalf("second start err = %v, want ErrRunActive", err)
-	}
-}
-
 func TestStartRunRefusedWhenInactive(t *testing.T) {
-	svc, _, judge, _, _ := fixture(t)
-	judge.configured = false
-	if _, _, err := svc.StartRun(context.Background(), uuid.New()); !errors.Is(err, ErrInactive) {
+	f := fixture(t)
+	f.judge.configured = false
+	if _, err := f.svc.StartRun(context.Background(), uuid.New()); !errors.Is(err, ErrInactive) {
 		t.Fatalf("err = %v, want ErrInactive", err)
 	}
 }
 
-func TestTestSendsTheFixedProbeOnly(t *testing.T) {
-	svc, _, judge, _, _ := fixture(t)
-	judge.next = []any{judgment.Result{Answers: map[string]judgment.Answer{QLanguage: {Pick: "en", Probabilities: map[string]float64{"en": 1}}}}}
-	if err := svc.Test(context.Background()); err != nil {
+func TestStartRunMapsTheUniqueViolation(t *testing.T) {
+	f := fixture(t)
+	f.repo.startErr = &pgconn.PgError{Code: "23505"}
+	if _, err := f.svc.StartRun(context.Background(), uuid.New()); !errors.Is(err, ErrRunActive) {
+		t.Fatalf("err = %v, want ErrRunActive", err)
+	}
+}
+
+func TestTestSendsTheFixedProbeAndClearsThePause(t *testing.T) {
+	f := fixture(t)
+	_ = f.svc.account.Pause(context.Background(), judgment.CodeAuth)
+	f.judge.next = []any{judgment.Result{Answers: map[string]judgment.Answer{QLanguage: {Pick: "en", Probabilities: map[string]float64{"en": 1}}}}}
+	if err := f.svc.Test(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	v := judge.lastState.(map[string]any)["video"].(map[string]any)
-	if v["title"] != testProbeTitle || len(judge.lastQuestions) != 1 {
-		t.Fatalf("probe = %v / %d questions", v, len(judge.lastQuestions))
+	v := f.judge.lastState.(map[string]any)["video"].(map[string]any)
+	if v["title"] != testProbeTitle || len(f.judge.lastQuestions) != 1 {
+		t.Fatalf("probe = %v / %d questions", v, len(f.judge.lastQuestions))
+	}
+	if _, paused, _ := f.svc.account.Paused(context.Background()); paused {
+		t.Fatal("a successful test must clear the pause")
 	}
 }
 ```
 
-Add `errors` to the imports. `fakeJudge` gains `lastState any` and `lastQuestions map[string]judgment.Question`.
+Add `errors` and `github.com/jackc/pgx/v5/pgconn` to the test imports. `fakeJudge` gains `lastState any`, `lastQuestions map[string]judgment.Question`; `fakeRepo` gains `startErr error` and implements `StartMetadataFillRun`, `CountMetadataJudgments` (returning a fixed row).
 
-- [ ] **Step 2: Implement the service methods** in `internal/metadatafill/service.go`. First add these to `Repository`: `CreateMetadataFillRun(ctx, pgtype.UUID) (sqlcgen.MetadataFillRun, error)`, `RequeueFailedMetadataJudgments(ctx) (int64, error)`, `CountMetadataJudgments(ctx) (sqlcgen.CountMetadataJudgmentsRow, error)` and `CountUnjudgedEligibleVideos(ctx) (int64, error)`. Then write:
+- [ ] **Step 2: Implement** in `internal/metadatafill/service.go`. Add these to `Repository`:
+  - `StartMetadataFillRun(ctx, *uuid.UUID) (sqlcgen.StartMetadataFillRunRow, error)`
+  - `CountMetadataJudgments(ctx, sqlcgen.CountMetadataJudgmentsParams) (sqlcgen.CountMetadataJudgmentsRow, error)`
+
+  The `started_by` narg is a nullable uuid. Check whether sqlc emitted `pgtype.UUID` or `*uuid.UUID` (§0.5) and use that.
 
 ```go
 var (
-	// ErrRunActive: a run is already running (unique index).
 	ErrRunActive = errors.New("metadatafill: a run is already running")
-	// ErrInactive: the toggle is off or no key resolves.
-	ErrInactive = errors.New("metadatafill: not enabled or not configured")
-	// ErrNoRun: nothing to stop.
-	ErrNoRun = errors.New("metadatafill: no running run")
+	ErrInactive  = errors.New("metadatafill: not enabled or not configured")
+	ErrNoRun     = errors.New("metadatafill: no running run")
 )
 
 const testProbeTitle = "Connection test"
 
-// Test sends one fixed, harmless judgment. It never sends a real video.
+// Test sends one fixed, harmless judgment — never a real video — and clears
+// an account pause when it succeeds (an operator who just fixed the key
+// should not wait out the 15-minute auth pause).
 func (s *Service) Test(ctx context.Context) error {
 	_, err := s.judge.Ask(ctx,
 		map[string]any{"video": map[string]any{"title": testProbeTitle, "description": "A short check that the connection works."}},
@@ -2811,26 +3249,25 @@ func (s *Service) Test(ctx context.Context) error {
 			Instructions: "In which language is `video.title` written?",
 			Options:      []judgment.Option{{Key: "en", Description: "English"}, {Key: Unclear}},
 		}})
-	return err
-}
-
-// StartRun creates the running run and returns failed rows to pending.
-func (s *Service) StartRun(ctx context.Context, actor uuid.UUID) (sqlcgen.MetadataFillRun, int64, error) {
-	if !s.enabled() || !s.judge.Configured(ctx) {
-		return sqlcgen.MetadataFillRun{}, 0, ErrInactive
-	}
-	run, err := s.repo.CreateMetadataFillRun(ctx, pgtype.UUID{Bytes: actor, Valid: true})
-	if isUniqueViolation(err) {
-		return sqlcgen.MetadataFillRun{}, 0, ErrRunActive
-	}
 	if err != nil {
-		return sqlcgen.MetadataFillRun{}, 0, err
+		return err
 	}
-	n, err := s.repo.RequeueFailedMetadataJudgments(ctx)
-	return run, n, err
+	return s.account.ClearPause(ctx)
 }
 
-// StopRun flips the running run to stopped; the worker reads it every tick.
+// StartRun creates the running run and requeues failed rows, atomically.
+func (s *Service) StartRun(ctx context.Context, actor uuid.UUID) (sqlcgen.StartMetadataFillRunRow, error) {
+	if !s.enabled() || !s.judge.Configured(ctx) {
+		return sqlcgen.StartMetadataFillRunRow{}, ErrInactive
+	}
+	row, err := s.repo.StartMetadataFillRun(ctx, &actor)
+	if pgconv.IsUniqueViolation(err) {
+		return sqlcgen.StartMetadataFillRunRow{}, ErrRunActive
+	}
+	return row, err
+}
+
+// StopRun flips the running run to stopped; the leader reads it every tick.
 func (s *Service) StopRun(ctx context.Context) error {
 	run, err := s.repo.GetRunningMetadataFillRun(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -2847,8 +3284,7 @@ func (s *Service) StopRun(ctx context.Context) error {
 type Status struct {
 	Enabled, Configured bool
 	Model               string
-	PausedCode          string
-	PausedUntil         *time.Time
+	PausedCode          judgment.Code
 	Counts              sqlcgen.CountMetadataJudgmentsRow
 	Unjudged            int64
 	Run                 *sqlcgen.MetadataFillRun
@@ -2856,16 +3292,15 @@ type Status struct {
 
 func (s *Service) Status(ctx context.Context, model string) (Status, error) {
 	st := Status{Enabled: s.enabled(), Configured: s.judge.Configured(ctx), Model: model}
-	fs, err := s.repo.GetMetadataFillState(ctx)
-	if err != nil {
+	if code, paused, err := s.account.Paused(ctx); err != nil {
 		return st, err
+	} else if paused {
+		st.PausedCode = code
 	}
-	if fs.PausedUntil.Valid && s.now().Before(fs.PausedUntil.Time) {
-		st.PausedCode = fs.PausedCode.String
-		t := fs.PausedUntil.Time
-		st.PausedUntil = &t
-	}
-	if st.Counts, err = s.repo.CountMetadataJudgments(ctx); err != nil {
+	var err error
+	if st.Counts, err = s.repo.CountMetadataJudgments(ctx, sqlcgen.CountMetadataJudgmentsParams{
+		CategoryBar: CategoryBar, LanguageBar: LanguageBar,
+	}); err != nil {
 		return st, err
 	}
 	if st.Unjudged, err = s.repo.CountUnjudgedEligibleVideos(ctx); err != nil {
@@ -2878,16 +3313,11 @@ func (s *Service) Status(ctx context.Context, model string) (Status, error) {
 	}
 	return st, nil
 }
-
-func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
-}
 ```
 
-Import `github.com/jackc/pgx/v5/pgconn`. If the repo already has an `isUniqueViolation` helper (`grep -rn '23505' internal/`), reuse it instead of adding one. The `Status(ctx, model)` parameter avoids a `Model()` method on the `Judge` interface; the handler passes `cfg.TypeSafeModel`.
+Import `github.com/vidra/vidra-core/internal/pgconv` (its `IsUniqueViolation` is at `internal/pgconv/pgconv.go:115`).
 
-- [ ] **Step 3: Failing HTTP tests** `internal/httpapi/admin_metadata_fill_test.go`. They use `mailTestServer`-style construction (`New(cfg, nil, nil, WithAuthService(...), WithMetadataFill(stub))`) with a stub provider, `registerAndToken` (first user is admin), `sendJSONAuth`, and the log-capture buffer with `auditEvents`/`findAudit`:
+- [ ] **Step 3: Failing HTTP tests** in `internal/httpapi/admin_metadata_fill_test.go`:
 
 ```go
 package httpapi
@@ -2911,22 +3341,22 @@ import (
 
 type stubFill struct {
 	enabled, configured bool
-	testErr             error
-	startErr            error
+	testErr, startErr   error
 	stopErr             error
-	started             int
 }
 
-func (s *stubFill) Enabled() bool                       { return s.enabled }
-func (s *stubFill) Configured(context.Context) bool     { return s.configured }
-func (s *stubFill) Test(context.Context) error          { return s.testErr }
-func (s *stubFill) StopRun(context.Context) error       { return s.stopErr }
+func (s *stubFill) Enabled() bool                   { return s.enabled }
+func (s *stubFill) Configured(context.Context) bool { return s.configured }
+func (s *stubFill) Test(context.Context) error      { return s.testErr }
+func (s *stubFill) StopRun(context.Context) error   { return s.stopErr }
 func (s *stubFill) Status(context.Context, string) (metadatafill.Status, error) {
 	return metadatafill.Status{Enabled: s.enabled, Configured: s.configured, Model: "jev-1.13.0"}, nil
 }
-func (s *stubFill) StartRun(context.Context, uuid.UUID) (sqlcgen.MetadataFillRun, int64, error) {
-	s.started++
-	return sqlcgen.MetadataFillRun{ID: uuid.New(), State: "running", CreatedAt: time.Now()}, 2, s.startErr
+func (s *stubFill) StartRun(context.Context, uuid.UUID) (sqlcgen.StartMetadataFillRunRow, error) {
+	if s.startErr != nil {
+		return sqlcgen.StartMetadataFillRunRow{}, s.startErr
+	}
+	return sqlcgen.StartMetadataFillRunRow{ID: uuid.New(), State: "running", CreatedAt: time.Now(), Requeued: 2}, nil
 }
 
 func fillServer(t *testing.T, fill *stubFill) (*Server, *bytes.Buffer, string, string) {
@@ -2960,12 +3390,12 @@ func TestMetadataFillRoutesAreAdminOnly(t *testing.T) {
 
 func TestMetadataFillTestOutcomes(t *testing.T) {
 	cases := []struct {
-		name     string
-		fill     *stubFill
-		status   int
-		code     string
-		reason   string
-		result   string
+		name   string
+		fill   *stubFill
+		status int
+		code   string
+		reason string
+		result string
 	}{
 		{"ok", &stubFill{configured: true}, 200, "", "ok", observability.ResultSuccess},
 		{"no key", &stubFill{configured: false}, 409, "metadata_fill_not_configured", "not_configured", observability.ResultFailure},
@@ -3010,9 +3440,7 @@ func TestMetadataFillRuns(t *testing.T) {
 }
 ```
 
-Because the stub returns `(run, 2, ErrRunActive)` on the second start, the handler must check `err` before using `run`.
-
-- [ ] **Step 4: Run them and watch them fail.** Run `go test ./internal/httpapi/ -run MetadataFill`. Expected: FAIL, because the routes are not registered.
+- [ ] **Step 4: Run them and watch them fail.** `go test ./internal/httpapi/ -run MetadataFill`. Expected: FAIL (the routes are missing).
 
 - [ ] **Step 5: Implement.**
 
@@ -3027,11 +3455,12 @@ Because the stub returns `(run, 2, ErrRunActive)` on the second start, the handl
 	ActionAdminMetadataFillRunStop  = "admin.metadata_fill.run_stop"
 ```
 
-`internal/httpapi/errors.go`: a single typed error, and a case in the central switch next to `mtf`:
+`internal/httpapi/errors.go`: add the type, declare `var mfe *MetadataFillError` with the others, and add the case after `mtf`:
 
 ```go
 // MetadataFillError renders with its own status and stable code. Reason is a
-// closed judgment code (never upstream text) and rides in ErrorBody.Reason.
+// closed judgment code (never upstream text) and rides in ErrorBody.Reason,
+// the field the mail test's reason already uses.
 type MetadataFillError struct {
 	Status  int
 	Code    string
@@ -3045,12 +3474,42 @@ func (e *MetadataFillError) Error() string { return e.Code }
 ```go
 	case errors.As(err, &mfe):
 		status, code, message = mfe.Status, mfe.Code, mfe.Message
-		mailReason = mfe.Reason // ErrorBody.Reason: a closed classification, safe to return
+		mailReason = mfe.Reason
 ```
 
-Declare `var mfe *MetadataFillError` with the others. `ErrorBody.Reason` is the existing field the mail test uses. Check its JSON name and doc comment (`grep -n 'Reason' internal/httpapi/errors.go | head`), and widen the comment to mention this code. If the scrubber drops 5xx bodies without a code, this case supplies one, so it survives.
+Widen `ErrorBody.Reason`'s doc comment to name `metadata_fill_test_failed`.
 
-`internal/httpapi/server.go`: widen the interface.
+`internal/httpapi/ratelimit.go`: after `mailTestRateLimit`:
+
+```go
+// metadataFillTestRateLimit throttles the TypeSafe connection probe per admin,
+// with its OWN budget: pressing it must never spend the mail probe's.
+func (s *Server) metadataFillTestRateLimit() echo.MiddlewareFunc {
+	return s.limitBy(limitRule{
+		resolve: func(c echo.Context) (*ratelimit.Limiter, string, bool) {
+			if s.metadataFillTestLimit == nil {
+				return nil, "", false
+			}
+			userID, _, ok := principalFromContext(c)
+			if !ok {
+				return nil, "", false
+			}
+			return s.metadataFillTestLimit, "metadata-fill-test:" + userID.String(), true
+		},
+		unavailable: "metadata fill test rate limiter unavailable, failing open",
+		denied:      "you have tested the TypeSafe connection several times recently; wait before testing again",
+		auditReason: "metadata_fill_test_rate_limited",
+		auditActor: func(c echo.Context) string {
+			userID, _, _ := principalFromContext(c)
+			return userID.String()
+		},
+	})
+}
+```
+
+In `server.go`, add the field `metadataFillTestLimit *ratelimit.Limiter` and an option `WithMetadataFillTestRateLimit(l *ratelimit.Limiter)` beside the mail one (L476). In `main.go`, construct the limiter exactly as the mail-test limiter is constructed, with the same budget (10 per hour per admin), and pass it in.
+
+Widen `metadataFillProvider`:
 
 ```go
 type metadataFillProvider interface {
@@ -3058,24 +3517,24 @@ type metadataFillProvider interface {
 	Configured(ctx context.Context) bool
 	Status(ctx context.Context, model string) (metadatafill.Status, error)
 	Test(ctx context.Context) error
-	StartRun(ctx context.Context, actor uuid.UUID) (sqlcgen.MetadataFillRun, int64, error)
+	StartRun(ctx context.Context, actor uuid.UUID) (sqlcgen.StartMetadataFillRunRow, error)
 	StopRun(ctx context.Context) error
 }
 ```
 
-Add the routes beside the mail routes:
+Task 9's `fakeFillFlags` must now satisfy it: add no-op methods to it.
+
+Routes, beside the mail routes:
 
 ```go
 	if s.metadatafillsvc != nil {
-		admin := []echo.MiddlewareFunc{s.requireAuth, s.requireRole(admin.RoleAdmin)}
-		api.GET("/admin/metadata-fill/status", s.handleMetadataFillStatus, admin...)
-		api.POST("/admin/metadata-fill/test", s.handleMetadataFillTest, append(admin, s.mailTestRateLimit())...)
-		api.POST("/admin/metadata-fill/runs", s.handleMetadataFillStartRun, admin...)
-		api.DELETE("/admin/metadata-fill/runs/current", s.handleMetadataFillStopRun, admin...)
+		adminOnly := []echo.MiddlewareFunc{s.requireAuth, s.requireRole(admin.RoleAdmin)}
+		api.GET("/admin/metadata-fill/status", s.handleMetadataFillStatus, adminOnly...)
+		api.POST("/admin/metadata-fill/test", s.handleMetadataFillTest, append(adminOnly, s.metadataFillTestRateLimit())...)
+		api.POST("/admin/metadata-fill/runs", s.handleMetadataFillStartRun, adminOnly...)
+		api.DELETE("/admin/metadata-fill/runs/current", s.handleMetadataFillStopRun, adminOnly...)
 	}
 ```
-
-`mailTestRateLimit()` is reused for the test button because it has the same abuse shape: an admin repeatedly pressing a button that calls a third party. If its key or name is mail-specific (for example its limiter label), add a sibling `metadataFillTestRateLimit()` built the same way instead.
 
 `internal/httpapi/admin_metadata_fill.go`:
 
@@ -3094,7 +3553,6 @@ import (
 	"github.com/vidra/vidra-core/internal/judgment"
 	"github.com/vidra/vidra-core/internal/metadatafill"
 	"github.com/vidra/vidra-core/internal/observability"
-	"github.com/vidra/vidra-core/internal/store/sqlcgen"
 )
 
 type metadataFillRunView struct {
@@ -3113,18 +3571,13 @@ type metadataFillCountsView struct {
 }
 
 type metadataFillStatusView struct {
-	Enabled     bool                   `json:"enabled"`
-	Configured  bool                   `json:"configured"`
-	Model       string                 `json:"model"`
-	PausedCode  *string                `json:"paused_code"`
-	PausedUntil *time.Time             `json:"paused_until"`
-	Counts      metadataFillCountsView `json:"counts"`
-	Unjudged    int64                  `json:"unjudged"`
-	Run         *metadataFillRunView   `json:"run"`
-}
-
-func runView(r sqlcgen.MetadataFillRun) *metadataFillRunView {
-	return &metadataFillRunView{ID: r.ID.String(), State: r.State, Judged: r.Judged, Filled: r.Filled, StartedAt: r.CreatedAt}
+	Enabled    bool                   `json:"enabled"`
+	Configured bool                   `json:"configured"`
+	Model      string                 `json:"model"`
+	PausedCode *string                `json:"paused_code"`
+	Counts     metadataFillCountsView `json:"counts"`
+	Unjudged   int64                  `json:"unjudged"`
+	Run        *metadataFillRunView   `json:"run"`
 }
 
 func (s *Server) handleMetadataFillStatus(c echo.Context) error {
@@ -3133,16 +3586,16 @@ func (s *Server) handleMetadataFillStatus(c echo.Context) error {
 		return err
 	}
 	v := metadataFillStatusView{
-		Enabled: st.Enabled, Configured: st.Configured, Model: st.Model, PausedUntil: st.PausedUntil,
+		Enabled: st.Enabled, Configured: st.Configured, Model: st.Model, Unjudged: st.Unjudged,
 		Counts: metadataFillCountsView{Waiting: st.Counts.Waiting, Filled: st.Counts.Filled,
 			NotConfident: st.Counts.NotConfident, Failed: st.Counts.Failed},
-		Unjudged: st.Unjudged,
 	}
 	if st.PausedCode != "" {
-		v.PausedCode = &st.PausedCode
+		code := string(st.PausedCode)
+		v.PausedCode = &code
 	}
-	if st.Run != nil {
-		v.Run = runView(*st.Run)
+	if r := st.Run; r != nil {
+		v.Run = &metadataFillRunView{ID: r.ID.String(), State: r.State, Judged: r.Judged, Filled: r.Filled, StartedAt: r.CreatedAt}
 	}
 	return c.JSON(http.StatusOK, v)
 }
@@ -3155,7 +3608,7 @@ func (s *Server) handleMetadataFillTest(c echo.Context) error {
 	if !s.metadatafillsvc.Configured(c.Request().Context()) {
 		s.audit(c, observability.ActionAdminMetadataFillTest, observability.ResultFailure, callerID.String(), "not_configured")
 		return &MetadataFillError{Status: http.StatusConflict, Code: "metadata_fill_not_configured",
-			Message: "no TypeSafe API key is set. Set TYPESAFE_API_KEY in the server's env file, or add the key in the admin panel"}
+			Message: "no TypeSafe API key is set. Set TYPESAFE_API_KEY in the server's env file"}
 	}
 	if err := s.metadatafillsvc.Test(c.Request().Context()); err != nil {
 		code := string(judgment.CodeOf(err))
@@ -3175,7 +3628,7 @@ func (s *Server) handleMetadataFillStartRun(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	run, requeued, err := s.metadatafillsvc.StartRun(c.Request().Context(), callerID)
+	run, err := s.metadatafillsvc.StartRun(c.Request().Context(), callerID)
 	switch {
 	case errors.Is(err, metadatafill.ErrRunActive):
 		s.audit(c, observability.ActionAdminMetadataFillRunStart, observability.ResultFailure, callerID.String(), "run_active")
@@ -3191,9 +3644,10 @@ func (s *Server) handleMetadataFillStartRun(c echo.Context) error {
 	s.auditEvent(c, audit.Event{
 		Action: observability.ActionAdminMetadataFillRunStart, Result: observability.ResultSuccess,
 		ActorID: callerID.String(), Reason: "started",
-		Metadata: []audit.MetadataField{{Key: "count", Value: strconv.FormatInt(requeued, 10)}},
+		Metadata: []audit.MetadataField{{Key: "count", Value: strconv.FormatInt(run.Requeued, 10)}},
 	})
-	return c.JSON(http.StatusCreated, runView(run))
+	return c.JSON(http.StatusCreated, metadataFillRunView{ID: run.ID.String(), State: run.State,
+		Judged: run.Judged, Filled: run.Filled, StartedAt: run.CreatedAt})
 }
 
 func (s *Server) handleMetadataFillStopRun(c echo.Context) error {
@@ -3201,10 +3655,12 @@ func (s *Server) handleMetadataFillStopRun(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := s.metadatafillsvc.StopRun(c.Request().Context()); errors.Is(err, metadatafill.ErrNoRun) {
+	err = s.metadatafillsvc.StopRun(c.Request().Context())
+	if errors.Is(err, metadatafill.ErrNoRun) {
 		s.audit(c, observability.ActionAdminMetadataFillRunStop, observability.ResultFailure, callerID.String(), "no_run")
 		return echo.NewHTTPError(http.StatusNotFound, "no fill run is running")
-	} else if err != nil {
+	}
+	if err != nil {
 		return err
 	}
 	s.audit(c, observability.ActionAdminMetadataFillRunStop, observability.ResultSuccess, callerID.String(), "stopped")
@@ -3212,18 +3668,14 @@ func (s *Server) handleMetadataFillStopRun(c echo.Context) error {
 }
 ```
 
-If the server's config field is not `s.cfg`, grep for how handlers read config (e.g. `s.config`).
+`api/openapi.yaml`: add the four operations, modelled on `/api/v1/admin/mail/test`, the two schemas, the `reason` enum for `metadata_fill_test_failed` (documented the way `mail_test_failed` documents its reason), and the two prose-list additions. In `openapi_contract_test.go` `fullRouteOptions()`, add `WithMetadataFill(&stubFill{})`.
 
-`api/openapi.yaml`: add the four operations under `/api/v1/admin/metadata-fill/...` with `security` and the status codes above. Copy the structure of `/api/v1/admin/mail/test`. Add the two schemas. Document `reason` in the error schema as a closed enum for `metadata_fill_test_failed`, the way `mail_test_failed` documents its reason.
+- [ ] **Step 6: Run.** `go test ./internal/httpapi/ ./internal/metadatafill/ -race` → PASS. Then `make ci`, including `openapi-verify`.
 
-`openapi_contract_test.go` `fullRouteOptions()`: add `WithMetadataFill(&stubFill{})`, or a minimal no-op stub if the contract test file cannot see `stubFill`. Define a tiny one there.
-
-- [ ] **Step 6: Run them.** `go test ./internal/httpapi/ ./internal/metadatafill/ -race` → PASS. Then `make ci`, including `openapi-verify`.
-
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Commit**, then run **Task 12** straight after the merge.
 
 ```bash
-git add internal/httpapi internal/metadatafill internal/observability api/openapi.yaml
+git add internal cmd/api api/openapi.yaml
 git commit -m "feat(httpapi): admin status, test and fill-run endpoints for metadata auto-fill
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -3231,55 +3683,62 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-## Task 10: `auto_filled` on the video view (PR C10, core)
+## Task 11: `auto_filled` on the video view (PR C11, core)
 
-**Goal:** `GET /api/v1/videos/{id}` returns `auto_filled` to the owner and to staff only, so Studio can show the marker.
+**Goal:** `GET /api/v1/videos/{id}` returns `auto_filled` to anyone who may manage the video (owner, channel editor, staff) and to no one else.
 
 **Files:**
-- Modify: `internal/httpapi/videos.go` (`videoView` beside `Category`/`Language`, L230-233; `respondVideo` L585-628)
-- Modify: the httpapi video service interface, if handlers depend on one (`grep -n 'videosvc ' internal/httpapi/server.go`), to include `AutoFilled`
+- Modify: `internal/httpapi/videos.go` (`videoView` beside `Category`/`Language` L230-233; `respondVideo` L585-628)
 - Modify: `api/openapi.yaml` `components.schemas.Video` (~L18213; model the description on `blocked`, ~L18333-18350)
 - Test: `internal/httpapi/videos_auto_filled_test.go` (new)
 
 **Acceptance Criteria:**
-- [ ] The owner and a moderator or admin get `auto_filled: ["category"]` when that field holds the worker's value.
-- [ ] An anonymous caller or another user never sees the field, not even as an empty array.
+- [ ] The owner, a channel editor (per `canManageVideo`, `channel_members.go:39`) and staff (`isStaff`) get `auto_filled: ["category"]` when that field holds the worker's value.
+- [ ] An anonymous caller or an unrelated user never sees the key, not even as an empty array.
 - [ ] An error from `AutoFilled` omits the field and never fails the read.
 
 **Verify:** `go test ./internal/httpapi/ -race -run AutoFilled` → PASS. Then `make ci`.
 
 **Steps:**
 
-- [ ] **Step 1: Failing test.** Use the existing video-detail test scaffolding in `internal/httpapi` (find a test that calls `GET /api/v1/videos/{id}` as owner vs anon; `grep -ln 'api/v1/videos/"' internal/httpapi/*_test.go`). Wire a fake video service whose `AutoFilled` returns `[]string{"category"}`, and assert:
+- [ ] **Step 1: Failing test.** `s.videosvc` is the concrete `*video.Service` (`server.go:131`), so seed the **repo**: `videoFakeRepo.autoFilled[id] = [2]bool{true, false}` (added in Task 5). Build the server the way the existing video-detail tests do (`grep -n 'videoFakeRepo{' internal/httpapi/videos_test.go`, near `:1497`). GET as the owner, as an unrelated user and anonymously, and decode each body into `map[string]any`:
 
 ```go
-	if got := decodeVideo(t, ownerRec)["auto_filled"]; !reflect.DeepEqual(got, []any{"category"}) {
+	if got := ownerBody["auto_filled"]; !reflect.DeepEqual(got, []any{"category"}) {
 		t.Fatalf("owner auto_filled = %v", got)
 	}
-	if _, present := decodeVideo(t, anonRec)["auto_filled"]; present {
-		t.Fatal("auto_filled leaked to an anonymous viewer")
-	}
-	if _, present := decodeVideo(t, otherUserRec)["auto_filled"]; present {
-		t.Fatal("auto_filled leaked to another user")
+	for name, body := range map[string]map[string]any{"anon": anonBody, "stranger": strangerBody} {
+		if _, present := body["auto_filled"]; present {
+			t.Fatalf("auto_filled leaked to %s", name)
+		}
 	}
 ```
 
-- [ ] **Step 2: Run it and watch it fail.** Expected: FAIL, because the owner response lacks the field.
+Add a second test where the repo's `GetVideoAutoFilled` returns an error: the owner gets 200 with no `auto_filled` key.
 
-- [ ] **Step 3: Implement.** In `videoView`, next to `Language`:
+- [ ] **Step 2: Run it and watch it fail.** Expected: FAIL (the owner body lacks the key).
+
+- [ ] **Step 3: Implement.** In `videoView`, beside `Language`:
 
 ```go
 	// AutoFilled lists which of category/language hold a value the Jev
-	// auto-fill worker chose and no human has since set. Owner and staff only.
+	// auto-fill worker chose and no human has set since. Managers and staff only.
 	AutoFilled []string `json:"auto_filled,omitempty"`
 ```
 
 In `respondVideo`, before `s.attachVideoIPFS(...)`:
 
 ```go
-	if viewerID, role, ok := principalFromContext(c); ok && (viewerID == v.OwnerID || isStaff(role)) {
-		if af, err := s.videosvc.AutoFilled(c.Request().Context(), id); err == nil && len(af) > 0 {
-			view.AutoFilled = af
+	if viewerID, role, ok := principalFromContext(c); ok {
+		ctx := c.Request().Context()
+		may := isStaff(role)
+		if !may {
+			_, may = s.canManageVideo(ctx, viewerID, id)
+		}
+		if may {
+			if af, err := s.videosvc.AutoFilled(ctx, id); err == nil && len(af) > 0 {
+				view.AutoFilled = af
+			}
 		}
 	}
 ```
@@ -3291,25 +3750,64 @@ In `api/openapi.yaml` `Video.properties`:
           type: array
           items: {type: string, enum: [category, language]}
           description: >-
-            Owner and staff only; omitted otherwise and when empty. Fields whose
-            current value was chosen automatically (TypeSafe Jev auto-fill) and
-            that no person has set since. Studio shows a "Set automatically" note.
+            Present only for callers who may manage the video (owner, channel
+            editor, staff) and only when non-empty. Fields whose current value
+            was chosen automatically (TypeSafe Jev auto-fill) and that no person
+            has set since. Studio shows a "Set automatically" note.
 ```
 
-- [ ] **Step 4: Run it.** `go test ./internal/httpapi/ -race` → PASS. Then `make ci`.
+- [ ] **Step 4: Run.** `go test ./internal/httpapi/ -race` → PASS. Then `make ci`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Commit**, then run **Task 12** straight after the merge.
 
 ```bash
 git add internal/httpapi api/openapi.yaml
-git commit -m "feat(httpapi): auto_filled on the owner/staff video view
+git commit -m "feat(httpapi): auto_filled on the video view for managers and staff
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 11: `api evaluate-metadata` (PR C11, core)
+## Task 12: Contract sync, a codegen-only vidra-user PR (S1, S2, S3)
+
+**Goal:** Keep vidra-user's required `contract-ci` green after each core PR that changes `api/openapi.yaml` (C10, C11, C14).
+
+**When:** Immediately after C10, C11 or C14 merges on core `main`, and before any other vidra-user PR merges.
+
+**Files:** `lib/api/generated.ts` only. Also `lib/api/types.ts` if a newly exported schema needs an alias in the same PR; the feature PRs add aliases otherwise.
+
+**Acceptance Criteria:**
+- [ ] `lib/api/generated.ts` equals codegen output from core `main`'s spec.
+- [ ] `npx tsc --noEmit` passes: the new optional fields break no existing code.
+- [ ] The PR's `contract-ci` is green.
+
+**Verify:** In the vidra-user worktree:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yegamble/vidra-core/main/api/openapi.yaml -o /tmp/openapi.yaml
+OPENAPI_PATH=/tmp/openapi.yaml npm run codegen
+git diff --stat -- lib/api/generated.ts     # non-empty: the core change
+npx tsc --noEmit && npm run lint && npm run test
+```
+
+**Steps:**
+
+- [ ] **Step 1:** Run the Verify block.
+- [ ] **Step 2:** Commit and open a PR titled `[claude] api: regenerate types for <core PR #>`. The body links the core PR and states "codegen only".
+
+```bash
+git add lib/api/generated.ts
+git commit -m "chore(api): regenerate types for vidra-core #<n>
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 3:** Merge once CI is green. Only then does other vidra-user work continue.
+
+---
+
+## Task 13: `api evaluate-metadata` (PR C12, core)
 
 **Goal:** A read-only subcommand that measures Jev against human-labelled public videos, so the bars are set from data. It writes nothing.
 
@@ -3319,7 +3817,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Behaviour:** `api evaluate-metadata [--sample 300] [--seed vidra] [--json]`
 - Loads config (`config.Load()`) and opens the store the way `verify-blobs` does (`cmd/api/verify_blobs.go:73`).
-- Requires a key (`TYPESAFE_API_KEY`; after Task 18, the same resolver the worker uses). With no key it exits 1 with `evaluate-metadata: no TypeSafe key`.
+- Requires a key (`TYPESAFE_API_KEY` until Task 15; from then on `judgment.NewAccount(db.Queries(), time.Now, judgment.WithSealedKey(cipher, cfg.TypeSafeAPIKey)).Key`, the resolver the worker uses). With no key it exits 1 with `evaluate-metadata: no TypeSafe key`.
 - Samples with `SampleLabelledVideosForEvaluation` and skips any row whose human value is not in the live vocabulary.
 - Asks both questions for every sample, as if both fields were empty, sequentially with a 5 s per-call timeout.
 - Prints, per field: n, coverage (share at or over the bar), agreement among covered, agreement per probability band (`<0.5`, `0.5–0.7`, `0.7–0.8`, `0.8–0.9`, `0.9–0.95`, `≥0.95`), the count of `none_of_these`/`unclear`, and the 10 most-confused `human→jev` pairs.
@@ -3521,421 +4019,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-## Task 12: Env example and runbook (PR M1, meta)
-
-**Goal:** An operator can find, understand, enable, measure and undo the feature from this repo alone.
-
-**Files:**
-- Modify: `env/production.env.example` (a new block after the outbound-email block, ~L976)
-- Create: `docs/metadata-autofill.md`
-
-**Acceptance Criteria:**
-- [ ] The four keys are present with empty or `false` values and the §8 privacy statement.
-- [ ] The compose gate passes with the unedited example.
-- [ ] The runbook covers: what is sent and never sent; enabling (env or panel); the `enabled_since` rule, stated plainly; "Fill existing videos"; the status meanings; the evaluation gate (`docker compose exec api /app/api evaluate-metadata`, with the real binary path checked against the api Dockerfile); turning it off; undoing fills (SQL below); and the operator's privacy-notice duty.
-
-**Verify:**
-```
-cp env/production.env.example /tmp/check.env   # fill the ${VAR:?} keys with dummies
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file /tmp/check.env config -q && echo OK
-python3 -m unittest discover -s tests -p '*_test.py'
-```
-
-**Steps:**
-
-- [ ] **Step 1: Env block**
-
-```bash
-# --- Automatic category & language (TypeSafe Jev) -----------------------------
-# OFF by default. When on, the TITLE, DESCRIPTION, CHANNEL NAME and TAGS of
-# PUBLIC, published videos that have no category or language are sent to
-# TypeSafe, a third-party service hosted in the United States, which picks one
-# from this instance's own lists. Private and unlisted videos, drafts,
-# comments and messages are never sent. TypeSafe states it does not train on
-# this data. You are the party deciding to send it: say so in your instance's
-# privacy notice. Runbook: docs/metadata-autofill.md.
-#
-# The admin toggle (Config → VOD) overrides METADATA_AUTOFILL_ENABLED. Leave
-# TYPESAFE_ENDPOINT / TYPESAFE_MODEL empty for the defaults (api.typesafe.ai,
-# jev-1.13.0): the confidence bars were measured against that model.
-# TYPESAFE_API_KEY is a SECRET — never commit a real value.
-METADATA_AUTOFILL_ENABLED=false
-TYPESAFE_API_KEY=
-TYPESAFE_ENDPOINT=
-TYPESAFE_MODEL=
-```
-
-- [ ] **Step 2: Runbook** `docs/metadata-autofill.md`, with these sections: *What it does*, *What is sent and what never is*, *Turning it on*, *Which videos it reaches* ("Videos published or edited after you switch this on are filled automatically; everything else waits for the Fill existing videos button"), *Reading the status card*, *Before you rely on it: the evaluation*, *Turning it off*, *Undoing fills*, *Privacy notice*, *Known limits* (English-primary; a wrong answer is visible and correctable in Studio; an edited old video becomes eligible; federation peers do not receive category or language). The undo SQL must say that it bypasses the hooks, so the search index converges at the next reconcile (24 h default), or at once after an api restart triggers the boot reconcile, which the implementer checks in `runSearchReconcileWorker` before claiming it:
-
-```sql
--- Revert every automatic value no person has changed since.
-BEGIN;
-UPDATE videos v SET category = NULL
-  FROM video_metadata_judgments j
- WHERE j.video_id = v.id AND j.category_applied IS NOT NULL AND v.category = j.category_applied;
-UPDATE videos v SET language = NULL
-  FROM video_metadata_judgments j
- WHERE j.video_id = v.id AND j.language_applied IS NOT NULL AND v.language = j.language_applied;
--- Keep the judgments so the worker does not re-ask; clear the marker.
-UPDATE video_metadata_judgments SET category_applied = NULL, language_applied = NULL;
-COMMIT;
-```
-
-- [ ] **Step 3: Run the gates** (Verify above). Expected: `OK`, and the unit suite passes with 0 skipped.
-
-- [ ] **Step 4: Commit and open the PR**
-
-```bash
-git add env/production.env.example docs/metadata-autofill.md
-git commit -m "docs: metadata auto-fill env keys and operator runbook
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
-```
-
----
-
-## Task 13: Codegen, toggle and warning, infrastructure labels, API wrappers (PR U1, user)
-
-**Goal:** The admin can switch the feature on under Config → VOD, is warned when no key is set, sees the Infrastructure row, and the client can call the four endpoints.
-
-**Files:**
-- Regenerate: `lib/api/generated.ts`
-- Modify: `lib/api/types.ts`, `lib/api/endpoints.ts`, `lib/admin-config-ia.ts` (VOD sections L282-341; META), `lib/admin-config-ia.test.ts` (`SERVER_REGISTRY` ~L108; wiring block L827-919), `components/AdminInfrastructureView.tsx` (`FEATURE_LABEL` L555-577; `FEATURE_CONFIG_PAGE` L590-619)
-
-**Acceptance Criteria:**
-- [ ] `metadata_autofill_enabled` renders as a toggle in a new VOD section `autofill` titled "Automatic category & language", with the §8 privacy text as help.
-- [ ] The warning shows when `features` has `{key:"metadata_autofill", configured:false}`, and not otherwise.
-- [ ] The Infrastructure row reads "Automatic category & language" and links to `/admin/config/vod`.
-- [ ] `api.getMetadataFillStatus`, `testMetadataFill`, `startMetadataFillRun` and `stopMetadataFillRun` exist, and `npm run check:contract` passes.
-
-**Verify:** `npx tsc --noEmit && npm run lint && npm run test -- lib/admin-config-ia components/AdminInfrastructureView && npm run check:contract`.
-
-**Steps:**
-
-- [ ] **Step 1: Regenerate.** `curl -fsSL https://raw.githubusercontent.com/yegamble/vidra-core/main/api/openapi.yaml -o /tmp/openapi.yaml && OPENAPI_PATH=/tmp/openapi.yaml npm run codegen`. Expected: `generated.ts` gains `MetadataFillStatus`, `MetadataFillRun` and `Video.auto_filled`.
-
-- [ ] **Step 2: Failing tests.** In `lib/admin-config-ia.test.ts`, add `["metadata_autofill_enabled","vod","autofill"]` to `SERVER_REGISTRY`. In the wiring block, add:
-
-```ts
-  it("warns on automatic category & language when no TypeSafe key is set", () => {
-    const infra = { features: [{ key: "metadata_autofill", enabled: true, configured: false }] };
-    expect(wiringWarnNote(META.metadata_autofill_enabled, infra)).toMatch(/no TypeSafe API key/);
-    expect(
-      wiringWarnNote(META.metadata_autofill_enabled, {
-        features: [{ key: "metadata_autofill", enabled: true, configured: true }],
-      }),
-    ).toBeNull();
-  });
-```
-
-In `components/AdminInfrastructureView.test.tsx`, add a case rendering a `metadata_autofill` row. It asserts the label "Automatic category & language" and a link to `/admin/config/vod`.
-
-- [ ] **Step 3: Run them and watch them fail.** `npm run test -- lib/admin-config-ia components/AdminInfrastructureView`. Expected: FAIL.
-
-- [ ] **Step 4: Implement.** In the VOD sections, after `transcription`:
-
-```ts
-    {
-      // Server id "autofill": TypeSafe Jev automatic category & language.
-      id: "autofill",
-      title: "Automatic category & language",
-      description:
-        "Fill in a missing category and language on public videos (needs a TypeSafe key).",
-    },
-```
-
-In `META`, after `transcription_enabled`:
-
-```ts
-  metadata_autofill_enabled: {
-    label: "Automatic category & language",
-    help: "Sends the title, description, channel name and tags of public videos to TypeSafe, a third-party service hosted in the United States, to choose a category and language for videos that have none. Private and unlisted videos, drafts, comments and messages are never sent. TypeSafe states it does not train on this data. Off by default.",
-    control: "toggle",
-    page: "vod",
-    section: "autofill",
-    warn: {
-      note: "This server has no TypeSafe API key, so this switch currently does nothing — nothing is sent and nothing is filled. See Infrastructure → Optional features.",
-      isTriggered: (infra) =>
-        infra.features?.some(
-          (f) => f.key === "metadata_autofill" && f.configured === false,
-        ) === true,
-    },
-  },
-```
-
-In `AdminInfrastructureView.tsx`: add `metadata_autofill: "Automatic category & language"` to `FEATURE_LABEL` and `metadata_autofill: "/admin/config/vod"` to `FEATURE_CONFIG_PAGE`.
-
-In `lib/api/types.ts`:
-
-```ts
-export type MetadataFillStatus = Schemas["MetadataFillStatus"];
-export type MetadataFillRun = Schemas["MetadataFillRun"];
-```
-
-In `lib/api/endpoints.ts`, beside `sendTestMail`:
-
-```ts
-  getMetadataFillStatus: (signal?: AbortSignal) =>
-    apiRequest<MetadataFillStatus>("/api/v1/admin/metadata-fill/status", { signal }),
-  testMetadataFill: () =>
-    apiRequest<{ status: string }>("/api/v1/admin/metadata-fill/test", { method: "POST" }),
-  startMetadataFillRun: () =>
-    apiRequest<MetadataFillRun>("/api/v1/admin/metadata-fill/runs", { method: "POST" }),
-  stopMetadataFillRun: () =>
-    apiRequest<void>("/api/v1/admin/metadata-fill/runs/current", { method: "DELETE" }),
-```
-
-- [ ] **Step 5: Run the gates.** Every command in Verify is green.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add lib components
-git commit -m "feat(admin): automatic category & language toggle, warning and infrastructure row
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
-```
-
----
-
-## Task 14: `MetadataFillCard` (PR U2, user)
-
-**Goal:** One card on the Infrastructure page shows the state and counts, and offers **Test connection** and **Fill existing videos (N)** / **Stop filling**.
-
-**Files:**
-- Create: `components/admin/MetadataFillCard.tsx`, `components/admin/MetadataFillCard.test.tsx`
-- Modify: `components/AdminInfrastructureView.tsx` (render after `<MailTestCard …/>`, L315)
-- Modify: `e2e/admin-infrastructure.spec.ts` (one mocked spec)
-
-**Behaviour and copy:**
-- Loads `api.getMetadataFillStatus` on mount. A failed load shows `ErrorState` with a retry button, and the rest of the page stays usable.
-- Status line: "Off" (not enabled), "Needs setup — no TypeSafe key" (enabled and not configured), "Paused — TypeSafe rejected the key" (`paused_code=auth`), "Paused — rate limited, resuming shortly" (`rate_limited`), otherwise "Active".
-- Counts: "Waiting N · Filled N · Not confident N · Failed N".
-- **Test connection**, following the MailTestCard pattern (an `inFlight` ref, `aria-disabled`, a `Spinner`). On success: "TypeSafe answered. The key works." On error, the `errorMessage` overrides are:
-  `metadata_fill_not_configured`: "No TypeSafe API key is set."
-  `reason` `auth`: "TypeSafe rejected the key."
-  `rate_limited`: "TypeSafe is rate-limiting this key. Try again in a few minutes."
-  `unavailable`: "TypeSafe could not be reached from this server."
-  `bad_response`/`invalid_request`: "TypeSafe answered with something unexpected. Check TYPESAFE_ENDPOINT and TYPESAFE_MODEL."
-  To read the typed `reason`, check how `MailTestCard` reads `err.mailReason` (`lib/api/client.ts` L37-58). The server puts it in the same `ErrorBody.Reason`, so `ApiError.mailReason` carries it. Rename nothing in this slice; read it and note in a code comment that the field is shared.
-- **Fill existing videos (N)**, where N is `unjudged`. It is disabled with an explanation when not enabled or not configured, or when `unjudged == 0` ("Nothing to fill"). While `run` is running, the button becomes **Stop filling** and shows "Filled X of Y judged so far". The card polls status every 10 s while a run is running and stops polling on unmount.
-- The card never shows a model name or a probability. The engine name "TypeSafe" appears only in admin copy.
-
-**Acceptance Criteria:**
-- [ ] Unit tests cover the five status lines, a test success, a test `auth` failure, a start (the button flips to Stop), a stop, a 409 `metadata_fill_run_active` message, and that polling stops on unmount.
-- [ ] A mocked e2e run renders the card from a mocked status and clicks Test connection against a mocked 200.
-
-**Verify:** `npm run test -- components/admin/MetadataFillCard components/AdminInfrastructureView && npx tsc --noEmit && npm run lint && npm run lint:icons`.
-
-**Steps:**
-
-- [ ] **Step 1: Failing tests** `components/admin/MetadataFillCard.test.tsx`. Mock the API the way `MailTestCard.test.tsx` does:
-
-```tsx
-// @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError } from "@/lib/api";
-import { MetadataFillCard } from "./MetadataFillCard";
-
-const mocks = vi.hoisted(() => ({
-  getMetadataFillStatus: vi.fn(),
-  testMetadataFill: vi.fn(),
-  startMetadataFillRun: vi.fn(),
-  stopMetadataFillRun: vi.fn(),
-}));
-vi.mock("@/lib/api", async (importActual) => {
-  const actual = await importActual<typeof import("@/lib/api")>();
-  return { ...actual, api: { ...actual.api, ...mocks } };
-});
-
-const base = {
-  enabled: true, configured: true, model: "jev-1.13.0", paused_code: null, paused_until: null,
-  counts: { waiting: 1, filled: 2, not_confident: 3, failed: 4 }, unjudged: 120, run: null,
-};
-
-beforeEach(() => mocks.getMetadataFillStatus.mockResolvedValue(base));
-afterEach(() => vi.clearAllMocks());
-
-describe("MetadataFillCard", () => {
-  it.each([
-    [{ enabled: false }, "Off"],
-    [{ configured: false }, "Needs setup — no TypeSafe key"],
-    [{ paused_code: "auth" }, "Paused — TypeSafe rejected the key"],
-    [{ paused_code: "rate_limited" }, "Paused — rate limited, resuming shortly"],
-    [{}, "Active"],
-  ])("shows the status for %o", async (patch, text) => {
-    mocks.getMetadataFillStatus.mockResolvedValue({ ...base, ...patch });
-    render(<MetadataFillCard />);
-    expect(await screen.findByText(text)).toBeTruthy();
-  });
-
-  it("shows counts and the unjudged total on the button", async () => {
-    render(<MetadataFillCard />);
-    expect(await screen.findByText(/Waiting 1 · Filled 2 · Not confident 3 · Failed 4/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Fill existing videos (120)" })).toBeTruthy();
-  });
-
-  it("reports a rejected key from the test", async () => {
-    mocks.testMetadataFill.mockRejectedValue(
-      Object.assign(new ApiError(502, "metadata_fill_test_failed", "x"), { mailReason: "auth" }),
-    );
-    render(<MetadataFillCard />);
-    await userEvent.click(await screen.findByRole("button", { name: "Test connection" }));
-    expect(await screen.findByText("TypeSafe rejected the key.")).toBeTruthy();
-  });
-
-  it("starts and stops a run", async () => {
-    mocks.startMetadataFillRun.mockResolvedValue({ id: "r", state: "running", judged: 0, filled: 0, started_at: "" });
-    render(<MetadataFillCard />);
-    await userEvent.click(await screen.findByRole("button", { name: "Fill existing videos (120)" }));
-    mocks.getMetadataFillStatus.mockResolvedValue({ ...base, run: { id: "r", state: "running", judged: 5, filled: 4, started_at: "" } });
-    const stop = await screen.findByRole("button", { name: "Stop filling" });
-    await userEvent.click(stop);
-    expect(mocks.stopMetadataFillRun).toHaveBeenCalledOnce();
-  });
-
-  it("explains a run already in progress", async () => {
-    mocks.startMetadataFillRun.mockRejectedValue(new ApiError(409, "metadata_fill_run_active", "x"));
-    render(<MetadataFillCard />);
-    await userEvent.click(await screen.findByRole("button", { name: "Fill existing videos (120)" }));
-    expect(await screen.findByText(/already running/)).toBeTruthy();
-  });
-
-  it("stops polling on unmount", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mocks.getMetadataFillStatus.mockResolvedValue({ ...base, run: { id: "r", state: "running", judged: 0, filled: 0, started_at: "" } });
-    const { unmount } = render(<MetadataFillCard />);
-    await waitFor(() => expect(mocks.getMetadataFillStatus).toHaveBeenCalledTimes(1));
-    unmount();
-    vi.advanceTimersByTime(30_000);
-    expect(mocks.getMetadataFillStatus).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
-  });
-});
-```
-
-Check the `ApiError` constructor's argument order in `lib/api/client.ts` and match it. The object-assign form above assumes `(status, code, message)`.
-
-- [ ] **Step 2: Run them and watch them fail.** Expected: FAIL (no module).
-
-- [ ] **Step 3: Implement `components/admin/MetadataFillCard.tsx`.** Structure it like `MailTestCard.tsx`: a `<section aria-label="Automatic category and language">` holding a `Card` with a heading, the status `Badge` (reuse the Off/Active/Needs setup variant mapping from `FeatureRow`, `AdminInfrastructureView.tsx:667-717`), the counts line, and two `Button`s that use `aria-disabled` rather than `disabled`, matching MailTestCard. It uses `Spinner`, and `Alert variant="danger"`/`"success"` for outcomes. Load with `useApiResource(api.getMetadataFillStatus, [])` (`lib/use-api-resource.ts:57`); its `retry` refreshes after start and stop. Poll with a `useEffect` that sets a 10 s `setInterval` only while `data?.run?.state === "running"` and clears it on cleanup. Copy is exactly the strings above, and all colours come from design tokens. Read `.ralph/specs/design-system.md` before writing the JSX.
-
-- [ ] **Step 4: Place it.** In `AdminInfrastructureView.tsx`, directly after `<MailTestCard configureHref="/admin/config/email" />`, add `<MetadataFillCard />`.
-
-- [ ] **Step 5: Mocked e2e.** In `e2e/admin-infrastructure.spec.ts`, add a `METADATA_FILL_STATUS = /\/api\/v1\/admin\/metadata-fill\/status$/` constant and a test. It uses `signIn(page, "admin")`, `openInfrastructure`, routes the status to `base` and `/metadata-fill/test` to `{ status: "ok" }`, clicks "Test connection", and expects "TypeSafe answered. The key works.".
-
-- [ ] **Step 6: Run the gates.** Verify is green. Do not run `npm run e2e` locally; CI runs it.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add components e2e
-git commit -m "feat(admin): metadata auto-fill status card with test and fill-existing run
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
-```
-
----
-
-## Task 15: Studio marker and mocked e2e (PR U3, user)
-
-**Goal:** In Studio's edit form, an automatically set category or language carries a quiet note that disappears when the creator changes the field.
-
-**Files:**
-- Modify: `components/studio/shared.tsx` (`TaxonomySelect`, L62-107), `components/studio/VideoRow.tsx` (state L71-72; `startEdit` L184-207; selects L238-257)
-- Create: `components/studio/shared.test.tsx`
-- Modify: `e2e/studio.spec.ts` (near the edit-flow block, ~L1209)
-
-**Acceptance Criteria:**
-- [ ] `TaxonomySelect` with `autoFilled` renders "Set automatically · change it if it's wrong" and wires it to the select with `aria-describedby`. Without the prop it renders exactly as before.
-- [ ] `VideoRow` shows the note on a field while its value equals the value loaded with `auto_filled` including it, and hides it once the creator picks a different value.
-- [ ] The note never names an engine and never shows a number.
-- [ ] A mocked e2e run proves the note shows on a mocked `auto_filled:["category"]` video and disappears after changing the category.
-
-**Verify:** `npm run test -- components/studio && npx tsc --noEmit && npm run lint`.
-
-**Steps:**
-
-- [ ] **Step 1: Failing test** `components/studio/shared.test.tsx`
-
-```tsx
-// @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import { TaxonomySelect } from "./shared";
-
-const options = [{ id: "1", label: "Music" }, { id: "2", label: "Films" }];
-
-describe("TaxonomySelect", () => {
-  it("notes an automatically set value and links it to the select", () => {
-    render(<TaxonomySelect label="Category" ariaLabel="Edit category" value="1" onChange={() => {}} options={options} autoFilled />);
-    const note = screen.getByText("Set automatically · change it if it's wrong");
-    const select = screen.getByLabelText("Edit category");
-    expect(select.getAttribute("aria-describedby") ?? "").toContain(note.id);
-  });
-
-  it("renders no note without the flag", () => {
-    render(<TaxonomySelect label="Category" ariaLabel="Edit category" value="1" onChange={() => {}} options={options} />);
-    expect(screen.queryByText(/Set automatically/)).toBeNull();
-  });
-});
-```
-
-- [ ] **Step 2: Run it and watch it fail.** Expected: FAIL, because the note is missing.
-
-- [ ] **Step 3: Implement.** Add `autoFilled?: boolean` to `TaxonomySelect`'s props. Inside it:
-
-```tsx
-  const noteId = useId();
-  const describedBy = [errorId && error ? errorId : null, autoFilled ? noteId : null]
-    .filter(Boolean)
-    .join(" ") || undefined;
-```
-
-Put `aria-describedby={describedBy}` on the `<select>`, replacing whatever `aria-describedby` it already derives from `errorId`, and keep that behaviour. Then render after the select:
-
-```tsx
-      {autoFilled ? (
-        <p id={noteId} className="text-xs text-fg-muted">
-          Set automatically · change it if it's wrong
-        </p>
-      ) : null}
-```
-
-Use the existing muted-text token class that `FieldErrorText`'s neighbours use. Check `components/studio/shared.tsx` for the house class name.
-
-In `VideoRow.tsx`, add `const [autoFilled, setAutoFilled] = useState<{ category?: string; language?: string }>(() => pickAuto(video));` with
-
-```ts
-function pickAuto(v: Video): { category?: string; language?: string } {
-  const af = v.auto_filled ?? [];
-  return {
-    category: af.includes("category") ? v.category : undefined,
-    language: af.includes("language") ? v.language : undefined,
-  };
-}
-```
-
-In `startEdit`, after `setLanguage(full.language ?? "")`, add `setAutoFilled(pickAuto(full));`. On the two selects, pass `autoFilled={autoFilled.category !== undefined && category === autoFilled.category}`, and the same for language. The note then disappears as soon as the value differs, and saving (decision §0.2.2) clears it server-side.
-
-- [ ] **Step 4: Mocked e2e.** In `e2e/studio.spec.ts`, beside the existing edit test (~L1209), route the `GET /api/v1/videos/<id>` mock with `category: "1", auto_filled: ["category"]`, open the edit form, `expect(page.getByText("Set automatically · change it if it's wrong")).toBeVisible()`, then `selectOption` "Edit category" to `"2"` and expect the note to be hidden.
-
-- [ ] **Step 5: Run the gates.** Verify is green.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add components/studio e2e/studio.spec.ts
-git commit -m "feat(studio): quiet note on automatically set category and language
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
-```
-
----
-
-## Task 16: `jev-stub` compose profile (PR C12, core)
+## Task 14: `jev-stub` compose profile (PR C13, core)
 
 **Goal:** A deterministic stand-in for `/v1/systemone` that backed e2e can start, so CI proves the whole chain with no real key.
 
@@ -3946,10 +4030,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Stub contract:** It requires `Authorization: Bearer stub` (anything else gets 401). For each `choice` question it picks, in order: the first option key found case-insensitively in `state.video.title`; then `en` if offered; then the last option, which is `none_of_these` or `unclear`. The pick gets 0.97 and the rest share 0.03. It returns the documented response shape with `model` echoed.
 
 **Acceptance Criteria:**
-- [ ] `python3 -m unittest scripts/dev/jevstub_test.py` passes: title match, `en` fallback, no-match, and 401.
+- [ ] `python3 -m unittest discover -s scripts/dev -p 'jevstub_test.py'` passes: title match, `en` fallback, no-match, and 401.
+- [ ] No core CI lane runs Python tests; the PR body says the stub test was run locally and pastes its output.
 - [ ] `docker compose --profile jev-stub config` renders a service `jev-stub` on the compose network with **no published port**.
 
-**Verify:** `python3 -m unittest scripts/dev/jevstub_test.py && docker compose --profile jev-stub config | grep -A3 'jev-stub:'`.
+**Verify:** `python3 -m unittest discover -s scripts/dev -p 'jevstub_test.py' && docker compose --profile jev-stub config | grep -A3 'jev-stub:'`.
 
 **Steps:**
 
@@ -4092,7 +4177,668 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-## Task 17: Backed e2e spec and optional-workflow job (PR U4, user; touches `.github/workflows`)
+## Task 15: Sealed key setting (PR C14, core)
+
+**Goal:** The admin can set or clear the TypeSafe key in the panel with no restart. It is stored sealed or not at all, in the account-level `typesafe_state` row, and it wins over `TYPESAFE_API_KEY`.
+
+**Files:**
+- Modify: `internal/judgment/account.go` (key methods), `internal/judgment/account_test.go`
+- Modify: `internal/store/queries/metadata_fill.sql` (two queries; the column already exists from 0152), then `make sqlc`
+- Modify: `internal/metadatafill/service.go` (`Status` gains the key source and status)
+- Modify: `internal/httpapi/admin_metadata_fill.go`, `internal/httpapi/server.go` (route; provider gains key methods), `internal/observability/audit.go`, `api/openapi.yaml`
+- Modify: `cmd/api/main.go` (pass the existing `secretbox` cipher built at L449-458 into `judgment.NewAccount`; replace the static `KeyFunc` with `typesafeAccount.Key`; the evaluator in Task 13 uses the same)
+- Modify: `internal/setup/secrets.go:85-86` (the `MFA_KEY_KEK` rotation text)
+
+**Contract:** `PUT /api/v1/admin/metadata-fill/key` with body `{"api_key":"<value>"}` replaces the key, and `{"api_key":""}` clears it. The response is 204. Errors: 409 `metadata_fill_secrets_key_missing` when there is no KEK; 422 when `api_key` is absent. `MetadataFillStatus` gains `key_source: admin | env | none` and `key_status: ok | undecryptable | none`. The key is never returned.
+
+**Acceptance Criteria:**
+- [ ] Resolution order: a sealed admin key that opens, then `TYPESAFE_API_KEY`, then "". An undecryptable sealed value is reported, and resolution falls back to env.
+- [ ] A **database error** reading the key resolves to "" for this call. The Task 8 tick then idles and never moves the cutoff; no global state changes on a read error.
+- [ ] With a nil cipher, a non-empty `PUT` gets 409 and stores nothing. Clearing works without a cipher.
+- [ ] Audit `admin.metadata_fill.key_update` records `secret_changed=true` and `Reason` `set` or `cleared`. The key string never appears in a response, log or audit record (the test greps the captured log buffer).
+- [ ] The key is read per call: a key saved in the panel is used by the next tick.
+- [ ] `internal/setup/secrets.go` states that rotating `MFA_KEY_KEK` makes TOTP secrets, the stored mail credential and the stored TypeSafe key undecryptable.
+
+**Verify:** `go test ./internal/judgment/ ./internal/httpapi/ -race -run 'Key|MetadataFill|Account'` → PASS. Then `make ci`.
+
+**Steps:**
+
+- [ ] **Step 1: Queries** (append to `metadata_fill.sql`, then `make sqlc`):
+
+```sql
+-- name: GetTypeSafeSealedKey :one
+SELECT api_key_sealed FROM typesafe_state WHERE singleton;
+
+-- name: SetTypeSafeSealedKey :exec
+UPDATE typesafe_state SET api_key_sealed = sqlc.narg('api_key_sealed'), updated_at = now() WHERE singleton;
+```
+
+`GetTypeSafeSealedKey` returns `*string` (§0.5).
+
+- [ ] **Step 2: Failing tests** appended to `internal/judgment/account_test.go`. Extend `fakeAccountRepo` with `sealed *string` and `readErr error`, and implement both new methods on it:
+
+```go
+func testCipher(t *testing.T) *secretbox.Cipher {
+	t.Helper()
+	c, err := secretbox.NewCipher(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func TestKeyResolutionOrderAndLiveness(t *testing.T) {
+	repo := &fakeAccountRepo{}
+	acct := NewAccount(repo, time.Now, WithSealedKey(testCipher(t), "env-key"))
+	ctx := context.Background()
+	if got, src := acct.ResolveKey(ctx); got != "env-key" || src != KeySourceEnv {
+		t.Fatalf("env fallback = %q/%s", got, src)
+	}
+	if err := acct.SetKey(ctx, "admin-key"); err != nil {
+		t.Fatal(err)
+	}
+	if got, src := acct.ResolveKey(ctx); got != "admin-key" || src != KeySourceAdmin {
+		t.Fatalf("admin key must win, read per call: %q/%s", got, src)
+	}
+	if repo.sealed == nil || *repo.sealed == "admin-key" || !strings.HasPrefix(*repo.sealed, "enc:") {
+		t.Fatal("key stored in the clear")
+	}
+	if err := acct.SetKey(ctx, ""); err != nil || repo.sealed != nil {
+		t.Fatalf("clear: err=%v sealed=%v", err, repo.sealed)
+	}
+}
+
+func TestKeyRefusedWithoutCipher(t *testing.T) {
+	acct := NewAccount(&fakeAccountRepo{}, time.Now, WithSealedKey(nil, ""))
+	if err := acct.SetKey(context.Background(), "x"); !errors.Is(err, ErrSecretsKeyMissing) {
+		t.Fatalf("err = %v, want ErrSecretsKeyMissing", err)
+	}
+	if err := acct.SetKey(context.Background(), ""); err != nil {
+		t.Fatalf("clearing must work without a cipher: %v", err)
+	}
+}
+
+func TestUndecryptableAndReadErrors(t *testing.T) {
+	bad := "enc:not-valid"
+	acct := NewAccount(&fakeAccountRepo{sealed: &bad}, time.Now, WithSealedKey(testCipher(t), "env-key"))
+	if got, _ := acct.ResolveKey(context.Background()); got != "env-key" {
+		t.Fatalf("got %q, want env fallback", got)
+	}
+	if acct.KeyStatus(context.Background()) != KeyStatusUndecryptable {
+		t.Fatal("undecryptable not reported")
+	}
+	broken := NewAccount(&fakeAccountRepo{readErr: errors.New("db down")}, time.Now, WithSealedKey(testCipher(t), "env-key"))
+	if got, _ := broken.ResolveKey(context.Background()); got != "env-key" {
+		t.Fatalf("a read error must fall back to env for this call, got %q", got)
+	}
+}
+```
+
+Add `errors`, `strings` and `github.com/vidra/vidra-core/internal/secretbox` to the imports.
+
+- [ ] **Step 3: Implement** in `internal/judgment/account.go`:
+
+```go
+// ErrSecretsKeyMissing: no KEK, so a key cannot be stored sealed and will not
+// be stored in the clear. Same rule as mailconfig.ErrSecretsKeyMissing.
+var ErrSecretsKeyMissing = errors.New("judgment: no key-encryption key")
+
+type KeySource string
+type KeyStatus string
+
+const (
+	KeySourceAdmin KeySource = "admin"
+	KeySourceEnv   KeySource = "env"
+	KeySourceNone  KeySource = "none"
+
+	KeyStatusOK            KeyStatus = "ok"
+	KeyStatusUndecryptable KeyStatus = "undecryptable"
+	KeyStatusNone          KeyStatus = "none"
+)
+
+// KeyRepository is the sealed-key half of typesafe_state.
+type KeyRepository interface {
+	GetTypeSafeSealedKey(ctx context.Context) (*string, error)
+	SetTypeSafeSealedKey(ctx context.Context, sealed *string) error
+}
+
+// AccountOption configures an Account.
+type AccountOption func(*Account)
+
+// WithSealedKey enables the admin-panel key (cipher may be nil: then a key is
+// refused, never stored in the clear) with env as the fallback.
+func WithSealedKey(cipher *secretbox.Cipher, env string) AccountOption {
+	return func(a *Account) { a.cipher, a.env, a.sealedKeys = cipher, strings.TrimSpace(env), true }
+}
+```
+
+Change the `Account` struct and its constructor:
+
+```go
+type Account struct {
+	repo       AccountRepository
+	now        func() time.Time
+	cipher     *secretbox.Cipher
+	env        string
+	sealedKeys bool
+}
+
+func NewAccount(repo AccountRepository, now func() time.Time, opts ...AccountOption) *Account {
+	a := &Account{repo: repo, now: now}
+	for _, o := range opts {
+		o(a)
+	}
+	return a
+}
+```
+
+Widen `AccountRepository` to embed `KeyRepository`. `*sqlcgen.Queries` satisfies both. Then add:
+
+```go
+func (a *Account) adminKey(ctx context.Context) (string, KeyStatus) {
+	if !a.sealedKeys {
+		return "", KeyStatusNone
+	}
+	sealed, err := a.repo.GetTypeSafeSealedKey(ctx)
+	if err != nil || sealed == nil || *sealed == "" {
+		return "", KeyStatusNone
+	}
+	if a.cipher == nil {
+		return "", KeyStatusUndecryptable
+	}
+	plain, err := a.cipher.Open(*sealed)
+	if err != nil {
+		return "", KeyStatusUndecryptable
+	}
+	return string(plain), KeyStatusOK
+}
+
+// ResolveKey: sealed admin key, else env, else "". Read per call.
+func (a *Account) ResolveKey(ctx context.Context) (string, KeySource) {
+	if v, st := a.adminKey(ctx); st == KeyStatusOK && v != "" {
+		return v, KeySourceAdmin
+	}
+	if a.env != "" {
+		return a.env, KeySourceEnv
+	}
+	return "", KeySourceNone
+}
+
+// Key adapts ResolveKey to KeyFunc.
+func (a *Account) Key(ctx context.Context) string { v, _ := a.ResolveKey(ctx); return v }
+
+// KeyStatus reports the admin key's health (for the status card).
+func (a *Account) KeyStatus(ctx context.Context) KeyStatus { _, st := a.adminKey(ctx); return st }
+
+// SetKey stores (sealed) or, with "", clears the admin key.
+func (a *Account) SetKey(ctx context.Context, value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return a.repo.SetTypeSafeSealedKey(ctx, nil)
+	}
+	if a.cipher == nil {
+		return ErrSecretsKeyMissing
+	}
+	sealed, err := a.cipher.Seal([]byte(value))
+	if err != nil {
+		return err
+	}
+	return a.repo.SetTypeSafeSealedKey(ctx, &sealed)
+}
+```
+
+Check `secretbox`'s signatures: `Seal([]byte) (string, error)` at L55, and `Open` at L66, which may return `[]byte` or `string`. Adjust `string(plain)` to match. Update Task 8's `fakeAccountRepo` to implement both key methods.
+
+- [ ] **Step 4: Wire it.** In `main.go`:
+
+```go
+	typesafeAccount := judgment.NewAccount(db.Queries(), time.Now, judgment.WithSealedKey(mailCipher, cfg.TypeSafeAPIKey))
+	judgeClient := judgment.New(cfg.TypeSafeEndpoint, cfg.TypeSafeModel, typesafeAccount.Key)
+```
+
+`mailCipher` is the local name of the `*secretbox.Cipher` built from `config.MailKEK()` at L449-458, and it may be nil. `metadatafill.Status` gains `KeySource judgment.KeySource` and `KeyStatus judgment.KeyStatus`, filled from the account. The service gets the account already (Task 8). Widen `metadataFillProvider` with `SetKey(ctx, value string) error`, and implement it on `metadatafill.Service` as a pass-through to `s.account.SetKey`.
+
+Handler:
+
+```go
+type metadataFillKeyRequest struct {
+	APIKey *string `json:"api_key"`
+}
+
+func (s *Server) handleMetadataFillSetKey(c echo.Context) error {
+	callerID, _, err := mustPrincipal(c)
+	if err != nil {
+		return err
+	}
+	var req metadataFillKeyRequest
+	if err := c.Bind(&req); err != nil || req.APIKey == nil {
+		return &ValidationError{Fields: []FieldError{{Field: "api_key", Message: "required; send \"\" to remove the key"}}}
+	}
+	err = s.metadatafillsvc.SetKey(c.Request().Context(), *req.APIKey)
+	if errors.Is(err, judgment.ErrSecretsKeyMissing) {
+		s.audit(c, observability.ActionAdminMetadataFillKeyUpdate, observability.ResultFailure, callerID.String(), "secrets_key_missing")
+		return &MetadataFillError{Status: http.StatusConflict, Code: "metadata_fill_secrets_key_missing",
+			Message: "this deployment has no key-encryption key, so the TypeSafe key cannot be stored sealed — and vidra will not store it in the clear. Set MFA_KEY_KEK (or share FEDERATION_KEY_KEK) and restart the api, then save again. TYPESAFE_API_KEY in the env file still works"}
+	}
+	if err != nil {
+		return err
+	}
+	reason := "set"
+	if strings.TrimSpace(*req.APIKey) == "" {
+		reason = "cleared"
+	}
+	s.auditEvent(c, audit.Event{
+		Action: observability.ActionAdminMetadataFillKeyUpdate, Result: observability.ResultSuccess,
+		ActorID: callerID.String(), Reason: reason,
+		Metadata: []audit.MetadataField{{Key: "secret_changed", Value: "true"}},
+	})
+	return c.NoContent(http.StatusNoContent)
+}
+```
+
+Check the `ValidationError`/`FieldError` shape in `errors.go` (the 422 envelope) and match it. Register `api.PUT("/admin/metadata-fill/key", s.handleMetadataFillSetKey, adminOnly...)`, and add the audit constant:
+
+```go
+	// ActionAdminMetadataFillKeyUpdate: the admin-panel TypeSafe key was set or
+	// cleared. Reason set|cleared; metadata secret_changed. Never the value.
+	ActionAdminMetadataFillKeyUpdate = "admin.metadata_fill.key_update"
+```
+
+Update OpenAPI: the route, and `key_source`/`key_status` on the status schema. Replace the Task 9 misconfigured note's parenthesis with "or add the key under Config → VOD — no restart needed". Update `internal/setup/secrets.go:85-86`.
+
+HTTP tests: admin-only; 204 on set and on clear; 409 with no cipher; 422 on a missing field; an audit record carrying `secret_changed`; and `!strings.Contains(buf.String(), "sk-test-key")` over the captured log.
+
+- [ ] **Step 5: Run.** `make ci`, then `go vet -tags=integration ./...`.
+
+- [ ] **Step 6: Commit**, then run **Task 12** (S3) straight after the merge.
+
+```bash
+git add internal cmd/api api/openapi.yaml
+git commit -m "feat(judgment): admin-panel TypeSafe key, sealed or refused, in the account state
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 16: Toggle and warning, infrastructure labels, API wrappers (PR U1, user)
+
+**Goal:** The admin can switch the feature on under Config → VOD, is warned when no key is set, sees the Infrastructure row, and the client can call the four endpoints.
+
+**Files:**
+- Modify: `lib/api/types.ts`, `lib/api/endpoints.ts`, `lib/admin-config-ia.ts` (VOD sections L282-341; META), `lib/admin-config-ia.test.ts` (`SERVER_REGISTRY` ~L108; wiring block L827-919), `components/AdminInfrastructureView.tsx` (`FEATURE_LABEL` L555-577; `FEATURE_CONFIG_PAGE` L590-619)
+
+**Acceptance Criteria:**
+- [ ] `metadata_autofill_enabled` renders as a toggle in a new VOD section `autofill` titled "Automatic category & language", with the §8 privacy text as help.
+- [ ] The warning shows when `features` has `{key:"metadata_autofill", configured:false}`, and not otherwise.
+- [ ] The Infrastructure row reads "Automatic category & language" and links to `/admin/config/vod#config-section-autofill`.
+- [ ] `api.getMetadataFillStatus`, `testMetadataFill`, `startMetadataFillRun` and `stopMetadataFillRun` exist, and `npm run check:contract` passes.
+
+**Verify:** `npx tsc --noEmit && npm run lint && npm run test -- lib/admin-config-ia components/AdminInfrastructureView && npm run check:contract`.
+
+**Steps:**
+
+- [ ] **Step 1: Confirm the contract is synced.** S1 and S2 (Task 12) must be merged: `grep -c "MetadataFillStatus\|auto_filled" lib/api/generated.ts` must print ≥ 2. Do not regenerate in this PR.
+
+- [ ] **Step 2: Failing tests.** In `lib/admin-config-ia.test.ts`, add `["metadata_autofill_enabled","vod","autofill"]` to `SERVER_REGISTRY`. In the wiring block, add:
+
+```ts
+  it("warns on automatic category & language when no TypeSafe key is set", () => {
+    const infra = { features: [{ key: "metadata_autofill", enabled: true, configured: false }] };
+    expect(wiringWarnNote(META.metadata_autofill_enabled, infra)).toMatch(/no TypeSafe API key/);
+    expect(
+      wiringWarnNote(META.metadata_autofill_enabled, {
+        features: [{ key: "metadata_autofill", enabled: true, configured: true }],
+      }),
+    ).toBeNull();
+  });
+```
+
+In `components/AdminInfrastructureView.test.tsx`, add a case rendering a `metadata_autofill` row. It asserts the label "Automatic category & language" and a link to `/admin/config/vod#config-section-autofill`.
+
+- [ ] **Step 3: Run them and watch them fail.** `npm run test -- lib/admin-config-ia components/AdminInfrastructureView`. Expected: FAIL.
+
+- [ ] **Step 4: Implement.** In the VOD sections, after `transcription`:
+
+```ts
+    {
+      // Server id "autofill": TypeSafe Jev automatic category & language.
+      id: "autofill",
+      title: "Automatic category & language",
+      description:
+        "Fill in a missing category and language on public videos (needs a TypeSafe key).",
+    },
+```
+
+In `META`, after `transcription_enabled`:
+
+```ts
+  metadata_autofill_enabled: {
+    label: "Automatic category & language",
+    help: "Sends the title, description, channel name and tags of public videos to TypeSafe, a third-party service hosted in the United States, to choose a category and language for videos that have none. Private and unlisted videos, drafts, comments and messages are never sent. TypeSafe states it does not train on this data. Off by default.",
+    control: "toggle",
+    page: "vod",
+    section: "autofill",
+    warn: {
+      note: "This server has no TypeSafe API key, so this switch currently does nothing — nothing is sent and nothing is filled. Set TYPESAFE_API_KEY in the server's env file.",
+      isTriggered: (infra) =>
+        infra.features?.some(
+          (f) => f.key === "metadata_autofill" && f.configured === false,
+        ) === true,
+    },
+  },
+```
+
+In `AdminInfrastructureView.tsx`: add `metadata_autofill: "Automatic category & language"` to `FEATURE_LABEL` and `metadata_autofill: "/admin/config/vod#config-section-autofill"` to `FEATURE_CONFIG_PAGE` (the anchor form `cdn` already uses).
+
+In `lib/api/types.ts`:
+
+```ts
+export type MetadataFillStatus = Schemas["MetadataFillStatus"];
+export type MetadataFillRun = Schemas["MetadataFillRun"];
+```
+
+In `lib/api/endpoints.ts`, beside `sendTestMail`:
+
+```ts
+  getMetadataFillStatus: (signal?: AbortSignal) =>
+    apiRequest<MetadataFillStatus>("/api/v1/admin/metadata-fill/status", { signal }),
+  testMetadataFill: () =>
+    apiRequest<{ status: string }>("/api/v1/admin/metadata-fill/test", { method: "POST" }),
+  startMetadataFillRun: () =>
+    apiRequest<MetadataFillRun>("/api/v1/admin/metadata-fill/runs", { method: "POST" }),
+  stopMetadataFillRun: () =>
+    apiRequest<void>("/api/v1/admin/metadata-fill/runs/current", { method: "DELETE" }),
+```
+
+- [ ] **Step 5: Run the gates.** Every command in Verify is green.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add lib components
+git commit -m "feat(admin): automatic category & language toggle, warning and infrastructure row
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 17: `MetadataFillCard` on Config → VOD (PR U2, user)
+
+**Goal:** The feature's controls sit beside its toggle: state, counts, **Test connection**, and **Fill existing videos (N)** / **Stop filling**. On a core that lacks the endpoints, the card renders nothing.
+
+**Files:**
+- Create: `components/admin/MetadataFillCard.tsx`, `components/admin/MetadataFillCard.test.tsx`
+- Modify: `components/AdminInstanceConfigView.tsx` (`sectionPanel`, L605-640)
+- Modify: `e2e/admin-config.spec.ts` (one mocked spec)
+
+**Behaviour and copy:**
+- The card loads `api.getMetadataFillStatus`.
+  - A **404** means this core predates the feature (§0.3; releases can pair a newer user with an older core), and the card renders `null`.
+  - Any other failure shows `ErrorState` with retry.
+- Status line:
+  - "Off" when not enabled.
+  - "Needs setup — no TypeSafe key" when enabled but not configured.
+  - "Paused — TypeSafe rejected the key" for `paused_code=auth`.
+  - "Paused — rate limited, resuming shortly" for `rate_limited`.
+  - "Paused — TypeSafe unreachable, retrying shortly" for `unavailable`.
+  - "Active" otherwise.
+- Counts: "Waiting N · Filled N · Not confident N · Failed N".
+- **Test connection** follows the MailTestCard pattern: an `inFlight` ref, `aria-disabled`, and a `Spinner`.
+  - Success: "TypeSafe answered. The key works."
+  - `errorMessage` overrides:
+    - `metadata_fill_not_configured`: "No TypeSafe API key is set."
+    - reason `auth`: "TypeSafe rejected the key."
+    - `rate_limited`: "TypeSafe is rate-limiting this key. Try again in a few minutes."
+    - `unavailable`: "TypeSafe could not be reached from this server."
+    - `bad_response`/`invalid_request`: "TypeSafe answered with something unexpected. Check TYPESAFE_ENDPOINT and TYPESAFE_MODEL."
+  - The server returns the typed reason in `ErrorBody.reason`, which `ApiError.mailReason` already carries (`lib/api/client.ts` L37-58). Read it from there, with a comment saying the field is shared.
+  - After a successful test, reload the status: the server clears a pause.
+- **Fill existing videos (N)**, where N is `unjudged`.
+  - It is `aria-disabled`, with the reason shown, when not enabled or not configured ("Switch it on and add a key first"), or when `unjudged == 0` ("Nothing to fill").
+  - While `run.state === "running"`, it becomes **Stop filling**, with "Filled X of Y judged so far".
+  - It polls status every 10 s only while a run is running, and clears the interval on unmount.
+- The card never shows a probability.
+
+**Acceptance Criteria:**
+- [ ] Unit tests cover:
+  - the six status lines;
+  - a 404 rendering nothing;
+  - test success, and test `auth` failure;
+  - start, which flips the button to Stop; stop; a 409 `metadata_fill_run_active` message;
+  - polling stopping on unmount.
+- [ ] The card is mounted by `sectionPanel("vod", "autofill")` and nowhere else.
+- [ ] A mocked e2e run renders the card on `/admin/config/vod` from a mocked status and clicks Test connection against a mocked 200.
+
+**Verify:** `npm run test -- components/admin/MetadataFillCard components/AdminInstanceConfigView && npx tsc --noEmit && npm run lint && npm run lint:icons`.
+
+**Steps:**
+
+- [ ] **Step 1: Failing tests** `components/admin/MetadataFillCard.test.tsx`. Mock the API as `MailTestCard.test.tsx` does:
+
+```tsx
+// @vitest-environment jsdom
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "@/lib/api";
+import { MetadataFillCard } from "./MetadataFillCard";
+
+const mocks = vi.hoisted(() => ({
+  getMetadataFillStatus: vi.fn(),
+  testMetadataFill: vi.fn(),
+  startMetadataFillRun: vi.fn(),
+  stopMetadataFillRun: vi.fn(),
+}));
+vi.mock("@/lib/api", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/api")>();
+  return { ...actual, api: { ...actual.api, ...mocks } };
+});
+
+const base = {
+  enabled: true, configured: true, model: "jev-1.13.0", paused_code: null,
+  counts: { waiting: 1, filled: 2, not_confident: 3, failed: 4 }, unjudged: 120, run: null,
+};
+
+beforeEach(() => mocks.getMetadataFillStatus.mockResolvedValue(base));
+afterEach(() => vi.clearAllMocks());
+
+describe("MetadataFillCard", () => {
+  it.each([
+    [{ enabled: false }, "Off"],
+    [{ configured: false }, "Needs setup — no TypeSafe key"],
+    [{ paused_code: "auth" }, "Paused — TypeSafe rejected the key"],
+    [{ paused_code: "rate_limited" }, "Paused — rate limited, resuming shortly"],
+    [{ paused_code: "unavailable" }, "Paused — TypeSafe unreachable, retrying shortly"],
+    [{}, "Active"],
+  ])("shows the status for %o", async (patch, text) => {
+    mocks.getMetadataFillStatus.mockResolvedValue({ ...base, ...patch });
+    render(<MetadataFillCard />);
+    expect(await screen.findByText(text)).toBeTruthy();
+  });
+
+  it("renders nothing on a core without the feature", async () => {
+    mocks.getMetadataFillStatus.mockRejectedValue(new ApiError(404, "not_found", "x"));
+    const { container } = render(<MetadataFillCard />);
+    await waitFor(() => expect(mocks.getMetadataFillStatus).toHaveBeenCalled());
+    expect(container.textContent).toBe("");
+  });
+
+  it("shows counts and the unjudged total on the button", async () => {
+    render(<MetadataFillCard />);
+    expect(await screen.findByText(/Waiting 1 · Filled 2 · Not confident 3 · Failed 4/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Fill existing videos (120)" })).toBeTruthy();
+  });
+
+  it("reports a rejected key from the test", async () => {
+    mocks.testMetadataFill.mockRejectedValue(
+      Object.assign(new ApiError(502, "metadata_fill_test_failed", "x"), { mailReason: "auth" }),
+    );
+    render(<MetadataFillCard />);
+    await userEvent.click(await screen.findByRole("button", { name: "Test connection" }));
+    expect(await screen.findByText("TypeSafe rejected the key.")).toBeTruthy();
+  });
+
+  it("starts and stops a run", async () => {
+    mocks.startMetadataFillRun.mockResolvedValue({ id: "r", state: "running", judged: 0, filled: 0, started_at: "" });
+    render(<MetadataFillCard />);
+    await userEvent.click(await screen.findByRole("button", { name: "Fill existing videos (120)" }));
+    mocks.getMetadataFillStatus.mockResolvedValue({ ...base, run: { id: "r", state: "running", judged: 5, filled: 4, started_at: "" } });
+    await userEvent.click(await screen.findByRole("button", { name: "Stop filling" }));
+    expect(mocks.stopMetadataFillRun).toHaveBeenCalledOnce();
+  });
+
+  it("explains a run already in progress", async () => {
+    mocks.startMetadataFillRun.mockRejectedValue(new ApiError(409, "metadata_fill_run_active", "x"));
+    render(<MetadataFillCard />);
+    await userEvent.click(await screen.findByRole("button", { name: "Fill existing videos (120)" }));
+    expect(await screen.findByText(/already running/)).toBeTruthy();
+  });
+
+  it("stops polling on unmount", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mocks.getMetadataFillStatus.mockResolvedValue({ ...base, run: { id: "r", state: "running", judged: 0, filled: 0, started_at: "" } });
+    const { unmount } = render(<MetadataFillCard />);
+    await waitFor(() => expect(mocks.getMetadataFillStatus).toHaveBeenCalledTimes(1));
+    unmount();
+    vi.advanceTimersByTime(30_000);
+    expect(mocks.getMetadataFillStatus).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+});
+```
+
+Check `ApiError`'s constructor argument order in `lib/api/client.ts` and match it.
+
+- [ ] **Step 2: Run them and watch them fail.** Expected: FAIL (no module).
+
+- [ ] **Step 3: Implement `components/admin/MetadataFillCard.tsx`**, structured like `MailTestCard.tsx`:
+  - A `<section aria-label="Automatic category and language">` holding a `Card`.
+  - The status `Badge`, using `FeatureRow`'s Off/Active/Needs-setup variant mapping (`AdminInfrastructureView.tsx:667-717`), with `warning` for the paused states.
+  - The counts line, and two `Button`s using `aria-disabled`.
+  - `Spinner`, plus `Alert variant="danger" | "success"` for outcomes.
+
+  Load with `useApiResource(api.getMetadataFillStatus, [])` (`lib/use-api-resource.ts:57`). When the error is an `ApiError` with status 404, return `null`. The resource's `retry` refreshes the status. Poll with a `useEffect` that sets a 10 s interval only while `data?.run?.state === "running"` and clears it on cleanup. Read `.ralph/specs/design-system.md` first; all colours come from tokens.
+
+- [ ] **Step 4: Mount it.** In `sectionPanel` (`AdminInstanceConfigView.tsx:605`):
+
+```tsx
+  if (page === "vod" && sectionId === "autofill") return <MetadataFillCard />;
+```
+
+- [ ] **Step 5: Mocked e2e.** In `e2e/admin-config.spec.ts`, add a `METADATA_FILL_STATUS = /\/api\/v1\/admin\/metadata-fill\/status$/` constant and a test. It signs in as admin with the file's existing helper, routes the status to `base` and `/metadata-fill/test` to `{ status: "ok" }`, opens `/admin/config/vod`, clicks "Test connection", and expects "TypeSafe answered. The key works.".
+
+- [ ] **Step 6: Run the gates.** Verify is green. Do not run `npm run e2e` locally; CI runs it.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add components e2e
+git commit -m "feat(admin): metadata auto-fill card beside its toggle on Config → VOD
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 18: Studio marker and mocked e2e (PR U3, user)
+
+**Goal:** In Studio's edit form, an automatically set category or language carries a quiet note that disappears when the creator changes the field.
+
+**Files:**
+- Modify: `components/studio/shared.tsx` (`TaxonomySelect`, L62-107), `components/studio/VideoRow.tsx` (state L71-72; `startEdit` L184-207; selects L238-257)
+- Create: `components/studio/shared.test.tsx`
+- Modify: `e2e/studio.spec.ts` (near the edit-flow block, ~L1209)
+
+**Acceptance Criteria:**
+- [ ] `TaxonomySelect` with `autoFilled` renders "Set automatically · change it if it's wrong" and wires it to the select with `aria-describedby`. Without the prop it renders exactly as before.
+- [ ] `VideoRow` shows the note on a field while its value equals the value loaded with `auto_filled` including it, and hides it once the creator picks a different value.
+- [ ] The note never names an engine and never shows a number.
+- [ ] A mocked e2e run proves the note shows on a mocked `auto_filled:["category"]` video and disappears after changing the category.
+
+**Verify:** `npm run test -- components/studio && npx tsc --noEmit && npm run lint`.
+
+**Steps:**
+
+- [ ] **Step 1: Failing test** `components/studio/shared.test.tsx`
+
+```tsx
+// @vitest-environment jsdom
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { TaxonomySelect } from "./shared";
+
+const options = [{ id: "1", label: "Music" }, { id: "2", label: "Films" }];
+
+describe("TaxonomySelect", () => {
+  it("notes an automatically set value and links it to the select", () => {
+    render(<TaxonomySelect label="Category" ariaLabel="Edit category" value="1" onChange={() => {}} options={options} autoFilled />);
+    const note = screen.getByText("Set automatically · change it if it's wrong");
+    const select = screen.getByLabelText("Edit category");
+    expect(select.getAttribute("aria-describedby") ?? "").toContain(note.id);
+  });
+
+  it("renders no note without the flag", () => {
+    render(<TaxonomySelect label="Category" ariaLabel="Edit category" value="1" onChange={() => {}} options={options} />);
+    expect(screen.queryByText(/Set automatically/)).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 2: Run it and watch it fail.** Expected: FAIL, because the note is missing.
+
+- [ ] **Step 3: Implement.** Add `autoFilled?: boolean` to `TaxonomySelect`'s props. Inside it:
+
+```tsx
+  const noteId = useId();
+  const describedBy = [errorId && error ? errorId : null, autoFilled ? noteId : null]
+    .filter(Boolean)
+    .join(" ") || undefined;
+```
+
+Put `aria-describedby={describedBy}` on the `<select>`, replacing whatever `aria-describedby` it already derives from `errorId`, and keep that behaviour. Then render after the select:
+
+```tsx
+      {autoFilled ? (
+        <p id={noteId} className="text-xs text-fg-muted">
+          Set automatically · change it if it's wrong
+        </p>
+      ) : null}
+```
+
+Use the existing muted-text token class that `FieldErrorText`'s neighbours use. Check `components/studio/shared.tsx` for the house class name.
+
+In `VideoRow.tsx`, add `const [autoFilled, setAutoFilled] = useState<{ category?: string; language?: string }>(() => pickAuto(video));` with
+
+```ts
+function pickAuto(v: Video): { category?: string; language?: string } {
+  const af = v.auto_filled ?? [];
+  return {
+    category: af.includes("category") ? v.category : undefined,
+    language: af.includes("language") ? v.language : undefined,
+  };
+}
+```
+
+In `startEdit`, after `setLanguage(full.language ?? "")`, add `setAutoFilled(pickAuto(full));`. On the two selects, pass `autoFilled={autoFilled.category !== undefined && category === autoFilled.category}`, and the same for language. The note then disappears as soon as the value differs, and saving (decision §0.2.2) clears it server-side.
+
+- [ ] **Step 4: Mocked e2e.** In `e2e/studio.spec.ts`, beside the existing edit test (~L1209), route the `GET /api/v1/videos/<id>` mock with `category: "1", auto_filled: ["category"]`, open the edit form, `expect(page.getByText("Set automatically · change it if it's wrong")).toBeVisible()`, then `selectOption` "Edit category" to `"2"` and expect the note to be hidden.
+
+- [ ] **Step 5: Run the gates.** Verify is green.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add components/studio e2e/studio.spec.ts
+git commit -m "feat(studio): quiet note on automatically set category and language
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 19: Backed e2e spec and optional-workflow job (PR U4, user; touches `.github/workflows`)
 
 **Goal:** Prove, against the real stack and the stub, that publishing leads to filling, then to the Studio marker, and that the category filter finds the video. This PR's task *is* the workflow change (AGENTS.md hard rule 6 exception); say so in the PR body.
 
@@ -4102,7 +4848,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `.github/workflows/frontend-e2e-optional.yml` (a new job `metadata-autofill-backed`; update the header's list of lanes)
 
 **Acceptance Criteria:**
-- [ ] With the stub profile up, `METADATA_AUTOFILL_ENABLED=true TYPESAFE_API_KEY=stub TYPESAFE_ENDPOINT=http://jev-stub:8080`, the spec: publishes a public video titled "Music … <uuid>" with no category or language through the Studio UI; polls the API (up to 120 s, since ticks run every 30 s with jitter) until `category` is the id of "Music" and `language` is `en`; opens the edit form and sees the note; then queries the public video list filtered by that category and finds the video.
+- [ ] With the stub profile up, `METADATA_AUTOFILL_ENABLED=true TYPESAFE_API_KEY=stub TYPESAFE_ENDPOINT=http://jev-stub:8080`, the spec: publishes a public video titled "Music … <uuid>" with no category or language through the Studio UI; polls the API (up to 120 s, since the leader ticks every 30 s) until `category` is the id of "Music" and `language` is `en`; opens the edit form and sees the note; then queries the public video list filtered by that category and finds the video.
 - [ ] In the ordinary backed lane the spec is skipped and listed in `allowed-skips-backed.txt`.
 - [ ] The optional workflow job runs only on `workflow_dispatch` and the Sunday cron, never on push or PR.
 
@@ -4178,261 +4924,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-## Task 18: Sealed key setting (PR C13, core)
-
-**Goal:** The admin can set or clear the TypeSafe key in the panel with no restart. It is stored sealed or not at all, and it wins over `TYPESAFE_API_KEY`.
-
-**Files:**
-- Create: `migrations/0153_metadata_fill_key.{up,down}.sql`, `internal/metadatafill/key.go`, `internal/metadatafill/key_test.go`
-- Modify: `internal/store/queries/metadata_fill.sql` (two queries), `internal/metadatafill/service.go` (`Status` gains the key source)
-- Modify: `internal/httpapi/admin_metadata_fill.go`, `internal/httpapi/server.go` (route), `internal/httpapi/errors.go` (reuse `MetadataFillError`), `internal/observability/audit.go`, `api/openapi.yaml`
-- Modify: `cmd/api/main.go` (pass the existing `secretbox` cipher, built at L449-458, and replace the static KeyFunc)
-
-**Contract:** `PUT /api/v1/admin/metadata-fill/key` with body `{"api_key":"<value>"}` replaces the key, and `{"api_key":""}` clears it. The response is 204. Errors: 409 `metadata_fill_secrets_key_missing` when no KEK is configured, and 422 when `api_key` is absent. `MetadataFillStatus` gains `key_source: "admin" | "env" | "none"` and `key_status: "ok" | "undecryptable" | "none"`. The key itself is never returned.
-
-**Acceptance Criteria:**
-- [ ] Resolution order: a sealed admin key that opens, then `TYPESAFE_API_KEY`, then "". An undecryptable sealed value is reported, and resolution falls back to env.
-- [ ] With a nil cipher, `PUT` with a non-empty key gets 409 and nothing is stored. Clearing still works.
-- [ ] Audit `admin.metadata_fill.key_update` with `secret_changed=true` and `Reason` `set` or `cleared`. The value never appears in any log or audit record, and `TestNoSensitiveLogKeys` stays green.
-- [ ] A key saved in the panel is used by the next tick with no restart. A unit test proves the resolver reads per call.
-
-**Verify:** `go test ./internal/metadatafill/ ./internal/httpapi/ -race -run 'Key|MetadataFill'` → PASS. Then `make ci`, and the integration command for the new queries.
-
-**Steps:**
-
-- [ ] **Step 1: Migration.**
-
-```sql
--- 0153_metadata_fill_key.up.sql
--- The admin-panel TypeSafe key, SEALED (internal/secretbox, the MFA KEK) or
--- absent. Never plaintext: the handler refuses a key when no KEK is set.
-ALTER TABLE metadata_fill_state ADD COLUMN api_key_sealed TEXT
-    CHECK (api_key_sealed IS NULL OR api_key_sealed LIKE 'enc:%');
-```
-
-```sql
--- 0153_metadata_fill_key.down.sql
-ALTER TABLE metadata_fill_state DROP COLUMN IF EXISTS api_key_sealed;
-```
-
-`make migrate-lint` may flag the down's `DROP COLUMN` as destructive DDL. Down files are normally exempt; if not, follow the lint's documented escape (read `scripts/migrate-lint.sh`).
-
-Queries:
-
-```sql
--- name: GetMetadataFillSealedKey :one
-SELECT api_key_sealed FROM metadata_fill_state WHERE singleton;
-
--- name: SetMetadataFillSealedKey :exec
-UPDATE metadata_fill_state SET api_key_sealed = sqlc.narg('api_key_sealed'), updated_at = now() WHERE singleton;
-```
-
-Run `make sqlc`.
-
-- [ ] **Step 2: Failing tests** `internal/metadatafill/key_test.go`
-
-```go
-package metadatafill
-
-import (
-	"context"
-	"testing"
-
-	"github.com/vidra/vidra-core/internal/secretbox"
-)
-
-type fakeKeyRepo struct{ sealed *string }
-
-func (f *fakeKeyRepo) GetMetadataFillSealedKey(context.Context) (*string, error) { return f.sealed, nil }
-func (f *fakeKeyRepo) SetMetadataFillSealedKey(_ context.Context, v *string) error { f.sealed = v; return nil }
-
-func cipher(t *testing.T) *secretbox.Cipher {
-	t.Helper()
-	c, err := secretbox.NewCipher(make([]byte, 32))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return c
-}
-
-func TestKeyResolutionOrderAndLiveness(t *testing.T) {
-	repo := &fakeKeyRepo{}
-	k := NewKeyStore(repo, cipher(t), "env-key")
-	ctx := context.Background()
-	if got, src := k.Resolve(ctx); got != "env-key" || src != KeySourceEnv {
-		t.Fatalf("env fallback = %q/%s", got, src)
-	}
-	if err := k.Set(ctx, "admin-key"); err != nil {
-		t.Fatal(err)
-	}
-	if got, src := k.Resolve(ctx); got != "admin-key" || src != KeySourceAdmin {
-		t.Fatalf("admin key must win, read per call: %q/%s", got, src)
-	}
-	if repo.sealed == nil || *repo.sealed == "admin-key" {
-		t.Fatal("stored in the clear")
-	}
-	if err := k.Set(ctx, ""); err != nil || repo.sealed != nil {
-		t.Fatalf("clear: err=%v sealed=%v", err, repo.sealed)
-	}
-}
-
-func TestKeyRefusedWithoutCipher(t *testing.T) {
-	k := NewKeyStore(&fakeKeyRepo{}, nil, "")
-	if err := k.Set(context.Background(), "x"); err != ErrSecretsKeyMissing {
-		t.Fatalf("err = %v, want ErrSecretsKeyMissing", err)
-	}
-	if err := k.Set(context.Background(), ""); err != nil {
-		t.Fatalf("clearing must work without a cipher: %v", err)
-	}
-}
-
-func TestUndecryptableFallsBackToEnv(t *testing.T) {
-	bad := "enc:not-valid"
-	k := NewKeyStore(&fakeKeyRepo{sealed: &bad}, cipher(t), "env-key")
-	if got, _ := k.Resolve(context.Background()); got != "env-key" {
-		t.Fatalf("got %q, want env fallback", got)
-	}
-	if k.Status(context.Background()) != KeyStatusUndecryptable {
-		t.Fatal("undecryptable not reported")
-	}
-}
-```
-
-The generated type of `api_key_sealed` may be `pgtype.Text` rather than `*string`, depending on the sqlc overrides. Match it in the fake and in `key.go`.
-
-- [ ] **Step 3: Implement `internal/metadatafill/key.go`**
-
-```go
-package metadatafill
-
-import (
-	"context"
-	"errors"
-	"strings"
-
-	"github.com/vidra/vidra-core/internal/secretbox"
-)
-
-// ErrSecretsKeyMissing: no KEK, so a key cannot be stored sealed and will not
-// be stored in the clear.
-var ErrSecretsKeyMissing = errors.New("metadatafill: no key-encryption key")
-
-type KeySource string
-type KeyStatus string
-
-const (
-	KeySourceAdmin KeySource = "admin"
-	KeySourceEnv   KeySource = "env"
-	KeySourceNone  KeySource = "none"
-
-	KeyStatusOK            KeyStatus = "ok"
-	KeyStatusUndecryptable KeyStatus = "undecryptable"
-	KeyStatusNone          KeyStatus = "none"
-)
-
-// KeyRepository is the sealed-key storage. *sqlcgen.Queries satisfies it.
-type KeyRepository interface {
-	GetMetadataFillSealedKey(ctx context.Context) (*string, error)
-	SetMetadataFillSealedKey(ctx context.Context, sealed *string) error
-}
-
-// KeyStore resolves the TypeSafe key per call: sealed admin value, else env.
-type KeyStore struct {
-	repo   KeyRepository
-	cipher *secretbox.Cipher
-	env    string
-}
-
-func NewKeyStore(repo KeyRepository, cipher *secretbox.Cipher, env string) *KeyStore {
-	return &KeyStore{repo: repo, cipher: cipher, env: strings.TrimSpace(env)}
-}
-
-func (k *KeyStore) admin(ctx context.Context) (string, KeyStatus) {
-	sealed, err := k.repo.GetMetadataFillSealedKey(ctx)
-	if err != nil || sealed == nil || *sealed == "" {
-		return "", KeyStatusNone
-	}
-	if k.cipher == nil {
-		return "", KeyStatusUndecryptable
-	}
-	plain, err := k.cipher.Open(*sealed)
-	if err != nil {
-		return "", KeyStatusUndecryptable
-	}
-	return string(plain), KeyStatusOK
-}
-
-// Resolve returns the key and where it came from. It is the judgment.KeyFunc.
-func (k *KeyStore) Resolve(ctx context.Context) (string, KeySource) {
-	if v, st := k.admin(ctx); st == KeyStatusOK && v != "" {
-		return v, KeySourceAdmin
-	}
-	if k.env != "" {
-		return k.env, KeySourceEnv
-	}
-	return "", KeySourceNone
-}
-
-// Key adapts Resolve to judgment.KeyFunc.
-func (k *KeyStore) Key(ctx context.Context) string { v, _ := k.Resolve(ctx); return v }
-
-// Status reports the admin key's health.
-func (k *KeyStore) Status(ctx context.Context) KeyStatus { _, st := k.admin(ctx); return st }
-
-// Set stores (sealed) or, with "", clears the admin key.
-func (k *KeyStore) Set(ctx context.Context, value string) error {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return k.repo.SetMetadataFillSealedKey(ctx, nil)
-	}
-	if k.cipher == nil {
-		return ErrSecretsKeyMissing
-	}
-	sealed, err := k.cipher.Seal([]byte(value))
-	if err != nil {
-		return err
-	}
-	return k.repo.SetMetadataFillSealedKey(ctx, &sealed)
-}
-```
-
-Check the signatures in `internal/secretbox/secretbox.go`: `Seal([]byte) (string, error)` at L55, and whether `Open` returns `[]byte` or `string` at L66. Adjust the conversions.
-
-- [ ] **Step 4: Wire it.** In `main.go`:
-
-```go
-	keyStore := metadatafill.NewKeyStore(q, mailCipher, cfg.TypeSafeAPIKey)
-	judgeClient := judgment.New(cfg.TypeSafeEndpoint, cfg.TypeSafeModel, keyStore.Key)
-```
-
-`mailCipher` stands for the local name of the `*secretbox.Cipher` built from `config.MailKEK()` at L449-458; it may be nil. Pass `keyStore` to the server through `WithMetadataFillKeys(keyStore)` and to the evaluator, replacing the static KeyFunc in Task 11.
-
-Add the handler, the `PUT /admin/metadata-fill/key` route (admin-only), and the audit constant `ActionAdminMetadataFillKeyUpdate = "admin.metadata_fill.key_update"`, recorded with `Metadata: []audit.MetadataField{{Key: "secret_changed", Value: "true"}}` and `Reason` `set` or `cleared`. The status view gains `key_source` and `key_status`. Map `ErrSecretsKeyMissing` to `&MetadataFillError{Status: 409, Code: "metadata_fill_secrets_key_missing", Message: "this deployment has no key-encryption key, so the TypeSafe key cannot be stored sealed — and vidra will not store it in the clear. Set MFA_KEY_KEK (or share FEDERATION_KEY_KEK) and restart the api, then save again. TYPESAFE_API_KEY in the env file still works"}`. Update OpenAPI.
-
-HTTP tests: admin-only; 204 set and clear; 409 without a cipher; an audit record with `secret_changed`; and the response body and log buffer never contain the key string. Scan `buf.String()` and fail if `strings.Contains(buf.String(), "sk-test-key")`.
-
-- [ ] **Step 5: Run everything.** `make ci`, `go vet -tags=integration ./...`, and the integration command.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add migrations/0153_* internal cmd/api api/openapi.yaml
-git commit -m "feat(metadatafill): admin-panel TypeSafe key, sealed or refused
-
-Reuses internal/secretbox and the MFA KEK the mail settings use; the admin
-key wins over TYPESAFE_API_KEY and takes effect on the next tick.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
-```
-
----
-
-## Task 19: Key field on the card (PR U5, user)
+## Task 20: Key field on the card (PR U5, user)
 
 **Goal:** The admin can paste, replace or remove the TypeSafe key on the card with `SecretInput`.
 
 **Files:**
-- Regenerate: `lib/api/generated.ts`
 - Modify: `lib/api/endpoints.ts` (`setMetadataFillKey`), `components/admin/MetadataFillCard.tsx`, `components/admin/MetadataFillCard.test.tsx`
 
 **Behaviour:** Under the status line, a `SecretInput` labelled "TypeSafe API key" with `isSet = key_source === "admin"`, `allowClear`, and a **Save key** button that is shown only when the value is not `undefined`. Hints:
@@ -4451,7 +4947,7 @@ After a save, the card reloads the status.
 
 **Steps:**
 
-- [ ] **Step 1: Regenerate** (Task 13, Step 1). Add the wrapper:
+- [ ] **Step 1: Confirm S3 (Task 12) merged** (`grep -c key_source lib/api/generated.ts` ≥ 1). Add the wrapper:
 
 ```ts
   setMetadataFillKey: (apiKey: string) =>
@@ -4499,11 +4995,87 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-## Task 20: Beta evaluation, bars, scope ledger (PR M2, meta)
+## Task 21: Env example and runbook (PR M1, meta)
+
+**Goal:** An operator can find, understand, enable, measure and undo the feature from this repo alone.
+
+**Files:**
+- Modify: `env/production.env.example` (a new block after the outbound-email block, ~L976)
+- Create: `docs/metadata-autofill.md`
+
+**When:** after the first vidra-core release containing C9–C13 and the first vidra-user release containing U1–U2 exist. Meta CI builds core `main`, so it would pass earlier, but operators run the pinned tags, and a runbook for a feature their images lack is a silent no-op.
+
+**Acceptance Criteria:**
+- [ ] The runbook opens with "Requires vidra-core ≥ vX.Y.Z and vidra-user ≥ vA.B.C", with the numbers taken from those releases' notes.
+- [ ] The four keys are present with empty or `false` values and the §8 privacy statement.
+- [ ] The compose gate passes with the unedited example.
+- [ ] The runbook covers: what is sent and never sent; enabling (env or panel); the `enabled_since` rule, stated plainly; "Fill existing videos"; the status meanings; the evaluation gate (`docker compose exec api /app/api evaluate-metadata`, with the real binary path checked against the api Dockerfile); turning it off; undoing fills (SQL below); and the operator's privacy-notice duty.
+
+**Verify:**
+```
+cp env/production.env.example /tmp/check.env   # fill the ${VAR:?} keys with dummies
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file /tmp/check.env config -q && echo OK
+python3 -m unittest discover -s tests -p '*_test.py'
+```
+
+**Steps:**
+
+- [ ] **Step 1: Env block**
+
+```bash
+# --- Automatic category & language (TypeSafe Jev) -----------------------------
+# OFF by default. When on, the TITLE, DESCRIPTION, CHANNEL NAME and TAGS of
+# PUBLIC, published videos that have no category or language are sent to
+# TypeSafe, a third-party service hosted in the United States, which picks one
+# from this instance's own lists. Private and unlisted videos, drafts,
+# comments and messages are never sent. TypeSafe states it does not train on
+# this data. You are the party deciding to send it: say so in your instance's
+# privacy notice. Runbook: docs/metadata-autofill.md.
+#
+# The admin toggle (Config → VOD) overrides METADATA_AUTOFILL_ENABLED. Leave
+# TYPESAFE_ENDPOINT / TYPESAFE_MODEL empty for the defaults (api.typesafe.ai,
+# jev-1.13.0): the confidence bars were measured against that model.
+# TYPESAFE_API_KEY is a SECRET — never commit a real value.
+METADATA_AUTOFILL_ENABLED=false
+TYPESAFE_API_KEY=
+TYPESAFE_ENDPOINT=
+TYPESAFE_MODEL=
+```
+
+- [ ] **Step 2: Runbook** `docs/metadata-autofill.md`, with these sections: *What it does*, *What is sent and what never is*, *Turning it on*, *Which videos it reaches* ("Videos published or edited after you switch this on are filled automatically; everything else waits for the Fill existing videos button"), *Reading the status card*, *Before you rely on it: the evaluation*, *Turning it off*, *Undoing fills*, *Privacy notice*, *Known limits* (PeerTube re-sync now keeps a category/language its source has none for; English-primary; a wrong answer is visible and correctable in Studio; an edited old video becomes eligible; federation peers are not sent auto-filled values). The undo SQL must say that it bypasses the hooks, so the search index converges at the next reconcile (24 h default), or at once after an api restart triggers the boot reconcile, which the implementer checks in `runSearchReconcileWorker` before claiming it:
+
+```sql
+-- Revert every automatic value no person has changed since.
+BEGIN;
+UPDATE videos v SET category = NULL
+  FROM video_metadata_judgments j
+ WHERE j.video_id = v.id AND j.category_applied IS NOT NULL AND v.category = j.category_applied;
+UPDATE videos v SET language = NULL
+  FROM video_metadata_judgments j
+ WHERE j.video_id = v.id AND j.language_applied IS NOT NULL AND v.language = j.language_applied;
+-- Keep the judgments so the worker does not re-ask; clear the marker.
+UPDATE video_metadata_judgments SET category_applied = NULL, language_applied = NULL;
+COMMIT;
+```
+
+- [ ] **Step 3: Run the gates** (Verify above). Expected: `OK`, and the unit suite passes with 0 skipped.
+
+- [ ] **Step 4: Commit and open the PR**
+
+```bash
+git add env/production.env.example docs/metadata-autofill.md
+git commit -m "docs: metadata auto-fill env keys and operator runbook
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 22: Beta evaluation, bars, scope ledger (PR M2, meta)
 
 **Goal:** The confidence bars come from a measurement on the beta's human-labelled PeerTube imports, recorded honestly, before auto-fill is switched on there.
 
-**Preconditions (owner steps; this plan does not do them):** a core release containing C1–C11 is cut and deployed to beta (`! ./deploy/release.sh --yes vX.Y.Z`, then the deploy). The feature stays **off**. `TYPESAFE_API_KEY` is set in beta's env file. Beta runs as a no-git bundle tree, so check the memory note on its local compose mount before editing anything there.
+**Preconditions (owner steps; this plan does not do them):** a core release containing C1–C13 (C6 included, so a re-sync cannot erase fills) is cut and deployed to beta (`! ./deploy/release.sh --yes vX.Y.Z`, then the deploy). The feature stays **off**. `TYPESAFE_API_KEY` is set in beta's env file. Beta runs as a no-git bundle tree, so check the memory note on its local compose mount before editing anything there.
 
 **Files:**
 - Create: `docs/metadata-autofill-evaluation-<YYYY-MM-DD>.md`
@@ -4544,30 +5116,38 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
-
-## Self-review (run 2026-09-26 against the spec)
+## Self-review (revision 2, 2026-09-26)
 
 **Spec coverage:**
 
 | Spec section | Task(s) |
 |---|---|
-| §4.1 client: key resolution, endpoint, model pin, 5 s timeout, size cap, breaker, closed codes, denylist | 2, 3, 18 (key resolution in two stages: env in 2/8, sealed in 18) |
-| §4.2 always-started worker, eligibility, claim, retries, lease reclaim | 7, 8, 4 |
-| §4.3 data model (three tables) | 4 |
-| §4.4 `enabled_since`, runs, `job_runs` projection, stop, requeue failed | 4, 7, 9 |
-| §4.5 `ApplyInferredMetadata`, human-edit clear | 5 |
-| §5 request (state, two questions, labels, descriptions, `none_of_these`, `unclear`, 255 cap) | 6 |
-| §6 bars and the evaluation subcommand | 6, 11, 20 |
-| §7 failure table | 2, 5, 7 (every row has a test) |
-| §7 audit rows: toggle, key, run start/stop | toggle via the existing instance-settings audit (`keys=` reason, `admin_instance_settings.go:419`); key 18; runs 9; plus test 9 |
-| §8 privacy text | 13 (help), 12 (env and runbook) |
-| §9 admin toggle, warn, infra row, status card, key field; Studio marker | 13, 8, 14, 19, 15 |
-| §10 contract and configuration, settings count 119 | 8, 9, 10, 3 |
-| §11 testing (client, worker, video service, HTTP, frontend unit, mocked e2e, backed against a stub, real service) | 2, 7, 4, 5, 9, 10, 14, 15, 17, 20 |
-| §12 PR sequence | §0.3 (split further for the 300-line rule) |
+| §4.1 client, key resolution, model pin, timeout, cap, breaker, closed codes, denylist | 1, 2, 3, 8 (account pause), 15 (sealed key) |
+| §4.2 always-started worker, eligibility, claim, retries, lease reclaim | 9 (leader-gated start), 4, 8 |
+| §4.3 data model | 4 (plus `typesafe_state`, §0.2.8) |
+| §4.4 `enabled_since`, runs, `job_runs` projection, stop, requeue | 4, 8, 10 |
+| §4.5 guarded write, human-edit clear | 4 (`RecordAndApplyMetadataJudgment`), 5, 8 |
+| §5 request | 7 |
+| §6 bars and the evaluation | 7, 13, 22 |
+| §7 failure table | 2, 4, 8, 5 (each row has a test: auth/rate/outage pause, backoff, vocabulary change, lost eligibility, >254 categories, cascade delete by FK) |
+| §7 audit: toggle, key, run start/stop | toggle via instance-settings audit (`admin_instance_settings.go:419`); key 15; runs and test 10 |
+| §8 privacy text | 16 (help), 21 (env and runbook) |
+| §9 toggle, warn, infra row, card, key field, Studio marker | 16, 9, 17, 20, 18 |
+| §10 contract and configuration; count 119 | 9, 10, 11, 3, 12 |
+| §11 testing incl. stub-backed e2e and a real-service run | 2, 4, 5, 6, 8, 9, 10, 11, 17, 18, 19, 22 |
+| §12 PR sequence | §0.3 (22 PRs; contract rule) |
+| §14 risks | 22 (accuracy), 6 (import interplay), §0.3 (what runs when off) |
 
-**Gaps knowingly left:** none from the spec. The spec's "per-video fills are recorded in `video_metadata_judgments`, not the audit log" holds by construction: no task writes a per-video audit row.
+**Review findings folded in:**
+- vidra-core reviewer: B1 → Task 9; B2 → Task 8 plus the Task 4 tie-break; B3 → Task 4 `RecordAndApplyMetadataJudgment`; M1 → Task 5; M2 → Task 5 (both fakes); M3 → §0.5; M4 → Task 5/9 narrow hook; M5 → Task 2 and 8; M6 → §0.4 scratch database; M7 → Task 4 cutoff test; M8 → Task 11 repo seeding; M9 → Task 14; M10 → Task 4; M11 → Task 10.
+- Architect: 1 → §0.3 contract rule and Task 12; 2 → Task 6; 3 → Task 8; 4 → `typesafe_state` / `judgment.Account`; 5 → leader gating; 6 → narrow hook; 7 → §0.3 "what runs when off" plus Task 5 best-effort; 8 → Task 9 queue depth; 9 → Task 11 `canManageVideo`; 10 → Task 17; 11 → Task 21 timing; 12 → Task 17 renders nothing on 404; 13 → Task 4; 14 → Task 10; 15 → deferred (File structure); 16 → Task 15; 17 → §0.1 quotes corrected.
+- Minor items: exact backoff literals; the fake clock; a run stuck when toggled off; an atomic start; a pause cleared by a successful test; `not_confident` computed from probabilities; the lease check on record (`state='running'` in the statement); the claim index; the actor on the projection; `pgconv.IsUniqueViolation`; `db.Queries()`; no `Pool()`; 404 rather than 501.
 
-**Placeholder scan:** Four places tell the implementer to confirm a name against the code rather than guess: the config test helper, the generated sqlc field types, the fixture helpers, and the `ApiError` constructor. Each names the exact file to read. No code block carries a stub or a line meant to be deleted.
+**Placeholder scan:** no code block carries a stub or a line meant to be deleted. Where a step says "match the real name", it names the file and line to read. Those are the sqlc field names (with §0.5 fixing the types), the `ApiError` constructor, the `ValidationError` shape, the seeding helper in `internal/video`, and the logger field.
 
-**Type consistency:** `judgment.Question`/`Option`/`Answer`/`Result`/`Code`/`KeyFunc` (Task 2) are used unchanged in 6, 7, 9, 11 and 18. `metadatafill.Subject`/`Request`/`Decision`/`BuildRequest`/`Decide`/`QCategory`/`QLanguage`/`NoneOfThese`/`Unclear`/`CategoryBar`/`LanguageBar` (Task 6) are used unchanged in 7 and 11. `video.InferredApplied`/`ApplyInferredMetadata`/`AutoFilled` (Task 5) are used in 7 and 10. `metadatafill.Status`/`ErrRunActive`/`ErrInactive`/`ErrNoRun` (Task 9) are used by the HTTP layer. `ErrSecretsKeyMissing`/`KeyStore` (Task 18) are used in 18 and 11's follow-up.
+**Type consistency:**
+- `judgment.{Question,Option,Answer,Result,Code,KeyFunc,Account,PausesAccount,AuthPause,ShortPause,ErrSecretsKeyMissing,KeySource,KeyStatus}`: defined in Tasks 2, 8 and 15; used in 8, 10, 13 and 15.
+- `metadatafill.{Subject,Request,Decision,BuildRequest,Decide,Q*,NoneOfThese,Unclear,CategoryBar,LanguageBar}`: defined in 7; used in 8 and 13.
+- `metadatafill.{Service,New,Repository,Judge,Notifier,Status,ErrRunActive,ErrInactive,ErrNoRun}`: defined in 8 and 10.
+- `video.{WithInferredMetadataHook,NotifyInferredMetadata,AutoFilled}`: defined in 5; used in 8, 9 and 11.
+- Query names match Task 4 throughout.
