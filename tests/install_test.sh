@@ -380,19 +380,13 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# resolve_pairing: a fresh install of a CORE-ONLY release pins each component
-# at the tag its release record names.
-#
-# --release-tag alone writes one tag into all three VIDRA_*_TAG keys. v0.7.5
-# re-released vidra-core only and pairs user/search at v0.7.3, so the one-liner
-# pinned ghcr.io/.../vidra-user:v0.7.5 - an image that never existed - and the
-# first 'vidra deploy' refused it. The function is run for real under `sh` (the
-# shell `curl ... | sh` gives it) against this tree's own lib.sh and
-# release-mapping.py; only curl is stubbed, serving the committed records, so
-# the fetched-record path is the one exercised - the path a real v0.7.5 bundle
-# takes, since its tree carries no releases/v0.7.5.json. Each resolved triple
-# is then held to the deploy-mode preflight 'vidra deploy' runs, which is the
-# assertion that matters: the installer's pins must be ones deploy accepts.
+# resolve_pairing: a fresh install must establish the released component triple,
+# including when today's installer unpacks an older bundle. v0.7.5 has no
+# fetch_release_record shell function and no `resolve` checker command. The
+# original tests copied today's helpers into the fake bundle and missed that.
+# Exercise both helper surfaces; only curl is stubbed. Every successful result
+# must pass the installed checker's deploy check using the installed records,
+# proving the fetched record survives for the first `vidra deploy` as well.
 # ---------------------------------------------------------------------------
 
 log "Testing resolve_pairing (per-component pins for a fresh install)..."
@@ -401,7 +395,7 @@ PAIR_TMP="$(mktemp -d)"
 trap 'rm -rf "$UNPACK_TMP" "$PAIR_TMP"' EXIT
 sed -n '/^resolve_pairing() {/,/^}/p' install.sh > "$PAIR_TMP/func.sh"
 # shellcheck disable=SC2016  # a literal to find in install.sh's source
-grep -q 'SEARCH_TAG="\$p_search"' "$PAIR_TMP/func.sh" \
+grep -q 'SEARCH_TAG="\$p_tag"' "$PAIR_TMP/func.sh" \
   || die "extraction self-check: sed did not capture the whole resolve_pairing function from install.sh"
 
 mkdir -p "$PAIR_TMP/tree/deploy" "$PAIR_TMP/tree/releases" "$PAIR_TMP/bin" "$PAIR_TMP/served"
@@ -424,66 +418,126 @@ cp "$f" "$out"
 STUB
 chmod +x "$PAIR_TMP/bin/curl"
 
-# Prints "core user search", then a WARNINGS line when resolve_pairing warned.
 run_pairing() {
   local tag="$1"; shift
   mkdir -p "$PAIR_TMP/work"
   # shellcheck disable=SC2016  # the inline script expands its own positionals
   env "$@" PATH="$PAIR_TMP/bin:$PATH" SERVED="$PAIR_TMP/served" sh -eu -c '
-    WARNINGS=""
+    OWNER=yegamble
     log()  { :; }
-    warn() { WARNINGS="${WARNINGS}$*"; }
+    warn() { echo "WARNING: $*" >&2; }
+    die()  { echo "DIE: $*" >&2; exit 9; }
     . "$1"
-    TAG="$2"; DIR="$3"; WORK="$4"; ENV_FILE="$DIR/env/production.env"; PAIRING_DONE=0
-    resolve_pairing 2>/dev/null
+    TAG="$2"; DIR="$3"; WORK="$4"; PAIRING_DONE=0
+    resolve_pairing
     echo "$CORE_TAG $USER_TAG $SEARCH_TAG"
-    if [ -n "$WARNINGS" ]; then echo "WARNINGS $WARNINGS"; fi
   ' pairing "$PAIR_TMP/func.sh" "$tag" "$PAIR_TMP/tree" "$PAIR_TMP/work"
 }
 
-# assert_pairing <tag> <expected "core user search"> <warn|quiet> [ENV=VAL ...]
 assert_pairing() {
-  local tag="$1" want="$2" warned="$3" out got core user search
-  shift 3
-  out="$(run_pairing "$tag" "$@")" || { echo "FAIL: resolve_pairing ${tag} exited non-zero: ${out}"; failures=$((failures + 1)); return; }
-  got="$(printf '%s\n' "$out" | head -n1)"
-  if [ "$got" != "$want" ]; then
-    echo "FAIL: resolve_pairing ${tag} ($*) -> pins '${got}', expected '${want}'"
+  local tag="$1" want="$2" out core user search
+  shift 2
+  out="$(run_pairing "$tag" "$@" 2>&1)" || { echo "FAIL: resolve_pairing ${tag} exited non-zero: ${out}"; failures=$((failures + 1)); return; }
+  if [ "$out" != "$want" ]; then
+    echo "FAIL: resolve_pairing ${tag} ($*) -> '${out}', expected '${want}'"
     failures=$((failures + 1)); return
   fi
-  if [ "$warned" = warn ] && ! printf '%s\n' "$out" | grep -q '^WARNINGS .*could not be determined'; then
-    echo "FAIL: resolve_pairing ${tag} ($*) fell back to one tag SILENTLY; the operator must be told a core-only release would be refused"
+  read -r core user search <<< "$out"
+  if ! python3 "$PAIR_TMP/tree/deploy/release-mapping.py" check --mode deploy \
+       --core "$core" --user "$user" --search "$search" \
+       --releases "$PAIR_TMP/tree/releases" >/dev/null 2>&1; then
+    echo "FAIL: resolve_pairing ${tag} -> '${out}', which the installed deploy checker REFUSES using the installed records"
     failures=$((failures + 1)); return
   fi
-  if [ "$warned" = quiet ] && printf '%s\n' "$out" | grep -q '^WARNINGS'; then
-    echo "FAIL: resolve_pairing ${tag} ($*) warned although its record was read: $(printf '%s\n' "$out" | sed -n 's/^WARNINGS //p')"
-    failures=$((failures + 1)); return
-  fi
-  if [ "$warned" = quiet ]; then
-    read -r core user search <<< "$got"
-    if ! python3 deploy/release-mapping.py check --mode deploy --release "$tag" \
-         --core "$core" --user "$user" --search "$search" --releases releases >/dev/null 2>&1; then
-      echo "FAIL: resolve_pairing ${tag} -> '${got}', which deploy/release-mapping.py check --mode deploy REFUSES; 'vidra deploy' would stop on the installer's own pins"
-      failures=$((failures + 1)); return
-    fi
-  fi
-  echo "PASS: resolve_pairing ${tag} ($*) -> ${got} (${warned})"
+  echo "PASS: resolve_pairing ${tag} ($*) -> ${out}; installed deploy checker accepts it"
 }
 
-# The defect: a core-only release, record fetched, tree carries none.
-assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3" quiet
-# A uniform release still pins one tag.
-assert_pairing v0.7.3 "v0.7.3 v0.7.3 v0.7.3" quiet
-# No record anywhere (404; or the window before the record PR merges): uniform,
-# and SAID - absence of a record is never a refusal.
-assert_pairing v0.9.9 "v0.9.9 v0.9.9 v0.9.9" warn
-# Airgapped switch honoured from the process environment (no env file exists
-# yet): nothing fetched, so the uniform fallback, with the warning.
-assert_pairing v0.7.5 "v0.7.5 v0.7.5 v0.7.5" warn VIDRA_RECORD_FETCH=off
-# ...unless the tree itself carries the record (a later bundle does).
+assert_pairing_refused() {
+  local label="$1" tag="$2" reason="$3" out
+  shift 3
+  if out="$(run_pairing "$tag" "$@" 2>&1)"; then
+    echo "FAIL: resolve_pairing ${label} succeeded: ${out}"
+    failures=$((failures + 1)); return
+  fi
+  if ! printf '%s\n' "$out" | grep -qF "$reason" || ! printf '%s\n' "$out" | grep -q 'no component tags were guessed'; then
+    echo "FAIL: resolve_pairing ${label} did not explain its refusal: ${out}"
+    failures=$((failures + 1)); return
+  fi
+  echo "PASS: resolve_pairing ${label} -> refused before setup/bootstrap"
+}
+
+# Today's helpers, followed by the helper API actually present in v0.7.5.
+assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3"
+rm -f "$PAIR_TMP/tree/releases/"*.json
+printf '# Old bundles have no fetch_release_record function.\n' > "$PAIR_TMP/tree/deploy/lib.sh"
+if [ -n "${INSTALL_TEST_RELEASE_MAPPING:-}" ]; then
+  # Optional real historical source, e.g. `git show v0.7.5:deploy/release-mapping.py`.
+  # CI's shallow checkout need not fetch old tags to run the API regression.
+  cp "$INSTALL_TEST_RELEASE_MAPPING" "$PAIR_TMP/tree/deploy/release-mapping.py"
+else
+  cp deploy/release-mapping.py "$PAIR_TMP/tree/deploy/record-validator.py"
+  cat > "$PAIR_TMP/tree/deploy/release-mapping.py" <<'LEGACY'
+import argparse
+from pathlib import Path
+import runpy
+
+source = str(Path(__file__).with_name("record-validator.py"))
+validate = runpy.run_path(source)["validate"]
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", choices=("check",))
+    parser.parse_known_args()
+    runpy.run_path(source, run_name="__main__")
+LEGACY
+fi
+if python3 "$PAIR_TMP/tree/deploy/release-mapping.py" resolve --release v0.7.5 >/dev/null 2>&1; then
+  die "legacy fixture must refuse the resolve command that did not exist in v0.7.5"
+fi
+assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3"
+assert_pairing v0.7.3 "v0.7.3 v0.7.3 v0.7.3"
+rm -f "$PAIR_TMP/tree/releases/"*.json
+# No record means no guessed pins, even for an apparently uniform release.
+assert_pairing_refused "missing record" v0.9.9 "no release record is available"
+assert_pairing_refused "fetch disabled without a local record" v0.7.5 "no release record is available" VIDRA_RECORD_FETCH=off
+# Offline/retry operation is safe with a validated local record.
 cp releases/v0.7.5.json "$PAIR_TMP/tree/releases/"
-assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3" quiet VIDRA_RECORD_FETCH=off
-rm -f "$PAIR_TMP/tree/releases/v0.7.5.json"
+assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3" VIDRA_RECORD_FETCH=off
+assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3" 'VIDRA_RECORD_FETCH= OFF # offline'
+mv "$PAIR_TMP/served/v0.7.5.json" "$PAIR_TMP/served/saved.json"
+assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3"
+mv "$PAIR_TMP/served/saved.json" "$PAIR_TMP/served/v0.7.5.json"
+
+# A well-formed but changed fetched record must not overwrite installed truth.
+python3 - "$PAIR_TMP/served/v0.7.5.json" <<'CONFLICT'
+import json
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+data = json.loads(p.read_text())
+data["components"]["user"]["tag"] = "v0.7.4"
+p.write_text(json.dumps(data))
+CONFLICT
+assert_pairing_refused "contradictory record" v0.7.5 "contradicts the installed record"
+cmp -s releases/v0.7.5.json "$PAIR_TMP/tree/releases/v0.7.5.json" \
+  || die "a refused fetched record modified the installed record"
+rm -f "$PAIR_TMP/tree/releases/"*.json
+
+# Structurally valid does not establish the requested release's pairing.
+python3 - "$PAIR_TMP/served/v0.7.5.json" <<'FUTURE'
+import json
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+data = json.loads(p.read_text())
+data["components"]["user"]["tag"] = "v0.7.6"
+p.write_text(json.dumps(data))
+FUTURE
+assert_pairing_refused "component newer than release" v0.7.5 "component tags do not belong"
+printf '{"invalid": true}\n' > "$PAIR_TMP/served/v0.7.5.json"
+assert_pairing_refused "malformed record" v0.7.5 "the record is missing"
+[ ! -f "$PAIR_TMP/tree/releases/v0.7.5.json" ] || die "a refused record was installed"
+cp releases/v0.7.5.json "$PAIR_TMP/served/"
+assert_pairing_refused "unencrypted record URL" v0.7.5 "must use https://" VIDRA_RECORD_BASE_URL=http://example.invalid/releases
 
 # ---------------------------------------------------------------------------
 # The --git clone path: bootstrap.sh puts EACH component on its own tag.
