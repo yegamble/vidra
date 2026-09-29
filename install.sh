@@ -686,99 +686,124 @@ fetch_verified() {
   die "CHECKSUM MISMATCH on ${asset} from release ${TAG}. The download has been deleted and nothing was installed. This is either a corrupted transfer or a tampered asset; re-run, and if it happens again do not work around it."
 }
 
-# Where step 7 writes the configuration. Named here because resolve_pairing's
-# warning names it, and the git paths resolve the pairing in step 5.
+# Where step 7 writes the configuration; the git paths resolve pairing in step 5.
 ENV_FILE="${DIR}/env/production.env"
 PAIRING_DONE=0
 
-# resolve_pairing - sets CORE_TAG, USER_TAG and SEARCH_TAG to the tag release
-# ${TAG} pairs EACH component at. Never fatal, and runs once: the git paths call
-# it before bootstrap.sh (step 5) and step 7 again before the interview, and one
-# fetch and one warning is enough.
-#
-# WHY THE THREE ARE NOT ALWAYS ${TAG}. v0.7.4 and v0.7.5 re-released vidra-core
-# alone and pair vidra-user and vidra-search at v0.7.3; ghcr.io/.../vidra-user:v0.7.5
-# has never existed. Passing only --release-tag wrote ${TAG} into all three keys,
-# so the documented one-liner installed the latest release and the first
-# 'vidra deploy' refused it (release-mapping preflight: "no release record names
-# this vidra-user tag") with no instruction anywhere to hand-edit two of them.
-# deploy/pin-release.sh closed the same hole on the upgrade path (meta#241); this
-# is the install path. On the --git path the same one tag also went to
-# bootstrap.sh, which died checking out a vidra-user tag that does not exist.
-#
-# The pairing is read by the SAME two readers pin-release.sh uses - lib.sh's
-# fetch_release_record and deploy/release-mapping.py resolve - from ${DIR}: the
-# unpacked bundle, or the meta-repo clone before its components exist. So there
-# is no third parser to drift. The record is FETCHED because a ${TAG} bundle
-# cannot carry releases/${TAG}.json (release.sh tags this repository before any
-# image exists); a main clone may, and the fetched copy wins if they differ.
-#
-# NO RECORD IS NOT A REFUSAL (pin-release.sh's standing ruling): an offline host,
-# VIDRA_RECORD_FETCH=off, no python3, or the window before the record PR merges
-# all fall back to one tag for all three - right for every uniform release -
-# with a warning that names the failure a core-only release would meet next.
-# bash for lib.sh (sourced, bash-only); its log goes to stderr so stdout stays the
-# resolver's machine answer. ENV_FILE=/dev/null: the env file is not consulted
-# (usually none exists yet); VIDRA_RECORD_FETCH / VIDRA_RECORD_BASE_URL are
-# still honoured from the process environment. The fetched copy must be named <tag>.json: the resolver refuses a
-# record whose filename disagrees with the release it names. The inline script
-# must stay free of apostrophes (it is single-quoted).
+# Resolve before bootstrap/setup, using the validator that even v0.7.5 shipped.
+# A current installer can unpack an OLD bundle: that bundle has neither lib.sh's
+# fetch_release_record nor release-mapping.py's newer `resolve` command. Calling
+# them used to warn and guess one tag for all services, inventing user/search
+# images for a core-only release. Fetch data here, never newer executable helpers,
+# and refuse when no record establishes the pairing. A validated local record is
+# sufficient offline. Save a fetched record so the OLD deploy checker can use it
+# too; otherwise correct mixed pins still fail its first deployment.
 resolve_pairing() {
   if [ "$PAIRING_DONE" -eq 1 ]; then
     return 0
   fi
-  PAIRING_DONE=1
-  CORE_TAG="$TAG"; USER_TAG="$TAG"; SEARCH_TAG="$TAG"
-  pairing=""
-  pairing_rc=0
-  if ! command -v python3 >/dev/null 2>&1 || ! command -v bash >/dev/null 2>&1; then
-    pairing_rc=127
-  elif [ ! -f "${DIR}/deploy/release-mapping.py" ] || [ ! -f "${DIR}/deploy/lib.sh" ]; then
-    pairing_rc=2
-  else
-    pairing="$(
-      cd "$DIR" && ENV_FILE=/dev/null bash -c '
-        log() { printf "[install] %s\n" "$*" >&2; }
-        die() { log "ERROR: $*"; exit 1; }
-        . deploy/lib.sh
-        tag="$1"; work="$2"
-        set -- resolve --release "$tag"
-        if [ -f "releases/$tag.json" ]; then set -- "$@" --record "releases/$tag.json"; fi
-        mkdir -p "$work/record"
-        if fetch_release_record "$tag" "$work/record/$tag.json"; then
-          set -- "$@" --fetched-record "$work/record/$tag.json"
-        fi
-        exec python3 deploy/release-mapping.py "$@"
-      ' vidra-install "$TAG" "$WORK"
-    )" || pairing_rc=$?
-  fi
+  command -v python3 >/dev/null 2>&1 \
+    || die "python3 is required to verify release pairing; install python3 and re-run. No component tags were guessed."
+  [ -f "${DIR}/deploy/release-mapping.py" ] \
+    || die "${TAG}'s deployment tree has no release-record validator. Install a release with deploy/release-mapping.py; no component tags were guessed."
+  case "$TAG" in
+    *[!v0-9.]*) die "release pairing requires a vMAJOR.MINOR.PATCH tag" ;;
+  esac
+  printf '%s\n' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+    || die "release pairing requires a vMAJOR.MINOR.PATCH tag"
 
-  if [ "$pairing_rc" -eq 0 ]; then
-    p_core=""; p_user=""; p_search=""
-    while read -r p_role p_tag _; do
-      case "$p_role" in
-        core)   p_core="$p_tag" ;;
-        user)   p_user="$p_tag" ;;
-        search) p_search="$p_tag" ;;
+  pairing_download="${WORK}/record/${TAG}.json"
+  mkdir -p "${WORK}/record"
+  rm -f "$pairing_download"
+  pairing_switch="$(printf '%s' "${VIDRA_RECORD_FETCH:-}" | sed 's/#.*//;s/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')"
+  case "$pairing_switch" in
+    off|false|0|no) log "release record fetch disabled; checking the installed record" ;;
+    *)
+      pairing_base="${VIDRA_RECORD_BASE_URL:-https://raw.githubusercontent.com/${OWNER}/vidra/main/releases}"
+      case "$pairing_base" in
+        https://*) ;;
+        *) die "VIDRA_RECORD_BASE_URL must use https://; no component tags were guessed" ;;
       esac
-    done <<EOF
+      # A record is ~2 KiB. Bound time, size and redirect protocols; validate
+      # JSON before it can replace any local record or decide an image tag.
+      if ! curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+          --connect-timeout 5 --max-time 20 --max-filesize 262144 \
+          --output "$pairing_download" "${pairing_base%/}/${TAG}.json"; then
+        rm -f "$pairing_download"
+        log "release record download failed; checking the installed record"
+      fi
+      ;;
+  esac
+
+  pairing="$(python3 - "$DIR" "$TAG" "$pairing_download" <<'PYPAIR'
+import json
+import os
+from pathlib import Path
+import re
+import runpy
+import sys
+import tempfile
+
+root, tag, downloaded = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3])
+local = root / "releases" / (tag + ".json")
+try:
+    validate = runpy.run_path(str(root / "deploy/release-mapping.py"))["validate"]
+
+    def read_record(path):
+        if path.stat().st_size > 262144:
+            raise ValueError("release record exceeds 256 KiB")
+        data = json.loads(path.read_text())
+        problems = validate(path, data)
+        if problems:
+            raise ValueError("; ".join(problems))
+        # The historical validator checks field shapes; these two release
+        # constraints arrived later and must hold before any tags are printed.
+        tags = [data["components"][role]["tag"] for role in ("core", "user", "search")]
+        if any(not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", t) for t in tags):
+            raise ValueError("component tags must be canonical vMAJOR.MINOR.PATCH tags")
+        version = lambda t: tuple(map(int, t[1:].split(".")))
+        if any(version(t) > version(tag) for t in tags) or tag not in tags:
+            raise ValueError("component tags do not belong to the requested release")
+        return data
+
+    existing = read_record(local) if local.exists() else None
+    data = read_record(downloaded) if downloaded.exists() else existing
+    if data is None:
+        raise ValueError("no release record is available; provide the trusted releases/" + tag + ".json or retry when it is published")
+    if existing is not None and data != existing:
+        raise ValueError("downloaded release record contradicts the installed record; neither was changed")
+    if existing is None:
+        local.parent.mkdir(parents=True, exist_ok=True)
+        # Promote only validated data, atomically. Keep it for deploy.sh, which
+        # in older bundles cannot fetch the record itself.
+        with tempfile.NamedTemporaryFile(mode="w", dir=local.parent, delete=False) as out:
+            pending = Path(out.name)
+            json.dump(data, out, indent=2)
+            out.write("\n")
+        try:
+            os.chmod(pending, 0o644)
+            os.replace(pending, local)
+        finally:
+            pending.unlink(missing_ok=True)
+    for role in ("core", "user", "search"):
+        print(role, data["components"][role]["tag"])
+except Exception as error:
+    print("[install] ERROR: cannot verify release pairing: " + str(error), file=sys.stderr)
+    sys.exit(1)
+PYPAIR
+  )" || die "release ${TAG}'s component pairing could not be verified. Setup/bootstrap was not run; no component tags were guessed."
+
+  while read -r p_role p_tag; do
+    case "$p_role" in
+      core) CORE_TAG="$p_tag" ;;
+      user) USER_TAG="$p_tag" ;;
+      search) SEARCH_TAG="$p_tag" ;;
+    esac
+  done <<EOF
 $pairing
 EOF
-    if [ -n "$p_core" ] && [ -n "$p_user" ] && [ -n "$p_search" ]; then
-      CORE_TAG="$p_core"; USER_TAG="$p_user"; SEARCH_TAG="$p_search"
-      log "release ${TAG} pairs its components as core=${CORE_TAG} user=${USER_TAG} search=${SEARCH_TAG} (its release record)"
-      return 0
-    fi
-    pairing_rc=70
-  fi
-
-  case "$pairing_rc" in
-    3)   why="no release record for ${TAG} could be read" ;;
-    127) why="this host has no python3 (or no bash) to read the release record with" ;;
-    2)   why="the ${TAG} tree carries no deploy/release-mapping.py resolve (it predates per-component pairing)" ;;
-    *)   why="deploy/release-mapping.py resolve answered exit ${pairing_rc} rather than a pairing" ;;
-  esac
-  warn "${TAG}'s component pairing could not be determined (${why}), so all three VIDRA_*_TAG keys are pinned to ${TAG}. That is right for a uniform release. If ${TAG} re-released ONE component (v0.7.4 and v0.7.5 re-released vidra-core alone), the other two images do not exist at ${TAG} and 'vidra deploy' will refuse the pins: set VIDRA_USER_TAG and VIDRA_SEARCH_TAG in ${ENV_FILE} to the tags the release notes name before deploying."
+  PAIRING_DONE=1
+  log "release ${TAG} pairs its components as core=${CORE_TAG} user=${USER_TAG} search=${SEARCH_TAG} (validated release record)"
 }
 
 # --- 5/7 the deployment tree ------------------------------------------------------
@@ -820,7 +845,7 @@ make_install_dir() {
 # core-only release (v0.7.4, v0.7.5) pairs vidra-user and vidra-search at an
 # earlier tag, and `checkout --detach ${TAG}` in either of them is a tag that
 # does not exist. The pairing is read from ${DIR}, which by now holds the
-# meta-repo (lib.sh, release-mapping.py) and not yet the components. The
+# meta-repo (release-mapping.py) and not yet the components. The
 # same tags reach the interview in step 7, so the checkouts and the image pins
 # agree - which is what deploy.sh's checkout sync then asserts.
 run_bootstrap() {
