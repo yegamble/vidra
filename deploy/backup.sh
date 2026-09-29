@@ -79,6 +79,16 @@ PGDB="$(env_get POSTGRES_DB vidra)"
 # Sets COMPOSE, EXTERNAL_POSTGRES and EXTERNAL_REDIS.
 vidra_compose_chain
 
+# These knobs are documented in production.env, but used to be read only from
+# the process environment: a correctly configured timer could report success
+# while keeping every recovery artifact on the host it was meant to protect.
+# Do not source the secrets file. An explicitly empty process value still
+# disables a file setting for a one-off local-only run.
+BACKUP_RCLONE_REMOTE="${BACKUP_RCLONE_REMOTE-$(env_get BACKUP_RCLONE_REMOTE '')}"
+BACKUP_S3_URI="${BACKUP_S3_URI-$(env_get BACKUP_S3_URI '')}"
+BACKUP_S3_ENDPOINT="${BACKUP_S3_ENDPOINT-$(env_get BACKUP_S3_ENDPOINT '')}"
+HEALTHCHECKS_URL="${HEALTHCHECKS_URL-$(env_get HEALTHCHECKS_URL '')}"
+
 # This script dumps by `docker exec`-ing pg_dump inside the BUNDLED postgres
 # container. With VIDRA_EXTERNAL_POSTGRES=true there is no such container, so
 # refuse in one sentence rather than fail at `ps -q postgres` with a message

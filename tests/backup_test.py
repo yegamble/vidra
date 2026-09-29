@@ -50,6 +50,67 @@ else:
         return subprocess.run(['bash', '-c', 'umask 022; exec bash deploy/backup.sh'],
                               cwd=self.root, env={**self.env, **env}, capture_output=True, text=True)
 
+    def configure_offsite(self, settings):
+        with (self.root / 'env/production.env').open('a') as out:
+            out.write(settings)
+        for key in ('BACKUP_RCLONE_REMOTE', 'BACKUP_S3_URI', 'BACKUP_S3_ENDPOINT',
+                    'HEALTHCHECKS_URL'):
+            self.env.pop(key, None)
+        self.env['CALLS'] = str(self.root / 'calls.jsonl')
+        for name in ('rclone', 'aws', 'curl'):
+            tool = self.root / 'bin' / name
+            tool.write_text('''#!/usr/bin/env python3
+import json,os,pathlib,sys
+with open(os.environ['CALLS'], 'a') as out:
+ out.write(json.dumps([pathlib.Path(sys.argv[0]).name, *sys.argv[1:]]) + '\\n')
+''')
+            tool.chmod(0o755)
+
+    def offsite_calls(self, tool):
+        path = self.root / 'calls.jsonl'
+        calls = [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+        return [call[1:] for call in calls if call[0] == tool]
+
+    def test_env_file_enables_encrypted_pair_and_backup_monitor(self):
+        self.configure_offsite('BACKUP_RCLONE_REMOTE="offsite:backup folder"\n'
+                               'HEALTHCHECKS_URL=https://monitor.invalid/backup\n')
+        run = self.run_backup()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        uploads = self.offsite_calls('rclone')
+        self.assertEqual(len(uploads), 2, run.stdout)
+        self.assertTrue(any('.dump.gz' in call[1] for call in uploads))
+        self.assertTrue(any('.tar.gz' in call[1] for call in uploads))
+        for call in uploads:
+            self.assertEqual(call, ['copyto', call[1], 'offsite:backup folder/' + Path(call[1]).name])
+        self.assertEqual([call[-1] for call in self.offsite_calls('curl')],
+                         ['https://monitor.invalid/backup/start', 'https://monitor.invalid/backup'])
+
+    def test_env_file_s3_endpoint_is_one_argument(self):
+        self.configure_offsite('BACKUP_S3_URI=s3://candidate-backups/migration\n'
+                               'BACKUP_S3_ENDPOINT=https://s3.us-east-005.backblazeb2.com\n')
+        run = self.run_backup()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        uploads = self.offsite_calls('aws')
+        self.assertEqual(len(uploads), 2, run.stdout)
+        for call in uploads:
+            self.assertEqual(call[:4], ['--endpoint-url', 'https://s3.us-east-005.backblazeb2.com', 's3', 'cp'])
+            self.assertEqual(call[5], 's3://candidate-backups/migration/' + Path(call[4]).name)
+
+    def test_process_overrides_file_and_explicit_empty_disables_offsite(self):
+        self.configure_offsite('BACKUP_RCLONE_REMOTE=file-target:\n'
+                               'HEALTHCHECKS_URL=https://monitor.invalid/backup\n')
+        run = self.run_backup(BACKUP_RCLONE_REMOTE='override:', HEALTHCHECKS_URL='')
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(len(self.offsite_calls('rclone')), 2)
+        self.assertTrue(all(call[-1].startswith('override:/') for call in self.offsite_calls('rclone')))
+        self.assertEqual(self.offsite_calls('curl'), [])
+        (self.root / 'calls.jsonl').unlink()
+        run = self.run_backup(BACKUP_RCLONE_REMOTE='', HEALTHCHECKS_URL='')
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn('LOCAL COPY ONLY', run.stdout)
+        self.assertEqual(self.offsite_calls('rclone'), [])
+        self.assertEqual(self.offsite_calls('curl'), [])
+
     def test_archives_and_plaintext_verification_are_private_from_creation(self):
         run = self.run_backup()
         self.assertEqual(run.returncode, 0, run.stderr)
