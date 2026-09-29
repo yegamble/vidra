@@ -434,7 +434,7 @@ run_pairing() {
     log()  { :; }
     warn() { WARNINGS="${WARNINGS}$*"; }
     . "$1"
-    TAG="$2"; DIR="$3"; WORK="$4"; ENV_FILE="$DIR/env/production.env"
+    TAG="$2"; DIR="$3"; WORK="$4"; ENV_FILE="$DIR/env/production.env"; PAIRING_DONE=0
     resolve_pairing 2>/dev/null
     echo "$CORE_TAG $USER_TAG $SEARCH_TAG"
     if [ -n "$WARNINGS" ]; then echo "WARNINGS $WARNINGS"; fi
@@ -484,6 +484,122 @@ assert_pairing v0.7.5 "v0.7.5 v0.7.5 v0.7.5" warn VIDRA_RECORD_FETCH=off
 cp releases/v0.7.5.json "$PAIR_TMP/tree/releases/"
 assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3" quiet VIDRA_RECORD_FETCH=off
 rm -f "$PAIR_TMP/tree/releases/v0.7.5.json"
+
+# ---------------------------------------------------------------------------
+# The --git clone path: bootstrap.sh puts EACH component on its own tag.
+#
+# install.sh --git (and any release without a bundle asset) clones this repo and
+# runs bootstrap.sh, which detached every component at the one VIDRA_REF. For a
+# core-only release that is a tag vidra-user and vidra-search do not have, so the
+# install died in bootstrap before setup ever ran. Real git against local repos
+# laid out like v0.7.5 (core has v0.7.5; user/search stop at v0.7.3); the
+# https://github.com/<owner>/ URLs bootstrap.sh builds are redirected to them
+# with url.insteadOf, so nothing touches the network.
+# ---------------------------------------------------------------------------
+
+log "Testing bootstrap.sh per-component refs (the --git install path)..."
+
+BOOT_TMP="$PAIR_TMP/boot"
+mkdir -p "$BOOT_TMP/remotes" "$BOOT_TMP/meta"
+boot_git() {
+  git -c user.name=t -c user.email=t@example.invalid -c init.defaultBranch=main \
+      -c commit.gpgsign=false -c tag.gpgsign=false "$@"
+}
+# Named <repo>.git: bootstrap.sh clones https://github.com/<owner>/<repo>.git.
+for r in vidra-core vidra-user vidra-search; do
+  boot_git init -q "$BOOT_TMP/remotes/$r.git"
+  for t in v0.7.3 v0.7.5; do
+    if [ "$t" = v0.7.5 ] && [ "$r" != vidra-core ]; then continue; fi
+    boot_git -C "$BOOT_TMP/remotes/$r.git" commit -q --allow-empty -m "$t"
+    boot_git -C "$BOOT_TMP/remotes/$r.git" tag "$t"
+  done
+done
+cp bootstrap.sh "$BOOT_TMP/meta/"
+
+# run_bootstrap_at <env...> - bootstrap.sh from $BOOT_TMP/meta; prints "core user search" tags.
+run_bootstrap_at() {
+  (
+    cd "$BOOT_TMP/meta"
+    env GIT_CONFIG_COUNT=1 \
+        GIT_CONFIG_KEY_0="url.file://$BOOT_TMP/remotes/.insteadOf" \
+        GIT_CONFIG_VALUE_0="https://github.com/boot-test/" \
+        GIT_TERMINAL_PROMPT=0 VIDRA_GH_OWNER=boot-test "$@" ./bootstrap.sh >/dev/null 2>&1
+  ) || return 1
+  for r in vidra-core vidra-user vidra-search; do
+    git -C "$BOOT_TMP/meta/$r" describe --tags --exact-match HEAD 2>/dev/null || echo "?"
+  done | tr '\n' ' ' | sed 's/ $//'
+}
+
+# assert_bootstrap <label> <expected "core user search"|FAIL> <env...>
+assert_bootstrap() {
+  local label="$1" want="$2" got rc=0
+  shift 2
+  got="$(run_bootstrap_at "$@")" || rc=$?
+  if [ "$want" = FAIL ]; then
+    if [ "$rc" -eq 0 ]; then
+      echo "FAIL: bootstrap.sh ${label} -> exit 0 (${got}); expected a refusal"; failures=$((failures + 1))
+    else
+      echo "PASS: bootstrap.sh ${label} -> refused"
+    fi
+  elif [ "$rc" -ne 0 ] || [ "$got" != "$want" ]; then
+    echo "FAIL: bootstrap.sh ${label} -> exit ${rc}, checkouts '${got}', expected '${want}'"
+    failures=$((failures + 1))
+  else
+    echo "PASS: bootstrap.sh ${label} -> ${got}"
+  fi
+}
+
+# The defect, as the old installer called it: one tag, and two repos lack it.
+assert_bootstrap "fresh clone, VIDRA_REF=v0.7.5 alone" FAIL VIDRA_REF=v0.7.5
+rm -rf "$BOOT_TMP/meta/vidra-"*
+# The fix, on a fresh clone...
+assert_bootstrap "fresh clone, per-component refs" "v0.7.5 v0.7.3 v0.7.3" \
+  VIDRA_REF=v0.7.5 VIDRA_CORE_REF=v0.7.5 VIDRA_USER_REF=v0.7.3 VIDRA_SEARCH_REF=v0.7.3
+# ...and on the update path an installer re-run takes over an existing checkout.
+assert_bootstrap "existing checkouts, uniform VIDRA_REF" "v0.7.3 v0.7.3 v0.7.3" VIDRA_REF=v0.7.3
+assert_bootstrap "existing checkouts, per-component refs" "v0.7.5 v0.7.3 v0.7.3" \
+  VIDRA_REF=v0.7.5 VIDRA_CORE_REF=v0.7.5 VIDRA_USER_REF=v0.7.3 VIDRA_SEARCH_REF=v0.7.3
+
+# And install.sh hands bootstrap.sh the pairing on BOTH git paths (fresh clone,
+# existing checkout): run_bootstrap is the one call site, run with the real
+# resolve_pairing and a stand-in bootstrap.sh that reports what it was given.
+sed -n '/^run_bootstrap() {/,/^}/p' install.sh > "$PAIR_TMP/boot_func.sh"
+if ! grep -q 'bootstrap.sh' "$PAIR_TMP/boot_func.sh"; then
+  echo "FAIL: install.sh has no run_bootstrap() wrapping bootstrap.sh"
+  failures=$((failures + 1))
+else
+  # shellcheck disable=SC2016  # a script body for the stand-in, expanded when IT runs
+  printf '#!/bin/sh\necho "$VIDRA_REF $VIDRA_CORE_REF $VIDRA_USER_REF $VIDRA_SEARCH_REF" > "$REPORT"\n' \
+    > "$PAIR_TMP/tree/bootstrap.sh"
+  chmod +x "$PAIR_TMP/tree/bootstrap.sh"
+  # shellcheck disable=SC2016  # the inline script expands its own positionals
+  PATH="$PAIR_TMP/bin:$PATH" SERVED="$PAIR_TMP/served" REPORT="$PAIR_TMP/boot_report" sh -eu -c '
+    WARNINGS=""; OWNER=yegamble
+    log()  { :; }
+    warn() { :; }
+    die()  { echo "DIE: $*" >&2; exit 9; }
+    . "$1"; . "$2"
+    TAG=v0.7.5; DIR="$3"; WORK="$4"; ENV_FILE="$DIR/env/production.env"; PAIRING_DONE=0
+    run_bootstrap 2>/dev/null
+  ' boot "$PAIR_TMP/func.sh" "$PAIR_TMP/boot_func.sh" "$PAIR_TMP/tree" "$PAIR_TMP/work" || true
+  got="$(cat "$PAIR_TMP/boot_report" 2>/dev/null || echo 'bootstrap.sh never ran')"
+  if [ "$got" = "v0.7.5 v0.7.5 v0.7.3 v0.7.3" ]; then
+    echo "PASS: install.sh run_bootstrap v0.7.5 -> VIDRA_REF/CORE/USER/SEARCH = ${got}"
+  else
+    echo "FAIL: install.sh run_bootstrap v0.7.5 -> '${got}', expected 'v0.7.5 v0.7.5 v0.7.3 v0.7.3'"
+    failures=$((failures + 1))
+  fi
+  rm -f "$PAIR_TMP/tree/bootstrap.sh"
+fi
+if [ "$(grep -c 'run_bootstrap$' install.sh)" -lt 2 ]; then
+  echo "FAIL: install.sh must call run_bootstrap on both the fresh-clone and existing-checkout paths"
+  failures=$((failures + 1))
+fi
+# shellcheck disable=SC2016  # a literal to find in install.sh's source
+if grep -q 'VIDRA_REF="\$TAG".*bootstrap.sh' install.sh; then
+  echo "FAIL: install.sh still runs bootstrap.sh with VIDRA_REF alone somewhere; a core-only release then dies in bootstrap"
+  failures=$((failures + 1))
+fi
 
 # And the pins actually reach the interview. Source-level, like --release-tag
 # above: $CORE_TAG etc must not expand here.
