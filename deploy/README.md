@@ -176,6 +176,10 @@ not stable across recreates.
 
 ### Run the shipped PeerTube importer from the admin page
 
+For the full sequence, including a read-only snapshot, Backblaze B2, reuse of
+existing HLS/storyboards, reconciliation and cutover, follow the
+[PeerTube migration guide](../docs/peertube-migration.md).
+
 The release API image contains the importer and its worker. The standalone
 `peertube-import` executable is not distributed; no Go build or copied binary
 is needed for the supported operator path. Configure the source with the
@@ -1298,6 +1302,13 @@ format is a contract; do not "improve" it.
   go to the same target; there is deliberately no separate knob, because sending
   the dump away and leaving its config on the dead host is the exact failure the
   archive closes.
+  These four backup/monitor knobs are read from the selected `ENV_FILE` as well
+  as the process environment; an exported value wins, including an explicitly
+  empty value for a one-off disable. Released v0.7.5 scripts require the process
+  environment instead; the [migration guide](../docs/peertube-migration.md)
+  includes the compatible systemd `EnvironmentFile` setup. Client settings such
+  as `RCLONE_CONFIG` and AWS credentials still belong in the client environment
+  or its private configuration, not in Vidra's env file.
 - **Alert on a *missing* backup**, not just a failing one. Set
   `HEALTHCHECKS_URL=https://hc-ping.com/<uuid>`; the script pings `/start`,
   `/fail` on any error, and success at the end, so a droplet that stops running
