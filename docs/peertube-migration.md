@@ -234,14 +234,12 @@ the existing mounts, and retain this reviewed local deployment change across
 updates. For example, append `/srv/peertube-storage:/source/peertube:ro` and set
 the source root to `/source/peertube`; inspect the rendered API/worker mounts.
 
-A mixed local/S3 source needs a separate plan. The source backend selector does
-not automatically fall back from a missing S3 original to the PeerTube host's
-filesystem. The 2026-09-29 source inventory contained **two local originals**
-alongside S3 media; that count is specific to that source. Preserve those files
-and their database/key mapping. They need a separately verified, supported
-staging or import pass before declaring the catalogue complete. This runbook
-does not yet prescribe that pass: do not assume that switching backends on an
-existing ledger or fetching arbitrary source URLs will repair them.
+A mixed local/S3 source needs a separate inventory: the source backend selector
+does not automatically fall back from S3 to the PeerTube host's filesystem.
+Preserve every local original and its database/key mapping. The prerelease
+[three-pass repair procedure](#mixed-locals3-repair-prerelease) below covers
+local originals whose captions or HLS remain in object storage; it is not a
+capability qualification for v0.7.5.
 
 Keep the source HTTP origin reachable too. Actor images, posters and storyboard
 sheets may live on the PeerTube host even when video storage is S3. The importer
@@ -358,6 +356,59 @@ verify that the optimization actually ran. These are per-tree transfer counters,
 not an independent checksum or whole-catalogue completeness proof. Remove/revoke
 the temporary copy key after the reconciliation window using another controlled
 configuration restart.
+
+#### Mixed local/S3 repair (prerelease)
+
+An original can remain on the PeerTube filesystem while its captions or HLS are
+in S3. The importer selects one source backend for an entire run. If the S3 pass
+cannot read that original, it does not create the video, so its child assets
+cannot be imported yet. A local pass supplies the parent; a final S3 pass can
+then supply its children. Two passes alone can leave those children missing.
+
+This procedure has a PostgreSQL regression using two disjoint source stores,
+including unchanged media, true original hashes and preserved creator edits or
+deletions. It does not replace a provider test or playback verification on the
+operator's exact deployment.
+
+1. Inventory and stage the local files on the Vidra host, preserving their
+   relative paths, including `web-videos/private/` where applicable. Record
+   sizes and SHA-256 values, then verify the staged copies. Mount the staged
+   root read-only into both API and worker as described above; verify that the
+   container UID can read the files. Do not change source file permissions.
+2. Use the same restored source database, destination database, destination
+   bucket and pinned component images for every pass. The ledger is keyed by
+   entity kind and numeric source ID, not by instance or backend: never reuse
+   it with a different PeerTube instance. Keep `media_mode=copy`, the reviewed
+   conflict policy, and `source_authoritative=false` unchanged.
+3. Launch the S3 pass through the authenticated admin import page/API from
+   [section 6](#6-preview-resolve-exceptions-then-launch-the-actual-copy), with
+   `PEERTUBE_SOURCE_STORAGE_BACKEND=s3`. Save the terminal report and failed
+   asset inventory. Local-only originals are expected to remain failed here;
+   identify those exact rows before proceeding.
+4. Wait for that run to become terminal. Disable importing, stop its executors,
+   set `PEERTUBE_SOURCE_STORAGE_BACKEND=local` and
+   `PEERTUBE_SOURCE_STORAGE_LOCAL_ROOT=/source/peertube` in the protected env,
+   and recreate API/worker through the reviewed deployment procedure. Verify
+   the running configuration and read-only mount before enabling imports and
+   launching the next run. The local pass repairs missing parent videos and
+   hashes their originals. S3-only captions/HLS can still fail in this pass.
+5. After the local run is terminal and checkpointed, repeat the controlled
+   configuration change back to `PEERTUBE_SOURCE_STORAGE_BACKEND=s3`, retaining
+   the original source S3 settings. Launch the final repair run against the
+   same ledger. Available S3 captions/HLS for the newly created videos can now
+   import; completed videos, captions and ready HLS trees are preserved.
+6. Reconcile every pass and verify the repaired originals' hashes, stable video
+   IDs, source state/privacy, captions and HLS dependencies. Source drafts must
+   stay drafts. Artwork is reconsidered but unchanged imported assets need no
+   new transfer; the prerelease preserves creator changes and cleared slots
+   across repeated runs, even if the source later selects a new artwork ID.
+
+Keep the [side-effect pauses](#5-pause-side-effects-and-choose-account-policy)
+throughout. Do not run the passes concurrently or delete destination objects
+between them: ready database rows would otherwise conceal missing bytes. Each
+pass also revisits other retryable failures; this is not an import limited to
+the staged files. Genuinely missing source assets remain failures to reconcile,
+never entries to mark done manually.
 
 ## 5. Pause side effects and choose account policy
 
