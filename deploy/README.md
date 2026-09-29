@@ -514,7 +514,10 @@ sync, and read the expected schema version from the manifest instead of from a
 release that carries no bundle asset — every release cut before the bundle
 existed, which must keep installing. Both say so. That path is the old one
 exactly: clone this repo, run `./bootstrap.sh` with `VIDRA_REF` set so all three
-component checkouts are pinned to the release. Take it deliberately if you want
+component checkouts are pinned to the release — each at the tag the release
+record pairs it at (`VIDRA_CORE_REF`/`VIDRA_USER_REF`/`VIDRA_SEARCH_REF`), since
+a core-only release such as v0.7.5 has no tag of that name in vidra-user or
+vidra-search. Take it deliberately if you want
 history, local patches, or to follow `main`; `git` is installed only if that path
 is actually taken.
 

@@ -29,16 +29,35 @@ COMPONENTS=(vidra-core vidra-user vidra-search)
 # floor"). Against an older component checkout the one-shot starts an API server
 # instead of migrating and never exits — i.e. `make dev` / `make dev-hot` hang on
 # `migrate`. vidra-core and vidra-search release FIRST; this repo follows.
+#
+# PER-COMPONENT REFS (meta#242). A release need not move all three components:
+# v0.7.4 and v0.7.5 re-released vidra-core alone and pair vidra-user and
+# vidra-search at v0.7.3, so there is no v0.7.5 tag in either of those repos and
+# VIDRA_REF=v0.7.5 alone fails at `git checkout`. VIDRA_CORE_REF, VIDRA_USER_REF
+# and VIDRA_SEARCH_REF override VIDRA_REF for one component each; install.sh sets
+# them from the release record (releases/<tag>.json), the same pairing it writes
+# into the VIDRA_*_TAG pins:
+#
+#   VIDRA_REF=v0.7.5 VIDRA_USER_REF=v0.7.3 VIDRA_SEARCH_REF=v0.7.3 ./bootstrap.sh
 VIDRA_REF="${VIDRA_REF:-}"
 
+component_ref() {
+  case "$1" in
+    vidra-core)   echo "${VIDRA_CORE_REF:-$VIDRA_REF}" ;;
+    vidra-user)   echo "${VIDRA_USER_REF:-$VIDRA_REF}" ;;
+    vidra-search) echo "${VIDRA_SEARCH_REF:-$VIDRA_REF}" ;;
+  esac
+}
+
 for r in "${COMPONENTS[@]}"; do
+  ref="$(component_ref "$r")"
   if [ -d "$r/.git" ]; then
-    if [ -n "$VIDRA_REF" ]; then
-      echo "==> updating $r -> $VIDRA_REF"
+    if [ -n "$ref" ]; then
+      echo "==> updating $r -> $ref"
       # --force: without it git refuses to move a tag this checkout already
       # has, so a tag re-pointed upstream would pin the stale object forever.
       git -C "$r" fetch --tags --force --prune origin
-      git -C "$r" checkout --detach "$VIDRA_REF"
+      git -C "$r" checkout --detach "$ref"
     else
       echo "==> updating $r"
       git -C "$r" pull --ff-only
@@ -48,9 +67,9 @@ for r in "${COMPONENTS[@]}"; do
   else
     echo "==> cloning $r"
     git clone "https://github.com/$OWNER/$r.git" "$r"
-    if [ -n "$VIDRA_REF" ]; then
-      echo "==> pinning $r to $VIDRA_REF"
-      git -C "$r" checkout --detach "$VIDRA_REF"
+    if [ -n "$ref" ]; then
+      echo "==> pinning $r to $ref"
+      git -C "$r" checkout --detach "$ref"
     fi
   fi
 done

@@ -331,6 +331,14 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
     preflight. Static proof only — no install was executed. Still OPEN on the
     `--git` clone path: `bootstrap.sh` checks every component out at the one
     `VIDRA_REF`, and vidra-user has no v0.7.5 tag.*
+    *Later 2026-09-29: the `--git` path (a fresh clone, and a re-run over an
+    existing checkout) now resolves the same pairing BEFORE `bootstrap.sh` and
+    passes it as `VIDRA_CORE_REF/VIDRA_USER_REF/VIDRA_SEARCH_REF`, which
+    override `VIDRA_REF` per component. `tests/install_test.sh` runs the real
+    `bootstrap.sh` through its clone and update paths against local stand-in
+    repos with the v0.7.5 tag shape (and pins that `VIDRA_REF` alone still
+    fails there). Both install paths are closed in code; still no blank-host
+    install was executed, which is the issue's remaining acceptance step.*
   - [yegamble/vidra-core#267](https://github.com/yegamble/vidra-core/issues/267)
     — after a failed search-outbox drain the rescheduled events are overtaken
     by later ones, and the delayed `reconcile.end` then suppresses a freshly

@@ -407,7 +407,7 @@ fi
 
 # The release everything gets pinned to: the tree and the CLI are ${TAG}'s. The
 # three IMAGE pins usually are too, but not always - a core-only release pairs
-# vidra-user and vidra-search at an earlier tag, and resolve_pairing (step 7)
+# vidra-user and vidra-search at an earlier tag, and resolve_pairing (step 5/7)
 # reads that out of the release record before the interview writes them.
 #
 # The GitHub REST API, read with curl and cut with sed. jq is deliberately NOT a
@@ -687,11 +687,98 @@ fetch_verified() {
 }
 
 # --- 5/7 the deployment tree ------------------------------------------------------
+# resolve_pairing - sets CORE_TAG, USER_TAG and SEARCH_TAG to the tag release
+# ${TAG} pairs EACH component at, and PAIRING_RESOLVED=1 so it runs once per
+# install. Never fatal. Defined here, ahead of step 5, because the git paths need
+# the pairing to CHECK OUT the components (bootstrap_components below), not only
+# to write the pins in step 7.
+#
+# WHY THE THREE ARE NOT ALWAYS ${TAG}. v0.7.4 and v0.7.5 re-released vidra-core
+# alone and pair vidra-user and vidra-search at v0.7.3; ghcr.io/.../vidra-user:v0.7.5
+# has never existed. Passing only --release-tag wrote ${TAG} into all three keys,
+# so the documented one-liner installed the latest release and the first
+# 'vidra deploy' refused it (release-mapping preflight: "no release record names
+# this vidra-user tag") with no instruction anywhere to hand-edit two of them.
+# deploy/pin-release.sh closed the same hole on the upgrade path (meta#241); this
+# is the install path.
+#
+# The pairing is read by the SAME two readers pin-release.sh uses - lib.sh's
+# fetch_release_record and deploy/release-mapping.py resolve - from the tree
+# step 5 just installed, so there is no third parser to drift. The record is
+# FETCHED because the ${TAG} tree cannot carry releases/${TAG}.json: release.sh
+# tags this repository before any image exists.
+#
+# NO RECORD IS NOT A REFUSAL (pin-release.sh's standing ruling): an offline host,
+# VIDRA_RECORD_FETCH=off, no python3, or the window before the record PR merges
+# all fall back to one tag for all three - right for every uniform release -
+# with a warning that names the failure a core-only release would meet next.
+# bash for lib.sh (sourced, bash-only); its log goes to stderr so stdout stays the
+# resolver's machine answer. ENV_FILE=/dev/null: no env file exists yet, and
+# VIDRA_RECORD_FETCH / VIDRA_RECORD_BASE_URL are still honoured from the process
+# environment. The fetched copy must be named <tag>.json: the resolver refuses a
+# record whose filename disagrees with the release it names. The inline script
+# must stay free of apostrophes (it is single-quoted).
+resolve_pairing() {
+  PAIRING_RESOLVED=1
+  CORE_TAG="$TAG"; USER_TAG="$TAG"; SEARCH_TAG="$TAG"
+  pairing=""
+  pairing_rc=0
+  if ! command -v python3 >/dev/null 2>&1 || ! command -v bash >/dev/null 2>&1; then
+    pairing_rc=127
+  elif [ ! -f "${DIR}/deploy/release-mapping.py" ] || [ ! -f "${DIR}/deploy/lib.sh" ]; then
+    pairing_rc=2
+  else
+    pairing="$(
+      cd "$DIR" && ENV_FILE=/dev/null bash -c '
+        log() { printf "[install] %s\n" "$*" >&2; }
+        die() { log "ERROR: $*"; exit 1; }
+        . deploy/lib.sh
+        tag="$1"; work="$2"
+        set -- resolve --release "$tag"
+        if [ -f "releases/$tag.json" ]; then set -- "$@" --record "releases/$tag.json"; fi
+        mkdir -p "$work/record"
+        if fetch_release_record "$tag" "$work/record/$tag.json"; then
+          set -- "$@" --fetched-record "$work/record/$tag.json"
+        fi
+        exec python3 deploy/release-mapping.py "$@"
+      ' vidra-install "$TAG" "$WORK"
+    )" || pairing_rc=$?
+  fi
+
+  if [ "$pairing_rc" -eq 0 ]; then
+    p_core=""; p_user=""; p_search=""
+    while read -r p_role p_tag _; do
+      case "$p_role" in
+        core)   p_core="$p_tag" ;;
+        user)   p_user="$p_tag" ;;
+        search) p_search="$p_tag" ;;
+      esac
+    done <<EOF
+$pairing
+EOF
+    if [ -n "$p_core" ] && [ -n "$p_user" ] && [ -n "$p_search" ]; then
+      CORE_TAG="$p_core"; USER_TAG="$p_user"; SEARCH_TAG="$p_search"
+      log "release ${TAG} pairs its components as core=${CORE_TAG} user=${USER_TAG} search=${SEARCH_TAG} (its release record)"
+      return 0
+    fi
+    pairing_rc=70
+  fi
+
+  case "$pairing_rc" in
+    3)   why="no release record for ${TAG} could be read" ;;
+    127) why="this host has no python3 (or no bash) to read the release record with" ;;
+    2)   why="the ${TAG} tree carries no deploy/release-mapping.py resolve (it predates per-component pairing)" ;;
+    *)   why="deploy/release-mapping.py resolve answered exit ${pairing_rc} rather than a pairing" ;;
+  esac
+  warn "${TAG}'s component pairing could not be determined (${why}), so all three VIDRA_*_TAG keys are pinned to ${TAG}. That is right for a uniform release. If ${TAG} re-released ONE component (v0.7.4 and v0.7.5 re-released vidra-core alone), the other two images do not exist at ${TAG} and 'vidra deploy' will refuse the pins: set VIDRA_USER_TAG and VIDRA_SEARCH_TAG in ${DIR}/env/production.env to the tags the release notes name before deploying."
+}
+
 step "5/7 the deployment tree"
 
 # Which kind of tree ${DIR} ends up being. Step 7 and the CLI failure message both
 # branch on it, because "there is no vidra-core source here" changes the advice.
 TREE_MODE=""
+PAIRING_RESOLVED=0
 
 # git is a dependency of the clone path only, so it is installed at the moment
 # that path is taken - which may be here, on a release with no bundle asset, long
@@ -717,18 +804,36 @@ make_install_dir() {
   as_root install -d -m 0755 -o "$(id -un)" -g "$(id -gn)" "$DIR"
 }
 
+# bootstrap_components <how DIR got here> - detaches each nested checkout at the
+# tag ${TAG} pairs THAT component at.
+#
+# bootstrap.sh is the ONE copy of "which repos, cloned how". It is idempotent, it
+# honours VIDRA_REF by detaching each checkout at that tag, and meta-ci exercises
+# its update path on every run - three reasons not to re-implement three git
+# clones here.
+#
+# VIDRA_REF ALONE IS NOT ENOUGH SINCE v0.7.4 (meta#242, the --git half). A
+# core-only release has no tag of its own name in vidra-user or vidra-search, so
+# `git checkout --detach v0.7.5` failed in vidra-user and the clone path died
+# here, before the interview ever ran. The per-component refs carry the same
+# pairing step 7 writes into the env file, so the checkouts and the pins agree;
+# deploy.sh's component sync would move them to those pins anyway. A tree whose
+# bootstrap.sh predates the per-component refs ignores them and behaves as
+# before, which is right for every uniform release.
+bootstrap_components() {
+  resolve_pairing
+  log "bootstrapping the component checkouts at core=${CORE_TAG} user=${USER_TAG} search=${SEARCH_TAG}"
+  ( cd "$DIR" && VIDRA_REF="$TAG" VIDRA_CORE_REF="$CORE_TAG" VIDRA_USER_REF="$USER_TAG" \
+      VIDRA_SEARCH_REF="$SEARCH_TAG" VIDRA_GH_OWNER="$OWNER" ./bootstrap.sh ) \
+    || die "bootstrap.sh failed. The meta-repo is $1 ${DIR}; fix the cause (usually a tag missing from the component repo it was checked out in - the error above names it) and re-run this installer, or just './bootstrap.sh' from ${DIR}."
+}
+
 clone_tree() {
   ensure_git
   log "cloning ${OWNER}/vidra into ${DIR}"
   make_install_dir
   git clone "https://github.com/${OWNER}/vidra.git" "$DIR"
-  log "bootstrapping the component checkouts at ${TAG}"
-  # bootstrap.sh is the ONE copy of "which repos, cloned how". It is idempotent, it
-  # honours VIDRA_REF by detaching each checkout at that tag, and meta-ci exercises
-  # its update path on every run - three reasons not to re-implement three git
-  # clones here.
-  ( cd "$DIR" && VIDRA_REF="$TAG" VIDRA_GH_OWNER="$OWNER" ./bootstrap.sh ) \
-    || die "bootstrap.sh failed. The meta-repo is cloned at ${DIR}; fix the cause (usually a tag that does not exist in every component repo) and re-run this installer, or just './bootstrap.sh' from ${DIR}."
+  bootstrap_components "cloned at"
   TREE_MODE=git
 }
 
@@ -816,9 +921,7 @@ elif [ "$DIR_STATE" = "checkout" ]; then
       warn "${DIR} is on branch '${BRANCH}', not main, so it was not updated. That is usually deliberate; if it is not, 'git -C ${DIR} checkout main' and re-run."
     fi
   fi
-  log "bootstrapping the component checkouts at ${TAG}"
-  ( cd "$DIR" && VIDRA_REF="$TAG" VIDRA_GH_OWNER="$OWNER" ./bootstrap.sh ) \
-    || die "bootstrap.sh failed. The meta-repo is at ${DIR}; fix the cause (usually a tag that does not exist in every component repo) and re-run this installer, or just './bootstrap.sh' from ${DIR}."
+  bootstrap_components "at"
 elif [ "$FORCE_GIT" -eq 1 ]; then
   log "--git given - cloning instead of unpacking the release bundle."
   clone_tree
@@ -896,88 +999,6 @@ VIDRA_BIN=/usr/local/bin/vidra
 step "7/7 setup"
 ENV_FILE="${DIR}/env/production.env"
 
-# resolve_pairing - sets CORE_TAG, USER_TAG and SEARCH_TAG to the tag release
-# ${TAG} pairs EACH component at. Never fatal.
-#
-# WHY THE THREE ARE NOT ALWAYS ${TAG}. v0.7.4 and v0.7.5 re-released vidra-core
-# alone and pair vidra-user and vidra-search at v0.7.3; ghcr.io/.../vidra-user:v0.7.5
-# has never existed. Passing only --release-tag wrote ${TAG} into all three keys,
-# so the documented one-liner installed the latest release and the first
-# 'vidra deploy' refused it (release-mapping preflight: "no release record names
-# this vidra-user tag") with no instruction anywhere to hand-edit two of them.
-# deploy/pin-release.sh closed the same hole on the upgrade path (meta#241); this
-# is the install path.
-#
-# The pairing is read by the SAME two readers pin-release.sh uses - lib.sh's
-# fetch_release_record and deploy/release-mapping.py resolve - from the tree
-# step 5 just installed, so there is no third parser to drift. The record is
-# FETCHED because the ${TAG} tree cannot carry releases/${TAG}.json: release.sh
-# tags this repository before any image exists.
-#
-# NO RECORD IS NOT A REFUSAL (pin-release.sh's standing ruling): an offline host,
-# VIDRA_RECORD_FETCH=off, no python3, or the window before the record PR merges
-# all fall back to one tag for all three - right for every uniform release -
-# with a warning that names the failure a core-only release would meet next.
-# bash for lib.sh (sourced, bash-only); its log goes to stderr so stdout stays the
-# resolver's machine answer. ENV_FILE=/dev/null: no env file exists yet, and
-# VIDRA_RECORD_FETCH / VIDRA_RECORD_BASE_URL are still honoured from the process
-# environment. The fetched copy must be named <tag>.json: the resolver refuses a
-# record whose filename disagrees with the release it names. The inline script
-# must stay free of apostrophes (it is single-quoted).
-resolve_pairing() {
-  CORE_TAG="$TAG"; USER_TAG="$TAG"; SEARCH_TAG="$TAG"
-  pairing=""
-  pairing_rc=0
-  if ! command -v python3 >/dev/null 2>&1 || ! command -v bash >/dev/null 2>&1; then
-    pairing_rc=127
-  elif [ ! -f "${DIR}/deploy/release-mapping.py" ] || [ ! -f "${DIR}/deploy/lib.sh" ]; then
-    pairing_rc=2
-  else
-    pairing="$(
-      cd "$DIR" && ENV_FILE=/dev/null bash -c '
-        log() { printf "[install] %s\n" "$*" >&2; }
-        die() { log "ERROR: $*"; exit 1; }
-        . deploy/lib.sh
-        tag="$1"; work="$2"
-        set -- resolve --release "$tag"
-        if [ -f "releases/$tag.json" ]; then set -- "$@" --record "releases/$tag.json"; fi
-        mkdir -p "$work/record"
-        if fetch_release_record "$tag" "$work/record/$tag.json"; then
-          set -- "$@" --fetched-record "$work/record/$tag.json"
-        fi
-        exec python3 deploy/release-mapping.py "$@"
-      ' vidra-install "$TAG" "$WORK"
-    )" || pairing_rc=$?
-  fi
-
-  if [ "$pairing_rc" -eq 0 ]; then
-    p_core=""; p_user=""; p_search=""
-    while read -r p_role p_tag _; do
-      case "$p_role" in
-        core)   p_core="$p_tag" ;;
-        user)   p_user="$p_tag" ;;
-        search) p_search="$p_tag" ;;
-      esac
-    done <<EOF
-$pairing
-EOF
-    if [ -n "$p_core" ] && [ -n "$p_user" ] && [ -n "$p_search" ]; then
-      CORE_TAG="$p_core"; USER_TAG="$p_user"; SEARCH_TAG="$p_search"
-      log "release ${TAG} pairs its components as core=${CORE_TAG} user=${USER_TAG} search=${SEARCH_TAG} (its release record)"
-      return 0
-    fi
-    pairing_rc=70
-  fi
-
-  case "$pairing_rc" in
-    3)   why="no release record for ${TAG} could be read" ;;
-    127) why="this host has no python3 (or no bash) to read the release record with" ;;
-    2)   why="the ${TAG} tree carries no deploy/release-mapping.py resolve (it predates per-component pairing)" ;;
-    *)   why="deploy/release-mapping.py resolve answered exit ${pairing_rc} rather than a pairing" ;;
-  esac
-  warn "${TAG}'s component pairing could not be determined (${why}), so all three VIDRA_*_TAG keys are pinned to ${TAG}. That is right for a uniform release. If ${TAG} re-released ONE component (v0.7.4 and v0.7.5 re-released vidra-core alone), the other two images do not exist at ${TAG} and 'vidra deploy' will refuse the pins: set VIDRA_USER_TAG and VIDRA_SEARCH_TAG in ${ENV_FILE} to the tags the release notes name before deploying."
-}
-
 # The runbook's proof, at the moment it matters: BEFORE anything writes secrets
 # into that path. `git check-ignore` answers about a path, not about a file, so it
 # works before the file exists - which is the only useful time to ask.
@@ -1000,7 +1021,9 @@ fi
 # Only when the interview is about to write the file: an existing one is left
 # exactly as it is, pins included, so there is nothing to resolve for.
 if [ ! -f "$ENV_FILE" ]; then
-  resolve_pairing
+  # A git install already resolved it to check the components out (step 5);
+  # asking twice would fetch the record twice and could warn twice.
+  [ "$PAIRING_RESOLVED" -eq 1 ] || resolve_pairing
   # Every command this step prints carries the same pins it would have run, so a
   # re-run by hand writes what the installer would have. Semver tags only, so
   # nothing here needs quoting.
