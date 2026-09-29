@@ -407,7 +407,7 @@ fi
 
 # The release everything gets pinned to: the tree and the CLI are ${TAG}'s. The
 # three IMAGE pins usually are too, but not always - a core-only release pairs
-# vidra-user and vidra-search at an earlier tag, and resolve_pairing (step 5/7)
+# vidra-user and vidra-search at an earlier tag, and resolve_pairing (step 7)
 # reads that out of the release record before the interview writes them.
 #
 # The GitHub REST API, read with curl and cut with sed. jq is deliberately NOT a
@@ -686,12 +686,15 @@ fetch_verified() {
   die "CHECKSUM MISMATCH on ${asset} from release ${TAG}. The download has been deleted and nothing was installed. This is either a corrupted transfer or a tampered asset; re-run, and if it happens again do not work around it."
 }
 
-# --- 5/7 the deployment tree ------------------------------------------------------
+# Where step 7 writes the configuration. Named here because resolve_pairing's
+# warning names it, and the git paths resolve the pairing in step 5.
+ENV_FILE="${DIR}/env/production.env"
+PAIRING_DONE=0
+
 # resolve_pairing - sets CORE_TAG, USER_TAG and SEARCH_TAG to the tag release
-# ${TAG} pairs EACH component at, and PAIRING_RESOLVED=1 so it runs once per
-# install. Never fatal. Defined here, ahead of step 5, because the git paths need
-# the pairing to CHECK OUT the components (bootstrap_components below), not only
-# to write the pins in step 7.
+# ${TAG} pairs EACH component at. Never fatal, and runs once: the git paths call
+# it before bootstrap.sh (step 5) and step 7 again before the interview, and one
+# fetch and one warning is enough.
 #
 # WHY THE THREE ARE NOT ALWAYS ${TAG}. v0.7.4 and v0.7.5 re-released vidra-core
 # alone and pair vidra-user and vidra-search at v0.7.3; ghcr.io/.../vidra-user:v0.7.5
@@ -700,26 +703,31 @@ fetch_verified() {
 # 'vidra deploy' refused it (release-mapping preflight: "no release record names
 # this vidra-user tag") with no instruction anywhere to hand-edit two of them.
 # deploy/pin-release.sh closed the same hole on the upgrade path (meta#241); this
-# is the install path.
+# is the install path. On the --git path the same one tag also went to
+# bootstrap.sh, which died checking out a vidra-user tag that does not exist.
 #
 # The pairing is read by the SAME two readers pin-release.sh uses - lib.sh's
-# fetch_release_record and deploy/release-mapping.py resolve - from the tree
-# step 5 just installed, so there is no third parser to drift. The record is
-# FETCHED because the ${TAG} tree cannot carry releases/${TAG}.json: release.sh
-# tags this repository before any image exists.
+# fetch_release_record and deploy/release-mapping.py resolve - from ${DIR}: the
+# unpacked bundle, or the meta-repo clone before its components exist. So there
+# is no third parser to drift. The record is FETCHED because a ${TAG} bundle
+# cannot carry releases/${TAG}.json (release.sh tags this repository before any
+# image exists); a main clone may, and the fetched copy wins if they differ.
 #
 # NO RECORD IS NOT A REFUSAL (pin-release.sh's standing ruling): an offline host,
 # VIDRA_RECORD_FETCH=off, no python3, or the window before the record PR merges
 # all fall back to one tag for all three - right for every uniform release -
 # with a warning that names the failure a core-only release would meet next.
 # bash for lib.sh (sourced, bash-only); its log goes to stderr so stdout stays the
-# resolver's machine answer. ENV_FILE=/dev/null: no env file exists yet, and
-# VIDRA_RECORD_FETCH / VIDRA_RECORD_BASE_URL are still honoured from the process
-# environment. The fetched copy must be named <tag>.json: the resolver refuses a
+# resolver's machine answer. ENV_FILE=/dev/null: the env file is not consulted
+# (usually none exists yet); VIDRA_RECORD_FETCH / VIDRA_RECORD_BASE_URL are
+# still honoured from the process environment. The fetched copy must be named <tag>.json: the resolver refuses a
 # record whose filename disagrees with the release it names. The inline script
 # must stay free of apostrophes (it is single-quoted).
 resolve_pairing() {
-  PAIRING_RESOLVED=1
+  if [ "$PAIRING_DONE" -eq 1 ]; then
+    return 0
+  fi
+  PAIRING_DONE=1
   CORE_TAG="$TAG"; USER_TAG="$TAG"; SEARCH_TAG="$TAG"
   pairing=""
   pairing_rc=0
@@ -770,15 +778,15 @@ EOF
     2)   why="the ${TAG} tree carries no deploy/release-mapping.py resolve (it predates per-component pairing)" ;;
     *)   why="deploy/release-mapping.py resolve answered exit ${pairing_rc} rather than a pairing" ;;
   esac
-  warn "${TAG}'s component pairing could not be determined (${why}), so all three VIDRA_*_TAG keys are pinned to ${TAG}. That is right for a uniform release. If ${TAG} re-released ONE component (v0.7.4 and v0.7.5 re-released vidra-core alone), the other two images do not exist at ${TAG} and 'vidra deploy' will refuse the pins: set VIDRA_USER_TAG and VIDRA_SEARCH_TAG in ${DIR}/env/production.env to the tags the release notes name before deploying."
+  warn "${TAG}'s component pairing could not be determined (${why}), so all three VIDRA_*_TAG keys are pinned to ${TAG}. That is right for a uniform release. If ${TAG} re-released ONE component (v0.7.4 and v0.7.5 re-released vidra-core alone), the other two images do not exist at ${TAG} and 'vidra deploy' will refuse the pins: set VIDRA_USER_TAG and VIDRA_SEARCH_TAG in ${ENV_FILE} to the tags the release notes name before deploying."
 }
 
+# --- 5/7 the deployment tree ------------------------------------------------------
 step "5/7 the deployment tree"
 
 # Which kind of tree ${DIR} ends up being. Step 7 and the CLI failure message both
 # branch on it, because "there is no vidra-core source here" changes the advice.
 TREE_MODE=""
-PAIRING_RESOLVED=0
 
 # git is a dependency of the clone path only, so it is installed at the moment
 # that path is taken - which may be here, on a release with no bundle asset, long
@@ -804,28 +812,23 @@ make_install_dir() {
   as_root install -d -m 0755 -o "$(id -un)" -g "$(id -gn)" "$DIR"
 }
 
-# bootstrap_components <how DIR got here> - detaches each nested checkout at the
-# tag ${TAG} pairs THAT component at.
-#
 # bootstrap.sh is the ONE copy of "which repos, cloned how". It is idempotent, it
-# honours VIDRA_REF by detaching each checkout at that tag, and meta-ci exercises
-# its update path on every run - three reasons not to re-implement three git
-# clones here.
+# detaches each checkout at its ref, and meta-ci exercises its update path on
+# every run - three reasons not to re-implement three git clones here.
 #
-# VIDRA_REF ALONE IS NOT ENOUGH SINCE v0.7.4 (meta#242, the --git half). A
-# core-only release has no tag of its own name in vidra-user or vidra-search, so
-# `git checkout --detach v0.7.5` failed in vidra-user and the clone path died
-# here, before the interview ever ran. The per-component refs carry the same
-# pairing step 7 writes into the env file, so the checkouts and the pins agree;
-# deploy.sh's component sync would move them to those pins anyway. A tree whose
-# bootstrap.sh predates the per-component refs ignores them and behaves as
-# before, which is right for every uniform release.
-bootstrap_components() {
+# Each component gets ITS OWN tag from the release record, not ${TAG}: a
+# core-only release (v0.7.4, v0.7.5) pairs vidra-user and vidra-search at an
+# earlier tag, and `checkout --detach ${TAG}` in either of them is a tag that
+# does not exist. The pairing is read from ${DIR}, which by now holds the
+# meta-repo (lib.sh, release-mapping.py) and not yet the components. The
+# same tags reach the interview in step 7, so the checkouts and the image pins
+# agree - which is what deploy.sh's checkout sync then asserts.
+run_bootstrap() {
   resolve_pairing
-  log "bootstrapping the component checkouts at core=${CORE_TAG} user=${USER_TAG} search=${SEARCH_TAG}"
+  log "bootstrapping the component checkouts: core ${CORE_TAG}, user ${USER_TAG}, search ${SEARCH_TAG}"
   ( cd "$DIR" && VIDRA_REF="$TAG" VIDRA_CORE_REF="$CORE_TAG" VIDRA_USER_REF="$USER_TAG" \
       VIDRA_SEARCH_REF="$SEARCH_TAG" VIDRA_GH_OWNER="$OWNER" ./bootstrap.sh ) \
-    || die "bootstrap.sh failed. The meta-repo is $1 ${DIR}; fix the cause (usually a tag missing from the component repo it was checked out in - the error above names it) and re-run this installer, or just './bootstrap.sh' from ${DIR}."
+    || die "bootstrap.sh failed. The meta-repo is at ${DIR}; fix the cause (usually a tag missing from a component repo) and re-run this installer, or run it by hand from ${DIR}: VIDRA_CORE_REF=${CORE_TAG} VIDRA_USER_REF=${USER_TAG} VIDRA_SEARCH_REF=${SEARCH_TAG} ./bootstrap.sh"
 }
 
 clone_tree() {
@@ -833,7 +836,7 @@ clone_tree() {
   log "cloning ${OWNER}/vidra into ${DIR}"
   make_install_dir
   git clone "https://github.com/${OWNER}/vidra.git" "$DIR"
-  bootstrap_components "cloned at"
+  run_bootstrap
   TREE_MODE=git
 }
 
@@ -921,7 +924,7 @@ elif [ "$DIR_STATE" = "checkout" ]; then
       warn "${DIR} is on branch '${BRANCH}', not main, so it was not updated. That is usually deliberate; if it is not, 'git -C ${DIR} checkout main' and re-run."
     fi
   fi
-  bootstrap_components "at"
+  run_bootstrap
 elif [ "$FORCE_GIT" -eq 1 ]; then
   log "--git given - cloning instead of unpacking the release bundle."
   clone_tree
@@ -997,7 +1000,7 @@ VIDRA_BIN=/usr/local/bin/vidra
 
 # --- 7/7 setup ---------------------------------------------------------------------
 step "7/7 setup"
-ENV_FILE="${DIR}/env/production.env"
+
 
 # The runbook's proof, at the moment it matters: BEFORE anything writes secrets
 # into that path. `git check-ignore` answers about a path, not about a file, so it
@@ -1021,9 +1024,7 @@ fi
 # Only when the interview is about to write the file: an existing one is left
 # exactly as it is, pins included, so there is nothing to resolve for.
 if [ ! -f "$ENV_FILE" ]; then
-  # A git install already resolved it to check the components out (step 5);
-  # asking twice would fetch the record twice and could warn twice.
-  [ "$PAIRING_RESOLVED" -eq 1 ] || resolve_pairing
+  resolve_pairing
   # Every command this step prints carries the same pins it would have run, so a
   # re-run by hand writes what the installer would have. Semver tags only, so
   # nothing here needs quoting.

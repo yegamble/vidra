@@ -30,27 +30,25 @@ COMPONENTS=(vidra-core vidra-user vidra-search)
 # instead of migrating and never exits — i.e. `make dev` / `make dev-hot` hang on
 # `migrate`. vidra-core and vidra-search release FIRST; this repo follows.
 #
-# PER-COMPONENT REFS (meta#242). A release need not move all three components:
-# v0.7.4 and v0.7.5 re-released vidra-core alone and pair vidra-user and
-# vidra-search at v0.7.3, so there is no v0.7.5 tag in either of those repos and
-# VIDRA_REF=v0.7.5 alone fails at `git checkout`. VIDRA_CORE_REF, VIDRA_USER_REF
-# and VIDRA_SEARCH_REF override VIDRA_REF for one component each; install.sh sets
-# them from the release record (releases/<tag>.json), the same pairing it writes
-# into the VIDRA_*_TAG pins:
-#
-#   VIDRA_REF=v0.7.5 VIDRA_USER_REF=v0.7.3 VIDRA_SEARCH_REF=v0.7.3 ./bootstrap.sh
+# PER-COMPONENT REFS. A release does not always move every component: v0.7.4
+# and v0.7.5 re-released vidra-core alone and pair vidra-user and vidra-search
+# at v0.7.3 (releases/v0.7.5.json), so VIDRA_REF=v0.7.5 names a tag two of the
+# three repos do not have and the clone died at the first `checkout --detach`.
+# VIDRA_CORE_REF / VIDRA_USER_REF / VIDRA_SEARCH_REF each override VIDRA_REF for
+# one component; install.sh sets them from the release record. Unset, each
+# falls back to VIDRA_REF, so every existing caller behaves exactly as before.
 VIDRA_REF="${VIDRA_REF:-}"
 
-component_ref() {
+ref_for() {
   case "$1" in
-    vidra-core)   echo "${VIDRA_CORE_REF:-$VIDRA_REF}" ;;
-    vidra-user)   echo "${VIDRA_USER_REF:-$VIDRA_REF}" ;;
-    vidra-search) echo "${VIDRA_SEARCH_REF:-$VIDRA_REF}" ;;
+    vidra-core)   printf '%s' "${VIDRA_CORE_REF:-$VIDRA_REF}" ;;
+    vidra-user)   printf '%s' "${VIDRA_USER_REF:-$VIDRA_REF}" ;;
+    vidra-search) printf '%s' "${VIDRA_SEARCH_REF:-$VIDRA_REF}" ;;
   esac
 }
 
 for r in "${COMPONENTS[@]}"; do
-  ref="$(component_ref "$r")"
+  ref="$(ref_for "$r")"
   if [ -d "$r/.git" ]; then
     if [ -n "$ref" ]; then
       echo "==> updating $r -> $ref"
