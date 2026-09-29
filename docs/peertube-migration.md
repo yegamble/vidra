@@ -4,6 +4,8 @@ This is an operator runbook for an independent Vidra installation, including a
 Backblaze B2 destination. It describes **core v0.7.5**, paired with **user and
 search v0.7.3**, as recorded in [the release manifest](../releases/v0.7.5.json).
 Its source schema gate accepts PeerTube `application.migrationVersion` **700–1040**.
+The optional HLS server-side copy section describes an **unreleased source
+feature**, not behavior available in v0.7.5.
 Choose a qualified release and repeat its acceptance checks; a released image,
 successful import, or healthy home page alone does not establish production
 readiness. See [release readiness](release-readiness.md).
@@ -41,6 +43,8 @@ historical daily analytics are not reconstructed.
 Budget duplicate storage for the source, destination and recovery copies. In
 v0.7.5, `copy` streams through the Vidra host and hashes the bytes. It does **not**
 use B2 server-side bucket copying, even when both buckets share an account.
+The optional feature below accelerates only HLS binary dependencies on a future
+qualified release; its benefit depends on the source's HLS share.
 Estimate transfer time from measured sustained throughput; include source
 downloads, destination writes, requests, retries and retained object versions.
 An inventory of video/HLS bytes alone is a lower bound if artwork and captions
@@ -245,6 +249,71 @@ Choose one media strategy before the first actual run:
 Do not change an active run to `reference` to avoid transfer time. The durable
 ledger and already-imported rows survive reruns; changing mode is not a general
 conversion or recopy mechanism.
+
+### Optional HLS server-side copy
+
+**Unreleased: do not enable this on v0.7.5 or assume that updating this env
+template updates the running binary.** Deploy and qualify a core release that
+contains the implementation before using it. This remains `media_mode=copy`;
+it is a transfer optimization, not reference mode or a re-encode.
+
+Both of the following values are empty by default. Populate them together using
+a protected editor on `env/production.env`, without shell arguments or history:
+
+```dotenv
+PEERTUBE_IMPORT_S3_COPY_ACCESS_KEY=
+PEERTUBE_IMPORT_S3_COPY_SECRET_KEY=
+```
+
+Use a dedicated, short-lived migration key. Leave the ordinary
+`PEERTUBE_SOURCE_S3_*` reader and destination `STORAGE_S3_*` credentials unchanged.
+For B2, a Multi-Bucket Application Key can be restricted to the source and
+destination buckets. However, its `readFiles`/`writeFiles` capabilities apply
+across that set: **this copy credential also permits source writes**. It is not
+a read-only source credential, even though the importer only copies from the
+source. No permission is broadened automatically. If that scope is unacceptable,
+leave the pair empty and retain streaming. Do not use an account master key.
+[B2 multi-bucket keys](https://www.backblaze.com/docs/cloud-storage-application-keys)
+
+The fast path requires matching S3 endpoint, TLS scheme and region; B2 buckets
+must also belong to the same account. A source HEAD through the normal read-only
+credential fixes its version, size and ETag before copying. Incompatible storage
+or an unsupported/unauthorized copy request rejected before a copy starts permits
+the ordinary streamed path. The first deterministic `ErrCopyUnavailable` disables
+the fast copier for the rest of that import run and emits one warning, avoiding
+the same denied request for every subsequent HLS object. A later run attempt
+reevaluates availability. Source HEAD failures, quota failures, cancellation and
+source-version/precondition failures do not take that fallback; neither does an
+error after multipart upload initialization. These remain failures rather than
+silently retrying against a newer source. Separate source and
+destination credentials cannot be combined to authorize one server-side copy.
+[B2 copy API](https://www.backblaze.com/apidocs/s3-copy-object),
+[same-account restriction](https://www.backblaze.com/apidocs/b2-copy-file)
+
+Only **HLS binary dependencies** use the fast path. Originals still stream and
+compute their true SHA-256; captions and artwork retain their streamed paths.
+HLS manifests are read and validated once, then those same bytes are PUT to the
+destination. Binary objects up to **4 GiB** use one copy; larger objects use
+**128 MiB** multipart copy ranges, within the existing **16 GiB per-object**
+cap. The HLS tree still has **10,000-object, 64 GiB, 30-minute** limits and
+**1 MiB** manifests. A provider copy result/ETag is not a freshly computed
+whole-file SHA-256. Preserve that distinction in migration evidence.
+[B2 multipart copy](https://www.backblaze.com/apidocs/s3-upload-part-copy)
+
+Enable this only for the **next controlled run or resume**. Record the source
+snapshot, run UUID, ledger checkpoint and destination state first. If an import
+is active, complete the agreed freeze/checkpoint procedure before a release
+change or restart; do not edit credentials and restart an active copy to speed it
+up. Deploy the approved release with both values passed to API and worker, verify
+the running images and configuration privately, then resume against the same
+snapshot and ledger. Completed ready HLS trees stay intact. Verify representative
+copied objects, multipart completion, playback and seeking; retain failure and
+fallback evidence. Successful HLS trees that used server-side copying log
+`server_side_objects`, `server_side_bytes` and `streamed_bytes`; record these to
+verify that the optimization actually ran. These are per-tree transfer counters,
+not an independent checksum or whole-catalogue completeness proof. Remove/revoke
+the temporary copy key after the reconciliation window using another controlled
+configuration restart.
 
 ## 5. Pause side effects and choose account policy
 

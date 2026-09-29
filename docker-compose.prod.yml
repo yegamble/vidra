@@ -89,6 +89,12 @@ x-core-prod-env: &core-prod-env
   # Rewritten because redis now requires a password. ${REDIS_URL} still wins
   # if the operator points at a managed Redis (use a rediss:// URL there).
   REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required in production (openssl rand -hex 32 - hex not base64, because the value is substituted into a redis:// DSN)}@redis:6379/0}
+  # Optional PeerTube HLS server-side copy credentials. Keep these in the shared
+  # map: split imports execute in worker, and older bundled base Compose files
+  # do not know these keys. Empty values preserve streamed copying; only a core
+  # release containing the opt-in implementation can use non-empty values.
+  PEERTUBE_IMPORT_S3_COPY_ACCESS_KEY: ${PEERTUBE_IMPORT_S3_COPY_ACCESS_KEY:-}
+  PEERTUBE_IMPORT_S3_COPY_SECRET_KEY: ${PEERTUBE_IMPORT_S3_COPY_SECRET_KEY:-}
 
 # The media + scratch volumes, likewise shared by api and worker. Both halves read
 # and write the object store, and in the split topology it is the WORKER that
