@@ -377,8 +377,8 @@ operator's exact deployment.
    container UID can read the files. Do not change source file permissions.
 2. Use the same restored source database, destination database, destination
    bucket and pinned component images for every pass. The ledger is keyed by
-   entity kind and numeric source ID, not by instance or backend: never reuse
-   it with a different PeerTube instance. Keep `media_mode=copy`, the reviewed
+   entity kind and source identifier (numeric ID or video UUID), not by instance
+   or backend: never reuse it with a different PeerTube instance. Keep `media_mode=copy`, the reviewed
    conflict policy, and `source_authoritative=false` unchanged.
 3. Launch the S3 pass through the authenticated admin import page/API from
    [section 6](#6-preview-resolve-exceptions-then-launch-the-actual-copy), with
