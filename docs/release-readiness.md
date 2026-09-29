@@ -324,6 +324,13 @@ v0.6.6 may be carried onto them (below). Overall verdict stays **NO-GO**.
     `vidra setup --release-tag` writes it into all three `VIDRA_*_TAG` keys,
     so a fresh install of a core-only release (v0.7.4, v0.7.5) pins
     `vidra-user` and `vidra-search` images that were never published.
+    *2026-09-29: the default **bundle** path now resolves the pairing from the
+    release record (`install.sh` `resolve_pairing`, via `fetch_release_record`
+    + `release-mapping.py resolve`) and passes `--core-tag/--user-tag/--search-tag`
+    to setup; `tests/install_test.sh` holds the v0.7.5 result to the deploy-mode
+    preflight. Static proof only — no install was executed. Still OPEN on the
+    `--git` clone path: `bootstrap.sh` checks every component out at the one
+    `VIDRA_REF`, and vidra-user has no v0.7.5 tag.*
   - [yegamble/vidra-core#267](https://github.com/yegamble/vidra-core/issues/267)
     — after a failed search-outbox drain the rescheduled events are overtaken
     by later ones, and the delayed `reconcile.end` then suppresses a freshly
