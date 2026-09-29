@@ -4,8 +4,10 @@ This is an operator runbook for an independent Vidra installation, including a
 Backblaze B2 destination. It describes **core v0.7.5**, paired with **user and
 search v0.7.3**, as recorded in [the release manifest](../releases/v0.7.5.json).
 Its source schema gate accepts PeerTube `application.migrationVersion` **700–1040**.
-The optional HLS server-side copy section describes an **unreleased source
-feature**, not behavior available in v0.7.5.
+The transfer rehearsal section describes **unreleased, unqualified source
+changes**: optional HLS server-side copy, concurrent trees, independent captions
+and subtitle manifest normalization. These are not behavior available in v0.7.5;
+the released pairing and its instructions remain unchanged.
 Choose a qualified release and repeat its acceptance checks; a released image,
 successful import, or healthy home page alone does not establish production
 readiness. See [release readiness](release-readiness.md).
@@ -232,6 +234,13 @@ the existing mounts, and retain this reviewed local deployment change across
 updates. For example, append `/srv/peertube-storage:/source/peertube:ro` and set
 the source root to `/source/peertube`; inspect the rendered API/worker mounts.
 
+A mixed local/S3 source needs a separate inventory: the source backend selector
+does not automatically fall back from S3 to the PeerTube host's filesystem.
+Preserve every local original and its database/key mapping. The prerelease
+[three-pass repair procedure](#mixed-locals3-repair-prerelease) below covers
+local originals whose captions or HLS remain in object storage; it is not a
+capability qualification for v0.7.5.
+
 Keep the source HTTP origin reachable too. Actor images, posters and storyboard
 sheets may live on the PeerTube host even when video storage is S3. The importer
 tries supported local artwork paths and source `/lazy-static/` routes; it derives
@@ -250,12 +259,43 @@ Do not change an active run to `reference` to avoid transfer time. The durable
 ledger and already-imported rows survive reruns; changing mode is not a general
 conversion or recopy mechanism.
 
-### Optional HLS server-side copy
+### Prerelease transfer rehearsal
 
-**Unreleased: do not enable this on v0.7.5 or assume that updating this env
-template updates the running binary.** Deploy and qualify a core release that
-contains the implementation before using it. This remains `media_mode=copy`;
-it is a transfer optimization, not reference mode or a re-encode.
+**Unreleased and unqualified: do not enable this on v0.7.5 or assume that updating
+this env template updates the running binary.** Test the implementation on an
+isolated candidate first. Record exact source commits, source archive checksums,
+image digests and build arguments for all components, then qualify that exact
+pairing before promotion. A private candidate build is not a public release or
+production acceptance. This remains `media_mode=copy`; it reuses source media
+without encoding.
+
+The prerelease importer copies up to **four independent HLS trees concurrently**.
+Each tree is still copied in dependency order and becomes ready only after its
+required objects succeed. A ready tree, including one created on Vidra, is
+preserved on rerun. This bound is built into the importer; starting extra import
+runs or workers is not the way to increase it. Measure throughput and memory on
+the candidate with its database and scanner running.
+
+In copy mode, captions run in a separate pass after videos and HLS, with up to
+four caption transfers at once. An absent VTT track records a retryable caption
+failure without discarding the video or blocking an otherwise valid HLS tree.
+Repair the source track and rerun against the same ledger. Existing same-language
+tracks and previously recorded creator deletions remain protected. A playable
+video does not make a missing caption acceptable: reconcile caption failures
+separately before acceptance.
+
+PeerTube HLS can reference subtitle playlists containing absolute VTT URLs.
+The prerelease copy removes `#EXT-X-MEDIA` declarations with `TYPE=SUBTITLES` and
+the `SUBTITLES` group attribute on `#EXT-X-STREAM-INF`; it does not open or copy those
+subtitle playlists or follow their URLs. Supported VTT tracks are imported from
+the configured source storage and served through Vidra's caption API/player
+tracks instead. Audio, video and closed-caption declarations remain, and their
+dependencies retain the flat-name restriction. Malformed attributes and external
+audio/video URLs still fail. Required source originals, manifests and media
+objects that are actually missing remain failures; this is not a general
+missing-object bypass.
+
+#### Optional server-side copy credentials
 
 Both of the following values are empty by default. Populate them together using
 a protected editor on `env/production.env`, without shell arguments or history:
@@ -292,8 +332,10 @@ destination credentials cannot be combined to authorize one server-side copy.
 
 Only **HLS binary dependencies** use the fast path. Originals still stream and
 compute their true SHA-256; captions and artwork retain their streamed paths.
-HLS manifests are read and validated once, then those same bytes are PUT to the
-destination. Binary objects up to **4 GiB** use one copy; larger objects use
+HLS manifests are read once, normalized as above and validated; those normalized
+bytes are PUT to the destination. Manifests without subtitle declarations or
+group attributes retain their bytes, and the media bytes are unchanged. Binary
+objects up to **4 GiB** use one copy; larger objects use
 **128 MiB** multipart copy ranges, within the existing **16 GiB per-object**
 cap. The HLS tree still has **10,000-object, 64 GiB, 30-minute** limits and
 **1 MiB** manifests. A provider copy result/ETag is not a freshly computed
@@ -314,6 +356,59 @@ verify that the optimization actually ran. These are per-tree transfer counters,
 not an independent checksum or whole-catalogue completeness proof. Remove/revoke
 the temporary copy key after the reconciliation window using another controlled
 configuration restart.
+
+#### Mixed local/S3 repair (prerelease)
+
+An original can remain on the PeerTube filesystem while its captions or HLS are
+in S3. The importer selects one source backend for an entire run. If the S3 pass
+cannot read that original, it does not create the video, so its child assets
+cannot be imported yet. A local pass supplies the parent; a final S3 pass can
+then supply its children. Two passes alone can leave those children missing.
+
+This procedure has a PostgreSQL regression using two disjoint source stores,
+including unchanged media, true original hashes and preserved creator edits or
+deletions. It does not replace a provider test or playback verification on the
+operator's exact deployment.
+
+1. Inventory and stage the local files on the Vidra host, preserving their
+   relative paths, including `web-videos/private/` where applicable. Record
+   sizes and SHA-256 values, then verify the staged copies. Mount the staged
+   root read-only into both API and worker as described above; verify that the
+   container UID can read the files. Do not change source file permissions.
+2. Use the same restored source database, destination database, destination
+   bucket and pinned component images for every pass. The ledger is keyed by
+   entity kind and source identifier (numeric ID or video UUID), not by instance
+   or backend: never reuse it with a different PeerTube instance. Keep `media_mode=copy`, the reviewed
+   conflict policy, and `source_authoritative=false` unchanged.
+3. Launch the S3 pass through the authenticated admin import page/API from
+   [section 6](#6-preview-resolve-exceptions-then-launch-the-actual-copy), with
+   `PEERTUBE_SOURCE_STORAGE_BACKEND=s3`. Save the terminal report and failed
+   asset inventory. Local-only originals are expected to remain failed here;
+   identify those exact rows before proceeding.
+4. Wait for that run to become terminal. Disable importing, stop its executors,
+   set `PEERTUBE_SOURCE_STORAGE_BACKEND=local` and
+   `PEERTUBE_SOURCE_STORAGE_LOCAL_ROOT=/source/peertube` in the protected env,
+   and recreate API/worker through the reviewed deployment procedure. Verify
+   the running configuration and read-only mount before enabling imports and
+   launching the next run. The local pass repairs missing parent videos and
+   hashes their originals. S3-only captions/HLS can still fail in this pass.
+5. After the local run is terminal and checkpointed, repeat the controlled
+   configuration change back to `PEERTUBE_SOURCE_STORAGE_BACKEND=s3`, retaining
+   the original source S3 settings. Launch the final repair run against the
+   same ledger. Available S3 captions/HLS for the newly created videos can now
+   import; completed videos, captions and ready HLS trees are preserved.
+6. Reconcile every pass and verify the repaired originals' hashes, stable video
+   IDs, source state/privacy, captions and HLS dependencies. Source drafts must
+   stay drafts. Artwork is reconsidered but unchanged imported assets need no
+   new transfer; the prerelease preserves creator changes and cleared slots
+   across repeated runs, even if the source later selects a new artwork ID.
+
+Keep the [side-effect pauses](#5-pause-side-effects-and-choose-account-policy)
+throughout. Do not run the passes concurrently or delete destination objects
+between them: ready database rows would otherwise conceal missing bytes. Each
+pass also revisits other retryable failures; this is not an import limited to
+the staged files. Genuinely missing source assets remain failures to reconcile,
+never entries to mark done manually.
 
 ## 5. Pause side effects and choose account policy
 
@@ -418,6 +513,47 @@ or unsupported entities. Resolve every required failed/unsupported item and
 reconcile final counts. Failed entries are retryable; v0.7.5 treats unsupported
 entries as terminal on ordinary reruns. Do not clear the whole ledger or restart
 from an empty database merely to retry one asset.
+
+### Deliberately restart a disposable candidate
+
+A clean restart discards candidate state and its ledger. Use it only when that
+loss is explicitly intended, with source data and recovery copies preserved.
+It is not required to retry failed captions or incomplete HLS trees. Keep the
+source domain serving PeerTube throughout this rehearsal.
+
+1. Identify and stop every candidate writer: the API, worker containers and any
+   standalone importer. Confirm the old run is
+   no longer executing before resetting anything. Record its UUID, parameters,
+   ledger counts and checkpoint time; a heartbeat is not a transfer checkpoint.
+2. Save the candidate database, configuration, encryption keys and exact image
+   references. Preserve the source snapshot, configuration and local media
+   separately. Retrieve and verify the recovery copies **outside every bucket
+   scheduled for deletion**. Vidra's database/config backup does not contain S3
+   media: retain that media separately if exact candidate rollback is required,
+   or explicitly accept reconstructing it from the intact source.
+3. Build a reviewed deletion allowlist using each **exact destination bucket
+   name and immutable bucket ID**, account, endpoint and purpose. Match the
+   provider inventory immediately before each deletion; stop on any mismatch.
+   No prefix, wildcard or account-wide deletion is appropriate. Exclude all
+   source buckets. A candidate backup bucket belongs on the list only after its
+   required recovery artifacts have been preserved and verified elsewhere.
+4. Reset only the identified **Vidra destination database**. The restored
+   PeerTube snapshot may share the PostgreSQL cluster or volume; preserve it
+   and its read-only role. Never remove the whole PostgreSQL volume or use
+   `docker compose down -v` as a database-reset shortcut. Account for the search
+   schema and candidate caches in the reviewed reset procedure.
+5. Recreate only the approved destination buckets and record their new IDs.
+   Reissue/update scoped destination, backup and optional copy keys where the
+   changed IDs require it. Keep ordinary source credentials read-only. Verify
+   the new keys against the intended bucket IDs before starting the importer.
+6. Deploy the recorded candidate images using the normal gated ordering:
+   pre-deploy backup, pull, discrete migrations, service start, then health and
+   migration-ledger checks. Configure the intended beta HTTPS origin before
+   claiming the fresh owner. Reapply the paused side effects from
+   [section 5](#5-pause-side-effects-and-choose-account-policy),
+   preview, then create one new run and record its new UUID. An empty destination
+   has no previous import ledger to resume; do not describe it as a resume or a
+   domain cutover.
 
 ## 7. Verify asset reuse, without a blanket re-encode
 
