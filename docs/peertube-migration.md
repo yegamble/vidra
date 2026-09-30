@@ -36,6 +36,14 @@ Save a private migration record containing:
   pre-existing beta accounts, uploads, comments and moderation decisions before
   importing; a fresh candidate does not merge those automatically.
 
+Identify the authoritative source explicitly. If that is the original server
+and its configured storage, an older beta or unrelated backup is not an
+additional import source. For missing media, record the expected source location,
+the read result and the affected capability (playback, captions or preview).
+Distinguish absent objects from denied reads and transient transfer failures.
+Retain the metadata and failure evidence; neither a successful retry of another
+asset nor a `done` run makes unavailable source bytes recoverable.
+
 The importer carries local content and supported relationships, not a complete
 PeerTube server clone. Password hashes and actor keys can be carried, but plugins,
 sessions, every moderation/audit record, remote subscriptions and federation
@@ -356,6 +364,14 @@ verify that the optimization actually ran. These are per-tree transfer counters,
 not an independent checksum or whole-catalogue completeness proof. Remove/revoke
 the temporary copy key after the reconciliation window using another controlled
 configuration restart.
+
+Record the expiry and bucket scope of every credential separately. Temporary
+media and backup keys need an approved replacement before a lasting beta opens;
+successful migration access does not establish that next week's playback or
+backup will work. Install and verify replacements before revoking old keys.
+Change importer credentials only at a terminal run boundary, then verify the
+actual API/worker configuration. Never extend the copy key's source permissions
+as a shortcut for ordinary destination access.
 
 #### Mixed local/S3 repair (prerelease)
 
@@ -714,6 +730,32 @@ blacklist dispositions, but v0.7.5 reruns do not mirror later suspension/blackli
 changes. Reconcile those changes explicitly. Test restricted access anonymously
 and as permitted/denied users. Decide how to preserve beta-only activity before
 allowing source-authoritative updates or replacing an existing beta installation.
+
+### Preserve account and content restrictions
+
+Keep beta accessible only to operators until these checks pass on the exact
+importer build. A copied password hash is not proof that all login protections
+survived, and a matching catalogue count does not prove policy parity.
+
+| Source protection | Required destination check |
+| --- | --- |
+| Per-video downloads and comments | Compare the stored policies, including disabled comments and any approval-only policy. If an approval queue is unsupported, keep comments disabled and report that stricter mapping. |
+| User sensitive-content preferences | Compare both the overall policy and category-specific flags. A conservative mapping must not display content the user hid; report lost category granularity. |
+| MFA | Inventory enabled status only, without exporting OTP secrets. Require native MFA or an inactive account hold before imported passwords can be used publicly. |
+| Personal account/server mutes | Verify the mapped owner and muted target. A content mute is not a symmetric interaction block or an account suspension. |
+| Instance account mutes and video blocks | Verify effective discovery/access behavior separately from login suspension; retain the restriction for future content too. |
+| Moderation reports | Preserve original status, repeated reports, remote reporters, deleted targets and staff history. A native uniqueness conflict must not silently discard source history. |
+
+For held MFA accounts, keep recovery restricted to a verified operator process.
+Do not remove source MFA or treat a password reset as replacement enrollment.
+If the selected Vidra build requires an active session to enroll native MFA,
+activate only inside an operator-restricted enrollment window, enroll and verify
+the factor, then prove a fresh login requires the challenge before public
+access. Otherwise leave the account held. Recheck that later import/resync
+passes cannot release a hold, and that default reruns preserve intentional
+destination edits. Source-authoritative policy repair is a separate, explicit
+choice. These are acceptance requirements, not claims that every listed mapping
+exists in v0.7.5.
 
 Exercise old `/w/<short-id>` and legacy UUID links against a known sample and
 recent source videos; inspect `/api/v1/videos/resolve?legacy_uuid=<uuid>`. Test
