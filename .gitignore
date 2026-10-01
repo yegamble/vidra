@@ -86,6 +86,12 @@ vidra-bundle_*.tar.gz
 # application persists, so they are never allowed near git.
 /backups/
 
+# Python bytecode: the deploy-script unit suites (tests/*_test.py) import the
+# deploy/*.py helpers, so every local run leaves tests/__pycache__ and
+# deploy/__pycache__ behind - one `git add -A` from a commit, and an untracked
+# file the Stop hook and install.sh's porcelain checks would trip over.
+__pycache__/
+
 # Logs / OS / temp
 *.log
 .DS_Store

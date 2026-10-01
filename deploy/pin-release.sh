@@ -257,6 +257,7 @@ EOF
 
 main() {
   local tag='' force='' owner snapshot rc=0 resolved paired='' unpaired_note='' bundle=''
+  local miss_where='' miss_where_bad=''
   local record='' fetched_record='' record_from=''
   local core_tag='' user_tag='' search_tag=''
   local core_from='' user_from='' search_from='' role value source
@@ -404,21 +405,27 @@ EOF
   if [ -n "$paired" ]; then
     log "${tag} pairs its components as follows (${record_from}):"
   else
-    # The failure named here is the one an operator will actually meet.
-    # pin-release.sh only ever runs on a GIT tree, and there deploy.sh's
-    # component checkout sync reaches a tag that does not exist before it
-    # pulls anything: `failed to checkout tag vX in vidra-user`. It used to
-    # say `compose pull`, which is a later step and the wrong line of the log
-    # to go looking at (it is the one a bundle host would see, and a bundle
-    # host cannot run this script at all).
-    #
+    # The failure named here is the one an operator will actually meet, and it
+    # differs by tree shape. On a GIT tree deploy.sh's component checkout sync
+    # reaches a tag that does not exist before it pulls anything: `failed to
+    # checkout tag vX in vidra-user`. A BUNDLE tree has no nested checkouts and
+    # no sync at all, so naming that step there sends the operator hunting for a
+    # line their log never prints; what they meet is the image pull, which runs
+    # after the pre-deploy dump but before any migration or restart.
+    if [ -n "$bundle" ]; then
+      miss_where="the image pull ('docker compose pull' says 'manifest unknown' for the missing tag), after the pre-deploy dump but before anything is migrated or restarted"
+      miss_where_bad="the image pull ('manifest unknown' for that tag), after the pre-deploy dump but before anything is migrated or restarted"
+    else
+      miss_where="the component checkout sync with 'failed to checkout tag ${tag} in vidra-user' before it changes anything"
+      miss_where_bad="the component checkout sync with 'failed to checkout tag <that tag> in <that repo>' before it changes anything"
+    fi
     # And the second sentence is conditional: with --component-tag the pins
     # below are NOT "what this script has always done", and claiming they are
     # would describe the operator's own correction back at them.
     if [ "${#overrides[@]}" -eq 0 ]; then
-      unpaired_note="Pinning as shown below, which is what this script has always done and is right for the uniform releases that are the norm. If ${tag} re-released ONE component (v0.7.4 and v0.7.5 re-released vidra-core alone), the images for the other two do not exist at ${tag}: the next deploy stops at the component checkout sync with 'failed to checkout tag ${tag} in vidra-user' before it changes anything. The release notes say which components moved; state the pairing by hand with: $0 ${tag} --component-tag user=<tag> --component-tag search=<tag>"
+      unpaired_note="Pinning as shown below, which is what this script has always done and is right for the uniform releases that are the norm. If ${tag} re-released ONE component (v0.7.4 and v0.7.5 re-released vidra-core alone), the images for the other two do not exist at ${tag}: the next deploy stops at ${miss_where}. The release notes say which components moved; state the pairing by hand with: $0 ${tag} --component-tag user=<tag> --component-tag search=<tag>"
     else
-      unpaired_note="The --component-tag values below are taken on trust: nothing here could check them against a record. If one of them is wrong the next deploy stops at the component checkout sync with 'failed to checkout tag <that tag> in <that repo>' before it changes anything."
+      unpaired_note="The --component-tag values below are taken on trust: nothing here could check them against a record. If one of them is wrong the next deploy stops at ${miss_where_bad}."
     fi
     log "WARNING: ${tag}'s component pairing could not be determined — this tree carries no releases/${tag}.json and none could be fetched. ${unpaired_note}"
   fi

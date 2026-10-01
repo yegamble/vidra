@@ -926,7 +926,21 @@ if [ "$DIR_STATE" = "bundle" ]; then
   if [ "$INSTALLED_TAG" = "$TAG" ]; then
     log "${DIR} is already the ${TAG} bundle - leaving it exactly as it is."
   else
-    warn "${DIR} holds the ${INSTALLED_TAG:-unknown} bundle and this run resolved ${TAG}. It was NOT overwritten: unpacking a different release over a live deployment tree would replace the deploy scripts and compose files under a running stack, and nothing here can tell your edits from ours. To move this host to ${TAG}, unpack the ${TAG} bundle over this tree yourself (curl -fsSLO ${BASE_URL}/${BUNDLE_ASSET} && tar -xzf ${BUNDLE_ASSET} -C ${DIR}), set the VIDRA_*_TAG values in env/production.env to ${TAG}, then run 'vidra deploy'. Bumping only the tags is refused before anything changes: deploy.sh's release-mapping preflight sees a ${INSTALLED_TAG:-unknown} bundle under ${TAG} pins."
+    # Point at the one-command upgrade (deploy/pin-release.sh verifies the bundle,
+    # unpacks it safely and pins the release's PAIRING of component tags) rather
+    # than hand tar steps: `tar -xzf` over a live tree trusts every member name
+    # in a downloaded archive, and "set the tags yourself" writes one tag three
+    # times for a release that re-released a single component. This stays a
+    # WARNING and never runs it: an installer that upgrades a live tree behind
+    # the operator's back is the failure this branch exists to prevent.
+    # A tree that predates v0.6.5 has no pin-release.sh to point at, so it keeps
+    # the manual steps - telling someone to run a missing script is worse.
+    if [ -f "${DIR}/deploy/pin-release.sh" ]; then
+      TREE_OWNER="$(stat -c %U "$DIR" 2>/dev/null || stat -f %Su "$DIR" 2>/dev/null || true)"
+      warn "${DIR} holds the ${INSTALLED_TAG:-unknown} bundle and this run resolved ${TAG}. It was NOT upgraded: moving a live deployment tree to a different release would replace the deploy scripts and compose files under a running stack, and an installer must not do that behind your back. To move this host to ${TAG}, run, as the tree's owner and never as root: cd ${DIR} && sudo -u ${TREE_OWNER:-<owner>} ./deploy/pin-release.sh ${TAG} - it verifies the ${TAG} bundle, unpacks it, and pins each VIDRA_*_TAG to the tag that release pairs it at without touching env/production.env's secrets or deploy/Caddyfile.local - then run ./deploy/deploy.sh. Do not just edit the tags: deploy.sh's release-mapping preflight refuses a ${INSTALLED_TAG:-unknown} bundle under ${TAG} pins."
+    else
+      warn "${DIR} holds the ${INSTALLED_TAG:-unknown} bundle and this run resolved ${TAG}. It was NOT overwritten: unpacking a different release over a live deployment tree would replace the deploy scripts and compose files under a running stack, and nothing here can tell your edits from ours. This tree predates deploy/pin-release.sh (v0.6.5), so move it by hand: unpack the ${TAG} bundle over this tree (curl -fsSLO ${BASE_URL}/${BUNDLE_ASSET} && tar -xzf ${BUNDLE_ASSET} -C ${DIR}), set the VIDRA_*_TAG values in env/production.env to ${TAG}, then run 'vidra deploy'. Bumping only the tags is refused before anything changes: deploy.sh's release-mapping preflight sees a ${INSTALLED_TAG:-unknown} bundle under ${TAG} pins."
+    fi
   fi
 elif [ "$DIR_STATE" = "checkout" ]; then
   # NEVER reset, never discard, never stash. A checkout on a deployment host may
