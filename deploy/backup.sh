@@ -292,8 +292,10 @@ stage_offsite() {
   [ ${#AGE_ARGS[@]} -gt 0 ] || return 0
   UP_NAME="${UP_NAME}.age"
   UP_SRC="$ENC_DIR/$UP_NAME"
-  age "${AGE_ARGS[@]}" -o "$UP_SRC" "$1" && [ -s "$UP_SRC" ] \
-    || { rm -f "$UP_SRC"; die "age failed to encrypt $(basename "$1") — NOT uploading it"; }
+  if ! age "${AGE_ARGS[@]}" -o "$UP_SRC" "$1" || [ ! -s "$UP_SRC" ]; then
+    rm -f "$UP_SRC"
+    die "age failed to encrypt $(basename "$1") — NOT uploading it"
+  fi
 }
 
 if [ -n "${BACKUP_RCLONE_REMOTE:-}" ]; then
