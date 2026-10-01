@@ -223,10 +223,13 @@ when closing items.
 > after this wave is its live test.~~ **CLOSED — verified 2026-09-03.** It has executed:
 > `gh release view v0.6.1 --repo yegamble/vidra-core` lists `SHA256SUMS`,
 > `vidra-bundle_v0.6.1.tar.gz` and four `vidra_v0.6.1_*` CLI binaries, so the
-> `curl … | sh` → bundle → checksum-gated CLI → wizard path has real assets behind it. **(b)** `vidra update` on a bundle tree remains
+> `curl … | sh` → bundle → checksum-gated CLI → wizard path has real assets behind it. **(b)** ~~`vidra update` on a bundle tree remains
 > degraded-graceful (it warns that the target schema version cannot be read from git and
 > proceeds ungated) — a bundle-aware update flow is a real follow-up, and bundle-tree
-> *upgrades* are today a documented manual unpack. **(c)** meta-ci's "every config key has a
+> *upgrades* are today a documented manual unpack.~~ **CLOSED — 2026-10-01.**
+> `deploy/pin-release.sh vX.Y.Z` upgrades a bundle tree (download → checksum → unpack → tags;
+> yegamble/vidra#255), and `vidra update --tag vX.Y.Z` hands a bundle tree to it
+> (yegamble/vidra-core#292) instead of refusing. **(c)** meta-ci's "every config key has a
 > compose consumer" assert only sees `getEnv*` string keys — the 66 typed keys
 > (`p.Bool`/`p.Int`/…) are invisible to it, including `VIDRA_ALLOW_PLAIN_HTTP`; both new vars
 > were wired anyway, but the gate would not have caught the omission. **(d)** core's HSTS
@@ -252,7 +255,7 @@ when closing items.
 > **What wave 6 leaves open after tranche 2:** item 9's nine-step wizard itself, now
 > architected as `vidra setup --web` on the host binary (the ruling and its evidence are in
 > item 9's entry) — a tranche-3-sized build; the spelling-gap follow-up above; and tranche 1's
-> recorded follow-ups (bundle-aware `vidra update`, the typed-keys blind spot in meta-ci's
+> recorded follow-ups (~~bundle-aware `vidra update`~~ closed 2026-10-01, the typed-keys blind spot in meta-ci's
 > consumer assert).
 
 - [x] **6. Remove runtime git dependence (migrations half)** *(implemented 2026-08-19, wave 2)* —
