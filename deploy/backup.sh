@@ -43,6 +43,8 @@
 # Optional off-site copy and dead-man's-switch ping are both opt-in and are
 # skipped silently-but-loudly (a log line) when unconfigured — see the
 # BACKUP_RCLONE_REMOTE / BACKUP_S3_URI / HEALTHCHECKS_URL blocks below.
+# BACKUP_AGE_RECIPIENTS (age public keys) encrypts the off-site copies
+# client-side; without it they are uploaded PLAINTEXT, secrets included.
 
 set -euo pipefail
 
@@ -87,6 +89,7 @@ vidra_compose_chain
 BACKUP_RCLONE_REMOTE="${BACKUP_RCLONE_REMOTE-$(env_get BACKUP_RCLONE_REMOTE '')}"
 BACKUP_S3_URI="${BACKUP_S3_URI-$(env_get BACKUP_S3_URI '')}"
 BACKUP_S3_ENDPOINT="${BACKUP_S3_ENDPOINT-$(env_get BACKUP_S3_ENDPOINT '')}"
+BACKUP_AGE_RECIPIENTS="${BACKUP_AGE_RECIPIENTS-$(env_get BACKUP_AGE_RECIPIENTS '')}"
 HEALTHCHECKS_URL="${HEALTHCHECKS_URL-$(env_get HEALTHCHECKS_URL '')}"
 
 # This script dumps by `docker exec`-ing pg_dump inside the BUNDLED postgres
@@ -117,7 +120,10 @@ hc_ping() {
 # short-circuited AND-list is itself a failing command, and how `set -e` treats
 # that inside a trap body varies between shell versions.
 # shellcheck disable=SC2154  # rc IS assigned — by the first statement of this very trap body.
-trap 'rc=$?; if [ "$rc" -ne 0 ]; then hc_ping /fail; fi; exit "$rc"' EXIT
+# The same trap removes the off-site ciphertext staging dir (ENC_DIR, set below
+# only when BACKUP_AGE_RECIPIENTS is in use): a failed upload must not leave
+# stray copies of every backup behind in BACKUP_DIR.
+trap 'rc=$?; [ -z "${ENC_DIR:-}" ] || rm -rf "$ENC_DIR"; if [ "$rc" -ne 0 ]; then hc_ping /fail; fi; exit "$rc"' EXIT
 
 hc_ping /start
 
@@ -243,11 +249,62 @@ if [ -n "$CONFIG_OUT" ]; then
   OFFSITE+=("$CONFIG_OUT")
 fi
 
+# Client-side encryption (optional): the config archive carries JWT_SECRET,
+# every KEK and the DB/S3 passwords, and the dump carries every account. Sent in
+# plaintext, anyone with read access to the bucket (a leaked key, a provider
+# insider, a misconfigured ACL) owns the whole platform. With
+# BACKUP_AGE_RECIPIENTS set, every OFFSITE file is encrypted to those age
+# public keys BEFORE upload, so the host only ever holds the public half and a
+# stolen host or bucket cannot decrypt old backups. Local copies stay plaintext
+# on purpose: deploy/restore.sh reads them unchanged.
+AGE_ARGS=()
+if [ -n "${BACKUP_RCLONE_REMOTE:-}${BACKUP_S3_URI:-}" ]; then
+  if [ -n "$BACKUP_AGE_RECIPIENTS" ]; then
+    command -v age >/dev/null 2>&1 \
+      || die "BACKUP_AGE_RECIPIENTS is set but age is not installed — refusing to upload plaintext (apt install age)"
+    # Space- or comma-separated native age1… keys. Not split on ssh-… keys: they
+    # contain spaces. The age1 prefix check also stops a stray "-o" or "-i" from
+    # being parsed by age as a flag.
+    read -r -a AGE_RECIPIENTS <<< "${BACKUP_AGE_RECIPIENTS//,/ }"
+    [ ${#AGE_RECIPIENTS[@]} -gt 0 ] || die "BACKUP_AGE_RECIPIENTS is set but lists no recipients"
+    for r in "${AGE_RECIPIENTS[@]}"; do
+      case "$r" in
+        age1*) AGE_ARGS+=(-r "$r") ;;
+        *) die "BACKUP_AGE_RECIPIENTS entry '$r' is not an age1… public key" ;;
+      esac
+    done
+    # Hidden dir inside BACKUP_DIR (0700, umask 077) so ciphertext never lands
+    # somewhere world-listable, and so prune_generation's globs never match it.
+    ENC_DIR="$(mktemp -d "$BACKUP_DIR/.offsite-age.XXXXXX")"
+  else
+    log "WARNING: off-site copies are PLAINTEXT and contain every secret (JWT_SECRET, all KEKs, DB/S3 passwords). Set BACKUP_AGE_RECIPIENTS=<age1… public key> to encrypt them before upload (ignore if the remote is an rclone crypt remote)."
+  fi
+fi
+
+# stage_offsite <file> — sets UP_SRC (what to upload) and UP_NAME (its remote
+# name). With recipients configured this encrypts to ENC_DIR and uploads
+# "<name>.age"; a failed or empty encryption aborts the run. There is NO
+# plaintext fallback: a backup job that quietly degrades to uploading secrets in
+# the clear is worse than one that fails loudly and pages the dead-man's switch.
+stage_offsite() {
+  UP_SRC="$1"
+  UP_NAME="$(basename "$1")"
+  [ ${#AGE_ARGS[@]} -gt 0 ] || return 0
+  UP_NAME="${UP_NAME}.age"
+  UP_SRC="$ENC_DIR/$UP_NAME"
+  if ! age "${AGE_ARGS[@]}" -o "$UP_SRC" "$1" || [ ! -s "$UP_SRC" ]; then
+    rm -f "$UP_SRC"
+    die "age failed to encrypt $(basename "$1") — NOT uploading it"
+  fi
+}
+
 if [ -n "${BACKUP_RCLONE_REMOTE:-}" ]; then
   if command -v rclone >/dev/null 2>&1; then
     for f in "${OFFSITE[@]}"; do
-      log "uploading $(basename "$f") to rclone remote ${BACKUP_RCLONE_REMOTE}"
-      rclone copyto "$f" "${BACKUP_RCLONE_REMOTE%/}/$(basename "$f")"
+      stage_offsite "$f"
+      log "uploading $UP_NAME to rclone remote ${BACKUP_RCLONE_REMOTE}"
+      rclone copyto "$UP_SRC" "${BACKUP_RCLONE_REMOTE%/}/$UP_NAME"
+      [ "$UP_SRC" = "$f" ] || rm -f "$UP_SRC"
     done
   else
     die "BACKUP_RCLONE_REMOTE is set but rclone is not installed"
@@ -255,11 +312,13 @@ if [ -n "${BACKUP_RCLONE_REMOTE:-}" ]; then
 elif [ -n "${BACKUP_S3_URI:-}" ]; then
   if command -v aws >/dev/null 2>&1; then
     for f in "${OFFSITE[@]}"; do
-      log "uploading $(basename "$f") to ${BACKUP_S3_URI}"
+      stage_offsite "$f"
+      log "uploading $UP_NAME to ${BACKUP_S3_URI}"
       # BACKUP_S3_ENDPOINT is required for DO Spaces / MinIO and must include the
       # scheme here (unlike the application's STORAGE_S3_ENDPOINT, which must not).
       aws ${BACKUP_S3_ENDPOINT:+--endpoint-url "$BACKUP_S3_ENDPOINT"} \
-        s3 cp "$f" "${BACKUP_S3_URI%/}/$(basename "$f")"
+        s3 cp "$UP_SRC" "${BACKUP_S3_URI%/}/$UP_NAME"
+      [ "$UP_SRC" = "$f" ] || rm -f "$UP_SRC"
     done
   else
     die "BACKUP_S3_URI is set but the aws CLI is not installed"

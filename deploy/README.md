@@ -1301,7 +1301,8 @@ format is a contract; do not "improve" it.
   CLI). Use a bucket in a **different region from the media Space**. Both files
   go to the same target; there is deliberately no separate knob, because sending
   the dump away and leaving its config on the dead host is the exact failure the
-  archive closes.
+  archive closes. Both are uploaded **plaintext** unless you set
+  `BACKUP_AGE_RECIPIENTS` (see "Off-site with client-side encryption (age)").
   These four backup/monitor knobs are read from the selected `ENV_FILE` as well
   as the process environment; an exported value wins, including an explicitly
   empty value for a one-off disable. Released v0.7.5 scripts require the process
@@ -1332,6 +1333,19 @@ format is a contract; do not "improve" it.
   `env/production.env` and `deploy/Caddyfile.local` yourself.
 - **Restore drill (quarterly).** Restore the latest dump into a scratch stack,
   boot, and click through login / watch / upload.
+
+### Off-site with client-side encryption (age)
+
+Set `BACKUP_AGE_RECIPIENTS` (one or more age `age1…` public keys, space- or
+comma-separated) and `backup.sh` encrypts every off-site file with `age` before
+upload, storing `<name>.age`; local copies stay plaintext so `restore.sh` is
+unchanged. Works with both `BACKUP_RCLONE_REMOTE` and `BACKUP_S3_URI`. It aborts
+if `age` is missing or encryption fails — never a plaintext fallback. Without it
+the script logs a WARNING that the off-site copies are plaintext and contain
+every secret. Generate the pair with `age-keygen -o key.txt`, put only the public
+key on the server, and keep `key.txt` **off the server** (a password manager or
+offline media). To restore: `age -d -i key.txt file.age > file`, then proceed as
+below.
 
 ### Off-site with client-side encryption (rclone crypt)
 
