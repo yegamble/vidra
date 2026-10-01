@@ -3,6 +3,7 @@ import copy
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -227,7 +228,11 @@ class ComponentTagTests(unittest.TestCase):
         # the regression tests/install_test.sh guards for install.sh. setup
         # writes that ONE tag for all three services, so that is what A02 must
         # observe before correcting it for the core-only case.
-        template = (Path(__file__).resolve().parents[1] / 'env/production.env.example').read_text()
+        # The template's own pins move every release (tests/env_template_pins_test.py
+        # holds them to the newest record), so this fixture normalises them to
+        # the tag under test instead of failing each time the template is bumped.
+        template = re.sub(r'(?m)^(VIDRA_(?:CORE|USER|SEARCH)_TAG)=.*$', r'\1=v0.7.3',
+                          (Path(__file__).resolve().parents[1] / 'env/production.env.example').read_text())
         self.assertEqual(p.check_setup_pins(template, 'v0.7.3'),
                          {'VIDRA_CORE_TAG': 'v0.7.3', 'VIDRA_USER_TAG': 'v0.7.3',
                           'VIDRA_SEARCH_TAG': 'v0.7.3'})

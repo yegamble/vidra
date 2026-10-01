@@ -1025,6 +1025,12 @@ fails, and it does **not** deploy anything — on the host, as the deploy user,
 `./deploy/pin-release.sh <tag>` then `./deploy/deploy.sh` when you want the
 release live.
 
+**Bump the env templates in the same PR that lands `releases/<tag>.json`.**
+`release.sh` writes the record but does not edit `env/production.env.example` or
+`env/staging.env.example`, and a manual-path operator deploys whatever those
+three `VIDRA_*_TAG` lines say. `tests/env_template_pins_test.py` pins them to the
+newest record's pairing, so that PR is red until the templates move with it.
+
 **Prefer releasing the three repos at the same version.** Nothing enforces it,
 staging→production promotion copies three identical lines, and "which build is
 running?" during an incident has one answer instead of three.

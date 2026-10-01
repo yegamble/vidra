@@ -319,7 +319,7 @@ for tmpl in env/production.env.example env/staging.env.example; do
       pins_ok=0
       continue
     fi
-    pin_values="${pin_values}${tag}
+    pin_values="${pin_values}${key}=${tag}
 "
     [ -n "$floor" ] || continue
 
@@ -343,16 +343,20 @@ for tmpl in env/production.env.example env/staging.env.example; do
     rc=0
     semver_ge "$floor" "$tag" || rc=$?
     if [ "$rc" -eq 0 ]; then
-      echo "FAIL: env pins -> ${tmpl}'s ${key}=${tag} is still sitting ON the ${floor} floor. That floor is a compatibility bound; these pins are the release a fresh install deploys and must be bumped every release (deploy/release.sh prints the instruction when it finishes cutting one). If you deliberately RAISED the floor to the newest release, bump these to it and relax this assertion in the same commit."
+      echo "FAIL: env pins -> ${tmpl}'s ${key}=${tag} is still sitting ON the ${floor} floor. That floor is a compatibility bound; these pins are the release a fresh install deploys and must be bumped every release (tests/env_template_pins_test.py fails the release PR until they are). If you deliberately RAISED the floor to the newest release, bump these to it and relax this assertion in the same commit."
       pins_ok=0
     fi
   done
 done
 
+# Compared PER KEY: a core-only release (v0.7.5 is core v0.7.5 with user and
+# search at v0.7.3) is three tags, not one, so "all six values equal" was only
+# ever true for uniform releases. Production and staging must still agree on
+# each key, and tests/env_template_pins_test.py holds both to the newest record.
 if [ -n "$pin_values" ]; then
   distinct="$(printf '%s' "$pin_values" | sort -u | wc -l | tr -d ' ')"
-  if [ "$distinct" -ne 1 ]; then
-    echo "FAIL: env pins -> production and staging do not name ONE release ($(printf '%s' "$pin_values" | sort -u | tr '\n' ' ')). Staging validates the exact tags production runs; if the six differ, a green staging says nothing about the artifact production pulls."
+  if [ "$distinct" -ne 3 ]; then
+    echo "FAIL: env pins -> production and staging do not pin the same tag per key ($(printf '%s' "$pin_values" | sort -u | tr '\n' ' ')). Staging validates the exact tags production runs; if they differ, a green staging says nothing about the artifact production pulls."
     pins_ok=0
   fi
 fi
