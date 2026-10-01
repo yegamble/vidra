@@ -76,7 +76,7 @@ runtime-mutable instance settings, and audit-enveloped job observability.
 **Operate.** One compose file; health/readiness probes (`/healthz`, `/readyz`, `/schemaz` migration probe, `/admin/system` 6-component status); Prometheus metrics and
 OpenTelemetry tracing; local or S3-compatible storage with optional dual-tier
 IPFS mirroring (public gateway offload plus a private swarm-keyed tier);
-scripted deploy, rollback, backup, and restore plus the `vidra` operator CLI (`doctor` 18 checks, `status`, `logs`). WCAG 2.2 AA is enforced by axe
+scripted deploy, rollback, backup, and restore plus the `vidra` operator CLI (`doctor`, `status`, `logs`). WCAG 2.2 AA is enforced by axe
 as a hard CI gate, on the tokens of a documented
 [design system](https://github.com/yegamble/vidra-branding/blob/main/design-system/README.md).
 
@@ -266,7 +266,7 @@ verified); for a release cut before those existed, `make build-vidra` in
 ```bash
 vidra setup --template env/production.env.example   # interview → env/production.env + deploy/Caddyfile.local
 vidra setup --answers a.txt  # or --non-interactive with the answers as flags
-vidra doctor                 # 18 checks: compose, port exposure, config, backups, reachability
+vidra doctor                 # compose, port exposure, config, backups, reachability
 vidra status                 # what is running, and whether it answers
 vidra logs [service] | vidra restart <service>
 vidra deploy | rollback <tag> | backup | restore <dump> | release <tag>

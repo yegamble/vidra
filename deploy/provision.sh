@@ -228,6 +228,34 @@ else
   log "chowned ${VIDRA_DIR} to ${VIDRA_USER}"
 fi
 
+# backups/ is created HERE, owned by the service user, rather than left for
+# backup.sh's own `umask 077; mkdir -p`. An operator's first manual
+# deploy/backup.sh — or deploy.sh, whose pre-deploy dump calls it — typically
+# runs as root; mkdir then makes backups/ a root-owned 0700 directory, and the
+# vidra-backup.timer (User=vidra) can no longer write a single file into it. The
+# nightly backup then fails at 03:15 with "Permission denied" into a journal
+# nobody reads. The chown above is skipped whenever ${VIDRA_DIR} itself is
+# already vidra's, so a root-owned backups/ BENEATH it needs its own repair
+# (and root-written dumps inside it are chowned too: the retention prune runs as
+# vidra and cannot delete them otherwise). 0700 matches backup.sh's umask — the
+# dumps and config archives hold every secret.
+ensure_backups_dir() {
+  local dir="${VIDRA_DIR}/backups"
+  mkdir -p "$dir"
+  chmod 0700 "$dir"
+  # %u prints the owner NAME without resolving it through find's -user, which
+  # errors out on a name this host does not know. Anything not vidra's — the
+  # directory or a file in it — triggers the repair.
+  if find "$dir" -printf '%u\n' | grep -qvx "$VIDRA_USER"; then
+    chown -R "${VIDRA_USER}:${VIDRA_USER}" "$dir" \
+      || die "could not chown ${dir} to ${VIDRA_USER}. This is fatal on purpose: vidra-backup.timer runs AS ${VIDRA_USER}, so a root-owned backups/ means every nightly backup fails with 'Permission denied'."
+    log "repaired ownership of ${dir} (was not all ${VIDRA_USER}'s — an earlier run as root)"
+  else
+    log "${dir} is already owned by ${VIDRA_USER} (0700)"
+  fi
+}
+ensure_backups_dir
+
 # The shipped units hardcode User=vidra and WorkingDirectory=/opt/vidra. An
 # override here is supported, but it makes those units wrong, and a backup timer
 # that runs `cd /opt/vidra` on a host whose checkout is elsewhere fails every

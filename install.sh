@@ -1184,7 +1184,7 @@ cat <<EOF
 
   Then:
 
-      cd ${DIR} && vidra doctor     # 18 checks: compose, exposure, config, backups, reachability
+      cd ${DIR} && vidra doctor     # compose, exposure, config, backups, reachability
       cd ${DIR} && vidra status     # what is running, and whether it answers
 
   deploy/README.md is the manual path for every one of these, and the source of
