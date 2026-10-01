@@ -279,8 +279,10 @@ Three rules worth internalizing: **staging is production config with throwaway
 data** (promote the exact image tags); the containerized frontend resolves its
 origin at **runtime** (`PUBLIC_API_BASE_URL` via `/runtime-config.js`), so one
 image serves any domain; and **claim the owner account first** — on a fresh
-install every signup path refuses until the one-time owner-claim token from the
-api's boot log is redeemed at `/setup/claim`. Production is fail-secure
+install every signup path refuses until the one-time owner-claim token is
+redeemed at `/setup/claim` — run `vidra claim` on the server, in a terminal, for
+the link (it reads the api's boot log; terminal-only because the token is a
+one-time admin credential). Production is fail-secure
 (`VIDRA_ENV=production` refuses dev secrets and dev mail capture); see
 [`deploy/README.md`](deploy/README.md) for first-boot ordering, host
 prerequisites, the firewall caveat, backups/restore, secret rotation, and the

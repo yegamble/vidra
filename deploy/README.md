@@ -40,24 +40,46 @@ registration owned your instance. It does not work that way any more
 (`vidra-core/internal/auth/ownerclaim.go`). While the instance is unclaimed —
 empty `users` table plus an unredeemed token — **every** signup path answers
 `403 owner_claim_required`, and the only way in is a one-time token the api
-mints at boot and prints to its own log.
+mints at boot and prints to its own log (`vidra claim` reads it for you).
 
 1. **Bring the stack up** and confirm `/readyz` is 200 — see
    [First bring-up](#first-bring-up) below. `vidra setup` prints these same two
    steps at the end of its run, for the same reason they are here: generating an
    env file otherwise leaves you two commands away from an instance nobody can
    log into.
-2. **Read the token out of the api log:**
+2. **Get the claim link with `vidra claim`**, on the server, in a terminal, from
+   the deployment directory:
    ```bash
-   ./deploy/compose.sh logs api | grep 'FIRST-RUN SETUP REQUIRED'
+   cd /opt/vidra && vidra claim
    ```
-   Use `compose.sh`, never a bare `docker compose logs api` — on a deployment
-   host the bare form auto-loads `docker-compose.override.yml` and addresses a
-   different project than the deploy scripts do. **Take the newest line.** Every
-   api restart mints a fresh token and *invalidates* the previous one, which is
+   It prints `<PUBLIC_BASE_URL>/setup/claim#token=<token>` (`PUBLIC_BASE_URL`
+   comes from the env file); open that link. It reads the token out of the api
+   log through `compose.sh` and takes the **newest** matching line, because every
+   api restart mints a fresh token and *invalidates* the previous one — which is
    what turns a token copied ten minutes and one deploy ago into a confusing
-   `owner_claim_invalid`.
-3. **Redeem it**, at `https://<your domain>/setup/claim` in the UI, or directly:
+   `owner_claim_invalid`. Run it again after any api restart.
+
+   `vidra claim` prints **only to a terminal**: the token is a one-time admin
+   credential, so a pipe, redirect or CI step is refused rather than allowed to
+   write it into a log that outlives the claim window. Over SSH, a remote command
+   needs `ssh -t <host> 'cd /opt/vidra && vidra claim'` (or log in first and run
+   it). That is also why cloud-init and `deploy.sh` only *point* at it and never
+   run it. No token found means the owner is probably already claimed or the api
+   has not started — check `vidra status`.
+
+   **Fallback — a host without `vidra claim`** (`vidra` v0.7.5 and earlier does
+   not have it; `install.sh` fetches the CLI from the release assets):
+   ```bash
+   ./deploy/compose.sh logs api | grep -E 'FIRST-RUN SETUP REQUIRED|OWNER STILL UNCLAIMED'
+   ```
+   Take the **last** line: the token is the text after the final `: `. The first
+   message is logged on a fresh instance, the second on a restart of an instance
+   that has users but was never claimed; both mint a new token. Use `compose.sh`,
+   never a bare `docker compose logs api` — on a deployment host the bare form
+   auto-loads `docker-compose.override.yml` and addresses a different project than
+   the deploy scripts do. Then open `https://<your domain>/setup/claim` and paste
+   the token (the link `vidra claim` prints just carries it in the URL fragment).
+3. **Redeem it** in the UI at that link, or directly:
    ```bash
    curl -X POST https://example.com/api/v1/setup/claim-owner \
      -H 'Content-Type: application/json' \
