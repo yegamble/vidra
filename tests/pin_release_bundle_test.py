@@ -192,6 +192,21 @@ class BundlePinTests(unittest.TestCase):
         before = self.snapshot()
         self.assertUntouched(self.run_pin(), before, 'download')
 
+    def test_unpaired_warning_speaks_of_the_image_pull_not_a_checkout_sync(self):
+        # No record in the tree and none fetchable (the stub 404s it), so the
+        # pairing is unknown and --component-tag is taken on trust. A bundle has
+        # no nested checkouts: the "component checkout sync" the git-tree wording
+        # names is a step its deploy never runs.
+        (self.root / 'releases/v0.7.5.json').unlink()
+        result = self.run_pin('--component-tag', 'user=v0.7.3', '--component-tag', 'search=v0.7.3')
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        output = result.stdout + result.stderr
+        self.assertIn('could not be determined', output)
+        self.assertIn('the image pull', output)
+        self.assertIn('manifest unknown', output)
+        self.assertNotIn('checkout sync', output)
+        self.assertNotIn('failed to checkout tag', output)
+
     def test_rerun_is_idempotent(self):
         self.assertEqual(self.run_pin().returncode, 0)
         first = (self.root / 'env/production.env').read_text()
