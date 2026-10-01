@@ -111,6 +111,103 @@ with open(os.environ['CALLS'], 'a') as out:
         self.assertEqual(self.offsite_calls('rclone'), [])
         self.assertEqual(self.offsite_calls('curl'), [])
 
+    def install_age(self, exit_code=0):
+        """A recording `age` stub: writes a recognisable ciphertext to its -o path."""
+        tool = self.root / 'bin' / 'age'
+        tool.write_text(f'''#!/usr/bin/env python3
+import json,os,sys
+with open(os.environ['CALLS'], 'a') as out:
+ out.write(json.dumps(['age', *sys.argv[1:]]) + '\\n')
+if {exit_code}:
+ sys.exit({exit_code})
+open(sys.argv[sys.argv.index('-o') + 1], 'wb').write(b'AGE-CIPHERTEXT')
+''')
+        tool.chmod(0o755)
+
+    def hide_real_age(self):
+        """PATH without any real `age`: symlink every other tool from the dirs that hold it."""
+        farm = self.root / 'noage'
+        farm.mkdir()
+        kept = []
+        for d in os.environ['PATH'].split(':'):
+            if not os.path.isdir(d) or not os.path.exists(os.path.join(d, 'age')):
+                kept.append(d)
+                continue
+            for name in os.listdir(d):
+                if name != 'age' and not (farm / name).exists():
+                    os.symlink(os.path.join(d, name), farm / name)
+        self.env['PATH'] = ':'.join([str(self.root / 'bin'), str(farm), *kept])
+
+    def test_age_recipients_encrypt_every_offsite_file_and_upload_only_age_names(self):
+        self.configure_offsite('BACKUP_RCLONE_REMOTE="offsite:backup folder"\n'
+                               'BACKUP_AGE_RECIPIENTS="age1aaa, age1bbb"\n')
+        self.install_age()
+        run = self.run_backup()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        encrypts = self.offsite_calls('age')
+        self.assertEqual(len(encrypts), 2, run.stdout)
+        for call in encrypts:
+            self.assertEqual(call[:4], ['-r', 'age1aaa', '-r', 'age1bbb'])
+        uploads = self.offsite_calls('rclone')
+        self.assertEqual(len(uploads), 2, run.stdout)
+        for call in uploads:
+            self.assertTrue(call[1].endswith('.age'), call)
+            self.assertEqual(call[2], 'offsite:backup folder/' + Path(call[1]).name)
+            self.assertFalse(Path(call[1]).exists(), 'ciphertext temp file must be removed')
+        self.assertEqual(sorted(Path(c[1]).name[:-4] for c in uploads),
+                         sorted(p.name for p in (*self.backups.glob('*.dump.gz'), *self.backups.glob('*.tar.gz'))))
+        self.assertNotIn('WARNING: off-site', run.stdout)
+        # Local copies stay plaintext so deploy/restore.sh is unchanged.
+        self.assertEqual(len(list(self.backups.glob('*.dump.gz'))), 1)
+        self.assertEqual(list(self.backups.glob('*.age')), [])
+
+    def test_age_recipients_apply_to_s3_target_too(self):
+        self.configure_offsite('BACKUP_S3_URI=s3://bucket/vidra\nBACKUP_AGE_RECIPIENTS=age1aaa\n')
+        self.install_age()
+        run = self.run_backup()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        uploads = self.offsite_calls('aws')
+        self.assertEqual(len(uploads), 2, run.stdout)
+        for call in uploads:
+            self.assertTrue(call[2].endswith('.age') and call[3].endswith('.age'), call)
+
+    def test_age_missing_aborts_before_any_upload(self):
+        self.configure_offsite('BACKUP_RCLONE_REMOTE=offsite:\nBACKUP_AGE_RECIPIENTS=age1aaa\n')
+        self.hide_real_age()
+        run = self.run_backup()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn('age is not installed', run.stderr)
+        self.assertEqual(self.offsite_calls('rclone'), [])
+
+    def test_age_failure_never_falls_back_to_plaintext(self):
+        self.configure_offsite('BACKUP_RCLONE_REMOTE=offsite:\nBACKUP_AGE_RECIPIENTS=age1aaa\n')
+        self.install_age(exit_code=1)
+        run = self.run_backup()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertEqual(self.offsite_calls('rclone'), [])
+        self.assertEqual(list(self.backups.glob('.offsite-age.*')), [])
+
+    def test_malformed_recipient_is_refused(self):
+        self.configure_offsite('BACKUP_RCLONE_REMOTE=offsite:\nBACKUP_AGE_RECIPIENTS="age1aaa -o"\n')
+        self.install_age()
+        run = self.run_backup()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertEqual(self.offsite_calls('age') + self.offsite_calls('rclone'), [])
+
+    def test_offsite_without_recipients_warns_but_still_uploads_config(self):
+        self.configure_offsite('BACKUP_RCLONE_REMOTE=offsite:\n')
+        run = self.run_backup()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        warning = [l for l in run.stdout.splitlines() if 'WARNING' in l and 'BACKUP_AGE_RECIPIENTS' in l]
+        self.assertEqual(len(warning), 1, run.stdout)
+        self.assertIn('PLAINTEXT', warning[0])
+        self.assertEqual(len(self.offsite_calls('rclone')), 2)
+
+    def test_local_only_run_does_not_warn_about_offsite_plaintext(self):
+        run = self.run_backup()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertNotIn('BACKUP_AGE_RECIPIENTS', run.stdout)
+
     def test_archives_and_plaintext_verification_are_private_from_creation(self):
         run = self.run_backup()
         self.assertEqual(run.returncode, 0, run.stderr)
