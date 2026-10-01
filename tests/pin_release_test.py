@@ -555,22 +555,21 @@ class PairingTests(Fixture):
         self.assertEqual(self.triple(), ('v9.9.9-rc1', 'v9.9.9-rc1', 'v9.9.9-rc1'))
         self.assertEqual(self.curl_calls(), '', 'a tag that can have no record was still fetched')
 
-    def test_a_bundle_tree_is_refused_before_any_record_is_looked_for(self):
-        """The beta host is an UNPACKED bundle with no .git anywhere. This
-        script has always refused there (a bundle is pinned by unpacking the
-        next one), and the record lookup must not turn that refusal into a
-        network call or a half-written env file."""
-        bundle = Path(self.temp.name) / 'bundle'
-        shutil.copytree(self.root, bundle, ignore=shutil.ignore_patterns('.git'))
-        before_env = (bundle / 'env/production.env').read_text()
+    def test_a_tree_that_is_neither_checkout_nor_bundle_is_refused_before_any_network_call(self):
+        """A copied-by-hand directory (no .git, no vidra-bundle.manifest) is
+        unidentifiable: refuse it before a record fetch or a download. Real
+        bundle trees are covered by pin_release_bundle_test.py."""
+        stray = Path(self.temp.name) / 'stray'
+        shutil.copytree(self.root, stray, ignore=shutil.ignore_patterns('.git'))
+        before_env = (stray / 'env/production.env').read_text()
         result = subprocess.run(
-            ['bash', str(bundle / 'deploy/pin-release.sh'), 'v0.7.5'],
+            ['bash', str(stray / 'deploy/pin-release.sh'), 'v0.7.5'],
             env={**os.environ, 'HOME': str(self.home),
                  'PATH': f'{self.bin}:{os.environ["PATH"]}', 'CURL_LOG': str(self.curl_log)},
             capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('not a git checkout', result.stderr)
-        self.assertEqual((bundle / 'env/production.env').read_text(), before_env)
+        self.assertIn('neither a git checkout nor an unpacked release bundle', result.stderr)
+        self.assertEqual((stray / 'env/production.env').read_text(), before_env)
         self.assertEqual(self.curl_calls(), '')
 
     def test_no_temporary_record_directory_is_left_behind(self):
