@@ -41,8 +41,10 @@
 # of the others, and exits non-zero with a per-image summary at the end.
 #
 # It does NOT deploy anything. Publishing an image and running it are separate
-# decisions: bump VIDRA_*_TAG in env/production.env and run ./deploy/deploy.sh
-# when you want this release live.
+# decisions: on the host, ./deploy/pin-release.sh <tag> then ./deploy/deploy.sh
+# when you want this release live. The env TEMPLATES (env/*.env.example) are
+# bumped in the same PR that lands releases/<tag>.json —
+# tests/env_template_pins_test.py fails until they name the newest record.
 #
 # Re-publishing a tag that already exists is deliberately NOT this script's job
 # (it would have to delete a release). Use the workflow's dispatch trigger:
@@ -534,6 +536,11 @@ fi
 # band (finding #189). Only for a full platform release — see the top-of-file note.
 if [ "$FULL_RELEASE" = 1 ]; then
   write_release_record
+  # The record is not the last edit this release needs: the templates a
+  # manual-path operator copies still name the previous release, and
+  # tests/env_template_pins_test.py turns the PR that lands the record red
+  # until they move. Saying so here beats discovering it from CI.
+  log "in the PR that lands ${RECORD_REL}, also set VIDRA_CORE_TAG / VIDRA_USER_TAG / VIDRA_SEARCH_TAG in env/production.env.example and env/staging.env.example to the tags it records"
 else
   log "subset release (${REPOS[*]}): ${RECORD_REL} was not written — a release record describes a full core+user+search release. Cut the full release, or complete the record by hand once all three images are green."
 fi
