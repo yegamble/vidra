@@ -85,6 +85,22 @@
 #
 # The body is a function called on the last line, so bash has parsed every
 # statement before the checkout changes the file it is reading from.
+#
+# BUNDLE TREES (D6, 2026-10-01). The default install is an unpacked
+# vidra-bundle (vidra-bundle.manifest, no .git), and `git checkout` does not
+# exist there. The same command does what the runbook's first five steps did by
+# hand: resolve the pairing, download vidra-bundle_<core tag>.tar.gz and
+# SHA256SUMS from the vidra-core release, VERIFY BEFORE UNPACKING, unpack, then
+# write the three tags. It stops there: ./deploy/deploy.sh is still the
+# operator's next, separate command.
+# The archive is untrusted until proven otherwise, and unpacking it over a live
+# tree is the dangerous step, so: members are listed first and an archive with
+# an absolute or `..` path, a link of any kind, a device, no manifest, or an
+# env/*.env or deploy/Caddyfile.local of its own is refused; it is unpacked into
+# a staging directory INSIDE the tree (same filesystem) and copied over only
+# after every check passed, manifest last, so any refusal leaves the tree and
+# the env file byte-for-byte as they were. This script replaces ITSELF during
+# the copy, which is why main() ends in an explicit exit - see there.
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -108,11 +124,16 @@ USAGE="usage: $0 <vMAJOR.MINOR.PATCH> [--component-tag <core|user|search>=<tag>]
 # failing command in an EXIT trap rewrites the exit status (measured in
 # lib.sh's own re-check subshell) and would turn a clean pin into a failure.
 RECORD_TMPDIR=''
+STAGE=''   # the bundle staging directory, inside the tree (see stage_bundle)
+# Invoked by the EXIT trap below; shellcheck stops seeing that once main() ends
+# in an explicit exit, and reports the function as unused.
+# shellcheck disable=SC2329
 cleanup_record_tmpdir() {
-  if [ -n "$RECORD_TMPDIR" ]; then
-    rm -rf "$RECORD_TMPDIR" 2>/dev/null \
-      || printf '[pin] WARNING: could not remove %s; remove it by hand.\n' "$RECORD_TMPDIR" >&2
-  fi
+  local d
+  for d in "$RECORD_TMPDIR" "$STAGE"; do
+    [ -z "$d" ] || rm -rf "$d" 2>/dev/null \
+      || printf '[pin] WARNING: could not remove %s; remove it by hand.\n' "$d" >&2
+  done
   return 0
 }
 trap cleanup_record_tmpdir EXIT
@@ -155,8 +176,87 @@ resolve_failure() {
   esac
 }
 
+# download <url> <dest> - HTTPS-only, bounded, ~/.curlrc ignored (-q first: a
+# deploy host's curl config can add --insecure or a proxy, and this fetches what
+# becomes the deployment tree).
+download() {
+  curl -q --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error \
+       --location --max-redirs 5 --connect-timeout 10 --max-time 900 --output "$2" "$1"
+}
+
+# stage_bundle <core tag> - everything that can be refused, before the tree is
+# touched. Leaves the verified, listing-checked archive unpacked in
+# $STAGE/tree and its manifest in $STAGE/vidra-bundle.manifest.
+stage_bundle() {
+  local core="$1" asset base listing verbose offenders mtag
+  asset="vidra-bundle_${core}.tar.gz"
+  base="https://github.com/yegamble/vidra-core/releases/download/${core}"
+  command -v sha256sum >/dev/null 2>&1 || die "no sha256sum on this host (coreutils), so the download cannot be verified - nothing was changed"
+  command -v tar >/dev/null 2>&1 || die "no tar on this host - nothing was changed"
+  # Inside the tree so the later copy never crosses a filesystem and a full
+  # /tmp cannot fail it half-way; removed by the EXIT trap whatever happens.
+  STAGE="$(mktemp -d "$REPO_ROOT/.vidra-upgrade.XXXXXX")" || die "could not create a staging directory in $REPO_ROOT (is the tree writable by $(id -un)?) - nothing was changed"
+  log "downloading ${asset} from ${base}"
+  download "${base}/${asset}" "$STAGE/${asset}" || die "downloading ${base}/${asset} failed - nothing was changed. A release cut before the bundle existed has none; unpack by hand per 'Upgrade a bundle tree' in deploy/README.md"
+  download "${base}/SHA256SUMS" "$STAGE/SHA256SUMS" || die "downloading ${base}/SHA256SUMS failed - nothing was changed; the bundle cannot be verified without it"
+  # Matched on the exact NAME (as install.sh does), not a regex over the file.
+  awk -v want="$asset" '$2 == want || $2 == "*" want { print; found = 1 } END { exit !found }' \
+    "$STAGE/SHA256SUMS" > "$STAGE/SHA256SUMS.one" \
+    || die "SHA256SUMS lists no entry for ${asset}, so it cannot be verified - nothing was changed"
+  ( cd "$STAGE" && sha256sum -c SHA256SUMS.one >/dev/null 2>&1 ) \
+    || die "CHECKSUM MISMATCH on ${asset} - nothing was unpacked or changed. A corrupted transfer or a tampered asset; re-run, and if it repeats do not work around it"
+  log "checksum verified: ${asset}"
+
+  # Verified means "the bytes the release published", not "safe to unpack":
+  # the member names are checked from the listing BEFORE tar writes anything,
+  # so the answer does not depend on which tar this host has. Every member of a
+  # real bundle is ./-relative by construction (make-bundle.sh).
+  listing="$(tar -tzf "$STAGE/${asset}")" || die "${asset} is not a readable gzip tarball - nothing was changed"
+  verbose="$(tar -tvzf "$STAGE/${asset}")" || die "${asset} is not a readable gzip tarball - nothing was changed"
+  [ "$(printf '%s\n' "$listing" | wc -l)" -eq "$(printf '%s\n' "$verbose" | wc -l)" ] \
+    || die "${asset}: the member list and the typed listing disagree (a member name with a newline in it?) - refusing to unpack, nothing was changed"
+  offenders="$(printf '%s\n' "$listing" | grep -vE '^\./' || true)"
+  [ -z "$offenders" ] || die "${asset} has member(s) not relative to the tree root (absolute or bare paths) - refusing to unpack, nothing was changed: ${offenders}"
+  offenders="$(printf '%s\n' "$listing" | grep -F '..' || true)"
+  [ -z "$offenders" ] || die "${asset} has member(s) with '..' in the path - refusing to unpack, nothing was changed: ${offenders}"
+  # A regular file is '-' and a directory 'd'; everything else (l symlink, h
+  # hardlink, c/b device, p fifo) can aim a later write outside the tree.
+  offenders="$(printf '%s\n' "$verbose" | grep -vE '^[-d]' || true)"
+  [ -z "$offenders" ] || die "${asset} has symlink, hardlink or special-file member(s) - refusing to unpack, nothing was changed: ${offenders}"
+  printf '%s\n' "$listing" | grep -qx './vidra-bundle.manifest' \
+    || die "${asset} has no vidra-bundle.manifest at its root, so it is not a deployment bundle - nothing was changed"
+  # The two things that belong to THIS host. A bundle must never ship them, and
+  # one that does is not to be trusted to overwrite your secrets or Caddyfile.
+  offenders="$(printf '%s\n' "$listing" | grep -E '^\./deploy/Caddyfile\.local$|^\./env/' | grep -vE '^\./env/$|\.env\.example$' || true)"
+  [ -z "$offenders" ] || die "${asset} contains host-local file(s) a bundle must never ship (env/*.env, deploy/Caddyfile.local) - refusing to unpack, nothing was changed: ${offenders}"
+
+  mkdir "$STAGE/tree"
+  tar -xzf "$STAGE/${asset}" -C "$STAGE/tree" --no-same-owner || die "unpacking ${asset} into the staging directory failed - the tree itself was not touched"
+  [ -f "$STAGE/tree/vidra-bundle.manifest" ] || die "${asset} unpacked without a vidra-bundle.manifest - nothing was changed"
+  mv "$STAGE/tree/vidra-bundle.manifest" "$STAGE/vidra-bundle.manifest"
+  mtag="$(bundle_manifest_get "$STAGE" tag)"
+  [ "$mtag" = "$core" ] || log "WARNING: the bundle's manifest says tag=${mtag:-<none>}, not ${core}; deploy.sh's release-mapping preflight judges the tree by the manifest"
+}
+
+# install_bundle - copy the staged tree over this one. cp -R, not -a/-p: files
+# become the invoking user's (the tree owner) and existing directories, notably
+# a 0700 env/, keep their modes. The manifest goes LAST, so a copy that dies
+# half-way leaves the OLD manifest in place and the tree reports unfinished.
+install_bundle() {
+  local f
+  cp -R "$STAGE/tree/." "$REPO_ROOT/" || die "copying the bundle over $REPO_ROOT failed part-way - the tree may be MIXED, the env file is untouched and the manifest still names the previous release; re-run this command"
+  # cp does not chmod a file it overwrites, so a script the new release made
+  # executable would stay non-executable.
+  while IFS= read -r f; do
+    [ -z "$f" ] || chmod u+x "$REPO_ROOT/$f" 2>/dev/null || true
+  done <<EOF
+$(cd "$STAGE/tree" && find . -type f -perm -u+x)
+EOF
+  cp "$STAGE/vidra-bundle.manifest" "$REPO_ROOT/vidra-bundle.manifest" || die "could not write vidra-bundle.manifest - re-run this command"
+}
+
 main() {
-  local tag='' force='' owner snapshot rc=0 resolved paired='' unpaired_note=''
+  local tag='' force='' owner snapshot rc=0 resolved paired='' unpaired_note='' bundle=''
   local record='' fetched_record='' record_from=''
   local core_tag='' user_tag='' search_tag=''
   local core_from='' user_from='' search_from='' role value source
@@ -189,12 +289,19 @@ main() {
     die "refusing to run as root. This checkout belongs to '${owner}'; git objects written by root are unwritable for the deploy user and break the next deploy. Run it as the owner: sudo -u ${owner} -- $0 ${tag}"
   fi
   [ -f "$ENV_FILE" ] || die "env file not found: $ENV_FILE"
-  [ -d "$REPO_ROOT/.git" ] || die "$REPO_ROOT is not a git checkout. An unpacked bundle is pinned by unpacking the release's bundle over it — see 'Upgrade a bundle tree' in deploy/README.md"
+  if is_bundle_tree "$REPO_ROOT"; then
+    bundle=1
+  elif [ ! -d "$REPO_ROOT/.git" ]; then
+    die "$REPO_ROOT is neither a git checkout nor an unpacked release bundle (no vidra-bundle.manifest) — it cannot be pinned"
+  fi
   command -v python3 >/dev/null 2>&1 || die "Python 3 is required for checkout preflight; install python3 first"
   [ -f "$CHECKER" ] || die "deploy/release-mapping.py is missing from $REPO_ROOT, so this release's component pairing cannot be read. This tree is incomplete or mixes revisions; take deploy/release-mapping.py from the same revision as deploy/pin-release.sh"
   # Every finding is fatal here, as in deploy.sh: pinning is deploy-side work,
   # and this is the moment to fix the host, not to work around it.
-  python3 "$REPO_ROOT/deploy/checkout-hygiene.py" check "$REPO_ROOT" || die "checkout hygiene preflight failed"
+  # Checkout hygiene is about git object ownership; a bundle tree has no git.
+  if [ -z "$bundle" ]; then
+    python3 "$REPO_ROOT/deploy/checkout-hygiene.py" check "$REPO_ROOT" || die "checkout hygiene preflight failed"
+  fi
 
   # FLAG VALIDATION BEFORE THE FIRST GIT COMMAND. The resolver is the only
   # thing that knows what a --component-tag value may be, and asking it with
@@ -215,11 +322,13 @@ main() {
     *) die "$(resolve_failure "$rc"). Nothing was changed: the tree has not moved and the env file is untouched" ;;
   esac
 
-  log "fetching tags from origin"
-  git -C "$REPO_ROOT" fetch --tags --force --quiet origin \
-    || die "git fetch failed — nothing was changed"
-  git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null \
-    || die "${tag} is not a tag on origin — was the release cut? (deploy/release.sh --yes ${tag}). Nothing was changed"
+  if [ -z "$bundle" ]; then
+    log "fetching tags from origin"
+    git -C "$REPO_ROOT" fetch --tags --force --quiet origin \
+      || die "git fetch failed — nothing was changed"
+    git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null \
+      || die "${tag} is not a tag on origin — was the release cut? (deploy/release.sh --yes ${tag}). Nothing was changed"
+  fi
 
   # THE PAIRING, resolved before the first mutation, from up to TWO copies of
   # the record.
@@ -278,6 +387,13 @@ EOF
     die "deploy/release-mapping.py resolved no tag for one of core/user/search — nothing was changed. This tree mixes revisions: take deploy/release-mapping.py and deploy/pin-release.sh from the same one"
   fi
 
+  # install.sh's rule for bundles: no record, no guess. A uniform triple for a
+  # core-only release names images that do not exist, and a bundle host cannot
+  # recover by re-checking out a tag.
+  if [ -n "$bundle" ] && [ -z "$paired" ] && [ "${#overrides[@]}" -eq 0 ]; then
+    die "no release record for ${tag} could be read (none in this tree, none fetched), and a bundle upgrade will not guess the pairing. Nothing was changed. Retry with network access, or state it: $0 ${tag} --component-tag user=<tag> --component-tag search=<tag>"
+  fi
+
   # Which copy of the record actually decided it. Only one of the two ever
   # does, so one lookup covers every record-sourced row below.
   case "${core_from}${user_from}${search_from}" in
@@ -310,6 +426,12 @@ EOF
   pin_row VIDRA_USER_TAG   "$user_tag"   "$user_from"   "$record_from"
   pin_row VIDRA_SEARCH_TAG "$search_tag" "$search_from" "$record_from"
 
+  # Bundle trees: everything that can be refused happens here, with the tree
+  # still untouched (download, checksum, member listing, staging unpack).
+  if [ -n "$bundle" ]; then
+    stage_bundle "$core_tag"
+  fi
+
   # The snapshot is taken BEFORE the checkout, with this tree's helper. The
   # helper (deploy/backup-env.sh + deploy/checkout-hygiene.py) landed after
   # v0.6.4, so a target release may not carry it — every v0.6.3/v0.6.4 tree does
@@ -321,10 +443,15 @@ EOF
   snapshot="$(ENV_FILE="$ENV_FILE" bash "$REPO_ROOT/deploy/backup-env.sh")" || die "env snapshot failed — nothing was changed: the tree has not moved and the env file is untouched"
   log "env snapshot: ${snapshot}"
 
-  log "checking out ${tag}"
-  git -C "$REPO_ROOT" checkout --detach --quiet "$tag" \
-    || die "could not check out ${tag} — nothing else was changed; the env file still names the previous release (${snapshot} is a plain copy of it)"
-  log "checkout: $(git -C "$REPO_ROOT" describe --tags --always)"
+  if [ -n "$bundle" ]; then
+    log "unpacking the verified ${core_tag} bundle over ${REPO_ROOT}"
+    install_bundle
+  else
+    log "checking out ${tag}"
+    git -C "$REPO_ROOT" checkout --detach --quiet "$tag" \
+      || die "could not check out ${tag} — nothing else was changed; the env file still names the previous release (${snapshot} is a plain copy of it)"
+    log "checkout: $(git -C "$REPO_ROOT" describe --tags --always)"
+  fi
 
   # Each key gets ITS OWN component's tag. deploy.sh's checkout sync then
   # moves each nested checkout to the matching tag, which is what keeps its
@@ -340,6 +467,10 @@ EOF
     shift 2
   done
   log "pinned ${tag}: core=$(env_get VIDRA_CORE_TAG) user=$(env_get VIDRA_USER_TAG) search=$(env_get VIDRA_SEARCH_TAG)"
-  log "next: ./deploy/deploy.sh"
+  log "next: ./deploy/deploy.sh   (or: vidra deploy) — nothing has been deployed yet"
+  # main EXITS rather than returning: on a bundle tree the unpack overwrote this
+  # very file, and bash reads a script incrementally, so returning to the last
+  # line would resume at the old byte offset inside the NEW file.
+  exit 0
 }
 main "$@"

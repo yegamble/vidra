@@ -839,7 +839,7 @@ record itself is wrong.
 
 ```bash
 # UPGRADE — tag a release in the component repo, wait for GHCR, then, AS vidra:
-./deploy/pin-release.sh v0.2.0                 # tree to v0.2.0 + each VIDRA_*_TAG at the tag the RECORD pairs it at; env snapshot first; CHECKOUT TREES ONLY
+./deploy/pin-release.sh v0.2.0                 # tree to v0.2.0 + each VIDRA_*_TAG at the tag the RECORD pairs it at; env snapshot first (a bundle tree: downloads, verifies and unpacks that release's bundle instead)
 ./deploy/deploy.sh                             # dump -> pull -> gated migrate -> up -> probe
 
 # ROLLBACK — app only; fine across an ADDITIVE migration (one-release rule below):
@@ -868,12 +868,31 @@ continues, which is not the same as reporting that the pairing is fine.
 **A bundle tree has no `git pull`, and bumping the tags alone is refused.** The
 tree's `vidra-bundle.manifest` names the release its compose files and expected
 schema version belong to. If `VIDRA_CORE_TAG` differs from it, `deploy.sh` stops
-in its pre-flight (`release-mapping.py`), before the dump, with nothing changed;
-`pin-release.sh` refuses a bundle tree outright, and so does `vidra update`.
-The procedure is: unpack the new release's bundle, then set the tags, then
-deploy. The bundle contains no `env/` secrets and no `Caddyfile.local`, so
-neither is touched. The same steps, with their reasoning, are in the docs under
+in its pre-flight (`release-mapping.py`), before the dump, with nothing changed.
+One command does the whole upgrade except the deploy itself, AS THE TREE'S OWNER:
+
+```bash
+sudo -u vidra ./deploy/pin-release.sh vX.Y.Z   # pairing -> download -> verify -> unpack -> tags
+sudo -u vidra ./deploy/deploy.sh               # or: vidra deploy
+```
+
+`pin-release.sh` reads the pairing from the release record, downloads
+`vidra-bundle_<core tag>.tar.gz` and `SHA256SUMS` from the vidra-core release
+and **verifies the checksum before unpacking anything**. It lists the archive's
+members first and refuses one with an absolute or `..` path, a symlink, a
+hardlink or device, no `vidra-bundle.manifest`, or an `env/*.env` or
+`deploy/Caddyfile.local` of its own. It unpacks into a staging directory inside
+the tree and copies over it only after every check passed, so a refusal leaves the
+tree and the env file as they were. It snapshots the env file, writes the three
+tags, prints the next command and stops: it never runs `deploy.sh`. The bundle
+contains no `env/` secrets and no `Caddyfile.local`, so neither is touched. Run
+it as the owner, never as root (it refuses root). The same steps, with their
+reasoning, are in the docs under
 [Upgrade a bundle tree](https://vidra.yosef.app/docs/install/upgrading#upgrade-a-bundle-tree).
+
+The manual procedure below is the fallback: a tree whose copy of `pin-release.sh`
+predates this behaviour (unpack once by hand, and every later upgrade is the
+command above), or a host that cannot reach GitHub from the script.
 
 ```bash
 # 1. Read the pairing from the release record (it is not always inside the
