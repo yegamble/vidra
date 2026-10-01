@@ -1201,6 +1201,15 @@ cat <<EOF
       cd ${DIR} && vidra doctor     # compose, exposure, config, backups, reachability
       cd ${DIR} && vidra status     # what is running, and whether it answers
 
+  Once the stack is up, claim the owner account (every signup path answers 403
+  until you do). On this server, in a terminal:
+
+      cd ${DIR} && vidra claim      # prints the owner-claim link; open it
+
+  'vidra claim' is not in v0.7.5 or earlier. On an older CLI, take the newest
+  'FIRST-RUN SETUP REQUIRED' line from './deploy/compose.sh logs api' instead -
+  deploy/README.md 'First boot' has the steps.
+
   deploy/README.md is the manual path for every one of these, and the source of
   truth for all of them.
 
