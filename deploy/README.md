@@ -863,23 +863,47 @@ it. Note the check can only be made against an image that answers
 `migrate embedded-max`; against an older image it reports **NOT CHECKED** and
 continues, which is not the same as reporting that the pairing is fine.
 
-**On a bundle tree there is no `git pull`.** An upgrade is the tag bump plus
-`vidra deploy` — a release changes the images, and that is what the tags name.
-To take a release's new compose files and deploy scripts as well, unpack its
-bundle over the tree (it contains no `env/` secrets and no `Caddyfile.local`, so
-neither is touched), then deploy:
+### Upgrade a bundle tree
+
+**A bundle tree has no `git pull`, and bumping the tags alone is refused.** The
+tree's `vidra-bundle.manifest` names the release its compose files and expected
+schema version belong to. If `VIDRA_CORE_TAG` differs from it, `deploy.sh` stops
+in its pre-flight (`release-mapping.py`), before the dump, with nothing changed;
+`pin-release.sh` refuses a bundle tree outright, and so does `vidra update`.
+The procedure is: unpack the new release's bundle, then set the tags, then
+deploy. The bundle contains no `env/` secrets and no `Caddyfile.local`, so
+neither is touched. The same steps, with their reasoning, are in the docs under
+[Upgrade a bundle tree](https://vidra.yosef.app/docs/install/upgrading#upgrade-a-bundle-tree).
 
 ```bash
+# 1. Read the pairing from the release record (it is not always inside the
+#    bundle you are about to unpack). The bundle is a vidra-core asset named for
+#    the CORE tag; note the user and search tags too.
+TAG=vX.Y.Z
+curl -fsSL "https://raw.githubusercontent.com/yegamble/vidra/main/releases/$TAG.json" -o "/tmp/$TAG.json"
+python3 -c 'import json,sys; c=json.load(open(sys.argv[1]))["components"]; [print(k, c[k]["tag"]) for k in ("core","user","search")]' "/tmp/$TAG.json"
+
+# 2. Download the bundle and SHA256SUMS, and verify. Stop unless this prints OK.
 cd /opt/vidra
-curl -fsSLO https://github.com/yegamble/vidra-core/releases/download/v0.2.0/vidra-bundle_v0.2.0.tar.gz
-tar -xzf vidra-bundle_v0.2.0.tar.gz            # overwrites tracked files, keeps yours
-$EDITOR env/production.env                     # VIDRA_CORE_TAG=v0.2.0 …
-./deploy/deploy.sh
+CORE=vX.Y.Z                                    # the core tag from step 1
+BASE="https://github.com/yegamble/vidra-core/releases/download/$CORE"
+curl -fsSLO "$BASE/vidra-bundle_$CORE.tar.gz"
+curl -fsSLO "$BASE/SHA256SUMS"
+awk -v want="vidra-bundle_$CORE.tar.gz" '$2 == want || $2 == "*" want' SHA256SUMS | sha256sum -c -
+
+# 3. Unpack AS THE TREE'S OWNER. As root, tar keeps the archive's uid 0 and
+#    leaves root-owned scripts in a tree the deploy user owns.
+sudo -u vidra tar -xzf "vidra-bundle_$CORE.tar.gz" -C /opt/vidra   # overwrites tracked files, keeps yours
+
+# 4. Set VIDRA_CORE_TAG, VIDRA_USER_TAG and VIDRA_SEARCH_TAG to step 1's tags.
+$EDITOR env/production.env
+
+# 5. Deploy.
+sudo -u vidra ./deploy/deploy.sh               # or: vidra deploy
 ```
 
-Verify its checksum against the release's `SHA256SUMS` first if you did not get
-it through `install.sh`. A bundle-aware `vidra update` is a recorded follow-up;
-today it warns rather than refuses on a tree with no git.
+Do steps 3 and 4 together: every later `deploy.sh` run depends on the manifest and
+the tags agreeing.
 
 `vidra deploy`, `vidra rollback v0.2.0`, `vidra backup`, `vidra restore <dump>` and
 `vidra release v0.2.0` are the same four lines: each execs the script above with
@@ -1428,6 +1452,8 @@ git clone https://github.com/yegamble/vidra.git /opt/vidra && cd /opt/vidra
 # 2. Fetch both files for the SAME stamp from off-site.
 rclone copy "$BACKUP_RCLONE_REMOTE/vidra-config-20260820T031500Z.tar.gz" backups/
 rclone copy "$BACKUP_RCLONE_REMOTE/vidra-20260820T031500Z.dump.gz"        backups/
+# With BACKUP_AGE_RECIPIENTS set the objects are <name>.age: decrypt each with
+# `age -d -i key.txt` first (see "Off-site with client-side encryption (age)").
 
 # 3. Configuration FIRST. Restores env/production.env (0600) and
 #    deploy/Caddyfile.local to exactly where the compose chain looks for them.

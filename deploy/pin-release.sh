@@ -189,7 +189,7 @@ main() {
     die "refusing to run as root. This checkout belongs to '${owner}'; git objects written by root are unwritable for the deploy user and break the next deploy. Run it as the owner: sudo -u ${owner} -- $0 ${tag}"
   fi
   [ -f "$ENV_FILE" ] || die "env file not found: $ENV_FILE"
-  [ -d "$REPO_ROOT/.git" ] || die "$REPO_ROOT is not a git checkout. An unpacked bundle is pinned by unpacking the release's bundle over it — see 'Upgrading a bundle install' in deploy/README.md"
+  [ -d "$REPO_ROOT/.git" ] || die "$REPO_ROOT is not a git checkout. An unpacked bundle is pinned by unpacking the release's bundle over it — see 'Upgrade a bundle tree' in deploy/README.md"
   command -v python3 >/dev/null 2>&1 || die "Python 3 is required for checkout preflight; install python3 first"
   [ -f "$CHECKER" ] || die "deploy/release-mapping.py is missing from $REPO_ROOT, so this release's component pairing cannot be read. This tree is incomplete or mixes revisions; take deploy/release-mapping.py from the same revision as deploy/pin-release.sh"
   # Every finding is fatal here, as in deploy.sh: pinning is deploy-side work,
