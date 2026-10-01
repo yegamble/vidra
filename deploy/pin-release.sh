@@ -127,7 +127,7 @@ RECORD_TMPDIR=''
 STAGE=''   # the bundle staging directory, inside the tree (see stage_bundle)
 # Invoked by the EXIT trap below; shellcheck stops seeing that once main() ends
 # in an explicit exit, and reports the function as unused.
-# shellcheck disable=SC2329
+# shellcheck disable=SC2317,SC2329  # SC2317 on older shellcheck, SC2329 on newer
 cleanup_record_tmpdir() {
   local d
   for d in "$RECORD_TMPDIR" "$STAGE"; do
