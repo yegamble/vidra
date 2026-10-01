@@ -245,8 +245,9 @@ ensure_backups_dir() {
   chmod 0700 "$dir"
   # %u prints the owner NAME without resolving it through find's -user, which
   # errors out on a name this host does not know. Anything not vidra's — the
-  # directory or a file in it — triggers the repair.
-  if find "$dir" -printf '%u\n' | grep -qvx "$VIDRA_USER"; then
+  # directory or a file in it — triggers the repair. Not `grep -q`: under
+  # pipefail an early grep exit can SIGPIPE find and turn a match into "no repair".
+  if find "$dir" -printf '%u\n' | grep -vx "$VIDRA_USER" >/dev/null; then
     chown -R "${VIDRA_USER}:${VIDRA_USER}" "$dir" \
       || die "could not chown ${dir} to ${VIDRA_USER}. This is fatal on purpose: vidra-backup.timer runs AS ${VIDRA_USER}, so a root-owned backups/ means every nightly backup fails with 'Permission denied'."
     log "repaired ownership of ${dir} (was not all ${VIDRA_USER}'s — an earlier run as root)"
