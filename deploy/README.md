@@ -1527,12 +1527,14 @@ sudo -u vidra tar -xzf backups/vidra-config-20260820T031500Z.tar.gz -C /opt/vidr
 #    A git-checkout install only: git check-ignore -v env/production.env  (MUST match)
 #    A bundle tree has no .git, so there is nothing to commit it to.
 
-# 6. Bring up just enough to restore into, then restore.
-./deploy/compose.sh up -d postgres
-./deploy/restore.sh backups/vidra-20260820T031500Z.dump.gz
+# 6. Bring up just enough to restore into, then restore. As the service user:
+#    after provision.sh it alone can read the 0600 env file, and it is the one
+#    in the docker group, so the login user gets a permission error here.
+sudo -u vidra ./deploy/compose.sh up -d postgres
+sudo -u vidra ./deploy/restore.sh backups/vidra-20260820T031500Z.dump.gz
 
 # 7. Media, if STORAGE_BACKEND=local — see the next section.
-# 8. Point DNS at the new host, then ./deploy/deploy.sh.
+# 8. Point DNS at the new host, then: sudo -u vidra ./deploy/deploy.sh
 ```
 
 Two things to check before you trust the result. The env file pins
