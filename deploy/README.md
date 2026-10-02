@@ -1516,10 +1516,12 @@ curl -fsSL https://raw.githubusercontent.com/yegamble/vidra/main/install.sh \
 #    taken under).
 
 # 4. Then the service user, backups/ and the timer - AFTER the install, never
-#    before: install.sh refuses a non-empty /opt/vidra and provision.sh creates
-#    /opt/vidra/backups. A host that cloud-init already ran provision.sh on: move
-#    /opt/vidra/backups aside, install, then move it back.
+#    before: install.sh refuses a non-empty /opt/vidra. A host that cloud-init
+#    already ran provision.sh on: move /opt/vidra/backups aside, install, then
+#    move it back. Create backups/ explicitly: v0.7.5's provision.sh does not,
+#    and its bundle ships none, so the copy below would fail without it.
 cd /opt/vidra && sudo ./deploy/provision.sh --yes
+sudo install -d -m 0700 -o vidra -g vidra /opt/vidra/backups
 sudo install -m 0600 -o vidra -g vidra ~/dr/vidra-* backups/
 
 # 5. Configuration FIRST. Restores env/production.env (0600) and
