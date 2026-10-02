@@ -13,11 +13,14 @@
 # fixed order, and refuses early rather than half-way:
 #
 #   1. pre-flight   — tag shape, gh auth, tag not already taken in ANY target
-#                     repo, and (for vidra-user) the repository variable its
+#                     repo, each target repo's default-branch HEAD resolved to
+#                     the commit its release will be created AT (the cut set),
+#                     and (for vidra-user) the repository variable its
 #                     workflow gates on. All of it BEFORE the first release is
 #                     created, because a GitHub release is outward-facing: it
 #                     mails watchers and it cannot be un-announced.
-#   2. confirm      — one prompt, skippable with --yes for a scripted release.
+#   2. confirm      — one prompt showing the cut set, skippable with --yes for
+#                     a scripted release (the cut set is logged either way).
 #   3. meta tag     — this repository gets the SAME tag, pushed, before any
 #                     release is created (see below).
 #   4. per repo     — gh release create -> watch the publish-container run to
@@ -74,7 +77,7 @@ REPOS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     -y|--yes)  ASSUME_YES=1; shift ;;
-    -h|--help) sed -n '2,49p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,54p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *)
       if [ -z "$TAG" ]; then TAG="$1"; else REPOS+=("$1"); fi
@@ -147,6 +150,42 @@ for repo in "${REPOS[@]}"; do
   fi
 done
 log "tag ${TAG} is free in: ${REPOS[*]}"
+
+# --- the cut set: one commit per repo, frozen here ----------------------------
+# WHY (council ruling v0.7.6, D9): `gh release create` without --target tags the
+# repo's default branch AS OF THAT CALL, and the calls run tens of minutes apart
+# because each one waits for its image build. A PR merged into vidra-user while
+# vidra-core's image was building shipped in the release without anybody having
+# chosen it, and the confirmation named no commit at all. So every target repo's
+# default-branch HEAD is resolved NOW, shown in the confirmation, and passed as
+# --target to its `gh release create`: the release is the commits that were
+# confirmed, whatever merges afterwards. A repo whose HEAD cannot be resolved to
+# a full 40-hex commit is refused here, before the meta tag or any release.
+TARGET_BRANCHES=()
+TARGET_SHAS=()
+for repo in "${REPOS[@]}"; do
+  branch="$(gh api "repos/${OWNER}/${repo}" --jq .default_branch 2>/dev/null || true)"
+  case "$branch" in
+    '' | *[!A-Za-z0-9._/-]*) die "could not resolve the default branch of ${OWNER}/${repo} (got '${branch}'), so its release cannot be pinned to a commit. Nothing has been tagged or released." ;;
+  esac
+  sha="$(gh api "repos/${OWNER}/${repo}/git/ref/heads/${branch}" --jq .object.sha 2>/dev/null || true)"
+  case "$sha" in
+    '' | *[!0-9a-f]*) die "could not resolve ${OWNER}/${repo} ${branch} to a commit (got '${sha}'), so its release cannot be pinned to one. Nothing has been tagged or released." ;;
+  esac
+  [ "${#sha}" -eq 40 ] \
+    || die "${OWNER}/${repo} ${branch} resolved to '${sha}', not a full 40-hex commit. Nothing has been tagged or released."
+  TARGET_BRANCHES+=("$branch")
+  TARGET_SHAS+=("$sha")
+done
+
+# Printed in the confirmation (and logged under --yes) so what is confirmed is
+# exactly what each `gh release create --target` receives.
+show_cut_set() {
+  local i
+  for i in "${!REPOS[@]}"; do
+    printf '  %-13s %s @ %s\n' "${REPOS[$i]}" "${TARGET_BRANCHES[$i]}" "${TARGET_SHAS[$i]}"
+  done
+}
 
 # --- the meta tag, decided here and applied after the confirmation ------------
 # Everything about it that can be refused is refused now, with the rest of the
@@ -236,10 +275,15 @@ fi
 # A GitHub release notifies watchers and shows up on the repo's front page. It is
 # the one step in this file that reaches people outside the machine, so it asks.
 if [ "$ASSUME_YES" = "1" ]; then
-  log "--yes given — not prompting."
+  log "--yes given — not prompting. The cut set (each release is created at exactly this commit):"
+  show_cut_set
 elif [ -t 0 ]; then
   echo ""
   echo "About to PUBLISH release ${TAG} in: ${REPOS[*]}"
+  echo "The cut set — each release is created at exactly this commit (--target):"
+  show_cut_set
+  echo "Hold merges to these repos until the record PR is open: the release is these"
+  echo "commits, and anything merged meanwhile is NOT in it."
   echo "This is public: it tags the repo, notifies watchers, and pushes"
   echo "ghcr.io/${OWNER}/<repo>:${TAG}. GitHub releases are not meant to be deleted."
   if [ "$META_TAG_ACTION" = "push" ]; then
@@ -428,7 +472,7 @@ resolve_manifest() {
 write_release_record() {
   step "recording ${RECORD_REL}"
   local meta_commit core_commit user_commit search_commit core_schema search_schema
-  local tmp skel record_branch pr_url
+  local tmp skel record_branch pr_url pr_body
 
   meta_commit="$(git -C "$REPO_ROOT" rev-parse "${TAG}^{commit}" 2>/dev/null || true)"
   case "$meta_commit" in
@@ -469,9 +513,13 @@ write_release_record() {
 
   # main is branch-protected (ci-required + enforce_admins), so a fresh commit
   # pushed straight to it is REJECTED. Land the record the way every record to
-  # date did: a short-lived branch and a PR. It is a data-only change, so
-  # ci-required passes trivially and the owner merges it. Each git step is gated
-  # on its own exit code — never `add && commit && push`.
+  # date did: a short-lived branch and a PR. That PR is NOT green on arrival, and
+  # its body must not say it is (an earlier one claimed "ci-required passes
+  # trivially"): tests/release_mapping_test.py fails until the record's
+  # release-preflight evidence is committed and the tag is in
+  # RAW_PREFLIGHT_RELEASES, and tests/env_template_pins_test.py fails until the
+  # env templates name the tags it records. Each git step is gated on its own
+  # exit code — never `add && commit && push`.
   record_branch="releases/record-${TAG}"
   git -C "$REPO_ROOT" checkout -b "$record_branch" \
     || record_die "could not create the record branch ${record_branch} (does it already exist?)."
@@ -481,9 +529,16 @@ write_release_record() {
     || record_die "could not commit ${RECORD_REL}."
   git -C "$REPO_ROOT" push -u origin "$record_branch" \
     || record_die "could not push ${record_branch}. The record commit is local on that branch; push it and open the PR by hand."
+  pr_body="Machine-readable release record for ${TAG}, written by deploy/release.sh after the images were published and verified.
+
+This PR is RED until it also carries, by design:
+1. The release-preflight evidence the record's \`evidence\` field names: run \`deploy/release-preflight.py --tag ${TAG} --out <new dir>\` and commit its output as docs/evidence/release-${TAG}-verification/, then add ${TAG} to RAW_PREFLIGHT_RELEASES in tests/release_mapping_test.py, which cross-checks every record against its evidence.
+2. VIDRA_CORE_TAG / VIDRA_USER_TAG / VIDRA_SEARCH_TAG in env/production.env.example and env/staging.env.example set to the tags this record names (tests/env_template_pins_test.py).
+
+Merging it is what publishes ${TAG} to fresh installs: install.sh takes the newest release that has a record on main. Merge only once the release's gates have passed."
   pr_url="$(gh pr create --repo "${OWNER}/${META_REPO}" --base main --head "$record_branch" \
     --title "releases: record ${TAG}" \
-    --body "Machine-readable release record for ${TAG}, written by deploy/release.sh after the images were published and verified. Data-only (${RECORD_REL}); ci-required passes trivially. Merge to complete the release." 2>&1)" \
+    --body "$pr_body" 2>&1)" \
     || record_die "gh pr create failed for ${record_branch}: ${pr_url}. The branch is pushed; open the PR by hand: gh pr create --repo ${OWNER}/${META_REPO} --base main --head ${record_branch} --title \"releases: record ${TAG}\""
   log "opened the record PR: ${pr_url}"
   # Back to main so the operator's checkout is where they started; the record now
@@ -495,9 +550,10 @@ write_release_record() {
 
 rc=0
 RESULTS=()
-for repo in "${REPOS[@]}"; do
-  step "publishing ${OWNER}/${repo} ${TAG}"
-  if ! gh release create "$TAG" -R "${OWNER}/${repo}" --generate-notes --latest; then
+for i in "${!REPOS[@]}"; do
+  repo="${REPOS[$i]}"
+  step "publishing ${OWNER}/${repo} ${TAG} at ${TARGET_SHAS[$i]}"
+  if ! gh release create "$TAG" -R "${OWNER}/${repo}" --target "${TARGET_SHAS[$i]}" --generate-notes --latest; then
     printf '[release] ERROR: %s\n' "gh release create failed for ${repo} — nothing was published for it" >&2
     RESULTS+=("${repo}: release NOT created")
     rc=1
@@ -540,7 +596,7 @@ if [ "$FULL_RELEASE" = 1 ]; then
   # manual-path operator copies still name the previous release, and
   # tests/env_template_pins_test.py turns the PR that lands the record red
   # until they move. Saying so here beats discovering it from CI.
-  log "in the PR that lands ${RECORD_REL}, also set VIDRA_CORE_TAG / VIDRA_USER_TAG / VIDRA_SEARCH_TAG in env/production.env.example and env/staging.env.example to the tags it records"
+  log "in the PR that lands ${RECORD_REL}, also commit the release-preflight evidence (docs/evidence/release-${TAG}-verification/, plus ${TAG} in RAW_PREFLIGHT_RELEASES) and set VIDRA_CORE_TAG / VIDRA_USER_TAG / VIDRA_SEARCH_TAG in env/production.env.example and env/staging.env.example to the tags it records"
 else
   log "subset release (${REPOS[*]}): ${RECORD_REL} was not written — a release record describes a full core+user+search release. Cut the full release, or complete the record by hand once all three images are green."
 fi
