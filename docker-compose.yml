@@ -108,6 +108,7 @@ services:
       # The frontend ENFORCES its Content-Security-Policy (vidra-user proxy.ts).
       # "true" sends the same policy report-only instead: the no-rebuild recovery
       # when an admin custom.js/custom.css the policy blocks has broken the site.
+      # Applied by `vidra deploy` (container recreated), not `vidra restart`.
       # Without this line the variable never reaches the container and the
       # escape hatch silently does nothing. Unset = enforced, the safe default.
       CSP_REPORT_ONLY: ${CSP_REPORT_ONLY:-}
