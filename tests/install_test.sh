@@ -758,6 +758,100 @@ else
   failures=$((failures + 1))
 fi
 
+# ---------------------------------------------------------------------------
+# --no-setup: the disaster-recovery install.
+#
+# On a rebuilt host the env file comes out of the config archive, and the setup
+# interview must NOT run: it would mint fresh KEKs and the restored database's
+# sealed columns would be unreadable. So the flag has to (a) be accepted and
+# documented, (b) short-circuit step 7 BEFORE any `vidra setup` invocation, and
+# (c) end with text that names the config archive. install.sh is not runnable
+# here (apt, root, GitHub), so (a) runs the real --help path, (b) reads the
+# source in order like the --release-tag check above, and (c) executes the
+# extracted notice function.
+# ---------------------------------------------------------------------------
+
+log "Testing install.sh --no-setup..."
+
+NOSETUP_TMP="$(mktemp -d)"
+trap 'rm -rf "$UNPACK_TMP" "$NOSETUP_TMP"' EXIT
+
+if sh install.sh --no-setup --help 2>&1 | grep -q -- '--no-setup'; then
+  echo "PASS: install.sh parses --no-setup and documents it in --help"
+else
+  echo "FAIL: 'install.sh --no-setup --help' does not mention --no-setup (unknown flag, or undocumented)"
+  failures=$((failures + 1))
+fi
+
+step7="$(sed -n '/^step "7\/7 setup"/,$p' install.sh)"
+# shellcheck disable=SC2016  # a literal to find in install.sh's source
+first_setup_line="$(printf '%s\n' "$step7" | grep -n '"\$VIDRA_BIN" setup' | head -n1 | cut -d: -f1)"
+guard_line="$(printf '%s\n' "$step7" | grep -n 'NO_SETUP" -eq 1' | tail -n1 | cut -d: -f1)"
+if [ -n "$guard_line" ] && [ -n "$first_setup_line" ] && [ "$guard_line" -lt "$first_setup_line" ]; then
+  echo "PASS: step 7 leaves on --no-setup before it can run 'vidra setup'"
+else
+  echo "FAIL: step 7 has no NO_SETUP guard ahead of the first '\$VIDRA_BIN setup' (guard line '${guard_line:-none}', setup line '${first_setup_line:-none}'); --no-setup would still run the interview and mint fresh KEKs over a restore"
+  failures=$((failures + 1))
+fi
+if printf '%s\n' "$step7" | grep -n 'NO_SETUP" -eq 0' | grep -q .; then
+  echo "PASS: resolve_pairing for the interview is skipped under --no-setup"
+else
+  echo "FAIL: the interview's resolve_pairing call is not gated on NO_SETUP=0; a DR host would need the release record fetched for nothing"
+  failures=$((failures + 1))
+fi
+
+sed -n '/^no_setup_notice() {/,/^}/p' install.sh > "$NOSETUP_TMP/notice.sh"
+if grep -q 'no_setup_notice' "$NOSETUP_TMP/notice.sh"; then
+  # shellcheck source=/dev/null
+  source "$NOSETUP_TMP/notice.sh"
+  notice="$(DIR=/opt/vidra TAG=v9.9.9 ENV_FILE=/opt/vidra/env/production.env no_setup_notice)"
+  for want in "config archive" "vidra-config-" "tar -xzf" "VIDRA_CORE_TAG" "v9.9.9" "KEK"; do
+    if printf '%s' "$notice" | grep -qF -- "$want"; then
+      echo "PASS: --no-setup closing text contains '$want'"
+    else
+      echo "FAIL: --no-setup closing text does not contain '$want'"
+      failures=$((failures + 1))
+    fi
+  done
+  if printf '%s' "$notice" | grep -q 'vidra setup --template'; then
+    echo "FAIL: --no-setup closing text tells the operator to run the interview, the one thing a DR must not do"
+    failures=$((failures + 1))
+  else
+    echo "PASS: --no-setup closing text does not point at the interview"
+  fi
+else
+  echo "FAIL: install.sh has no no_setup_notice() function"
+  failures=$((failures + 1))
+fi
+
+# The non-empty refusal stays. A backups/-only dir (what provision.sh leaves) is
+# still refused - make_install_dir would chown it away from the service user -
+# but the refusal must say WHY and name the order that works.
+sed -n '/^dir_refusal_hint() {/,/^}/p' install.sh > "$NOSETUP_TMP/hint.sh"
+if grep -q 'dir_refusal_hint' "$NOSETUP_TMP/hint.sh"; then
+  # shellcheck source=/dev/null
+  source "$NOSETUP_TMP/hint.sh"
+  mkdir -p "$NOSETUP_TMP/prov/backups" "$NOSETUP_TMP/other/backups"
+  : > "$NOSETUP_TMP/other/notes.txt"
+  hint_prov="$(dir_refusal_hint "$NOSETUP_TMP/prov")"
+  hint_other="$(dir_refusal_hint "$NOSETUP_TMP/other")"
+  if printf '%s' "$hint_prov" | grep -q 'provision.sh' && printf '%s' "$hint_prov" | grep -q 'BEFORE'; then
+    echo "PASS: a backups/-only directory is refused with the install-before-provision order"
+  else
+    echo "FAIL: a backups/-only directory's refusal does not name 'install.sh BEFORE provision.sh': '${hint_prov}'"
+    failures=$((failures + 1))
+  fi
+  if [ -z "$hint_other" ]; then
+    echo "PASS: a directory holding anything besides backups/ gets no provision hint"
+  else
+    echo "FAIL: a directory with other files got the provision hint: '${hint_other}'"
+    failures=$((failures + 1))
+  fi
+else
+  echo "FAIL: install.sh has no dir_refusal_hint() function"
+  failures=$((failures + 1))
+fi
+
 if [ "$failures" -gt 0 ]; then
   die "$failures tests failed!"
 else
