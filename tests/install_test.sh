@@ -544,6 +544,150 @@ cp releases/v0.7.5.json "$PAIR_TMP/served/"
 assert_pairing_refused "unencrypted record URL" v0.7.5 "must use https://" VIDRA_RECORD_BASE_URL=http://example.invalid/releases
 
 # ---------------------------------------------------------------------------
+# resolve_tag: a fresh install with no --ref takes the newest core release WITH
+# a release record on meta main, not releases/latest. Between release.sh
+# publishing vN and the vN record PR merging, releases/latest named a tag
+# resolve_pairing refuses, so every fresh install died; skipping it makes the
+# record merge the publish switch. Only a 404 skips: a corrupt record still
+# selects its release and resolve_pairing refuses it, and an unreadable answer
+# refuses outright, rather than quietly installing something older. curl is the
+# only stub: it serves the API list and the records from RT_SERVED.
+# ---------------------------------------------------------------------------
+
+log "Testing resolve_tag (newest core release with a record on main)..."
+
+RT_TMP="$PAIR_TMP/rt"
+mkdir -p "$RT_TMP/bin" "$RT_TMP/served/records" "$RT_TMP/work"
+sed -n '/^resolve_tag() {/,/^}/p' install.sh > "$RT_TMP/func.sh"
+grep -q 'merging that record is what releases it' "$RT_TMP/func.sh" \
+  || die "extraction self-check: sed did not capture a record-aware resolve_tag from install.sh"
+cat > "$RT_TMP/bin/curl" <<'STUB'
+#!/bin/sh
+# -w prints the status like curl does; --fail turns a miss into exit 22.
+out=""; url=""; fmt=""; fail=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|--output) out="$2"; shift 2 ;;
+    -w) fmt="$2"; shift 2 ;;
+    -H|--proto|--proto-redir|--connect-timeout|--max-time|--max-filesize) shift 2 ;;
+    --fail) fail=1; shift ;;
+    https://*) url="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+echo "$url" >> "$RT_SERVED/requests"
+case "$url" in
+  https://api.github.com/*) f="$RT_SERVED/list.json" ;;
+  *) f="$RT_SERVED/records/${url##*/}" ;;
+esac
+if [ -n "${RT_DOWN:-}" ] && [ "${url##*/}" = "$RT_DOWN" ]; then
+  [ -n "$fmt" ] && printf 503; [ "$fail" -eq 1 ] && exit 22; exit 0
+fi
+if [ -f "$f" ]; then
+  cp "$f" "$out"; [ -n "$fmt" ] && printf 200; exit 0
+fi
+[ -n "$fmt" ] && printf 404
+[ "$fail" -eq 1 ] && exit 22
+exit 0
+STUB
+chmod +x "$RT_TMP/bin/curl"
+
+# A trimmed real-shape listing: newest-created first, a prerelease above the
+# stable line, a draft, nested objects, and a body that mentions a tag_name.
+rt_release() { # <tag> <draft> <prerelease>
+  printf '{"url":"u","author":{"login":"yegamble","id":1,"type":"User"},"node_id":"n","tag_name":"%s","target_commitish":"main","name":"%s","draft":%s,"immutable":false,"prerelease":%s,"assets":[{"name":"SHA256SUMS","uploader":{"login":"bot"}}],"body":"pairs \\"tag_name\\": \\"v9.9.9\\", see notes"}' "$1" "$1" "$2" "$3"
+}
+{
+  printf '['
+  rt_release v0.8.0 false true; printf ','
+  rt_release v0.7.7 true false; printf ','
+  rt_release v0.7.6 false false; printf ','
+  rt_release v0.7.5 false false; printf ','
+  rt_release v0.7.3 false false
+  printf ']'
+} > "$RT_TMP/served/list.json"
+# The same listing pretty-printed, as the API answers a terminal client.
+python3 -m json.tool "$RT_TMP/served/list.json" > "$RT_TMP/pretty.json"
+
+run_resolve_tag() {
+  : > "$RT_TMP/served/requests"
+  rm -rf "$RT_TMP/work/tree" && cp -R "$PAIR_TMP/tree" "$RT_TMP/work/tree" && rm -f "$RT_TMP/work/tree/releases/"*.json
+  # shellcheck disable=SC2016  # the inline script expands its own positionals
+  env "$@" PATH="$RT_TMP/bin:$PATH" RT_SERVED="$RT_TMP/served" sh -eu -c '
+    OWNER=yegamble
+    log()  { echo "LOG: $*"; }
+    die()  { echo "DIE: $*"; exit 9; }
+    . "$1"; . "$2"
+    resolve_tag
+    echo "TAG=$TAG"
+    if [ -n "${RT_PAIR:-}" ]; then
+      DIR="$3"; WORK="$4"; PAIRING_DONE=0
+      resolve_pairing
+      echo "PAIR=$CORE_TAG $USER_TAG $SEARCH_TAG"
+    fi
+  ' resolve "$RT_TMP/func.sh" "$PAIR_TMP/func.sh" "$RT_TMP/work/tree" "$RT_TMP/work"
+}
+
+# rt_case <label> <want-exit> <want-line> [<line that must NOT appear>] [-- env...]
+rt_case() {
+  local label="$1" want_rc="$2" want="$3" absent="$4" out rc
+  shift 4
+  set +e
+  out="$(run_resolve_tag "$@" 2>&1)"; rc=$?
+  set -e
+  if [ "$rc" -ne "$want_rc" ] || ! printf '%s\n' "$out" | grep -qF -- "$want" \
+     || { [ -n "$absent" ] && printf '%s\n' "$out" | grep -qF -- "$absent"; }; then
+    echo "FAIL: resolve_tag [${label}] -> exit ${rc} (want ${want_rc}), want '${want}'${absent:+ and no \"${absent}\"}:"
+    printf '%s\n' "$out" | sed 's/^/       /'
+    failures=$((failures + 1)); return 0
+  fi
+  echo "PASS: resolve_tag [${label}] -> ${want}"
+}
+
+rm -f "$RT_TMP/served/records/"*
+cp releases/v0.7.5.json releases/v0.7.3.json "$RT_TMP/served/records/"
+# Latest v0.7.6 has no record yet: v0.7.5, saying which newer tag it skipped and why.
+rt_case "v0.7.6 published, no record" 0 "TAG=v0.7.5" ""
+rt_case "skip is logged with its reason" 0 "skipping v0.7.6 - it is published, but releases/v0.7.6.json is not on yegamble/vidra main yet" "skipping v0.8.0"
+grep -q 'v0.8.0.json\|v0.7.7.json' "$RT_TMP/served/requests" \
+  && { echo "FAIL: resolve_tag probed a record for a prerelease or draft"; failures=$((failures + 1)); } \
+  || echo "PASS: resolve_tag never considers prereleases or drafts"
+mv "$RT_TMP/served/list.json" "$RT_TMP/min.json" && cp "$RT_TMP/pretty.json" "$RT_TMP/served/list.json"
+rt_case "pretty-printed listing" 0 "TAG=v0.7.5" ""
+mv "$RT_TMP/min.json" "$RT_TMP/served/list.json"
+
+# The record merges: v0.7.6, with no skip. Its pairing (search held back) resolves.
+python3 - "$RT_TMP/served/records" <<'REC'
+import json, sys
+from pathlib import Path
+d = Path(sys.argv[1])
+rec = json.loads((d / "v0.7.5.json").read_text())
+rec["release"] = "v0.7.6"
+rec["components"]["core"]["tag"] = "v0.7.6"
+rec["components"]["user"]["tag"] = "v0.7.6"
+rec["core_schema_version"] = 151
+(d / "v0.7.6.json").write_text(json.dumps(rec, indent=2) + "\n")
+REC
+rt_case "v0.7.6 recorded" 0 "TAG=v0.7.6" "skipping"
+
+# A corrupt record still selects its release (no silent fallback to v0.7.5) and
+# resolve_pairing refuses it, as it always has.
+printf '{"release": "v0.7.6", "components": ' > "$RT_TMP/served/records/v0.7.6.json"
+rt_case "corrupt v0.7.6 record selects v0.7.6" 0 "TAG=v0.7.6" "TAG=v0.7.5"
+rt_case "corrupt v0.7.6 record refuses at pairing" 9 "component pairing could not be verified" "PAIR=" RT_PAIR=1
+# Negative control for the pairing leg: the record removed, v0.7.5 pairs cleanly.
+rm -f "$RT_TMP/served/records/v0.7.6.json"
+rt_case "no v0.7.6 record pairs v0.7.5" 0 "PAIR=v0.7.5 v0.7.3 v0.7.3" "" RT_PAIR=1
+
+# Neither 200 nor 404 refuses instead of falling back past an unknown answer.
+rt_case "record probe 503" 9 "could not check whether v0.7.6 has a release record (HTTP 503" "TAG=" RT_DOWN=v0.7.6.json
+rm -f "$RT_TMP/served/records/"*
+rt_case "no recorded release at all" 9 "none of the yegamble/vidra-core releases" "TAG="
+rt_case "API unreachable" 9 "could not resolve the latest yegamble/vidra-core release" "TAG=" RT_DOWN=releases?per_page=30
+rt_case "plain-http record base refused" 9 "VIDRA_RECORD_BASE_URL must use https://" "TAG=" VIDRA_RECORD_BASE_URL=http://example.invalid/releases
+rt_case "fetch off keeps the newest stable" 0 "TAG=v0.7.6" "skipping" VIDRA_RECORD_FETCH=off
+
+# ---------------------------------------------------------------------------
 # The --git clone path: bootstrap.sh puts EACH component on its own tag.
 #
 # install.sh --git (and any release without a bundle asset) clones this repo and
