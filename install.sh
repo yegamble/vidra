@@ -1173,14 +1173,18 @@ cat <<EOF
 
   Swap, the 'vidra' service user, ${DIR}'s ownership, the docker log cap,
   unattended-upgrades and the nightly backup timer - installed AND verified. It
-  With IPFS_MANAGED_NODE=true, provisioning also installs the host IPFS manager.
-  It exposes a narrow local socket; the API never receives the Docker socket.
   opens no port and never touches sshd; it prints the exact list your CLOUD
   firewall must allow (a host ufw does not filter Docker-published ports).
+  With IPFS_MANAGED_NODE=true, provisioning also installs the host IPFS manager.
+  It exposes a narrow local socket; the API never receives the Docker socket.
+
+  From here on, run vidra AS 'vidra': provisioning hands ${DIR} to that user,
+  env/production.env is readable by it alone, and it is the one in the docker
+  group. As your own login the commands below fail on a permission error.
 
   Deploy:
 
-      cd ${DIR} && vidra deploy
+      cd ${DIR} && sudo -u vidra vidra deploy
 
   That execs deploy/deploy.sh unchanged: pre-deploy dump, pull, the core and
   search migrations as two separate exit-code-gated steps, 'up -d --no-build',
@@ -1198,13 +1202,13 @@ cat <<EOF
 
   Then:
 
-      cd ${DIR} && vidra doctor     # compose, exposure, config, backups, reachability
-      cd ${DIR} && vidra status     # what is running, and whether it answers
+      cd ${DIR} && sudo -u vidra vidra doctor     # compose, exposure, config, backups, reachability
+      cd ${DIR} && sudo -u vidra vidra status     # what is running, and whether it answers
 
   Once the stack is up, claim the owner account (every signup path answers 403
   until you do). On this server, in a terminal:
 
-      cd ${DIR} && vidra claim      # prints the owner-claim link; open it
+      cd ${DIR} && sudo -u vidra vidra claim      # prints the owner-claim link; open it
 
   'vidra claim' is not in v0.7.5 or earlier. On an older CLI, take the newest
   'FIRST-RUN SETUP REQUIRED' line from './deploy/compose.sh logs api' instead -

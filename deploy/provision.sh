@@ -404,4 +404,16 @@ if [ ${#WARNINGS[@]} -gt 0 ]; then
   printf '\n'
 fi
 
-log "host provisioned. Next: install Vidra into ${VIDRA_DIR} (see deploy/README.md 'First bring-up'), then 'vidra setup'."
+# The next step depends on which order the operator came in: the quickstart runs
+# install.sh (which writes the env file) BEFORE this script, so naming 'vidra
+# setup' there sent people back to a step they had finished. Either way, the
+# commands run as ${VIDRA_USER} from now on: the tree and the 0600 env file are
+# its, and it is the one in the docker group.
+print_next_step() {
+  if [ -f "${VIDRA_DIR}/env/production.env" ]; then
+    log "host provisioned. Next: cd ${VIDRA_DIR} && sudo -u ${VIDRA_USER} vidra deploy, then sudo -u ${VIDRA_USER} vidra claim (run vidra as ${VIDRA_USER} from now on)."
+  else
+    log "host provisioned. Next: install Vidra into ${VIDRA_DIR} (curl -fsSL https://raw.githubusercontent.com/yegamble/vidra/main/install.sh | sh, or deploy/README.md 'First bring-up'), then deploy as ${VIDRA_USER}: sudo -u ${VIDRA_USER} vidra deploy."
+  fi
+}
+print_next_step
