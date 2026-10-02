@@ -21,10 +21,13 @@
 //   search-catchup      stop search, edit the drill video's title, restart
 //                       search, prove the outbox retry delivered it
 //   mfa-enroll          sealed-secret fixture: TOTP on the owner, proven by a
-//                       real two-factor browser sign-in BEFORE the backup
+//                       real two-factor browser sign-in BEFORE the backup; on a
+//                       candidate with 0151, also an admin mail-config document
+//                       carrying a sealed provider key
 //   rpo-marker          one write AFTER the backup, which a restore must lose
 //   verify-restore      replacement host: password+TOTP sign-in (wrong code
-//                       refused), rpo marker absent, decode old media from the
+//                       refused), the restored mail-config credential still
+//                       decrypts, rpo marker absent, decode old media from the
 //                       bucket, find the drill video through real search, then
 //                       upload and decode a NEW video
 //   verify-restore-write  only the new-upload phase (retry after a 429)
@@ -352,6 +355,26 @@ print(sum(float(l.rsplit(' ',1)[1]) for l in lines if l.startswith('vidra_search
     await signIn(fresh, { expectMfa: true });
     await expect(fresh.getByRole('button', { name: 'Open account menu' })).toBeVisible();
     result.checks[phase] = 'PASS';
+    // 0151's credential is sealed under the same MFA KEK chain, so it is the
+    // second sealed fixture. A random throwaway key, never written to any file:
+    // the drill proves it is SEALED (host half) and still DECRYPTS (verify-restore),
+    // which needs no knowledge of the value. A candidate without 0151 answers 404.
+    step('mail-config-sealed-fixture');
+    const mail = await api(page, '/api/v1/admin/mail-config', auth.token);
+    if (mail.status === 404) {
+      result.mail_config = 'not applicable: this candidate predates 0151';
+    } else {
+      assert.equal(mail.status, 200, 'admin mail-config read failed');
+      assert.equal(mail.body.secrets_available, true, 'this deployment cannot seal a credential');
+      const saved = await api(page, '/api/v1/admin/mail-config', auth.token, 'PUT', {
+        transport: 'resend', from_address: 'recovery-drill@video.test',
+        resend: { api_key: `re_drill_${randomBytes(16).toString('hex')}` }, current_password: owner.password });
+      assert.equal(saved.status, 200, `mail-config save failed (${saved.status})`);
+      assert.equal(saved.body.secret_status, 'ok'); assert.equal(saved.body.config?.resend?.api_key_set, true);
+      assert.equal(sql("SELECT count(*) FROM mail_config WHERE secret LIKE 'enc:%'"), '1');
+      result.mail_config = { source: saved.body.source, secret_status: saved.body.secret_status };
+    }
+    result.checks[phase] = 'PASS';
   } else if (action === 'rpo-marker') {
     const page = await newPage();
     step('write-after-backup');
@@ -379,6 +402,19 @@ print(sum(float(l.rsplit(' ',1)[1]) for l in lines if l.startswith('vidra_search
     await expect(page.getByRole('button', { name: 'Open account menu' })).toBeVisible();
     const me = await api(page, '/api/v1/auth/me', auth.token);
     assert.equal(me.status, 200); assert.equal(me.body.username, owner.username); assert.equal(me.body.role, 'admin');
+    result.checks[phase] = 'PASS';
+    step('restored-mail-config-credential-decrypts');
+    // The host half proved the row came back enc:-sealed; only the api holds the
+    // KEK, so only it can say the restored config archive's key still opens it.
+    const mail = await api(page, '/api/v1/admin/mail-config', auth.token);
+    if (mail.status === 404) {
+      result.mail_config = 'not applicable: this candidate predates 0151';
+    } else {
+      assert.equal(mail.status, 200, 'admin mail-config read failed');
+      assert.equal(mail.body.config?.resend?.api_key_set, true, 'the restored mail-config lost its stored credential');
+      assert.equal(mail.body.secret_status, 'ok', `restored mail-config credential is ${mail.body.secret_status}, not ok`);
+      result.mail_config = { source: mail.body.source, secret_status: mail.body.secret_status };
+    }
     result.checks[phase] = 'PASS';
     step('write-after-backup-is-lost');
     const displayName = me.body.display_name;

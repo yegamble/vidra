@@ -150,6 +150,27 @@ CATALOGUE = {
     # and deleted (FinishIPFSCopyCleanup), never rewritten in place, so a
     # quiesced fixture cannot drift here.
     'ipfs_copy_cleanup': (150, ()),
+    # 0151. The single-row outbound-mail document an admin saves. Operator intent,
+    # written only by an admin PUT/DELETE, so the row is compared whole —
+    # transport, from_address, settings and every other column — EXCEPT the
+    # credential, which is in SEALED below and never read, hashed or compared.
+    'mail_config': (151, ()),
+}
+
+# Columns holding a credential sealed under the MFA KEK chain, as
+# `table: (column, ...)`. A drill must prove a restore kept the credential
+# SEALED, and must never read it: the value is the instance's mail-relay
+# password or provider API key. So each is deleted from the row's jsonb like a
+# volatile column and replaced by its CLASS — 'none' (empty: 0151 allows that
+# for a transport that needs no credential), 'sealed' (`enc:`-prefixed, the
+# internal/secretbox envelope) or 'UNSEALED' (anything else) — which the
+# fingerprint then compares; and `fingerprint` separately REFUSES any UNSEALED
+# row by table and column name, never by value. Whether the sealed value still
+# DECRYPTS under the restored KEKs is the browser half's verify-restore check
+# (GET /api/v1/admin/mail-config, secret_status), because only the api holds
+# the key.
+SEALED = {
+    'mail_config': ('secret',),
 }
 
 # Tables a migration creates that the drill deliberately does NOT fingerprint,
@@ -175,6 +196,7 @@ TABLES_ADDED = {
     148: ('ipfs_control_config', 'ipfs_control_operations'),
     149: ('ipfs_capacity',),
     150: ('ipfs_copy_cleanup',),
+    151: ('mail_config',),
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 IDENTIFIER = re.compile(r'[a-z_]+')
@@ -248,7 +270,7 @@ def check_recorded_harness(name, recorded, revision):
             'actions with the files staged on this host.')
 
 
-def fingerprint_sql(table, volatile=()):
+def fingerprint_sql(table, volatile=(), sealed=()):
     """count(*) plus an order-independent md5 over one table's stable content.
 
     `to_jsonb(t)` is the WHOLE row, so a column missing from a restored table
@@ -257,13 +279,48 @@ def fingerprint_sql(table, volatile=()):
     every column nobody excluded — including ones a later migration adds. A
     table with nothing volatile produces exactly the SQL the v0.6.x drills
     recorded, so this change moves no existing fingerprint.
+
+    A SEALED column is deleted the same way and put back as its class only
+    (see SEALED), so the credential itself never enters the hash, the output
+    or a log line.
     """
     identifier(table)
-    keys = ''
-    if volatile:
-        keys = " - ARRAY[" + ','.join(f"'{identifier(c, 'column')}'" for c in volatile) + "]::text[]"
+    keys = row = ''
+    dropped = tuple(volatile) + tuple(sealed)
+    if dropped:
+        keys = " - ARRAY[" + ','.join(f"'{identifier(c, 'column')}'" for c in dropped) + "]::text[]"
+    if sealed:
+        row = " || jsonb_build_object(" + ','.join(
+            f"'{c}', CASE WHEN t.{c} = '' THEN 'none' WHEN t.{c} LIKE 'enc:%' THEN 'sealed' ELSE 'UNSEALED' END"
+            for c in sealed) + ")"
+        return (f"SELECT count(*)||'|'||md5(COALESCE(string_agg(r::text,E'\\n' ORDER BY r::text),'')) "
+                f"FROM (SELECT (to_jsonb(t){keys}){row} AS r FROM {table} t) s")
     return (f"SELECT count(*)||'|'||md5(COALESCE(string_agg(r::text,E'\\n' ORDER BY r::text),'')) "
             f"FROM (SELECT to_jsonb(t){keys} AS r FROM {table} t) s")
+
+
+def unsealed_sql(table, column):
+    """How many rows hold a non-empty credential WITHOUT the `enc:` envelope.
+
+    A count and nothing else: the value is never selected."""
+    identifier(table)
+    identifier(column, 'column')
+    return f"SELECT count(*) FROM {table} WHERE {column} <> '' AND {column} NOT LIKE 'enc:%'"
+
+
+def check_sealed(run, tables):
+    """Refuse a catalogued credential column holding anything but a sealed value.
+
+    Named by table and column only. psql's answer arrives mixed with compose's
+    own lines (see present_tables), so only a line that is exactly a number is
+    read; no such line is a refusal, not a pass."""
+    for table in tables:
+        for column in SEALED.get(table, ()):
+            counts = [line.strip() for line in run.sql(unsealed_sql(table, column)).splitlines()
+                      if line.strip().isdigit()]
+            require(counts, f'{table}.{column}: the sealed-credential check returned no count')
+            require(counts[-1] == '0', f'{table}.{column}: {counts[-1]} row(s) hold a credential that is not '
+                                       'enc:-sealed; a restore must never yield an unsealed secret')
 
 
 def expected_ledgers(baseline):
@@ -410,7 +467,9 @@ def fingerprint(run, core_version):
     # anonymous psql exit 1 buried in a private log.
     check_catalogue_present(run, [qualified('public', table) for table in tables] + [SEARCH_DOCUMENTS],
                             core_version)
-    rows = {table: run.sql(fingerprint_sql(table, volatile)) for table, volatile in tables.items()}
+    check_sealed(run, tables)
+    rows = {table: run.sql(fingerprint_sql(table, volatile, SEALED.get(table, ())))
+            for table, volatile in tables.items()}
     rows[SEARCH_DOCUMENTS] = run.sql(SEARCH_SQL)
     rows[SCHEMA_SHAPE] = run.sql(SCHEMA_SHAPE_SQL)
     return rows

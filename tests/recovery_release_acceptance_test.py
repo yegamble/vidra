@@ -28,9 +28,10 @@ class FakeRun:
 
     LEDGERS = {'schema_migrations': 146, 'vidra_search_migrations': 18}
 
-    def __init__(self, present=None, ledgers=None):
+    def __init__(self, present=None, ledgers=None, unsealed='0'):
         self.present = list(present) if present is not None else None
         self.ledgers = dict(self.LEDGERS if ledgers is None else ledgers)
+        self.unsealed = unsealed
         self.queries = []
 
     def relations(self, core_version):
@@ -45,6 +46,8 @@ class FakeRun:
             found = self.relations(recovery.CATALOGUE_AUDITED_THROUGH) if self.present is None else self.present
             # Real psql output carries compose's own stderr lines; so does this.
             return '[compose] docker compose exec -T postgres psql\n' + '\n'.join(found) + '\n'
+        if "NOT LIKE 'enc:%'" in query:                  # the sealed-credential check
+            return '[compose] docker compose exec -T postgres psql\n' + self.unsealed
         for table, version in self.ledgers.items():
             if f'FROM {table}' in query:
                 return f'{version}|f'
@@ -300,7 +303,7 @@ class CatalogueSchemaTest(unittest.TestCase):
         with self.assertRaises(ValueError) as raised:
             recovery.catalogue_for(recovery.CATALOGUE_AUDITED_THROUGH + 1)
         self.assertIn(str(recovery.CATALOGUE_AUDITED_THROUGH + 1), str(raised.exception))
-        self.assertIn('0151', str(raised.exception))
+        self.assertIn(f'{recovery.CATALOGUE_AUDITED_THROUGH + 1:04d}', str(raised.exception))
 
 
 class FingerprintWiringTest(unittest.TestCase):
@@ -346,6 +349,73 @@ class FingerprintWiringTest(unittest.TestCase):
         self.assertIn(recovery.SCHEMA_SHAPE, rows)
         self.assertEqual(rows[recovery.SCHEMA_SHAPE], '812|' + 'c' * 32)
 
+
+
+class MailConfigCatalogueTest(unittest.TestCase):
+    """0151 mail_config: catalogued from 151, its credential proven sealed and never read.
+
+    The row is operator intent (transport, from_address, settings, ...) and is
+    compared whole. Its `secret` is the instance's relay password or provider
+    API key, sealed under the MFA KEK chain: a drill asserts it is still
+    `enc:`-sealed after a restore and must not read, hash or log the value.
+    """
+
+    def test_a_151_candidate_is_drilled_against_mail_config(self):
+        self.assertIn('mail_config', recovery.catalogue_for(151))
+        self.assertNotIn('mail_config', recovery.catalogue_for(150))
+        rows = recovery.fingerprint(FakeRun(), 151)
+        self.assertIn('mail_config', rows)
+        self.assertIn('public.mail_config', ' '.join(FakeRun().relations(151)))
+
+    def test_a_152_candidate_is_refused_naming_the_migration_to_read(self):
+        with self.assertRaises(ValueError) as raised:
+            recovery.catalogue_for(152)
+        self.assertIn('0152', str(raised.exception))
+
+    def test_a_150_candidate_runs_no_sealed_check(self):
+        run = FakeRun()
+        recovery.fingerprint(run, 150)
+        self.assertNotIn('mail_config', ' '.join(run.queries))
+
+    def test_the_credential_is_replaced_by_its_class_before_hashing(self):
+        sql = recovery.fingerprint_sql('mail_config', (), recovery.SEALED['mail_config'])
+        self.assertIn("(to_jsonb(t) - ARRAY['secret']::text[])", sql)
+        case = ("CASE WHEN t.secret = '' THEN 'none' WHEN t.secret LIKE 'enc:%' THEN 'sealed' "
+                "ELSE 'UNSEALED' END")
+        self.assertIn(f"jsonb_build_object('secret', {case})", sql)
+        # Remove the deletion and the classification: nothing else may touch the column.
+        rest = sql.replace("ARRAY['secret']", '').replace(f"'secret', {case}", '')
+        self.assertNotIn('secret', rest, 'the credential column is read somewhere other than its class')
+        # transport, from_address and settings stay in the hashed row: nothing deletes them.
+        for column in ('transport', 'from_address', 'settings'):
+            self.assertNotIn(f"'{column}'", sql)
+
+    def test_the_sealed_check_selects_a_count_and_never_the_value(self):
+        sql = recovery.unsealed_sql('mail_config', 'secret')
+        self.assertTrue(sql.startswith('SELECT count(*) FROM mail_config WHERE'), sql)
+        self.assertEqual(sql.count('SELECT'), 1)
+        with self.assertRaises(ValueError):
+            recovery.unsealed_sql('mail_config', "secret' OR '1'='1")
+
+    def test_an_unsealed_credential_refuses_by_name_and_shows_no_value(self):
+        planted = 'enc:NOT-A-REAL-CIPHERTEXT-' + 'z' * 16
+        run = FakeRun(unsealed='1\n')
+        with self.assertRaises(ValueError) as raised:
+            recovery.fingerprint(run, 151)
+        message = str(raised.exception)
+        self.assertIn('mail_config.secret', message)
+        self.assertNotIn(planted, message)
+        self.assertNotIn('enc:NOT', message)
+
+    def test_a_check_that_returns_no_count_is_a_refusal_not_a_pass(self):
+        with self.assertRaises(ValueError):
+            recovery.fingerprint(FakeRun(unsealed='ERROR:  relation "mail_config" does not exist\n'), 151)
+
+    def test_the_fingerprint_output_carries_no_secret_text(self):
+        rows = recovery.fingerprint(FakeRun(), 151)
+        dumped = json.dumps(rows)
+        self.assertNotIn('enc:', dumped)
+        self.assertRegex(rows['mail_config'], r'^[0-9]+\|[0-9a-f]{32}$')
 
 
 class CatalogueRotTest(unittest.TestCase):
