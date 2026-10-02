@@ -1061,19 +1061,19 @@ v0.7.4 and v0.7.5 did not: both re-released **vidra-core alone**, and
 `releases/<tag>.json` is where the pairing is written down. `pin-release.sh`
 reads it (above) and `deploy/release-preflight.py` resolves it (see
 "Core-only releases: the components are not all at `--tag`" below), so the
-upgrade path handles that shape.
-**`rollback.sh` does not.** `./deploy/rollback.sh v0.7.5` still sets all three
-`VIDRA_*_TAG` values from one argument, so rolling back *to* a core-only
-release that way pins `ghcr.io/yegamble/vidra-user:v0.7.5`, which does not
-exist, and the rollback fails at the pull with the broken release still
-serving. Spell the pairing out with the per-component flags it already has:
+upgrade path handles that shape, and so does `rollback.sh`: given a bare tag
+with a record, `./deploy/rollback.sh v0.7.5` pins core v0.7.5 with user and
+search at v0.7.3 and logs that pairing. A `--core`/`--user`/`--search` flag
+still overrides its component, and a tag with no record keeps the old
+behaviour (that one tag for all three, with a WARNING that the triple was not
+verified). Spelling the pairing out is equivalent:
 
 ```bash
 ./deploy/rollback.sh --core v0.7.5 --user v0.7.3 --search v0.7.3
 ```
 
-A rollback between two **uniform** releases, and a rollback *from* a core-only
-release to a uniform one (`./deploy/rollback.sh v0.6.6`), are unaffected.
+Released v0.7.5 and older `rollback.sh` copies set all three keys from the
+bare tag, so on those trees use the flags above.
 
 **This repository is tagged too — first, and without a release.** vidra-core's
 `release-assets.yml` builds `vidra-bundle_<tag>.tar.gz` by checking *this* repo

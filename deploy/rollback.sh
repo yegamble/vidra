@@ -6,6 +6,10 @@
 #   ./deploy/rollback.sh v0.2.0
 #   ./deploy/rollback.sh --core v0.2.1 --user v0.2.0 --search v0.2.0
 #
+# The bare form pins the pairing releases/<tag>.json records (v0.7.5 is core
+# v0.7.5 with user and search at v0.7.3); with no record, <tag> for all three.
+# A flag overrides its component either way.
+#
 # Rewrites VIDRA_CORE_TAG / VIDRA_USER_TAG / VIDRA_SEARCH_TAG in the env file
 # (snapshotting it outside the checkout first), pulls, restarts and re-probes.
 #
@@ -14,8 +18,8 @@
 # depends on would boot API servers that never exit, and the rollback would hang.
 # Before the env file is touched it also holds the target triple against
 # releases/<tag>.json. A digest that contradicts a record, or an unreadable
-# record, stops it. A triple no record pairs, including the single-component
-# form above, continues with a WARNING naming what was not verified.
+# record, stops it. A triple no record pairs, such as a single --user, continues
+# with a WARNING naming what was not verified.
 #
 # WHAT THIS DOES NOT DO: it does not touch the database. That is deliberate and
 # it is only safe because of the release policy stated in deploy/README.md —
@@ -64,20 +68,70 @@ MIN_EMBEDDED_MIGRATE_TAG="v0.2.0"
 log() { printf '[rollback] %s\n' "$*"; }
 die() { printf '[rollback] ERROR: %s\n' "$*" >&2; exit 1; }
 
-CORE_TAG=""; USER_TAG=""; SEARCH_TAG=""
+CORE_TAG=""; USER_TAG=""; SEARCH_TAG=""; BARE_TAG=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --core)   CORE_TAG="${2:-}";   shift 2 ;;
     --user)   USER_TAG="${2:-}";   shift 2 ;;
     --search) SEARCH_TAG="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,41p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,45p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
-    *)  CORE_TAG="$1"; USER_TAG="$1"; SEARCH_TAG="$1"; shift ;;
+    *)  BARE_TAG="$1"; shift ;;
   esac
 done
 
-[ -n "$CORE_TAG$USER_TAG$SEARCH_TAG" ] || die "usage: $0 <tag>  |  $0 [--core T] [--user T] [--search T]"
+[ -n "$BARE_TAG$CORE_TAG$USER_TAG$SEARCH_TAG" ] || die "usage: $0 <tag>  |  $0 [--core T] [--user T] [--search T]"
 [ -f "$ENV_FILE" ] || die "env file not found: $ENV_FILE"
+
+# THE BARE TAG'S PAIRING. v0.7.4 and v0.7.5 re-released vidra-core alone, so
+# writing <tag> into all three keys pinned ghcr.io/yegamble/vidra-user:v0.7.5,
+# which has never existed: the rollback died at `compose pull` with the broken
+# release still serving — and `rollback.sh v0.7.5` is the command an operator
+# types to leave v0.7.6. The record is read by the SAME resolver pin-release.sh
+# uses (deploy/release-mapping.py resolve), so there is one reader of records.
+#
+# Only this tree's copy is read, never a fetch: a rollback targets an OLDER
+# release, whose record a newer tree already carries, and a network wait
+# mid-incident buys nothing. Flags are applied AFTER, not passed to the
+# resolver as --component-tag: an operator's explicit flag mid-incident wins
+# over a record, and is logged as overriding it. Every answer other than "a
+# record decided it" falls back to the uniform triple this script always wrote
+# — the release-mapping preflight below then WARNS that it was not verified —
+# because refusing here predicts nothing the pull does not already catch, and
+# a failed pull restores the env file.
+resolve_bare_tag() {
+  local record="$REPO_ROOT/releases/${BARE_TAG}.json" resolved='' rc=0 role value _
+  local core="$BARE_TAG" user="$BARE_TAG" search="$BARE_TAG"
+  if [ -f "$record" ] && command -v python3 >/dev/null 2>&1; then
+    resolved="$(python3 "$REPO_ROOT/deploy/release-mapping.py" resolve \
+      --release "$BARE_TAG" --record "$record")" || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      # A here-document, not a pipe: `while read` in a pipeline runs in a
+      # subshell and the assignments would be gone by the next line.
+      while read -r role value _; do
+        case "$role" in
+          core) core="$value" ;; user) user="$value" ;; search) search="$value" ;;
+        esac
+      done <<EOF
+$resolved
+EOF
+      log "releases/${BARE_TAG}.json pairs core=${core} user=${user} search=${search}"
+    else
+      log "WARNING: deploy/release-mapping.py could not resolve releases/${BARE_TAG}.json (exit ${rc}); using ${BARE_TAG} for every component no flag names"
+    fi
+  fi
+  # `if`, not `[ ] || log`: the last command's status is the function's, and a
+  # false test there would fire errexit at the call site.
+  if [ -n "$CORE_TAG" ] && [ "$CORE_TAG" != "$core" ]; then log "--core ${CORE_TAG} overrides core=${core}"; fi
+  if [ -n "$USER_TAG" ] && [ "$USER_TAG" != "$user" ]; then log "--user ${USER_TAG} overrides user=${user}"; fi
+  if [ -n "$SEARCH_TAG" ] && [ "$SEARCH_TAG" != "$search" ]; then log "--search ${SEARCH_TAG} overrides search=${search}"; fi
+  CORE_TAG="${CORE_TAG:-$core}"
+  USER_TAG="${USER_TAG:-$user}"
+  SEARCH_TAG="${SEARCH_TAG:-$search}"
+}
+if [ -n "$BARE_TAG" ]; then
+  resolve_bare_tag
+fi
 
 # The prod overlay closes Postgres/Redis/search with the `!reset` / `!override`
 # merge tags, which need Compose >= 2.24. An older Compose does not error on
