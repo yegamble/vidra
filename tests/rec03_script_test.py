@@ -506,5 +506,109 @@ class DiesBeforeTouchingTheHost(unittest.TestCase):
             self.assertIn('backup', done.stdout + done.stderr)
 
 
+
+RECORDS = SCRIPT.parents[1] / 'releases'
+V076 = {'REC03_OLD': 'v0.7.5', 'REC03_NEW': 'v0.7.6'}
+
+
+def seed_records(root, *tags):
+    """The records a drill would have fetched, in the cache every phase reads (state/records).
+    v0.7.6 is the hand-assembled shape ruling D1 decided: core+user v0.7.6, search held at v0.7.3."""
+    cache = Path(root) / 'state' / 'records'
+    cache.mkdir(parents=True, exist_ok=True)
+    for tag in tags:
+        if tag == 'v0.7.6':
+            data = json.loads((RECORDS / 'v0.7.5.json').read_text())
+            data['release'] = 'v0.7.6'
+            data['components']['core']['tag'] = 'v0.7.6'
+            data['components']['user']['tag'] = 'v0.7.6'
+            data['core_schema_version'] = 151
+            (cache / 'v0.7.6.json').write_text(json.dumps(data))
+        else:
+            (cache / f'{tag}.json').write_text((RECORDS / f'{tag}.json').read_text())
+
+
+def su_calls(root):
+    path = Path(root) / 'su-called'
+    return path.read_text() if path.exists() else ''
+
+
+class PerComponentTags(unittest.TestCase):
+    """A release is not one tag (v0.7.5 pairs user/search at v0.7.3); every pin comes from its record."""
+
+    def test_rollback_to_a_core_only_release_names_each_component(self):
+        with tempfile.TemporaryDirectory() as root:
+            seed_records(root, 'v0.7.5')
+            done, r = phase('rollback', root, **V076)
+            calls = su_calls(root)
+            self.assertIn('./deploy/rollback.sh --core v0.7.5 --user v0.7.3 --search v0.7.3', calls,
+                          done.stdout + done.stderr)
+            self.assertNotIn('rollback.sh v0.7.5', calls)
+            facts = json.loads((r / 'facts' / 'rollback.json').read_text())
+            self.assertEqual(facts['rollback_args'], '--core v0.7.5 --user v0.7.3 --search v0.7.3')
+
+    def test_negative_control_a_uniform_record_keeps_the_single_tag_form(self):
+        with tempfile.TemporaryDirectory() as root:
+            seed_records(root, 'v0.6.6')
+            done, _ = phase('rollback', root, **PAIR)
+            calls = su_calls(root)
+            self.assertIn('./deploy/rollback.sh v0.6.6', calls, done.stdout + done.stderr)
+            self.assertNotIn('--core', calls)
+
+    def test_rollback_args_is_per_component_unless_all_three_agree(self):
+        self.assertEqual(helpers('rollback_args v0.7.5 v0.7.3 v0.7.3', **V076).stdout,
+                         '--core v0.7.5 --user v0.7.3 --search v0.7.3')
+        self.assertEqual(helpers('rollback_args v0.6.6 v0.6.6 v0.6.6', **V076).stdout, 'v0.6.6')
+        self.assertEqual(helpers('rollback_args v0.7.6 v0.7.6 v0.7.3', **V076).stdout,
+                         '--core v0.7.6 --user v0.7.6 --search v0.7.3')
+
+    def test_no_record_refuses_before_touching_the_host(self):
+        with tempfile.TemporaryDirectory() as root:
+            done, r = phase('rollback', root, **V076)   # the curl stub fetches nothing
+            self.assertNotEqual(done.returncode, 0)
+            self.assertEqual(su_calls(root), '', 'rollback.sh ran without a recorded pairing')
+            self.assertIn('no release record for v0.7.5', done.stdout + done.stderr)
+            self.assertFalse((r / 'facts' / 'rollback.json').exists())
+
+    def test_a_pairing_without_three_release_tags_is_refused(self):
+        r = helpers("printf 'core v0.7.5 x\\nuser v0.7.3 x\\n' | parse_pairing", **V076)
+        self.assertNotEqual(r.returncode, 0)
+        r = helpers("printf 'core v0.7.5 x\\nuser v0.7.3 x\\nsearch v0.7.3;rm x\\n' | parse_pairing", **V076)
+        self.assertNotEqual(r.returncode, 0)
+        r = helpers("printf 'core v0.7.5 a\\nuser v0.7.3 b\\nsearch v0.7.3 c\\n' | parse_pairing", **V076)
+        self.assertEqual(r.stdout, 'v0.7.5 v0.7.3 v0.7.3', r.stderr)
+
+    def test_git_mode_upgrade_states_a_mixed_pairing_and_keeps_the_uniform_command(self):
+        with tempfile.TemporaryDirectory() as root:
+            seed_records(root, 'v0.7.6')
+            done, _ = phase('upgrade-fail', root, REC03_INSTALL='git', **V076)
+            self.assertIn('./deploy/pin-release.sh v0.7.6 --component-tag core=v0.7.6 '
+                          '--component-tag user=v0.7.6 --component-tag search=v0.7.3',
+                          su_calls(root), done.stdout + done.stderr)
+        with tempfile.TemporaryDirectory() as root:
+            seed_records(root, 'v0.7.5')
+            phase('upgrade-fail', root, REC03_INSTALL='git', REC03_OLD='v0.6.6', REC03_NEW='v0.7.5')
+            calls = su_calls(root)
+            self.assertIn('./deploy/pin-release.sh v0.7.5 --component-tag core=v0.7.5', calls)
+        with tempfile.TemporaryDirectory() as root:
+            seed_records(root, 'v0.6.6')
+            phase('upgrade-fail', root, REC03_INSTALL='git', REC03_OLD='v0.6.5', REC03_NEW='v0.6.6')
+            calls = su_calls(root)
+            self.assertIn('./deploy/pin-release.sh v0.6.6', calls)
+            self.assertNotIn('--component-tag', calls, 'a uniform release must keep the old command')
+
+    def test_a_record_ref_reaches_the_deploy_scripts(self):
+        with tempfile.TemporaryDirectory() as root:
+            seed_records(root, 'v0.7.5')
+            phase('rollback', root, REC03_RECORD_REF='releases/record-v0.7.6', **V076)
+            self.assertIn('VIDRA_RECORD_BASE_URL=https://raw.githubusercontent.com/yegamble/vidra/'
+                          'releases/record-v0.7.6/releases ', su_calls(root))
+        for bad in ('../main', 'a b', '-x', 'main;id', 'a..b'):
+            with self.subTest(bad=bad):
+                r = helpers('require_release_pair', REC03_RECORD_REF=bad, **V076)
+                self.assertNotEqual(r.returncode, 0, bad)
+
+
+
 if __name__ == '__main__':
     unittest.main()
