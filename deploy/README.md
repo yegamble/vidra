@@ -1372,15 +1372,19 @@ format is a contract; do not "improve" it.
   CLI). Use a bucket in a **different region from the media Space**. Both files
   go to the same target; there is deliberately no separate knob, because sending
   the dump away and leaving its config on the dead host is the exact failure the
-  archive closes. Both are uploaded **plaintext** unless you set
-  `BACKUP_AGE_RECIPIENTS` (see "Off-site with client-side encryption (age)").
-  These four backup/monitor knobs are read from the selected `ENV_FILE` as well
-  as the process environment; an exported value wins, including an explicitly
-  empty value for a one-off disable. Released v0.7.5 scripts require the process
-  environment instead; the [migration guide](../docs/peertube-migration.md)
-  includes the compatible systemd `EnvironmentFile` setup. Client settings such
-  as `RCLONE_CONFIG` and AWS credentials still belong in the client environment
-  or its private configuration, not in Vidra's env file.
+  archive closes. Without `BACKUP_AGE_RECIPIENTS` (see "Off-site with
+  client-side encryption (age)") or an rclone remote of `type = crypt`, the
+  config archive is **refused** off-site: the dump still uploads, the archive
+  stays local, and the run exits non-zero (pinging `/fail`, leaving
+  `last_success` alone) until you set one of those or accept plaintext with
+  `BACKUP_OFFSITE_PLAINTEXT=true`. These backup/monitor knobs are read from the
+  selected `ENV_FILE` as well as the process environment; an exported value
+  wins, including an explicitly empty value for a one-off disable. Released
+  v0.7.5 scripts require the process environment instead; the [migration
+  guide](../docs/peertube-migration.md) includes the compatible systemd
+  `EnvironmentFile` setup. Client settings such as `RCLONE_CONFIG` and AWS
+  credentials still belong in the client environment or its private
+  configuration, not in Vidra's env file.
 - **Alert on a *missing* backup**, not just a failing one. Set
   `HEALTHCHECKS_URL=https://hc-ping.com/<uuid>`; the script pings `/start`,
   `/fail` on any error, and success at the end, so a droplet that stops running
@@ -1411,22 +1415,20 @@ Set `BACKUP_AGE_RECIPIENTS` (one or more age `age1…` public keys, space- or
 comma-separated) and `backup.sh` encrypts every off-site file with `age` before
 upload, storing `<name>.age`; local copies stay plaintext so `restore.sh` is
 unchanged. Works with both `BACKUP_RCLONE_REMOTE` and `BACKUP_S3_URI`. It aborts
-if `age` is missing or encryption fails — never a plaintext fallback. Without it
-the script logs a WARNING that the off-site copies are plaintext and contain
-every secret. Generate the pair with `age-keygen -o key.txt`, put only the public
-key on the server, and keep `key.txt` **off the server** (a password manager or
-offline media). To restore: `age -d -i key.txt file.age > file`, then proceed as
-below.
+if `age` is missing or encryption fails — never a plaintext fallback. Generate
+the pair with `age-keygen -o key.txt`, put only the public key on the server,
+and keep `key.txt` **off the server** (a password manager or offline media). To
+restore: `age -d -i key.txt file.age > file`, then proceed as below.
 
 ### Off-site with client-side encryption (rclone crypt)
 
-The bullet above sends the dump and config **plaintext** to whatever
-`BACKUP_RCLONE_REMOTE` names. For an off-site copy on a provider you do not fully
-trust — and for provider independence in general — point `BACKUP_RCLONE_REMOTE`
-at an **rclone `crypt` remote layered over your object store**, so everything is
-encrypted **client-side before upload** and the provider only ever stores
-ciphertext. This is the shipped, no-code-change path; `deploy/backup.sh` just
-runs `rclone copyto` to the remote you configure.
+Without age, a plain remote receives the dump **plaintext** (and the config
+archive only if you set `BACKUP_OFFSITE_PLAINTEXT=true`). For an off-site copy
+on a provider you do not fully trust — and for provider independence in general
+— point `BACKUP_RCLONE_REMOTE` at an **rclone `crypt` remote layered over your
+object store**, so everything is encrypted **client-side before upload** and the
+provider only ever stores ciphertext. This is the shipped, no-code-change path;
+`deploy/backup.sh` just runs `rclone copyto` to the remote you configure.
 
 Choose an off-site provider that is independent of your media store — a
 **different company and region**, not just a different bucket — so that a single

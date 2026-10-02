@@ -44,7 +44,9 @@
 # skipped silently-but-loudly (a log line) when unconfigured — see the
 # BACKUP_RCLONE_REMOTE / BACKUP_S3_URI / HEALTHCHECKS_URL blocks below.
 # BACKUP_AGE_RECIPIENTS (age public keys) encrypts the off-site copies
-# client-side; without it they are uploaded PLAINTEXT, secrets included.
+# client-side. Without it, or an rclone `crypt` remote, or an explicit
+# BACKUP_OFFSITE_PLAINTEXT=true, the CONFIG archive is refused off-site (the dump
+# still goes) and the run exits non-zero — see "Plaintext refusal" below.
 
 set -euo pipefail
 
@@ -90,6 +92,7 @@ BACKUP_RCLONE_REMOTE="${BACKUP_RCLONE_REMOTE-$(env_get BACKUP_RCLONE_REMOTE '')}
 BACKUP_S3_URI="${BACKUP_S3_URI-$(env_get BACKUP_S3_URI '')}"
 BACKUP_S3_ENDPOINT="${BACKUP_S3_ENDPOINT-$(env_get BACKUP_S3_ENDPOINT '')}"
 BACKUP_AGE_RECIPIENTS="${BACKUP_AGE_RECIPIENTS-$(env_get BACKUP_AGE_RECIPIENTS '')}"
+BACKUP_OFFSITE_PLAINTEXT="${BACKUP_OFFSITE_PLAINTEXT-$(env_get BACKUP_OFFSITE_PLAINTEXT '')}"
 HEALTHCHECKS_URL="${HEALTHCHECKS_URL-$(env_get HEALTHCHECKS_URL '')}"
 
 # This script dumps by `docker exec`-ing pg_dump inside the BUNDLED postgres
@@ -257,7 +260,36 @@ fi
 # public keys BEFORE upload, so the host only ever holds the public half and a
 # stolen host or bucket cannot decrypt old backups. Local copies stay plaintext
 # on purpose: deploy/restore.sh reads them unchanged.
+#
+# Plaintext refusal: before v0.7.6 an env-file BACKUP_RCLONE_REMOTE was ignored,
+# so upgrading silently STARTS uploading, to a bucket configured before age
+# existed here, an archive holding JWT_SECRET and every KEK. So the config
+# archive goes off-site only through age, an rclone `crypt` remote, or an
+# explicit BACKUP_OFFSITE_PLAINTEXT=true. Otherwise the dump still goes (the
+# operator asked for off-site, and a dump alone does not hand over the keys),
+# the archive stays local, and the run exits non-zero at the end so systemd and
+# the HEALTHCHECKS_URL /fail ping both say so. A warning alone was not enough:
+# it was logged nightly into a journal nobody reads.
+#
+# rclone_remote_is_crypt — exit 0 only when BACKUP_RCLONE_REMOTE names a
+# configured remote whose `type = crypt`. Anything it cannot prove (no colon,
+# which rclone treats as a LOCAL path; an on-the-fly `:backend:` string; an
+# alias over a crypt remote; rclone missing) counts as plaintext: the way out is
+# one explicit setting, the cost of guessing wrong is every secret. Captured
+# then matched, not piped into `grep -q`, which can SIGPIPE rclone under
+# pipefail and turn a crypt remote into a false refusal.
+rclone_remote_is_crypt() {
+  local name conf
+  case "${BACKUP_RCLONE_REMOTE:-}" in *:*) ;; *) return 1 ;; esac
+  name="${BACKUP_RCLONE_REMOTE%%:*}"
+  name="${name%%,*}"
+  [ -n "$name" ] && command -v rclone >/dev/null 2>&1 || return 1
+  conf="$(rclone config show "$name" 2>/dev/null)" || return 1
+  grep -Eq '^[[:space:]]*type[[:space:]]*=[[:space:]]*crypt[[:space:]]*$' <<< "$conf"
+}
+
 AGE_ARGS=()
+OFFSITE_REFUSED=""
 if [ -n "${BACKUP_RCLONE_REMOTE:-}${BACKUP_S3_URI:-}" ]; then
   if [ -n "$BACKUP_AGE_RECIPIENTS" ]; then
     command -v age >/dev/null 2>&1 \
@@ -276,8 +308,14 @@ if [ -n "${BACKUP_RCLONE_REMOTE:-}${BACKUP_S3_URI:-}" ]; then
     # Hidden dir inside BACKUP_DIR (0700, umask 077) so ciphertext never lands
     # somewhere world-listable, and so prune_generation's globs never match it.
     ENC_DIR="$(mktemp -d "$BACKUP_DIR/.offsite-age.XXXXXX")"
+  elif [ -n "${BACKUP_RCLONE_REMOTE:-}" ] && rclone_remote_is_crypt; then
+    log "off-site target is rclone crypt remote '${BACKUP_RCLONE_REMOTE%%:*}' — rclone encrypts before upload"
+  elif is_true "$BACKUP_OFFSITE_PLAINTEXT" || [ -z "$CONFIG_OUT" ]; then
+    log "WARNING: off-site copies are PLAINTEXT and contain every secret (JWT_SECRET, all KEKs, DB/S3 passwords). Set BACKUP_AGE_RECIPIENTS=<age1… public key> to encrypt them before upload, or use an rclone crypt remote."
   else
-    log "WARNING: off-site copies are PLAINTEXT and contain every secret (JWT_SECRET, all KEKs, DB/S3 passwords). Set BACKUP_AGE_RECIPIENTS=<age1… public key> to encrypt them before upload (ignore if the remote is an rclone crypt remote)."
+    OFFSITE_REFUSED=1
+    OFFSITE=("$OUT")
+    log "REFUSING to upload $(basename "$CONFIG_OUT") off-site: it holds JWT_SECRET and every KEK, and this target would store it PLAINTEXT. The database dump is still uploaded; this run will exit non-zero. Pick ONE: (1) BACKUP_AGE_RECIPIENTS=<age1… public key> to encrypt before upload; (2) point BACKUP_RCLONE_REMOTE at an rclone remote of type = crypt; (3) set BACKUP_OFFSITE_PLAINTEXT=true in $ENV_FILE to accept plaintext."
   fi
 fi
 
@@ -396,6 +434,18 @@ prune_generation() {
 log "pruning: keeping ${KEEP_DAILY} daily + ${KEEP_WEEKLY} weekly"
 prune_generation "database dumps"   7  "$BACKUP_DIR"/vidra-*.dump.gz
 prune_generation "config archives" 14  "$BACKUP_DIR"/vidra-config-*.tar.gz
+
+# --- refused config upload ------------------------------------------------------
+# Fail AFTER retention and BEFORE the success marker. A refused run is treated
+# exactly like a failed `rclone copyto` (which set -e already turns into an exit
+# before this point): the local pair is good and stays, but the off-site set the
+# operator configured is incomplete, so last_success must not claim a full
+# backup. Not advancing it also gives doctor's 26-hour age check a second,
+# independent alarm, in case the unit's red state and the /fail ping are both
+# missed.
+if [ -n "$OFFSITE_REFUSED" ]; then
+  die "local backup written ($(basename "$OUT"), $(basename "$CONFIG_OUT")); off-site got the dump but NOT the config archive (plaintext refused, see above) — last_success not updated"
+fi
 
 # --- success marker ------------------------------------------------------------
 # Machine-readable "when did a backup last actually succeed". Point a file-age
