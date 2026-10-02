@@ -19,6 +19,11 @@
 #                              the real, unmodified migrator fails on it. `dirty` marks the ledger
 #                              dirty — the only failure a pair that ships no new migration can
 #                              have. Default: column.
+#   REC03_RECORD_REF           the yegamble/vidra ref whose releases/<tag>.json pair each release.
+#                              Default main. REC-03 gates the record MERGE, so NEW's record is on
+#                              the record PR's branch when the drill runs: name that branch here.
+#                              A non-main ref is passed to install/deploy/rollback as
+#                              VIDRA_RECORD_BASE_URL so they verify against the same record.
 #   REC03_INJECT_TABLE         the column to pre-create. REQUIRED when REC03_INJECT=column; there
 #   REC03_INJECT_COLUMN        is deliberately no fallback, because a fallback here is another
 #   REC03_INJECT_TYPE          release's fact. The script BUILDS both the `ALTER TABLE .. ADD
@@ -40,6 +45,16 @@
 # To the left of `ssh` they are set on the local client, and OpenSSH forwards nothing outside
 # SendEnv/AcceptEnv, so the host would see them unset and every phase would be refused.
 #   REC03_ALLOW_DOCKER=1       proceed on a host that already has Docker (i.e. not a blank host).
+#
+# PER-COMPONENT TAGS. A release is not one tag: a core-only release pairs user and search at an
+# EARLIER tag. Writing OLD/NEW into all three VIDRA_*_TAG keys pinned images that were never built,
+# and a bare `rollback.sh <OLD>` fails the same way. Every phase that pins (install, upgrade-fail,
+# rollback, repin) therefore reads the pairing out of releases/<tag>.json with
+# deploy/release-mapping.py resolve — the one record reader — and refuses when no record decides
+# it, rather than guess. The resolver is the repo's copy beside this file, else
+# /root/release-mapping.py (scp deploy/release-mapping.py root@HOST:/root/, as the scan-posture
+# helper is staged). Each record is fetched ONCE per drill into state/records/, so every phase pins
+# the same pairing.
 #
 # The recovery `force` target is DERIVED, never typed: the clean pre-upgrade ledger version the
 # `backup` phase captured, and only once force_target() has confirmed the ledger went dirty at
@@ -73,6 +88,10 @@ INJECT="${REC03_INJECT:-column}"
 INJECT_TABLE="${REC03_INJECT_TABLE:-}"
 INJECT_COLUMN="${REC03_INJECT_COLUMN:-}"
 INJECT_TYPE="${REC03_INJECT_TYPE:-}"
+RECORD_REF="${REC03_RECORD_REF:-main}"
+RECORD_BASE="https://raw.githubusercontent.com/yegamble/vidra/${RECORD_REF}/releases"
+# A git ref that becomes a URL path: letters, digits and ._/- only, no `..`, no leading `-`.
+REF_RE='^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$'
 
 # Postgres folds an unquoted identifier to lower case and allows 63 bytes; this drill only ever
 # names vidra's own snake_case tables and columns. Anything else — a quote, a semicolon, a space,
@@ -110,6 +129,27 @@ require_release_pair() {
   matches "$OLD" "$TAG_RE" || die "REC03_OLD=\"$OLD\" is not a release tag (vX.Y.Z). It is used as a git ref and inside a raw.githubusercontent.com URL."
   matches "$NEW" "$TAG_RE" || die "REC03_NEW=\"$NEW\" is not a release tag (vX.Y.Z). It is used as a git ref and inside a raw.githubusercontent.com URL."
   [ "$OLD" != "$NEW" ] || die "REC03_OLD and REC03_NEW are both $OLD — an upgrade drill needs two releases."
+  { matches "$RECORD_REF" "$REF_RE" && [[ "$RECORD_REF" != *..* ]]; } || die "REC03_RECORD_REF=\"$RECORD_REF\" is not a plain git ref; it becomes part of the URL the release records are fetched from."
+}
+
+# `release-mapping.py resolve` output ("<role> <tag> <source>" lines) -> "<core> <user> <search>".
+# All three roles, each a vX.Y.Z tag, or nothing: these become image pins and rollback.sh argv.
+parse_pairing() {
+  local role tag _ core='' user='' search=''
+  while read -r role tag _; do
+    case "$role" in core) core="$tag" ;; user) user="$tag" ;; search) search="$tag" ;; esac
+  done
+  for tag in "$core" "$user" "$search"; do
+    matches "$tag" "$TAG_RE" || die "the resolver did not pair all three components with release tags (core=\"$core\" user=\"$user\" search=\"$search\")"
+  done
+  printf '%s %s %s' "$core" "$user" "$search"
+}
+
+# rollback.sh's argv for a pairing. One tag only when the record pairs all three at it (a uniform
+# release, the form every earlier drill ran); otherwise per component, because the bare form
+# writes that one tag into all three keys and a core-only release has no such user/search image.
+rollback_args() {
+  if [ "$1" = "$2" ] && [ "$1" = "$3" ]; then printf '%s' "$1"; else printf -- '--core %s --user %s --search %s' "$1" "$2" "$3"; fi
 }
 
 # The injection preflight. Called from ONE place, before the phase dispatch, so that no phase can
@@ -200,7 +240,40 @@ case "$PHASE" in
   inject|recover) require_injection_setup ;;
 esac
 
-asv() { su - vidra -c "cd $DIR && VIDRA_SKIP_DNS_PREFLIGHT=1 $*"; }   # run as the checkout owner
+# A non-main record ref reaches the deploy scripts too, so they verify against the record the drill pinned from.
+RECORD_ENV=''; [ "$RECORD_REF" = main ] || RECORD_ENV="VIDRA_RECORD_BASE_URL=$RECORD_BASE "
+asv() { su - vidra -c "cd $DIR && ${RECORD_ENV}VIDRA_SKIP_DNS_PREFLIGHT=1 $*"; }   # run as the checkout owner
+resolver() {
+  local f
+  for f in "$(dirname "$0")/../deploy/release-mapping.py" /root/release-mapping.py; do [ -f "$f" ] && { printf '%s' "$f"; return 0; }; done
+  die "deploy/release-mapping.py is not on this host. Only the driver crosses the 'bash -s' pipe, so stage it first: scp deploy/release-mapping.py root@HOST:/root/"
+}
+# pairing <tag> -> "<core> <user> <search>", from releases/<tag>.json at $RECORD_REF (fetched once
+# per drill). Refuses when no record decides it: a guessed pairing is the defect this replaces.
+pairing() {
+  # Named <tag>.json: the validator refuses a record whose file name is not its release.
+  local rec="$R/state/records/$1.json" out rc
+  mkdir -p "$R/state/records"
+  if [ ! -s "$rec" ]; then
+    curl -fsSL --proto '=https' --max-time 20 "$RECORD_BASE/$1.json" -o "$rec.tmp" && mv "$rec.tmp" "$rec"
+    rm -f "$rec.tmp"
+  fi
+  [ -s "$rec" ] || die "no release record for $1 at $RECORD_BASE. The drill pins each component at the tag its record names and will not guess; for a record still in review, set REC03_RECORD_REF to its branch."
+  out="$(python3 "$(resolver)" resolve --release "$1" --fetched-record "$rec")"; rc=$?
+  [ "$rc" -eq 0 ] || die "release-mapping.py resolve did not pair $1 from $rec (exit $rc); nothing was pinned."
+  printf '%s\n' "$out" | parse_pairing
+}
+# set_pins <core> <user> <search>: the three VIDRA_*_TAG keys, as the tree owner, mode 0600 kept.
+set_pins() {
+  su - vidra -c "cd $DIR && python3 - $1 $2 $3 <<'PY'
+import os,re,sys
+p='env/production.env'; s=open(p).read()
+for k,v in zip(('VIDRA_CORE_TAG','VIDRA_USER_TAG','VIDRA_SEARCH_TAG'), sys.argv[1:4]):
+    s=re.sub(r'(?m)^'+k+r'=.*$', k+'='+v, s)
+tmp=p+'.tmp'; open(tmp,'w').write(s); os.chmod(tmp,0o600); os.replace(tmp,p)
+PY"
+  grep -E '^VIDRA_[A-Z_]*TAG=' $DIR/env/production.env
+}
 psq() { su - vidra -c "cd $DIR && ./deploy/compose.sh exec -T postgres psql -U vidra -d vidra -tA -c \"$1\""; }
 imgs() { docker ps --format '{{.Names}} {{.Image}}' | grep -E 'api|frontend|search' | sort | tr '\n' ';'; }
 ledger() { echo "core=$(psq 'SELECT version||chr(58)||dirty FROM schema_migrations') search=$(psq 'SELECT version||chr(58)||dirty FROM vidra_search_migrations')"; }
@@ -249,13 +322,17 @@ install)
   if docker info >/dev/null 2>&1 && [ "${REC03_ALLOW_DOCKER:-0}" != 1 ]; then log "docker already present — not a blank host (REC03_ALLOW_DOCKER=1 to proceed anyway)"; exit 1; fi
   [ -e "$DIR" ] && { log "$DIR exists — not blank"; exit 1; }
   grep -q "$DOMAIN" /etc/hosts || echo "127.0.0.1 $DOMAIN" >> /etc/hosts
-  log "released installer $OLD (git path)"
-  curl -fsSL "https://raw.githubusercontent.com/yegamble/vidra/$OLD/install.sh" -o "/root/install-$OLD.sh"
-  sha256sum "/root/install-$OLD.sh"
-  sh "/root/install-$OLD.sh" --git --ref "$OLD" --yes </dev/null; rc=$?; log "install.sh exit=$rc"
+  p="$(pairing "$OLD")" || exit 1; read -r oc ou os <<< "$p"; log "$OLD pairs core=$oc user=$ou search=$os (releases/$OLD.json at $RECORD_REF)"
+  # meta main's installer: the one an operator runs today, and the first that pairs a core-only
+  # release's components (the released installer at a core-only OLD bootstraps one tag into all three).
+  log "meta main's installer, git path: install.sh --git --ref $OLD --yes"
+  curl -fsSL "https://raw.githubusercontent.com/yegamble/vidra/main/install.sh" -o "/root/install-main.sh"
+  sha256sum "/root/install-main.sh"
+  [ "$RECORD_REF" = main ] || export VIDRA_RECORD_BASE_URL="$RECORD_BASE"
+  sh /root/install-main.sh --git --ref "$OLD" --yes </dev/null; rc=$?; log "install.sh exit=$rc"
   vidra --help 2>&1 | head -2; find "$DIR" -maxdepth 1 -mindepth 1 | sort | head; git -C "$DIR" describe --tags --always; for c in vidra-core vidra-user vidra-search; do echo "$c $(git -C $DIR/$c describe --tags --always)"; done
   log "vidra setup --non-interactive"
-  ( cd $DIR && vidra setup --non-interactive --yes --domain $DOMAIN --instance-name "REC-03 drill" --registration closed --tls-mode internal --storage local --scan=false --release-tag "$OLD" --template env/production.env.example ); log "setup exit=$?"
+  ( cd $DIR && vidra setup --non-interactive --yes --domain $DOMAIN --instance-name "REC-03 drill" --registration closed --tls-mode internal --storage local --scan=false --release-tag "$OLD" --core-tag "$oc" --user-tag "$ou" --search-tag "$os" --template env/production.env.example ); log "setup exit=$?"
   ( cd $DIR && vidra setup --check env/production.env ); log "setup --check exit=$?"
   grep -E '^(VIDRA_[A-Z_]*TAG|VIDRA_TLS_MODE|VIDRA_COMPOSE_PROFILES|STORAGE_BACKEND|MALWARE_SCAN_MODE|HTTP_PORT|PUBLIC_BASE_URL)=' $DIR/env/production.env || true
   # F2: `vidra setup --scan=false` leaves CLAMAV_ADDR set with MALWARE_SCAN_MODE=fail-closed, and
@@ -271,7 +348,7 @@ install)
   log "deploy $OLD as vidra"
   asv ./deploy/deploy.sh; rc=$?; log "deploy.sh exit=$rc"
   probe; imgs; ledger
-  facts install_exit=$rc "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)"
+  facts install_exit=$rc "pairing=$p" "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)"
   ;;
 data)
   log "fixture via the api image's ffmpeg"; mkdir -p "$R/fx"; chmod 777 "$R/fx"
@@ -320,6 +397,7 @@ inject)
   fi
   ;;
 upgrade-fail)
+  p="$(pairing "$NEW")" || exit 1; read -r nc nu ns <<< "$p"; log "$NEW pairs core=$nc user=$nu search=$ns (releases/$NEW.json at $RECORD_REF)"
   su - vidra -c "git -C $DIR fetch --tags --force origin"
   if su - vidra -c "git -C $DIR cat-file -e $NEW:deploy/pin-release.sh" 2>/dev/null; then
     log "README procedure for a pre-v0.6.5 tree: one-time move to $NEW as the deploy user, then pin-release.sh $NEW"
@@ -328,21 +406,18 @@ upgrade-fail)
     log "tree -> origin/main (to obtain pin-release.sh), then pin-release.sh $NEW"
     su - vidra -c "git -C $DIR checkout --detach --quiet origin/main && git -C $DIR describe --tags --always"
   fi
-  asv ./deploy/pin-release.sh "$NEW"; prc=$?; log "pin-release.sh exit=$prc"; su - vidra -c "git -C $DIR describe --tags --always"; grep -E '^VIDRA_[A-Z_]*TAG=' $DIR/env/production.env
+  # The pairing is stated only when it is not uniform: a uniform pin keeps the exact command
+  # every earlier drill ran, and a tree whose pin-release.sh predates --component-tag still works.
+  flags=''; [ "$(rollback_args "$nc" "$nu" "$ns")" = "$nc" ] || flags="--component-tag core=$nc --component-tag user=$nu --component-tag search=$ns"
+  asv ./deploy/pin-release.sh "$NEW" "$flags"; prc=$?; log "pin-release.sh exit=$prc"; su - vidra -c "git -C $DIR describe --tags --always"; grep -E '^VIDRA_[A-Z_]*TAG=' $DIR/env/production.env
   if [ $prc -ne 0 ]; then
     log "pin-release.sh failed — falling back to the pre-v0.6.5 runbook: tree at tag + rewrite pins as vidra"
-    su - vidra -c "git -C $DIR checkout --detach --quiet $NEW && cd $DIR && python3 - <<'PY'
-import re,os
-p='env/production.env'; s=open(p).read()
-for k in ('VIDRA_CORE_TAG','VIDRA_USER_TAG','VIDRA_SEARCH_TAG'):
-    s=re.sub(r'(?m)^'+k+r'=.*$', k+'=$NEW', s)
-tmp=p+'.tmp'; open(tmp,'w').write(s); os.chmod(tmp,0o600); os.replace(tmp,p)
-PY"
-    grep -E '^VIDRA_[A-Z_]*TAG=' $DIR/env/production.env
+    su - vidra -c "git -C $DIR checkout --detach --quiet $NEW"
+    set_pins "$nc" "$nu" "$ns"
   fi
   log "deploy.sh (expected: abort inside the migrate step, no restart)"; asv ./deploy/deploy.sh; rc=$?; log "deploy.sh exit=$rc"
   imgs; ledger; probe; fingerprint | tee "$R/fp.fail"
-  facts pin_release_exit=$prc deploy_exit=$rc "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)" "fp=$(cat "$R/fp.fail")"
+  facts "pairing=$p" pin_release_exit=$prc deploy_exit=$rc "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)" "fp=$(cat "$R/fp.fail")"
   ;;
 recover)
   log "runbook: migrate version, undo the partial effect, force the newest FULLY applied version, rerun"
@@ -375,9 +450,10 @@ backup2)
   facts "backup_exit=$rc" "dump_post=$d" "marker_http=$code" "counts=$(counts)"
   ;;
 rollback)
-  log "rollback.sh $OLD (app-only; the schema stays where the upgrade left it)"; asv ./deploy/rollback.sh "$OLD"; rc=$?; log "rollback.sh exit=$rc"
+  p="$(pairing "$OLD")" || exit 1; read -r oc ou os <<< "$p"; args="$(rollback_args "$oc" "$ou" "$os")"
+  log "rollback.sh $args (app-only; the schema stays where the upgrade left it)"; asv ./deploy/rollback.sh "$args"; rc=$?; log "rollback.sh exit=$rc"
   imgs; ledger; probe; fingerprint | tee "$R/fp.rollback"; counts; grep -E '^VIDRA_[A-Z_]*TAG=' $DIR/env/production.env
-  facts rollback_exit=$rc "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)" "fp=$(cat "$R/fp.rollback")" "counts=$(counts)"
+  facts rollback_exit=$rc "rollback_args=$args" "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)" "fp=$(cat "$R/fp.rollback")" "counts=$(counts)"
   ;;
 restore-refuse)
   assert_schema_expectation
@@ -390,14 +466,9 @@ restore-refuse)
   facts restore_exit=$rc "counts_before=$before" "counts_after=$after" "ledger=$(ledger)" "probe=$(probe)" "pre_core_version=$(remembered pre_core_version)" "post_core_version=$(remembered post_core_version)" "pre_search_version=$(remembered pre_search_version)" "post_search_version=$(remembered post_search_version)"
   ;;
 repin)
-  log "re-pin $NEW + deploy (roll forward)"
-  su - vidra -c "cd $DIR && python3 - <<'PY'
-import re,os
-p='env/production.env'; s=open(p).read()
-for k in ('VIDRA_CORE_TAG','VIDRA_USER_TAG','VIDRA_SEARCH_TAG'):
-    s=re.sub(r'(?m)^'+k+r'=.*$', k+'=$NEW', s)
-tmp=p+'.tmp'; open(tmp,'w').write(s); os.chmod(tmp,0o600); os.replace(tmp,p)
-PY"
+  p="$(pairing "$NEW")" || exit 1; read -r nc nu ns <<< "$p"
+  log "re-pin $NEW (core=$nc user=$nu search=$ns) + deploy (roll forward)"
+  set_pins "$nc" "$nu" "$ns"
   asv ./deploy/deploy.sh; rc=$?; log "deploy.sh exit=$rc"; imgs; ledger; probe
   facts deploy_exit=$rc "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)"
   ;;
@@ -431,7 +502,7 @@ PY"
   ;;
 report)
   asv "vidra doctor" || true; docker --version; docker compose version; python3 --version; lsb_release -ds
-  log "pair=$OLD -> $NEW inject=$INJECT pre_core_version=$(remembered pre_core_version) post_core_version=$(remembered post_core_version) same_schema=${REC03_SAME_SCHEMA:-0}"
+  log "pair=$OLD -> $NEW record_ref=$RECORD_REF inject=$INJECT pre_core_version=$(remembered pre_core_version) post_core_version=$(remembered post_core_version) same_schema=${REC03_SAME_SCHEMA:-0}"
   python3 - "$R/facts" <<'PY'
 import json,os,sys
 d=sys.argv[1]; out={}
