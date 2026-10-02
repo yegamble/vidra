@@ -233,5 +233,23 @@ open(sys.argv[sys.argv.index('-o') + 1], 'wb').write(b'AGE-CIPHERTEXT')
         self.assertEqual(stat.S_IMODE(partials[0].stat().st_mode) & 0o077, 0)
 
 
+    def test_success_marker_is_replaced_not_rewritten_in_place(self):
+        # A manual `sudo ./deploy/backup.sh` leaves a root-owned 0600 marker; the
+        # 03:15 timer runs as the service user, which owns backups/ but not that
+        # file, so writing through it fails AFTER the dump. A rename only needs
+        # the directory, so the marker must arrive as a new file. (Asserted by
+        # inode: the suite may run as root, which ignores the file's mode.)
+        self.backups.mkdir(mode=0o700)
+        marker = self.backups / 'last_success'
+        marker.write_text('previous successful backup\n')
+        marker.chmod(0o400)
+        before = marker.stat().st_ino
+        run = self.run_backup()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertNotEqual(marker.stat().st_ino, before)
+        self.assertRegex(marker.read_text(), r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \S+\.dump\.gz\n$')
+        self.assertEqual(stat.S_IMODE(marker.stat().st_mode) & 0o077, 0)
+        self.assertEqual(list(self.backups.glob('last_success.*')), [])
+
 if __name__ == '__main__':
     unittest.main()
