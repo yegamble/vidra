@@ -411,7 +411,14 @@ prune_generation "config archives" 14  "$BACKUP_DIR"/vidra-config-*.tar.gz
 # silent no-op) or, if the format were "improved" to a list, break an age check
 # whose whole job is to be the last thing that still works when everything else
 # has stopped reporting.
-printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(basename "$OUT")" > "$BACKUP_DIR/last_success"
+#
+# WRITTEN BESIDE AND RENAMED, never truncated in place: one manual
+# `sudo ./deploy/backup.sh` leaves a root-owned 0600 last_success, and the 03:15
+# timer runs as the service user, which owns backups/ but not that file. A `>`
+# through it fails AFTER the dump, the unit goes red, and doctor's fix ("run
+# backup.sh again") repeats the loop. mv needs only the directory.
+printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(basename "$OUT")" > "$BACKUP_DIR/last_success.part"
+mv -f "$BACKUP_DIR/last_success.part" "$BACKUP_DIR/last_success"
 
 hc_ping
 if [ -n "$CONFIG_OUT" ]; then
