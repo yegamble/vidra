@@ -131,7 +131,8 @@ flags:
                        Required for an unattended install; without it, and
                        without a terminal to ask on, this script refuses.
       --ref <tag>      release to pin: the deployment tree and the vidra CLI both
-                       come from it (default: vidra-core's latest release). A
+                       come from it (default: the newest vidra-core release
+                       whose releases/<tag>.json is on this repo's main). A
                        release cut before the release-assets workflow landed
                        carries no CLI binary and is refused with the
                        `make build-vidra` fallback named.
@@ -448,19 +449,76 @@ fi
 # vidra-user and vidra-search at an earlier tag, and resolve_pairing (step 7)
 # reads that out of the release record before the interview writes them.
 #
-# The GitHub REST API, read with curl and cut with sed. jq is deliberately NOT a
-# dependency: it is not on a fresh droplet, and an installer that apt-installs a
-# JSON parser in order to read one string has lost the plot.
+# Which release a fresh install gets when no --ref names one: the NEWEST STABLE
+# vidra-core release WHOSE RELEASE RECORD (releases/<tag>.json) IS ON META MAIN -
+# not simply releases/latest.
+#
+# WHY: deploy/release.sh publishes the component releases first, and the record
+# that pairs core/user/search lands afterwards in its own PR (preflight evidence,
+# RAW_PREFLIGHT_RELEASES, the env template bump). resolve_pairing refuses without
+# that record, so while releases/latest already named the new tag every fresh
+# install died with "no release record is available" - and it was the PUBLISH,
+# not any reviewed step, that exposed a release to installers, before its image
+# scan or REC-03 drill had looked at it. Skipping a release whose record is not on
+# main closes that window and makes MERGING THE RECORD the switch that publishes a
+# release to installers.
+#
+# Only a 404 skips. A record that exists but is corrupt or invalid still selects
+# its release, and resolve_pairing refuses it exactly as before: stepping past a
+# broken record to an older release would hide the breakage. Any other answer (no
+# network, a 5xx) refuses rather than guess that an older release is the right
+# one. --ref bypasses all of this; so does VIDRA_RECORD_FETCH=off, which means
+# "the record is already on this host" and so cannot be probed for here.
+#
+# The GitHub REST API, read with curl and cut with tr/sed/awk. jq is deliberately
+# NOT a dependency: it is not on a fresh droplet, and an installer that
+# apt-installs a JSON parser in order to read a few strings has lost the plot.
 resolve_tag() {
-  TAG="$(
-    curl -fsSL -H 'Accept: application/vnd.github+json' \
-      "https://api.github.com/repos/${OWNER}/vidra-core/releases/latest" 2>/dev/null \
-      | grep -m 1 '"tag_name"' \
-      | sed -e 's/.*"tag_name"[^"]*"//' -e 's/".*//' || true
-  )"
+  rt_tmp="$(mktemp -d)"
+  rt_code="$(curl -sSL -H 'Accept: application/vnd.github+json' -o "${rt_tmp}/list" -w '%{http_code}' \
+    "https://api.github.com/repos/${OWNER}/vidra-core/releases?per_page=30" 2>/dev/null)" || true
+  # One "key":value per line (the API may answer minified), then the stable,
+  # canonical tags, highest version first. Drafts and prereleases never reach an
+  # installer, which is what releases/latest used to filter for us.
+  rt_tags=""
+  if [ "$rt_code" = "200" ]; then
+    rt_tags="$(awk '{ gsub(/[][{},]/, "\n"); print }' "${rt_tmp}/list" \
+      | sed -n -E 's/^[[:space:]]*"(tag_name|draft|prerelease)"[[:space:]]*:[[:space:]]*"?([^",]*)"?[[:space:]]*$/\1 \2/p' \
+      | awk '$1 == "tag_name" { t = $2; d = "" } $1 == "draft" { d = $2 }
+             $1 == "prerelease" { if (t != "" && d == "false" && $2 == "false") print t; t = "" }' \
+      | grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' \
+      | sed 's/^v//' | sort -t. -k1,1nr -k2,2nr -k3,3nr | sed 's/^/v/' || true)"
+  fi
+  [ -n "$rt_tags" ] || { rm -rf "$rt_tmp"; die "could not resolve the latest ${OWNER}/vidra-core release from the GitHub API (rate limit, no network, or no releases yet). Pass --ref <tag> to name one: https://github.com/${OWNER}/vidra-core/releases"; }
+
+  rt_switch="$(printf '%s' "${VIDRA_RECORD_FETCH:-}" | sed 's/#.*//;s/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')"
+  case "$rt_switch" in
+    off|false|0|no)
+      TAG="$(printf '%s\n' "$rt_tags" | head -n 1)"
+      rm -rf "$rt_tmp"
+      log "release: ${TAG} (newest ${OWNER}/vidra-core release; VIDRA_RECORD_FETCH=off, so its record is not checked until pairing)"
+      return 0 ;;
+  esac
+  rt_base="${VIDRA_RECORD_BASE_URL:-https://raw.githubusercontent.com/${OWNER}/vidra/main/releases}"
+  case "$rt_base" in
+    https://*) ;;
+    *) rm -rf "$rt_tmp"; die "VIDRA_RECORD_BASE_URL must use https://; no release was chosen" ;;
+  esac
+
+  TAG=""
+  for rt_tag in $rt_tags; do
+    rt_code="$(curl -sSL --proto '=https' --proto-redir '=https' --connect-timeout 5 --max-time 20 \
+      -o "${rt_tmp}/record" -w '%{http_code}' "${rt_base%/}/${rt_tag}.json" 2>/dev/null)" || true
+    case "$rt_code" in
+      200) TAG="$rt_tag"; break ;;
+      404) log "release: skipping ${rt_tag} - it is published, but releases/${rt_tag}.json is not on ${OWNER}/vidra main yet, and merging that record is what releases it to installers" ;;
+      *)   rm -rf "$rt_tmp"; die "could not check whether ${rt_tag} has a release record (HTTP ${rt_code:-000} from ${rt_base%/}/${rt_tag}.json), so no release was chosen rather than guess an older one. Re-run when the network is, or pass --ref <tag>." ;;
+    esac
+  done
+  rm -rf "$rt_tmp"
   [ -n "$TAG" ] \
-    || die "could not resolve the latest ${OWNER}/vidra-core release from the GitHub API (rate limit, no network, or no releases yet). Pass --ref <tag> to name one: https://github.com/${OWNER}/vidra-core/releases"
-  log "release: ${TAG} (latest ${OWNER}/vidra-core release)"
+    || die "none of the ${OWNER}/vidra-core releases the GitHub API listed has a release record on ${OWNER}/vidra main, so there is no release an installer can pair. Pass --ref <tag> with a recorded release: https://github.com/${OWNER}/vidra/tree/main/releases"
+  log "release: ${TAG} (newest ${OWNER}/vidra-core release with a release record on main)"
 }
 
 # Resolved here, before the confirmation, ONLY when it can be: naming the tag in
@@ -474,7 +532,7 @@ if [ -n "$REF" ]; then
 elif command -v curl >/dev/null 2>&1; then
   resolve_tag
 else
-  log "release: the latest ${OWNER}/vidra-core release, looked up once curl is installed"
+  log "release: the newest ${OWNER}/vidra-core release with a release record, looked up once curl is installed"
 fi
 TAG_SHOWN="${TAG:-<the latest release>}"
 

@@ -522,7 +522,9 @@ curl -fsSL https://raw.githubusercontent.com/yegamble/vidra/main/install.sh | sh
 [`../install.sh`](../install.sh) does everything down to `vidra setup`: detects the
 platform (Linux amd64/arm64; on macOS it prints the dev quick start and stops),
 installs `curl`, Docker Engine and the Compose v2 plugin from **Docker's own apt
-repository** when they are missing, resolves vidra-core's latest release,
+repository** when they are missing, resolves the newest vidra-core release whose
+release record (`releases/<tag>.json`) is on this repo's `main` — so merging the
+record is what publishes a release to installers —
 downloads that release's `vidra-bundle_<tag>.tar.gz`, verifies it against the
 release's `SHA256SUMS` and unpacks it into `/opt/vidra`, then downloads
 `vidra_<tag>_linux_<arch>` the same way — **refusing to install either on a
