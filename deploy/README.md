@@ -1491,28 +1491,48 @@ that file, and a missing bind-mount source is created by Docker as an empty
 So the configuration has to land before the database, not after:
 
 ```bash
-# 1. A host and a checkout.
-sudo ./deploy/provision.sh --yes                     # or boot it from cloud-init
-git clone https://github.com/yegamble/vidra.git /opt/vidra && cd /opt/vidra
-./bootstrap.sh
-
-# 2. Fetch both files for the SAME stamp from off-site.
-rclone copy "$BACKUP_RCLONE_REMOTE/vidra-config-20260820T031500Z.tar.gz" backups/
-rclone copy "$BACKUP_RCLONE_REMOTE/vidra-20260820T031500Z.dump.gz"        backups/
+# 1. Fetch both files for the SAME stamp from off-site into a scratch directory
+#    that is NOT /opt/vidra (the installer refuses a non-empty one, see below).
+mkdir -p ~/dr && cd ~/dr
+rclone copy "$BACKUP_RCLONE_REMOTE/vidra-config-20260820T031500Z.tar.gz" .
+rclone copy "$BACKUP_RCLONE_REMOTE/vidra-20260820T031500Z.dump.gz"        .
 # With BACKUP_AGE_RECIPIENTS set the objects are <name>.age: decrypt each with
 # `age -d -i key.txt` first (see "Off-site with client-side encryption (age)").
 
-# 3. Configuration FIRST. Restores env/production.env (0600) and
-#    deploy/Caddyfile.local to exactly where the compose chain looks for them.
-tar -xzf backups/vidra-config-20260820T031500Z.tar.gz -C /opt/vidra
-git check-ignore -v env/production.env               # MUST match
+# 2. Find the release the dump was taken under: the config archive's env file
+#    pins it. Read it without extracting anything.
+tar -xzOf vidra-config-20260820T031500Z.tar.gz env/production.env | grep '^VIDRA_.*_TAG='
+#    VIDRA_CORE_TAG=v0.7.5 -> use that tag below.
 
-# 4. Bring up just enough to restore into, then restore.
+# 3. The release tree and the CLI, WITHOUT the setup interview. --no-setup is the
+#    whole point: the interview mints a fresh JWT secret and fresh *_KEK values,
+#    and over a restored database that orphans every sealed column.
+curl -fsSL https://raw.githubusercontent.com/yegamble/vidra/main/install.sh \
+  | sh -s -- --yes --no-setup --ref v0.7.5
+#    A host that was a git checkout install: add --git to get a checkout pinned
+#    at that tag (never `git clone` main - that is not the release the dump was
+#    taken under).
+
+# 4. Then the service user, backups/ and the timer - AFTER the install, never
+#    before: install.sh refuses a non-empty /opt/vidra and provision.sh creates
+#    /opt/vidra/backups. A host that cloud-init already ran provision.sh on: move
+#    /opt/vidra/backups aside, install, then move it back.
+cd /opt/vidra && sudo ./deploy/provision.sh --yes
+sudo install -m 0600 -o vidra -g vidra ~/dr/vidra-* backups/
+
+# 5. Configuration FIRST. Restores env/production.env (0600) and
+#    deploy/Caddyfile.local to exactly where the compose chain looks for them.
+#    As the service user, so the 0600 env file is readable by what runs deploy.
+sudo -u vidra tar -xzf backups/vidra-config-20260820T031500Z.tar.gz -C /opt/vidra
+#    A git-checkout install only: git check-ignore -v env/production.env  (MUST match)
+#    A bundle tree has no .git, so there is nothing to commit it to.
+
+# 6. Bring up just enough to restore into, then restore.
 ./deploy/compose.sh up -d postgres
 ./deploy/restore.sh backups/vidra-20260820T031500Z.dump.gz
 
-# 5. Media, if STORAGE_BACKEND=local — see the next section.
-# 6. Point DNS at the new host, then ./deploy/deploy.sh.
+# 7. Media, if STORAGE_BACKEND=local — see the next section.
+# 8. Point DNS at the new host, then ./deploy/deploy.sh.
 ```
 
 Two things to check before you trust the result. The env file pins

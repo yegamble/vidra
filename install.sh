@@ -137,6 +137,13 @@ flags:
                        `make build-vidra` fallback named.
       --dir <path>     absolute path to install into (default /opt/vidra)
       --owner <owner>  GitHub owner to fetch from, for a fork (default yegamble)
+      --no-setup       install the tree and the CLI, then STOP before the setup
+                       interview. For a disaster-recovery rebuild: env/production.env
+                       and deploy/Caddyfile.local come from a config archive
+                       (backups/vidra-config-<stamp>.tar.gz), because a fresh
+                       interview mints new KEKs and orphans every sealed column in
+                       the restored database. See deploy/README.md "Disaster
+                       recovery".
       --git            clone the repositories instead of unpacking the release
                        bundle: a full git checkout of this repo plus the three
                        component checkouts, which is what you want in order to
@@ -152,6 +159,7 @@ environment (the flags win when both are given):
   VIDRA_HOME=<path>    same as --dir
   VIDRA_GH_OWNER=<o>   same as --owner
   VIDRA_INSTALL_GIT=1  same as --git
+  VIDRA_NO_SETUP=1     same as --no-setup
 
 exit status: 0 when the install completed (including the macOS "wrong platform,
 here is the dev path" case), non-zero when it stopped and said why. Whatever it
@@ -176,6 +184,11 @@ case "${VIDRA_INSTALL_GIT:-}" in
   ""|0|false|no|off) ;;
   *) FORCE_GIT=1 ;;
 esac
+NO_SETUP=0
+case "${VIDRA_NO_SETUP:-}" in
+  ""|0|false|no|off) ;;
+  *) NO_SETUP=1 ;;
+esac
 
 need_value() {
   # $1 = flag name, $2 = how many arguments are left including the flag itself
@@ -192,6 +205,7 @@ while [ $# -gt 0 ]; do
     --owner)    need_value --owner "$#"; OWNER="$2"; shift 2 ;;
     --owner=*)  OWNER="${1#--owner=}";   shift ;;
     --git)      FORCE_GIT=1; shift ;;
+    --no-setup) NO_SETUP=1; shift ;;
     -h|--help)  usage; exit 0 ;;
     --)         shift; break ;;
     *)          usage >&2; die "unknown argument: $1" ;;
@@ -372,6 +386,30 @@ else
   INSTALL_DOCKER=1
 fi
 
+# Extra words for the "not empty" refusal below when the ONLY entry is backups/ -
+# the shape deploy/provision.sh leaves, and so the shape a disaster-recovery host
+# provisioned first (cloud-init, or following the old recipe) is in.
+#
+# The refusal is deliberately NOT relaxed for that shape, though unpacking a
+# bundle never writes backups/ and so would destroy nothing: make_install_dir
+# runs `install -d -o <this user>` on ${DIR}, which would hand a directory
+# provision.sh chowned to the service user back to root (or to whoever ran this)
+# and leave the 03:15 backup timer unable to write into the backups/ beneath it.
+# Accepting the directory safely needs ownership handling of its own; the order
+# "install.sh, THEN provision.sh" (which the quickstart already uses, and which
+# provision.sh's own closing message assumes) needs none. So this only explains.
+dir_refusal_hint() {
+  local d="$1" e
+  [ -d "${d}/backups" ] && [ ! -L "${d}/backups" ] || return 0
+  # A glob and not `ls | grep`: names are not ours to assume, and the dotfile
+  # patterns are what `ls -A` (the refusal's own test) would have counted.
+  for e in "$d"/* "$d"/.[!.]* "$d"/..?*; do
+    [ -e "$e" ] || [ -L "$e" ] || continue
+    [ "${e##*/}" = backups ] || return 0
+  done
+  printf ' It holds only backups/, which is what deploy/provision.sh leaves behind: run install.sh BEFORE provision.sh (the unpack needs an empty directory and provision.sh creates backups/), or move backups/ aside and put it back afterwards.'
+}
+
 # What state is the install directory in? Four cases now, and only one of them is
 # a refusal.
 #
@@ -387,7 +425,7 @@ elif [ -f "${DIR}/vidra-bundle.manifest" ]; then
   DIR_STATE=bundle
   log "${DIR}: an unpacked deployment bundle - will be left alone (see below)"
 elif [ -e "$DIR" ] && [ -n "$(ls -A "$DIR" 2>/dev/null || true)" ]; then
-  die "${DIR} exists, is neither a git checkout nor an unpacked bundle, and is not empty. Refusing to install over somebody's files - move it aside, or pass --dir <another path>."
+  die "${DIR} exists, is neither a git checkout nor an unpacked bundle, and is not empty. Refusing to install over somebody's files - move it aside, or pass --dir <another path>.$(dir_refusal_hint "$DIR")"
 else
   log "${DIR}: will be created"
 fi
@@ -482,7 +520,11 @@ elif have_tty; then
       ;;
   esac
   echo "  cli             ${TAG_SHOWN}'s vidra_${TAG_SHOWN}_linux_${ARCH} -> /usr/local/bin/vidra"
-  echo "  then            'vidra setup' - the interview that writes env/production.env"
+  if [ "$NO_SETUP" -eq 1 ]; then
+    echo "  then            NOTHING - --no-setup: env/production.env must come from a config archive"
+  else
+    echo "  then            'vidra setup' - the interview that writes env/production.env"
+  fi
   echo
   echo "It starts nothing, opens no port, and never rewrites an existing env file."
   echo
@@ -1040,6 +1082,37 @@ VIDRA_BIN=/usr/local/bin/vidra
 # --- 7/7 setup ---------------------------------------------------------------------
 step "7/7 setup"
 
+# What --no-setup ends with. A function so the one thing it must say - where the
+# env file comes from - is tested by running it (tests/install_test.sh).
+no_setup_notice() {
+  if [ -f "$ENV_FILE" ]; then
+    log "${ENV_FILE} already exists - leaving it EXACTLY as it is."
+  fi
+  cat <<EOF
+
+[install] --no-setup: the deployment tree (${TAG}) and the vidra CLI are installed
+and the setup interview was NOT run, on purpose. ${ENV_FILE}
+and ${DIR}/deploy/Caddyfile.local must come from the config archive that
+deploy/backup.sh wrote next to the dump (backups/vidra-config-<stamp>.tar.gz), not
+from a new interview: that file holds the KEKs sealing data already in the
+database, and a freshly generated set orphans it.
+
+  1. Put the config archive and the dump for the SAME stamp on this host, then:
+
+         tar -xzf vidra-config-<stamp>.tar.gz -C ${DIR}
+
+  2. Check the pins it restored. VIDRA_CORE_TAG (and the user and search tags)
+     should name the release the dump was taken under; this tree is ${TAG}. If
+     they differ, deploy.sh's release-mapping preflight will refuse - install the
+     release the env file names instead:
+
+         grep '^VIDRA_.*_TAG=' ${ENV_FILE}
+
+  3. Restore the dump, then deploy - deploy/README.md, "Disaster recovery".
+
+EOF
+}
+
 
 # The runbook's proof, at the moment it matters: BEFORE anything writes secrets
 # into that path. `git check-ignore` answers about a path, not about a file, so it
@@ -1061,8 +1134,9 @@ else
 fi
 
 # Only when the interview is about to write the file: an existing one is left
-# exactly as it is, pins included, so there is nothing to resolve for.
-if [ ! -f "$ENV_FILE" ]; then
+# exactly as it is, pins included, so there is nothing to resolve for. --no-setup
+# never writes it, so it resolves nothing either.
+if [ "$NO_SETUP" -eq 0 ] && [ ! -f "$ENV_FILE" ]; then
   resolve_pairing
   # Every command this step prints carries the same pins it would have run, so a
   # re-run by hand writes what the installer would have. Semver tags only, so
@@ -1070,7 +1144,20 @@ if [ ! -f "$ENV_FILE" ]; then
   TAG_FLAGS="--release-tag ${TAG} --core-tag ${CORE_TAG} --user-tag ${USER_TAG} --search-tag ${SEARCH_TAG}"
 fi
 
-if [ -f "$ENV_FILE" ]; then
+if [ "$NO_SETUP" -eq 1 ]; then
+  # Disaster recovery. The interview generates a fresh JWT secret and fresh KEKs;
+  # run over a restored database, the MFA, federation and ATProto material sealed
+  # under the OLD keys becomes undecryptable, and nothing says so until a user
+  # logs in. The config archive carries the old file, so this step has nothing to
+  # write - and must exit before the `vidra setup` call below, not merely before
+  # its prompts.
+  no_setup_notice
+  if [ -n "$WARNINGS" ]; then
+    printf '[install] thing(s) that need you:\n%s\n' "$WARNINGS"
+  fi
+  log "done (--no-setup)."
+  exit 0
+elif [ -f "$ENV_FILE" ]; then
   # The whole reason this installer is safe to re-run. That file holds the KEKs
   # that seal MFA/federation/ATProto material in the database; regenerating them
   # orphans everything already sealed under the old ones. `vidra setup` refuses to
