@@ -14,17 +14,30 @@
 #   REC03_OLD / REC03_NEW      the release pair, e.g. REC03_OLD=v0.6.6 REC03_NEW=v0.7.5.
 #                              REQUIRED, vX.Y.Z; they become a git ref and a raw.githubusercontent
 #                              URL, so they are pattern-checked rather than trusted.
-#   REC03_INJECT=column|dirty  how the upgrade is made to fail. `column` pre-creates a column the
+#   REC03_INJECT=column|table|dirty
+#                              how the upgrade is made to fail. `column` pre-creates a column the
 #                              upgrade's FIRST pending migration adds without IF NOT EXISTS, so
-#                              the real, unmodified migrator fails on it. `dirty` marks the ledger
-#                              dirty — the only failure a pair that ships no new migration can
-#                              have. Default: column.
+#                              the real, unmodified migrator fails on it. `table` does the same
+#                              for a migration that only CREATEs a table (and so has no column
+#                              to clash on): it pre-creates REC03_INJECT_TABLE with one bare
+#                              column, and the undo is `DROP TABLE` of that same name. `dirty`
+#                              marks the ledger dirty — the only failure a pair that ships no new
+#                              migration can have. Default: column.
+#   REC03_INSTALL=bundle|git   how `install` lays the OLD tree down, and so how `upgrade-fail`
+#                              moves it. `bundle` (default) is the default operator path:
+#                              install.sh --ref OLD with no --git, then the documented manual
+#                              bundle upgrade (vidra-docs install/upgrading.md, "If the script is
+#                              older than this release"), because an older pin-release.sh
+#                              refuses a bundle tree. `git` is the --git checkout + pin-release.sh
+#                              path every earlier drill used. The installer is meta main's
+#                              install.sh in both modes: the one an operator runs today.
 #   REC03_RECORD_REF           the yegamble/vidra ref whose releases/<tag>.json pair each release.
 #                              Default main. REC-03 gates the record MERGE, so NEW's record is on
 #                              the record PR's branch when the drill runs: name that branch here.
 #                              A non-main ref is passed to install/deploy/rollback as
 #                              VIDRA_RECORD_BASE_URL so they verify against the same record.
-#   REC03_INJECT_TABLE         the column to pre-create. REQUIRED when REC03_INJECT=column; there
+#   REC03_INJECT_TABLE         the column (or, for `table`, the table) to pre-create. REQUIRED when
+#                              REC03_INJECT=column|table; there
 #   REC03_INJECT_COLUMN        is deliberately no fallback, because a fallback here is another
 #   REC03_INJECT_TYPE          release's fact. The script BUILDS both the `ALTER TABLE .. ADD
 #                              COLUMN` and its exact `DROP COLUMN` undo from these three
@@ -88,6 +101,7 @@ INJECT="${REC03_INJECT:-column}"
 INJECT_TABLE="${REC03_INJECT_TABLE:-}"
 INJECT_COLUMN="${REC03_INJECT_COLUMN:-}"
 INJECT_TYPE="${REC03_INJECT_TYPE:-}"
+INSTALL="${REC03_INSTALL:-bundle}"
 RECORD_REF="${REC03_RECORD_REF:-main}"
 RECORD_BASE="https://raw.githubusercontent.com/yegamble/vidra/${RECORD_REF}/releases"
 # A git ref that becomes a URL path: letters, digits and ._/- only, no `..`, no leading `-`.
@@ -132,6 +146,27 @@ require_release_pair() {
   { matches "$RECORD_REF" "$REF_RE" && [[ "$RECORD_REF" != *..* ]]; } || die "REC03_RECORD_REF=\"$RECORD_REF\" is not a plain git ref; it becomes part of the URL the release records are fetched from."
 }
 
+# The install path. `bundle` is what an operator gets from the one-line installer, and the hazards
+# a release council found (the stale-dump advice, the unmoved meta tree) live on that path only,
+# so a bundle drill must never quietly take the clone path: install.sh reads VIDRA_INSTALL_GIT as
+# --git, and a stray export would turn the drill into the git one with nothing in the log saying so.
+require_install_mode() {
+  case "$INSTALL" in
+    bundle)
+      case "${VIDRA_INSTALL_GIT:-}" in
+        ''|0|false|no|off) ;;
+        *) die "REC03_INSTALL=bundle, but VIDRA_INSTALL_GIT=${VIDRA_INSTALL_GIT} is set, which install.sh reads as --git: the drill would rehearse the clone path while claiming the bundle one. Unset it, or set REC03_INSTALL=git." ;;
+      esac ;;
+    git) ;;
+    *) die "REC03_INSTALL=\"$INSTALL\" is neither bundle nor git." ;;
+  esac
+}
+
+# install.sh's arguments for the OLD tree. --git ONLY in git mode.
+installer_args() {
+  if [ "$INSTALL" = git ]; then printf -- '--git --ref %s --yes' "$OLD"; else printf -- '--ref %s --yes' "$OLD"; fi
+}
+
 # `release-mapping.py resolve` output ("<role> <tag> <source>" lines) -> "<core> <user> <search>".
 # All three roles, each a vX.Y.Z tag, or nothing: these become image pins and rollback.sh argv.
 parse_pairing() {
@@ -158,7 +193,11 @@ require_injection_setup() {
   case "$INJECT" in
     dirty)  return 0 ;;
     column) ;;
-    *)      die "REC03_INJECT=\"$INJECT\" is neither column nor dirty; a misspelling must not fall through to a column injection." ;;
+    table)
+      [ -n "$INJECT_TABLE" ] || die "REC03_INJECT=table needs REC03_INJECT_TABLE, the table the first pending migration CREATEs. No default: another release's table either already exists here or is created by a migration this upgrade never runs."
+      matches "$INJECT_TABLE" "$IDENT_RE" || die "REC03_INJECT_TABLE=\"$INJECT_TABLE\" is not a bare lower-case SQL identifier; this value is executed as SQL against the drill database."
+      return 0 ;;
+    *)      die "REC03_INJECT=\"$INJECT\" is not column, table or dirty; a misspelling must not fall through to a column injection." ;;
   esac
   local missing=''
   [ -n "$INJECT_TABLE" ]  || missing="$missing REC03_INJECT_TABLE"
@@ -173,8 +212,16 @@ require_injection_setup() {
 # The injection and its undo, built from the SAME three parameters so they cannot drift: an undo
 # that names a different column leaves the drill database permanently off-script, on a host that
 # costs money and has to be rebuilt to retry.
-inject_ddl() { printf 'ALTER TABLE %s ADD COLUMN %s %s' "$INJECT_TABLE" "$INJECT_COLUMN" "$(printf '%s' "$INJECT_TYPE" | tr '[:lower:]' '[:upper:]')"; }
-inject_undo_ddl() { printf 'ALTER TABLE %s DROP COLUMN %s' "$INJECT_TABLE" "$INJECT_COLUMN"; }
+# For `table`, ONE identifier builds both: the pre-created table carries a single bare column the
+# drill names itself, so the undo is exactly `DROP TABLE` of the name that was created.
+inject_ddl() {
+  if [ "$INJECT" = table ]; then printf 'CREATE TABLE %s (rec03_injected BOOLEAN)' "$INJECT_TABLE"; return; fi
+  printf 'ALTER TABLE %s ADD COLUMN %s %s' "$INJECT_TABLE" "$INJECT_COLUMN" "$(printf '%s' "$INJECT_TYPE" | tr '[:lower:]' '[:upper:]')"
+}
+inject_undo_ddl() {
+  if [ "$INJECT" = table ]; then printf 'DROP TABLE %s' "$INJECT_TABLE"; return; fi
+  printf 'ALTER TABLE %s DROP COLUMN %s' "$INJECT_TABLE" "$INJECT_COLUMN"
+}
 
 # force_target <clean pre-upgrade version> <version the ledger is DIRTY at> -> the force target.
 #
@@ -236,6 +283,7 @@ exec > >(tee -a "$R/$PHASE.log") 2>&1
 # The preflight, ahead of ANY host call in any phase: a bad parameter has to be refused here and
 # not discovered halfway through a drill, on a host that must be rebuilt before it can be retried.
 require_release_pair
+require_install_mode
 case "$PHASE" in
   inject|recover) require_injection_setup ;;
 esac
@@ -325,12 +373,15 @@ install)
   p="$(pairing "$OLD")" || exit 1; read -r oc ou os <<< "$p"; log "$OLD pairs core=$oc user=$ou search=$os (releases/$OLD.json at $RECORD_REF)"
   # meta main's installer: the one an operator runs today, and the first that pairs a core-only
   # release's components (the released installer at a core-only OLD bootstraps one tag into all three).
-  log "meta main's installer, git path: install.sh --git --ref $OLD --yes"
+  log "meta main's installer, $INSTALL path: install.sh $(installer_args)"
   curl -fsSL "https://raw.githubusercontent.com/yegamble/vidra/main/install.sh" -o "/root/install-main.sh"
   sha256sum "/root/install-main.sh"
   [ "$RECORD_REF" = main ] || export VIDRA_RECORD_BASE_URL="$RECORD_BASE"
-  sh /root/install-main.sh --git --ref "$OLD" --yes </dev/null; rc=$?; log "install.sh exit=$rc"
-  vidra --help 2>&1 | head -2; find "$DIR" -maxdepth 1 -mindepth 1 | sort | head; git -C "$DIR" describe --tags --always; for c in vidra-core vidra-user vidra-search; do echo "$c $(git -C $DIR/$c describe --tags --always)"; done
+  # shellcheck disable=SC2046  # installer_args is a fixed word list built from validated values
+  sh /root/install-main.sh $(installer_args) </dev/null; rc=$?; log "install.sh exit=$rc"
+  vidra --help 2>&1 | head -2; find "$DIR" -maxdepth 1 -mindepth 1 | sort | head
+  if [ "$INSTALL" = git ]; then git -C "$DIR" describe --tags --always; for c in vidra-core vidra-user vidra-search; do echo "$c $(git -C $DIR/$c describe --tags --always)"; done
+  else [ ! -e "$DIR/.git" ] || die "REC03_INSTALL=bundle but $DIR is a git checkout: the installer took the clone path"; cat "$DIR/vidra-bundle.manifest"; fi
   log "vidra setup --non-interactive"
   ( cd $DIR && vidra setup --non-interactive --yes --domain $DOMAIN --instance-name "REC-03 drill" --registration closed --tls-mode internal --storage local --scan=false --release-tag "$OLD" --core-tag "$oc" --user-tag "$ou" --search-tag "$os" --template env/production.env.example ); log "setup exit=$?"
   ( cd $DIR && vidra setup --check env/production.env ); log "setup --check exit=$?"
@@ -348,7 +399,7 @@ install)
   log "deploy $OLD as vidra"
   asv ./deploy/deploy.sh; rc=$?; log "deploy.sh exit=$rc"
   probe; imgs; ledger
-  facts install_exit=$rc "pairing=$p" "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)"
+  facts install_exit=$rc "install_mode=$INSTALL" "pairing=$p" "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)"
   ;;
 data)
   log "fixture via the api image's ffmpeg"; mkdir -p "$R/fx"; chmod 777 "$R/fx"
@@ -391,33 +442,46 @@ inject)
     psq "UPDATE schema_migrations SET dirty = true"; ledger
     facts injected=dirty_ledger "ledger=$(ledger)"
   else
-    log "inject: pre-create the column the upgrade's first pending migration adds (it carries no IF NOT EXISTS, so the real, unmodified migrator must fail on it): $(inject_ddl)"
+    log "inject: pre-create the $INJECT the upgrade's first pending migration creates (it carries no IF NOT EXISTS, so the real, unmodified migrator must fail on it): $(inject_ddl)"
     psq "$(inject_ddl)"; ledger
     facts "injected=$(inject_ddl)" "undo=$(inject_undo_ddl)" "ledger=$(ledger)"
   fi
   ;;
 upgrade-fail)
   p="$(pairing "$NEW")" || exit 1; read -r nc nu ns <<< "$p"; log "$NEW pairs core=$nc user=$nu search=$ns (releases/$NEW.json at $RECORD_REF)"
-  su - vidra -c "git -C $DIR fetch --tags --force origin"
-  if su - vidra -c "git -C $DIR cat-file -e $NEW:deploy/pin-release.sh" 2>/dev/null; then
-    log "README procedure for a pre-v0.6.5 tree: one-time move to $NEW as the deploy user, then pin-release.sh $NEW"
-    su - vidra -c "git -C $DIR checkout --detach --quiet $NEW && git -C $DIR describe --tags --always"
-  else
-    log "tree -> origin/main (to obtain pin-release.sh), then pin-release.sh $NEW"
-    su - vidra -c "git -C $DIR checkout --detach --quiet origin/main && git -C $DIR describe --tags --always"
-  fi
-  # The pairing is stated only when it is not uniform: a uniform pin keeps the exact command
-  # every earlier drill ran, and a tree whose pin-release.sh predates --component-tag still works.
-  flags=''; [ "$(rollback_args "$nc" "$nu" "$ns")" = "$nc" ] || flags="--component-tag core=$nc --component-tag user=$nu --component-tag search=$ns"
-  asv ./deploy/pin-release.sh "$NEW" "$flags"; prc=$?; log "pin-release.sh exit=$prc"; su - vidra -c "git -C $DIR describe --tags --always"; grep -E '^VIDRA_[A-Z_]*TAG=' $DIR/env/production.env
-  if [ $prc -ne 0 ]; then
-    log "pin-release.sh failed — falling back to the pre-v0.6.5 runbook: tree at tag + rewrite pins as vidra"
-    su - vidra -c "git -C $DIR checkout --detach --quiet $NEW"
+  if [ "$INSTALL" = bundle ]; then
+    [ ! -e "$DIR/.git" ] || die "REC03_INSTALL=bundle but $DIR is a git checkout; this drill was installed with REC03_INSTALL=git."
+    # vidra-docs install/upgrading.md, "If the script is older than this release": an older
+    # pin-release.sh refuses a bundle tree, so the first hop is these five steps, verbatim in
+    # effect. Step 1 (read the pairing) is the line above.
+    log "bundle tree: the documented manual upgrade to $NEW (bundle named for core $nc)"
+    base="https://github.com/yegamble/vidra-core/releases/download/$nc"
+    ( cd "$DIR" && curl -fsSLO "$base/vidra-bundle_$nc.tar.gz" && curl -fsSLO "$base/SHA256SUMS" ) || die "could not download $nc's bundle and SHA256SUMS"
+    ( cd "$DIR" && awk -v want="vidra-bundle_$nc.tar.gz" '$2 == want || $2 == "*" want' SHA256SUMS | sha256sum -c - ) || die "$nc's bundle does not match its SHA256SUMS; not unpacking it"
+    su - vidra -c "tar -xzf $DIR/vidra-bundle_$nc.tar.gz -C $DIR"; prc=$?; log "unpack as vidra exit=$prc"; cat "$DIR/vidra-bundle.manifest"
     set_pins "$nc" "$nu" "$ns"
+  else
+    su - vidra -c "git -C $DIR fetch --tags --force origin"
+    if su - vidra -c "git -C $DIR cat-file -e $NEW:deploy/pin-release.sh" 2>/dev/null; then
+      log "README procedure for a pre-v0.6.5 tree: one-time move to $NEW as the deploy user, then pin-release.sh $NEW"
+      su - vidra -c "git -C $DIR checkout --detach --quiet $NEW && git -C $DIR describe --tags --always"
+    else
+      log "tree -> origin/main (to obtain pin-release.sh), then pin-release.sh $NEW"
+      su - vidra -c "git -C $DIR checkout --detach --quiet origin/main && git -C $DIR describe --tags --always"
+    fi
+    # The pairing is stated only when it is not uniform: a uniform pin keeps the exact command
+    # every earlier drill ran, and a tree whose pin-release.sh predates --component-tag still works.
+    flags=''; [ "$(rollback_args "$nc" "$nu" "$ns")" = "$nc" ] || flags="--component-tag core=$nc --component-tag user=$nu --component-tag search=$ns"
+    asv ./deploy/pin-release.sh "$NEW" "$flags"; prc=$?; log "pin-release.sh exit=$prc"; su - vidra -c "git -C $DIR describe --tags --always"; grep -E '^VIDRA_[A-Z_]*TAG=' $DIR/env/production.env
+    if [ $prc -ne 0 ]; then
+      log "pin-release.sh failed — falling back to the pre-v0.6.5 runbook: tree at tag + rewrite pins as vidra"
+      su - vidra -c "git -C $DIR checkout --detach --quiet $NEW"
+      set_pins "$nc" "$nu" "$ns"
+    fi
   fi
   log "deploy.sh (expected: abort inside the migrate step, no restart)"; asv ./deploy/deploy.sh; rc=$?; log "deploy.sh exit=$rc"
   imgs; ledger; probe; fingerprint | tee "$R/fp.fail"
-  facts "pairing=$p" pin_release_exit=$prc deploy_exit=$rc "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)" "fp=$(cat "$R/fp.fail")"
+  facts "install_mode=$INSTALL" "pairing=$p" pin_exit=$prc deploy_exit=$rc "images=$(imgs)" "ledger=$(ledger)" "probe=$(probe)" "fp=$(cat "$R/fp.fail")"
   ;;
 recover)
   log "runbook: migrate version, undo the partial effect, force the newest FULLY applied version, rerun"
@@ -502,7 +566,7 @@ PY"
   ;;
 report)
   asv "vidra doctor" || true; docker --version; docker compose version; python3 --version; lsb_release -ds
-  log "pair=$OLD -> $NEW record_ref=$RECORD_REF inject=$INJECT pre_core_version=$(remembered pre_core_version) post_core_version=$(remembered post_core_version) same_schema=${REC03_SAME_SCHEMA:-0}"
+  log "pair=$OLD -> $NEW install=$INSTALL record_ref=$RECORD_REF inject=$INJECT pre_core_version=$(remembered pre_core_version) post_core_version=$(remembered post_core_version) same_schema=${REC03_SAME_SCHEMA:-0}"
   python3 - "$R/facts" <<'PY'
 import json,os,sys
 d=sys.argv[1]; out={}

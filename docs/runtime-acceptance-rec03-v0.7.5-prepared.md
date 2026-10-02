@@ -42,11 +42,14 @@ staged it at `/root` for exactly this reason.
 Then, per phase:
 
 ```
-ssh root@HOST "REC03_OLD=v0.6.6 REC03_NEW=v0.7.5 REC03_INJECT=column \
+ssh root@HOST "REC03_OLD=v0.6.6 REC03_NEW=v0.7.5 REC03_INSTALL=git REC03_INJECT=column \
 REC03_INJECT_TABLE=federation_deliveries \
 REC03_INJECT_COLUMN=authored_remote_comment_id \
 REC03_INJECT_TYPE=UUID bash -s -- <phase>" < tests/rec03-upgrade-rollback.sh
 ```
+
+`REC03_INSTALL=git` keeps this page's drill on the `--git` checkout path it was
+written for; the driver's default is now `bundle`, the default operator path.
 
 **The assignments belong inside the quoted remote command.** Written to the left
 of `ssh` they set the variables on the *local* ssh client, and OpenSSH forwards
@@ -187,12 +190,12 @@ evidence.
 
 ```
 # v0.6.3 -> v0.6.4  (core 144 -> 146; the column-conflict injection)
-ssh root@HOST "REC03_OLD=v0.6.3 REC03_NEW=v0.6.4 REC03_INJECT=column \
+ssh root@HOST "REC03_OLD=v0.6.3 REC03_NEW=v0.6.4 REC03_INSTALL=git REC03_INJECT=column \
 REC03_INJECT_TABLE=storage_migrations REC03_INJECT_COLUMN=paused_reason \
 REC03_INJECT_TYPE=TEXT bash -s -- <phase>" < tests/rec03-upgrade-rollback.sh
 
 # v0.6.4 -> v0.6.5  (core 146 -> 146; nothing to migrate, so a dirty ledger)
-ssh root@HOST "REC03_OLD=v0.6.4 REC03_NEW=v0.6.5 REC03_INJECT=dirty \
+ssh root@HOST "REC03_OLD=v0.6.4 REC03_NEW=v0.6.5 REC03_INSTALL=git REC03_INJECT=dirty \
 REC03_SAME_SCHEMA=1 bash -s -- <phase>" < tests/rec03-upgrade-rollback.sh
 ```
 

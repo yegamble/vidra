@@ -609,6 +609,91 @@ class PerComponentTags(unittest.TestCase):
                 self.assertNotEqual(r.returncode, 0, bad)
 
 
+class InstallMode(unittest.TestCase):
+    """`bundle` is the default operator path and must never silently become the clone path."""
+
+    def test_bundle_is_the_default_and_never_passes_git(self):
+        r = helpers('require_install_mode && installer_args', **V076)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, '--ref v0.7.5 --yes')
+        self.assertNotIn('--git', r.stdout)
+
+    def test_git_mode_passes_git(self):
+        r = helpers('require_install_mode && installer_args', REC03_INSTALL='git', **V076)
+        self.assertEqual(r.stdout, '--git --ref v0.7.5 --yes')
+
+    def test_bundle_mode_refuses_the_environment_flag_that_means_git(self):
+        for value in ('1', 'true', 'yes'):
+            with self.subTest(value=value):
+                r = helpers('require_install_mode', VIDRA_INSTALL_GIT=value, **V076)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn('VIDRA_INSTALL_GIT', r.stdout + r.stderr)
+        self.assertEqual(helpers('require_install_mode', VIDRA_INSTALL_GIT='0', **V076).returncode, 0)
+        self.assertEqual(helpers('require_install_mode', REC03_INSTALL='git', VIDRA_INSTALL_GIT='1',
+                                 **V076).returncode, 0)
+
+    def test_an_unknown_mode_stops_every_phase_before_the_host(self):
+        with tempfile.TemporaryDirectory() as root:
+            done, _ = phase('rollback', root, REC03_INSTALL='bundel', **V076)
+            self.assertNotEqual(done.returncode, 0)
+            self.assertEqual(su_calls(root), '')
+
+    def test_bundle_upgrade_takes_the_documented_manual_steps_not_git(self):
+        with tempfile.TemporaryDirectory() as root:
+            seed_records(root, 'v0.7.6')
+            done, _ = phase('upgrade-fail', root, **V076)
+            out = done.stdout + done.stderr
+            self.assertIn('documented manual upgrade to v0.7.6 (bundle named for core v0.7.6)', out)
+            self.assertNotIn('git -C', su_calls(root))
+            self.assertNotIn('pin-release.sh', su_calls(root))
+
+
+class TableInjection(unittest.TestCase):
+    """0151 only CREATEs mail_config: the clash is a pre-existing table, undone by DROP TABLE."""
+
+    TABLE = {'REC03_INJECT': 'table', 'REC03_INJECT_TABLE': 'mail_config'}
+
+    def test_the_v076_injection_and_its_undo_come_from_one_identifier(self):
+        r = helpers('require_injection_setup && inject_ddl && echo && inject_undo_ddl', **V076, **self.TABLE)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        add, drop = r.stdout.splitlines()
+        self.assertEqual(add, 'CREATE TABLE mail_config (rec03_injected BOOLEAN)')
+        self.assertEqual(drop, 'DROP TABLE mail_config')
+        for table in ('ipfs_capacity', 'x_2_y'):
+            r = helpers('inject_ddl; echo; inject_undo_ddl', **V076, REC03_INJECT='table',
+                        REC03_INJECT_TABLE=table)
+            add, drop = r.stdout.splitlines()
+            self.assertEqual(add.split()[2], table)
+            self.assertEqual(drop.split(), ['DROP', 'TABLE', table])
+
+    def test_the_table_is_required_and_validated(self):
+        r = helpers('require_injection_setup', **V076, REC03_INJECT='table')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('REC03_INJECT_TABLE', r.stdout + r.stderr)
+        for bad in HOSTILE:
+            with self.subTest(bad=bad):
+                r = helpers('require_injection_setup', **V076, REC03_INJECT='table', REC03_INJECT_TABLE=bad)
+                self.assertNotEqual(r.returncode, 0, bad)
+
+    def test_a_hostile_table_stops_the_phase_before_any_sql(self):
+        with tempfile.TemporaryDirectory() as root:
+            done, r = phase('inject', root, **V076, REC03_INJECT='table',
+                            REC03_INJECT_TABLE='mail_config; DROP TABLE users')
+            self.assertNotEqual(done.returncode, 0)
+            self.assertEqual(su_calls(root), '')
+
+    def test_the_inject_phase_runs_the_create_and_records_the_undo(self):
+        with tempfile.TemporaryDirectory() as root:
+            done, r = phase('inject', root, **V076, **self.TABLE)
+            self.assertIn('CREATE TABLE mail_config (rec03_injected BOOLEAN)', su_calls(root),
+                          done.stdout + done.stderr)
+            facts = json.loads((r / 'facts' / 'inject.json').read_text())
+            self.assertEqual(facts['undo'], 'DROP TABLE mail_config')
+
+    def test_dirty_still_works(self):
+        with tempfile.TemporaryDirectory() as root:
+            phase('inject', root, **V076, REC03_INJECT='dirty')
+            self.assertIn('UPDATE schema_migrations SET dirty = true', su_calls(root))
 
 if __name__ == '__main__':
     unittest.main()
