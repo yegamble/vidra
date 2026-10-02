@@ -1040,8 +1040,10 @@ vidra release --yes v0.2.0                     # the CLI, which execs that scrip
 Each component repo's `publish-container.yml` runs on `release: published` and
 pushes `ghcr.io/<owner>/<repo>:<tag>` — the owner `deploy/release.sh` targets
 via `GITHUB_OWNER`, which must agree with the `VIDRA_IMAGE_OWNER` the deploy
-overlay pulls from — so cutting the release *is* building the image. `deploy/release.sh` creates the release in each repo
-(`--generate-notes --latest`), watches the resulting workflow run to its
+overlay pulls from — so cutting the release *is* building the image. `deploy/release.sh` resolves every target repo's
+default-branch HEAD in its pre-flight, shows that cut set in the confirmation, and creates
+the release in each repo AT that commit (`--target <sha> --generate-notes --latest`), so
+a PR merged while an earlier repo's image builds is not in the release; it watches the resulting workflow run to its
 conclusion, and then verifies the image is really in GHCR
 (`docker manifest inspect`, falling back to the GitHub packages API and saying
 which check it used). It exits non-zero with a per-image summary if any repo
