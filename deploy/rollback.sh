@@ -87,7 +87,7 @@ done
 # writing <tag> into all three keys pinned ghcr.io/yegamble/vidra-user:v0.7.5,
 # which has never existed: the rollback died at `compose pull` with the broken
 # release still serving — and `rollback.sh v0.7.5` is the command an operator
-# types to leave v0.7.6. The record is read by the SAME resolver pin-release.sh
+# types to leave a broken v0.7.7. The record is read by the SAME resolver pin-release.sh
 # uses (deploy/release-mapping.py resolve), so there is one reader of records.
 #
 # Only this tree's copy is read, never a fetch: a rollback targets an OLDER
