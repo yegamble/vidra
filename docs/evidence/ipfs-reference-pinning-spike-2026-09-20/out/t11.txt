@@ -1,0 +1,41 @@
+clean slate: 0 filestore refs, RepoSize=1224748
+playlist is 225 bytes
+
+=== T11a nocopy directory add with ONE part missing its Abspath ===
+{"Message":"missing file path or URL, can't create filestore reference","Code":0,"Type":"error"}
+
+http=500
+--- resulting filestore refs mentioning mix/ ---
+   (none)
+
+=== T11b the pre-copy trick ===
+clean slate: 0 filestore refs, RepoSize=1224748
+--- 1. add the playlist ALONE in copy mode, pin=false ---
+playlist CID: bafkreia3r6mevd3p4e5o4tusda4y46flb76sps25tmzlh5sr7ygdqy2zgm
+   in filestore/ls? 0  (0 == it is a real block)
+--- 2. full nocopy tree add, Abspath on EVERY part including the playlist ---
+{"Name":"mix/master.m3u8","Hash":"bafkreia3r6mevd3p4e5o4tusda4y46flb76sps25tmzlh5sr7ygdqy2zgm","Size":"225"}
+{"Name":"mix/720p/init.mp4","Hash":"bafkreignvx3l4y57mfmtkutjcuhk2mw4ljkbpz7d6xarkru5vgqsljzw6i","Size":"700"}
+{"Name":"mix/720p/seg-1.m4s","Hash":"bafybeifcwc5dblukgf7zdsjvvhsf4hi4hx34uorbjclxzzh7h5zsbn76cm","Size":"2097561"}
+{"Name":"mix/720p","Hash":"bafybeidtfh3vp32kczr4sjargs6lfbnlizflrofqg3azv7x645qytd54ky","Size":"2098374"}
+{"Name":"mix","Hash":"bafybeidbfmhzq4vavlwlfalhx4pjc3kezutgedgtz7bmzvvo4xtqznlowq","Size":"2098710"}
+{"Name":"","Hash":"bafybeif5fi73yo6jpzogyb76wd2qrq7mrqb6zg5lg2elw3i6kz72bx2qc4","Size":"2098764"}
+
+http=200
+tree root: bafybeif5fi73yo6jpzogyb76wd2qrq7mrqb6zg5lg2elw3i6kz72bx2qc4
+   playlist CID in the tree == standalone CID? yes
+   playlist in filestore/ls? 0  (0 == still a real block)
+   seg-1 refs: 8
+   init.mp4 refs: 1
+
+=== T11b-2 with the ORIGIN DOWN: playlist readable, segment not? ===
+   playlist: http=200 size=225
+   PLAYLIST SERVED FROM LOCAL BLOCK: bytes match
+   segment:  http=500 size=54
+   init.mp4: http=500 size=204
+
+=== T11b-3 does the real block survive repo/gc while the tree is pinned? ===
+   gc removed 1 entries
+   playlist block still there? {"Key":"bafkreia3r6mevd3p4e5o4tusda4y46flb76sps25tmzlh5sr7ygdqy2zgm","Size":225}
+   playlist after gc (origin 404): http=200 size=225
+   SURVIVES GC: bytes match

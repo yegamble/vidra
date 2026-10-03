@@ -1,0 +1,10 @@
+clean slate: 0 filestore refs, RepoSize=1244278
+
+=== directory add: good part (with Abspath) FIRST, bad part (no Abspath) LAST ===
+{"Name":"mix2/720p/seg-1.m4s","Hash":"bafybeifa2twkul2cs3zpllknehodlpcrhwl6rbezrgfbnvbekfiktlolwi","Size":"2097561"}
+
+http=200
+--- refs written for the GOOD part despite the failed request ---
+   seg-1 refs now: 8
+   total filestore entries: 8
+   pins: 0

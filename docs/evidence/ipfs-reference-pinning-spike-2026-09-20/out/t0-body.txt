@@ -1,0 +1,1 @@
+{"Message":"either the filestore or the urlstore must be enabled to use nocopy, see: https://github.com/ipfs/kubo/blob/master/docs/experimental-features.md#ipfs-filestore","Code":0,"Type":"error"}

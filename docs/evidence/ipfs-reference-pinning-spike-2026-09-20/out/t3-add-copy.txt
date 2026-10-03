@@ -1,0 +1,6 @@
+{"Name":"hls/master.m3u8","Hash":"bafkreiede27t6tjhxurohbuw2p6e3xjgb6kcgshp2fdia734sr7zqtbfde","Size":"225"}
+{"Name":"hls/720p/init.mp4","Hash":"bafkreih7gjtzws5254vo7yexz3mqyrt243zatux33crai7rc65d27uvr7e","Size":"700"}
+{"Name":"hls/720p/seg-1.m4s","Hash":"bafybeib44snfojlej6s6rj7fodgvwu3yu2xstiax67b6imkecj3hmh7ooe","Size":"3146337"}
+{"Name":"hls/720p","Hash":"bafybeibramkbli5w74ehwlrxfcyv53ilffybpd56qwfnktuolrntrxgjoa","Size":"3147150"}
+{"Name":"hls","Hash":"bafybeibd7f3cxgxubtqhaelihdxejdt4dsfx7feyrfw34uq33ym4qmyvf4","Size":"3147486"}
+{"Name":"","Hash":"bafybeidosoqui4j57nlswzl3whsrjyc2xsytn7hmmybawofr3hv6fsggie","Size":"3147540"}

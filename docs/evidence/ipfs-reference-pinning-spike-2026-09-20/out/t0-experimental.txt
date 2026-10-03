@@ -1,0 +1,8 @@
+{
+  "FilestoreEnabled": false,
+  "Libp2pStreamMounting": false,
+  "OptimisticProvide": false,
+  "OptimisticProvideJobsPoolSize": 0,
+  "P2pHttpProxy": false,
+  "UrlstoreEnabled": false
+}
