@@ -1937,12 +1937,12 @@ Reach for the flag only in the window before the record exists, since the
 record and this preflight's evidence land in the same PR:
 
 ```bash
-python3 deploy/release-preflight.py --tag v0.7.6 --platform linux/amd64 \
+python3 deploy/release-preflight.py --tag v0.7.7 --platform linux/amd64 \
   --component-tag vidra-user=v0.7.3 --component-tag vidra-search=v0.7.3 \
   --out /tmp/vidra-candidate-unique > /tmp/vidra-candidate-unique.log 2>&1
 ```
 
-Once `releases/v0.7.6.json` is on the tree, drop the flags: `--tag v0.7.6`
+Once `releases/v0.7.7.json` is on the tree, drop the flags: `--tag v0.7.7`
 alone then reproduces the same frozen tree.
 
 **History, stated plainly:** the committed v0.7.4 and v0.7.5 evidence was
