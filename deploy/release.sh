@@ -243,6 +243,21 @@ else
   die "tag ${TAG} already exists in ${OWNER}/${META_REPO} but points at ${META_REMOTE_SHA}, not at HEAD (${META_SHA}). The deployment bundle for this release would be built from that other commit. Releases are immutable here: pick the next version, or delete that tag deliberately if it was never released."
 fi
 
+# A NEW meta tag goes at origin/main's tip, not merely somewhere on main. The
+# ancestor check above lets a stale clone through, and it did: v0.7.6 was cut on
+# 2026-10-03 from a checkout 54 commits behind, so the meta tag — and with it the
+# deployment bundle release-assets builds from that tag — missed every deploy fix
+# the release existed to ship, and the release.sh that ran was that old too. A
+# re-run where the tag already sits at HEAD (META_TAG_ACTION=skip) is a resume and
+# stays allowed.
+if [ "$META_TAG_ACTION" = "push" ]; then
+  META_MAIN="$(git -C "$REPO_ROOT" rev-parse origin/main)"
+  if [ "$META_SHA" != "$META_MAIN" ]; then
+    behind="$(git -C "$REPO_ROOT" rev-list --count "${META_SHA}..${META_MAIN}")"
+    die "HEAD ($(git -C "$REPO_ROOT" rev-parse --short HEAD)) is ${behind} commit(s) behind origin/main. ${TAG}'s deployment bundle is built from the commit this tag names, so it would ship without them — and this copy of release.sh is that old as well. Nothing has been tagged or released. Run 'git switch main && git pull --ff-only' and re-run."
+  fi
+fi
+
 # --- the release record: everything that can be refused, refused now ----------
 # The record is written after the images publish (see below), but a reason it
 # CANNOT be written must surface here, before the outward-facing release, not

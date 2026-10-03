@@ -96,6 +96,7 @@ class ReleaseTargetTests(unittest.TestCase):
             shutil.copy2(ROOT / 'deploy' / name, self.repo / 'deploy' / name)
         (self.repo / 'releases/.keep').write_text('')
         remote = base / 'remote/yegamble/vidra.git'
+        self.remote = remote
         remote.parent.mkdir(parents=True)
         subprocess.run(['git', 'init', '-q', '--bare', '-b', 'main', str(remote)], check=True)
         git(base, 'init', '-q', '-b', 'main', str(self.repo))
@@ -187,6 +188,32 @@ class ReleaseTargetTests(unittest.TestCase):
         tags = subprocess.run(['git', '-C', str(self.repo), 'ls-remote', '--tags', 'origin'],
                               capture_output=True, text=True, check=True).stdout
         self.assertEqual(tags.strip(), '', 'the meta tag was pushed before the refusal')
+
+    def test_a_checkout_behind_origin_main_refuses_before_any_create_or_meta_tag(self):
+        # 2026-10-03: v0.7.6 was cut from a meta checkout 54 commits behind
+        # main. HEAD was ON main, so the ancestor check passed, the meta tag
+        # went out at the old commit, and core's release-assets built the
+        # v0.7.6 bundle from it - without any of the deploy fixes the release
+        # existed to ship. A subset release skips the record step's tip check,
+        # so nothing else stopped it.
+        other = self.repo.parent / 'other'
+        git(self.repo.parent, 'clone', '-q', str(self.remote), str(other))
+        for key, value in (('user.name', 't'), ('user.email', 't@example.invalid'), ('commit.gpgsign', 'false')):
+            git(other, 'config', key, value)
+        (other / 'deploy/fix.txt').write_text('a deploy fix merged after this checkout was last pulled\n')
+        git(other, 'add', '-A')
+        git(other, 'commit', '-q', '-m', 'fix')
+        git(other, 'push', '-q', 'origin', 'main')
+
+        result, calls = self.run_release('vidra-core', 'vidra-user')
+        out = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, out)
+        self.assertIn('1 commit(s) behind origin/main', out)
+        self.assertIn('git pull --ff-only', out)
+        self.assertEqual(self.creates(calls), [])
+        tags = subprocess.run(['git', '-C', str(self.repo), 'ls-remote', '--tags', 'origin'],
+                              capture_output=True, text=True, check=True).stdout
+        self.assertEqual(tags.strip(), '', 'the meta tag was pushed at a stale commit')
 
     def test_a_full_release_targets_all_three_and_the_record_pr_names_what_it_needs(self):
         result, calls = self.run_release()
