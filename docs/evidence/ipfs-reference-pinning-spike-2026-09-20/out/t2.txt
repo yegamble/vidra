@@ -1,0 +1,24 @@
+payload sha256: cc0a910b2e615fb049091570780b29c4bc47d0583971a3ea60769c52b22c2cc4   cid: bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq
+
+=== cat via RPC ===
+http=200 time=2.546556s size=67108864
+rpc sha256: cc0a910b2e615fb049091570780b29c4bc47d0583971a3ea60769c52b22c2cc4
+RPC MATCH
+origin requests: 256
+with Range: 256   without Range: 0
+--- distinct Range spans requested (size histogram) ---
+ 256 262144
+--- first 3 / last 2 request lines ---
+2026-09-20T13:35:48.115 127.0.0.1 "GET /payload1.bin" Range=bytes=0-262143 mode=normal -> 206 bytes=262144
+2026-09-20T13:35:48.130 127.0.0.1 "GET /payload1.bin" Range=bytes=262144-524287 mode=normal -> 206 bytes=262144
+2026-09-20T13:35:48.142 127.0.0.1 "GET /payload1.bin" Range=bytes=524288-786431 mode=normal -> 206 bytes=262144
+2026-09-20T13:35:50.626 127.0.0.1 "GET /payload1.bin" Range=bytes=66060288-66322431 mode=normal -> 206 bytes=262144
+2026-09-20T13:35:50.636 127.0.0.1 "GET /payload1.bin" Range=bytes=66322432-66584575 mode=normal -> 206 bytes=262144
+
+=== cat via gateway ===
+http=200 time=2.575012s size=67108864
+gw sha256: cc0a910b2e615fb049091570780b29c4bc47d0583971a3ea60769c52b22c2cc4
+GATEWAY MATCH
+origin requests: 256
+non-Range requests: 0
+ 256 262144

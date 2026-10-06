@@ -1,0 +1,13 @@
+HTTP/1.1 200 OK
+Access-Control-Allow-Headers: X-Stream-Output, X-Chunked-Output, X-Content-Length
+Access-Control-Expose-Headers: X-Stream-Output, X-Chunked-Output, X-Content-Length
+Content-Type: text/plain
+Server: kubo/0.43.0
+Trailer: X-Stream-Error
+Vary: Origin
+X-Content-Length: 4194304
+X-Stream-Output: 1
+Date: Sun, 20 Sep 2026 17:35:58 GMT
+Transfer-Encoding: chunked
+
+X-Stream-Error: failed to fetch all nodes

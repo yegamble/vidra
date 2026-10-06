@@ -1,0 +1,23 @@
+
+=== refs: recursive vs non-recursive vs edges ===
+  refs-nonrecursive          0 request(s), 0 bytes
+  refs-recursive-2           256 request(s), 67108864 bytes
+  refs-unique                256 request(s), 67108864 bytes
+
+=== gateway: HEAD, 1-byte range, 1 KiB range, mid-file range ===
+  gw-head-2                  2 request(s), 524288 bytes
+  gw-1byte                   2 request(s), 524288 bytes
+  gw-1kib                    2 request(s), 524288 bytes
+  gw-mid                     2 request(s), 524288 bytes
+--- exact origin ranges for the mid-file 1 KiB request ---
+2026-09-20T13:36:30.764 127.0.0.1 "GET /payload1.bin" Range=bytes=33554432-33816575 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:30.777 127.0.0.1 "GET /payload1.bin" Range=bytes=33816576-34078719 mode=normal -> 206 bytes=262144
+--- exact origin ranges for gw-1byte ---
+2026-09-20T13:36:30.430 127.0.0.1 "GET /payload1.bin" Range=bytes=0-262143 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:30.459 127.0.0.1 "GET /payload1.bin" Range=bytes=262144-524287 mode=normal -> 206 bytes=262144
+---- MARK gw-1kib ----
+2026-09-20T13:36:30.525 127.0.0.1 "GET /payload1.bin" Range=bytes=0-262143 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:30.536 127.0.0.1 "GET /payload1.bin" Range=bytes=262144-524287 mode=normal -> 206 bytes=262144
+---- MARK gw-mid ----
+2026-09-20T13:36:30.764 127.0.0.1 "GET /payload1.bin" Range=bytes=33554432-33816575 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:30.777 127.0.0.1 "GET /payload1.bin" Range=bytes=33816576-34078719 mode=normal -> 206 bytes=262144
