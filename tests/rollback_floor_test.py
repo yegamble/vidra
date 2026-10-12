@@ -297,14 +297,17 @@ class RollbackEnvRestoreTests(unittest.TestCase):
 
     def test_every_refusal_after_the_rewrite_goes_through_the_helper(self):
         """Counted over the CODE so the explanatory comments do not inflate it:
-        the definition plus the checkout-sync trio, `config -q` and `pull`."""
+        the definition plus the checkout-sync trio, `config -q`, `pull`, and
+        the privacy-tier gate's second look (a failed remap, and a re-asked
+        check that found a video or could not be asked)."""
         source = (DEPLOY / 'rollback.sh').read_text()
         code = [l for l in source.splitlines()
                 if l.strip() and not l.lstrip().startswith('#')]
         uses = sum(1 for l in code if 'restore_env_and_die' in l)
-        self.assertEqual(uses, 6, 'expected the definition plus the five refusal '
+        self.assertEqual(uses, 9, 'expected the definition plus the eight refusal '
                                   'paths between the env rewrite and `up -d` '
-                                  f'(checkout sync x3, config -q, pull), found {uses}')
+                                  '(checkout sync x3, config -q, pull, privacy-tier '
+                                  f'second look x3), found {uses}')
         self.assertNotIn('restored from ${ENV_FILE}.bak if you need to undo',
                          '\n'.join(code),
                          'the message that reads as if the .bak had been restored '

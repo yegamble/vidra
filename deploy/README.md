@@ -866,7 +866,9 @@ record itself is wrong.
 ./deploy/pin-release.sh v0.2.0                 # tree to v0.2.0 + each VIDRA_*_TAG at the tag the RECORD pairs it at; env snapshot first (a bundle tree: downloads, verifies and unpacks that release's bundle instead)
 ./deploy/deploy.sh                             # dump -> pull -> gated migrate -> up -> probe
 
-# ROLLBACK — app only; fine across an ADDITIVE migration (one-release rule below):
+# ROLLBACK — app only; fine across an ADDITIVE migration (one-release rule below).
+# Refused while the data uses a privacy tier the target core predates — see
+# "Rollback compatibility: what old code does with new values" below.
 ./deploy/rollback.sh v0.2.0
 
 # ROLLBACK across an INCOMPATIBLE schema change (a rename, a drop):
@@ -1253,6 +1255,58 @@ half, the other the migrator half.
 An app-only `rollback.sh` across an additive migration therefore works now. It
 is still not enough across an *incompatible* one — old code cannot read a
 renamed column — and that path is still restore-then-rollback.
+
+#### Rollback compatibility: what old code does with new values
+
+One-release compatibility has to hold for what release *N−1*'s code **does**
+with values release *N* can write, not only for whether *N−1* can read *N*'s
+schema. A new value in an existing enumerated column (a privacy tier, a state, a
+role) changes no column type, passes `migrate-lint`, and reads fine through the
+old code; it is still a compat break if the old code decides behaviour by
+comparing against the values it knew. Review a new enum value as a compat change,
+with the same care as a dropped column.
+
+The same mixed-version window exists without any rollback: a multi-replica
+rolling deploy runs *N−1* and *N* side by side against *N*'s schema, so a value
+*N* writes is handled by *N−1* replicas until the last of them drains.
+
+`rollback.sh` enforces this for one case. It refuses an app-only rollback that
+would run a core release unaware of a privacy tier present in the data: a target
+core that does not carry vidra-core's `0160_video_privacy_internal.up.sql` (the
+`internal` video privacy tier; `INTERNAL_PRIVACY_MIGRATION` in the script, which
+must match that file name) while the database holds videos at `internal`.
+
+- **Which targets.** Read from the release records **by file name**: records cut
+  by `release.sh` list the core's migration files (`core_migrations`), and
+  `deploy/release-mapping.py core-migration` places an unrecorded tag by the
+  recorded cores around it. A number cannot decide it — several core PRs held
+  neighbouring numbers, so a release can pass 0160 without this migration — and
+  only says "not carried" for a record whose newest migration is below 0160. A
+  target the records cannot place is treated as not carrying it, so the
+  database is asked. A rollback that leaves core alone (`--user` / `--search`
+  only) is not checked.
+- **The check** is one read-only `SELECT EXISTS` through the bundled postgres
+  container, in a session the server holds read-only, bounded by
+  `statement_timeout=15s`, `lock_timeout=5s` and a 10 s connect timeout (the
+  remap carries the same bounds). It runs before the env file is touched, again
+  after the pull, and once more after the restart.
+- **When it cannot run** (external Postgres, postgres not running, compose
+  unable to list it, a psql error or a timeout) the rollback is refused, saying
+  which. `--allow-unchecked-privacy-tier` proceeds after you
+  have checked by hand (`SELECT count(*) FROM videos WHERE privacy = 'internal';`).
+  The same flag covers a target the records cannot place; it never overrides a
+  definite finding.
+- **To proceed anyway**, `--remap-internal-to-private` runs the `UPDATE` from
+  0160's down migration (`internal` → `private`, the stricter tier) as one
+  transaction after the pull and immediately before the restart, logs the row
+  count, writes the remapped ids to `backups/internal-privacy-remap-<ts>.ids`
+  (0600), and proceeds. The remap is lossy until undone — after rolling forward
+  again, those ids are the list to set back.
+
+```bash
+./deploy/rollback.sh v0.7.7                                # refused while videos are at 'internal'
+./deploy/rollback.sh v0.7.7 --remap-internal-to-private    # remap, then roll back
+```
 
 #### Release notes: accepted compat breaks
 

@@ -61,6 +61,11 @@ OK, REFUSED, UNVERIFIED = 0, 1, 3
 # bug in here. The same reasoning that gave the --extra-record re-check its own
 # 65 in deploy/lib.sh.
 CRASHED = 70
+# `core-migration`'s "no": the records place the core tag BELOW the migration.
+# Its own code rather than REFUSED, because it is an answer and not a refusal,
+# and because 1 is also what an uncaught traceback exits with — a crash must
+# never read as a definite answer. See core_migration below.
+PREDATES = 4
 
 COMPONENTS = (('core', 'VIDRA_CORE_TAG', 'vidra-core'),
               ('user', 'VIDRA_USER_TAG', 'vidra-user'),
@@ -95,7 +100,11 @@ SEMVER = re.compile(r'v([0-9]+)\.([0-9]+)\.([0-9]+)([-+].*)?')
 # bundles do not ship: provenance to look up, not a file to open.
 RECORD_KEYS = {'schema_version', 'release', 'meta_commit', 'core_schema_version',
                'search_schema_version', 'components'}
-OPTIONAL_RECORD_KEYS = {'evidence'}
+OPTIONAL_RECORD_KEYS = {'evidence', 'core_migrations'}
+# One vidra-core up-migration FILE NAME, as `core_migrations` lists them and as
+# `core-migration --migration` takes one. The number is the ledger version the
+# file brings the schema to; the name is what identifies what it does.
+MIGRATION_FILE = re.compile(r'(?P<number>[0-9]{4,})_[a-z0-9_]+\.up\.sql')
 
 # --extra-record comes from OUTSIDE this tree — deploy/lib.sh downloads it — so
 # its size is refused before it is parsed, and by this script as well as by the
@@ -154,6 +163,21 @@ def validate(path, data):
             bad(f'{key} {data[key]!r} is not a positive integer migration version')
     if 'evidence' in data and not isinstance(data['evidence'], str):
         bad('evidence must be a string path')
+    if 'core_migrations' in data:
+        # What deploy/release.sh lists for the core commit: every up-migration
+        # file, once. Its newest must be core_schema_version, or the list is not
+        # the one that release shipped and must not vouch for anything.
+        names = data['core_migrations']
+        if not isinstance(names, list) or not names \
+                or not all(isinstance(name, str) and MIGRATION_FILE.fullmatch(name) for name in names):
+            bad('core_migrations must be a non-empty list of NNNN_name.up.sql file names')
+        elif len(set(names)) != len(names):
+            bad('core_migrations names a migration file more than once')
+        elif schema_int(data['core_schema_version']) and \
+                max(int(MIGRATION_FILE.fullmatch(name)['number']) for name in names) \
+                != data['core_schema_version']:
+            bad(f'core_migrations ends at a different migration than core_schema_version '
+                f'{data["core_schema_version"]}')
     components = data['components']
     if not keys(components, {name for name, _, _ in COMPONENTS}, set(), 'components'):
         return problems
@@ -981,10 +1005,114 @@ def record_pairing(path, release):
     return triple, ''
 
 
+def migration_file(value):
+    """argparse type for --migration: an up-migration file name, never a bare
+    number (see _core_migration for why a number cannot identify one)."""
+    if not MIGRATION_FILE.fullmatch(value):
+        raise argparse.ArgumentTypeError(f'{value!r} is not a vidra-core up-migration file name '
+                                         '(NNNN_name.up.sql)')
+    return value
+
+
+def core_migration(args):
+    """`core-migration`, guarded exactly like `resolve`: a bug in here exits
+    CRASHED, never a code the caller reads as an answer."""
+    try:
+        return _core_migration(args)
+    except Exception as error:  # noqa: BLE001 - see resolve()
+        print(f'[release-mapping] ERROR: core-migration crashed ({type(error).__name__}: '
+              f'{error}). This is a bug in deploy/release-mapping.py. Nothing was decided.',
+              file=sys.stderr)
+        return CRASHED
+
+
+def _core_migration(args):
+    """`core-migration --core TAG --migration FILE`: does vidra-core TAG carry
+    the up-migration FILE (e.g. 0160_video_privacy_internal.up.sql), according
+    to the release records in --releases?
+
+    BY FILE NAME, NOT BY NUMBER. A record's core_schema_version is the newest
+    migration in that core: how far its ledger reaches, not what is in it.
+    Migrations are numbered when they MERGE, so with several core PRs holding
+    neighbouring numbers, a release can pass 0160 without the 0160 that was
+    meant, and a renumbered PR moves the feature to another number. So a
+    record says YES only by listing FILE in its `core_migrations` (written by
+    deploy/release.sh from the core commit). The number decides one thing
+    only: a record whose newest migration is below FILE's number cannot
+    contain FILE. A record past that number with no list says nothing.
+
+    WHY THE RECORDS. They need no image, no pull and no network: rollback.sh
+    asks this before it has changed anything, mid-incident, with only this tree.
+
+    A TAG WITH NO RECORD OF ITS OWN is placed by the records around it: a
+    migration file, once merged, is in every later release. A recorded core at
+    or ABOVE the tag without FILE means the tag lacks it too; one at or BELOW
+    the tag listing FILE means the tag has it too. A prerelease (`v0.8.0-rc1`)
+    sorts below its release: it may have been cut before the migration merged,
+    so the v0.8.0 record must not vouch for it. Records that disagree decide
+    nothing.
+
+    THE EXIT CODE IS THE ANSWER; stdout is one line saying which record decided:
+      0   carries FILE
+      4   does not carry it (PREDATES above)
+      3   cannot tell: no record places the tag, the records disagree, or the
+          tag is not release-shaped
+      2   argparse — including a FILE that is not an up-migration file name,
+          and an older copy of this script with no `core-migration` command
+      70  this script fell over
+    The caller must treat everything but 0 and 4 as "unknown", never as "no".
+    """
+    tag, wanted = args.core or '', args.migration
+    number = int(MIGRATION_FILE.fullmatch(wanted)['number'])
+    match = SEMVER.fullmatch(tag)
+    if not match:
+        print(f'core tag {tag!r} is not a vMAJOR.MINOR.PATCH tag, so no release record can '
+              'place it')
+        return UNVERIFIED
+    target = semver(tag) + (0 if match.group(4) else 1,)
+    records, _ = load_records(args.releases)   # an unusable record places nothing
+
+    def has(record):
+        """True/False when this record can say, None when it cannot."""
+        if 'core_migrations' in record:
+            return wanted in record['core_migrations']
+        return False if record['core_schema_version'] < number else None
+
+    carries = predates = None
+    for record in records:
+        key = semver(record['components']['core']['tag']) + (1,)
+        verdict = has(record)
+        if verdict is True and key <= target and (carries is None or key > carries[0]):
+            carries = (key, record)
+        if verdict is False and key >= target and (predates is None or key < predates[0]):
+            predates = (key, record)
+
+    def said(found):
+        record = found[1]
+        core = record['components']['core']['tag']
+        where = '' if core == tag else f' (the nearest recorded core to {tag})'
+        how = ('lists it in core_migrations' if 'core_migrations' in record and has(record)
+               else 'does not list it in core_migrations' if 'core_migrations' in record
+               else f'has migrations only through {record["core_schema_version"]}')
+        return f'releases/{record["release"]}.json records core {core}{where}, which {how}'
+
+    if carries and predates:
+        print(f'the release records disagree about core {tag} and {wanted}: '
+              f'{said(carries)}, but {said(predates)}')
+        return UNVERIFIED
+    if carries:
+        print(said(carries))
+        return OK
+    if predates:
+        print(said(predates))
+        return PREDATES
+    print(f'no release record places core {tag} relative to {wanted}')
+    return UNVERIFIED
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0],
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('command', choices=('check', 'resolve'))
+    parser.add_argument('command', choices=('check', 'resolve', 'core-migration'))
     parser.add_argument('--release', help='resolve: the release being pinned')
     parser.add_argument('--record', type=Path,
                         help='resolve: this tree\'s releases/<tag>.json, when it has one. '
@@ -1008,7 +1136,11 @@ def main():
     parser.add_argument('--releases', type=Path,
                         default=Path(__file__).resolve().parents[1] / 'releases')
     parser.add_argument('--env', type=Path, help='env file to read VIDRA_*_TAG from')
-    parser.add_argument('--core', help='effective VIDRA_CORE_TAG (overrides --env)')
+    parser.add_argument('--core', help='effective VIDRA_CORE_TAG (overrides --env); '
+                                       'core-migration: the core tag being asked about')
+    parser.add_argument('--migration', type=migration_file,
+                        help='core-migration: the vidra-core up-migration FILE NAME to ask '
+                             'about, e.g. 0160_video_privacy_internal.up.sql')
     parser.add_argument('--user', help='effective VIDRA_USER_TAG (overrides --env)')
     parser.add_argument('--search', help='effective VIDRA_SEARCH_TAG (overrides --env)')
     parser.add_argument('--registry', help='effective VIDRA_IMAGE_REGISTRY (overrides --env; '
@@ -1040,6 +1172,10 @@ def main():
     args = parser.parse_args()
     if args.command == 'resolve':
         return resolve(args)   # guarded: never raises, see its docstring
+    if args.command == 'core-migration':
+        if args.core is None or args.migration is None:
+            parser.error('core-migration requires --core and --migration')
+        return core_migration(args)   # guarded the same way
     # --mode stopped being argparse-`required` when `resolve`, which has no
     # mode, joined the same parser. It is still required for `check`: a
     # default here would silently pick a severity (deploy refuses what

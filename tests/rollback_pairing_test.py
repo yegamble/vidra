@@ -20,10 +20,15 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# A running postgres with no video at privacy 'internal': every target here
+# predates that tier, so rollback.sh's privacy-tier gate asks, and must hear
+# "none" for the pairing under test to be what decides the run.
 DOCKER_STUB = '''#!/bin/sh
 printf 'docker %s\\n' "$*" >> "$STUB_LOG"
 case "$*" in
   "compose version --short") echo v2.30.0 ;;
+  *" ps -q postgres") echo pgcid ;;
+  exec*"SELECT EXISTS"*) echo f ;;
 esac
 exit 0
 '''

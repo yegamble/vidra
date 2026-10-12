@@ -470,6 +470,18 @@ component_schema() {
   printf '%s\n' "$((10#$max))"
 }
 
+# The core's migrations/ listing at that commit, one file name per line, for the
+# record's core_migrations (deploy/release-record.py keeps the *.up.sql names).
+# deploy/rollback.sh asks it whether a target core carries ONE migration — the
+# 'internal' privacy tier's — by NAME, because the schema number above says how
+# far the ledger reaches, not what is in it.
+component_migrations() {
+  local repo="$1" ref="$2" names
+  names="$(gh api "repos/${OWNER}/${repo}/contents/migrations?ref=${ref}" --jq '.[].name' 2>/dev/null)" || return 1
+  [ -n "$names" ] || return 1
+  printf '%s\n' "$names"
+}
+
 # Resolve one image's index + per-platform digests into $out, exactly as
 # release-preflight froze v0.6.5 — `imagetools inspect … {{json .Manifest}}`,
 # which deploy/release-record.py then parses. Runs directly (not in a
@@ -504,10 +516,13 @@ write_release_record() {
   # shellcheck disable=SC2064  # expand $tmp now so the cleanup targets THIS dir.
   trap "rm -rf '$tmp'" RETURN
   skel="$tmp/skeleton.json"
+  component_migrations vidra-core "$core_commit" > "$tmp/core-migrations" \
+    || record_die "could not list the vidra-core migrations at ${core_commit}."
 
   python3 "$RECORD_HELPER" skeleton \
     --release "$TAG" --meta-commit "$meta_commit" \
     --core-schema "$core_schema" --search-schema "$search_schema" \
+    --core-migrations "$tmp/core-migrations" \
     --evidence "docs/evidence/release-${TAG}-verification/manifest.json" \
     --component "core:${TAG}:${core_commit}:ghcr.io/${OWNER}/vidra-core" \
     --component "user:${TAG}:${user_commit}:ghcr.io/${OWNER}/vidra-user" \
