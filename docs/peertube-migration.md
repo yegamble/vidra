@@ -47,7 +47,8 @@ asset nor a `done` run makes unavailable source bytes recoverable.
 The importer carries local content and supported relationships, not a complete
 PeerTube server clone. Password hashes and actor keys can be carried, but plugins,
 sessions, every moderation/audit record, remote subscriptions and federation
-identity continuity need separate review. Lifetime view totals are carried;
+identity continuity need separate review (see [§9](#federation-continuity) for
+what a same-domain migration carries). Lifetime view totals are carried;
 historical daily analytics are not reconstructed.
 
 Budget duplicate storage for the source, destination and recovery copies. In
@@ -760,13 +761,56 @@ exists in v0.7.5.
 Exercise old `/w/<short-id>` and legacy UUID links against a known sample and
 recent source videos; inspect `/api/v1/videos/resolve?legacy_uuid=<uuid>`. Test
 embeds, query strings and non-video routes before proposing path-preserving
-redirects. A new hostname changes ActivityPub actor/object identities even if
-private keys were imported. Core v0.7.5 does not implement a complete ActivityPub
-Move migration; an HTTP redirect alone does not preserve old-domain WebFinger,
-actors, inboxes or remote followers. Keep federation disabled until the chosen
-same-origin or domain-migration strategy is tested end to end. If preserving the
-old identity requires serving protocol routes on the original hostname, retain
-those routes explicitly rather than redirecting the entire host.
+redirects.
+
+<a id="federation-continuity"></a>
+**Federation continuity.** Keep federation disabled while importing (§5), and
+until the strategy below has been tested end to end. Core v0.7.5 carries actor
+keys but **no remote followers**. The capabilities listed here need a core release
+that contains core#367–#369 (remote followers), core#373 (legacy object ids) and
+core#371–#372 (inbound Move). Check the release notes for the exact tag.
+
+- **Same domain, same handles: the supported path.** When vidra serves the
+  source's hostname, set `PUBLIC_BASE_URL` to that origin before the run. A
+  channel's actor id `/video-channels/<handle>` is then unchanged, and so is
+  its key. With an unchanged id and key, the importer carries the channel's
+  accepted remote followers. The report's `remote_follower` row counts them.
+  Followers are skipped, with a reason in the report, in these cases:
+  - the handle was renamed by the conflict policy, or `PUBLIC_BASE_URL` differs;
+  - the channel has ActivityPub off;
+  - the follower's instance or actor is blocked here, or the channel owner
+    blocks them;
+  - the source holds no usable inbox or key for the follower.
+
+  Block on Vidra **before** the run: the source's own blocklists are not read.
+  A video's old object id `/videos/watch/<uuid>` redirects an ActivityPub
+  fetch to its new id. Inbound replies and reports naming the old id still
+  reach the imported video.
+- **Not carried:**
+  - followers of an **account**. Vidra records followers per channel, so the
+    report counts these as `unsupported`;
+  - a source-authoritative rerun does not yet remove followers who left the
+    source after an earlier run;
+  - old comment ids (`/videos/watch/<uuid>/comments/<id>`).
+- **A new hostname** changes every ActivityPub actor and object id, even with
+  imported keys. Followers are then not carried, because posts would come from
+  an actor they never followed. Vidra does not send an outbound `Move` and
+  cannot declare `alsoKnownAs` for a local actor. An HTTP redirect does not
+  preserve old-domain WebFinger, actors, inboxes or followers. If the old
+  identity must survive, serve the protocol routes on the original hostname
+  rather than redirecting the whole host.
+- **Remote accounts that move.** When a remote account that Vidra users follow
+  migrates (Mastodon `Move`), those follows are re-pointed to the new account.
+  This happens once per account per day, and only when the new account lists
+  the old one in `alsoKnownAs`.
+
+Before enabling federation publicly, run these checks:
+
+1. Compare the report's `remote_follower` count with the source.
+2. Publish a test video on a channel with a follower you control, and confirm
+   it arrives.
+3. Fetch an old `/videos/watch/<uuid>` id with
+   `Accept: application/activity+json`, and confirm a 301 to the new id.
 
 ## 10. Accept, switch traffic, and retain rollback
 
