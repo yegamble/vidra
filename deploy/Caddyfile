@@ -109,6 +109,9 @@ example.com {
 	#   /.well-known/nodeinfo   NodeInfo discovery        (server.go:814)
 	#   /nodeinfo/2.1           NodeInfo document         (server.go:815)
 	#   /.well-known/webfinger  WebFinger                 (server.go:816)
+	#   /.well-known/host-meta, /.well-known/host-meta.json  XRD/JRD discovery
+	#   /.well-known/security.txt  RFC 9116 contact (404 if no contact set)
+	#   /.well-known/change-password  302 to the password settings page
 	#   /accounts/*             AP actor + inbox +
 	#   /video-channels/*       followers/following/outbox(server.go:817-831)
 	#   /inbox                  AP shared inbox           (server.go:821)
@@ -121,12 +124,14 @@ example.com {
 	#   /comments/{uuid}        AP Note object id
 	#   /remote-comments/{uuid} AP authored-remote-comment Note object id
 	#
-	# NOTE on /.well-known: only the two paths the api actually serves are
+	# NOTE on /.well-known: only the paths the api actually serves are
 	# listed, NOT the whole namespace — /.well-known/acme-challenge/* must stay
 	# with Caddy for the HTTP-01 certificate challenge.
 	@api path /api/* \
  /healthz /readyz /version \
  /.well-known/nodeinfo /.well-known/webfinger /nodeinfo/2.1 \
+ /.well-known/host-meta /.well-known/host-meta.json \
+ /.well-known/security.txt /.well-known/change-password \
  /accounts/* /video-channels/* /inbox \
  /feeds/* /services/oembed /sitemap.xml
 	handle @api {
