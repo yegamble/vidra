@@ -156,6 +156,16 @@ class CoreMigrationTests(unittest.TestCase):
         code, out = self.ask('v0.8.0')
         self.assertEqual(code, PREDATES, out)
 
+    def test_a_same_numbered_migration_with_another_name_is_not_carries(self):
+        """Pins the match to the exact FILE NAME: a release whose 0160 is some
+        other migration (a renumber on the core side) must not read as carrying
+        the tier. Matching by number alone would pass every other test here."""
+        future_record(self.releases, 'v0.8.0', 'v0.8.0', 160,
+                      migrations=['0001_init.up.sql', '0160_support_text.up.sql'])
+        code, out = self.ask('v0.8.0')
+        self.assertNotEqual(code, CARRIES, out)
+        self.assertEqual(code, PREDATES, out)
+
     def test_a_record_past_the_number_that_does_not_list_its_files_decides_nothing(self):
         future_record(self.releases, 'v0.8.0', 'v0.8.0', 161)   # no core_migrations
         code, out = self.ask('v0.8.0')
