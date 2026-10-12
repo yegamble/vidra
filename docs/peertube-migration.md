@@ -767,8 +767,9 @@ redirects.
 **Federation continuity.** Keep federation disabled while importing (§5), and
 until the strategy below has been tested end to end. Core v0.7.5 carries actor
 keys but **no remote followers**. The capabilities listed here need a core release
-that contains core#367–#369 (remote followers), core#373 (legacy object ids) and
-core#371–#372 (inbound Move). Check the release notes for the exact tag.
+that contains core#367–#369 and #374 (remote followers), core#373 (legacy
+object ids) and core#371, #372 and #375 (inbound Move). Check the release notes
+for the exact tag. Import only from a source database you trust.
 
 - **Same domain, same handles: the supported path.** When vidra serves the
   source's hostname, set `PUBLIC_BASE_URL` to that origin before the run. A
@@ -780,9 +781,15 @@ core#371–#372 (inbound Move). Check the release notes for the exact tag.
   - the channel has ActivityPub off;
   - the follower's instance or actor is blocked here, or the channel owner
     blocks them;
-  - the source holds no usable inbox or key for the follower.
+  - the follower's actor cannot be fetched, or names an inbox on another
+    server.
 
-  Block on Vidra **before** the run: the source's own blocklists are not read.
+  A follower's inbox and key are never copied from the source: the importer
+  fetches each follower's actor itself, the way federation does. Each run
+  fetches at most 500 actors, and a host that fails once is not retried in
+  that run. Followers left over are fetched by the next run, so rerun the
+  import until the report shows no deferred followers. Block on Vidra
+  **before** the run: the source's own blocklists are not read.
   A video's old object id `/videos/watch/<uuid>` redirects an ActivityPub
   fetch to its new id. Inbound replies and reports naming the old id still
   reach the imported video.
@@ -801,8 +808,13 @@ core#371–#372 (inbound Move). Check the release notes for the exact tag.
   rather than redirecting the whole host.
 - **Remote accounts that move.** When a remote account that Vidra users follow
   migrates (Mastodon `Move`), those follows are re-pointed to the new account.
-  This happens once per account per day, and only when the new account lists
-  the old one in `alsoKnownAs`.
+  This happens only when the new account lists the old one in `alsoKnownAs`.
+  - A verified move is accepted once per account per 24 hours. If
+    verification fails, the move is released and can be retried at once.
+  - The federation worker re-points every follow in batches of 200, so a
+    large audience moves over a few passes.
+  - A local block of the old account carries to the new one, and a user who
+    blocks the new account keeps the old follow.
 
 Before enabling federation publicly, run these checks:
 
