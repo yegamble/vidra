@@ -5,6 +5,7 @@
 #
 #   ./deploy/rollback.sh v0.2.0
 #   ./deploy/rollback.sh --core v0.2.1 --user v0.2.0 --search v0.2.0
+#   ./deploy/rollback.sh v0.7.7 --remap-internal-to-private
 #
 # The bare form pins the pairing releases/<tag>.json records (v0.7.5 is core
 # v0.7.5 with user and search at v0.7.3); with no record, <tag> for all three.
@@ -21,7 +22,21 @@
 # record, stops it. A triple no record pairs, such as a single --user, continues
 # with a WARNING naming what was not verified.
 #
-# WHAT THIS DOES NOT DO: it does not touch the database. That is deliberate and
+# It also REFUSES an app-only rollback that would run a core release unaware of
+# a privacy tier present in the data: a target core whose release records stop
+# below vidra-core migration 0160 (the 'internal' video privacy tier) while the
+# database holds videos at privacy 'internal'. That check is one read-only
+# SELECT, and a check that cannot be made refuses too. Two flags, both explicit:
+#   --remap-internal-to-private     remap those videos to 'private' (the UPDATE
+#                                   in 0160's down migration) just before the
+#                                   restart, record their ids under backups/,
+#                                   and proceed
+#   --allow-unchecked-privacy-tier  proceed when the check could NOT be made
+#                                   (or the target could not be placed), on
+#                                   your word, after checking by hand
+#
+# WHAT THIS DOES NOT DO: it does not touch the database (the one exception is
+# the remap above, which runs only when asked for by name). That is deliberate and
 # it is only safe because of the release policy stated in deploy/README.md —
 # SCHEMA CHANGES STAY BACKWARD-COMPATIBLE FOR ONE RELEASE, so release N-1's code
 # can always run against release N's schema. If you are rolling back ACROSS an
@@ -65,22 +80,32 @@ READY_TIMEOUT="${READY_TIMEOUT:-120}"
 # Kept identical in deploy.sh and restore.sh.
 MIN_EMBEDDED_MIGRATE_TAG="v0.2.0"
 
+# The vidra-core migration that adds the 'internal' video privacy tier. A core
+# release whose embedded migrations stop below it does not know that tier; see
+# the privacy-tier gate below. A migration NUMBER, not a release tag, so it
+# needs no edit when the release that ships it is cut — but if vidra-core
+# renumbers the migration before it merges, change this with it.
+INTERNAL_PRIVACY_MIGRATION=160
+
 log() { printf '[rollback] %s\n' "$*"; }
 die() { printf '[rollback] ERROR: %s\n' "$*" >&2; exit 1; }
 
 CORE_TAG=""; USER_TAG=""; SEARCH_TAG=""; BARE_TAG=""
+REMAP_INTERNAL=0; ALLOW_UNCHECKED_PRIVACY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --core)   CORE_TAG="${2:-}";   shift 2 ;;
     --user)   USER_TAG="${2:-}";   shift 2 ;;
     --search) SEARCH_TAG="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,45p' "$0"; exit 0 ;;
+    --remap-internal-to-private)    REMAP_INTERNAL=1;          shift ;;
+    --allow-unchecked-privacy-tier) ALLOW_UNCHECKED_PRIVACY=1; shift ;;
+    -h|--help) sed -n '2,59p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *)  BARE_TAG="$1"; shift ;;
   esac
 done
 
-[ -n "$BARE_TAG$CORE_TAG$USER_TAG$SEARCH_TAG" ] || die "usage: $0 <tag>  |  $0 [--core T] [--user T] [--search T]"
+[ -n "$BARE_TAG$CORE_TAG$USER_TAG$SEARCH_TAG" ] || die "usage: $0 <tag>  |  $0 [--core T] [--user T] [--search T]   [--remap-internal-to-private] [--allow-unchecked-privacy-tier]"
 [ -f "$ENV_FILE" ] || die "env file not found: $ENV_FILE"
 
 # THE BARE TAG'S PAIRING. v0.7.4 and v0.7.5 re-released vidra-core alone, so
@@ -309,6 +334,157 @@ release_mapping_check "$REPO_ROOT" rollback \
   "${SEARCH_TAG:-$(env_get VIDRA_SEARCH_TAG '')}" \
   || die "the release mapping preflight stopped this rollback (findings above). $ENV_FILE was NOT rewritten and nothing was pulled or restarted; the release you are serving is untouched."
 
+# Sets COMPOSE, EXTERNAL_POSTGRES and EXTERNAL_REDIS. It used to be called just
+# before `config -q` below; it moved up because the privacy-tier gate has to
+# reach the database BEFORE the env file is rewritten. Moving it changes no
+# command: it reads only the datastore and profile keys, which the tag rewrite
+# does not touch, and every compose call it builds reads the tags out of
+# $ENV_FILE when it runs, i.e. after the rewrite exactly as before.
+vidra_compose_chain
+
+# THE PRIVACY-TIER GATE, on the TARGET core, BEFORE the env snapshot and
+# rewrite below, so a refusal — like every gate above — leaves $ENV_FILE and the
+# running stack exactly as they were.
+#
+# WHY. The one-release compat policy (deploy/README.md) keeps old code able to
+# READ a newer schema. It says nothing about what old code DOES with a value it
+# has never seen. vidra-core migration 0160 adds the 'internal' video privacy
+# tier, and a core release cut before it does not know that tier. This script
+# never migrates down, so it must not put such a release in front of data that
+# uses the tier.
+#
+# "CUT BEFORE IT" COMES FROM THE RELEASE RECORDS, not from a tag constant.
+# releases/<tag>.json's core_schema_version is the newest migration compiled
+# into that core image, and `deploy/release-mapping.py core-migration` places a
+# tag that has no record by the recorded cores around it. So no future version
+# number is written down here: the release that ships the migration records it
+# like any other. (A MIN_CORE_TAG-style constant would sit empty until someone
+# remembered to fill it in, and every rollback before that would pass.)
+#
+# SEVERITY — a finding may only stop what it PREDICTS:
+#   - core not being rolled (`--user` / `--search` alone): not checked; the core
+#     that runs afterwards is the one running now.
+#   - the target carries the migration: not checked.
+#   - no video at 'internal': proceeds.
+#   - videos at 'internal' and a target that PREDATES the migration: REFUSED
+#     unless --remap-internal-to-private. No flag waves this through, because
+#     the finding is definite.
+#   - the database cannot be asked (external Postgres, postgres not running, a
+#     psql error), or videos are at 'internal' and the records cannot place
+#     the target: REFUSED unless --allow-unchecked-privacy-tier. Fail closed,
+#     not locked out. The override exists for the second case because a remap
+#     would needlessly demote videos for a target that may well know the tier.
+PGUSER="$(env_get POSTGRES_USER vidra)"
+PGDB="$(env_get POSTGRES_DB vidra)"
+BACKUP_DIR="${BACKUP_DIR:-$REPO_ROOT/backups}"
+INTERNAL_SQL="SELECT EXISTS (SELECT 1 FROM videos WHERE privacy = 'internal');"
+# Verbatim from 0160's down migration, which is the only remap anyone has
+# reviewed. Kept separate from RETURNING so the messages can quote it as is.
+REMAP_SQL="UPDATE videos SET privacy = 'private' WHERE privacy = 'internal';"
+REMAP_IDS_FILE="$BACKUP_DIR/internal-privacy-remap-$(date -u +%FT%H%M%S).ids"
+PRIVACY_STATE=off        # off | clean | remap | accepted
+PRIVACY_UNASKED=""
+
+# internal_privacy_rows — exit 0 when a video is at privacy 'internal', 1 when
+# none is, and 2 when the question could not be asked (PRIVACY_UNASKED says
+# why). READ-ONLY twice over: a SELECT, in a session the SERVER holds read-only
+# (default_transaction_read_only), so no later edit of the query can turn the
+# check into a write. No `docker exec -i`: nothing is piped in, and an attached
+# stdin would swallow the rest of a script fed to `bash -s`. psql's own error
+# is left on the terminal, unredirected, so the operator sees why.
+internal_privacy_rows() {
+  local cid answer
+  if [ "$EXTERNAL_POSTGRES" -eq 1 ]; then
+    PRIVACY_UNASKED="VIDRA_EXTERNAL_POSTGRES=true, so there is no bundled postgres container to ask"
+    return 2
+  fi
+  cid="$("${COMPOSE[@]}" ps -q postgres 2>/dev/null || true)"
+  if [ -z "$cid" ]; then
+    PRIVACY_UNASKED="the bundled postgres container is not running"
+    return 2
+  fi
+  if ! answer="$(docker exec -e PGOPTIONS='-c default_transaction_read_only=on' "$cid" \
+      psql -X -q -t -A -v ON_ERROR_STOP=1 -U "$PGUSER" -d "$PGDB" -c "$INTERNAL_SQL")"; then
+    PRIVACY_UNASKED="psql could not run the check (its error is above)"
+    return 2
+  fi
+  case "$answer" in
+    t) return 0 ;;
+    f) return 1 ;;
+  esac
+  PRIVACY_UNASKED="psql answered '${answer}', which is neither t nor f"
+  return 2
+}
+
+# remap_internal_to_private — REMAP_SQL and nothing else: every 'internal' video
+# becomes 'private', the stricter tier, so the remap can only narrow who sees a
+# video. One statement under psql --single-transaction: all of them or none.
+# The ids go to REMAP_IDS_FILE (0600, appended, one per line) because once
+# remapped they cannot be told apart from videos that were always private; a
+# later roll-forward needs the list to put them back.
+remap_internal_to_private() {
+  local cid ids count
+  cid="$("${COMPOSE[@]}" ps -q postgres 2>/dev/null || true)"
+  [ -n "$cid" ] || return 1
+  ids="$(docker exec "$cid" psql -X -q -t -A -1 -v ON_ERROR_STOP=1 -U "$PGUSER" -d "$PGDB" \
+    -c "${REMAP_SQL%;} RETURNING id;")" || return 1
+  count="$(printf '%s\n' "$ids" | awk 'NF { n++ } END { print n + 0 }')"
+  log "remapped ${count} video(s) from privacy 'internal' to 'private' (${REMAP_SQL})"
+  [ "$count" -gt 0 ] || return 0
+  if mkdir -p "$BACKUP_DIR" && (umask 077 && printf '%s\n' "$ids" >> "$REMAP_IDS_FILE"); then
+    log "their ids are in ${REMAP_IDS_FILE}. After rolling forward to a release that knows the tier, an owner can set them back, or: UPDATE videos SET privacy = 'internal' WHERE id = '<id>';"
+  else
+    log "WARNING: could not write ${REMAP_IDS_FILE}; the remapped ids follow, so they are not lost:"
+    printf '%s\n' "$ids" >&2
+  fi
+}
+
+privacy_tier_gate() {
+  local how rc=0 rows=0 target nothing_changed
+  nothing_changed="Nothing was changed: $ENV_FILE was NOT rewritten and nothing was pulled or restarted."
+  if [ -z "$CORE_TAG" ]; then
+    log "privacy-tier check: core is not being rolled back, so the core that runs afterwards is the one running now — not checked"
+    if [ "$REMAP_INTERNAL" -eq 1 ]; then log "--remap-internal-to-private: nothing to do, and NOTHING was remapped"; fi
+    return 0
+  fi
+  how="$(python3 "$REPO_ROOT/deploy/release-mapping.py" core-migration --releases "$REPO_ROOT/releases" \
+    --core "$CORE_TAG" --migration "$INTERNAL_PRIVACY_MIGRATION")" || rc=$?
+  case "$rc" in
+    0)
+      log "privacy-tier check: core ${CORE_TAG} carries migration ${INTERNAL_PRIVACY_MIGRATION} (${how}) — not checked"
+      if [ "$REMAP_INTERNAL" -eq 1 ]; then log "--remap-internal-to-private: not needed for this target, and NOTHING was remapped"; fi
+      return 0 ;;
+    4) target="core ${CORE_TAG} predates migration ${INTERNAL_PRIVACY_MIGRATION} (${how})" ;;
+    *) target="core ${CORE_TAG} could not be placed relative to migration ${INTERNAL_PRIVACY_MIGRATION} (${how:-deploy/release-mapping.py core-migration exited ${rc}}), so it is treated as predating it" ;;
+  esac
+  internal_privacy_rows || rows=$?
+  if [ "$rows" -eq 1 ]; then
+    log "privacy-tier check: ${target}; no video is at privacy 'internal' — proceeding"
+    PRIVACY_STATE=clean
+    return 0
+  fi
+  if [ "$rows" -eq 0 ] && [ "$REMAP_INTERNAL" -eq 1 ]; then
+    log "privacy-tier check: ${target}; videos ARE at privacy 'internal'. --remap-internal-to-private was given: they are remapped after the pull, immediately before the restart"
+    PRIVACY_STATE=remap
+    return 0
+  fi
+  if [ "$rows" -eq 0 ] && [ "$rc" -eq 4 ]; then
+    die "this app-only rollback would run ${target} against a database with videos at privacy 'internal', a tier that release does not know. Refusing. Remap them first: re-run with --remap-internal-to-private, which runs the UPDATE from vidra-core migration ${INTERNAL_PRIVACY_MIGRATION}'s down migration (${REMAP_SQL}) as one transaction just before the restart, records the ids it changed under ${BACKUP_DIR}/, and proceeds. ${nothing_changed}"
+  fi
+  if [ "$ALLOW_UNCHECKED_PRIVACY" -eq 1 ]; then
+    log "WARNING: privacy-tier check NOT settled: ${PRIVACY_UNASKED:-videos are at privacy 'internal' and the target could not be placed}. ${target}. --allow-unchecked-privacy-tier was given, so this rollback proceeds on your word."
+    # Only reachable with REMAP_INTERNAL=1 when the database could not be asked.
+    if [ "$REMAP_INTERNAL" -eq 1 ]; then log "--remap-internal-to-private needs that same connection, so NOTHING was remapped"; fi
+    PRIVACY_STATE=accepted
+    return 0
+  fi
+  if [ "$rows" -eq 0 ]; then
+    die "${target}, and the database has videos at privacy 'internal'. Refusing rather than guessing. If the target DOES carry migration ${INTERNAL_PRIVACY_MIGRATION} (its release record is missing from this tree, say), re-run with --allow-unchecked-privacy-tier; otherwise re-run with --remap-internal-to-private. ${nothing_changed}"
+  fi
+  die "the privacy-tier check could not be made: ${PRIVACY_UNASKED}. ${target}, so this rollback is refused rather than guessed. Check by hand against the database: SELECT count(*) FROM videos WHERE privacy = 'internal'; — if it is 0, or once you have run ${REMAP_SQL} yourself, re-run with --allow-unchecked-privacy-tier.$( [ "$REMAP_INTERNAL" -eq 0 ] || printf ' (--remap-internal-to-private cannot help here: it needs the same database connection.)' ) ${nothing_changed}"
+}
+privacy_tier_gate
+
 HTTP_PORT="$(env_get HTTP_PORT 8080)"
 FRONTEND_PORT="$(env_get FRONTEND_PORT 3000)"
 
@@ -382,9 +558,7 @@ else
   done
 fi
 
-# Sets COMPOSE, EXTERNAL_POSTGRES and EXTERNAL_REDIS.
-vidra_compose_chain
-
+# COMPOSE was set by vidra_compose_chain, above the privacy-tier gate.
 "${COMPOSE[@]}" config -q \
   || restore_env_and_die "the compose model does not render with the rollback tags — aborted; nothing was changed on the running stack"
 
@@ -395,6 +569,23 @@ log "pulling"
 # this path (`no matching manifest for linux/arm64/v8`).
 "${COMPOSE[@]}" pull \
   || restore_env_and_die "pull failed — does that tag exist in the registry, for this architecture? Nothing was changed on the running stack"
+
+# THE PRIVACY-TIER GATE, SECOND LOOK: after the pull, immediately before the
+# restart. The remap runs HERE and not at the gate, so a refusal or a failed
+# pull above leaves every video exactly as it was. A "no 'internal' videos"
+# answer is asked AGAIN, because the pull can take minutes with the newer
+# release still serving, and still able to put a video at 'internal'.
+case "$PRIVACY_STATE" in
+  remap)
+    remap_internal_to_private \
+      || restore_env_and_die "--remap-internal-to-private failed (psql's error, if any, is above). Nothing was restarted. The remap is one transaction, so it changed every such video or none; re-running this command retries it" ;;
+  clean)
+    privacy_rows=0; internal_privacy_rows || privacy_rows=$?
+    case "$privacy_rows" in
+      0) restore_env_and_die "a video was put at privacy 'internal' while this rollback was pulling, so the target would now meet the tier it does not know. Nothing was restarted. Re-run with --remap-internal-to-private" ;;
+      2) restore_env_and_die "the privacy-tier check passed before the pull but could not be repeated now: ${PRIVACY_UNASKED}. Nothing was restarted. Re-run once the database answers, or see --allow-unchecked-privacy-tier" ;;
+    esac ;;
+esac
 
 # THE TRAILER, and it is a function so that EVERY path that leaves the site down
 # reaches it (A38 rehearsal, 2026-09-07, run 4). It used to be inline at the very
@@ -440,6 +631,24 @@ probe() {
   done
   log "${name} OK"
 }
+
+# THE PRIVACY-TIER GATE, LAST LOOK, now that the target owns the data. The newer
+# api kept serving until `up -d` replaced it — through the migration one-shots —
+# so the remap is repeated (normally 0 rows) and a clean answer is re-asked. It
+# sits after probe()'s definition only so the `up -d` block above stays one
+# contiguous unit (tests/rollback_floor_test.py runs it in isolation); nothing
+# has executed in between.
+case "$PRIVACY_STATE" in
+  remap)
+    remap_internal_to_private \
+      || die "the rollback target is RUNNING, but the post-restart remap failed (psql's error, if any, is above). Run it by hand now: ${REMAP_SQL}" ;;
+  clean)
+    privacy_rows=0; internal_privacy_rows || privacy_rows=$?
+    case "$privacy_rows" in
+      0) die "the rollback target is RUNNING, and a video was put at privacy 'internal' before the newer release stopped. Remap it now: ./deploy/rollback.sh --core ${CORE_TAG} --remap-internal-to-private" ;;
+      2) log "WARNING: the rollback target is running, and the privacy-tier check could not be repeated: ${PRIVACY_UNASKED}. Check by hand: SELECT count(*) FROM videos WHERE privacy = 'internal';" ;;
+    esac ;;
+esac
 
 rc=0
 probe "api /readyz" "http://127.0.0.1:${HTTP_PORT}/readyz" || rc=1

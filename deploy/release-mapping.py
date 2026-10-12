@@ -61,8 +61,13 @@ OK, REFUSED, UNVERIFIED = 0, 1, 3
 # bug in here. The same reasoning that gave the --extra-record re-check its own
 # 65 in deploy/lib.sh.
 CRASHED = 70
+# `core-migration`'s "no": the records place the core tag BELOW the migration.
+# Its own code rather than REFUSED, because it is an answer and not a refusal,
+# and because 1 is also what an uncaught traceback exits with — a crash must
+# never read as a definite answer. See core_migration below.
+PREDATES = 4
 
-COMPONENTS = (('core', 'VIDRA_CORE_TAG', 'vidra-core'),
+COMPONENTS =(('core', 'VIDRA_CORE_TAG', 'vidra-core'),
               ('user', 'VIDRA_USER_TAG', 'vidra-user'),
               ('search', 'VIDRA_SEARCH_TAG', 'vidra-search'))
 # Repository name -> role, so `resolve --component-tag` takes the spelling
@@ -981,10 +986,89 @@ def record_pairing(path, release):
     return triple, ''
 
 
+def core_migration(args):
+    """`core-migration`, guarded exactly like `resolve`: a bug in here exits
+    CRASHED, never a code the caller reads as an answer."""
+    try:
+        return _core_migration(args)
+    except Exception as error:  # noqa: BLE001 - see resolve()
+        print(f'[release-mapping] ERROR: core-migration crashed ({type(error).__name__}: '
+              f'{error}). This is a bug in deploy/release-mapping.py. Nothing was decided.',
+              file=sys.stderr)
+        return CRASHED
+
+
+def _core_migration(args):
+    """`core-migration --core TAG --migration N`: does vidra-core TAG embed
+    migration N, according to the release records in --releases?
+
+    WHY THE RECORDS. Each record's core_schema_version is the newest migration
+    compiled into that release's core image (checked against the image's own
+    `migrate embedded-max` when the record is cut). So the question needs no
+    image, no pull and no network: deploy/rollback.sh asks it before it has
+    changed anything, mid-incident, with only this tree.
+
+    A TAG WITH NO RECORD OF ITS OWN is placed by the records around it, because
+    core migrations are numbered in release order. A recorded core at or ABOVE
+    the tag that stops below N means the tag stops below N too; a recorded core
+    at or BELOW the tag that reaches N means the tag reaches it too. A
+    prerelease (`v0.8.0-rc1`) sorts below its release: it may have been cut
+    before the migration merged, so the v0.8.0 record must not vouch for it.
+    Records that disagree (one says yes, one says no) decide nothing.
+
+    THE EXIT CODE IS THE ANSWER; stdout is one line saying which record decided:
+      0   carries migration N
+      4   PREDATES it (PREDATES above)
+      3   cannot tell: no record places the tag, the records disagree, or the
+          tag is not release-shaped
+      2   argparse — including an older copy of this script with no
+          `core-migration` command
+      70  this script fell over
+    The caller must treat everything but 0 and 4 as "unknown", never as "no".
+    """
+    tag = args.core or ''
+    match = SEMVER.fullmatch(tag)
+    if not match:
+        print(f'core tag {tag!r} is not a vMAJOR.MINOR.PATCH tag, so no release record can '
+              'place it')
+        return UNVERIFIED
+    target = semver(tag) + (0 if match.group(4) else 1,)
+    records, _ = load_records(args.releases)   # an unusable record places nothing
+    carries = predates = None
+    for record in records:
+        recorded = record['components']['core']['tag']
+        key = semver(recorded) + (1,)
+        schema = record['core_schema_version']
+        if key <= target and schema >= args.migration and (carries is None or key > carries[0]):
+            carries = (key, record)
+        if key >= target and schema < args.migration and (predates is None or key < predates[0]):
+            predates = (key, record)
+
+    def said(found):
+        record = found[1]
+        core = record['components']['core']['tag']
+        where = '' if core == tag else f' (the nearest recorded core to {tag})'
+        return (f'releases/{record["release"]}.json records core {core}{where} with migrations '
+                f'through {record["core_schema_version"]}')
+
+    if carries and predates:
+        print(f'the release records disagree about core {tag} and migration {args.migration}: '
+              f'{said(carries)}, but {said(predates)}')
+        return UNVERIFIED
+    if carries:
+        print(said(carries))
+        return OK
+    if predates:
+        print(said(predates))
+        return PREDATES
+    print(f'no release record places core {tag} relative to migration {args.migration}')
+    return UNVERIFIED
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0],
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('command', choices=('check', 'resolve'))
+    parser.add_argument('command', choices=('check', 'resolve', 'core-migration'))
     parser.add_argument('--release', help='resolve: the release being pinned')
     parser.add_argument('--record', type=Path,
                         help='resolve: this tree\'s releases/<tag>.json, when it has one. '
@@ -1008,7 +1092,10 @@ def main():
     parser.add_argument('--releases', type=Path,
                         default=Path(__file__).resolve().parents[1] / 'releases')
     parser.add_argument('--env', type=Path, help='env file to read VIDRA_*_TAG from')
-    parser.add_argument('--core', help='effective VIDRA_CORE_TAG (overrides --env)')
+    parser.add_argument('--core', help='effective VIDRA_CORE_TAG (overrides --env); '
+                                       'core-migration: the core tag being asked about')
+    parser.add_argument('--migration', type=int,
+                        help='core-migration: the vidra-core migration number to ask about')
     parser.add_argument('--user', help='effective VIDRA_USER_TAG (overrides --env)')
     parser.add_argument('--search', help='effective VIDRA_SEARCH_TAG (overrides --env)')
     parser.add_argument('--registry', help='effective VIDRA_IMAGE_REGISTRY (overrides --env; '
@@ -1040,6 +1127,10 @@ def main():
     args = parser.parse_args()
     if args.command == 'resolve':
         return resolve(args)   # guarded: never raises, see its docstring
+    if args.command == 'core-migration':
+        if args.core is None or args.migration is None:
+            parser.error('core-migration requires --core and --migration')
+        return core_migration(args)   # guarded the same way
     # --mode stopped being argparse-`required` when `resolve`, which has no
     # mode, joined the same parser. It is still required for `check`: a
     # default here would silently pick a severity (deploy refuses what
