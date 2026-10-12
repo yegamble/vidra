@@ -177,5 +177,54 @@ class ValidatorEquivalenceTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+
+class CoreMigrationsTests(unittest.TestCase):
+    """core_migrations: the core's up-migration FILE NAMES, so deploy/rollback.sh
+    can ask whether a target core carries one specific migration (the 'internal'
+    privacy tier's) by name. A number says how far the ledger reaches, not what
+    is in it."""
+
+    NAMES = ['0160_video_privacy_internal.up.sql', '0001_init.up.sql',
+             '0001_init.down.sql', 'embed.go']
+
+    def skeleton(self, schema='160', names=None):
+        return rr.build_skeleton(
+            release=TAG, meta_commit=META_COMMIT,
+            core_schema_version=schema, search_schema_version='18',
+            components={name: {'tag': TAG, 'commit': COMMITS[name],
+                               'repository': f'ghcr.io/yegamble/vidra-{name}'}
+                        for name in ('core', 'user', 'search')},
+            core_migrations=self.NAMES if names is None else names)
+
+    def test_the_skeleton_records_the_up_migration_files_sorted(self):
+        self.assertEqual(self.skeleton()['core_migrations'],
+                         ['0001_init.up.sql', '0160_video_privacy_internal.up.sql'])
+
+    def test_a_list_that_disagrees_with_the_core_schema_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.skeleton(schema='161')
+        with self.assertRaises(ValueError):
+            self.skeleton(names=['embed.go'])
+
+    def test_the_completed_record_with_the_list_passes_the_checker(self):
+        record = rr.finalize(self.skeleton(), digests_from_manifests())
+        self.assertEqual(mapping.validate(Path(f'/records/{TAG}.json'), record), [])
+
+    def test_the_cli_reads_the_names_from_a_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            names = Path(tmp) / 'core-migrations'
+            names.write_text('\n'.join(self.NAMES) + '\n')
+            result = subprocess.run(
+                ['python3', str(SEAM), 'skeleton', '--release', TAG,
+                 '--meta-commit', META_COMMIT, '--core-schema', '160', '--search-schema', '18',
+                 '--core-migrations', str(names),
+                 *[arg for name in ('core', 'user', 'search') for arg in
+                   ('--component', f'{name}:{TAG}:{COMMITS[name]}:ghcr.io/yegamble/vidra-{name}')]],
+                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['core_migrations'],
+                         ['0001_init.up.sql', '0160_video_privacy_internal.up.sql'])
+
+
 if __name__ == '__main__':
     unittest.main()

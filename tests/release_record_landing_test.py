@@ -137,6 +137,11 @@ class LandingTests(unittest.TestCase):
             image = record['components'][name]['image']
             self.assertEqual(image['index_digest'], INDEX_DIGEST)
             self.assertEqual(image['platforms'], {'linux/amd64': PLATFORM_DIGEST})
+        # The core's up-migration file names, so rollback.sh can ask by NAME
+        # whether a target carries one migration (deploy/rollback.sh,
+        # INTERNAL_PRIVACY_MIGRATION).
+        self.assertEqual(record['core_migrations'], ['0100_b.up.sql', '0146_a.up.sql'])
+        self.assertEqual(record['core_schema_version'], 146)
 
     def test_a_failed_pr_create_reports_the_branch_and_a_by_hand_pr_recipe(self):
         result, calls = self.run_harness(fail_pr=True)

@@ -1272,20 +1272,27 @@ rolling deploy runs *N−1* and *N* side by side against *N*'s schema, so a valu
 
 `rollback.sh` enforces this for one case. It refuses an app-only rollback that
 would run a core release unaware of a privacy tier present in the data: a target
-core whose embedded migrations stop below vidra-core migration 0160 (the
-`internal` video privacy tier) while the database holds videos at `internal`.
+core that does not carry vidra-core's `0160_video_privacy_internal.up.sql` (the
+`internal` video privacy tier; `INTERNAL_PRIVACY_MIGRATION` in the script, which
+must match that file name) while the database holds videos at `internal`.
 
-- **Which targets.** "Stops below 0160" is read from the release records — each
-  `releases/<tag>.json` states its core's newest migration
-  (`core_schema_version`), and `deploy/release-mapping.py core-migration` places
-  an unrecorded tag by the recorded cores around it. A target the records cannot
-  place is treated as predating 0160. A rollback that leaves core alone
-  (`--user` / `--search` only) is not checked.
+- **Which targets.** Read from the release records **by file name**: records cut
+  by `release.sh` list the core's migration files (`core_migrations`), and
+  `deploy/release-mapping.py core-migration` places an unrecorded tag by the
+  recorded cores around it. A number cannot decide it — several core PRs held
+  neighbouring numbers, so a release can pass 0160 without this migration — and
+  only says "not carried" for a record whose newest migration is below 0160. A
+  target the records cannot place is treated as not carrying it, so the
+  database is asked. A rollback that leaves core alone (`--user` / `--search`
+  only) is not checked.
 - **The check** is one read-only `SELECT EXISTS` through the bundled postgres
-  container, in a session the server holds read-only. It runs before the env
-  file is touched, again after the pull, and once more after the restart.
-- **When it cannot run** (external Postgres, postgres not running, a psql error)
-  the rollback is refused. `--allow-unchecked-privacy-tier` proceeds after you
+  container, in a session the server holds read-only, bounded by
+  `statement_timeout=15s`, `lock_timeout=5s` and a 10 s connect timeout (the
+  remap carries the same bounds). It runs before the env file is touched, again
+  after the pull, and once more after the restart.
+- **When it cannot run** (external Postgres, postgres not running, compose
+  unable to list it, a psql error or a timeout) the rollback is refused, saying
+  which. `--allow-unchecked-privacy-tier` proceeds after you
   have checked by hand (`SELECT count(*) FROM videos WHERE privacy = 'internal';`).
   The same flag covers a target the records cannot place; it never overrides a
   definite finding.

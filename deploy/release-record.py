@@ -54,6 +54,9 @@ DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
 PLATFORM = re.compile(r'[a-z0-9]+/[a-z0-9]+(/[a-z0-9]+)?')
 COMMIT = re.compile(r'[0-9a-f]{40}')
 RELEASE_TAG = re.compile(r'v[0-9]+\.[0-9]+\.[0-9]+')
+# Kept identical to deploy/release-mapping.py's MIGRATION_FILE, which validates
+# what this writes.
+MIGRATION_FILE = re.compile(r'(?P<number>[0-9]{4,})_[a-z0-9_]+\.up\.sql')
 
 
 def skeleton_image(repository):
@@ -65,7 +68,7 @@ def skeleton_image(repository):
 
 
 def build_skeleton(release, meta_commit, core_schema_version, search_schema_version,
-                   components, evidence=None):
+                   components, evidence=None, core_migrations=None):
     """A digest-less record from what is known before the images publish.
 
     `components` maps each of core/user/search to {'tag', 'commit', 'repository'}.
@@ -91,7 +94,32 @@ def build_skeleton(release, meta_commit, core_schema_version, search_schema_vers
         }
     if evidence:
         record['evidence'] = evidence
+    if core_migrations is not None:
+        record['core_migrations'] = _core_migrations(core_migrations,
+                                                     record['core_schema_version'])
     return record
+
+
+def _core_migrations(names, core_schema_version):
+    """The core's up-migration FILE NAMES, sorted, from a directory listing
+    (down migrations and anything that is not a migration are dropped).
+
+    WHY THE NAMES. deploy/rollback.sh must know whether a target core carries
+    one specific migration — the 'internal' privacy tier's — and a number only
+    says how far the ledger reaches. The newest listed must BE
+    core_schema_version: both come from the same listing, and a list that ends
+    elsewhere is not that release's."""
+    ups = sorted({name.strip() for name in names if name.strip().endswith('.up.sql')})
+    odd = [name for name in ups if not MIGRATION_FILE.fullmatch(name)]
+    if odd:
+        raise ValueError(f'core migration file name(s) {", ".join(odd)} are not NNNN_name.up.sql')
+    if not ups:
+        raise ValueError('the core migration listing holds no *.up.sql file')
+    newest = max(int(MIGRATION_FILE.fullmatch(name)['number']) for name in ups)
+    if newest != core_schema_version:
+        raise ValueError(f'the core migration listing ends at {newest}, but core_schema_version '
+                         f'is {core_schema_version}')
+    return ups
 
 
 def _schema_int(label, value):
@@ -226,6 +254,9 @@ def main(argv=None):
     skel.add_argument('--core-schema', required=True)
     skel.add_argument('--search-schema', required=True)
     skel.add_argument('--evidence')
+    skel.add_argument('--core-migrations', metavar='FILE',
+                      help="the core's migrations/ directory listing, one file name per line; "
+                           'its *.up.sql names are recorded as core_migrations')
     skel.add_argument('--component', action='append', type=_component_arg, default=[],
                       help='name:tag:commit:repository (give core, user and search)')
     skel.add_argument('--out', help='write here instead of stdout')
@@ -244,10 +275,14 @@ def main(argv=None):
                 raise ValueError(f'release {args.release!r} is not vMAJOR.MINOR.PATCH')
             if not COMMIT.fullmatch(args.meta_commit):
                 raise ValueError(f'meta-commit {args.meta_commit!r} is not a 40-hex commit')
+            core_migrations = None
+            if args.core_migrations:
+                with open(args.core_migrations, encoding='utf-8') as handle:
+                    core_migrations = handle.read().splitlines()
             record = build_skeleton(
                 release=args.release, meta_commit=args.meta_commit,
                 core_schema_version=args.core_schema, search_schema_version=args.search_schema,
-                components=components, evidence=args.evidence)
+                components=components, evidence=args.evidence, core_migrations=core_migrations)
             _write(record, args.out)
         else:
             with open(args.record, encoding='utf-8') as handle:
