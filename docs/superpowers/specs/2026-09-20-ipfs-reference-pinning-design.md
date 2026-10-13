@@ -3,6 +3,19 @@
 Date: 2026-09-20 · Status: **draft for discussion — not approved, not planned, not
 built** · Repos: vidra-core (C), vidra (M), vidra-user (U)
 
+> **Decision (2026-10-13).** The owner chose to build **Tier A** and then measure.
+> **D5: progressive download MP4s (and other non-HLS assets the HLS handlers never
+> serve) are NOT pinned to IPFS.** **Tier B (reference pinning) is deferred - it is
+> not to be built now;** D1, D3 and D4 remain unruled, and D2 is decided only after
+> Tier A has been measured on beta (PR 7 in section 11). Tier A is open in
+> vidra-core and not merged: F2 [#384](https://github.com/yegamble/vidra-core/pull/384),
+> F6 [#386](https://github.com/yegamble/vidra-core/pull/386),
+> F4 [#388](https://github.com/yegamble/vidra-core/pull/388),
+> F3 [#390](https://github.com/yegamble/vidra-core/pull/390) (stacked on #388),
+> F5 [#389](https://github.com/yegamble/vidra-core/pull/389),
+> F1 [#391](https://github.com/yegamble/vidra-core/pull/391). The roughly five-fold
+> figure above is still **by construction, not measured**.
+
 Every claim below is tagged by how it is known: **[read]** in the code at
 vidra-core `400c1a8` / vidra `79a84cd` with file:line, **[measured]** in the lab
 spike recorded beside this document
