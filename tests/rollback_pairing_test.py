@@ -29,6 +29,7 @@ case "$*" in
   "compose version --short") echo v2.30.0 ;;
   *" ps -q postgres") echo pgcid ;;
   exec*"SELECT EXISTS"*) echo f ;;
+  exec*"FROM watched_word_lists"*) echo f ;;
 esac
 exit 0
 '''

@@ -36,6 +36,13 @@
 #                                   (or the target could not be placed), on
 #                                   your word, after checking by hand
 #
+# It likewise REFUSES an app-only rollback below WORD_LISTS_MIGRATION while the
+# database holds any per-account watched-word list or any list whose action is
+# 'hold' (see the word-lists gate). Old code ignores both: it would match a
+# creator's PRIVATE terms into the staff review queue and publish comments a
+# 'hold' list was holding. A check that cannot be made refuses too, unless
+# --allow-unchecked-word-lists.
+#
 # WHAT THIS DOES NOT DO: it does not touch the database (the one exception is
 # the remap above, which runs only when asked for by name). That is deliberate and
 # it is only safe because of the release policy stated in deploy/README.md —
@@ -93,11 +100,16 @@ MIN_EMBEDDED_MIGRATE_TAG="v0.2.0"
 # records then never list it, and every rollback asks the database.
 INTERNAL_PRIVACY_MIGRATION="0160_video_privacy_internal.up.sql"
 
+# The vidra-core migration that adds named watched-word lists (per-account lists
+# and the 'hold' action), IDENTIFIED BY ITS FILE NAME for the same reasons as
+# INTERNAL_PRIVACY_MIGRATION above; see the word-lists gate below.
+WORD_LISTS_MIGRATION="0172_watched_word_lists.up.sql"
+
 log() { printf '[rollback] %s\n' "$*"; }
 die() { printf '[rollback] ERROR: %s\n' "$*" >&2; exit 1; }
 
 CORE_TAG=""; USER_TAG=""; SEARCH_TAG=""; BARE_TAG=""
-REMAP_INTERNAL=0; ALLOW_UNCHECKED_PRIVACY=0
+REMAP_INTERNAL=0; ALLOW_UNCHECKED_PRIVACY=0; ALLOW_UNCHECKED_WORD_LISTS=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --core)   CORE_TAG="${2:-}";   shift 2 ;;
@@ -105,13 +117,14 @@ while [ $# -gt 0 ]; do
     --search) SEARCH_TAG="${2:-}"; shift 2 ;;
     --remap-internal-to-private)    REMAP_INTERNAL=1;          shift ;;
     --allow-unchecked-privacy-tier) ALLOW_UNCHECKED_PRIVACY=1; shift ;;
+    --allow-unchecked-word-lists)   ALLOW_UNCHECKED_WORD_LISTS=1; shift ;;
     -h|--help) sed -n '2,60p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *)  BARE_TAG="$1"; shift ;;
   esac
 done
 
-[ -n "$BARE_TAG$CORE_TAG$USER_TAG$SEARCH_TAG" ] || die "usage: $0 <tag>  |  $0 [--core T] [--user T] [--search T]   [--remap-internal-to-private] [--allow-unchecked-privacy-tier]"
+[ -n "$BARE_TAG$CORE_TAG$USER_TAG$SEARCH_TAG" ] || die "usage: $0 <tag>  |  $0 [--core T] [--user T] [--search T]   [--remap-internal-to-private] [--allow-unchecked-privacy-tier] [--allow-unchecked-word-lists]"
 [ -f "$ENV_FILE" ] || die "env file not found: $ENV_FILE"
 
 # THE BARE TAG'S PAIRING. v0.7.4 and v0.7.5 re-released vidra-core alone, so
@@ -529,6 +542,72 @@ privacy_tier_gate() {
   die "the privacy-tier check could not be made: ${PRIVACY_UNASKED}. ${target}, so this rollback is refused rather than guessed. Check by hand against the database: SELECT count(*) FROM videos WHERE privacy = 'internal'; — if it is 0, or once you have run ${REMAP_SQL} yourself, re-run with --allow-unchecked-privacy-tier.$( [ "$REMAP_INTERNAL" -eq 0 ] || printf ' (--remap-internal-to-private cannot help here: it needs the same database connection.)' ) ${nothing_changed}"
 }
 privacy_tier_gate
+
+# THE WORD-LISTS GATE, same place and same shape as the privacy-tier gate, same
+# bounded read-only psql (privacy_pg). vidra-core's WORD_LISTS_MIGRATION adds
+# per-account watched-word lists and a 'hold' action per list. A core release
+# without it does not know either: it matches EVERY term in watched_words
+# (including creators' private ones) and files the hit in the staff review queue,
+# and a comment a 'hold' list would have held is published. This script never
+# migrates down, so it must not put such a release in front of that data.
+#
+# Severity, as for the privacy tier: core not being rolled, or a target that
+# carries the migration: not checked. No private list and no 'hold' list:
+# proceeds (a missing watched_word_lists table is that case too). Otherwise
+# REFUSED, with no flag, because the finding is definite - clear the data by
+# hand (the SQL is in the message), then re-run. A check that cannot be made, or
+# a target the records cannot place with the data present, is refused unless
+# --allow-unchecked-word-lists.
+WORD_LISTS_SQL="SELECT count(*) > 0 FROM watched_word_lists WHERE owner_id IS NOT NULL OR action = 'hold';"
+WORD_LISTS_FIX_SQL="DELETE FROM watched_word_lists WHERE owner_id IS NOT NULL; UPDATE watched_word_lists SET action = 'flag' WHERE action = 'hold';"
+
+word_lists_in_use() {
+  PG_ERR=""
+  privacy_pg '-c default_transaction_read_only=on' "$WORD_LISTS_SQL" && {
+    case "$PG_OUT" in
+      t) return 0 ;;
+      f) return 1 ;;
+    esac
+    PRIVACY_UNASKED="psql answered '${PG_OUT}', which is neither t nor f"
+    return 2
+  }
+  # A database below the migration has no such table: nothing to protect.
+  case "$PG_ERR" in *'"watched_word_lists" does not exist'*) return 1 ;; esac
+  return 2
+}
+
+word_lists_gate() {
+  local how rc=0 rows=0 target nothing_changed
+  nothing_changed="Nothing was changed: $ENV_FILE was NOT rewritten and nothing was pulled or restarted."
+  if [ -z "$CORE_TAG" ]; then
+    log "word-lists check: core is not being rolled back — not checked"
+    return 0
+  fi
+  how="$(python3 "$REPO_ROOT/deploy/release-mapping.py" core-migration --releases "$REPO_ROOT/releases" \
+    --core "$CORE_TAG" --migration "$WORD_LISTS_MIGRATION")" || rc=$?
+  case "$rc" in
+    0) log "word-lists check: core ${CORE_TAG} carries migration ${WORD_LISTS_MIGRATION} (${how}) — not checked"; return 0 ;;
+    4) target="core ${CORE_TAG} does not carry migration ${WORD_LISTS_MIGRATION} (${how})" ;;
+    *) target="core ${CORE_TAG} could not be placed relative to migration ${WORD_LISTS_MIGRATION} (${how:-deploy/release-mapping.py core-migration exited ${rc}}), so it is treated as not carrying it" ;;
+  esac
+  word_lists_in_use || rows=$?
+  if [ "$rows" -eq 1 ]; then
+    log "word-lists check: ${target}; no per-account or 'hold' watched-word list exists — proceeding"
+    return 0
+  fi
+  if [ "$rows" -eq 0 ] && [ "$rc" -eq 4 ]; then
+    die "this app-only rollback would run ${target} against a database with per-account or 'hold' watched-word lists. That release would put creators' private terms in the staff review queue and publish comments a 'hold' list holds. Refusing. Clear them first, by hand: ${WORD_LISTS_FIX_SQL} then re-run. ${nothing_changed}"
+  fi
+  if [ "$ALLOW_UNCHECKED_WORD_LISTS" -eq 1 ]; then
+    log "WARNING: word-lists check NOT settled: ${PRIVACY_UNASKED:-lists exist and the target could not be placed}. ${target}. --allow-unchecked-word-lists was given, so this rollback proceeds on your word."
+    return 0
+  fi
+  if [ "$rows" -eq 0 ]; then
+    die "${target}, and the database has per-account or 'hold' watched-word lists. Refusing rather than guessing. If the target DOES carry migration ${WORD_LISTS_MIGRATION}, re-run with --allow-unchecked-word-lists; otherwise clear them by hand: ${WORD_LISTS_FIX_SQL} ${nothing_changed}"
+  fi
+  die "the word-lists check could not be made: ${PRIVACY_UNASKED}. ${target}, so this rollback is refused rather than guessed. Check by hand: ${WORD_LISTS_SQL} - if it is f, re-run with --allow-unchecked-word-lists. ${nothing_changed}"
+}
+word_lists_gate
 
 HTTP_PORT="$(env_get HTTP_PORT 8080)"
 FRONTEND_PORT="$(env_get FRONTEND_PORT 3000)"
