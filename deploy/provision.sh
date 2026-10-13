@@ -107,6 +107,9 @@ case " $PROFILES " in
   *" media "*) PORTS="$PORTS  1935/tcp (RTMP ingest)" ;;
 esac
 case " $PROFILES " in
+  *" rtmps "*) PORTS="$PORTS  1936/tcp (RTMPS ingest)" ;;
+esac
+case " $PROFILES " in
   *" ipfs "*)  PORTS="$PORTS  4001/tcp+udp (IPFS swarm)" ;;
 esac
 

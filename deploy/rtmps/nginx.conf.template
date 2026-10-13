@@ -1,0 +1,31 @@
+# Vidra RTMPS front: terminates TLS for live ingest and relays the decrypted
+# RTMP byte stream to the plain nginx-rtmp `rtmp` service over the private
+# compose network. Plain RTMP (1935) sends the stream key in cleartext; this
+# listener is how an encoder (OBS: rtmps://host:1936/live) avoids that.
+#
+# Deliberately a generic TCP `stream` proxy, not a patch to nginx-rtmp: the
+# media server, its hooks and the stream-key privacy rename stay exactly as
+# the A26 lab measured them. The relay is transparent, so nothing in the
+# publish/stop callbacks changes. Variables ${RTMPS_*} are substituted by
+# envsubst at container start (see the compose `rtmps` service); the explicit
+# variable list there keeps nginx's own $variables untouched.
+worker_processes 1;
+error_log /dev/stderr warn;
+pid /tmp/nginx.pid;
+
+events { worker_connections 1024; }
+
+stream {
+    server {
+        listen 1936 ssl;
+        ssl_certificate     ${RTMPS_CERT_FILE};
+        ssl_certificate_key ${RTMPS_KEY_FILE};
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        ssl_session_cache   shared:rtmps:2m;
+        # A live encoder holds one connection for hours; do not let an idle
+        # proxy timeout cut a stream during a quiet moment in the broadcast.
+        proxy_timeout       4h;
+        proxy_connect_timeout 5s;
+        proxy_pass rtmp:1935;
+    }
+}
