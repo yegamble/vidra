@@ -538,18 +538,15 @@ services:
     logging: *logging
 
   # rtmps (optional `rtmps` profile): the TLS front for live ingest. Like rtmp it
-  # is deliberately internet-facing — an encoder on a creator's laptop dials it —
+  # is deliberately internet-facing - an encoder on a creator's laptop dials it -
   # so it keeps its publish (1936) and is another standing exception to open in
-  # the cloud firewall. Caddy's certificate volume is mounted read-only so the
-  # Caddy-managed cert can be reused (point RTMPS_CERT_FILE/RTMPS_KEY_FILE into
-  # /caddy-data); nothing new is exposed beyond 1936.
+  # the cloud firewall. It deliberately does NOT mount caddy_data (not even
+  # read-only): that volume holds the ACME account key and any internal-CA key,
+  # and this container faces the internet. deploy/sync-rtmps-certs.sh copies just
+  # the one certificate + key into RTMPS_CERT_DIR instead.
   rtmps:
     restart: unless-stopped
     logging: *logging
-    volumes:
-      - ./deploy/rtmps/nginx.conf.template:/etc/nginx/rtmps.conf.template:ro
-      - ${RTMPS_CERT_DIR:-./deploy/rtmps-certs}:/certs:ro
-      - caddy_data:/caddy-data:ro
 
   # ---------------------------------------------------------------------------
   # Public IPFS mirror node (base definition: vidra-core/docker-compose.yml).

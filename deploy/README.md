@@ -389,7 +389,7 @@ half-provisions.
   | Port | Open it when | Why it cannot be loopback |
   |---|---|---|
   | **1935/tcp** | `VIDRA_COMPOSE_PROFILES` contains `media` | RTMP ingest. OBS on a creator's laptop connects to it from the internet. |
-  | **1936/tcp** | …contains `rtmps` | RTMPS ingest (TLS front for the stream key; needs `media` too). Same reason as 1935. Once every encoder uses RTMPS you may close 1935. Setup and certificate options: `env/production.env.example`. |
+  | **1936/tcp** | …contains `rtmps` | RTMPS ingest (TLS front for the stream key; needs `media` too). Same reason as 1935. Once every encoder uses RTMPS you may close 1935. Certificate options and the renewal timer (`deploy/vidra-rtmps-certs.timer`, runs `deploy/sync-rtmps-certs.sh`): `env/production.env.example`. |
   | **4001/tcp+udp** | …contains `ipfs` | libp2p swarm. Peers dial in; a node nobody can reach only ever pushes. |
 
   These stay **closed** on an instance that has not enabled those profiles, which

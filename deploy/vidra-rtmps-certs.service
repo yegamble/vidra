@@ -1,0 +1,32 @@
+# Copies the renewed Caddy certificate into RTMPS_CERT_DIR and reloads the rtmps
+# proxy. Triggered daily by vidra-rtmps-certs.timer; only needed when the
+# `rtmps` profile reuses Caddy's certificate (see env/production.env.example).
+#
+# Install on the droplet:
+#
+#   sudo cp deploy/vidra-rtmps-certs.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now vidra-rtmps-certs.timer
+#   sudo systemctl start vidra-rtmps-certs.service    # prove it works NOW
+#   journalctl -u vidra-rtmps-certs.service -n 50
+#
+# Adjust User= and WorkingDirectory= if the checkout is not /opt/vidra owned by
+# the `vidra` user. The user MUST be in the `docker` group.
+
+[Unit]
+Description=Sync the Caddy certificate to the Vidra RTMPS proxy
+Documentation=https://github.com/yegamble/vidra/blob/main/deploy/README.md
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=vidra
+Group=vidra
+WorkingDirectory=/opt/vidra
+Environment=ENV_FILE=env/production.env
+ExecStart=/opt/vidra/deploy/sync-rtmps-certs.sh
+TimeoutStartSec=5min
+
+[Install]
+WantedBy=multi-user.target

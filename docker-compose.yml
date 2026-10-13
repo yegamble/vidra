@@ -65,12 +65,13 @@ services:
   # the Go-live panel offers it. It is a generic stream proxy, not a patch to
   # nginx-rtmp, so the ingest hooks and key-privacy rename are untouched.
   #
-  # Certificate: operator-provided. RTMPS_CERT_DIR (host dir, default
-  # ./deploy/rtmps-certs) is mounted at /certs; RTMPS_CERT_FILE / RTMPS_KEY_FILE
-  # are CONTAINER paths into it. In production the prod overlay also mounts
-  # Caddy's certificate volume at /caddy-data, so the Caddy-managed cert can be
-  # reused — see env/production.env.example. The container refuses to start
-  # (rather than listening without TLS) if either file is missing.
+  # Certificate: RTMPS_CERT_DIR (host dir, default ./deploy/rtmps-certs) is
+  # mounted read-only at /certs; RTMPS_CERT_FILE / RTMPS_KEY_FILE are CONTAINER
+  # paths into it (default fullchain.pem / privkey.pem). Supply your own, or fill
+  # the directory from Caddy's certificate with deploy/sync-rtmps-certs.sh (run
+  # daily by deploy/vidra-rtmps-certs.timer, which also reloads the proxy on
+  # renewal). Caddy's volume is never mounted here. The container refuses to
+  # start (rather than listening without TLS) if either file is missing.
   rtmps:
     profiles: ["rtmps"]
     image: nginx:1.29-alpine
