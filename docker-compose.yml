@@ -56,6 +56,47 @@ services:
   # service inside the SAME file that `include:`s it is rejected by some Compose
   # versions ("services.api conflicts with imported resource"). The override file is
   # auto-loaded by every plain `docker compose` command; see its header for details.
+  # Optional RTMPS ingest (profile `rtmps`, OFF by default): a TLS-terminating
+  # TCP front for the `media` profile's plain-RTMP `rtmp` service (defined in
+  # vidra-core/docker-compose.yml). Plain RTMP sends the stream key in
+  # cleartext; encoders that speak RTMPS (OBS, ffmpeg) use rtmps://host:1936/live
+  # instead. Enable with `VIDRA_COMPOSE_PROFILES="core frontend media rtmps"`
+  # (needs `media` — it relays to the `rtmp` service) and set LIVE_RTMPS_URL so
+  # the Go-live panel offers it. It is a generic stream proxy, not a patch to
+  # nginx-rtmp, so the ingest hooks and key-privacy rename are untouched.
+  #
+  # Certificate: RTMPS_CERT_DIR (host dir, default ./deploy/rtmps-certs) is
+  # mounted read-only at /certs; RTMPS_CERT_FILE / RTMPS_KEY_FILE are CONTAINER
+  # paths into it (default fullchain.pem / privkey.pem). Supply your own, or fill
+  # the directory from Caddy's certificate with deploy/sync-rtmps-certs.sh (run
+  # daily by deploy/vidra-rtmps-certs.timer, which also reloads the proxy on
+  # renewal). Caddy's volume is never mounted here. The container refuses to
+  # start (rather than listening without TLS) if either file is missing.
+  rtmps:
+    profiles: ["rtmps"]
+    image: nginx:1.29-alpine
+    depends_on:
+      rtmp:
+        condition: service_started
+    environment:
+      RTMPS_CERT_FILE: ${RTMPS_CERT_FILE:-/certs/fullchain.pem}
+      RTMPS_KEY_FILE: ${RTMPS_KEY_FILE:-/certs/privkey.pem}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        for f in "$$RTMPS_CERT_FILE" "$$RTMPS_KEY_FILE"; do
+          [ -r "$$f" ] || { echo "rtmps: cannot read $$f - set RTMPS_CERT_DIR/RTMPS_CERT_FILE/RTMPS_KEY_FILE (refusing to start without TLS)" >&2; exit 1; }
+        done
+        envsubst '$$RTMPS_CERT_FILE $$RTMPS_KEY_FILE' \
+          < /etc/nginx/rtmps.conf.template > /etc/nginx/nginx.conf
+        exec nginx -g 'daemon off;'
+    volumes:
+      - ./deploy/rtmps/nginx.conf.template:/etc/nginx/rtmps.conf.template:ro
+      - ${RTMPS_CERT_DIR:-./deploy/rtmps-certs}:/certs:ro
+    ports:
+      - "${RTMPS_PORT:-1936}:1936"
+
   frontend:
     profiles: ["frontend"]
     build:

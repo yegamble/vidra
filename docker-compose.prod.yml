@@ -537,6 +537,17 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  # rtmps (optional `rtmps` profile): the TLS front for live ingest. Like rtmp it
+  # is deliberately internet-facing - an encoder on a creator's laptop dials it -
+  # so it keeps its publish (1936) and is another standing exception to open in
+  # the cloud firewall. It deliberately does NOT mount caddy_data (not even
+  # read-only): that volume holds the ACME account key and any internal-CA key,
+  # and this container faces the internet. deploy/sync-rtmps-certs.sh copies just
+  # the one certificate + key into RTMPS_CERT_DIR instead.
+  rtmps:
+    restart: unless-stopped
+    logging: *logging
+
   # ---------------------------------------------------------------------------
   # Public IPFS mirror node (base definition: vidra-core/docker-compose.yml).
   # Not started by default: it lives behind the "ipfs" profile — set

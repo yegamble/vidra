@@ -1,0 +1,18 @@
+# Runs vidra-rtmps-certs.service daily. See the service for install steps -
+# enable THIS unit, not the service.
+
+[Unit]
+Description=Daily sync of the Caddy certificate to the Vidra RTMPS proxy
+Documentation=https://github.com/yegamble/vidra/blob/main/deploy/README.md
+
+[Timer]
+# Caddy renews ~30 days before expiry, so a daily check leaves a month of
+# retries; the script is a no-op (no reload) when nothing changed.
+OnCalendar=*-*-* 04:20:00
+RandomizedDelaySec=30m
+# Catch up after a reboot rather than skip the day.
+Persistent=true
+AccuracySec=1m
+
+[Install]
+WantedBy=timers.target
