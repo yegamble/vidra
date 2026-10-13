@@ -69,7 +69,9 @@ tmp="$(mktemp -d "$DEST/.sync.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 compose exec -T caddy cat "$crt_path" > "$tmp/fullchain.pem" || die "could not read $crt_path"
 compose exec -T caddy cat "$key_path" > "$tmp/privkey.pem" || die "could not read $key_path"
-[ -s "$tmp/fullchain.pem" ] && [ -s "$tmp/privkey.pem" ] || die "copied certificate or key is empty"
+if [ ! -s "$tmp/fullchain.pem" ] || [ ! -s "$tmp/privkey.pem" ]; then
+  die "copied certificate or key is empty"
+fi
 chmod 0640 "$tmp/fullchain.pem" "$tmp/privkey.pem"
 
 changed=0
