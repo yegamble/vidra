@@ -45,7 +45,6 @@ case "$*" in
       norel) echo 'ERROR:  relation "oidc_providers" does not exist' >&2; exit 1 ;;
     esac
     echo "$OIDC_ANSWER" ;;
-  exec*"FROM oidc_providers"*) echo f ;;
   exec*"SELECT EXISTS"*) echo f ;;
 esac
 exit 0
