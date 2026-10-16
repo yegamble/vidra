@@ -8,6 +8,10 @@ const EMAIL = 'synthetic-recovery@recovery.invalid';
 const NAME = 'synthetic-recovery';
 class Failure extends Error {}
 const check = (ok, code) => { if (!ok) throw new Failure(code); };
+// Core deliberately shares this refusal for bad TOTP and undecryptable secrets;
+// an invalid/expired challenge is a different 401 and proves neither condition.
+const codeRefused = ({ status, body }) => status === 401 && body?.error?.code === 'unauthorized' &&
+  body.error.message === 'invalid code' && !body.token && !body.refresh_token;
 export function totp(secret, now) {
   check(typeof secret === 'string' && /^[A-Z2-7]{16,128}={0,6}$/.test(secret), 'totp_secret');
   let bits = 0, value = 0; const bytes = [];
@@ -81,13 +85,13 @@ export function fixtureClient({ baseUrl, fetchImpl = fetch, now = Date.now,
       return { mfa_token: challenge.body.mfa_token, code: String(bad).padStart(6, '0') };
     };
     if (wrongFirst) { const refused = await request('/auth/mfa/challenge', 'POST', () => payload(true));
-      check(refused.status === 401 && !refused.body.token && !refused.body.refresh_token, 'wrong_totp'); }
+      check(codeRefused(refused), 'wrong_totp'); }
     let acceptedStep;
     const result = await request('/auth/mfa/challenge', 'POST', async () => {
       const fresh = await freshCode(state); acceptedStep = fresh.step;
       return { mfa_token: challenge.body.mfa_token, code: fresh.code };
     });
-    if (wrongKey) { check(result.status === 401 && !result.body.token && !result.body.refresh_token, 'wrong_key_mfa'); return; }
+    if (wrongKey) { check(codeRefused(result), 'wrong_key_mfa'); return; }
     check(result.status === 200 && result.body.token, 'correct_totp');
     state.last_step = acceptedStep; state.token = result.body.token;
   };

@@ -13,7 +13,8 @@ const SECRET = rfcBits.match(/.{5}/g).map(bits => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234
 const BASE = 'http://127.0.0.1:8080';
 async function fixture(run) {
   const dir = mkdtempSync(join(tmpdir(), 'sealed-api-')); const file = join(dir, 'fixture.json');
-  let clock = 1800000000000, wrongKey = false, bypass = false, acceptWrong = false, rateLimit = false;
+  let clock = 1800000000000, wrongKey = false, bypass = false, acceptWrong = false, rateLimit = 0;
+  let issued = 0, invalidAfter = Infinity, retryAfter = 31;
   const requests = []; let mail, provider;
   const fetchImpl = async (url, options) => {
     const body = options.body ? JSON.parse(options.body) : undefined; requests.push({ url, ...options, body });
@@ -21,11 +22,12 @@ async function fixture(run) {
     if (url.endsWith('/setup/claim-owner')) { status = 201; result = { token: 'a.b.c' }; }
     else if (url.endsWith('/auth/mfa/totp')) result = { secret: SECRET };
     else if (url.endsWith('/auth/mfa/totp/verify')) result = { recovery_codes: ['private-recovery-canary'] };
-    else if (url.endsWith('/auth/login')) result = bypass ? { token: 'a.b.c' } : { mfa_required: true, mfa_token: 'challenge' };
+    else if (url.endsWith('/auth/login')) { issued = clock; result = bypass ? { token: 'a.b.c' } : { mfa_required: true, mfa_token: 'challenge' }; }
     else if (url.endsWith('/auth/mfa/challenge')) {
-      if (rateLimit) { rateLimit = false; status = 429; }
+      if (rateLimit) { rateLimit--; status = 429; }
+      else if (clock - issued >= invalidAfter) { status = 401; result = { error: { code: 'unauthorized', message: 'invalid or expired mfa token' } }; }
       else if (acceptWrong || (!wrongKey && body.code === totp(SECRET, clock))) result = { token: 'a.b.c' };
-      else { status = 401; result = { error: 'private-body-canary' }; }
+      else { status = 401; result = { error: { code: 'unauthorized', message: 'invalid code', request_id: 'private-body-canary' } }; }
     } else if (url.endsWith('/admin/mail-config')) {
       if (options.method === 'PUT') mail = { source: 'database', secrets_available: true, secret_status: 'ok', config: { transport: 'smtp', from_address: body.from_address,
         smtp: { host: body.smtp.host, port: body.smtp.port, username: body.smtp.username, encryption: body.smtp.encryption, password_set: true } } };
@@ -35,11 +37,12 @@ async function fixture(run) {
         auto_provision: body.auto_provision, secret_configured: true, secret_status: 'ok' }; }
       result = options.method === 'POST' ? provider : { secrets_available: true, providers: [{ ...provider, secret_status: wrongKey ? 'undecryptable' : 'ok' }] };
     } else assert.fail('unexpected endpoint');
-    return { status, headers: new Headers({ 'retry-after': '31' }), json: async () => result };
+    return { status, headers: new Headers({ 'retry-after': String(retryAfter) }), json: async () => result };
   };
   const client = fixtureClient({ baseUrl: BASE, fetchImpl, now: () => clock, sleep: async ms => { clock += ms; } });
   try { await run({ client, file, dir, requests, setWrongKey: () => { wrongKey = true; },
-    bypass: () => { bypass = true; }, acceptWrong: () => { acceptWrong = true; }, rateLimit: () => { rateLimit = true; } }); }
+    bypass: () => { bypass = true; }, acceptWrong: () => { acceptWrong = true; }, rateLimit: () => { rateLimit = 1; },
+    expireChallenge: retries => { wrongKey = true; acceptWrong = true; invalidAfter = retries ? 300000 : 0; rateLimit = retries; retryAfter = 120; } }); }
   finally { rmSync(dir, { recursive: true }); }
 }
 
@@ -82,6 +85,14 @@ test('wrong-key control also requires MFA rejection', () => fixture(async f => {
   await f.client('source', f.file, 'setup_token_canary_123456'); f.setWrongKey(); f.acceptWrong();
   await assert.rejects(f.client('wrong-key', f.file), /wrong_key_mfa/);
 }));
+test('invalid or expired MFA challenges cannot prove wrong-key refusal', async () => {
+  for (const retries of [0, 3]) await fixture(async f => {
+    await f.client('source', f.file, 'setup_token_canary_123456');
+    const state = readFileSync(f.file); f.expireChallenge(retries);
+    await assert.rejects(f.client('wrong-key', f.file), /wrong_key_mfa/);
+    assert.ok(readFileSync(f.file).equals(state), 'failure must not rewrite private state');
+  });
+});
 test('raw HTTP, JSON and network failures never promote private payloads into errors', () => fixture(async f => {
   for (const [fetchImpl, expected] of [
     [async () => ({ status: 500, json: async () => ({ message: 'private-canary' }) }), 'owner_claim'],
