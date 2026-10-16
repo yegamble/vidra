@@ -12,13 +12,17 @@ import { fixtureClient, totp } from './sealed-recovery-api.mjs';
 const rfcBits = [...Buffer.from('12345678901234567890', 'ascii')].map(byte => byte.toString(2).padStart(8, '0')).join('');
 const SECRET = rfcBits.match(/.{5}/g).map(bits => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'[Number.parseInt(bits, 2)]).join('');
 const BASE = 'http://127.0.0.1:8080';
-async function fixture(run, { baseUrl = BASE, internalOrigin } = {}) {
+async function fixture(run, { baseUrl = BASE, internalOrigin, deadlines, networkDelay = 0 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'sealed-api-')); const file = join(dir, 'fixture.json');
   let clock = 1800000000000, wrongKey = false, bypass = false, acceptWrong = false, rateLimit = 0;
   let issued = 0, invalidAfter = Infinity, retryAfter = 31;
   const requests = []; let mail, provider;
   const fetchImpl = async (url, options) => {
-    const body = options.body ? JSON.parse(options.body) : undefined; requests.push({ url, ...options, body });
+    clock += networkDelay;
+    const deadline = deadlines?.get(options.signal);
+    if (deadline && clock >= deadline.expiresAt) deadline.controller.abort();
+    options.signal.throwIfAborted();
+    const body = options.body ? JSON.parse(options.body) : undefined; requests.push({ url, ...options, body, at: clock });
     let status = 200, result;
     if (url.endsWith('/setup/claim-owner')) { status = 201; result = { token: 'a.b.c' }; }
     else if (url.endsWith('/auth/mfa/totp')) result = { secret: SECRET };
@@ -41,13 +45,50 @@ async function fixture(run, { baseUrl = BASE, internalOrigin } = {}) {
     return { status, headers: new Headers({ 'retry-after': String(retryAfter) }), json: async () => result };
   };
   const client = fixtureClient({ baseUrl, internalOrigin, fetchImpl, now: () => clock, sleep: async ms => { clock += ms; } });
-  try { await run({ client, file, dir, requests, setWrongKey: () => { wrongKey = true; },
+  try { await run({ client, file, dir, requests, now: () => clock, setWrongKey: () => { wrongKey = true; },
     bypass: () => { bypass = true; }, acceptWrong: () => { acceptWrong = true; }, rateLimit: () => { rateLimit = 1; },
     expireChallenge: retries => { wrongKey = true; acceptWrong = true; invalidAfter = retries ? 300000 : 0; rateLimit = retries; retryAfter = 120; } }); }
   finally { rmSync(dir, { recursive: true }); }
 }
 
+async function virtualDeadlineFixture(run, { networkDelay = 0 } = {}) {
+  const deadlines = new Map();
+  return fixture(async f => {
+    const original = Object.getOwnPropertyDescriptor(AbortSignal, 'timeout');
+    Object.defineProperty(AbortSignal, 'timeout', { ...original, value: ms => {
+      assert.equal(ms, 15000);
+      const controller = new AbortController(), at = f.now();
+      deadlines.set(controller.signal, { controller, at, ms, expiresAt: at + ms });
+      return controller.signal;
+    } });
+    try { await run({ ...f, deadlines }); }
+    finally { Object.defineProperty(AbortSignal, 'timeout', original); }
+  }, { deadlines, networkDelay });
+}
+
 test('RFC6238 vector uses SHA1, 30-second counter and six digits', () => assert.equal(totp(SECRET, 59000), '287082'));
+test('fresh TOTP waits and 429 retries get a new full 15-second network deadline', () => virtualDeadlineFixture(async f => {
+  const start = f.now(); f.rateLimit();
+  assert.equal((await f.client('source', f.file, 'setup_token_canary_123456')).status, 'PASS');
+  assert.ok(f.now() - start >= 60000, 'enrollment code burn and retry must cross TOTP windows');
+  const challenges = f.requests.filter(r => r.url.endsWith('/auth/mfa/challenge'));
+  assert.equal(challenges.length, 2);
+  assert.notEqual(challenges[0].body.code, challenges[1].body.code);
+  for (const request of challenges) assert.equal(request.body.code, totp(SECRET, request.at));
+  assert.equal(new Set(f.requests.map(r => r.signal)).size, f.requests.length);
+  for (const request of f.requests) {
+    const deadline = f.deadlines.get(request.signal);
+    assert.equal(deadline.at, request.at); assert.equal(deadline.expiresAt - request.at, 15000);
+    assert.equal(request.signal.aborted, false);
+  }
+}));
+test('a network exchange exceeding 15 seconds still aborts with a fixed failure code', () => virtualDeadlineFixture(async f => {
+  await assert.rejects(f.client('source', f.file, 'setup_token_canary_123456'), error => error.message === 'request_failed');
+  assert.equal(f.deadlines.size, 1);
+  const [signal] = f.deadlines.keys();
+  assert.equal(signal.aborted, true);
+  assert.equal(f.requests.length, 0);
+}, { networkDelay: 15001 }));
 test('loopback is the default and private bridge origins require an exact explicit opt-in', () => {
   assert.doesNotThrow(() => fixtureClient({ baseUrl: BASE }));
   for (const baseUrl of ['http://10.0.0.1:8080', 'http://10.255.255.254:8080',
