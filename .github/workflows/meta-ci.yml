@@ -187,7 +187,7 @@ jobs:
         run: |
           docker run --rm --network none \
             -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
-            caddy:2.11.4-alpine caddy validate --config /etc/caddy/Caddyfile
+            caddy:2.11.7-alpine caddy validate --config /etc/caddy/Caddyfile
 
       # …and the two pins really are the same tag. A drift here is invisible
       # otherwise: both jobs stay green while CI parses the Caddyfile with a

@@ -208,7 +208,7 @@ def gateway(directory, name):
         config=config.replace('api:8080',f'{origin}:{servers[0].server_port}')
         config=config.replace('ipfs:8080',f'{origin}:{servers[1].server_port}')
         (directory/'Caddyfile').write_text('{\n admin off\n}\n'+config)
-        image='caddy:2.11.4-alpine'
+        image='caddy:2.11.7-alpine'
         ensure_image(image)
         network=['--network','host'] if linux else ['-p',f'127.0.0.1:{listen}:8080']
         command(['docker','create','--name',container,'--memory','128m','--cpus','0.25',*network,image,
