@@ -209,11 +209,20 @@ class StaticGateTest(unittest.TestCase):
         files['components/Widget.tsx'] = '''import { resumableUpload } from "@/lib/api/resumable-upload";
           export default function Widget() { resumableUpload(file); }'''
         for unused in ('putChunkWithRetry;', 'putUploadChunk;',
-                       'function unused() { putUploadChunk("id", 0, file); }'):
+                       'function unused() { putUploadChunk("id", 0, file); }',
+                       'const unused = () => putUploadChunk("id", 0, file); return null;',
+                       'const unused = () => { return putUploadChunk("id", 0, file); }; return null;',
+                       'const unused = async () => putUploadChunk("id", 0, file); return null;'):
             with self.subTest(unused=unused):
                 files['lib/api/resumable-upload.ts'] = transport.replace(
                     'await putChunkWithRetry("id", 0, file);', unused)
                 self.assertEqual(findings(files, routes_yaml(('PUT', path))), missing)
+        for send in ('const send = () => putChunkWithRetry("id", 0, file); await send();',
+                     'const send = () => { return putChunkWithRetry("id", 0, file); }; await send();'):
+            with self.subTest(send=send):
+                files['lib/api/resumable-upload.ts'] = transport.replace(
+                    'await putChunkWithRetry("id", 0, file);', send)
+                self.assertEqual(findings(files, routes_yaml(('PUT', path))), set())
 
     def test_dynamic_method_is_not_misread_as_default_get(self):
         files = fixture()

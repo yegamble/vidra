@@ -294,7 +294,7 @@ def request_calls(ts, bindings=None):
 
 
 def function_bodies(ts):
-    """Named declarations and React cache callbacks; retain export identity."""
+    """Named declarations, const arrows and React cache callbacks."""
     bodies, declarations = {}, []
     for k in range(len(ts) - 3):
         if ts[k].value != 'function' or ts[k + 1].string or not re.fullmatch(r'[A-Za-z_$][\w$]*', ts[k + 1].value):
@@ -325,6 +325,29 @@ def function_bodies(ts):
                 break
             elif ts[q].value == ';' and depth == 0:
                 break
+    for k in range(len(ts) - 4):
+        if ts[k].value != 'const' or ts[k + 2].value != '=':
+            continue
+        signature = k + 3 + (ts[k + 3].value == 'async')
+        if ts[signature].value == '(':
+            _, end = groups(ts, signature)
+            arrow = end + 1
+        else:
+            arrow = signature + 1
+        if ts[arrow:arrow + 1] != [Token('=>')]:
+            continue
+        start = arrow + 1
+        if ts[start].value == '{':
+            _, end = groups(ts, start)
+        else:
+            end = start
+            while end < len(ts) and ts[end].value not in (';', '}'):
+                if ts[end].value in ('(', '[', '{') and not ts[end].string:
+                    _, end = groups(ts, end)
+                end += 1
+            end -= 1
+        bodies[ts[k + 1].value] = (start, end, k > 0 and ts[k - 1].value == 'export')
+        declarations.append((k, end))
     # A declaration does not run its body. Keep nested helpers available for
     # explicit call traversal, but remove them from their enclosing execution.
     def execution(start, end):
