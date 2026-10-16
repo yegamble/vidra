@@ -344,16 +344,16 @@ assert_schema_expectation() {
 }
 # >>> BEGIN transcode drain gate — exercised with a fake psq by rec03_transcode_wait_test.py
 wait_transcodes() {
-  local vid="$1" rows total done failed i
+  local vid="$1" rows total completed failed i
   [[ "$vid" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]] || die "invalid fixture video id"
   # Published is not the queue's completion signal: the web-video promotion can
   # publish before the HLS ladder finishes. Baselines/backups need every job done.
   for i in $(seq 1 120); do
     rows="$(psq "SELECT count(*) || ':' || count(*) FILTER (WHERE state = 'done') || ':' || count(*) FILTER (WHERE state = 'failed') FROM transcode_jobs WHERE video_id = '$vid'")" || die "cannot read transcode queue"
     [[ "$rows" =~ ^[0-9]+:[0-9]+:[0-9]+$ ]] || die "invalid transcode queue counts"
-    IFS=: read -r total done failed <<< "$rows"
+    IFS=: read -r total completed failed <<< "$rows"
     [ "$failed" -eq 0 ] || die "fixture transcode failed"
-    if [ "$total" -gt 0 ] && [ "$done" -eq "$total" ]; then log "fixture transcodes drained ($done jobs, attempt $i)"; return 0; fi
+    if [ "$total" -gt 0 ] && [ "$completed" -eq "$total" ]; then log "fixture transcodes drained ($completed jobs, attempt $i)"; return 0; fi
     sleep 5
   done
   die "fixture transcodes did not drain within 600 seconds"
