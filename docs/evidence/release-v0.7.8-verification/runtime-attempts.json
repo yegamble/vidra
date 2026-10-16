@@ -444,6 +444,64 @@
         }
       },
       "status": "PASS"
+    },
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "release": "v0.7.8",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38945689909,
+        "tool_commit": "198391e335d756f656d4049e6ec39ca336b91657"
+      },
+      "informational_only": true,
+      "kind": "sealed",
+      "missing": [],
+      "roles": {
+        "replacement": {
+          "job_result": "success",
+          "sha256": "777765e066ecb9ed8193600bf75859b98110cd81ca31581898baee89bcefbf91",
+          "verdict": {
+            "backup_hash_match": true,
+            "core_schema": 182,
+            "different_runner_boot": true,
+            "empty_destination": true,
+            "external_delivery_blocked": true,
+            "mail_secret_status": "ok",
+            "mfa_correct_code_accepted": true,
+            "mfa_wrong_code_refused": true,
+            "oidc_disabled": true,
+            "oidc_secret_status": "ok",
+            "phase": "complete",
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "release": "v0.7.8",
+            "schema_and_catalogue_match": true,
+            "scope": "published-image synthetic cross-VM sealed-secret subset",
+            "search_schema": 18,
+            "status": "PASS",
+            "synthetic_only": true,
+            "tool_commit": "198391e335d756f656d4049e6ec39ca336b91657",
+            "wrong_key_refused": true
+          }
+        },
+        "source": {
+          "job_result": "success",
+          "sha256": "629323b05fcea9a42ced0c04f707a10ffc6a5c0df3046f3458afd23d8e526334",
+          "verdict": {
+            "core_schema": 182,
+            "external_delivery_blocked": true,
+            "phase": "complete",
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "release": "v0.7.8",
+            "scope": "published-image synthetic cross-VM sealed-secret subset",
+            "search_schema": 18,
+            "status": "PASS",
+            "synthetic_only": true,
+            "tool_commit": "198391e335d756f656d4049e6ec39ca336b91657"
+          }
+        }
+      },
+      "status": "PASS"
     }
   ]
 }

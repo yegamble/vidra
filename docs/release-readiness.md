@@ -26,15 +26,19 @@ tested commits and log hashes are retained in
 [record validation](evidence/release-v0.7.8-verification/record-validation.json).
 These checks do not establish operational acceptance.
 
-**Runtime qualification is incomplete.** Failed attempts remain in
+**G9 passed within the two reports' synthetic scope.** Failed attempts remain in
 [the attempt record](evidence/release-v0.7.8-verification/runtime-attempts.json).
 The [REC-03 report](runtime-acceptance-rec03-v0.7.8.md) records a successful fourth
 run on tooling `07afa5a4`: all thirteen operational phases and the final report
-passed, including persisted worker execution attribution. The latest completed
-[sealed-recovery attempt](runtime-acceptance-recovery-v0.7.8.md), on `cce26c92`,
-accepted its full source fixture and backup but failed early replacement restore.
-A new attempt is running with strict database/Redis readiness and finer failure
-phases. All use immutable record `da049b6e`; replacement recovery remains pending.
+passed, including persisted worker execution attribution. The fourth
+[sealed-recovery attempt](runtime-acceptance-recovery-v0.7.8.md), on `198391e3`,
+passed on two distinct hosted VMs: complete source fixture and backup, empty
+replacement restore, catalogue/configuration equality, MFA authentication,
+mail/OIDC decryption, wrong-key refusal and recovery with the original key.
+Both successful workflows used immutable record `da049b6e`. Independent checks
+verified actual job results, complete fields and original verdict hashes.
+These results establish neither B2/off-site recovery nor representative migration,
+public TLS, browser playback or human installation timing.
 
 The master completion gates still include these unresolved requirements:
 
@@ -65,8 +69,7 @@ reports unchanged advisory IDs versus v0.7.5, OpenSSL **3.5.9-r0** in all three
 images, separately measured source Go reachability and a clean full frontend
 lockfile audit with a firing negative control. Existing glib/AV1/Go residuals
 and the image scanner's zero-npm coverage limit are explicitly retained.
-**REC-03 and sealed recovery remain pending here**; their actual runtime proof
-must be recorded separately. Residual risk acceptance, full untranslated-copy
+**Scoped REC-03 and sealed recovery evidence is recorded above.** Residual risk acceptance, full untranslated-copy
 extraction/guard coverage, human acceptance and G10/G2 debt remain unresolved.
 This entry grants no GO, waiver or inherited runtime acceptance.
 
