@@ -21,9 +21,10 @@ spec.loader.exec_module(driver)
 
 class CrossJobBoundaryTest(unittest.TestCase):
     def test_unchanged_restore_command_is_inside_relay_and_failure_propagates(self):
-        events = []
+        events, result = [], {}
         @contextmanager
         def relay(host):
+            self.assertEqual(result['phase'], 'restore-relay')
             events.append('enter')
             try:
                 yield
@@ -32,14 +33,52 @@ class CrossJobBoundaryTest(unittest.TestCase):
         host = Mock()
         def run(command, label, *, timeout):
             self.assertEqual(events, ['enter'])
+            self.assertEqual(result['phase'], 'restore')
             self.assertEqual(command, ['bash', 'deploy/restore.sh', '--yes', '/synthetic/backup.dump.gz'])
             self.assertEqual((label, timeout), ('published-restore', 1800))
             events.append('command')
             raise ValueError('synthetic command failure')
         host.run.side_effect = run
         with patch.object(driver, 'readiness_relay', side_effect=relay), self.assertRaises(ValueError):
-            driver.restore_dump(host, Path('/synthetic/backup.dump.gz'))
+            driver.restore_dump(host, Path('/synthetic/backup.dump.gz'), result)
         self.assertEqual(events, ['enter', 'command', 'exit'])
+        self.assertEqual(result['phase'], 'restore')
+
+    def test_relay_failure_never_claims_the_published_command_was_invoked(self):
+        host, result = Mock(), {}
+        with patch.object(driver, 'readiness_relay', side_effect=ValueError('PRIVATE_CANARY')), \
+                self.assertRaises(ValueError):
+            driver.restore_dump(host, Path('/synthetic/backup.dump.gz'), result)
+        self.assertEqual(result['phase'], 'restore-relay')
+        host.run.assert_not_called()
+
+    def test_fresh_restore_dependencies_fail_before_the_published_command(self):
+        for operation in ('compose', 'wait_restore_dependencies'):
+            with self.subTest(operation=operation), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                payload = root / 'payload'
+                payload.mkdir()
+                (payload / 'proof.json').write_text(json.dumps({'config_hashes': {}, 'script_hashes': {}}))
+                (payload / 'fixture.json').write_text('{}')
+                (root / 'private').mkdir()
+                args = SimpleNamespace(tool_commit='a' * 40, record_commit='b' * 40, release='v0.7.8',
+                    record_root=ROOT, stage=root / 'stage', action='restore', handoff=root / 'handoff', handoff_sha='hash')
+                host = Mock(private=root / 'private', script_hashes={})
+                host.run.return_value = ''
+                getattr(host, operation).side_effect = ValueError('PRIVATE_CANARY')
+                record, result = {'core_schema_version': 182, 'search_schema_version': 18}, {}
+                with patch.object(driver.support, 'head', return_value=args.tool_commit), \
+                        patch.object(driver.support, 'published', return_value=(record, {})), \
+                        patch.object(driver.support, 'check_vm'), patch.object(driver.runtime, 'host_facts'), \
+                        patch.object(driver.runtime, 'sha', return_value='hash'), \
+                        patch.object(driver.support, 'unpack_handoff', return_value=payload), \
+                        patch.object(driver, 'verify_proof'), patch.object(driver, 'restore_config'), \
+                        patch.object(driver, 'Host', return_value=host), patch.object(driver, 'restore_dump') as restore:
+                    restore.side_effect = ValueError('published command invoked')
+                    with self.assertRaises(ValueError):
+                        driver.execute(args, result, [])
+                self.assertEqual(result['phase'], 'restore-infrastructure')
+                restore.assert_not_called()
 
     def test_source_operation_failures_keep_their_fixed_milestone(self):
         for milestone, method in (('migrations', 'compose'), ('start-services', 'compose'), ('ready', 'ready'),
