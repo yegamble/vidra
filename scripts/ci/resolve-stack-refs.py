@@ -62,14 +62,29 @@ def verify(selection, root):
     return selection
 
 
+def verify_ledgers(selection, ledgers):
+    """Require one clean applied row per database at the recorded release schema."""
+    if selection['mode'] != 'release':
+        raise ValueError('ledger verification requires a recorded release')
+    versions = {}
+    for role in ('core', 'search'):
+        expected = selection[role + '_schema_version']
+        if ledgers.get(role, '').strip() != f'{expected}|f':
+            raise ValueError(f'{role}: ledger must contain exactly one clean row at schema {expected}')
+        versions[role] = expected
+    return {**selection, 'applied_schemas': versions}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('select', 'verify'))
+    parser.add_argument('command', choices=('select', 'verify', 'verify-ledgers'))
     parser.add_argument('--mode', choices=('main', 'release'), default='release')
     parser.add_argument('--releases', type=Path, default=ROOT / 'releases')
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--github-output', type=Path)
+    parser.add_argument('--core-ledger', type=Path)
+    parser.add_argument('--search-ledger', type=Path)
     args = parser.parse_args()
     try:
         if args.command == 'select':
@@ -79,8 +94,13 @@ def main():
                     for role in ROLES:
                         out.write(f'{role}_ref={selected["components"][role]["ref"]}\n')
                     out.write(f'release={selected["release"]}\n')
-        else:
+        elif args.command == 'verify':
             selected = verify(json.loads(args.evidence.read_text()), args.root)
+        else:
+            if not args.core_ledger or not args.search_ledger:
+                raise ValueError('--core-ledger and --search-ledger are required')
+            selected = verify_ledgers(json.loads(args.evidence.read_text()), {
+                'core': args.core_ledger.read_text(), 'search': args.search_ledger.read_text()})
         args.evidence.parent.mkdir(parents=True, exist_ok=True)
         args.evidence.write_text(json.dumps(selected, indent=2) + '\n')
         print(json.dumps(selected, indent=2))

@@ -36,7 +36,8 @@ One check stands for the whole required set: **`ci-required`** — the only name
 that belongs in branch protection for this repo. It reads
 [`.github/required-checks.txt`](.github/required-checks.txt), the checked-in
 definition of required, and fails if any listed lane failed, was cancelled,
-timed out, or **never ran**. Required today: `validate`, `bundle`, `boot`.
+timed out, or **never ran**. Required today: `validate`, `bundle`, `boot`,
+`pinned-release-validate`, `pinned-release-boot`.
 Removing an entry from that file fails `validate`
 (`scripts/ci/check-required-manifest-removals.sh`, compared against the base
 branch) unless the same file carries `# retired: <name> — <reason>` for it:
@@ -60,7 +61,8 @@ had been committed and wired to nothing until A39:
   assertion must not read as a passing one.
 
 `validate` and `boot` upload their evidence as 14-day artifacts
-(`meta-validate-python-unit`, `meta-boot-compose-log`) so a green check's
+(`meta-validate-python-unit`, `meta-boot-compose-log`, and separate
+`meta-pinned-release-validate` / `meta-pinned-release-boot` counterparts) so a green check's
 console record outlives the run page.
 
 **Finding F04, half closed:** the required `boot` lane starts the stack in
