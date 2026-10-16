@@ -90,13 +90,28 @@ class Verdict(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 runner.verify('upgrade-fail', facts, {'data': DATA}, MIGRATION_LOG)
 
-    def test_split_needs_a_published_worker_and_an_idle_api(self):
-        facts = {'deploy_exit': '0', 'probe': runner.PROBE, 'workers': '1', 'images': IMAGES.replace('v0.7.7', 'v0.7.8').replace('v0.7.3', 'v0.7.8'),
-                 'video2_state': 'published', 'api_ffmpeg_mentions': '0'}
+    def split(self, **changes):
+        return {'deploy_exit': '0', 'probe': runner.PROBE, 'images': IMAGES.replace('v0.7.7', 'v0.7.8').replace('v0.7.3', 'v0.7.8'),
+                'video2_state': 'published', 'video2_packaging': 'cmaf', 'video2_fp': FP, **changes}
+
+    def test_split_needs_published_cmaf_media_before_executor_checks(self):
+        facts = self.split()
         self.assertEqual(runner.verify('split', facts, {}, '')['status'], 'PASS')
-        for change in ({'workers': '0'}, {'video2_state': 'failed'}, {'api_ffmpeg_mentions': '1'}):
+        for change in ({'video2_packaging': 'hls-ts'}, {'video2_state': 'failed'}, {'video2_fp': ''}):
             with self.assertRaises(AssertionError):
                 runner.verify('split', {**facts, **change}, {}, '')
+
+    def test_no_split_pass_until_persisted_executor_proof_passes(self):
+        records, containers, _, inspect = RunningImages().fixture('split')
+        proof = runner.rec03_split_proof
+        with patch.object(proof, 'verify', side_effect=proof.Invalid()) as validate:
+            with self.assertRaisesRegex(runner.Failure, 'split worker not proven'):
+                runner.verify_phase('split', self.split(), {}, '', records, inspect)
+            self.assertEqual(validate.call_args.args[:3], (self.split(),
+                {row['Config']['Labels']['com.docker.compose.service']: row for row in containers}, records['v0.7.8']['components']['core']))
+        with patch.object(proof, 'verify') as validate:
+            self.assertEqual(runner.verify_phase('split', self.split(), {}, '', records, inspect)['status'], 'PASS')
+            validate.assert_called_once()
 
     def test_bad_input_writes_only_a_safe_failure_before_host_calls(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'REC03_RECORD_REF': 'private-canary'}), \

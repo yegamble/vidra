@@ -67,7 +67,10 @@ class TranscodeDrain(unittest.TestCase):
         data = text.split('\ndata)\n', 1)[1].split('\nfp)\n', 1)[0]
         split = text.split('\nsplit)\n', 1)[1].split('\nreport)\n', 1)[0]
         self.assertLess(data.index('wait_transcodes "$vid"'), data.index('fingerprint |'))
-        self.assertLess(split.index('wait_transcodes "$vid"'), split.index('who transcoded it'))
+        self.assertLess(split.index('split_before='), split.index('vid=$(curl'))
+        self.assertLess(split.index('split_cursor='), split.index('vid=$(curl'))
+        self.assertLess(split.index('wait_transcodes "$vid"'), split.index('fp2='))
+        self.assertLess(split.index('fp2='), split.index('facts deploy_exit='))
 
 
 if __name__ == '__main__':
