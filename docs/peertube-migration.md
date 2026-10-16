@@ -1,21 +1,76 @@
 # PeerTube → Vidra migration
 
 This is an operator runbook for an independent Vidra installation, including a
-Backblaze B2 destination. It describes **core v0.7.5**, paired with **user and
-search v0.7.3**, as recorded in [the release manifest](../releases/v0.7.5.json).
-Its source schema gate accepts PeerTube `application.migrationVersion` **700–1040**.
-The transfer rehearsal section describes **unreleased, unqualified source
-changes**: optional HLS server-side copy, concurrent trees, independent captions
-and subtitle manifest normalization. These are not behavior available in v0.7.5;
-the released pairing and its instructions remain unchanged.
-Choose a qualified release and repeat its acceptance checks; a released image,
-successful import, or healthy home page alone does not establish production
-readiness. See [release readiness](release-readiness.md).
+Backblaze B2 destination. It describes the **published v0.7.8** components in
+[the release manifest](../releases/v0.7.8.json), with core/search schemas **182/18**:
+
+| Component | Tag | Frozen commit |
+| --- | --- | --- |
+| Core | `v0.7.8` | `04a7f0e127177b631eb323d04d330673fee044f9` |
+| User | `v0.7.8` | `e861ff57ef45f655d71502e959cd4c59bb03c75f` |
+| Search | `v0.7.8` | `63eed039aba6f3a6a520c3cfc021181adcc04dd1` |
+| Deployment bundle | `v0.7.8` | `35d2d3c5fc174514371cd865cd065c6b8defc07d` |
+
+The source schema gate accepts PeerTube `application.migrationVersion`
+**700–1040**. Optional HLS server-side copy, configurable concurrent HLS trees,
+independent captions and subtitle manifest normalization are released in this
+cut set. Their implementation and configuration were checked against the frozen
+core commit above; this runbook supplies no representative migration result.
+
+**G10 remains unverified:** the representative PeerTube import, provider transfer,
+browser playback and reconciliation rehearsal on these published images has not
+been completed. Source fixtures, image publication, upgrade drills and scoped
+sealed-data recovery checks do not establish that result. Complete the checks
+below before cutover; a successful import or healthy home page alone does not
+establish production readiness. See [release readiness](release-readiness.md).
+
+Preparatory tools: [synthetic importer fixture](peertube-synthetic-fixture.md)
+and [schema-refusal controls](peertube-schema-refusal.md). These tools supply no
+representative G10 migration result.
 
 Keep the original service available throughout rehearsal. Use an isolated host,
 database, media bucket, and temporary HTTPS hostname for Vidra. Do not redirect
 the original domain until step 10 passes. Examples use `/opt/vidra` owned by the
 `vidra` operator account; adapt paths and service ownership together.
+
+## Per-user account ZIP import
+
+The released **`/settings` → Your data → Import from PeerTube** card accepts a
+PeerTube account-export `.zip` for the signed-in user's own account when user
+imports are enabled. It sends multipart field `archive` to
+`POST /api/v1/me/import/peertube`. This is separate from the operator database
+and source-media migration below; it needs no source database credentials.
+
+It adds channels, regular playlists and eligible playlist items referencing
+public, published, unblocked videos already held by Vidra. Existing owned
+channels/playlists are reused rather than replaced or duplicated; available
+exported channel avatars/banners only fill empty image slots and pass the
+normal image checks/scanner. The exported autoplay-next setting, if present,
+updates that playback preference. Videos/media, comments, likes/dislikes,
+watch history, blocklists and followers are skipped, with counts in the result.
+This does not move account credentials or provide source-MFA protection.
+
+The **whole multipart request** is capped by `PEERTUBE_IMPORT_MAX_SIZE` when
+positive, otherwise `HTTP_BODY_LIMIT` (default `8M`); oversized requests return
+413. The upload requires `Content-Length` and is spooled to
+`PEERTUBE_IMPORT_TMPDIR` (default `TMPDIR`), so budget scratch space before
+raising the cap. A larger accepted ZIP can contain video files, but those files
+are not imported. Inspect created/existing/skipped counts; a partial server
+failure retains already-created rows, and retrying the same archive is additive.
+
+Eligible `following.json` targets are queued separately when federation is
+enabled. A non-null `follows_job_id` is polled through
+`GET /api/v1/me/import/peertube/follows/{id}`; only that user's job is visible.
+The card polls every two seconds while targets are pending and offers retry or
+pause/resume of **status updates**; pausing does not stop the queued follows.
+Completion means follow requests were processed, not that remote servers accepted
+them. With federation disabled, eligible follows are counted as skipped rather
+than queued; retain the operator side-effect pauses below during rehearsal.
+
+These paths were checked in the frozen [user UI](https://github.com/yegamble/vidra-user/blob/e861ff57ef45f655d71502e959cd4c59bb03c75f/components/auth/PeerTubeImportCard.tsx)
+and [archive importer](https://github.com/yegamble/vidra-core/blob/04a7f0e127177b631eb323d04d330673fee044f9/internal/peertubearchive/import.go).
+Representative published-image ZIP upload, persistence and follow-status
+verification remains unexecuted for G10, independently of the operator migration.
 
 ## 1. Record what must survive
 
@@ -52,10 +107,10 @@ what a same-domain migration carries). Lifetime view totals are carried;
 historical daily analytics are not reconstructed.
 
 Budget duplicate storage for the source, destination and recovery copies. In
-v0.7.5, `copy` streams through the Vidra host and hashes the bytes. It does **not**
-use B2 server-side bucket copying, even when both buckets share an account.
-The optional feature below accelerates only HLS binary dependencies on a future
-qualified release; its benefit depends on the source's HLS share.
+v0.7.8, originals stream through the Vidra host and receive a SHA-256 checksum.
+HLS also streams by default. The optional server-side copy path below accelerates
+only eligible HLS binary dependencies; its benefit depends on the source's HLS
+share and must be measured on the intended provider.
 Estimate transfer time from measured sustained throughput; include source
 downloads, destination writes, requests, retries and retained object versions.
 An inventory of video/HLS bytes alone is a lower bound if artwork and captions
@@ -76,24 +131,25 @@ git clone https://github.com/yegamble/vidra.git vidra-migration-tooling
 cd vidra-migration-tooling
 git checkout --detach REVIEWED_META_COMMIT
 git rev-parse HEAD
-sh ./install.sh --ref v0.7.5 --dir /opt/vidra
+sh ./install.sh --ref v0.7.8 --dir /opt/vidra
 cd /opt/vidra
 ```
 
 The installer prepares the installation and setup; deployment is a separate
 step. Follow [the deployment guide](../deploy/README.md). Resolve each component
-from the release manifest: do not assign `v0.7.5` to user/search, which use
-`v0.7.3` in this release. Keep nested checkouts pinned; the deployment script uses
-them to check expected migration versions. Do not bypass missing helper,
+from the release manifest: all three component tags are `v0.7.8` for this cut set;
+other releases can have mixed tags. Keep nested checkouts pinned; the deployment
+script uses them to check expected migration versions. Do not bypass missing helper,
 release-mapping, migration-ledger or Compose-version failures.
 
 The corrected installer requires `python3` and a validated release record; it
 refuses to guess component tags if pairing cannot be established. For an offline
-installation, provision a trusted `releases/v0.7.5.json` in the installation tree
+installation, provision a trusted `releases/v0.7.8.json` in the installation tree
 and the required release assets/images before using `VIDRA_RECORD_FETCH=off`.
 That switch only disables record fetching; it does not make other downloads
-offline or waive record validation. The v0.7.5 bundle predates this installer fix,
-so keep the reviewed current installer and the pinned application bundle distinct.
+offline or waive record validation. The published bundle is cut before its own
+digest record exists, so record retrieval or trusted local provisioning is still
+required. Keep the reviewed installer commit and pinned application bundle distinct.
 
 Choose host resources for PostgreSQL, Redis, ClamAV, import streaming and any
 workers. Adjust Compose CPU/memory limits to fit the actual host; its production
@@ -117,7 +173,7 @@ public issue. Configure `PUBLIC_BASE_URL`, `NEXT_PUBLIC_API_BASE_URL` and
 `CORS_ALLOWED_ORIGINS` for the candidate HTTPS origin. Verify trusted TLS, browser
 rendering, `/version`, `/healthz`, `/readyz`, actual running image manifests and
 both migration ledgers after deployment. For the pairing above, the expected
-core/search schema versions are **150/18**.
+core/search schema versions are **182/18**.
 
 ## 3. Restore a snapshot behind a read-only role
 
@@ -245,10 +301,10 @@ the source root to `/source/peertube`; inspect the rendered API/worker mounts.
 
 A mixed local/S3 source needs a separate inventory: the source backend selector
 does not automatically fall back from S3 to the PeerTube host's filesystem.
-Preserve every local original and its database/key mapping. The prerelease
-[three-pass repair procedure](#mixed-locals3-repair-prerelease) below covers
+Preserve every local original and its database/key mapping. The
+[three-pass repair procedure](#mixed-locals3-repair) below covers
 local originals whose captions or HLS remain in object storage; it is not a
-capability qualification for v0.7.5.
+provider or representative migration qualification for v0.7.8.
 
 Keep the source HTTP origin reachable too. Actor images, posters and storyboard
 sheets may live on the PeerTube host even when video storage is S3. The importer
@@ -260,7 +316,7 @@ Choose one media strategy before the first actual run:
 
 | Mode | What it does | Operational consequence |
 | --- | --- | --- |
-| `copy` | Streams supported media into Vidra's destination bucket. | Enables independence only after required media and artwork are verified. Recommended for replacing the old installation. |
+| `copy` | Streams supported media into Vidra's destination bucket, with optional server-side copy for eligible HLS binary objects. | Enables independence only after required media and artwork are verified. Recommended for replacing the old installation. |
 | `reference` | Keeps source keys for originals, HLS and captions; **still copies artwork**. | Vidra's runtime `STORAGE_*` must access the same source bucket/layout and allow destination artwork writes. The source bucket remains a runtime dependency. Never force media GC ownership onto a shared source bucket. |
 | `none` | Imports metadata without media. | Use a disposable destination for a mapping rehearsal; it is not a playable migration. |
 
@@ -268,33 +324,38 @@ Do not change an active run to `reference` to avoid transfer time. The durable
 ledger and already-imported rows survive reruns; changing mode is not a general
 conversion or recopy mechanism.
 
-### Prerelease transfer rehearsal
+### Released transfer paths and required rehearsal
 
-**Unreleased and unqualified: do not enable this on v0.7.5 or assume that updating
-this env template updates the running binary.** Test the implementation on an
-isolated candidate first. Record exact source commits, source archive checksums,
-image digests and build arguments for all components, then qualify that exact
-pairing before promotion. A private candidate build is not a public release or
-production acceptance. This remains `media_mode=copy`; it reuses source media
+These paths are present in v0.7.8; updating an env template alone does not update
+an older running binary. Rehearse them on an isolated installation of the exact
+published images. Record source snapshot/archive checksums, component commits,
+running image digests, source/destination layout and settings. G10 still requires
+the resulting representative transfer, failure, reconciliation and playback
+evidence before promotion. This remains `media_mode=copy`; it reuses source media
 without encoding.
 
-The prerelease importer copies up to **four independent HLS trees concurrently**.
+The released importer defaults to **four independent HLS trees concurrently**.
+`PEERTUBE_IMPORT_COPY_CONCURRENCY` selects **1–32** trees, including streamed
+fallback; this setting applies to both API and worker containers.
 Each tree is still copied in dependency order and becomes ready only after its
 required objects succeed. A ready tree, including one created on Vidra, is
-preserved on rerun. This bound is built into the importer; starting extra import
-runs or workers is not the way to increase it. Measure throughput and memory on
-the candidate with its database and scanner running.
+preserved on rerun. Starting extra import runs or workers is not the way to tune
+this bound. Measure throughput and memory on the candidate with its database and
+scanner running.
 
 In copy mode, captions run in a separate pass after videos and HLS, with up to
 four caption transfers at once. An absent VTT track records a retryable caption
 failure without discarding the video or blocking an otherwise valid HLS tree.
-Repair the source track and rerun against the same ledger. Existing same-language
-tracks and previously recorded creator deletions remain protected. A playable
+Repair the source track and rerun against the same ledger. Caption concurrency is
+fixed at four; the HLS concurrency setting does not change it. Existing same-language
+tracks and previously recorded creator deletions remain protected. A track carried
+by an older importer without a caption ledger can be carried once more if deleted
+before its first ledger entry; reconcile that case explicitly. A playable
 video does not make a missing caption acceptable: reconcile caption failures
 separately before acceptance.
 
 PeerTube HLS can reference subtitle playlists containing absolute VTT URLs.
-The prerelease copy removes `#EXT-X-MEDIA` declarations with `TYPE=SUBTITLES` and
+The released copy removes `#EXT-X-MEDIA` declarations with `TYPE=SUBTITLES` and
 the `SUBTITLES` group attribute on `#EXT-X-STREAM-INF`; it does not open or copy those
 subtitle playlists or follow their URLs. Supported VTT tracks are imported from
 the configured source storage and served through Vidra's caption API/player
@@ -374,7 +435,7 @@ Change importer credentials only at a terminal run boundary, then verify the
 actual API/worker configuration. Never extend the copy key's source permissions
 as a shortcut for ordinary destination access.
 
-#### Mixed local/S3 repair (prerelease)
+#### Mixed local/S3 repair
 
 An original can remain on the PeerTube filesystem while its captions or HLS are
 in S3. The importer selects one source backend for an entire run. If the S3 pass
@@ -417,7 +478,7 @@ operator's exact deployment.
 6. Reconcile every pass and verify the repaired originals' hashes, stable video
    IDs, source state/privacy, captions and HLS dependencies. Source drafts must
    stay drafts. Artwork is reconsidered but unchanged imported assets need no
-   new transfer; the prerelease preserves creator changes and cleared slots
+   new transfer; the released importer preserves creator changes and cleared slots
    across repeated runs, even if the source later selects a new artwork ID.
 
 Keep the [side-effect pauses](#5-pause-side-effects-and-choose-account-policy)
@@ -456,14 +517,14 @@ vidra deploy
 vidra doctor
 ```
 
-**On v0.7.5, also turn the runtime admin setting `storyboards_enabled` off before
+**Also turn the runtime admin setting `storyboards_enabled` off before
 starting the actual run.** `TRANSCODING_ENABLED=false` does not stop storyboard
 backfill. Without this step, backfill can decode originals before the importer's
 later storyboard pass, and the default rerun policy can preserve that generated
 sheet instead of the source one. The setting takes effect without an API restart;
-existing source sheets can still be copied and served. Do not assume an unreleased
-worker guard is present in a released image. Keep this pause step even with a
-guard for queued imports: a decode may already be running, and the standalone
+existing source sheets can still be copied and served. v0.7.8 excludes new
+storyboard-backfill selections while an admin/API import is pending or running.
+Keep the explicit pause: a decode may already be running, and the standalone
 CLI does not create the admin/API run record that such a guard checks.
 
 The example intentionally chooses **unlimited storage for all users**: default
@@ -527,7 +588,7 @@ The ledger is cumulative across runs, keyed by entity kind/source ID; it is not
 a per-run byte counter. Run counters can lag an active entity pass. A changing
 heartbeat is not evidence of bytes copied, and `done` does not mean zero failed
 or unsupported entities. Resolve every required failed/unsupported item and
-reconcile final counts. Failed entries are retryable; v0.7.5 treats unsupported
+reconcile final counts. Failed entries are retryable; v0.7.8 treats unsupported
 entries as terminal on ordinary reruns. Do not clear the whole ledger or restart
 from an empty database merely to retry one asset.
 
@@ -577,7 +638,7 @@ source domain serving PeerTube throughout this rehearsal.
 The released importer does not enqueue a fresh video transcode for each imported
 video. Verify these paths against representative public and restricted videos:
 
-| Asset | v0.7.5 behavior | Evidence to collect |
+| Asset | v0.7.8 behavior | Evidence to collect |
 | --- | --- | --- |
 | Original/web video | Copies the highest-resolution eligible source file unchanged and records its SHA-256; reference retains its key. It does not copy every old web resolution. | Source/destination byte count and checksum, playable file, correct access control. |
 | HLS | Copies a flat master/variant/dependency graph, including byte-range MP4, audio and init objects, without encoding. Publishes the tree after completion; an existing ready tree is preserved. | Fetch master, variants, init/media ranges; decode and seek in a real browser. Check audio and recorded renditions. Do not require native CMAF packaging from a preserved PeerTube tree. |
@@ -599,10 +660,14 @@ every segmented, encrypted or live source layout. Do not enable a blanket
 transcode to remedy a missing poster, stale rendition row or transfer failure.
 
 Behavior is grounded in the tagged importer:
-[media streaming](https://github.com/yegamble/vidra-core/blob/v0.7.5/internal/peertubeimport/importer.go),
-[HLS copy](https://github.com/yegamble/vidra-core/blob/v0.7.5/internal/peertubeimport/copyhls.go),
-[artwork](https://github.com/yegamble/vidra-core/blob/v0.7.5/internal/peertubeimport/entities_videoimages.go),
-[rerun updates](https://github.com/yegamble/vidra-core/blob/v0.7.5/internal/peertubeimport/resync.go).
+[media streaming](https://github.com/yegamble/vidra-core/blob/04a7f0e127177b631eb323d04d330673fee044f9/internal/peertubeimport/importer.go),
+[HLS copy](https://github.com/yegamble/vidra-core/blob/04a7f0e127177b631eb323d04d330673fee044f9/internal/peertubeimport/copyhls.go),
+[HLS concurrency](https://github.com/yegamble/vidra-core/blob/04a7f0e127177b631eb323d04d330673fee044f9/internal/peertubeimport/hls_backfill.go),
+[captions](https://github.com/yegamble/vidra-core/blob/04a7f0e127177b631eb323d04d330673fee044f9/internal/peertubeimport/entities_captions.go),
+[server-side copy](https://github.com/yegamble/vidra-core/blob/04a7f0e127177b631eb323d04d330673fee044f9/internal/storage/server_copy.go),
+[configuration and validation](https://github.com/yegamble/vidra-core/blob/04a7f0e127177b631eb323d04d330673fee044f9/internal/config/config.go),
+[artwork](https://github.com/yegamble/vidra-core/blob/04a7f0e127177b631eb323d04d330673fee044f9/internal/peertubeimport/entities_videoimages.go),
+[rerun updates](https://github.com/yegamble/vidra-core/blob/04a7f0e127177b631eb323d04d330673fee044f9/internal/peertubeimport/resync.go).
 
 ## 8. Establish encrypted backups and prove recovery
 
@@ -663,10 +728,10 @@ RCLONE_CONFIG=/home/vidra/.config/rclone/rclone.conf
 # HEALTHCHECKS_URL=<private dead-man monitoring endpoint, if used>
 ```
 
-**Released v0.7.5 backup tooling reads its off-site settings from the process
-environment.** Merely putting `BACKUP_RCLONE_REMOTE` in `env/production.env` can
-leave backups local-only. Newer tooling may load those documented values from
-the selected env file; an active systemd `EnvironmentFile` works across both.
+**Released v0.7.8 backup tooling reads its documented off-site settings from the
+selected env file, with explicit process-environment values taking precedence.**
+An explicitly empty process value disables the corresponding file setting.
+The systemd `EnvironmentFile` below makes the timer's selected values explicit.
 `RCLONE_CONFIG` must reach the rclone process environment either way.
 
 Install the timer and make its environment file explicit:
@@ -723,11 +788,11 @@ those entities. Destination-deleted parents are retired rather than resurrected.
 Check replaced media/captions and existing renditions separately from metadata.
 
 Compare final identities and visibility/moderation states, not just one catalogue
-total. Public/unlisted/private visibility is mapped; PeerTube internal and
-password-protected videos become private, and their video-password access
-mechanism is not carried. Only source state `published` becomes published;
-other states become drafts. Initial inserts carry account suspension and video
-blacklist dispositions, but v0.7.5 reruns do not mirror later suspension/blacklist
+total. Public/unlisted/private visibility is mapped; PeerTube internal becomes
+Vidra `internal` (any signed-in account). Password-protected videos become
+private, and their video-password access mechanism is not carried. Only source
+state `published` becomes published; other states become drafts. Initial inserts carry account suspension and video
+blacklist dispositions, but v0.7.8 reruns do not mirror later suspension/blacklist
 changes. Reconcile those changes explicitly. Test restricted access anonymously
 and as permitted/denied users. Decide how to preserve beta-only activity before
 allowing source-authoritative updates or replacing an existing beta installation.
@@ -756,7 +821,8 @@ access. Otherwise leave the account held. Recheck that later import/resync
 passes cannot release a hold, and that default reruns preserve intentional
 destination edits. Source-authoritative policy repair is a separate, explicit
 choice. These are acceptance requirements, not claims that every listed mapping
-exists in v0.7.5.
+exists in v0.7.8. In particular, do not assume source MFA secrets or an automatic
+MFA hold were imported; inventory and enforce the account holds explicitly.
 
 Exercise old `/w/<short-id>` and legacy UUID links against a known sample and
 recent source videos; inspect `/api/v1/videos/resolve?legacy_uuid=<uuid>`. Test
@@ -765,11 +831,12 @@ redirects.
 
 <a id="federation-continuity"></a>
 **Federation continuity.** Keep federation disabled while importing (§5), and
-until the strategy below has been tested end to end. Core v0.7.5 carries actor
-keys but **no remote followers**. The capabilities listed here need a core release
-that contains core#367–#369 and #374 (remote followers), core#373 (legacy
-object ids) and core#371, #372 and #375 (inbound Move). Check the release notes
-for the exact tag. Import only from a source database you trust.
+until the strategy below has been tested end to end. Core v0.7.8 contains actor
+key import, remote channel-follower import, legacy video object-id resolution
+and inbound remote-account Move handling. These released capabilities still
+need the following domain, access-control and delivery checks; source fixtures
+are not a live federation-continuity rehearsal. Import only from a source
+database you trust.
 
 - **Same domain, same handles: the supported path.** When vidra serves the
   source's hostname, set `PUBLIC_BASE_URL` to that origin before the run. A
@@ -861,9 +928,16 @@ For a mixed component release, use the script's explicit component flags rather
 than assuming one shared tag:
 
 ```sh
-# Example release pairing; execute only as part of the agreed rollback plan.
+# Known older pairing, not a qualified rollback from v0.7.8.
+# Execute only as part of the agreed rollback plan.
 ./deploy/rollback.sh --core v0.7.5 --user v0.7.3 --search v0.7.3
 ```
+
+v0.7.8's rollback guards can refuse an older core when internal videos, watched
+word lists, held comments/approval policies or admin-managed OIDC providers are
+in use. Those refusals protect access and authentication policy; do not bypass
+them to make a rehearsal pass. Review the actual data and target compatibility,
+or use the separately tested restore plan with its matching backup and keys.
 
 Until the acceptance and rollback evidence exists, keep the candidate private and
 the original domain serving the source.
