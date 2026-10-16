@@ -1,37 +1,23 @@
-# Agent Build Instructions — Vidra Monorepo **Orchestrator** (root)
+# Agent Build Instructions — Vidra Platform **Orchestrator** (meta repo)
 
-> ⛔ **You are the orchestrator, running from the monorepo root. NEVER create
-> application code at the root.** All code, tests, config, Docker, and docs live
-> inside `vidra-core/` or `vidra-user/`. The root holds only `.git`, `.gitignore`,
-> `README.md`, `.github/workflows/`, and `.ralph/`. Full procedure: `.ralph/PROMPT.md`.
+Work in the owning repository: application code in `vidra-core`, `vidra-user`
+or `vidra-search`; deployment, recovery, Compose, env and platform docs in
+`vidra`. Each has its own Git history, `.github/workflows/`, `main`, and
+`ci-required` gate. Nested component checkouts on operator hosts are detached
+release pins; use separate development checkouts or worktrees for changes.
 
-This checkout is the **Vidra monorepo root** — NOT a single project. Vidra is a
-clean-room, PeerTube-inspired federated video platform split into two self-contained
-projects that are **subdirectories of this one git repo** (not separate repos):
+Read each affected repo's `AGENTS.md` and `.ralph/` instructions where present.
+For one coherent vertical slice, land dependent PRs in search → core → user →
+meta order. Keep one writer per checkout, one repository per PR (normally fewer
+than 300 lines), and link downstream work instead of marking a backend-only
+milestone complete. Update recovery classifications and review rollback guards
+for each new core migration; update env templates for config changes.
 
-- **vidra-core/** — Go backend / HTTP API (Echo, PostgreSQL, sqlc, Redis, Docker).
-- **vidra-user/** — Next.js + TypeScript frontend (Tailwind, Playwright).
-
-One Ralph loop, run from here, advances **both**. The detailed, authoritative build
-and test instructions for each project live in that project's own files — read them
-when you work in that project, and follow them exactly:
-
-- `vidra-core/.ralph/AGENT.md`, `vidra-core/.ralph/PROMPT.md`, `vidra-core/.ralph/fix_plan.md`
-- `vidra-user/.ralph/AGENT.md`, `vidra-user/.ralph/PROMPT.md`, `vidra-user/.ralph/fix_plan.md`
-
-## Per-loop orientation (see `.ralph/PROMPT.md` for the full procedure)
-1. Read this file, the root `.ralph/fix_plan.md` (coarse phase gate), and **both**
-   subdirectory `fix_plan.md` files.
-2. Pick the single highest-priority vertical slice across the platform
-   (backend foundations/contracts before the frontend that depends on them).
-3. `cd` into the **one** target project and read its `.ralph/PROMPT.md`,
-   `.ralph/AGENT.md`, and `.ralph/specs/` before writing anything. Exactly one
-   project per loop — never touch the sibling in the same loop.
-4. Run that project's **canonical gate** and never commit/push a red gate:
-   - `vidra-core`: `make ci`  (fmt-check + vet + openapi-verify + test-race)
-   - `vidra-user`: `npm run ci`  (lint + typecheck + build + e2e; data-mutating
-     flows must be proven against a **real** vidra-core + Postgres via the
-     backend-backed Playwright profile — never `VERIFIED` on mocks).
+Run each affected repo's gates and required CI. Frontend data mutations also
+need real backend/DB evidence (not mocks). Before ticking a completed fix-plan
+item or reporting completion, run the meta completeness command below, paste
+its real output and the affected PR/CI links into the status block, and verify
+that every required dependency PR is merged. Missing evidence stays open.
 
 ## Canonical commands (for reference; authoritative copies live per-project)
 ```bash
@@ -41,22 +27,26 @@ make up / make down# full Docker stack (postgres, redis, migrate, api)
 make sqlc          # regenerate typed query code after migration/query changes
 make openapi-verify# lint api/openapi.yaml + route↔spec drift guard
 
+# search (run inside vidra-search/)
+make ci            # this independent repo owns its required CI
+
+# meta (run inside vidra/)
+python3 -m unittest discover -s tests -p '*_test.py'
+python3 scripts/ci/check-vertical-slice-completeness.py
+
 # frontend (run inside vidra-user/)
 npm run ci         # the full local gate the frontend CI runs
 npm run e2e:backed # Playwright against a live vidra-core + Postgres (proves persistence)
 ```
 
-## Git workflow (this is the ORCHESTRATOR's workflow — it overrides any
-## "feature branch / pull request" language in the per-project AGENT files)
-- **Commit AND push every loop that ends green, directly to the working branch
-  (`main`).** Pushing is what runs CI; a loop is not done until its work is pushed
+## Git workflow (follow each owning repo's `AGENTS.md`)
+- **Commit AND push green checkpoints on short-lived PR branches off `main`.**
+  Pushing runs CI; a loop is not done until its work is pushed
   (or the push failure is recorded `BLOCKED`). Use scoped conventional messages
   (`feat(core): …`, `fix(user): …`). See `.ralph/PROMPT.md` for the push/rebase
   failure handling.
-- **Single writer:** only ONE Ralph loop may run against this repo at a time —
-  `vidra-core` and `vidra-user` share one git history and one `main`, and the
-  pull-rebase-retry is not concurrency-safe. Do not run a standalone subdir loop
-  while the root orchestrator is running.
+- **One writer per checkout:** concurrent work in one repo needs separate
+  worktrees; each repository has its own `main` and merge gate.
 - **Done means merged to `main`:** prefer small, frequent commits over one
   loop-end mega-commit, and any work done on a side branch is not complete —
   and may not be ticked done in any fix_plan — until that branch is merged
