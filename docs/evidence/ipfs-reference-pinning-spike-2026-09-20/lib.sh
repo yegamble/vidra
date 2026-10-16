@@ -30,6 +30,13 @@ api() { local ep="$1"; shift; curl -sS -X POST "$API/$ep" "$@"; }
 
 origin_mode() { printf '%s' "$1" > "$MODEFILE"; }
 
+# A saved PID can outlive its process. Verify this exact origin and its fixture
+# arguments before signalling, both during a fault and during later teardown.
+stop_origin() {
+  python3 "$SPIKE_DIR/stop-origin.py" "$OUT/origin.pid" "$SPIKE_DIR/origin.py" \
+    "$DATA" "$ORIGIN_PORT" "$ORIGIN_LOG" "$MODEFILE"
+}
+
 # Mark a spot in the origin log so a test can count only its own requests.
 origin_mark() { printf -- '---- MARK %s ----\n' "$1" >> "$ORIGIN_LOG"; }
 origin_since() { awk -v m="---- MARK $1 ----" 'f{print} $0==m{f=1}' "$ORIGIN_LOG"; }

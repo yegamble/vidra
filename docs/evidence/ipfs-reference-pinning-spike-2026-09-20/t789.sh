@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # T7 chunk size, T8 rough throughput, T9 concurrency.
+# shellcheck source-path=SCRIPTDIR
 source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 origin_mode normal
 WANT=$(shasum -a 256 "$DATA/payload1.bin" | awk '{print $1}')
+# Collect the complete transcript without letting later diagnostics hide a failure.
+failed=0
 tally() { origin_since "$1" | python3 -c '
 import sys,re
 n=b=0
@@ -25,7 +28,12 @@ echo "  filestore entries for the 1 MiB variant: $(api 'filestore/ls?enc=json' |
 origin_mark t7def; curl -sS "$GW/ipfs/$DEF" -o "$OUT/t7-def.bin"; echo "  full read @256 KiB: $(tally t7def)"
 origin_mark t7big; curl -sS "$GW/ipfs/$BIG" -o "$OUT/t7-big.bin"; echo "  full read @1 MiB:   $(tally t7big)"
 for f in t7-def t7-big; do
-  [ "$(shasum -a 256 "$OUT/$f.bin"|awk '{print $1}')" = "$WANT" ] && echo "  $f bytes MATCH" || echo "  $f MISMATCH"
+  if [ "$(shasum -a 256 "$OUT/$f.bin"|awk '{print $1}')" = "$WANT" ]; then
+    echo "  $f bytes MATCH"
+  else
+    echo "  $f MISMATCH"
+    failed=1
+  fi
 done
 
 step "T8 rough throughput: gateway read of 64 MiB, copy mode vs nocopy"
@@ -56,12 +64,19 @@ for i in 0 1 2 3 4 5 6 7; do
 done
 for p in "${pids[@]}"; do wait "$p" || rc=1; done
 echo "  all curls exited 0: $([ $rc -eq 0 ] && echo yes || echo NO)"
+[ "$rc" -eq 0 ] || failed=1
 for i in 0 1 2 3 4 5 6 7; do
   S=$((i * 8388608))
   A=$(dd if="$DATA/payload1.bin" bs=1 skip=$S count=1048576 2>/dev/null | shasum -a 256 | awk '{print $1}')
   B=$(shasum -a 256 "$OUT/t9-$i.bin" | awk '{print $1}')
-  [ "$A" = "$B" ] && echo "  range $i: MATCH ($(wc -c < "$OUT/t9-$i.bin" | tr -d ' ') bytes)" || echo "  range $i: MISMATCH"
+  if [ "$A" = "$B" ]; then
+    echo "  range $i: MATCH ($(wc -c < "$OUT/t9-$i.bin" | tr -d ' ') bytes)"
+  else
+    echo "  range $i: MISMATCH"
+    failed=1
+  fi
 done
 echo "  origin traffic for the 8 parallel reads: $(tally t9)"
 echo "--- kubo daemon log: any errors during the spike? ---"
 docker logs "$KUBO_NAME" 2>&1 | grep -iE 'error|panic|fatal|warn' | tail -15 || echo "  (no error/warn lines)"
+exit "$failed"

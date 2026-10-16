@@ -4,6 +4,10 @@ Measured 2026-09-20 against the exact Kubo version vidra pins. Every figure belo
 is copied from a real run; transcripts live in `out/` (`out/RUN.txt` is the whole
 end-to-end run). Reproduce with `bash run.sh`; clean up with `bash run.sh teardown`.
 
+Reproduction tooling was hardened on 2026-10-16: stopping the origin now verifies
+its full process identity, and T7/T9 failures return nonzero. The archived `out/`
+transcripts retain the original measured run; these tooling changes are not a new lab run.
+
 What is committed in `out/`: the 48 text transcripts, with the local username
 replaced by `<user>` (it appeared only in `ls -l` listings; no other local path
 occurs in them) — nothing else was altered. Not committed: the

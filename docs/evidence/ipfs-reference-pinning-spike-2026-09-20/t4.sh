@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # T4: what a nocopy pin does when the origin misbehaves.
+# shellcheck source-path=SCRIPTDIR
 source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
 python3 -c "import os;open('$DATA/t4.bin','wb').write(os.urandom(4*1024*1024))"
@@ -26,7 +27,7 @@ trycat() { # trycat <label>
 }
 
 step "T4a origin STOPPED"
-kill "$(cat "$OUT/origin.pid")" 2>/dev/null || true
+stop_origin
 wait_for "origin down" bash -c "! nc -z 127.0.0.1 $ORIGIN_PORT"
 trycat a-down
 echo "--- filestore/verify (whole store) while origin is down, first 8 lines ---"

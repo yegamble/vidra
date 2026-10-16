@@ -1,14 +1,15 @@
 # The IPFS mirror and the disk: pin less first, pin by reference maybe — design
 
-Date: 2026-09-20 · Status: **draft for discussion — not approved, not planned, not
-built** · Repos: vidra-core (C), vidra (M), vidra-user (U)
+Date: 2026-09-20 · Decision recorded: 2026-10-13 · Status: **Tier A approved;
+Tier B deferred; beta measurement pending** · Repos: vidra-core (C), vidra (M), vidra-user (U)
 
 > **Decision (2026-10-13).** The owner chose to build **Tier A** and then measure.
 > **D5: progressive download MP4s (and other non-HLS assets the HLS handlers never
 > serve) are NOT pinned to IPFS.** **Tier B (reference pinning) is deferred - it is
-> not to be built now;** D1, D3 and D4 remain unruled, and D2 is decided only after
-> Tier A has been measured on beta (PR 7 in section 11). Tier A is open in
-> vidra-core and not merged: F2 [#384](https://github.com/yegamble/vidra-core/pull/384),
+> not to be built now;** D1, D3 and D4 remain unruled. D2 selected Tier A; any
+> later Tier B decision waits for its beta measurement (PR 7 in section 11).
+> Implementation PRs open when the decision was recorded were:
+> F2 [#384](https://github.com/yegamble/vidra-core/pull/384),
 > F6 [#386](https://github.com/yegamble/vidra-core/pull/386),
 > F4 [#388](https://github.com/yegamble/vidra-core/pull/388),
 > F3 [#390](https://github.com/yegamble/vidra-core/pull/390) (stacked on #388),
@@ -20,8 +21,9 @@ Every claim below is tagged by how it is known: **[read]** in the code at
 vidra-core `400c1a8` / vidra `79a84cd` with file:line, **[measured]** in the lab
 spike recorded beside this document
 (`docs/evidence/ipfs-reference-pinning-spike-2026-09-20/`), **[sourced]** from a
-URL fetched on 2026-09-20, or **[unverified]**. Nothing here is an owner ruling;
-section 12 lists the decisions the owner has not made.
+URL fetched on 2026-09-20, or **[unverified]**. The technical analysis retains its
+original source snapshots; the explicit October 13 decision above sets the
+approved scope. Section 12 separates that decision from the remaining choices.
 
 This is revision 3. Revisions 1 and 2 were each reviewed by four independent
 readers (backend, security, infrastructure, evidence audit) and each review found
@@ -41,7 +43,7 @@ the moment, pinning stops at a point on local disk"*.
    what is measured should let the same disk hold about **five times** the video —
    by construction, not yet by measurement — with no new mechanism, no new
    cost and nothing for the operator to do. That is **Tier A** (section 5): six
-   small fixes, each worth shipping alone. **This document recommends Tier A now.**
+   small fixes, each worth shipping alone. **The October 13 decision selected Tier A.**
 3. **Removing the ceiling altogether is possible**: Kubo can keep references to
    bytes vidra already stores instead of a second copy. That is **Tier B**
    (section 6). The lab spike shows the mechanism works and the CIDs do not change.
@@ -50,7 +52,7 @@ the moment, pinning stops at a point on local disk"*.
    the host manager cannot carry today, and it turns a disk cost into bucket egress
    that has to be limited — on an upstream that loses its maintainers on 2026-09-30
    (section 4). **This document recommends deciding Tier B only after Tier A has
-   been measured on beta** (section 12, D2).
+   been measured on beta** (section 12, D2). It remains deferred.
 
 ## 2. Why pinning stops today
 
@@ -693,7 +695,7 @@ segment fetched through the gateway; conversion copy → reference → copy with
 
 Small PRs, each merged before the next.
 
-**Tier A — recommended now:**
+**Tier A — approved scope, followed by measurement:**
 1. C — F2, the trailer and wrap-entry check.
 2. C + M — F6, the playback-only wrap-add, the re-pin run, the gc runbook step.
 3. C + M — F4, capacity gauges, the pause log line, the `/admin/system` decision.
@@ -722,10 +724,11 @@ Small PRs, each merged before the next.
 The mode defaults to `copy` and the route is inert without reference rows, so a
 release containing any prefix of this list is safe to deploy.
 
-## 12. Decisions the owner has not made
+## 12. Recorded decisions and remaining owner choices
 
-- **D2 — How much to build. Recommendation: Tier A now, and decide Tier B from
-  beta's measured number.** Tier A is six small fixes, closes two gaps that exist
+- **D2 — Decided October 13: build Tier A, then measure beta. Tier B is deferred.**
+  A later decision about Tier B requires that measurement; this document does
+  not approve building it. Tier A is six small fixes, closes two gaps that exist
   today, and should multiply what the disk holds about five-fold. Tier B removes the
   ceiling, but two review rounds each found blockers in it, its deleter list is
   only as complete as the last search, it needs a manager change before it can be
@@ -733,12 +736,13 @@ release containing any prefix of this list is safe to deploy.
   it rests on experimental features of software whose maintainers stop on
   2026-09-30. If five-fold is enough for the instances vidra has, Tier B is not
   worth its risk.
-- **D5 — Are the download assets meant to be on IPFS?** F6 assumes not: the pin
+- **D5 — Decided October 13: download MP4s and other non-HLS assets are not pinned.**
+  F6 therefore pins only what the HLS handlers serve. The pin
   code's comment asks for *"a clean playlists+segments tree"*, delivery has no
   mirror class for downloads, and nothing reads them through the mirror today. If
   mirroring downloads is wanted, it should be its own media class with the download
   policy applied, not a side effect.
-- **D1 — (Tier B) Is a mirror that depends on the rest of the stack acceptable?** In
+- **D1 — Unruled, Tier B: is a mirror that depends on the rest of the stack acceptable?** In
   reference mode the mirror depends on primary storage **and on Postgres and on the
   api container**. A Postgres restart, a migration window or `up -d` recreating the
   api takes every reference-pinned video off IPFS — events the mirror survives
@@ -747,10 +751,10 @@ release containing any prefix of this list is safe to deploy.
   surface, never a backup.** Do **not** back up the Kubo datastore for durability —
   it holds only re-derivable copies of already-public bytes"* — but that sentence
   was written about backups, not about this.
-- **D3 — (Tier B) Chunk size.** Stay at 256 KiB (recommended: CIDs never change), or
+- **D3 — Unruled, Tier B: chunk size.** Stay at 256 KiB (recommended: CIDs never change), or
   1 MiB for rows never pinned before (four times fewer origin requests, at the price
   of a per-row chunker record and CIDs that differ by vintage).
-- **D4 — Which mode does beta run?** `IPFS_MANAGED_NODE` and the live
+- **D4 — Unruled: which mode does beta run?** `IPFS_MANAGED_NODE` and the live
   `admission_paused_reason` are in the untracked env file and the database, not in
   either repo. The answer decides whether F1 or F3 is the fix beta feels first.
 

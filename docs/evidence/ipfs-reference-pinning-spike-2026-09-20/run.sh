@@ -9,9 +9,11 @@
 # published on 127.0.0.1 only, on non-default ports (15001/18080).
 set -euo pipefail
 cd "$(dirname "$0")"
+# shellcheck source-path=SCRIPTDIR
+source ./lib.sh
 
 if [ "${1:-}" = teardown ]; then
-  [ -f out/origin.pid ] && kill "$(cat out/origin.pid)" 2>/dev/null || true
+  stop_origin
   docker rm -f refpin-spike-kubo >/dev/null 2>&1 || true
   docker volume rm refpin-spike-repo >/dev/null 2>&1 || true
   echo "--- remaining refpin-spike-* resources (expect none) ---"
