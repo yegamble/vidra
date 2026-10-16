@@ -24,6 +24,10 @@ sealed-data recovery checks do not establish that result. Complete the checks
 below before cutover; a successful import or healthy home page alone does not
 establish production readiness. See [release readiness](release-readiness.md).
 
+Preparatory tools: [synthetic importer fixture](peertube-synthetic-fixture.md)
+and [schema-refusal controls](peertube-schema-refusal.md). These tools supply no
+representative G10 migration result.
+
 Keep the original service available throughout rehearsal. Use an isolated host,
 database, media bucket, and temporary HTTPS hostname for Vidra. Do not redirect
 the original domain until step 10 passes. Examples use `/opt/vidra` owned by the
