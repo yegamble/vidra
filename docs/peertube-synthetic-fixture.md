@@ -49,7 +49,8 @@ python3 tests/peertube_fixture_database.py \
   --out /absolute/private-parent/NEW-database
 ```
 
-The tool verifies the media inventory hashes, private modes and frozen contract.
+The tool verifies the media inventory hashes, SQL-referenced assets, private modes
+and frozen contract. Database output cannot be placed inside the source media tree.
 It requires OpenSSL and real bcrypt: the Python `bcrypt` package, or Python
 3.11–3.12 with libcrypt's Blowfish method. No dependencies are installed.
 Fresh random passwords use bcrypt cost 12; four actor RSA keys use 2048 bits.

@@ -57,6 +57,10 @@ def validated_media(directory):
     actual = {path.relative_to(directory).as_posix() for path in (directory / 'source-media').rglob('*') if path.is_file()}
     if set(inventory['files']) != actual:
         raise media.FixtureError('media_inventory_differs')
+    required = {'source-media/thumbnails/thumbnail.jpg', 'source-media/thumbnails/poster.jpg',
+                'source-media/storyboards/sprite.jpg', 'source-media/captions/fixture-en.vtt'}
+    if not required <= actual:
+        raise media.FixtureError('sql_media_missing')
     for name, record in inventory['files'].items():
         path = directory / name
         if path.stat().st_size != record['size'] or not record['size'] or media.sha256(path) != record['sha256']:
@@ -169,6 +173,9 @@ def generate(output, source_media, origin):
             parsed.path or parsed.query or parsed.fragment or '\n' in origin or '\r' in origin):
         raise media.FixtureError('source_origin_refused')
     inventory = validated_media(source_media)
+    output_path = Path(output).resolve()
+    if output_path == Path(source_media) or Path(source_media) in output_path.parents:
+        raise media.FixtureError('output_overlaps_media')
     hasher, openssl = bcrypt_hasher(), shutil.which('openssl')
     if not openssl:
         raise media.FixtureError('openssl_dependency_missing')

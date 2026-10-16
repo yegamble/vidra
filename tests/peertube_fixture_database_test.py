@@ -36,6 +36,11 @@ class DatabaseFixtureTests(unittest.TestCase):
                     path = self.source / 'source-media' / relative
                     media.write_private(path, 'unit-only-placeholder')
                     files['source-media/' + relative] = dict(size=path.stat().st_size, sha256=media.sha256(path))
+            for relative in ('thumbnails/thumbnail.jpg', 'thumbnails/poster.jpg', 'storyboards/sprite.jpg',
+                             'captions/fixture-en.vtt'):
+                path = self.source / 'source-media' / relative
+                media.write_private(path, 'unit-only-placeholder')
+                files['source-media/' + relative] = dict(size=path.stat().st_size, sha256=media.sha256(path))
             self.inventory = dict(format='vidra-peertube-importer-subset-media-v1', core_commit=media.CORE_COMMIT,
                                   intended_schema_marker=1040, unsupported_schema_marker=1041, videos=videos, files=files)
             media.write_private(self.source / 'inventory.json', json.dumps(self.inventory))
@@ -141,13 +146,35 @@ class DatabaseFixtureTests(unittest.TestCase):
 
     def test_existing_output_refuses_before_generating_secrets(self):
         hasher = Mock()
+        output = self.root / 'existing'
+        output.mkdir(mode=0o700)
         with patch.object(database, 'bcrypt_hasher', return_value=hasher), \
                 patch.object(database.shutil, 'which', return_value=sys.executable), \
                 patch.object(database.subprocess, 'run') as crypto:
             with self.assertRaisesRegex(media.FixtureError, '^output_exists$'):
-                database.generate(self.source, self.source, 'https://source.invalid')
+                database.generate(output, self.source, 'https://source.invalid')
         hasher.assert_not_called()
         crypto.assert_not_called()
+
+    def test_missing_sql_referenced_asset_refused_even_when_inventory_agrees(self):
+        key = 'source-media/thumbnails/poster.jpg'
+        (self.source / key).unlink()
+        del self.inventory['files'][key]
+        (self.source / 'inventory.json').write_text(json.dumps(self.inventory))
+        with patch.object(database, 'bcrypt_hasher') as hasher:
+            with self.assertRaisesRegex(media.FixtureError, '^sql_media_missing$'):
+                database.generate(self.root / 'new', self.source, 'https://source.invalid')
+        hasher.assert_not_called()
+        self.assertFalse((self.root / 'new').exists())
+
+    def test_output_cannot_mutate_source_tree(self):
+        before = {path: media.sha256(path) for path in self.source.rglob('*') if path.is_file()}
+        for output in (self.source, self.source / 'new', self.source / 'source-media/new'):
+            with patch.object(database, 'bcrypt_hasher') as hasher:
+                with self.assertRaisesRegex(media.FixtureError, '^output_overlaps_media$'):
+                    database.generate(output, self.source, 'https://source.invalid')
+            hasher.assert_not_called()
+        self.assertEqual(before, {path: media.sha256(path) for path in self.source.rglob('*') if path.is_file()})
 
     def test_crypto_failure_never_prints_subprocess_output(self):
         captured = io.StringIO()
