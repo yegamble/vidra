@@ -1,11 +1,12 @@
 """REC03 verdicts fail closed without exporting private driver material."""
+import copy
 import importlib.util
 import json
 import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 spec = importlib.util.spec_from_file_location('runner', Path(__file__).with_name('rec03-runner.py'))
 runner = importlib.util.module_from_spec(spec)
@@ -76,6 +77,86 @@ class Verdict(unittest.TestCase):
             summary = (Path(tmp) / 'summary.json').read_text()
             self.assertNotIn('private-canary', summary)
             self.assertEqual(json.loads(summary)['failed_phase'], 'preflight')
+
+
+class RunningImages(unittest.TestCase):
+    def fixture(self, phase, digest_kind='index_digest'):
+        records = {}
+        for release in ('v0.7.7', 'v0.7.8'):
+            first = 1 if release == 'v0.7.7' else 4
+            records[release] = {'components': {role: {
+                'commit': str(index) * 40, 'tag': 'v0.7.3' if role == 'search' and release == 'v0.7.7' else release,
+                'image': {'repository': 'ghcr.io/yegamble/vidra-' + role,
+                          'index_digest': 'sha256:' + str(index) * 64,
+                          'platforms': {'linux/amd64': 'sha256:' + str(index + 3) * 64}}}
+                for index, role in enumerate(('core', 'user', 'search'), first)}}
+        record = records['v0.7.7' if phase in {'install', 'upgrade-fail', 'rollback'} else 'v0.7.8']
+        services = {'api': 'core', 'frontend': 'user', 'search': 'search'}
+        if phase == 'split':
+            services['worker'] = 'core'
+        containers, images = [], {}
+        for index, (service, role) in enumerate(services.items()):
+            component = record['components'][role]
+            image = component['image']
+            image_id = 'sha256:' + 'abcdef'[index] * 64
+            digest = image[digest_kind] if digest_kind == 'index_digest' else image['platforms']['linux/amd64']
+            containers.append({'Id': service, 'Image': image_id, 'State': {'Running': True},
+                'Config': {'Image': image['repository'] + ':' + component['tag'],
+                           'Labels': {'com.docker.compose.service': service}, 'Env': ['PRIVATE=private-canary']}})
+            images[image_id] = {'Id': image_id, 'Os': 'linux', 'Architecture': 'amd64',
+                'RepoDigests': [image['repository'] + '@' + digest],
+                'Config': {'Labels': {'org.opencontainers.image.revision': component['commit']}}}
+        def command(argv):
+            if argv[:2] == ['bash', 'deploy/compose.sh']:
+                self.assertEqual(argv[2:], ['ps', '-q', *services])
+                return '\n'.join(container['Id'] for container in containers)
+            if argv[:2] == ['docker', 'inspect']:
+                return json.dumps(containers)
+            self.assertEqual(argv[:3], ['docker', 'image', 'inspect'])
+            return json.dumps([images[argv[3]]])
+        return records, containers, images, Mock(side_effect=command)
+
+    def test_every_runtime_phase_accepts_recorded_index_or_platform_digest(self):
+        for phase in ('install', 'upgrade-fail', 'recover', 'rollback', 'repin', 'restore-ok', 'split'):
+            for kind in ('index_digest', 'platform'):
+                with self.subTest(phase=phase, digest=kind):
+                    records, _, _, inspect = self.fixture(phase, kind)
+                    runner.verify_running_images(phase, records, inspect)
+                    self.assertEqual(inspect.call_count, 6 if phase == 'split' else 5)
+
+    def test_matching_tags_cannot_hide_wrong_loaded_bytes_or_identity(self):
+        changes = ({'RepoDigests': ['ghcr.io/yegamble/vidra-core@sha256:' + '0' * 64]},
+                   {'Architecture': 'arm64'}, {'Os': 'windows'}, {'Id': 'sha256:' + '0' * 64},
+                   {'Config': {'Labels': {'org.opencontainers.image.revision': '0' * 40}}})
+        for change in changes:
+            with self.subTest(change=change):
+                records, containers, images, inspect = self.fixture('recover')
+                images[containers[0]['Image']].update(copy.deepcopy(change))
+                with self.assertRaises(runner.Failure) as refused:
+                    runner.verify_running_images('recover', records, inspect)
+                self.assertNotIn('private-canary', str(refused.exception))
+
+    def test_split_worker_and_exact_services_cannot_be_omitted(self):
+        for change in ('missing', 'duplicate', 'stopped', 'wrong-worker', 'wrong-tag'):
+            with self.subTest(change=change):
+                records, containers, images, inspect = self.fixture('split')
+                if change == 'missing':
+                    containers.pop()
+                elif change == 'duplicate':
+                    containers[-1]['Config']['Labels']['com.docker.compose.service'] = 'api'
+                elif change == 'stopped':
+                    containers[-1]['State']['Running'] = False
+                elif change == 'wrong-tag':
+                    containers[-1]['Config']['Image'] = 'ghcr.io/yegamble/vidra-core:latest'
+                else:
+                    images[containers[-1]['Image']]['RepoDigests'] = []
+                with self.assertRaises(runner.Failure):
+                    runner.verify_running_images('split', records, inspect)
+
+    def test_non_runtime_phases_do_not_request_container_config(self):
+        inspect = Mock()
+        runner.verify_running_images('report', {}, inspect)
+        inspect.assert_not_called()
 
 
 if __name__ == '__main__':
