@@ -293,41 +293,95 @@ def request_calls(ts, bindings=None):
     return calls
 
 
+def function_bodies(ts):
+    """Named declarations and React cache callbacks; retain export identity."""
+    bodies, declarations = {}, []
+    for k in range(len(ts) - 3):
+        if ts[k].value != 'function' or ts[k + 1].string or not re.fullmatch(r'[A-Za-z_$][\w$]*', ts[k + 1].value):
+            continue
+        name = ts[k + 1].value
+        j = k + 2
+        while j < len(ts) and ts[j].value != '(':
+            j += 1
+        if j == len(ts):
+            continue
+        _, end = groups(ts, j)
+        depth = 0
+        for q in range(end + 1, len(ts)):
+            if ts[q].value == '<':
+                depth += 1
+            elif ts[q].value == '>':
+                depth -= 1
+            elif ts[q].value == '{' and depth == 0:
+                try:
+                    _, body_end = groups(ts, q)
+                except ValueError:
+                    # Regex-heavy URL helpers need a full TS lexer. Omitting
+                    # an unresolved body cannot satisfy an endpoint finding.
+                    break
+                exported = any(t.value == 'export' for t in ts[max(0, k - 3):k])
+                bodies[name] = (q, body_end, exported)
+                declarations.append((k, body_end))
+                break
+            elif ts[q].value == ';' and depth == 0:
+                break
+    # A declaration does not run its body. Keep nested helpers available for
+    # explicit call traversal, but remove them from their enclosing execution.
+    def execution(start, end):
+        return [ts[j] for j in range(start, end + 1)
+                if not any(start < a <= j <= b <= end for a, b in declarations)]
+    bodies = {name: (execution(start, end), exported)
+              for name, (start, end, exported) in bodies.items()}
+    react_cache = any(module == 'react' and [t.value for t in binding] == ['{', 'cache', '}']
+                      for module, binding in imports(ts, include_exports=False))
+    if react_cache:
+        for i in range(len(ts) - 5):
+            if [t.value for t in ts[i:i + 2]] != ['export', 'const']:
+                continue
+            if [t.value for t in ts[i + 3:i + 6]] != ['=', 'cache', '(']:
+                continue
+            args, _ = groups(ts, i + 5)
+            if len(args) == 1:
+                callback = args[0]
+                arrow = next((j for j, t in enumerate(callback) if t.value == '=>'), None)
+                if arrow is not None and callback[arrow + 1:arrow + 2] == [Token('{')]:
+                    start = i + 7 + arrow
+                    _, end = groups(ts, start)
+                    bodies[ts[i + 2].value] = (execution(start, end), True)
+    return bodies
+
+
+def function_requests(name, bodies, bindings, seen=None):
+    """Follow actual local helper calls, never an unused helper declaration."""
+    seen = set(seen or ())
+    if name in seen:
+        return set()
+    seen.add(name)
+    body = bodies[name][0]
+    operations = set(request_calls(body, bindings))
+    for i, t in enumerate(body[:-1]):
+        if not t.string and t.value in bodies and body[i + 1].value == '(':
+            if i and body[i - 1].value in ('.', 'function'):
+                continue
+            operations.update(function_requests(t.value, bodies, bindings, seen))
+    return operations
+
+
 def wrappers(files):
     """Map exact method/path to (module, export, member) wrapper identities."""
     result = {}
     for file, source in files.items():
-        if not file.startswith('lib/api/') or file.endswith(('generated.ts', 'types.ts')):
+        if not (file.startswith('lib/api/') or file.startswith('lib/') and file.endswith('.server.ts')) or file.endswith(('generated.ts', 'types.ts')):
             continue
         ts = tokens(source)
         global_bindings = {}
         for k in range(len(ts) - 3):
             if ts[k].value == 'const' and ts[k + 2].value == '=' and ts[k + 3].string:
                 global_bindings[ts[k + 1].value] = template(ts[k + 3].value, global_bindings)
-        for k in range(len(ts) - 3):
-            if ts[k].value != 'function' or ts[k + 1].string:
-                continue
-            name = ts[k + 1].value
-            j = k + 2
-            while j < len(ts) and ts[j].value != '(':
-                j += 1
-            if j == len(ts):
-                continue
-            _, end = groups(ts, j)
-            depth, body_start = 0, None
-            for q in range(end + 1, len(ts)):
-                if ts[q].value == '<':
-                    depth += 1
-                elif ts[q].value == '>':
-                    depth -= 1
-                elif ts[q].value == '{' and depth == 0:
-                    body_start = q
-                    break
-                elif ts[q].value == ';' and depth == 0:
-                    break
-            if body_start is not None and any(t.value == 'export' for t in ts[max(0, k - 2):k]):
-                _, body_end = groups(ts, body_start)
-                for op in request_calls(ts[body_start:body_end + 1], global_bindings):
+        bodies = function_bodies(ts)
+        for name, (_, exported) in bodies.items():
+            if exported:
+                for op in function_requests(name, bodies, global_bindings):
                     result.setdefault(op, []).append((file, name, None))
         for i in range(len(ts) - 4):
             if [t.value for t in ts[i:i + 2]] != ['export', 'const']:
@@ -425,6 +479,22 @@ def object_member_origins(module, name, member, files):
     return set()
 
 
+def indexed_origins(ts, start, tables):
+    """Resolve a known dispatch table's literal key or dynamic scope union."""
+    if ts[start].value not in tables or ts[start + 1:start + 2] != [Token('[')]:
+        return set(), start
+    args, end = groups(ts, start + 1)
+    if len(args) != 1 or len(args[0]) != 1:
+        return set(), end
+    key = args[0][0]
+    entries = tables[ts[start].value]
+    if key.string:
+        return entries.get(key.value, set()), end
+    if re.fullmatch(r'[A-Za-z_$][\w$]*', key.value):
+        return set().union(*entries.values()), end
+    return set(), end
+
+
 def consumed_wrappers(files, reachable):
     consumed = set()
     for file in sorted(reachable):
@@ -444,18 +514,36 @@ def consumed_wrappers(files, reachable):
                 symbols[local] = imported_origins(module, name, files)
         # Resolve local const aliases and shared scope dispatch tables. Import
         # presence alone is never sufficient: an actual member access is needed.
+        tables, dispatch_aliases = {}, set()
         for _ in range(3):
             for i in range(len(ts) - 3):
                 if ts[i].value != 'const' or ts[i + 2].value != '=':
                     continue
                 end = next((j for j in range(i + 3, len(ts)) if ts[j].value == ';'), len(ts))
-                origins = set().union(*(symbols.get(t.value, set()) for t in ts[i + 3:end] if not t.string))
+                if ts[i + 3].value == '{':
+                    entries, _ = groups(ts, i + 3)
+                    tables[ts[i + 1].value] = {
+                        e[0].value: symbols.get(e[2].value, set()) for e in entries
+                        if len(e) == 3 and e[1].value == ':' and not e[2].string}
+                if ts[i + 3].value in tables and ts[i + 4:i + 5] == [Token('[')]:
+                    origins, _ = indexed_origins(ts, i + 3, tables)
+                    dispatch_aliases.add(ts[i + 1].value)
+                else:
+                    origins = set().union(*(symbols.get(t.value, set()) for t in ts[i + 3:end] if not t.string))
+                    if any(t.value in dispatch_aliases for t in ts[i + 3:end] if not t.string):
+                        dispatch_aliases.add(ts[i + 1].value)
                 if origins:
                     symbols[ts[i + 1].value] = origins
         for i in range(len(ts) - 2):
             if ts[i].string or ts[i].value not in symbols:
                 continue
-            if ts[i + 1].value == '.' and not ts[i + 2].string:
+            if ts[i + 1].value == '[':
+                origins, end = indexed_origins(ts, i, tables)
+                if end + 3 < len(ts) and ts[end + 1].value == '.' and ts[end + 3].value == '(':
+                    consumed.update((module, export, ts[end + 2].value) for module, export in origins)
+            elif ts[i + 1].value == '.' and not ts[i + 2].string:
+                if ts[i].value in dispatch_aliases and ts[i + 3:i + 4] != [Token('(')]:
+                    continue
                 for module, export in symbols[ts[i].value]:
                     consumed.add((module, export, ts[i + 2].value))
                     # Object shorthand is an export, not a call. Follow its
@@ -477,11 +565,18 @@ def static_findings(yaml, files):
             findings.append(Finding(f'orphan:{file}', f'unmounted React component: {file}'))
     clients = wrappers(files)
     consumed = consumed_wrappers(files, reachable)
+    direct = set()
+    for file in reachable:
+        if file.startswith(('app/', 'components/')):
+            bodies = function_bodies(tokens(files[file]))
+            for name, (_, exported) in bodies.items():
+                if exported and name[0].isupper():
+                    direct.update(function_requests(name, bodies, {}))
     for method, path in sorted(operations):
         if not path.startswith('/api/v1/') or (method, path) in BACKEND_ONLY_PATHS:
             continue
         identities = clients.get((method, path), [])
-        if not any(w in consumed for w in identities):
+        if (method, path) not in direct and not any(w in consumed for w in identities):
             reason = 'no statically resolved client wrapper' if not identities else 'wrapper has no mounted consumer'
             findings.append(Finding(f'endpoint:{method}:{path}', f'{method} {path}: {reason}'))
     return findings
