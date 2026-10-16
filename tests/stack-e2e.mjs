@@ -25,8 +25,9 @@
 //     not bytes that decode; a real player is release-acceptance.mjs's job.
 //   * The lane runs with rate limiting OFF and malware scanning OFF, so it
 //     proves nothing about the shipped limits or about scanning.
-//   * It builds the three components from their DEFAULT BRANCHES. It is not a
-//     release qualification and touches no published image or digest.
+//   * Source refs are selected by the workflow: floating main or the newest
+//     recorded release commits. It touches no published image or digest and
+//     does not establish runtime recovery or release qualification.
 //
 // Inputs (all required, all from the environment — see .github/workflows/stack-e2e.yml):
 //   VIDRA_BASE_URL          origin of the api                (e.g. http://127.0.0.1:8099)
