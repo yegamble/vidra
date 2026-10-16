@@ -34,8 +34,48 @@ byte identity across tool versions nor successful Vidra playback/import.
 
 The ten named cases reserve public, unlisted, private, internal,
 password-protected, draft, HLS-only, split-audio, blacklisted and missing-media
-relationships for a separate private SQL generator. This slice contains no
-database or credentials. Missing-media deliberately has neither file nor
+relationships. Missing-media deliberately has neither file nor
 playlist rows; it does not simulate a missing object referenced by a file row.
 Schema marker 1040 is supported; 1041 is reserved for refusal testing. Neither
 marker represents a running PeerTube server or upstream schema certification.
+
+## Private SQL and credentials
+
+After generating media, create a separate new private output directory:
+
+```sh
+python3 tests/peertube_fixture_database.py \
+  --media /absolute/private-parent/NEW-fixture \
+  --out /absolute/private-parent/NEW-database
+```
+
+The tool verifies the media inventory hashes, private modes and frozen contract.
+It requires OpenSSL and real bcrypt: the Python `bcrypt` package, or Python
+3.11–3.12 with libcrypt's Blowfish method. No dependencies are installed.
+Fresh random passwords use bcrypt cost 12; four actor RSA keys use 2048 bits.
+Passwords, hashes, private keys, SQL and inventory remain in 0700/0600 output.
+The CLI prints fixed result/error labels. Treat **all** generated state as private.
+
+`source-1040.sql` creates and seeds only the frozen importer's query subset;
+`source-1041.sql` changes its marker for a future default-preflight refusal test.
+The supported importer contract is 700–1040. These are plaintext SQL inputs for
+new disposable source databases, not real PeerTube exports or Vidra restore
+archives. The generator creates/loads no database and runs no migration/import.
+It omits upstream constraints, indexes, sequences, grants and server behavior.
+
+The graph includes an active and a blocked user, two channels, all ten video
+cases, threaded/deleted comments, regular/Watch Later playlists, accepted/pending
+local follows, a public blacklisted video, tags, chapters, ratings, captions,
+thumbnail selection and storyboard geometry. HLS file rows are explicitly
+synthetic **playlist descriptors**: measured sizes are playlist bytes, not encoded
+track totals or upstream whole-MP4 semantics. This does not verify rendition-size
+accounting. Avatar rows remain empty because avatar import always requires a live
+HTTP source; the generated PNG is reserved for a future scoped harness.
+
+The default actor origin is `https://synthetic-peertube.invalid`.
+`--source-origin http://isolated-source-host:port` may record a future fixture
+origin; it starts no listener or network request. For an S3-source rehearsal,
+host artwork must separately be served under the frozen importer's `/lazy-static/`
+routes. No remote followers, plugin auth, history or per-user ZIP are generated.
+Neither source SQL has been imported through the released CLI as qualification;
+G10 and representative-source/browser evidence remain **UNVERIFIED**.
