@@ -14,6 +14,7 @@ from blank_server_smoke import require
 import recovery_release_acceptance as recovery
 import release_acceptance as runtime
 from sealed_recovery_host import Host, INSTALL
+from sealed_recovery_relay import readiness_relay
 import sealed_recovery_support as support
 
 SCOPE = 'published-image synthetic cross-VM sealed-secret subset'
@@ -52,6 +53,11 @@ def no_smtp_listener(host):
               '/proc/net/tcp', '/proc/net/tcp6'], 'no-loopback-smtp-listener')
 
 
+def restore_dump(host, dump):
+    with readiness_relay(host):
+        host.run(['bash', 'deploy/restore.sh', '--yes', str(dump)], 'published-restore', timeout=1800)
+
+
 def execute(args, result, hosts):
     require(support.head(support.ROOT) == args.tool_commit and re.fullmatch(r'[0-9a-f]{40}', args.tool_commit),
             'tool commit must be immutable and match checkout')
@@ -86,7 +92,7 @@ def execute(args, result, hosts):
     if payload:
         fixture.write_bytes((payload / 'fixture.json').read_bytes())
         fixture.chmod(0o600)
-        host.run(['bash', 'deploy/restore.sh', '--yes', str(payload / 'backup.dump.gz')], 'published-restore', timeout=1800)
+        restore_dump(host, payload / 'backup.dump.gz')
         result['phase'] = 'restore-ready'
         host.ready()
         no_smtp_listener(host)

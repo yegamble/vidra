@@ -27,6 +27,15 @@ Node helper. Redirects are refused and actual host port bindings must be absent.
 All five service health checks and immutable image checks remain required. This
 control route establishes no production port, DNS or browser-origin behavior.
 
+During the unchanged restore command only, a fixture listener binds loopback
+port 8080 for its hardcoded readiness curl. It serves only exact `GET /readyz`,
+revalidates the current private API route per request, and returns 200 only for
+an actual backend 200. HTTP failures remain failures; redirects, other success
+codes and unavailable probes become 503 because `curl -f` accepts nonready 2xx
+and 3xx responses. No body, redirect location or private log crosses the adapter.
+The listener closes on command success or failure; the command must still exit
+successfully before every original health/image/schema/catalogue/MFA check runs.
+
 The fixture enrolls TOTP, stores a dummy SMTP password targeting container
 loopback port 1 with no listener, and stores a disabled OIDC provider with a dummy
 client secret. External container delivery is blocked; the SMTP document itself
