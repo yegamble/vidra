@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { chmodSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,13 +12,17 @@ import { fixtureClient, totp } from './sealed-recovery-api.mjs';
 const rfcBits = [...Buffer.from('12345678901234567890', 'ascii')].map(byte => byte.toString(2).padStart(8, '0')).join('');
 const SECRET = rfcBits.match(/.{5}/g).map(bits => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'[Number.parseInt(bits, 2)]).join('');
 const BASE = 'http://127.0.0.1:8080';
-async function fixture(run) {
+async function fixture(run, { baseUrl = BASE, internalOrigin, deadlines, networkDelay = 0 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'sealed-api-')); const file = join(dir, 'fixture.json');
   let clock = 1800000000000, wrongKey = false, bypass = false, acceptWrong = false, rateLimit = 0;
   let issued = 0, invalidAfter = Infinity, retryAfter = 31;
   const requests = []; let mail, provider;
   const fetchImpl = async (url, options) => {
-    const body = options.body ? JSON.parse(options.body) : undefined; requests.push({ url, ...options, body });
+    clock += networkDelay;
+    const deadline = deadlines?.get(options.signal);
+    if (deadline && clock >= deadline.expiresAt) deadline.controller.abort();
+    options.signal.throwIfAborted();
+    const body = options.body ? JSON.parse(options.body) : undefined; requests.push({ url, ...options, body, at: clock });
     let status = 200, result;
     if (url.endsWith('/setup/claim-owner')) { status = 201; result = { token: 'a.b.c' }; }
     else if (url.endsWith('/auth/mfa/totp')) result = { secret: SECRET };
@@ -39,14 +44,86 @@ async function fixture(run) {
     } else assert.fail('unexpected endpoint');
     return { status, headers: new Headers({ 'retry-after': String(retryAfter) }), json: async () => result };
   };
-  const client = fixtureClient({ baseUrl: BASE, fetchImpl, now: () => clock, sleep: async ms => { clock += ms; } });
-  try { await run({ client, file, dir, requests, setWrongKey: () => { wrongKey = true; },
+  const client = fixtureClient({ baseUrl, internalOrigin, fetchImpl, now: () => clock, sleep: async ms => { clock += ms; } });
+  try { await run({ client, file, dir, requests, now: () => clock, setWrongKey: () => { wrongKey = true; },
     bypass: () => { bypass = true; }, acceptWrong: () => { acceptWrong = true; }, rateLimit: () => { rateLimit = 1; },
     expireChallenge: retries => { wrongKey = true; acceptWrong = true; invalidAfter = retries ? 300000 : 0; rateLimit = retries; retryAfter = 120; } }); }
   finally { rmSync(dir, { recursive: true }); }
 }
 
+async function virtualDeadlineFixture(run, { networkDelay = 0 } = {}) {
+  const deadlines = new Map();
+  return fixture(async f => {
+    const original = Object.getOwnPropertyDescriptor(AbortSignal, 'timeout');
+    Object.defineProperty(AbortSignal, 'timeout', { ...original, value: ms => {
+      assert.equal(ms, 15000);
+      const controller = new AbortController(), at = f.now();
+      deadlines.set(controller.signal, { controller, at, ms, expiresAt: at + ms });
+      return controller.signal;
+    } });
+    try { await run({ ...f, deadlines }); }
+    finally { Object.defineProperty(AbortSignal, 'timeout', original); }
+  }, { deadlines, networkDelay });
+}
+
 test('RFC6238 vector uses SHA1, 30-second counter and six digits', () => assert.equal(totp(SECRET, 59000), '287082'));
+test('fresh TOTP waits and 429 retries get a new full 15-second network deadline', () => virtualDeadlineFixture(async f => {
+  const start = f.now(); f.rateLimit();
+  assert.equal((await f.client('source', f.file, 'setup_token_canary_123456')).status, 'PASS');
+  assert.ok(f.now() - start >= 60000, 'enrollment code burn and retry must cross TOTP windows');
+  const challenges = f.requests.filter(r => r.url.endsWith('/auth/mfa/challenge'));
+  assert.equal(challenges.length, 2);
+  assert.notEqual(challenges[0].body.code, challenges[1].body.code);
+  for (const request of challenges) assert.equal(request.body.code, totp(SECRET, request.at));
+  assert.equal(new Set(f.requests.map(r => r.signal)).size, f.requests.length);
+  for (const request of f.requests) {
+    const deadline = f.deadlines.get(request.signal);
+    assert.equal(deadline.at, request.at); assert.equal(deadline.expiresAt - request.at, 15000);
+    assert.equal(request.signal.aborted, false);
+  }
+}));
+test('a network exchange exceeding 15 seconds still aborts with a fixed failure code', () => virtualDeadlineFixture(async f => {
+  await assert.rejects(f.client('source', f.file, 'setup_token_canary_123456'), error => error.message === 'request_failed');
+  assert.equal(f.deadlines.size, 1);
+  const [signal] = f.deadlines.keys();
+  assert.equal(signal.aborted, true);
+  assert.equal(f.requests.length, 0);
+}, { networkDelay: 15001 }));
+test('loopback is the default and private bridge origins require an exact explicit opt-in', () => {
+  assert.doesNotThrow(() => fixtureClient({ baseUrl: BASE }));
+  for (const baseUrl of ['http://10.0.0.1:8080', 'http://10.255.255.254:8080',
+    'http://172.16.0.1:8080', 'http://172.31.255.254:8080', 'http://192.168.0.1:8080', 'http://192.168.255.254:8080']) {
+    assert.throws(() => fixtureClient({ baseUrl }), /loopback_origin/);
+    assert.throws(() => fixtureClient({ baseUrl, internalOrigin: 'http://10.0.0.2:8080' }), /loopback_origin/);
+    assert.doesNotThrow(() => fixtureClient({ baseUrl, internalOrigin: baseUrl }));
+  }
+});
+test('explicit opt-in cannot authorize non-private or non-canonical origins', () => {
+  for (const baseUrl of [undefined, null, new URL(BASE), 'http://127.0.0.2:8080',
+    'http://9.255.255.255:8080', 'http://11.0.0.1:8080', 'http://172.15.255.255:8080', 'http://172.32.0.1:8080',
+    'http://192.167.255.255:8080', 'http://192.169.0.1:8080', 'http://8.8.8.8:8080', 'http://169.254.1.1:8080',
+    'http://0.0.0.0:8080', 'http://100.64.0.1:8080', 'http://localhost:8080', 'http://api:8080',
+    'http://[::1]:8080', 'http://[fd00::1]:8080', 'https://10.0.0.1:8080', 'HTTP://10.0.0.1:8080',
+    `http://${randomUUID()}:${randomUUID()}@10.0.0.1:8080`, `http://${randomUUID()}:${randomUUID()}@8.8.8.8:8080`, 'http://10.0.0.1:8081',
+    'http://10.0.0.1', 'http://10.0.0.1:08080', 'http://10.0.0.1:8080/', 'http://10.0.0.1:8080/a/..',
+    'http://10.0.0.1:8080?query', 'http://10.0.0.1:8080#fragment', 'http://10.0.0.1:8080\n',
+    ' http://10.0.0.1:8080', 'http://10.0.0.1:8080\t', 'http://10.0.\n0.1:8080', 'http:\\10.0.0.1:8080',
+    'http://010.0.0.1:8080', 'http://10.00.0.1:8080', 'http://10.0.0.001:8080', 'http://10.0.0.256:8080',
+    'http://10.0.1:8080', 'http://167772161:8080', 'http://0x0a000001:8080', 'http://0xa.0.0.1:8080',
+    'http://%31%30.0.0.1:8080', 'http://10.0.0.1.:8080', 'http://10.0.0.1.example:8080']) {
+    assert.throws(() => fixtureClient({ baseUrl, internalOrigin: baseUrl, fetchImpl: () => assert.fail('unexpected HTTP') }),
+      error => error.message === 'loopback_origin');
+  }
+});
+test('private bridge origin prefixes source, restore and wrong-key requests without redirects', () => {
+  const baseUrl = 'http://172.20.0.2:8080';
+  return fixture(async f => {
+    await f.client('source', f.file, 'setup_token_canary_123456');
+    await f.client('verify', f.file); f.setWrongKey(); await f.client('wrong-key', f.file);
+    assert.ok(f.requests.length > 0);
+    assert.ok(f.requests.every(r => r.url.startsWith(`${baseUrl}/api/v1/`) && r.redirect === 'error'));
+  }, { baseUrl, internalOrigin: baseUrl });
+});
 test('source creates only synthetic private state and safe disabled provider fixtures', () => fixture(async ({ client, file, requests }) => {
   const verdict = await client('source', file, 'setup_token_canary_123456');
   const state = JSON.parse(readFileSync(file));
@@ -101,7 +178,7 @@ test('raw HTTP, JSON and network failures never promote private payloads into er
   ]) await assert.rejects(fixtureClient({ baseUrl: BASE, fetchImpl })('source', f.file, 'setup_token_canary_123456'),
     error => error.message === expected && !error.stack.includes('private-canary'));
 }));
-test('public state permissions and non-loopback targets fail before HTTP', () => fixture(async f => {
+test('public state permissions and unapproved targets fail before HTTP', () => fixture(async f => {
   await f.client('source', f.file, 'setup_token_canary_123456'); const calls = f.requests.length;
   await assert.rejects(f.client('source', f.file, 'setup_token_canary_123456'), /private_state/);
   chmodSync(f.file, 0o644); await assert.rejects(f.client('verify', f.file), /private_state/);
@@ -109,8 +186,14 @@ test('public state permissions and non-loopback targets fail before HTTP', () =>
   assert.throws(() => fixtureClient({ baseUrl: 'https://private-canary.example' }), /loopback_origin/);
 }));
 test('CLI errors contain only fixed codes and never echo credential input', () => {
-  const run = spawnSync(process.execPath, [new URL('./sealed-recovery-api.mjs', import.meta.url).pathname, 'source', '/private-canary'],
-    { encoding: 'utf8', env: { PATH: process.env.PATH, VIDRA_BASE_URL: 'https://private-canary.example', VIDRA_SETUP_TOKEN: 'private-canary' } });
-  assert.equal(run.status, 1); assert.equal(run.stderr, ''); assert.ok(!run.stdout.includes('private-canary'));
-  assert.deepEqual(JSON.parse(run.stdout), { status: 'FAIL', phase: 'source', error: 'loopback_origin' });
+  const privateOrigin = 'http://172.20.0.2:8080';
+  for (const [baseUrl, internalOrigin, error] of [['https://private-canary.example', undefined, 'loopback_origin'],
+    [privateOrigin, undefined, 'loopback_origin'], [privateOrigin, 'http://172.20.0.3:8080', 'loopback_origin'],
+    [privateOrigin, privateOrigin, 'state_path']]) {
+    const run = spawnSync(process.execPath, [new URL('./sealed-recovery-api.mjs', import.meta.url).pathname, 'source', 'private-canary'],
+      { encoding: 'utf8', env: { PATH: process.env.PATH, VIDRA_BASE_URL: baseUrl, VIDRA_INTERNAL_ORIGIN: internalOrigin,
+        VIDRA_SETUP_TOKEN: 'private-canary' } });
+    assert.equal(run.status, 1); assert.equal(run.stderr, ''); assert.ok(!run.stdout.includes('private-canary'));
+    assert.deepEqual(JSON.parse(run.stdout), { status: 'FAIL', phase: 'source', error });
+  }
 });

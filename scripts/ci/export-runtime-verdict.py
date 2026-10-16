@@ -20,6 +20,12 @@ COMMON = {'status', 'scope', 'synthetic_only', 'phase', 'external_delivery_block
 RESTORE = {'different_runner_boot', 'empty_destination', 'backup_hash_match', 'schema_and_catalogue_match',
            'wrong_key_refused', 'mfa_wrong_code_refused', 'mfa_correct_code_accepted', 'oidc_disabled',
            'mail_secret_status', 'oidc_secret_status'}
+SERVICES = set('api frontend search postgres redis worker caddy clamav migrate search-migrate prep-volumes'.split())
+SEALED_PHASES = {
+    'source': set('preconditions published-assets fixture migrations start-services ready owner-claim api-fixture snapshot backup complete'.split()),
+    'replacement': set(('preconditions published-assets restore-infrastructure restore-relay restore restore-ready restore-snapshot restore-verify '
+                        'wrong-key-start wrong-key-ready wrong-key-verify original-key-start original-key-ready '
+                        'original-key-verify complete').split())}
 
 
 class Invalid(ValueError):
@@ -64,8 +70,24 @@ def failure_reasons():
                           'HTTPError', 'URLError', 'TimeoutExpired', 'CalledProcessError'}
 
 
+def diagnostics(value):
+    keys(value, {'install_steps', 'running_services', 'probe_statuses'})
+    for field, names, low, high in (
+            ('install_steps', {'installer', 'setup', 'setup_check', 'provision', 'deploy'}, 0, 255),
+            ('probe_statuses', {'instance', 'healthz', 'site', 'watch'}, 100, 599)):
+        if field in value:
+            keys(value[field], names)
+            require(all(type(code) is int and (low <= code <= high or field == 'probe_statuses' and code == 0)
+                        for code in value[field].values()))
+    if 'running_services' in value:
+        services = value['running_services']
+        require(type(services) is list and len(services) <= len(SERVICES)
+                and all(type(service) is str and service in SERVICES for service in services)
+                and len(set(services)) == len(services))
+
+
 def rec03(value, args):
-    allowed = {'status', 'pair', 'phases', 'record_commit', 'installer_commit', 'failed_phase', 'failure'}
+    allowed = {'status', 'pair', 'phases', 'record_commit', 'installer_commit', 'failed_phase', 'failure', 'diagnostics'}
     keys(value, allowed, {'status', 'pair', 'phases'})
     require(value['status'] in ('PASS', 'FAIL') and value['pair'] == ['v0.7.7', 'v0.7.8'])
     identities(value, {'record_commit': args.record_commit, 'installer_commit': args.tool_commit})
@@ -82,6 +104,9 @@ def rec03(value, args):
         require(value['failed_phase'] in ['preflight', *PHASES])
     if 'failure' in value:
         require(type(value['failure']) is str and value['failure'] in failure_reasons())
+    if 'diagnostics' in value:
+        require(value['status'] == 'FAIL')
+        diagnostics(value['diagnostics'])
     if value['status'] == 'PASS':
         require(not {'failure', 'failed_phase'} & set(value))
     return complete
@@ -89,10 +114,22 @@ def rec03(value, args):
 
 def sealed(value, args, role):
     fields = COMMON | (RESTORE if role == 'replacement' else set())
-    keys(value, fields, {'status', 'scope', 'synthetic_only', 'phase'})
+    keys(value, fields | {'diagnostics'}, {'status', 'scope', 'synthetic_only', 'phase'})
     require(value['status'] in ('PASS', 'FAIL'))
-    require(value['phase'] in ({'preconditions', 'published-assets', 'restore', 'complete'} if role == 'replacement'
-                             else {'preconditions', 'published-assets', 'fixture', 'backup', 'complete'}))
+    require(value['phase'] in SEALED_PHASES[role])
+    if 'diagnostics' in value:
+        require(value['status'] == 'FAIL')
+        facts = value['diagnostics']
+        keys(facts, {'readyz_status', 'services'})
+        require(bool(facts))
+        if 'readyz_status' in facts:
+            code = facts['readyz_status']
+            require(type(code) is int and (code == 0 or 100 <= code <= 599))
+        if 'services' in facts:
+            keys(facts['services'], {'api', 'search', 'frontend', 'postgres', 'redis'})
+            require(bool(facts['services']) and all(type(state) is str and state in {
+                'missing', 'stopped', 'restarting', 'starting', 'healthy', 'unhealthy', 'running'}
+                for state in facts['services'].values()))
     expected = {'scope': SCOPE, 'synthetic_only': True, 'record_commit': args.record_commit,
                 'tool_commit': args.tool_commit, 'release': args.release, 'core_schema': 182, 'search_schema': 18,
                 'external_delivery_blocked': True}

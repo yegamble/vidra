@@ -1,4 +1,4 @@
-// Synthetic loopback fixture only. Private state is never returned or logged.
+// Synthetic isolated fixture only. Private state is never returned or logged.
 import { createHmac, randomBytes } from 'node:crypto';
 import { lstatSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -45,16 +45,24 @@ function saveState(file, state, source) {
   else { writeFileSync(`${file}.new`, JSON.stringify(state), { flag: 'wx', mode: 0o600 }); renameSync(`${file}.new`, file); }
 }
 
-export function fixtureClient({ baseUrl, fetchImpl = fetch, now = Date.now,
+export function fixtureClient({ baseUrl, internalOrigin, fetchImpl = fetch, now = Date.now,
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
-  check(baseUrl === 'http://127.0.0.1:8080', 'loopback_origin');
+  // The host verifies Docker ownership and subnet membership before supplying a
+  // private bridge address. Literal matching rejects credentials, whitespace
+  // and alternate IPv4 spellings before URL parsing can normalize the input.
+  const origin = typeof baseUrl === 'string' && /^http:\/\/((?:0|[1-9][0-9]{0,2})(?:\.(?:0|[1-9][0-9]{0,2})){3}):8080$/.exec(baseUrl);
+  const ip = origin ? origin[1].split('.').map(Number) : [];
+  check(baseUrl === 'http://127.0.0.1:8080' || (internalOrigin === baseUrl && origin && origin[0] === baseUrl && ip.every(octet => octet <= 255) &&
+    (ip[0] === 10 || (ip[0] === 172 && ip[1] >= 16 && ip[1] <= 31) || (ip[0] === 192 && ip[1] === 168))), 'loopback_origin');
   const request = async (path, method = 'GET', body, token) => {
     for (let attempt = 0; attempt < 5; attempt++) {
       let response;
       try {
+        // Waiting for an unused TOTP window precedes the network deadline.
+        const payload = body ? JSON.stringify(typeof body === 'function' ? await body() : body) : undefined;
         response = await fetchImpl(`${baseUrl}/api/v1${path}`, { method, redirect: 'error', signal: AbortSignal.timeout(15000),
           headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: body ? JSON.stringify(typeof body === 'function' ? await body() : body) : undefined });
+          body: payload });
       } catch { throw new Failure('request_failed'); }
       if (response.status === 429) {
         const delay = Number(response.headers.get('retry-after'));
@@ -142,7 +150,8 @@ export function fixtureClient({ baseUrl, fetchImpl = fetch, now = Date.now,
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [mode, file] = process.argv.slice(2);
-  try { console.log(JSON.stringify(await fixtureClient({ baseUrl: process.env.VIDRA_BASE_URL })(mode, file, process.env.VIDRA_SETUP_TOKEN))); }
+  try { console.log(JSON.stringify(await fixtureClient({ baseUrl: process.env.VIDRA_BASE_URL,
+    internalOrigin: process.env.VIDRA_INTERNAL_ORIGIN })(mode, file, process.env.VIDRA_SETUP_TOKEN))); }
   catch (error) {
     console.log(JSON.stringify({ status: 'FAIL', phase: ['source', 'verify', 'wrong-key'].includes(mode) ? mode : 'input',
       error: error instanceof Failure ? error.message : 'internal' })); process.exitCode = 1;
