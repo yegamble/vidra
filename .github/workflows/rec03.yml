@@ -1,0 +1,39 @@
+name: rec03-release-drill
+on:
+  workflow_dispatch:
+    inputs:
+      record_commit:
+        description: "Immutable meta record-PR commit containing v0.7.7 and v0.7.8 records"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: rec03-release-drill
+  cancel-in-progress: false
+jobs:
+  rec03:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Raw driver logs contain generated secrets. They stay under /root, never
+      # enter the console, and disappear with this disposable hosted runner.
+      - name: Run all thirteen phases and report against published images
+        env:
+          RECORD_COMMIT: ${{ inputs.record_commit }}
+          INSTALLER_COMMIT: ${{ github.sha }}
+        run: |
+          sudo env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            REC03_RECORD_REF="$RECORD_COMMIT" REC03_INSTALLER_REF="$INSTALLER_COMMIT" \
+            python3 tests/rec03-runner.py --out "$RUNNER_TEMP/rec03-public"
+      - name: Preserve only the allowlisted verdict (never logs, env or backups)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rec03-v0.7.8-verdict
+          path: ${{ runner.temp }}/rec03-public/summary.json
+          if-no-files-found: error
+          retention-days: 14

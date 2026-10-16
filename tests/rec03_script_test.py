@@ -178,6 +178,8 @@ class ReleasePair(unittest.TestCase):
             with self.subTest(bad=bad):
                 r = helpers('require_release_pair', REC03_OLD='v0.6.6', REC03_NEW=bad)
                 self.assertNotEqual(r.returncode, 0, bad)
+        self.assertNotEqual(helpers('require_release_pair', **PAIR,
+                                   REC03_INSTALLER_REF='../../etc').returncode, 0)
 
     def test_a_pair_of_one_release_is_refused(self):
         r = helpers('require_release_pair', REC03_OLD='v0.7.5', REC03_NEW='v0.7.5')
