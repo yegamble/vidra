@@ -38,6 +38,7 @@ case "$*" in
   *" ps -q postgres")
     [ "${PG_DOWN:-0}" = 1 ] || echo pgcid ;;
   exec*"FROM watched_word_lists"*) echo f ;;
+  exec*"FROM comments WHERE held_for_review"*) printf 'f\nf\n' ;;
   exec*"FROM oidc_providers"*)
     case "$OIDC_ANSWER" in
       err) echo 'psql: error: connection to server failed' >&2; exit 2 ;;
@@ -145,6 +146,19 @@ class RollbackOidcProvidersGateTests(unittest.TestCase):
         self.assertIn('--allow-oidc-env-fallback was given', out)
         self.assertTrue(self.ran(' up -d'))
 
+    def test_unchecked_override_does_not_accept_definite_provider_fallback(self):
+        before = self.env_file.read_bytes()
+        code, out = self.rollback('v0.7.7', '--allow-unchecked-oidc-providers', answer='t')
+        self.assertNotEqual(code, 0, out)
+        self.assertIn('--allow-oidc-env-fallback', out)
+        self.assert_untouched(before, out)
+
+    def test_unchecked_override_accepts_unknown_target(self):
+        code, out = self.rollback('--core', 'v0.7.9', '--allow-unchecked-oidc-providers', answer='t')
+        self.assertEqual(code, 0, out)
+        self.assertIn('could not be placed', out)
+        self.assertIn('--allow-unchecked-oidc-providers was given', out)
+
     def test_a_rollback_that_leaves_core_alone_is_not_checked(self):
         code, out = self.rollback('--user', 'v0.7.7', answer='t')
         self.assertEqual(code, 0, out)
@@ -177,6 +191,9 @@ class RollbackOidcProvidersGateTests(unittest.TestCase):
                 code, out = self.rollback('v0.7.7', '--allow-oidc-env-fallback', answer=answer)
                 self.assertEqual(code, 0, out)
                 self.assertIn('WARNING: oidc-providers check', out)
+                code, out = self.rollback('v0.7.7', '--allow-unchecked-oidc-providers', answer=answer)
+                self.assertEqual(code, 0, out)
+                self.assertIn('WARNING: oidc-providers check NOT settled', out)
 
 
 if __name__ == '__main__':

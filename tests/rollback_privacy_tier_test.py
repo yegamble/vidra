@@ -237,6 +237,9 @@ case "$*" in
     # here it always finds nothing, or the database is unreachable like the rest.
     [ "${DB_ANSWERS%% *}" != err ] || { echo 'psql: error: connection to server failed' >&2; exit 2; }
     echo f ;;
+  exec*"FROM comments WHERE held_for_review"*)
+    [ "${DB_ANSWERS%% *}" != err ] || { echo 'psql: error: connection to server failed' >&2; exit 2; }
+    printf 'f\nf\n' ;;
   exec*"FROM oidc_providers"*)
     # The OIDC-providers gate (tests/rollback_oidc_providers_test.py owns it).
     [ "${DB_ANSWERS%% *}" != err ] || { echo 'psql: error: connection to server failed' >&2; exit 2; }
@@ -426,7 +429,7 @@ class RollbackPrivacyGateTests(unittest.TestCase):
                     self.assertNotIn('is not running', out)
 
                 self.reset(extra)
-                code, out = self.rollback('v0.7.7', '--allow-unchecked-privacy-tier', '--allow-unchecked-word-lists', '--allow-oidc-env-fallback', **kwargs)
+                code, out = self.rollback('v0.7.7', '--allow-unchecked-privacy-tier', '--allow-unchecked-word-lists', '--allow-unchecked-comment-approval', '--allow-oidc-env-fallback', **kwargs)
                 self.assertEqual(code, 0, out)
                 self.assertIn('WARNING: privacy-tier check NOT settled', out)
                 self.assertTrue(self.ran(' up -d'))
@@ -475,7 +478,7 @@ class RollbackPrivacyGateTests(unittest.TestCase):
 
         self.reset()
         code, out = self.rollback('v0.7.7', '--remap-internal-to-private',
-                                  '--allow-unchecked-privacy-tier', '--allow-unchecked-word-lists', '--allow-oidc-env-fallback', pg_down=True)
+                                  '--allow-unchecked-privacy-tier', '--allow-unchecked-word-lists', '--allow-unchecked-comment-approval', '--allow-oidc-env-fallback', pg_down=True)
         self.assertEqual(code, 0, out)
         self.assertIn('NOTHING was remapped', out)
         self.assertFalse(self.ran('UPDATE videos'), out)
