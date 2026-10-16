@@ -399,9 +399,21 @@ class StopHookTest(unittest.TestCase):
         self.git(self.repo, 'config', 'user.name', 'Test')
         self.git(self.repo, 'checkout', '-b', 'main')
         (self.repo / 'tracked').write_text('base')
-        self.git(self.repo, 'add', 'tracked')
+        script = self.repo / 'scripts/ci/check-vertical-slice-completeness.py'
+        script.parent.mkdir(parents=True)
+        script.write_text('print("fixture completeness passed")\n')
+        self.git(self.repo, 'add', '.')
         self.git(self.repo, 'commit', '-m', 'base')
         self.git(self.repo, 'push', '-u', 'origin', 'main')
+        self.components, self.remotes = {}, {}
+        for component in ('CORE', 'USER', 'SEARCH'):
+            path = self.base / ('vidra-' + component.lower())
+            remote = self.base / (component.lower() + '.git')
+            self.git(self.base, 'clone', '--branch', 'main', str(self.remote), str(path))
+            self.git(self.base, 'init', '--bare', str(remote))
+            self.git(path, 'remote', 'set-url', 'origin', str(remote))
+            self.git(path, 'push', '-u', 'origin', 'main')
+            self.components[component], self.remotes[component] = path, remote
         self.hook = ROOT / '.claude/hooks/finished-means-merged.sh'
 
     def git(self, cwd, *args):
@@ -409,10 +421,24 @@ class StopHookTest(unittest.TestCase):
 
     def stop(self, repo=None, components=None):
         env = os.environ | {'CLAUDE_PROJECT_DIR': str(repo or self.repo)}
+        components = self.components if components is None else components
         for component in ('CORE', 'USER', 'SEARCH'):
-            env[f'VIDRA_{component}_ROOT'] = str((components or {}).get(component, self.base / f'missing-{component}'))
+            env[f'VIDRA_{component}_ROOT'] = str(components.get(component, self.base / f'missing-{component}'))
         return subprocess.run(['bash', str(self.hook)], input='{"session_id":"../../unsafe"}',
                               env=env, text=True, capture_output=True)
+
+    def advance_remote(self, remote, filename='tracked', content='remote change'):
+        writer = self.base / ('writer-' + remote.stem)
+        self.git(self.base, 'clone', '--branch', 'main', str(remote), str(writer))
+        self.git(writer, 'config', 'user.email', 'test@example.invalid')
+        self.git(writer, 'config', 'user.name', 'Test')
+        target = writer / filename
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+        self.git(writer, 'add', '.')
+        self.git(writer, 'commit', '-m', 'advance remote main')
+        self.git(writer, 'push', 'origin', 'main')
+        return self.git(writer, 'rev-parse', 'HEAD')
 
     def test_clean_pushed_main_passes_and_untracked_secret_is_ignored(self):
         (self.repo / 'local.env').write_text('never commit')
@@ -453,16 +479,60 @@ class StopHookTest(unittest.TestCase):
 
     def test_four_present_repos_invoke_completeness_and_block_on_failure(self):
         script = self.repo / 'scripts/ci/check-vertical-slice-completeness.py'
-        script.parent.mkdir(parents=True)
         script.write_text('print("fixture contract broken")\nraise SystemExit(1)\n')
-        components = {}
-        for component in ('CORE', 'USER', 'SEARCH'):
-            path = self.base / ('vidra-' + component.lower())
-            self.git(self.base, 'clone', '--branch', 'main', str(self.remote), str(path))
-            components[component] = path
-        result = self.stop(components=components)
+        result = self.stop()
         self.assertEqual(result.returncode, 2)
         self.assertIn('fixture contract broken', result.stdout)
+
+    def test_each_missing_component_blocks_instead_of_skipping_completeness(self):
+        for component in self.components:
+            with self.subTest(component=component):
+                result = self.stop(components={k: v for k, v in self.components.items() if k != component})
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn('vidra-' + component.lower(), result.stdout)
+                self.assertIn('missing', result.stdout.lower())
+        self.assertEqual(self.stop(components={}).returncode, 2)
+
+    def test_stale_core_main_and_detached_pin_block_without_advancing_baseline(self):
+        core = self.components['CORE']
+        old_sha = self.git(core, 'rev-parse', 'HEAD')
+        env = {'VIDRA_' + name + '_ROOT': str(path) for name, path in self.components.items()}
+        with patch.dict(os.environ, env), patch.object(sys, 'stdin', io.StringIO('{"session_id":"../../unsafe"}')):
+            gate.record_session_baseline(self.repo)
+        baseline = next((self.repo / '.claude/hooks/.state').glob('*.baseline.json'))
+        original = baseline.read_bytes()
+        recorded = json.loads(original)['repos']
+        self.assertEqual(recorded['core']['sha'], old_sha)
+        self.assertEqual(recorded['user']['sha'], self.git(self.components['USER'], 'rev-parse', 'HEAD'))
+        yaml = YAML.replace('components:', '  /api/v1/admin/new-feature:\n    post:\n      operationId: newFeature\ncomponents:')
+        latest = self.advance_remote(self.remotes['CORE'], 'api/openapi.yaml', yaml)
+        result = self.stop()
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn('vidra-core', result.stdout)
+        self.assertIn('stale', result.stdout.lower())
+        self.assertEqual(self.git(core, 'rev-parse', 'HEAD'), old_sha)
+        self.assertEqual(baseline.read_bytes(), original)
+        # Stop refreshes refs but must leave the operator's checkout untouched.
+        self.git(core, 'merge', '--ff-only', 'origin/main')
+        self.assertEqual(self.git(core, 'rev-parse', 'HEAD'), latest)
+        self.assertEqual(self.stop().returncode, 0)
+        self.git(core, 'checkout', '--detach', old_sha)
+        result = self.stop()
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn('stale', result.stdout.lower())
+        self.git(core, 'checkout', '--detach', latest)
+        self.assertEqual(self.stop().returncode, 0)
+        self.assertEqual(baseline.read_bytes(), original)
+        self.assertFalse((self.base / 'unsafe').exists())
+
+    def test_stale_meta_main_blocks_despite_passing_completeness(self):
+        old_sha = self.git(self.repo, 'rev-parse', 'HEAD')
+        self.advance_remote(self.remote)
+        result = self.stop()
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn('vidra', result.stdout)
+        self.assertIn('stale', result.stdout.lower())
+        self.assertEqual(self.git(self.repo, 'rev-parse', 'HEAD'), old_sha)
 
     def test_remote_fetch_failure_blocks_instead_of_trusting_stale_main(self):
         self.git(self.repo, 'remote', 'set-url', 'origin', str(self.base / 'missing.git'))

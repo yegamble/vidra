@@ -42,6 +42,7 @@ for component in core user search; do
     repos+=("$repo")
   else
     all_present=false
+    unfinished+="  - vidra-$component: required development source checkout missing at $repo; configure $variable before SessionStart."$'\n'
   fi
   case "$component" in
     core) core_root="$repo" ;;
@@ -52,8 +53,8 @@ done
 for repo in "${repos[@]}"; do
   name="$(basename "$repo")"
   branch="$(git -C "$repo" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
-  # A pinned detached checkout is normal, but tracked edits or commits outside
-  # main are unfinished work there too. Worktrees use a .git FILE, not a dir.
+  # Detached release pins can have valid ancestry, but cannot certify latest-main
+  # completeness when stale. Worktrees use a .git FILE, not a directory.
   if ! git -C "$repo" diff --quiet --ignore-submodules 2>/dev/null ||
      ! git -C "$repo" diff --cached --quiet --ignore-submodules 2>/dev/null; then
     unfinished+="  - $name: uncommitted changes to tracked files"$'\n'
@@ -77,6 +78,8 @@ for repo in "${repos[@]}"; do
     unfinished+="  - $name: cannot refresh origin/main; merge containment is unverified"$'\n'
   elif ! git -C "$repo" merge-base --is-ancestor HEAD origin/main 2>/dev/null; then
     unfinished+="  - $name: HEAD is not contained in origin/main; merge to main (or explicitly report 'open — awaiting merge') before stopping."$'\n'
+  elif ! git -C "$repo" merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
+    unfinished+="  - $name: source checkout is stale (behind refreshed origin/main); it cannot certify latest-main completeness. Use current development audit worktrees, with CLAUDE_PROJECT_DIR and VIDRA_*_ROOT configured before SessionStart. Update dedicated development sources if they fall behind; preserve deployment/release pins."$'\n'
   fi
 done
 
