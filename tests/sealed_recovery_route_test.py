@@ -31,12 +31,14 @@ class InternalRouteTest(unittest.TestCase):
             second['Id'] = 'c' * 64
             second['NetworkSettings']['Networks'][NAME]['IPAddress'] = '172.30.0.3'
             net2['Containers'] = {second['Id']: {'IPv4Address': '172.30.0.3/24'}}
-            with patch.object(fixture, 'compose', side_effect=[CID, second['Id'], second['Id']]), \
-                    patch.object(fixture, 'run', side_effect=[json.dumps([value]) for value in (first, net1, second, net2, first)]):
-                self.assertEqual(fixture.api_origin(), 'http://172.30.0.2:8080')
-                self.assertEqual(fixture.api_origin(), 'http://172.30.0.3:8080')
+            values = [CID, json.dumps([first]), json.dumps([net1]), second['Id'], json.dumps([second]),
+                      json.dumps([net2]), second['Id'], json.dumps([first])]
+            with patch.object(fixture, 'run', side_effect=values) as run:
+                self.assertEqual(fixture.api_origin(timeout=2), 'http://172.30.0.2:8080')
+                self.assertEqual(fixture.api_origin(timeout=2), 'http://172.30.0.3:8080')
                 with self.assertRaises(ValueError):
-                    fixture.api_origin()
+                    fixture.api_origin(timeout=2)
+                self.assertTrue(all(call.kwargs['timeout'] == 2 for call in run.call_args_list))
 
     def test_http_probe_does_not_follow_redirect_and_node_gets_matching_fresh_opt_in(self):
         with tempfile.TemporaryDirectory() as temporary:

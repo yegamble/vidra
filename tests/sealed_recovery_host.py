@@ -91,18 +91,18 @@ class Host(runtime.Recorder):
             pass  # Unavailable or malformed observations never become healthy/missing facts.
         return facts
 
-    def api_origin(self):
-        cid = self.compose('ps', '-q', 'api').strip()
+    def api_origin(self, timeout=5):
+        cid = self.run(['bash', 'deploy/compose.sh', 'ps', '-q', 'api'], 'fixture-api-current', timeout=timeout).strip()
         require(re.fullmatch(r'[0-9a-f]{64}', cid), 'current API container required')
-        containers = json.loads(self.run(['docker', 'inspect', cid], 'fixture-api-route'))
+        containers = json.loads(self.run(['docker', 'inspect', cid], 'fixture-api-route', timeout=timeout))
         require(len(containers) == 1 and containers[0]['Id'] == cid, 'stale API container')
         name = self.env['COMPOSE_PROJECT_NAME'] + '_default'
-        networks = json.loads(self.run(['docker', 'network', 'inspect', name], 'fixture-api-network'))
+        networks = json.loads(self.run(['docker', 'network', 'inspect', name], 'fixture-api-network', timeout=timeout))
         require(len(networks) == 1, 'one fixture network required')
         return internal_origin(containers[0], networks[0], self.env['COMPOSE_PROJECT_NAME'])
 
     def readyz_status(self, timeout=5):
-        connection = http.client.HTTPConnection(self.api_origin().removeprefix('http://'), timeout=timeout)
+        connection = http.client.HTTPConnection(self.api_origin(timeout=timeout).removeprefix('http://'), timeout=timeout)
         try:
             connection.request('GET', '/readyz')
             return connection.getresponse().status  # No redirects, body reads or proxy changes.
