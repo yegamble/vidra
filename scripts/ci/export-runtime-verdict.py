@@ -23,7 +23,7 @@ RESTORE = {'different_runner_boot', 'empty_destination', 'backup_hash_match', 's
 SERVICES = set('api frontend search postgres redis worker caddy clamav migrate search-migrate prep-volumes'.split())
 SEALED_PHASES = {
     'source': set('preconditions published-assets fixture migrations start-services ready owner-claim api-fixture snapshot backup complete'.split()),
-    'replacement': set(('preconditions published-assets restore restore-ready restore-snapshot restore-verify '
+    'replacement': set(('preconditions published-assets restore-infrastructure restore-relay restore restore-ready restore-snapshot restore-verify '
                         'wrong-key-start wrong-key-ready wrong-key-verify original-key-start original-key-ready '
                         'original-key-verify complete').split())}
 
