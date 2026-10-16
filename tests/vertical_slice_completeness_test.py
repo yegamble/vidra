@@ -64,6 +64,45 @@ class StaticGateTest(unittest.TestCase):
     def test_complete_wrappers_match_methods_templates_barrels_and_import_aliases(self):
         self.assertEqual(findings(), set())
 
+    def test_imported_functions_called_through_object_shorthand_and_barrel(self):
+        files = fixture()
+        files['lib/api/endpoints.ts'] = '''
+          export function importPeerTubeArchive(file: File) {
+            return uploadWithProgress("/api/v1/me/import/peertube", file);
+          }
+          export function getPeerTubeFollowImport(id: string) {
+            return apiRequest(`/api/v1/me/import/peertube/follows/${id}`);
+          }'''
+        files['lib/api/auth.ts'] = '''
+          import { importPeerTubeArchive, getPeerTubeFollowImport } from "./endpoints";
+          export const authApi = { importPeerTubeArchive, getPeerTubeFollowImport };'''
+        files['lib/api/index.ts'] = 'export { authApi } from "./auth";'
+        files['components/Widget.tsx'] = '''import { authApi } from "@/lib/api";
+          export default function Widget() {
+            authApi.importPeerTubeArchive(file); authApi.getPeerTubeFollowImport("x");
+          }'''
+        yaml = YAML[:YAML.index('  /api/v1/me/example/{id}:')] + '''
+  /api/v1/me/import/peertube:
+    post:
+      operationId: importPeerTubeArchive
+  /api/v1/me/import/peertube/follows/{id}:
+    get:
+      operationId: getPeerTubeFollowImport
+'''
+        self.assertEqual(findings(files, yaml), set())
+        files['lib/api/auth.ts'] = '''
+          import { importPeerTubeArchive as uploadArchive, getPeerTubeFollowImport as followStatus } from "./endpoints";
+          export const authApi = { importPeerTubeArchive: uploadArchive, getPeerTubeFollowImport: followStatus };'''
+        self.assertEqual(findings(files, yaml), set())
+        for calls in ('', 'authApi.importPeerTubeArchive;', 'authApi.unrelated();'):
+            with self.subTest(calls=calls):
+                files['components/Widget.tsx'] = f'''import {{ authApi }} from "@/lib/api";
+                  export default function Widget() {{ {calls} }}'''
+                self.assertEqual(findings(files, yaml), {
+                    'endpoint:POST:/api/v1/me/import/peertube',
+                    'endpoint:GET:/api/v1/me/import/peertube/follows/{}',
+                })
+
     def test_missing_method_not_hidden_by_same_path_get(self):
         files = fixture()
         files['lib/api/endpoints.ts'] = CLIENT.replace('method: "DELETE"', 'method: "POST"')

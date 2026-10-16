@@ -197,11 +197,13 @@ def resolve_import(file, module, files):
                             *(path + '/index' + e for e in ('.ts', '.tsx', '.js'))] if p in files), None)
 
 
-def imports(ts):
+def imports(ts, include_exports=True):
     """Real import/export module edges, including dynamic import; skip type-only."""
     result = []
     for i, t in enumerate(ts[:-1]):
         if t.string or t.value not in ('import', 'export') or ts[i + 1].value == 'type':
+            continue
+        if t.value == 'export' and not include_exports:
             continue
         if t.value == 'import' and ts[i + 1].value == '(':
             if i + 2 < len(ts) and ts[i + 2].string:
@@ -391,6 +393,38 @@ def imported_origins(module, name, files, seen=None):
     return origins
 
 
+def object_member_origins(module, name, member, files):
+    """Resolve exported object shorthand/identifier members to their functions."""
+    ts = tokens(files[module])
+    for i in range(len(ts) - 4):
+        if [t.value for t in ts[i:i + 5]] != ['export', 'const', name, '=', '{']:
+            continue
+        members, _ = groups(ts, i + 4)
+        for entry in members:
+            if not entry or entry[0].string or entry[0].value != member:
+                continue
+            local = entry[0] if len(entry) == 1 else (
+                entry[2] if len(entry) == 3 and entry[1].value == ':' else None)
+            if local and not local.string and re.fullmatch(r'[A-Za-z_$][\w$]*', local.value):
+                origins = {(module, local.value, None)}
+                for specifier, binding in imports(ts, include_exports=False):
+                    target = resolve_import(module, specifier, files)
+                    if target is None:
+                        continue
+                    names = [t.value for t in binding]
+                    for j, imported in enumerate(names):
+                        if not re.fullmatch(r'[A-Za-z_$][\w$]*', imported) or imported in ('as', 'type'):
+                            continue
+                        if j and names[j - 1] == 'as':
+                            continue
+                        bound = names[j + 2] if names[j + 1:j + 2] == ['as'] else imported
+                        if bound == local.value:
+                            origins.update((origin, export, None)
+                                           for origin, export in imported_origins(target, imported, files))
+                return origins
+    return set()
+
+
 def consumed_wrappers(files, reachable):
     consumed = set()
     for file in sorted(reachable):
@@ -424,6 +458,10 @@ def consumed_wrappers(files, reachable):
             if ts[i + 1].value == '.' and not ts[i + 2].string:
                 for module, export in symbols[ts[i].value]:
                     consumed.add((module, export, ts[i + 2].value))
+                    # Object shorthand is an export, not a call. Follow its
+                    # function identity only when this exact member is called.
+                    if i + 3 < len(ts) and ts[i + 3].value == '(':
+                        consumed.update(object_member_origins(module, export, ts[i + 2].value, files))
             elif ts[i + 1].value == '(':
                 for module, export in symbols[ts[i].value]:
                     consumed.add((module, export, None))
