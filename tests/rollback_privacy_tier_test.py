@@ -54,8 +54,8 @@ _spec.loader.exec_module(mapping)
 
 
 def future_record(directory, release, core, schema, user=None, migrations=None):
-    """A valid record for a release that does not exist yet, cloned from the
-    newest real one so it passes the checker's own validate(). `migrations` is
+    """A synthetic record cloned from the fixed legacy v0.7.7 template so it
+    passes the checker's own validate(). `migrations` is
     the core_migrations list a record cut by deploy/release.sh carries."""
     data = json.loads((ROOT / 'releases' / 'v0.7.7.json').read_text())
     data['release'] = release
@@ -114,7 +114,11 @@ class CoreMigrationTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.releases = Path(self.temp.name) / 'releases'
-        shutil.copytree(ROOT / 'releases', self.releases)
+        self.releases.mkdir()
+        # Own this history: future real releases must not place synthetic tags.
+        for release in ('v0.6.4', 'v0.7.7'):
+            shutil.copyfile(ROOT / 'releases' / f'{release}.json',
+                            self.releases / f'{release}.json')
 
     def ask(self, core, releases=None, migration=None):
         p = subprocess.run(['python3', str(MAPPING), 'core-migration',
@@ -124,9 +128,9 @@ class CoreMigrationTests(unittest.TestCase):
         return p.returncode, p.stdout + p.stderr
 
     def test_a_recorded_core_whose_ledger_stops_below_the_file_number_predates_it(self):
-        """No record cut so far lists its migrations. One whose newest migration
-        is below 0160 cannot contain a file numbered 0160 — that is the only
-        thing a number may decide."""
+        """The legacy fixture records do not list their migrations. One whose
+        newest migration is below 0160 cannot contain a file numbered 0160 —
+        that is the only thing a number may decide."""
         code, out = self.ask('v0.7.7')
         self.assertEqual(code, PREDATES, out)
         self.assertIn('releases/v0.7.7.json records core v0.7.7', out)
@@ -273,7 +277,10 @@ class RollbackPrivacyGateTests(unittest.TestCase):
         for name in ('rollback.sh', 'lib.sh', 'checkout-hygiene.py', 'backup-env.sh',
                      'release-mapping.py'):
             shutil.copyfile(ROOT / 'deploy' / name, self.tree / 'deploy' / name)
-        shutil.copytree(ROOT / 'releases', self.tree / 'releases')
+        # Keep the synthetic rollback history independent of new real releases.
+        (self.tree / 'releases').mkdir()
+        shutil.copyfile(ROOT / 'releases' / 'v0.7.7.json',
+                        self.tree / 'releases' / 'v0.7.7.json')
         # An unpacked bundle: no git to sync, so the stubs see every step.
         (self.tree / 'vidra-bundle.manifest').write_text('tag=v0.8.1\ncore_schema_version=0160\n')
         self.env_file = self.tree / 'env/production.env'
