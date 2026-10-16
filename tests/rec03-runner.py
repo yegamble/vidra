@@ -78,7 +78,8 @@ def verify(phase, facts, previous, log):
         require(facts.get('counts') == previous['data']['counts'], 'forward restore did not remove marker')
     if phase == 'split':
         require(int(facts.get('workers', '0')) >= 1 and facts.get('api_ffmpeg_mentions') == '0', 'split worker not proven')
-    if 'images' in facts:
+    if phase in ('install', 'upgrade-fail', 'recover', 'rollback', 'repin', 'restore-ok', 'split'):
+        require('images' in facts, 'missing running images')
         old = phase in ('install', 'upgrade-fail', 'rollback')
         for role in ('core', 'user', 'search'):
             tag = ('v0.7.3' if role == 'search' else 'v0.7.7') if old else 'v0.7.8'

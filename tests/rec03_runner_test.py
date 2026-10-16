@@ -54,14 +54,14 @@ class Verdict(unittest.TestCase):
         self.assertEqual(set(verdict), {'status', 'ledger', 'media_fingerprint_verified'})
 
     def test_missing_media_or_probes_cannot_pass(self):
-        for field in ('fp', 'probe'):
+        for field in ('fp', 'probe', 'images'):
             facts = self.upgrade()
             del facts[field]
             with self.assertRaises(AssertionError):
                 runner.verify('upgrade-fail', facts, {'data': DATA}, 'column "is_sensitive" already exists')
 
     def test_split_needs_a_published_worker_and_an_idle_api(self):
-        facts = {'deploy_exit': '0', 'probe': runner.PROBE, 'workers': '1',
+        facts = {'deploy_exit': '0', 'probe': runner.PROBE, 'workers': '1', 'images': IMAGES.replace('v0.7.7', 'v0.7.8').replace('v0.7.3', 'v0.7.8'),
                  'video2_state': 'published', 'api_ffmpeg_mentions': '0'}
         self.assertEqual(runner.verify('split', facts, {}, '')['status'], 'PASS')
         for change in ({'workers': '0'}, {'video2_state': 'failed'}, {'api_ffmpeg_mentions': '1'}):
