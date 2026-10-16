@@ -6,10 +6,16 @@ on:
         description: "Immutable meta record-PR commit containing v0.7.7 and v0.7.8 records"
         required: true
         type: string
+  workflow_call:
+    inputs:
+      record_commit:
+        description: "Immutable meta record-PR commit containing v0.7.7 and v0.7.8 records"
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
-  group: rec03-release-drill
+  group: rec03-release-drill-${{ inputs.record_commit }}
   cancel-in-progress: false
 jobs:
   rec03:
@@ -20,6 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       # Raw driver logs contain generated secrets. They stay under /root, never
       # enter the console, and disappear with this disposable hosted runner.
