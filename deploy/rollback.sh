@@ -43,6 +43,21 @@
 # 'hold' list was holding. A check that cannot be made refuses too, unless
 # --allow-unchecked-word-lists.
 #
+# Comment approval is protected the same way: a core without migration 0161
+# publishes held comments and ignores 'requires_approval' policies. Clear that
+# data first; --allow-unchecked-comment-approval only accepts an uncheckable
+# database or a target the release records cannot place.
+#
+# And it REFUSES an app-only rollback below OIDC_PROVIDERS_MIGRATION while
+# oidc_providers holds any row: admin-managed providers can OVERRIDE or DISABLE
+# the environment-configured ones (stricter domain allow-lists, disabled). Old
+# code ignores the table, so the environment providers come back WITHOUT those
+# restrictions. An empty table only WARNS (nothing to lose). A check that cannot
+# be made refuses too. Both are overridden by --allow-oidc-env-fallback, after
+# you have reviewed or disabled the environment providers (OAUTH_PROVIDERS).
+# --allow-unchecked-oidc-providers only accepts an uncheckable database or an
+# unknown target; it never accepts definite provider loss or policy fallback.
+#
 # WHAT THIS DOES NOT DO: it does not touch the database (the one exception is
 # the remap above, which runs only when asked for by name). That is deliberate and
 # it is only safe because of the release policy stated in deploy/README.md —
@@ -105,11 +120,21 @@ INTERNAL_PRIVACY_MIGRATION="0160_video_privacy_internal.up.sql"
 # INTERNAL_PRIVACY_MIGRATION above; see the word-lists gate below.
 WORD_LISTS_MIGRATION="0172_watched_word_lists.up.sql"
 
+# Older code publishes held comments and ignores the approval policy.
+COMMENT_APPROVAL_MIGRATION="0161_comment_approval.up.sql"
+
+# The vidra-core migration that adds admin-managed OIDC providers
+# (oidc_providers), IDENTIFIED BY ITS FILE NAME for the same reasons as above;
+# see the OIDC-providers gate below.
+OIDC_PROVIDERS_MIGRATION="0182_oidc_providers.up.sql"
+
 log() { printf '[rollback] %s\n' "$*"; }
 die() { printf '[rollback] ERROR: %s\n' "$*" >&2; exit 1; }
 
 CORE_TAG=""; USER_TAG=""; SEARCH_TAG=""; BARE_TAG=""
 REMAP_INTERNAL=0; ALLOW_UNCHECKED_PRIVACY=0; ALLOW_UNCHECKED_WORD_LISTS=0
+ALLOW_OIDC_ENV_FALLBACK=0
+ALLOW_UNCHECKED_COMMENT_APPROVAL=0; ALLOW_UNCHECKED_OIDC_PROVIDERS=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --core)   CORE_TAG="${2:-}";   shift 2 ;;
@@ -118,13 +143,16 @@ while [ $# -gt 0 ]; do
     --remap-internal-to-private)    REMAP_INTERNAL=1;          shift ;;
     --allow-unchecked-privacy-tier) ALLOW_UNCHECKED_PRIVACY=1; shift ;;
     --allow-unchecked-word-lists)   ALLOW_UNCHECKED_WORD_LISTS=1; shift ;;
+    --allow-unchecked-comment-approval) ALLOW_UNCHECKED_COMMENT_APPROVAL=1; shift ;;
+    --allow-unchecked-oidc-providers) ALLOW_UNCHECKED_OIDC_PROVIDERS=1; shift ;;
+    --allow-oidc-env-fallback)      ALLOW_OIDC_ENV_FALLBACK=1; shift ;;
     -h|--help) sed -n '2,60p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *)  BARE_TAG="$1"; shift ;;
   esac
 done
 
-[ -n "$BARE_TAG$CORE_TAG$USER_TAG$SEARCH_TAG" ] || die "usage: $0 <tag>  |  $0 [--core T] [--user T] [--search T]   [--remap-internal-to-private] [--allow-unchecked-privacy-tier] [--allow-unchecked-word-lists]"
+[ -n "$BARE_TAG$CORE_TAG$USER_TAG$SEARCH_TAG" ] || die "usage: $0 <tag>  |  $0 [--core T] [--user T] [--search T]   [--remap-internal-to-private] [--allow-unchecked-privacy-tier] [--allow-unchecked-word-lists] [--allow-unchecked-comment-approval] [--allow-unchecked-oidc-providers] [--allow-oidc-env-fallback]"
 [ -f "$ENV_FILE" ] || die "env file not found: $ENV_FILE"
 
 # THE BARE TAG'S PAIRING. v0.7.4 and v0.7.5 re-released vidra-core alone, so
@@ -608,6 +636,131 @@ word_lists_gate() {
   die "the word-lists check could not be made: ${PRIVACY_UNASKED}. ${target}, so this rollback is refused rather than guessed. Check by hand: ${WORD_LISTS_SQL} - if it is f, re-run with --allow-unchecked-word-lists. ${nothing_changed}"
 }
 word_lists_gate
+
+# THE COMMENT-APPROVAL GATE follows word_lists_gate: a definite finding cannot
+# be overridden; only an uncheckable database or unknown target can. Never
+# release held comments as a side effect of an application rollback.
+COMMENT_APPROVAL_SQL="SELECT count(*) > 0 FROM comments WHERE held_for_review UNION ALL SELECT count(*) > 0 FROM videos WHERE comments_policy = 'requires_approval';"
+COMMENT_POLICY_SQL="SELECT count(*) > 0 FROM videos WHERE comments_policy = 'requires_approval';"
+
+comment_approval_in_use() {
+  PG_ERR=""
+  PRIVACY_UNASKED=""
+  if privacy_pg '-c default_transaction_read_only=on' "$COMMENT_APPROVAL_SQL"; then
+    case "$PG_OUT" in
+      $'f\nf') return 1 ;;
+      $'t\nf'|$'f\nt'|$'t\nt') return 0 ;;
+    esac
+  else
+    case "$PG_ERR" in
+      *'column "held_for_review" does not exist'*)
+        # Pre-0161 schemas have no held comments. Still check the policy so a
+        # partially changed schema cannot hide approval-only videos.
+        if privacy_pg '-c default_transaction_read_only=on' "$COMMENT_POLICY_SQL"; then
+          case "$PG_OUT" in t) return 0 ;; f) return 1 ;; esac
+        else
+          case "$PG_ERR" in *'column "comments_policy" does not exist'*) return 1 ;; esac
+          return 2
+        fi ;;
+      *) return 2 ;;
+    esac
+  fi
+  PRIVACY_UNASKED="psql answered '${PG_OUT}', which is not the expected boolean result"
+  return 2
+}
+
+comment_approval_gate() {
+  local how rc=0 rows=0 target nothing_changed
+  nothing_changed="Nothing was changed: $ENV_FILE was NOT rewritten and nothing was pulled or restarted."
+  if [ -z "$CORE_TAG" ]; then
+    log "comment-approval check: core is not being rolled back — not checked"
+    return 0
+  fi
+  how="$(python3 "$REPO_ROOT/deploy/release-mapping.py" core-migration --releases "$REPO_ROOT/releases" \
+    --core "$CORE_TAG" --migration "$COMMENT_APPROVAL_MIGRATION")" || rc=$?
+  case "$rc" in
+    0) log "comment-approval check: core ${CORE_TAG} carries migration ${COMMENT_APPROVAL_MIGRATION} (${how}) — not checked"; return 0 ;;
+    4) target="core ${CORE_TAG} does not carry migration ${COMMENT_APPROVAL_MIGRATION} (${how})" ;;
+    *) target="core ${CORE_TAG} could not be placed relative to migration ${COMMENT_APPROVAL_MIGRATION} (${how:-deploy/release-mapping.py core-migration exited ${rc}}), so it is treated as not carrying it" ;;
+  esac
+  comment_approval_in_use || rows=$?
+  if [ "$rows" -eq 1 ]; then
+    log "comment-approval check: ${target}; no held comments or approval-only videos exist — proceeding"
+    return 0
+  fi
+  if [ "$rows" -eq 0 ] && [ "$rc" -eq 4 ]; then
+    die "this app-only rollback would run ${target} against held comments or videos requiring comment approval. That release would publicly display held comments and ignore approval policies. Refusing. Review and approve or delete held comments, then change requires_approval policies before retrying. ${nothing_changed}"
+  fi
+  if [ "$ALLOW_UNCHECKED_COMMENT_APPROVAL" -eq 1 ]; then
+    log "WARNING: comment-approval check NOT settled: ${PRIVACY_UNASKED:-approval data exists and the target could not be placed}. ${target}. --allow-unchecked-comment-approval was given, so this rollback proceeds on your word."
+    return 0
+  fi
+  die "the comment-approval check is not settled: ${PRIVACY_UNASKED:-held comments or approval-only videos exist}. ${target}, so this rollback is refused rather than guessed. Check by hand: ${COMMENT_APPROVAL_SQL} If both answers are f, or the target carries the migration, re-run with --allow-unchecked-comment-approval. ${nothing_changed}"
+}
+comment_approval_gate
+
+# THE OIDC-PROVIDERS GATE, same place, same bounded read-only psql. vidra-core's
+# OIDC_PROVIDERS_MIGRATION adds admin-managed OIDC providers that can OVERRIDE or
+# DISABLE the environment-configured ones (stricter domain allow-lists, off). A
+# core release without it ignores the table, so the environment providers come
+# back WITHOUT the admin's restrictions. This script never migrates down.
+#
+# Severity: a finding may only stop what it PREDICTS. Core not being rolled, or a
+# target that carries the migration: not checked. No rows (or no table): the
+# environment providers are all there is, so WARN and proceed. Rows present and
+# the target known to predate it: REFUSED unless --allow-oidc-env-fallback. A
+# check that cannot be made, or a target the records cannot place with rows
+# present, is refused the same way.
+OIDC_SQL="SELECT count(*) > 0 FROM oidc_providers;"
+
+oidc_providers_in_use() {
+  PG_ERR=""
+  privacy_pg '-c default_transaction_read_only=on' "$OIDC_SQL" && {
+    case "$PG_OUT" in
+      t) return 0 ;;
+      f) return 1 ;;
+    esac
+    PRIVACY_UNASKED="psql answered '${PG_OUT}', which is neither t nor f"
+    return 2
+  }
+  # A database below the migration has no such table: nothing to protect.
+  case "$PG_ERR" in *'"oidc_providers" does not exist'*) return 1 ;; esac
+  return 2
+}
+
+oidc_providers_gate() {
+  local how rc=0 rows=0 target nothing_changed
+  nothing_changed="Nothing was changed: $ENV_FILE was NOT rewritten and nothing was pulled or restarted."
+  if [ -z "$CORE_TAG" ]; then
+    log "oidc-providers check: core is not being rolled back — not checked"
+    return 0
+  fi
+  how="$(python3 "$REPO_ROOT/deploy/release-mapping.py" core-migration --releases "$REPO_ROOT/releases" \
+    --core "$CORE_TAG" --migration "$OIDC_PROVIDERS_MIGRATION")" || rc=$?
+  case "$rc" in
+    0) log "oidc-providers check: core ${CORE_TAG} carries migration ${OIDC_PROVIDERS_MIGRATION} (${how}) — not checked"; return 0 ;;
+    4) target="core ${CORE_TAG} does not carry migration ${OIDC_PROVIDERS_MIGRATION} (${how})" ;;
+    *) target="core ${CORE_TAG} could not be placed relative to migration ${OIDC_PROVIDERS_MIGRATION} (${how:-deploy/release-mapping.py core-migration exited ${rc}}), so it is treated as not carrying it" ;;
+  esac
+  oidc_providers_in_use || rows=$?
+  if [ "$rows" -eq 1 ]; then
+    log "WARNING: oidc-providers check: ${target}; oidc_providers is empty, so only environment-configured providers (OAUTH_PROVIDERS) apply — proceeding. Providers an admin adds after this rollback will be ignored by that release."
+    return 0
+  fi
+  if [ "$ALLOW_UNCHECKED_OIDC_PROVIDERS" -eq 1 ] && { [ "$rows" -ne 0 ] || [ "$rc" -ne 4 ]; }; then
+    log "WARNING: oidc-providers check NOT settled: ${PRIVACY_UNASKED:-providers exist and the target could not be placed}. ${target}. --allow-unchecked-oidc-providers was given, so this rollback proceeds on your word."
+    return 0
+  fi
+  if [ "$ALLOW_OIDC_ENV_FALLBACK" -eq 1 ]; then
+    log "WARNING: oidc-providers check: ${target}; ${PRIVACY_UNASKED:-oidc_providers has rows}. --allow-oidc-env-fallback was given, so this rollback proceeds on your word: environment providers will return without any admin override or disable."
+    return 0
+  fi
+  if [ "$rows" -eq 0 ]; then
+    die "this app-only rollback would run ${target} against a database with admin-managed OIDC providers. That release ignores them, so environment-configured providers come back WITHOUT the admin's overrides, stricter domain allow-lists or disables. Refusing. Review OAUTH_PROVIDERS and the oidc_providers table first (disable any environment provider the admin had turned off or restricted), then re-run with --allow-oidc-env-fallback. ${nothing_changed}"
+  fi
+  die "the oidc-providers check could not be made: ${PRIVACY_UNASKED}. ${target}, so this rollback is refused rather than guessed. Check by hand: ${OIDC_SQL} - if it is f, re-run with --allow-unchecked-oidc-providers. ${nothing_changed}"
+}
+oidc_providers_gate
 
 HTTP_PORT="$(env_get HTTP_PORT 8080)"
 FRONTEND_PORT="$(env_get FRONTEND_PORT 3000)"

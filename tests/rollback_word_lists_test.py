@@ -43,6 +43,8 @@ case "$*" in
       norel) echo 'ERROR:  relation "watched_word_lists" does not exist' >&2; exit 1 ;;
     esac
     echo "$WL_ANSWER" ;;
+  exec*"FROM comments WHERE held_for_review"*) printf 'f\nf\n' ;;
+  exec*"FROM oidc_providers"*) echo f ;;
   exec*"SELECT EXISTS"*) echo f ;;
 esac
 exit 0
