@@ -20,6 +20,7 @@ COMMON = {'status', 'scope', 'synthetic_only', 'phase', 'external_delivery_block
 RESTORE = {'different_runner_boot', 'empty_destination', 'backup_hash_match', 'schema_and_catalogue_match',
            'wrong_key_refused', 'mfa_wrong_code_refused', 'mfa_correct_code_accepted', 'oidc_disabled',
            'mail_secret_status', 'oidc_secret_status'}
+SERVICES = set('api frontend search postgres redis worker caddy clamav migrate search-migrate prep-volumes'.split())
 
 
 class Invalid(ValueError):
@@ -64,8 +65,24 @@ def failure_reasons():
                           'HTTPError', 'URLError', 'TimeoutExpired', 'CalledProcessError'}
 
 
+def diagnostics(value):
+    keys(value, {'install_steps', 'running_services', 'probe_statuses'})
+    for field, names, low, high in (
+            ('install_steps', {'installer', 'setup', 'setup_check', 'provision', 'deploy'}, 0, 255),
+            ('probe_statuses', {'instance', 'healthz', 'site', 'watch'}, 100, 599)):
+        if field in value:
+            keys(value[field], names)
+            require(all(type(code) is int and (low <= code <= high or field == 'probe_statuses' and code == 0)
+                        for code in value[field].values()))
+    if 'running_services' in value:
+        services = value['running_services']
+        require(type(services) is list and len(services) <= len(SERVICES)
+                and all(type(service) is str and service in SERVICES for service in services)
+                and len(set(services)) == len(services))
+
+
 def rec03(value, args):
-    allowed = {'status', 'pair', 'phases', 'record_commit', 'installer_commit', 'failed_phase', 'failure'}
+    allowed = {'status', 'pair', 'phases', 'record_commit', 'installer_commit', 'failed_phase', 'failure', 'diagnostics'}
     keys(value, allowed, {'status', 'pair', 'phases'})
     require(value['status'] in ('PASS', 'FAIL') and value['pair'] == ['v0.7.7', 'v0.7.8'])
     identities(value, {'record_commit': args.record_commit, 'installer_commit': args.tool_commit})
@@ -82,6 +99,9 @@ def rec03(value, args):
         require(value['failed_phase'] in ['preflight', *PHASES])
     if 'failure' in value:
         require(type(value['failure']) is str and value['failure'] in failure_reasons())
+    if 'diagnostics' in value:
+        require(value['status'] == 'FAIL')
+        diagnostics(value['diagnostics'])
     if value['status'] == 'PASS':
         require(not {'failure', 'failed_phase'} & set(value))
     return complete

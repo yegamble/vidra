@@ -78,6 +78,46 @@ class Verdict(unittest.TestCase):
             self.assertNotIn('private-canary', summary)
             self.assertEqual(json.loads(summary)['failed_phase'], 'preflight')
 
+    def test_install_exit_and_probe_failures_precede_image_inspection(self):
+        facts = {'install_exit': '1', 'probe': runner.PROBE}
+        for change, reason in (({}, 'unexpected command exit'),
+                               ({'install_exit': '0', 'probe': 'healthz=503'}, 'HTTP probes failed')):
+            inspect = Mock(side_effect=AssertionError('image failure must not mask install facts'))
+            with self.assertRaisesRegex(runner.Failure, reason):
+                runner.verify_phase('install', {**facts, **change}, {}, '', {}, inspect)
+            inspect.assert_not_called()
+        facts.update(install_exit='0', ledger='core=151:false search=18:false', images=IMAGES)
+        with self.assertRaisesRegex(runner.Failure, 'missing running image services'):
+            runner.verify_phase('install', facts, {}, '', {'v0.7.7': {}}, Mock(return_value=''))
+
+    def test_failure_diagnostics_export_only_finite_values(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'install.private.log').write_text('\n'.join([
+                '[rec03 install 12:34:56] install.sh exit=0',
+                '[rec03 install 12:34:56] setup exit=2',
+                '[rec03 install 12:34:56] setup --check exit=255',
+                '[rec03 install 12:34:56] provision exit=1',
+                '[rec03 install 12:34:56] deploy.sh exit=127',
+                '[rec03 install 12:34:56] setup exit=256',
+                '[rec03 install 12:34:56] setup exit=-1',
+                '[rec03 install 12:34:56] setup exit=0 private-canary',
+                '[rec03 install 12:34:56] private-canary exit=0',
+                'JWT_SECRET=private-canary']))
+            with patch.object(runner.subprocess, 'check_output', return_value='api\npostgres\napi\nprivate-canary\napi private-canary\n') as command:
+                result = runner.diagnostics(root, {'probe': 'instance=200 healthz=503 site=000 watch=502',
+                                                   'private': 'private-canary'})
+            self.assertEqual(result, {'install_steps': {'installer': 0, 'setup': 2, 'setup_check': 255,
+                'provision': 1, 'deploy': 127}, 'running_services': ['api', 'postgres'],
+                'probe_statuses': {'instance': 200, 'healthz': 503, 'site': 0, 'watch': 502}})
+            self.assertNotIn('private-canary', json.dumps(result))
+            self.assertEqual(command.call_args.kwargs['stderr'], runner.subprocess.DEVNULL)
+            for probe in ('instance=200 healthz=200 site=200 watch=200 private-canary', None, 200):
+                with patch.object(runner.subprocess, 'check_output', side_effect=OSError('private-canary')):
+                    self.assertEqual(runner.diagnostics(root / 'absent', {'probe': probe}), {})
+            with patch.object(runner.subprocess, 'check_output', side_effect=runner.subprocess.TimeoutExpired('private-canary', 10)):
+                self.assertEqual(runner.diagnostics(root / 'absent', ['private-canary']), {})
+
 
 class RunningImages(unittest.TestCase):
     def fixture(self, phase, digest_kind='index_digest'):
