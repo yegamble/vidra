@@ -36,6 +36,7 @@
 #                              the record PR's branch when the drill runs: name that branch here.
 #                              A non-main ref is passed to install/deploy/rollback as
 #                              VIDRA_RECORD_BASE_URL so they verify against the same record.
+#   REC03_INSTALLER_REF        installer source ref (default main); hosted evidence freezes its SHA.
 #   REC03_INJECT_TABLE         the column (or, for `table`, the table) to pre-create. REQUIRED when
 #                              REC03_INJECT=column|table; there
 #   REC03_INJECT_COLUMN        is deliberately no fallback, because a fallback here is another
@@ -103,6 +104,7 @@ INJECT_COLUMN="${REC03_INJECT_COLUMN:-}"
 INJECT_TYPE="${REC03_INJECT_TYPE:-}"
 INSTALL="${REC03_INSTALL:-bundle}"
 RECORD_REF="${REC03_RECORD_REF:-main}"
+INSTALLER_REF="${REC03_INSTALLER_REF:-main}"
 RECORD_BASE="https://raw.githubusercontent.com/yegamble/vidra/${RECORD_REF}/releases"
 # A git ref that becomes a URL path: letters, digits and ._/- only, no `..`, no leading `-`.
 REF_RE='^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$'
@@ -144,6 +146,7 @@ require_release_pair() {
   matches "$NEW" "$TAG_RE" || die "REC03_NEW=\"$NEW\" is not a release tag (vX.Y.Z). It is used as a git ref and inside a raw.githubusercontent.com URL."
   [ "$OLD" != "$NEW" ] || die "REC03_OLD and REC03_NEW are both $OLD — an upgrade drill needs two releases."
   { matches "$RECORD_REF" "$REF_RE" && [[ "$RECORD_REF" != *..* ]]; } || die "REC03_RECORD_REF=\"$RECORD_REF\" is not a plain git ref; it becomes part of the URL the release records are fetched from."
+  { matches "$INSTALLER_REF" "$REF_RE" && [[ "$INSTALLER_REF" != *..* ]]; } || die "REC03_INSTALLER_REF is not a plain git ref"
 }
 
 # The install path. `bundle` is what an operator gets from the one-line installer, and the hazards
@@ -374,7 +377,8 @@ install)
   # meta main's installer: the one an operator runs today, and the first that pairs a core-only
   # release's components (the released installer at a core-only OLD bootstraps one tag into all three).
   log "meta main's installer, $INSTALL path: install.sh $(installer_args)"
-  curl -fsSL "https://raw.githubusercontent.com/yegamble/vidra/main/install.sh" -o "/root/install-main.sh"
+  # Hosted evidence freezes the current installer too; historical invocations default to main.
+  curl -fsSL "https://raw.githubusercontent.com/yegamble/vidra/$INSTALLER_REF/install.sh" -o "/root/install-main.sh"
   sha256sum "/root/install-main.sh"
   [ "$RECORD_REF" = main ] || export VIDRA_RECORD_BASE_URL="$RECORD_BASE"
   # shellcheck disable=SC2046  # installer_args is a fixed word list built from validated values
