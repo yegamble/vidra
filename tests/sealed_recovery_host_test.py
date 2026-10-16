@@ -16,7 +16,7 @@ class FixtureHostBoundaryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             fixture = host.Host(Path(temporary), {}, {})
             states = 'api\trestarting\t\nsearch\trunning\thealthy\nfrontend\trunning\tstarting\npostgres\texited\t\n'
-            with patch.object(host.recovery, 'http', return_value={'status': 503, 'body': 'PRIVATE_CANARY'}), \
+            with patch.object(fixture, 'readyz_status', return_value=503), \
                     patch.object(fixture, 'run', return_value=states) as run:
                 facts = fixture.failure_diagnostics()
             self.assertEqual(facts, {'readyz_status': 503, 'services': {'api': 'restarting', 'search': 'healthy',
@@ -30,10 +30,10 @@ class FixtureHostBoundaryTest(unittest.TestCase):
             fixture = host.Host(Path(temporary), {}, {})
             for output in ('api\trunning\tPRIVATE_CANARY\n', 'PRIVATE_CANARY\trunning\thealthy\n',
                            'api\trunning\thealthy\napi\texited\t\n', 'PRIVATE_CANARY'):
-                with self.subTest(output=output), patch.object(host.recovery, 'http', return_value={'status': None}), \
+                with self.subTest(output=output), patch.object(fixture, 'readyz_status', return_value=None), \
                         patch.object(fixture, 'run', return_value=output):
                     self.assertEqual(fixture.failure_diagnostics(), {'readyz_status': 0})
-            with patch.object(host.recovery, 'http', side_effect=ValueError('PRIVATE_CANARY')), \
+            with patch.object(fixture, 'readyz_status', side_effect=ValueError('PRIVATE_CANARY')), \
                     patch.object(fixture, 'run', side_effect=ValueError('PRIVATE_CANARY')):
                 self.assertEqual(fixture.failure_diagnostics(), {})
 
