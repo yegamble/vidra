@@ -73,6 +73,14 @@ class StaticGateTest(unittest.TestCase):
     def test_complete_wrappers_match_methods_templates_barrels_and_import_aliases(self):
         self.assertEqual(findings(), set())
 
+    def test_const_and_arrow_string_delimiters_are_not_syntax(self):
+        for literal in ('(', '{', '[', ')', '}', ']', ';'):
+            with self.subTest(literal=literal):
+                files = fixture()
+                files['lib/api/endpoints.ts'] = (
+                    f'const literal = "{literal}"; const text = () => "{literal}";\n' + CLIENT)
+                self.assertEqual(findings(files), set())
+
     def test_imported_functions_called_through_object_shorthand_and_barrel(self):
         files = fixture()
         files['lib/api/endpoints.ts'] = '''

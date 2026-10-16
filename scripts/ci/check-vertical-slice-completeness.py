@@ -329,7 +329,7 @@ def function_bodies(ts):
         if ts[k].value != 'const' or ts[k + 2].value != '=':
             continue
         signature = k + 3 + (ts[k + 3].value == 'async')
-        if ts[signature].value == '(':
+        if not ts[signature].string and ts[signature].value == '(':
             _, end = groups(ts, signature)
             arrow = end + 1
         else:
@@ -337,11 +337,11 @@ def function_bodies(ts):
         if ts[arrow:arrow + 1] != [Token('=>')]:
             continue
         start = arrow + 1
-        if ts[start].value == '{':
+        if not ts[start].string and ts[start].value == '{':
             _, end = groups(ts, start)
         else:
             end = start
-            while end < len(ts) and ts[end].value not in (';', '}'):
+            while end < len(ts) and (ts[end].string or ts[end].value not in (';', '}')):
                 if ts[end].value in ('(', '[', '{') and not ts[end].string:
                     _, end = groups(ts, end)
                 end += 1
@@ -543,7 +543,7 @@ def consumed_wrappers(files, reachable):
                 if ts[i].value != 'const' or ts[i + 2].value != '=':
                     continue
                 end = next((j for j in range(i + 3, len(ts)) if ts[j].value == ';'), len(ts))
-                if ts[i + 3].value == '{':
+                if not ts[i + 3].string and ts[i + 3].value == '{':
                     entries, _ = groups(ts, i + 3)
                     tables[ts[i + 1].value] = {
                         e[0].value: symbols.get(e[2].value, set()) for e in entries
