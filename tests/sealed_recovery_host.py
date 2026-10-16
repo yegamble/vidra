@@ -76,9 +76,10 @@ class Host(runtime.Recorder):
         extract_bundle(assets / f'vidra-bundle_{tag}.tar.gz', INSTALL)
         manifest = dict(line.split('=', 1) for line in (INSTALL / 'vidra-bundle.manifest').read_text().splitlines()
                         if '=' in line and not line.startswith('#'))
+        schema = manifest.get('core_schema_version', '')
         require(manifest.get('tag') == tag and manifest.get('meta_commit') == self.record['meta_commit']
                 and manifest.get('core_commit') == self.record['components']['core']['commit']
-                and manifest.get('core_schema_version') == str(self.record['core_schema_version']), 'bundle provenance differs')
+                and re.fullmatch(r'[0-9]+', schema) and int(schema) == self.record['core_schema_version'], 'bundle provenance differs')
         self.cli = assets / f'vidra_{tag}_linux_amd64'
         self.cli.chmod(0o700)
         self.script_hashes = {name: runtime.sha(INSTALL / name) for name in ('deploy/backup.sh', 'deploy/restore.sh', 'deploy/lib.sh')}

@@ -24,7 +24,10 @@ IDENTITY = 'AGE-SECRET-KEY-12RXAWEFDKZ8JV2JM6GSYCV4XGQAKTCJSKTTKHHMZQST2H4972N8S
 
 
 def head(root):
-    return subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
+    # Root runs the isolated host driver; checkout ownership remains runner's.
+    # Trust exactly this checkout for this read, never global/wildcard paths.
+    return subprocess.check_output(['git', '-c', 'safe.directory=' + str(root.resolve()),
+                                    '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
 
 
 def published(root, tag, record_commit):

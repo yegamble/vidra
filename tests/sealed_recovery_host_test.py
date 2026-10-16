@@ -1,5 +1,6 @@
 """Published archive/config boundaries without invoking Docker or a live host."""
 import io
+import hashlib
 from pathlib import Path
 import tarfile
 import tempfile
@@ -10,6 +11,32 @@ import sealed_recovery_host as host
 
 
 class FixtureHostBoundaryTest(unittest.TestCase):
+    def test_authentic_zero_padded_bundle_schema_matches_integer_record(self):
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode='w:gz') as archive:
+            manifest = 'tag=v0.7.8\ncore_schema_version=0182\nmeta_commit=' + 'a' * 40 + '\ncore_commit=' + 'b' * 40
+            for name, content in {'vidra-bundle.manifest': manifest, 'deploy/backup.sh': 'backup',
+                                  'deploy/restore.sh': 'restore', 'deploy/lib.sh': 'lib'}.items():
+                info = tarfile.TarInfo(name)
+                data = content.encode()
+                info.size = len(data)
+                archive.addfile(info, io.BytesIO(data))
+        assets = {'SHA256SUMS': b'fixture-sums', 'vidra-bundle_v0.7.8.tar.gz': stream.getvalue(),
+                  'vidra_v0.7.8_linux_amd64': b'fixture-cli-not-executed'}
+        candidate = {'assets': {name: {'url': 'https://fixture.invalid/' + name,
+            'sha256': hashlib.sha256(data).hexdigest()} for name, data in assets.items()}}
+        record = {'release': 'v0.7.8', 'meta_commit': 'a' * 40, 'core_schema_version': 182,
+                  'components': {'core': {'commit': 'b' * 40}}}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stage = root / 'stage'
+            stage.mkdir()
+            fixture = host.Host(stage, record, candidate)
+            with patch.object(host, 'INSTALL', root / 'install'), patch.object(host.urllib.request, 'urlopen',
+                    side_effect=lambda url, **_: io.BytesIO(assets[url.rsplit('/', 1)[-1]])):
+                fixture.install()
+            self.assertEqual(set(fixture.script_hashes), {'deploy/backup.sh', 'deploy/restore.sh', 'deploy/lib.sh'})
+
     def test_setup_generates_archivable_caddy_config_before_disabling_edge(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

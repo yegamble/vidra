@@ -16,6 +16,15 @@ spec.loader.exec_module(support)
 
 
 class PublishedBoundaryTest(unittest.TestCase):
+    def test_root_git_trust_is_limited_to_this_canonical_checkout(self):
+        root = Path('/tmp/fixture-checkout/child/..')
+        with patch.object(support.subprocess, 'check_output', return_value='a' * 40 + '\n') as command:
+            self.assertEqual(support.head(root), 'a' * 40)
+        argv = command.call_args.args[0]
+        self.assertIn('safe.directory=/tmp/fixture-checkout', argv)
+        self.assertNotIn('--global', argv)
+        self.assertFalse(any('*' in value for value in argv))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
