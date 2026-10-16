@@ -2,6 +2,7 @@
 import io
 import hashlib
 from pathlib import Path
+import re
 import tarfile
 import tempfile
 import unittest
@@ -67,6 +68,25 @@ class FixtureHostBoundaryTest(unittest.TestCase):
                     fixture.install()
                 self.assertFalse((root / 'install').exists())
 
+    def test_setup_clears_scanner_address_from_actual_production_template(self):
+        template = (Path(__file__).resolve().parents[1] / 'env/production.env.example').read_text()
+        self.assertRegex(template, r'(?m)^CLAMAV_ADDR=clamav:3310$')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stage, install = root / 'stage', root / 'install'
+            stage.mkdir()
+            (install / 'env').mkdir(parents=True)
+            path = install / 'env/production.env'
+            path.write_text(template)
+            fixture = host.Host(stage, {'release': 'v0.7.8', 'components': {}}, {})
+            fixture.cli = root / 'fixture-cli'
+            with patch.object(host, 'INSTALL', install), patch.object(fixture, 'run'):
+                fixture.configure()
+            configured = dict(re.findall(r'(?m)^([A-Z][A-Z0-9_]*)=(.*)$', path.read_text()))
+            self.assertEqual(configured['CLAMAV_ADDR'], '')
+            self.assertEqual(configured['MALWARE_SCAN_MODE'], 'disabled')
+            self.assertEqual(configured['VIDRA_COMPOSE_PROFILES'], 'core frontend')
+
     def test_untrusted_bundle_paths_and_links_never_extract(self):
         for name, kind in (('../outside', tarfile.REGTYPE), ('/absolute', tarfile.REGTYPE),
                            ('link', tarfile.SYMTYPE), ('pipe', tarfile.FIFOTYPE)):
@@ -97,12 +117,14 @@ class FixtureHostBoundaryTest(unittest.TestCase):
 
     def test_render_rejects_external_network_or_provider(self):
         api = {'VIDRA_ENV': 'production', 'STORAGE_BACKEND': 'local', 'MAIL_ENABLED': 'false',
-               'OAUTH_PROVIDERS': '', 'FEDERATION_ENABLED': 'false', 'DEV_MAIL_CAPTURE_ENABLED': 'false'}
+               'OAUTH_PROVIDERS': '', 'FEDERATION_ENABLED': 'false', 'DEV_MAIL_CAPTURE_ENABLED': 'false',
+               'CLAMAV_ADDR': '', 'MALWARE_SCAN_MODE': 'disabled'}
         model = {'networks': {'default': {'internal': True}}, 'services': {
             'api': {'environment': api, 'networks': {'default': {}}}}}
         host.check_isolation(model)
         for key, value in (('STORAGE_BACKEND', 's3'), ('MAIL_ENABLED', 'true'),
-                           ('OAUTH_PROVIDERS', 'real'), ('FEDERATION_ENABLED', 'true')):
+                           ('OAUTH_PROVIDERS', 'real'), ('FEDERATION_ENABLED', 'true'),
+                           ('CLAMAV_ADDR', 'clamav:3310'), ('MALWARE_SCAN_MODE', 'fail-closed')):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 host.check_isolation({**model, 'services': {'api': {
                     'environment': {**api, key: value}, 'networks': {'default': {}}}}})
