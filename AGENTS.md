@@ -177,12 +177,12 @@ These rules bind every AI tool working in this repo (Claude, Jules, Codex, …):
 
 **Enforcement:** `.claude/hooks/finished-means-merged.sh` is a Claude Code
 `Stop` hook. It checks tracked dirty state even on detached checkouts, refreshes
-`origin/main`, and blocks non-main branches or commits absent from main. When
-all four repos are present it runs the completeness script with
-`--baseline-ref origin/main`: unchanged static debt is reported separately;
-contract/type freshness always passes the full check. `MAX_BLOCKS=6` caps the
-reminder counter, never bypasses a failing gate. Other AI tools obey the same
-completion rules even though this hook runs only in Claude.
+`origin/main`, and blocks non-main branches or commits absent from main.
+`SessionStart` records immutable core/user SHAs; Stop uses `--baseline-file`
+so unchanged static debt is separate but newly merged debt still blocks.
+Missing snapshots trigger full inventory; contract/type checks always run.
+`MAX_BLOCKS=6` caps reminders, never bypasses failure. Other AI tools obey
+these completion rules even though the hook runs only in Claude.
 
 ## Layout
 
