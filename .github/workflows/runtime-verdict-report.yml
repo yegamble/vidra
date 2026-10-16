@@ -1,0 +1,60 @@
+name: runtime-verdict-report
+on:
+  workflow_call:
+    inputs:
+      kind: {required: true, type: string}
+      record_commit: {required: true, type: string}
+      release: {default: v0.7.8, type: string}
+      source_result: {required: true, type: string}
+      replacement_result: {default: skipped, type: string}
+      source_artifact_id: {default: '', type: string}
+      replacement_artifact_id: {default: '', type: string}
+permissions:
+  contents: read
+  actions: read
+  checks: write
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: inputs.source_artifact_id != ''
+        continue-on-error: true # Missing current-attempt verdicts become INCOMPLETE.
+        with:
+          name: ${{ inputs.kind == 'rec03' && format('rec03-v0.7.8-verdict-{0}-{1}', github.run_id, github.run_attempt) || format('published-sealed-verdict-source-{0}-{1}', github.run_id, github.run_attempt) }}
+          path: ${{ runner.temp }}/verdict-source
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: inputs.kind == 'sealed' && inputs.replacement_artifact_id != ''
+        continue-on-error: true
+        with:
+          name: published-sealed-verdict-restore-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/verdict-restore
+      - name: Publish only the validated informational verdict
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KIND: ${{ inputs.kind }}
+          RECORD_COMMIT: ${{ inputs.record_commit }}
+          SOURCE_RESULT: ${{ inputs.source_result }}
+          REPLACEMENT_RESULT: ${{ inputs.replacement_result }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          umask 077
+          extra=()
+          file=summary.json
+          if [ "$KIND" = sealed ]; then
+            file=verdict.json
+            extra=(--replacement "$RUNNER_TEMP/verdict-restore/verdict.json" --replacement-result "$REPLACEMENT_RESULT" --release "$RELEASE")
+          fi
+          python3 scripts/ci/export-runtime-verdict.py --kind "$KIND" --source "$RUNNER_TEMP/verdict-source/$file" \
+            --source-result "$SOURCE_RESULT" --record-commit "$RECORD_COMMIT" --tool-commit "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --repository "$GITHUB_REPOSITORY" \
+            --out "$RUNNER_TEMP/verdict-check.json" "${extra[@]}"
+          if ! gh api --method POST "repos/$GITHUB_REPOSITORY/check-runs" --input "$RUNNER_TEMP/verdict-check.json" --jq .html_url 2>"$RUNNER_TEMP/verdict-post-error"; then
+            echo '::error::Sanitized verdict publication failed'
+            exit 1
+          fi
