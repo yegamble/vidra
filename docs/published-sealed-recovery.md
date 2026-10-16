@@ -18,6 +18,15 @@ Compose input. Caddy configuration is generated for the backup, while the edge
 service stays off. Local storage, closed registration and one newly generated
 synthetic owner are required. There are no media uploads or object-store inputs.
 
+This isolated fixture uses the current API container's private bridge address for
+host probes and API controls. Docker may suppress published loopback mappings on
+an internal network. Each control resolves the current running container again,
+verifies its Compose ownership and membership in the owned internal bridge's
+RFC1918 subnet, and supplies a matching explicit private-origin opt-in to the
+Node helper. Redirects are refused and actual host port bindings must be absent.
+All five service health checks and immutable image checks remain required. This
+control route establishes no production port, DNS or browser-origin behavior.
+
 The fixture enrolls TOTP, stores a dummy SMTP password targeting container
 loopback port 1 with no listener, and stores a disabled OIDC provider with a dummy
 client secret. External container delivery is blocked; the SMTP document itself
@@ -42,7 +51,8 @@ and successful MFA, while a wrong code remains refused.
 
 Public verdict artifacts contain fixed status/boolean fields and immutable
 release/tool/record provenance. Failed commands and raw API/container logs remain
-private to the ephemeral VM; only a fixed failure-phase enum is exported.
+private to the ephemeral VM. Failures export only fixed milestones, bounded HTTP
+status codes and known-service state enums.
 
 A green run is **published-image recovery evidence for synthetic sealed-secret
 fixtures across two VMs**. It does not qualify fresh installation, real operator

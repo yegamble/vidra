@@ -1,5 +1,6 @@
 """Run unchanged published backup/restore scripts on an isolated synthetic VM."""
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import urllib.request
 from blank_server_smoke import require
 import release_acceptance as runtime
 import recovery_release_acceptance as recovery
+from sealed_recovery_route import internal_origin, unpublished
 
 INSTALL = runtime.INSTALL
 SAFE = {'VIDRA_ENV': 'production', 'STORAGE_BACKEND': 'local', 'MAIL_ENABLED': 'false',
@@ -68,7 +70,7 @@ class Host(runtime.Recorder):
         """Fresh, bounded read-only probes; never export Docker text or HTTP bodies."""
         facts = {}
         try:
-            code = recovery.http('/readyz', timeout=2)['status']
+            code = self.readyz_status(timeout=2)
             if code is None or type(code) is int and 100 <= code <= 599:
                 facts['readyz_status'] = 0 if code is None else code
         except Exception:
@@ -88,6 +90,26 @@ class Host(runtime.Recorder):
         except Exception:
             pass  # Unavailable or malformed observations never become healthy/missing facts.
         return facts
+
+    def api_origin(self):
+        cid = self.compose('ps', '-q', 'api').strip()
+        require(re.fullmatch(r'[0-9a-f]{64}', cid), 'current API container required')
+        containers = json.loads(self.run(['docker', 'inspect', cid], 'fixture-api-route'))
+        require(len(containers) == 1 and containers[0]['Id'] == cid, 'stale API container')
+        name = self.env['COMPOSE_PROJECT_NAME'] + '_default'
+        networks = json.loads(self.run(['docker', 'network', 'inspect', name], 'fixture-api-network'))
+        require(len(networks) == 1, 'one fixture network required')
+        return internal_origin(containers[0], networks[0], self.env['COMPOSE_PROJECT_NAME'])
+
+    def readyz_status(self, timeout=5):
+        connection = http.client.HTTPConnection(self.api_origin().removeprefix('http://'), timeout=timeout)
+        try:
+            connection.request('GET', '/readyz')
+            return connection.getresponse().status  # No redirects, body reads or proxy changes.
+        except (OSError, http.client.HTTPException):
+            return None
+        finally:
+            connection.close()
 
     def install(self):
         assets = self.private / 'assets'
@@ -133,7 +155,7 @@ class Host(runtime.Recorder):
         self.compose('pull', 'postgres', 'redis', 'api', 'search', 'frontend')
 
     def ready(self):
-        recovery.wait(lambda: recovery.http('/readyz')['status'] == 200, 600)
+        recovery.wait(lambda: self.readyz_status() == 200, 600)
         containers = []
         def health():
             nonlocal containers
@@ -144,12 +166,11 @@ class Host(runtime.Recorder):
             return {c['Id']: c['State'].get('Health', {}).get('Status', 'healthy')
                     if c['State']['Running'] else 'stopped' for c in containers}
         runtime.wait_for_health(health, timeout=300)
-        ports = {}
         for container in containers:
             require(container['State']['Running'] and container['State'].get('Health', {}).get('Status', 'healthy') == 'healthy',
                     'unhealthy fixture service')
             name = container['Config']['Labels']['com.docker.compose.service']
-            ports[name] = container['NetworkSettings']['Ports'] or {}
+            unpublished(container)
             if name in runtime.SERVICES:
                 image = json.loads(self.run(['docker', 'image', 'inspect', container['Image']], 'verify-published-image'))[0]
                 runtime.verify_image(image, self.candidate['images'][runtime.SERVICES[name]], container)
@@ -157,7 +178,6 @@ class Host(runtime.Recorder):
             require(len(networks) == 1, 'running container has alternate network')
             network = json.loads(self.run(['docker', 'network', 'inspect', next(iter(networks))], 'verify-internal-network'))[0]
             require(network.get('Internal') is True, 'running container has external egress')
-        runtime.check_runtime_ports(ports)
 
     def snapshot(self):
         for role, table in (('core', 'schema_migrations'), ('search', 'vidra_search_migrations')):
@@ -171,7 +191,8 @@ class Host(runtime.Recorder):
                 'published backup/restore script changed')
 
     def api_fixture(self, mode, fixture, setup_token=None):
-        env = {**self.env, 'VIDRA_BASE_URL': 'http://127.0.0.1:8080'}
+        origin = self.api_origin()  # Resolve again after every key-control recreation.
+        env = {**self.env, 'VIDRA_BASE_URL': origin, 'VIDRA_INTERNAL_ORIGIN': origin}
         if setup_token:
             env['VIDRA_SETUP_TOKEN'] = setup_token
         tool = Path(__file__).with_name('sealed-recovery-api.mjs')
