@@ -39,6 +39,18 @@ def match_assets(source, destination, field):
             'media assigned to wrong video, missing, or duplicated')
 
 
+def change_source_marker(source, action, result):
+    """Change only the disposable schema-970 clone, then verify the write."""
+    require(action in ('schema-unsupported', 'schema-restore'), 'invalid schema marker action')
+    # v0.7.8 accepts 700..1040 inclusive; 1040 no longer tests refusal.
+    previous, version = (970, 1041) if action == 'schema-unsupported' else (1041, 970)
+    result['before'] = source('SELECT "migrationVersion" FROM application')
+    require(result['before'] == str(previous), 'unexpected clone schema marker')
+    source(f'UPDATE application SET "migrationVersion"={version}')
+    result['after'] = source('SELECT "migrationVersion" FROM application')
+    require(result['after'] == str(version), 'source marker update failed')
+
+
 def reboot_state(run, baseline):
     """The catalogue and ledgers a host reboot must preserve, unchanged.
 
@@ -123,12 +135,7 @@ def execute(stage, action, label=None, baseline=DEFAULT_BASELINE, root=DEFAULT_R
                 check_reboot_preserved(before, result)
                 result['checks']['host_restart_state_preserved'] = 'PASS'
         elif action in ('schema-unsupported', 'schema-restore'):
-            version = 1040 if action == 'schema-unsupported' else 970
-            result['before'] = source('SELECT "migrationVersion" FROM application')
-            require(result['before'] == ('970' if version == 1040 else '1040'), 'unexpected clone schema marker')
-            source(f'UPDATE application SET "migrationVersion"={version}')
-            result['after'] = source('SELECT "migrationVersion" FROM application')
-            require(result['after'] == str(version), 'source marker update failed')
+            change_source_marker(source, action, result)
             result['checks']['isolated_source_marker'] = 'PASS'
         elif action == 'reconcile':
             result['source_videos'] = json.loads(source('SELECT json_agg(v) FROM (SELECT uuid,name,privacy FROM video ORDER BY uuid) v'))
