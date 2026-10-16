@@ -164,6 +164,10 @@ def diagnostics(private, facts):
     return result
 
 
+def require_small_resource_host():
+    require((os.cpu_count() or 0) >= 4, 'small resource profile requires four CPUs')
+
+
 def main(out):
     # Build output solely from booleans, validated SHAs and fixed labels. Never
     # serialize raw facts, errors, subprocess stdout, owner.json or backup paths.
@@ -173,6 +177,7 @@ def main(out):
         ref, installer = os.environ.get('REC03_RECORD_REF', ''), os.environ.get('REC03_INSTALLER_REF', '')
         require(all(re.fullmatch('[a-f0-9]{40}', x) for x in (ref, installer)), 'immutable commits required')
         require(os.geteuid() == 0 and os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted', 'disposable hosted runner required')
+        require_small_resource_host()
         require(not Path('/opt/vidra').exists(), 'existing deployment refused')
         private = Path('/root/rec03')
         private.mkdir(mode=0o700)
@@ -180,7 +185,8 @@ def main(out):
         os.umask(0o077)
         result.update(record_commit=ref, installer_commit=installer)
         env = {**os.environ, 'REC03_OLD': 'v0.7.7', 'REC03_NEW': 'v0.7.8',
-               'REC03_ALLOW_DOCKER': '1', 'REC03_ROOT': str(private), 'REC03_SAME_SCHEMA': '0', 'REC03_INSTALL': 'bundle', 'REC03_INJECT': 'column',
+               'REC03_ALLOW_DOCKER': '1', 'REC03_RESOURCE_PROFILE': 'small',
+               'REC03_ROOT': str(private), 'REC03_SAME_SCHEMA': '0', 'REC03_INSTALL': 'bundle', 'REC03_INJECT': 'column',
                'REC03_INJECT_TABLE': 'remote_videos', 'REC03_INJECT_COLUMN': 'is_sensitive', 'REC03_INJECT_TYPE': 'BOOLEAN'}
         records = {}
         with (private / 'preflight.log').open('w') as log:
