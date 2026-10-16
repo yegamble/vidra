@@ -15,7 +15,8 @@ INSTALL = runtime.INSTALL
 SAFE = {'VIDRA_ENV': 'production', 'STORAGE_BACKEND': 'local', 'MAIL_ENABLED': 'false',
         'DEV_MAIL_CAPTURE_ENABLED': 'false', 'FEDERATION_ENABLED': 'false', 'OAUTH_PROVIDERS': '',
         'OIDC_ALLOW_PRIVATE_ISSUERS': 'false', 'TRANSCODING_ENABLED': 'false',
-        'MALWARE_SCAN_MODE': 'disabled', 'VIDRA_TLS_MODE': 'external', 'VIDRA_COMPOSE_PROFILES': 'core frontend'}
+        'MALWARE_SCAN_MODE': 'disabled', 'CLAMAV_ADDR': '',
+        'VIDRA_TLS_MODE': 'external', 'VIDRA_COMPOSE_PROFILES': 'core frontend'}
 
 
 def set_values(text, values):
@@ -43,7 +44,7 @@ def extract_bundle(bundle, destination):
 def check_isolation(model):
     api = model['services']['api']
     for key in ('VIDRA_ENV', 'STORAGE_BACKEND', 'MAIL_ENABLED', 'DEV_MAIL_CAPTURE_ENABLED',
-                'FEDERATION_ENABLED', 'OAUTH_PROVIDERS'):
+                'FEDERATION_ENABLED', 'OAUTH_PROVIDERS', 'MALWARE_SCAN_MODE', 'CLAMAV_ADDR'):
         require(str(api['environment'].get(key, '')).lower() == SAFE[key], 'unsafe fixture configuration')
     require(model['networks']['default'].get('internal') is True, 'external fixture network refused')
     for service in model['services'].values():
