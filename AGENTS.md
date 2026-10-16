@@ -100,8 +100,9 @@ behind it.
   about the shipped limits, and **scanning is off**
   (`MALWARE_SCAN_MODE=disabled` — without it every ingestion route answers
   503 `scanner_not_configured`), so it proves nothing about scanning.
-- **Source builds of the three default branches**, not released images or
-  pinned digests: stack coverage, never release qualification.
+- **Source builds**, from floating main and from the newest recorded release
+  commits in separate matrix lanes. Neither lane tests published image digests
+  or establishes runtime recovery or release qualification.
 - **Local storage**, not S3/Spaces/MinIO, and no CDN, presign or federation.
 - **No degraded-dependency coverage.** The lane boots vidra-search to healthy
   *before* the api, because an api whose first outbox drain fails reschedules
