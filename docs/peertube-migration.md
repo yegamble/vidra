@@ -29,6 +29,45 @@ database, media bucket, and temporary HTTPS hostname for Vidra. Do not redirect
 the original domain until step 10 passes. Examples use `/opt/vidra` owned by the
 `vidra` operator account; adapt paths and service ownership together.
 
+## Per-user account ZIP import
+
+The released **`/settings` → Your data → Import from PeerTube** card accepts a
+PeerTube account-export `.zip` for the signed-in user's own account when user
+imports are enabled. It sends multipart field `archive` to
+`POST /api/v1/me/import/peertube`. This is separate from the operator database
+and source-media migration below; it needs no source database credentials.
+
+It adds channels, regular playlists and eligible playlist items referencing
+public, published, unblocked videos already held by Vidra. Existing owned
+channels/playlists are reused rather than replaced or duplicated; available
+exported channel avatars/banners only fill empty image slots and pass the
+normal image checks/scanner. The exported autoplay-next setting, if present,
+updates that playback preference. Videos/media, comments, likes/dislikes,
+watch history, blocklists and followers are skipped, with counts in the result.
+This does not move account credentials or provide source-MFA protection.
+
+The **whole multipart request** is capped by `PEERTUBE_IMPORT_MAX_SIZE` when
+positive, otherwise `HTTP_BODY_LIMIT` (default `8M`); oversized requests return
+413. The upload requires `Content-Length` and is spooled to
+`PEERTUBE_IMPORT_TMPDIR` (default `TMPDIR`), so budget scratch space before
+raising the cap. A larger accepted ZIP can contain video files, but those files
+are not imported. Inspect created/existing/skipped counts; a partial server
+failure retains already-created rows, and retrying the same archive is additive.
+
+Eligible `following.json` targets are queued separately when federation is
+enabled. A non-null `follows_job_id` is polled through
+`GET /api/v1/me/import/peertube/follows/{id}`; only that user's job is visible.
+The card polls every two seconds while targets are pending and offers retry or
+pause/resume of **status updates**; pausing does not stop the queued follows.
+Completion means follow requests were processed, not that remote servers accepted
+them. With federation disabled, eligible follows are counted as skipped rather
+than queued; retain the operator side-effect pauses below during rehearsal.
+
+These paths were checked in the frozen [user UI](https://github.com/yegamble/vidra-user/blob/e861ff57ef45f655d71502e959cd4c59bb03c75f/components/auth/PeerTubeImportCard.tsx)
+and [archive importer](https://github.com/yegamble/vidra-core/blob/04a7f0e127177b631eb323d04d330673fee044f9/internal/peertubearchive/import.go).
+Representative published-image ZIP upload, persistence and follow-status
+verification remains unexecuted for G10, independently of the operator migration.
+
 ## 1. Record what must survive
 
 Save a private migration record containing:
