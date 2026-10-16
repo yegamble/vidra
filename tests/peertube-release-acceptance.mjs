@@ -126,7 +126,8 @@ try {
       acknowledged_schema_version: run.acknowledged_schema_version, error_code: run.error_code ?? null,
       entities: run.report?.entities, conflict_count: run.report?.conflicts?.length ?? 0, started_at: run.started_at, finished_at: run.finished_at };
     if (mode === 'schema-refusal') {
-      assert.equal(run.state, 'failed'); assert.equal(run.error_code, 'unverified_schema'); assert.equal(run.source_version, 1040);
+      // v0.7.8 accepts schema 1040; the next version must still be refused.
+      assert.equal(run.state, 'failed'); assert.equal(run.error_code, 'unverified_schema'); assert.equal(run.source_version, 1041);
     } else {
       assert.equal(run.state, 'done'); assert.equal(run.source_version, 970);
       for (const kind of ['user', 'channel', 'video', 'video_file', 'hls_playlist', 'video_no_media', 'comment', 'caption', 'tag', 'chapter', 'rating', 'playlist', 'playlist_item', 'follow']) {
