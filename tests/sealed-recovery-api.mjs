@@ -58,9 +58,11 @@ export function fixtureClient({ baseUrl, internalOrigin, fetchImpl = fetch, now 
     for (let attempt = 0; attempt < 5; attempt++) {
       let response;
       try {
+        // Waiting for an unused TOTP window precedes the network deadline.
+        const payload = body ? JSON.stringify(typeof body === 'function' ? await body() : body) : undefined;
         response = await fetchImpl(`${baseUrl}/api/v1${path}`, { method, redirect: 'error', signal: AbortSignal.timeout(15000),
           headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: body ? JSON.stringify(typeof body === 'function' ? await body() : body) : undefined });
+          body: payload });
       } catch { throw new Failure('request_failed'); }
       if (response.status === 429) {
         const delay = Number(response.headers.get('retry-after'));
