@@ -41,6 +41,10 @@ on:
     paths:
       - ".github/workflows/stack-e2e.yml"
       - "tests/stack-e2e.mjs"
+      - "scripts/ci/resolve-stack-refs.py"
+      - "tests/pinned_release_ci_test.py"
+      - "deploy/release-mapping.py"
+      - "releases/*.json"
       - "docker-compose.yml"
 
 permissions:
@@ -52,6 +56,11 @@ concurrency:
 
 jobs:
   stack-e2e:
+    name: ${{ matrix.mode == 'release' && 'pinned-release-e2e' || 'stack-e2e' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [main, release]
     runs-on: ubuntu-latest
     # boot is measured at ~2m; this adds the vidra-search build, an upload, a
     # single-rung transcode and an indexing poll. 20 minutes is a ceiling, not
@@ -63,14 +72,22 @@ jobs:
         with:
           persist-credentials: false
 
-      # The same three checkouts `boot` makes, at their DEFAULT BRANCHES: this
-      # lane tests main-of-everything built from source. It pulls no released
-      # GHCR tag and no pinned digest, so it is stack coverage, never release
-      # qualification.
+      # Both modes share the same assertions. Release mode resolves the newest
+      # checked-in record and checks out its immutable source commits. It does
+      # not test GHCR image digests or replace runtime/recovery qualification.
+      - name: Resolve stack source refs
+        id: refs
+        env:
+          STACK_MODE: ${{ matrix.mode }}
+        run: |
+          python3 scripts/ci/resolve-stack-refs.py select --mode "$STACK_MODE" \
+            --github-output "$GITHUB_OUTPUT" --evidence ci-report/stack-source-refs.json
+
       - name: Check out vidra-core (build context + compose include)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yegamble/vidra-core
+          ref: ${{ steps.refs.outputs.core_ref }}
           path: vidra-core
           persist-credentials: false
 
@@ -78,6 +95,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yegamble/vidra-search
+          ref: ${{ steps.refs.outputs.search_ref }}
           path: vidra-search
           persist-credentials: false
 
@@ -87,8 +105,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yegamble/vidra-user
+          ref: ${{ steps.refs.outputs.user_ref }}
           path: vidra-user
           persist-credentials: false
+
+      - name: Verify checked-out commits and pinned migration ceilings
+        run: python3 scripts/ci/resolve-stack-refs.py verify --evidence ci-report/stack-source-refs.json
 
       # Dummy secrets, real shapes — the same posture `boot` uses. Every value
       # here is a throwaway CI literal generated on the runner; nothing in this
@@ -351,7 +373,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: meta-stack-e2e
+          name: meta-stack-e2e-${{ matrix.mode }}
           path: ci-report/
           retention-days: 14
           if-no-files-found: warn

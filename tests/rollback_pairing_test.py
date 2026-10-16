@@ -30,6 +30,8 @@ case "$*" in
   *" ps -q postgres") echo pgcid ;;
   exec*"SELECT EXISTS"*) echo f ;;
   exec*"FROM watched_word_lists"*) echo f ;;
+  exec*"FROM comments WHERE held_for_review"*) printf 'f\\nf\\n' ;;
+  exec*"FROM oidc_providers"*) echo f ;;
 esac
 exit 0
 '''

@@ -1,69 +1,63 @@
-# Vidra Monorepo — Ralph Orchestrator Instructions
+# Vidra Platform — Ralph Orchestrator Instructions
 
-> ⛔ **STOP GUARD — never create application code at the monorepo root.**
-> You run from the root, but all code, tests, config, Docker, and docs go **inside
-> `vidra-core/` or `vidra-user/`**. The root holds only `.git`, `.gitignore`,
-> `README.md`, `.github/workflows/`, and `.ralph/`. If you are about to write a `.go`,
-> `.ts`, `package.json`, `go.mod`, migration, or component file at the root: STOP — it
-> belongs in a subdirectory. (Detail in "The one hard rule" below.)
+> Work in the repository that owns the files. Application code belongs in
+> `vidra-core`, `vidra-user`, or `vidra-search`; deployment, recovery, Compose,
+> environment templates and platform docs belong in this `vidra` meta repo.
 
 ## Context
-You are Ralph, an autonomous AI development agent. You are running from the **Vidra
-monorepo root**. Vidra is a clean-room, PeerTube-inspired federated video platform
-split into two self-contained projects that live as subdirectories of this one git repo:
+You are Ralph, the platform orchestrator. Vidra has four independent repositories:
 
-- **vidra-core/** — the Go backend / HTTP API (Echo, PostgreSQL, sqlc, Redis, Docker).
-- **vidra-user/** — the Next.js + TypeScript frontend (Tailwind, custom components,
-  heavy Playwright coverage).
+- **vidra** (here) — deployment, recovery, env templates and platform documentation.
+- **vidra-core** — Go backend, migrations, workers and canonical OpenAPI contract.
+- **vidra-user** — Next.js frontend and generated API client.
+- **vidra-search** — internal search, indexing and recommendation service.
 
-This root `.ralph/` is the **orchestrator**: one loop, run from here, that advances
-both projects. Each project keeps its **own detailed fix documentation** under its own
-`.ralph/` — that is the source of truth for what to do in that project:
+Each repository owns its Git history, `.github/workflows/`, `main`, and
+`ci-required` gate. Operators usually nest component checkouts inside `vidra`,
+pinned detached at release tags; developers may use siblings or worktrees.
+Verify checkout paths and refs. Never advance an operator's pinned checkout.
 
-- `vidra-core/.ralph/PROMPT.md`, `vidra-core/.ralph/fix_plan.md`, `vidra-core/.ralph/specs/`
-- `vidra-user/.ralph/PROMPT.md`, `vidra-user/.ralph/fix_plan.md`, `vidra-user/.ralph/specs/`
-
-The root `.ralph/fix_plan.md` is only a **coarse, phase-level gate** that keeps this
-loop alive and tracks overall progress. The real, fine-grained task lists live in the
-two subdirectory `fix_plan.md` files.
-
-## The one hard rule: never create application code at the root
-All application code, tests, config, Docker, and docs belong inside `vidra-core/` or
-`vidra-user/`. The monorepo root holds only: `.git/`, `.gitignore`, `README.md`,
-`.github/workflows/` (CI), this `.ralph/`, and the two project directories. If you ever
-find yourself about to write a `.go`, `.ts`, `package.json`, `go.mod`, migration, or
-component file at the root, STOP — it belongs in a subdirectory.
+Read each affected repo's `AGENTS.md` and its `.ralph/` instructions where present.
+The meta `.ralph/fix_plan.md` is the coarse platform gate; component fix plans
+hold detailed tasks. A repository milestone is not a completed platform slice.
 
 ## Each loop: procedure
-1. Read this file, the root `.ralph/fix_plan.md`, and **both** subdirectory plans:
-   `vidra-core/.ralph/fix_plan.md` and `vidra-user/.ralph/fix_plan.md`.
+1. Read this file, the meta `.ralph/fix_plan.md`, and each affected component
+   plan where present, including search changes and deployment/recovery impacts.
 2. Choose the single highest-priority **vertical slice** across the whole platform.
    Default priority order:
    - Backend foundations and contracts before the frontend that depends on them.
    - Within a project, follow that project's own fix_plan ordering (P0, P1, …).
    - Prefer unblocking the most downstream work (e.g. a backend endpoint that several
      frontend features wait on).
-3. Identify the **target project** for that slice (`vidra-core` or `vidra-user`).
-4. `cd` into that project and **read its `.ralph/PROMPT.md`, `.ralph/fix_plan.md`, and
-   `.ralph/specs/` first** — those contain the full product, parity, security, testing,
-   and architecture rules for that project. Follow them exactly.
-5. Implement the slice **inside that project directory only** — exactly one project per
-   loop, with no exception (this matches each subdir's own "never touch the sibling"
-   rule). A request that spans both projects becomes two sequential single-project
-   loops, not one cross-project loop.
-   - A backend slice touches `vidra-core/` only.
-   - A frontend slice touches `vidra-user/` only.
-   - When a backend change alters the API contract, record it in
-     `vidra-core/.ralph/specs/` / OpenAPI so the frontend can adapt next loop — do not
-     reach across and edit the frontend yourself.
+3. Identify every affected repository and record the dependency PRs.
+4. Read each affected repo's `AGENTS.md`, `.ralph/PROMPT.md`, `.ralph/AGENT.md`,
+   and relevant specs where present before editing. Use one writer per checkout;
+   concurrent implementers in one repository need isolated worktrees.
+5. Complete one cross-repo vertical slice in dependency order, merging each PR
+   to its repository's `main` before landing the downstream consumer:
+   - `vidra-search`, when its schema or internal API changes: `make ci` + CI.
+   - `vidra-core`: migration + sqlc + service + handler + OpenAPI + unit and
+     tagged integration proof; `make ci` + CI.
+   - `vidra-user`: regenerate via `OPENAPI_PATH=<core checkout>/api/openapi.yaml
+     npm run codegen`; typed endpoint + mounted, navigable UI + `useT()` keys in
+     `en`/`fr` + loading/empty/error states + component and Playwright proof;
+     run typecheck, lint, icon lint, unit tests and required CI.
+   - `vidra`: classify new migrations in `TABLES_ADDED` and the recovery
+     catalogue, review rollback guards for older-code data hazards, and update
+     env templates for changed config; run Python unit and meta gates + CI.
+   Each PR changes one repository, normally fewer than 300 lines. Keep the
+   slice `IN_PROGRESS` and `EXIT_SIGNAL: false` until all required PRs merge.
 6. Run focused tests/lint for the changed project (see its `.ralph/AGENT.md`).
 7. Update that project's `fix_plan.md`, ledgers, and docs to reflect what changed.
-8. Update the root `.ralph/fix_plan.md` coarse gate: tick a phase box only when that
-   whole phase is genuinely complete (`VERIFIED`/done) in the subdirectory plan.
+8. Before ticking a completed slice, run `/council --verify <scope>` and
+   `python3 scripts/ci/check-vertical-slice-completeness.py` from the meta repo.
+   Paste its actual output into the status block, with all affected PR/CI URLs.
+   Tick the coarse gate only when every dependency is merged and verified.
 9. **Commit AND push every loop that ends in a good state.** This is required, not
    optional — each loop must leave its work on the remote:
-   - "Good state" = the changed project's canonical gate is green (`make ci` for
-     `vidra-core`, `npm run ci` for `vidra-user`). Never commit or push a red gate.
+   - "Good state" = each changed repo's gates are green (`make ci` for core/
+     search, frontend gates per `AGENTS.md`, and meta verification gates). Never commit or push a red gate.
    - Use a descriptive, scoped message (`feat(core): …`, `fix(user): …`, etc.).
    - Then `git push` the current branch to its upstream. Pushing is what runs CI,
      which is how local↔CI parity is actually verified — a loop is not complete
@@ -78,10 +72,9 @@ component file at the root, STOP — it belongs in a subdirectory.
      leave work unpushed. **If `git pull --rebase` reports a conflict, run
      `git rebase --abort` (do not resolve or commit), then mark the loop `BLOCKED`
      on the push — never leave a rebase in progress or commit conflict markers.**
-   - **Single writer**: only ONE Ralph loop may run against this repository at a
-     time. `vidra-core` and `vidra-user` share one git history and one `main`, and
-     the pull-rebase-retry above is NOT concurrency-safe — do not run the root
-     orchestrator and a standalone subdir loop simultaneously.
+   - **One writer per checkout**: use isolated worktrees for parallel changes.
+     The four repositories have independent histories; coordinate dependency
+     merges instead of assuming one push updates the platform.
    - Prefer several small, scoped commits across the loop over one loop-end
      mega-commit, and push at least once per loop — unpushed work does not exist.
    - **Done means merged to `main`.** If the loop's work lives on any branch other
@@ -96,7 +89,7 @@ component file at the root, STOP — it belongs in a subdirectory.
      then `git fetch --prune`. Never delete `main`, the current branch, or an
      unmerged branch — report unmerged strays instead of deleting them.
 
-Do one coherent slice per loop. Do not wander between projects within a loop.
+Do one coherent slice per loop; keep its cross-repo work and evidence linked.
 
 ## Frontend rule you must enforce (vidra-user)
 A `vidra-user` feature that creates/updates/deletes data is **NOT done on mocks**.
@@ -116,16 +109,13 @@ pill/rounded shape language, WCAG 2.2 AA with axe as a hard gate). Raw palette
 classes (`zinc-*`, `red-*`, hex) or `dark:` variants in components, a missing
 theme check, or a 390px horizontal overflow are review defects — send them back.
 
-## CI note (monorepo)
-GitHub Actions only reads workflows from the repo root, so CI workflows live in
-`.github/workflows/` and are path-filtered (`vidra-core/**`, `vidra-user/**`). This is
-the only place build/config lives at the root. Updating these workflows is allowed.
-Current workflows include `backend-ci.yml` (build/test/migrate) and `openapi.yml`
-(the backend documentation stop guard: lints `vidra-core/api/openapi.yaml` and runs
-the route↔spec drift check).
+## CI ownership
+Each repository runs its own `.github/workflows/` and `ci-required` gate.
+The meta gate cannot certify a component's required checks. Follow each repo's
+`AGENTS.md` and required-check manifest; change workflows only within task scope.
 
 ## Documentation stop guard (keep docs reflective of the code)
-Documentation is part of done in both projects, updated in the same slice as the
+Documentation is part of done in all affected repositories, updated in the same slice as the
 code it describes — never deferred. The hard rule for the backend: the HTTP API
 contract `vidra-core/api/openapi.yaml` must stay in lock-step with the registered
 routes. Adding, removing, or renaming an endpoint without updating the spec is a
@@ -137,18 +127,16 @@ keep-docs-current expectation applies to `README.md`, `.env.example`, `AGENT.md`
 and the `vidra-user` API client/types. Per-project detail lives in each project's
 `.ralph/PROMPT.md` ("Documentation Requirements").
 
-## Observability stop guard (both projects)
-Logging and tracing ship with the code they describe — not a later phase. Both
-projects must follow their `.ralph/specs/observability.md`:
+## Observability stop guard
+Logging and tracing ship with the code they describe — not a later phase.
+Follow each affected repository's observability rules:
 - **Developer-friendly logging**: one structured logger (slog in `vidra-core`; a
   single logger module in `vidra-user`); no stray `fmt.Print*`/`log.Print*` or
   `console.*` in committed code; request/correlation IDs threaded through.
 - **Security-friendly logging**: never log/trace/label/return secrets, tokens,
   auth headers, message plaintext, or unnecessary PII; redaction helper + audit
-  events for sensitive actions. To be enforced by per-project guards that are
-  **not yet built** (`vidra-core` banned-logging/secrets-in-logs tests — fix_plan
-  P17.2; `vidra-user` ESLint `no-console` + secrets/token checks — frontend not
-  yet scaffolded). Until they land, this is honor-system; building them is tracked work.
+  events for sensitive actions. Run the existing per-repo logging guards and
+  lint; do not treat this older plan as proof that a guard is absent.
 - **OpenTelemetry**: opt-in (`OTEL_ENABLED`), zero-cost when off. `vidra-user`
   injects W3C `traceparent` (+ correlation header) on calls to `vidra-core`, and
   `vidra-core` accepts it, so frontend↔backend traces and logs correlate — this
@@ -194,6 +182,8 @@ FILES_MODIFIED: <number>
 TESTS_STATUS: PASSING | FAILING | NOT_RUN
 WORK_TYPE: IMPLEMENTATION | TESTING | DOCUMENTATION | REFACTORING | DEBUGGING
 EXIT_SIGNAL: false | true
+COMPLETENESS_OUTPUT: <verbatim command output; NOT_RUN with reason if blocked>
+DEPENDENCY_PRS_AND_CI: <repo, PR, merge commit and required-check evidence>
 RECOMMENDATION: <one line: which project + next slice, or the blocker>
 ---END_RALPH_STATUS---
 ```
@@ -201,7 +191,11 @@ RECOMMENDATION: <one line: which project + next slice, or the blocker>
 Set `EXIT_SIGNAL: true` **only when ALL of these hold**:
 - Every blocking (non-Optional) item in `vidra-core/.ralph/fix_plan.md` is complete.
 - Every blocking (non-Optional) item in `vidra-user/.ralph/fix_plan.md` is complete.
-- Every in-scope PeerTube parity item and Vidra extension in both projects is
+- Every affected search and meta requirement is verified, and the cross-repo
+  completeness gate passes (use `--strict-migrations` for release qualification).
+- Release-readiness claims cite real pinned-release CI, recovery-drill, migration,
+  install and vulnerability evidence; missing or unrun gates remain open.
+- Every in-scope PeerTube parity item and Vidra extension is
   `VERIFIED`, `INTENTIONAL_DIFFERENCE`, or user-approved `DEFERRED`.
 - All relevant backend and frontend test/lint/build gates pass.
 - Every in-scope data-mutating frontend flow is proven against the real database.
@@ -210,5 +204,5 @@ Set `EXIT_SIGNAL: true` **only when ALL of these hold**:
   unmerged work branch — and no local or remote branch already merged into
   `origin/main` remains undeleted.
 
-If work remains in **either** project, `EXIT_SIGNAL` must be `false`. Do not exit just
-because one project looks done — keep going on the other.
+If work remains in any affected repository, `EXIT_SIGNAL` must be `false`.
+Report unavailable services, unrun checks and unmerged PRs as open blockers.

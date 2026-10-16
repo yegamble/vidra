@@ -100,8 +100,9 @@ behind it.
   about the shipped limits, and **scanning is off**
   (`MALWARE_SCAN_MODE=disabled` — without it every ingestion route answers
   503 `scanner_not_configured`), so it proves nothing about scanning.
-- **Source builds of the three default branches**, not released images or
-  pinned digests: stack coverage, never release qualification.
+- **Source builds**, from floating main and from the newest recorded release
+  commits in separate matrix lanes. Neither lane tests published image digests
+  or establishes runtime recovery or release qualification.
 - **Local storage**, not S3/Spaces/MinIO, and no CDN, presign or federation.
 - **No degraded-dependency coverage.** The lane boots vidra-search to healthy
   *before* the api, because an api whose first outbox drain fails reschedules
@@ -121,8 +122,9 @@ behind it.
 
 ## Hard rules
 
-1. **One small PR per session.** Deploy tooling failures cost real downtime —
-   keep diffs surgical and explain the failure mode each change closes.
+1. **One small PR per concern.** Keep each PR in one repo and explain the
+   failure mode it closes. Cross-repo slices may use several linked PRs; keep
+   the slice open until every required dependency is merged and verified.
 2. **Ordering in `deploy/deploy.sh` is sacred**: pre-deploy dump (abort on
    failure) → pull → migrate as discrete exit-code-gated steps → `up -d
    --no-build` → health probes. Never fold migrations into `up -d`.
@@ -174,13 +176,14 @@ These rules bind every AI tool working in this repo (Claude, Jules, Codex, …):
    on, or an unmerged branch — an unmerged stray is reported for triage, not
    deleted.
 
-**Enforcement:** `.claude/hooks/finished-means-merged.sh` runs as a Claude Code
-`Stop` hook and refuses to let a session end while any repo here has
-uncommitted tracked changes or unpushed commits. It ignores untracked files (so
-`env/*.env` never trips it), skips detached checkouts (the pinned nested repos),
-and gives up after 3 attempts. It is Claude-only — Jules, Codex and every other
-tool are bound by the rules above regardless, with nothing mechanical to catch
-them.
+**Enforcement:** `.claude/hooks/finished-means-merged.sh` is a Claude Code
+`Stop` hook. It checks tracked dirty state even on detached checkouts, refreshes
+`origin/main`, and blocks non-main branches or commits absent from main.
+`SessionStart` records immutable core/user SHAs; Stop uses `--baseline-file`
+so unchanged static debt is separate but newly merged debt still blocks.
+Missing snapshots trigger full inventory; contract/type checks always run.
+`MAX_BLOCKS=6` caps reminders, never bypasses failure. Other AI tools obey
+these completion rules even though the hook runs only in Claude.
 
 ## Layout
 

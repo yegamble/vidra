@@ -47,7 +47,10 @@ class FakeRun:
             # Real psql output carries compose's own stderr lines; so does this.
             return '[compose] docker compose exec -T postgres psql\n' + '\n'.join(found) + '\n'
         if "NOT LIKE 'enc:%'" in query:                  # the sealed-credential check
-            return '[compose] docker compose exec -T postgres psql\n' + self.unsealed
+            answer = self.unsealed
+            if isinstance(answer, dict):
+                answer = next((n for table, n in answer.items() if f'FROM {table} ' in query), '0')
+            return '[compose] docker compose exec -T postgres psql\n' + answer
         for table, version in self.ledgers.items():
             if f'FROM {table}' in query:
                 return f'{version}|f'
@@ -213,8 +216,7 @@ class FingerprintTest(unittest.TestCase):
 class SchemaShapeTest(unittest.TestCase):
     """One key that notices a table or column lost ANYWHERE in `public`.
 
-    Only 20 of vidra-core's ~109 tables are catalogued, and the audit floor is
-    147, so a restore that lost `instance_settings`, `audit_log`, `reports`,
+    The audit floor is 147, so a restore that lost `instance_settings`, `audit_log`, `reports`,
     `user_blocks`, `watched_words`, `sessions`, `notifications` or
     `remote_videos` would still report every catalogued fingerprint intact. This
     key carries no row data — it is the column inventory of `public` — so it
@@ -367,10 +369,10 @@ class MailConfigCatalogueTest(unittest.TestCase):
         self.assertIn('mail_config', rows)
         self.assertIn('public.mail_config', ' '.join(FakeRun().relations(151)))
 
-    def test_a_152_candidate_is_refused_naming_the_migration_to_read(self):
+    def test_a_183_candidate_is_refused_naming_the_migration_to_read(self):
         with self.assertRaises(ValueError) as raised:
-            recovery.catalogue_for(152)
-        self.assertIn('0152', str(raised.exception))
+            recovery.catalogue_for(183)
+        self.assertIn('0183', str(raised.exception))
 
     def test_a_150_candidate_runs_no_sealed_check(self):
         run = FakeRun()
@@ -416,6 +418,41 @@ class MailConfigCatalogueTest(unittest.TestCase):
         dumped = json.dumps(rows)
         self.assertNotIn('enc:', dumped)
         self.assertRegex(rows['mail_config'], r'^[0-9]+\|[0-9a-f]{32}$')
+
+
+class RecentCatalogueTest(unittest.TestCase):
+    def test_schema_182_requires_new_content_and_operator_configuration(self):
+        lost = ('public.report_messages', 'public.blocklist_allowlist', 'public.oidc_providers')
+        run = FakeRun(present=[r for r in FakeRun().relations(182) if r not in lost])
+        with self.assertRaises(ValueError) as raised:
+            recovery.fingerprint(run, 182)
+        for table in lost:
+            self.assertIn(table, str(raised.exception))
+        self.assertEqual(len(run.queries), 1, 'missing tables must refuse before hashing')
+
+    def test_new_secret_checks_start_only_when_the_candidate_has_the_table(self):
+        for table, column, since in (('instance_actor_keys', 'private_key_pem', 166),
+                                     ('oidc_providers', 'client_secret', 182)):
+            with self.subTest(table=table):
+                before = FakeRun()
+                recovery.fingerprint(before, since - 1)
+                self.assertNotIn(table, ' '.join(before.queries))
+                after = FakeRun(unsealed={table: '1'})
+                with self.assertRaisesRegex(ValueError, f'{table}.{column}'):
+                    recovery.fingerprint(after, since)
+                # A count-only predicate may inspect the envelope class; the
+                # secret value must never be selected into a command log.
+                self.assertIn(recovery.unsealed_sql(table, column), after.queries)
+
+    def test_new_secret_values_are_replaced_by_their_class_before_hashing(self):
+        for table, column in (('instance_actor_keys', 'private_key_pem'),
+                              ('oidc_providers', 'client_secret')):
+            with self.subTest(table=table):
+                query = recovery.fingerprint_sql(table, (), recovery.SEALED[table])
+                self.assertIn(f"to_jsonb(t) - ARRAY['{column}']::text[]", query)
+                self.assertIn(f"'{column}', CASE WHEN t.{column} = '' THEN 'none'", query)
+                rows = recovery.fingerprint(FakeRun(), 182)
+                self.assertNotIn('enc:', json.dumps(rows))
 
 
 class CatalogueRotTest(unittest.TestCase):
