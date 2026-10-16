@@ -43,7 +43,15 @@ it is not the Stop-hook baseline.
 
 The Stop hook also refreshes each repo's `origin/main`, checks actual commit
 containment, dirty tracked files (including detached checkouts), upstream
-pushes, and non-main branches. `MAX_BLOCKS=6` caps the reminder counter only:
+pushes, and non-main branches. Every required repository must be present, and
+every audited HEAD must equal its freshly fetched `origin/main`. An older
+detached release pin can have valid ancestry but cannot certify latest-main
+completeness. Keep deployment pins intact; configure separate current development
+audit worktrees through `CLAUDE_PROJECT_DIR` / `VIDRA_*_ROOT` before SessionStart.
+The immutable baseline binds those paths, so changing roots mid-session does
+not fix an audit. Update only dedicated development sources when they fall
+behind; the hook never switches or advances a checkout.
+`MAX_BLOCKS=6` caps the reminder counter only:
 failed verification continues blocking after six attempts. A blocked merge is
 reported as **open — awaiting merge**. This does not authorize committing
 someone else's changes, and untracked local environment secrets are ignored.
