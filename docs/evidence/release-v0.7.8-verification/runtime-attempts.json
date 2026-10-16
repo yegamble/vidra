@@ -1,0 +1,507 @@
+{
+  "schema_version": 1,
+  "scope": "Actual published-image hosted attempts; failed attempts are retained. Each successful result qualifies only its documented synthetic subset.",
+  "attempts": [
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38933507608,
+        "tool_commit": "fabaac468a7d96969a60cae84cad18ba31749e08"
+      },
+      "informational_only": true,
+      "kind": "rec03",
+      "missing": [],
+      "roles": {
+        "source": {
+          "job_result": "failure",
+          "sha256": "088a03408ed8d69bb7300b893c5ba7a70a46d86a7117fa1834fbeb30855b2c31",
+          "verdict": {
+            "failed_phase": "install",
+            "failure": "missing running image services",
+            "installer_commit": "fabaac468a7d96969a60cae84cad18ba31749e08",
+            "pair": [
+              "v0.7.7",
+              "v0.7.8"
+            ],
+            "phases": {},
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "status": "FAIL"
+          }
+        }
+      },
+      "status": "FAIL"
+    },
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "release": "v0.7.8",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38933537741,
+        "tool_commit": "fabaac468a7d96969a60cae84cad18ba31749e08"
+      },
+      "informational_only": true,
+      "kind": "sealed",
+      "missing": [
+        "replacement"
+      ],
+      "roles": {
+        "replacement": {
+          "job_result": "skipped"
+        },
+        "source": {
+          "job_result": "failure",
+          "sha256": "48754ac976d164b1e228f142646f98d6f5685dba70d171121abd88abd82acf3a",
+          "verdict": {
+            "phase": "fixture",
+            "scope": "published-image synthetic cross-VM sealed-secret subset",
+            "status": "FAIL",
+            "synthetic_only": true
+          }
+        }
+      },
+      "status": "INCOMPLETE"
+    },
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38937708685,
+        "tool_commit": "94bed8fa4dc54b2ef9643008713ed7553340abd2"
+      },
+      "informational_only": true,
+      "kind": "rec03",
+      "missing": [],
+      "roles": {
+        "source": {
+          "job_result": "failure",
+          "sha256": "3ac85e5f2147f81ccfc2b3bfa13c1d5a962157708e69080bc8311c719a548ac2",
+          "verdict": {
+            "diagnostics": {
+              "install_steps": {
+                "deploy": 0,
+                "installer": 0,
+                "provision": 0,
+                "setup": 0,
+                "setup_check": 0
+              },
+              "probe_statuses": {
+                "healthz": 200,
+                "instance": 200,
+                "site": 200,
+                "watch": 200
+              },
+              "running_services": [
+                "api",
+                "caddy",
+                "frontend",
+                "postgres",
+                "redis",
+                "search"
+              ]
+            },
+            "failed_phase": "upgrade-fail",
+            "failure": "migration conflict not observed",
+            "installer_commit": "94bed8fa4dc54b2ef9643008713ed7553340abd2",
+            "pair": [
+              "v0.7.7",
+              "v0.7.8"
+            ],
+            "phases": {
+              "backup": {
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "data": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "fp": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "inject": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "install": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              }
+            },
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "status": "FAIL"
+          }
+        }
+      },
+      "status": "FAIL"
+    },
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38940381561,
+        "tool_commit": "8950662a4a26b196e04416e8ee532dd619a195f3"
+      },
+      "informational_only": true,
+      "kind": "rec03",
+      "missing": [],
+      "roles": {
+        "source": {
+          "job_result": "failure",
+          "sha256": "0f3d13e9de27f1555c6043b8c1b25c0e9a2b38a15fecf784753534e857fc3f82",
+          "verdict": {
+            "diagnostics": {
+              "install_steps": {
+                "deploy": 0,
+                "installer": 0,
+                "provision": 0,
+                "setup": 0,
+                "setup_check": 0
+              },
+              "probe_statuses": {
+                "healthz": 200,
+                "instance": 200,
+                "site": 200,
+                "watch": 200
+              },
+              "running_services": [
+                "api",
+                "caddy",
+                "frontend",
+                "postgres",
+                "redis",
+                "search",
+                "worker"
+              ]
+            },
+            "failed_phase": "split",
+            "failure": "split worker not proven",
+            "installer_commit": "8950662a4a26b196e04416e8ee532dd619a195f3",
+            "pair": [
+              "v0.7.7",
+              "v0.7.8"
+            ],
+            "phases": {
+              "backup": {
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "backup2": {
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "data": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "fp": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "inject": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "install": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "recover": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "repin": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "restore-ok": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "restore-refuse": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "rollback": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "upgrade-fail": {
+                "ledger": "core=152:true search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              }
+            },
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "status": "FAIL"
+          }
+        }
+      },
+      "status": "FAIL"
+    },
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "release": "v0.7.8",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38940385591,
+        "tool_commit": "8950662a4a26b196e04416e8ee532dd619a195f3"
+      },
+      "informational_only": true,
+      "kind": "sealed",
+      "missing": [
+        "replacement"
+      ],
+      "roles": {
+        "replacement": {
+          "job_result": "skipped"
+        },
+        "source": {
+          "job_result": "failure",
+          "sha256": "6a6b8efcfffd32e818ea8d94a396733dfff7f34f3a39b11654b2d39cc22bbc26",
+          "verdict": {
+            "diagnostics": {
+              "readyz_status": 200,
+              "services": {
+                "api": "healthy",
+                "frontend": "healthy",
+                "postgres": "healthy",
+                "redis": "healthy",
+                "search": "healthy"
+              }
+            },
+            "phase": "api-fixture",
+            "scope": "published-image synthetic cross-VM sealed-secret subset",
+            "status": "FAIL",
+            "synthetic_only": true
+          }
+        }
+      },
+      "status": "INCOMPLETE"
+    },
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "release": "v0.7.8",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38943219095,
+        "tool_commit": "cce26c92690768ef612db6802b70df12b67ba88a"
+      },
+      "informational_only": true,
+      "kind": "sealed",
+      "missing": [],
+      "roles": {
+        "replacement": {
+          "job_result": "failure",
+          "sha256": "37a59f35d7ead9c68770cd69917790f36b2284a2585f6763577e9cb4e83a2926",
+          "verdict": {
+            "diagnostics": {
+              "services": {
+                "api": "missing",
+                "frontend": "missing",
+                "postgres": "starting",
+                "redis": "starting",
+                "search": "missing"
+              }
+            },
+            "phase": "restore",
+            "scope": "published-image synthetic cross-VM sealed-secret subset",
+            "status": "FAIL",
+            "synthetic_only": true
+          }
+        },
+        "source": {
+          "job_result": "success",
+          "sha256": "5bfa64470d1d733c684a40cf73ced102c7aade688ba351eb8c80913a9908db11",
+          "verdict": {
+            "core_schema": 182,
+            "external_delivery_blocked": true,
+            "phase": "complete",
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "release": "v0.7.8",
+            "scope": "published-image synthetic cross-VM sealed-secret subset",
+            "search_schema": 18,
+            "status": "PASS",
+            "synthetic_only": true,
+            "tool_commit": "cce26c92690768ef612db6802b70df12b67ba88a"
+          }
+        }
+      },
+      "status": "FAIL"
+    },
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38944885813,
+        "tool_commit": "07afa5a4d9c9ab5d137a1c7875d3a1e3a999c238"
+      },
+      "informational_only": true,
+      "kind": "rec03",
+      "missing": [],
+      "roles": {
+        "source": {
+          "job_result": "success",
+          "sha256": "4b5aaef8099825c802d8fd6ca0c1cd7aca5cf30a1341ade28d9be0b19ae1c1c3",
+          "verdict": {
+            "installer_commit": "07afa5a4d9c9ab5d137a1c7875d3a1e3a999c238",
+            "pair": [
+              "v0.7.7",
+              "v0.7.8"
+            ],
+            "phases": {
+              "backup": {
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "backup2": {
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "data": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "fp": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "inject": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "install": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "recover": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "repin": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "report": {
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "restore-ok": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "restore-refuse": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "rollback": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "split": {
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "upgrade-fail": {
+                "ledger": "core=152:true search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              }
+            },
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "status": "PASS"
+          }
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "release": "v0.7.8",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38945689909,
+        "tool_commit": "198391e335d756f656d4049e6ec39ca336b91657"
+      },
+      "informational_only": true,
+      "kind": "sealed",
+      "missing": [],
+      "roles": {
+        "replacement": {
+          "job_result": "success",
+          "sha256": "777765e066ecb9ed8193600bf75859b98110cd81ca31581898baee89bcefbf91",
+          "verdict": {
+            "backup_hash_match": true,
+            "core_schema": 182,
+            "different_runner_boot": true,
+            "empty_destination": true,
+            "external_delivery_blocked": true,
+            "mail_secret_status": "ok",
+            "mfa_correct_code_accepted": true,
+            "mfa_wrong_code_refused": true,
+            "oidc_disabled": true,
+            "oidc_secret_status": "ok",
+            "phase": "complete",
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "release": "v0.7.8",
+            "schema_and_catalogue_match": true,
+            "scope": "published-image synthetic cross-VM sealed-secret subset",
+            "search_schema": 18,
+            "status": "PASS",
+            "synthetic_only": true,
+            "tool_commit": "198391e335d756f656d4049e6ec39ca336b91657",
+            "wrong_key_refused": true
+          }
+        },
+        "source": {
+          "job_result": "success",
+          "sha256": "629323b05fcea9a42ced0c04f707a10ffc6a5c0df3046f3458afd23d8e526334",
+          "verdict": {
+            "core_schema": 182,
+            "external_delivery_blocked": true,
+            "phase": "complete",
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "release": "v0.7.8",
+            "scope": "published-image synthetic cross-VM sealed-secret subset",
+            "search_schema": 18,
+            "status": "PASS",
+            "synthetic_only": true,
+            "tool_commit": "198391e335d756f656d4049e6ec39ca336b91657"
+          }
+        }
+      },
+      "status": "PASS"
+    }
+  ]
+}

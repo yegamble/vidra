@@ -7,7 +7,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import peertube_release_acceptance as p
 import peertube_release_checks as checks
@@ -20,6 +20,45 @@ from peertube_release_export import collect_secrets, env_secrets, json_values, o
 ROOT = Path(__file__).resolve().parents[1]
 B2_SPEC = {'bucket': 'vidra-acceptance-v065-20260914-media', 'bucket_id': 'e565124b996984e8a7070215',
            'region': 'us-east-005', 'endpoint': 's3.us-east-005.backblazeb2.com'}
+
+
+class SourceSchemaMarkerTests(unittest.TestCase):
+    def test_refusal_uses_1041_and_restore_requires_that_exact_marker(self):
+        source = Mock(side_effect=['970', '', '1041', '1041', '', '970'])
+        result = {}
+        checks.change_source_marker(source, 'schema-unsupported', result)
+        self.assertEqual(result, {'before': '970', 'after': '1041'})
+        checks.change_source_marker(source, 'schema-restore', result)
+        self.assertEqual(result, {'before': '1041', 'after': '970'})
+        writes = [call.args[0] for call in source.call_args_list if call.args[0].startswith('UPDATE ')]
+        self.assertEqual(writes, ['UPDATE application SET "migrationVersion"=1041',
+                                  'UPDATE application SET "migrationVersion"=970'])
+
+    def test_supported_boundary_and_foreign_markers_are_refused_before_any_write(self):
+        for action in ('schema-unsupported', 'schema-restore'):
+            for marker in ('1040', '0', '1042', '970\n1041',
+                           '1041' if action == 'schema-unsupported' else '970'):
+                with self.subTest(action=action, marker=marker):
+                    source = Mock(return_value=marker)
+                    result = {}
+                    with self.assertRaisesRegex(ValueError, 'unexpected clone schema marker'):
+                        checks.change_source_marker(source, action, result)
+                    self.assertEqual(result, {'before': marker})
+                    self.assertEqual(source.call_count, 1)
+                    self.assertTrue(source.call_args.args[0].startswith('SELECT '))
+
+    def test_failed_marker_write_and_unknown_actions_cannot_pass(self):
+        for action, before in (('schema-unsupported', '970'), ('schema-restore', '1041')):
+            with self.subTest(action=action):
+                source = Mock(side_effect=[before, '', before])
+                result = {}
+                with self.assertRaisesRegex(ValueError, 'source marker update failed'):
+                    checks.change_source_marker(source, action, result)
+                self.assertEqual(result, {'before': before, 'after': before})
+        source = Mock()
+        with self.assertRaisesRegex(ValueError, 'invalid schema marker action'):
+            checks.change_source_marker(source, 'reconcile', {})
+        source.assert_not_called()
 
 
 class PeerTubeReleaseTests(unittest.TestCase):

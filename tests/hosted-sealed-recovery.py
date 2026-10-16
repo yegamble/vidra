@@ -14,6 +14,7 @@ from blank_server_smoke import require
 import recovery_release_acceptance as recovery
 import release_acceptance as runtime
 from sealed_recovery_host import Host, INSTALL
+from sealed_recovery_relay import readiness_relay
 import sealed_recovery_support as support
 
 SCOPE = 'published-image synthetic cross-VM sealed-secret subset'
@@ -52,6 +53,13 @@ def no_smtp_listener(host):
               '/proc/net/tcp', '/proc/net/tcp6'], 'no-loopback-smtp-listener')
 
 
+def restore_dump(host, dump, result):
+    result['phase'] = 'restore-relay'
+    with readiness_relay(host):
+        result['phase'] = 'restore'
+        host.run(['bash', 'deploy/restore.sh', '--yes', str(dump)], 'published-restore', timeout=1800)
+
+
 def execute(args, result, hosts):
     require(support.head(support.ROOT) == args.tool_commit and re.fullmatch(r'[0-9a-f]{40}', args.tool_commit),
             'tool commit must be immutable and match checkout')
@@ -80,13 +88,14 @@ def execute(args, result, hosts):
     else:
         host.configure()
     host.pin_and_check()
-    result['phase'] = 'restore' if payload else 'migrations'
+    result['phase'] = 'restore-infrastructure' if payload else 'migrations'
     host.compose('up', '-d', 'postgres', 'redis')
     fixture = host.private / 'fixture.json'
     if payload:
+        host.wait_restore_dependencies()
         fixture.write_bytes((payload / 'fixture.json').read_bytes())
         fixture.chmod(0o600)
-        host.run(['bash', 'deploy/restore.sh', '--yes', str(payload / 'backup.dump.gz')], 'published-restore', timeout=1800)
+        restore_dump(host, payload / 'backup.dump.gz', result)
         result['phase'] = 'restore-ready'
         host.ready()
         no_smtp_listener(host)

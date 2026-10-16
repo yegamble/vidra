@@ -14,6 +14,9 @@ spec.loader.exec_module(runner)
 FP = 'orig=1111111111111111 master=2222222222222222 renditions=720,480 segsha=3333333333333333 state=published'
 DATA = {'fp': FP, 'counts': 'users=1 channels=1 videos=1 titles=fixture'}
 IMAGES = 'ghcr.io/yegamble/vidra-core:v0.7.7;ghcr.io/yegamble/vidra-user:v0.7.7;ghcr.io/yegamble/vidra-search:v0.7.3;'
+MIGRATION_EVENT = {'level': 'ERROR', 'msg': 'migrate failed',
+                   'error': 'dbmigrate: apply migrations: migration failed: column "is_sensitive" of relation "remote_videos" already exists'}
+MIGRATION_LOG = json.dumps(MIGRATION_EVENT)
 
 
 class Verdict(unittest.TestCase):
@@ -22,7 +25,7 @@ class Verdict(unittest.TestCase):
                 'probe': runner.PROBE, 'images': IMAGES, 'fp': FP, **changes}
 
     def check_upgrade(self, **changes):
-        return runner.verify('upgrade-fail', self.upgrade(**changes), {'data': DATA}, 'column "is_sensitive" already exists')
+        return runner.verify('upgrade-fail', self.upgrade(**changes), {'data': DATA}, MIGRATION_LOG)
 
     def test_actual_first_migration_failure_is_required(self):
         self.assertEqual(self.check_upgrade()['status'], 'PASS')
@@ -32,6 +35,32 @@ class Verdict(unittest.TestCase):
                 self.check_upgrade(**change)
         with self.assertRaises(AssertionError):
             runner.verify('upgrade-fail', self.upgrade(), {'data': DATA}, 'network failure')
+
+    def test_published_json_conflict_is_decoded_without_exporting_private_fields(self):
+        log = '\n'.join(('unrelated deploy progress', '{malformed JSON',
+            json.dumps({'level': 'INFO', 'msg': 'migrating'}),
+            json.dumps({**MIGRATION_EVENT, 'private': 'private-canary'})))
+        self.assertIn('\\"is_sensitive\\"', log)
+        self.assertIsNone(runner.re.search(r'column "is_sensitive".*already exists', log))
+        verdict = runner.verify('upgrade-fail', self.upgrade(), {'data': DATA}, log)
+        self.assertEqual(verdict['status'], 'PASS')
+        self.assertNotIn('private-canary', json.dumps(verdict))
+
+    def test_unrelated_or_malformed_conflicts_cannot_pass(self):
+        errors = (MIGRATION_EVENT['error'].replace('is_sensitive', 'different_column'),
+                  MIGRATION_EVENT['error'].replace('remote_videos', 'different_table'),
+                  MIGRATION_EVENT['error'].replace('already exists', 'does not exist'),
+                  MIGRATION_EVENT['error'].removeprefix('dbmigrate: apply migrations: '),
+                  None, 1, ['private-canary'])
+        events = [{**MIGRATION_EVENT, 'error': error} for error in errors]
+        events += [{**MIGRATION_EVENT, 'level': 'INFO'}, {**MIGRATION_EVENT, 'msg': 'request failed'},
+                   {'level': 'ERROR', 'msg': 'migrate failed', 'other': MIGRATION_EVENT['error']},
+                   list(MIGRATION_EVENT.values())]
+        logs = [json.dumps(event) for event in events]
+        logs += [MIGRATION_EVENT['error'], MIGRATION_LOG[:-1], json.dumps(MIGRATION_LOG)]
+        for log in logs:
+            with self.subTest(log=log), self.assertRaisesRegex(runner.Failure, 'migration conflict not observed'):
+                runner.verify('upgrade-fail', self.upgrade(), {'data': DATA}, log)
 
     def test_corrupt_or_empty_media_cannot_become_the_baseline(self):
         for bad in (FP.replace('1111111111111111', 'e3b0c44298fc1c14'), FP.replace('published', 'draft')):
@@ -59,15 +88,30 @@ class Verdict(unittest.TestCase):
             facts = self.upgrade()
             del facts[field]
             with self.assertRaises(AssertionError):
-                runner.verify('upgrade-fail', facts, {'data': DATA}, 'column "is_sensitive" already exists')
+                runner.verify('upgrade-fail', facts, {'data': DATA}, MIGRATION_LOG)
 
-    def test_split_needs_a_published_worker_and_an_idle_api(self):
-        facts = {'deploy_exit': '0', 'probe': runner.PROBE, 'workers': '1', 'images': IMAGES.replace('v0.7.7', 'v0.7.8').replace('v0.7.3', 'v0.7.8'),
-                 'video2_state': 'published', 'api_ffmpeg_mentions': '0'}
+    def split(self, **changes):
+        return {'deploy_exit': '0', 'probe': runner.PROBE, 'images': IMAGES.replace('v0.7.7', 'v0.7.8').replace('v0.7.3', 'v0.7.8'),
+                'video2_state': 'published', 'video2_packaging': 'cmaf', 'video2_fp': FP, **changes}
+
+    def test_split_needs_published_cmaf_media_before_executor_checks(self):
+        facts = self.split()
         self.assertEqual(runner.verify('split', facts, {}, '')['status'], 'PASS')
-        for change in ({'workers': '0'}, {'video2_state': 'failed'}, {'api_ffmpeg_mentions': '1'}):
+        for change in ({'video2_packaging': 'hls-ts'}, {'video2_state': 'failed'}, {'video2_fp': ''}):
             with self.assertRaises(AssertionError):
                 runner.verify('split', {**facts, **change}, {}, '')
+
+    def test_no_split_pass_until_persisted_executor_proof_passes(self):
+        records, containers, _, inspect = RunningImages().fixture('split')
+        proof = runner.rec03_split_proof
+        with patch.object(proof, 'verify', side_effect=proof.Invalid()) as validate:
+            with self.assertRaisesRegex(runner.Failure, 'split worker not proven'):
+                runner.verify_phase('split', self.split(), {}, '', records, inspect)
+            self.assertEqual(validate.call_args.args[:3], (self.split(),
+                {row['Config']['Labels']['com.docker.compose.service']: row for row in containers}, records['v0.7.8']['components']['core']))
+        with patch.object(proof, 'verify') as validate:
+            self.assertEqual(runner.verify_phase('split', self.split(), {}, '', records, inspect)['status'], 'PASS')
+            validate.assert_called_once()
 
     def test_bad_input_writes_only_a_safe_failure_before_host_calls(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'REC03_RECORD_REF': 'private-canary'}), \

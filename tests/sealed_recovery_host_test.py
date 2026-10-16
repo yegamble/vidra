@@ -1,12 +1,13 @@
 """Published archive/config boundaries without invoking Docker or a live host."""
 import io
 import hashlib
+import json
 from pathlib import Path
 import re
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import sealed_recovery_host as host
 
@@ -16,7 +17,7 @@ class FixtureHostBoundaryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             fixture = host.Host(Path(temporary), {}, {})
             states = 'api\trestarting\t\nsearch\trunning\thealthy\nfrontend\trunning\tstarting\npostgres\texited\t\n'
-            with patch.object(host.recovery, 'http', return_value={'status': 503, 'body': 'PRIVATE_CANARY'}), \
+            with patch.object(fixture, 'readyz_status', return_value=503), \
                     patch.object(fixture, 'run', return_value=states) as run:
                 facts = fixture.failure_diagnostics()
             self.assertEqual(facts, {'readyz_status': 503, 'services': {'api': 'restarting', 'search': 'healthy',
@@ -30,10 +31,10 @@ class FixtureHostBoundaryTest(unittest.TestCase):
             fixture = host.Host(Path(temporary), {}, {})
             for output in ('api\trunning\tPRIVATE_CANARY\n', 'PRIVATE_CANARY\trunning\thealthy\n',
                            'api\trunning\thealthy\napi\texited\t\n', 'PRIVATE_CANARY'):
-                with self.subTest(output=output), patch.object(host.recovery, 'http', return_value={'status': None}), \
+                with self.subTest(output=output), patch.object(fixture, 'readyz_status', return_value=None), \
                         patch.object(fixture, 'run', return_value=output):
                     self.assertEqual(fixture.failure_diagnostics(), {'readyz_status': 0})
-            with patch.object(host.recovery, 'http', side_effect=ValueError('PRIVATE_CANARY')), \
+            with patch.object(fixture, 'readyz_status', side_effect=ValueError('PRIVATE_CANARY')), \
                     patch.object(fixture, 'run', side_effect=ValueError('PRIVATE_CANARY')):
                 self.assertEqual(fixture.failure_diagnostics(), {})
 
@@ -156,6 +157,98 @@ class FixtureHostBoundaryTest(unittest.TestCase):
         model['services']['api']['networks']['external'] = {}
         with self.assertRaises(ValueError):
             host.check_isolation(model)
+
+
+class RestoreDependenciesTest(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.fixture = host.Host(Path(temporary.name), {}, {})
+        self.ids = ['a' * 64, 'b' * 64]
+        self.containers = [{'Id': cid, 'Config': {'Labels': {'com.docker.compose.service': service,
+            'com.docker.compose.project': self.fixture.env['COMPOSE_PROJECT_NAME']}},
+            'State': {'Running': True, 'Restarting': False, 'Health': {'Status': 'healthy'}}}
+            for cid, service in zip(self.ids, ('postgres', 'redis'))]
+
+        def observe(args, label, timeout):
+            self.assertEqual(timeout, 10)
+            if args[:2] == ['bash', 'deploy/compose.sh']:
+                self.assertEqual(args[2:], ['ps', '-q', 'postgres', 'redis'])
+                return '\n'.join(self.ids)
+            self.assertEqual(args, ['docker', 'inspect', *self.ids])
+            return json.dumps(self.containers)
+
+        self.fixture.run = Mock(side_effect=observe)
+
+    def wait(self, pause=lambda _: None, ticks=(0, 301)):
+        actual = host.runtime.wait_for_health
+        with patch.object(host.runtime, 'wait_for_health', side_effect=lambda probe, timeout:
+                actual(probe, timeout=timeout, clock=iter(ticks).__next__, pause=pause)) as wait:
+            result = self.fixture.wait_restore_dependencies()
+            self.assertEqual(wait.call_args.kwargs['timeout'], 300)
+            return result
+
+    def test_starting_dependencies_are_polled_until_both_are_healthy(self):
+        for container in self.containers:
+            container['State']['Health']['Status'] = 'starting'
+        changes = iter(self.containers)
+
+        def become_healthy(seconds):
+            self.assertEqual(seconds, 2)
+            container = next(changes)
+            container['State']['Health']['Status'] = 'healthy'
+            if container is self.containers[1]:
+                self.ids[1] = container['Id'] = 'c' * 64
+
+        self.assertEqual(self.wait(become_healthy, (0, 1, 2)), {'postgres': 'healthy', 'redis': 'healthy'})
+        self.assertEqual(self.fixture.run.call_count, 6)
+
+    def test_missing_unknown_unhealthy_stopped_or_restarting_dependency_never_passes(self):
+        states = [{}, {'Running': True, 'Restarting': False},
+            {'Running': True, 'Restarting': False, 'Health': {}},
+            {'Running': True, 'Restarting': False, 'Health': None},
+            *({'Running': True, 'Restarting': False, 'Health': {'Status': value}}
+              for value in ('starting', 'unhealthy', 'unknown')),
+            {'Running': False, 'Restarting': False, 'Health': {'Status': 'healthy'}},
+            {'Running': True, 'Restarting': True, 'Health': {'Status': 'healthy'}},
+            {'Running': 1, 'Restarting': False, 'Health': {'Status': 'healthy'}},
+            {'Running': True, 'Restarting': 0, 'Health': {'Status': 'healthy'}},
+            {'Running': True, 'Health': {'Status': 'healthy'}}]
+        for container in self.containers:
+            original = container['State']
+            for state in states:
+                with self.subTest(service=container['Id'], state=state):
+                    try:
+                        container['State'] = state
+                        with self.assertRaisesRegex(ValueError, 'runtime health timeout'):
+                            self.wait()
+                    finally:
+                        container['State'] = original
+
+    def test_missing_duplicate_or_excess_compose_ids_never_reach_inspect(self):
+        for ids in [[], self.ids[:1], [self.ids[0]] * 2, self.ids + ['c' * 64]]:
+            with self.subTest(ids=ids):
+                self.ids = ids
+                self.fixture.run.reset_mock()
+                with self.assertRaisesRegex(ValueError, 'runtime health timeout'):
+                    self.wait()
+                self.assertEqual(self.fixture.run.call_count, 1)
+
+    def test_stale_duplicate_foreign_or_missing_inspection_proofs_are_refused(self):
+        for mutate in [lambda: self.containers[0].update(Id='c' * 64),
+                       lambda: self.containers[0].update(Id=self.ids[1]),
+                       lambda: self.containers.pop(), lambda: self.containers.append(self.containers[0]),
+                       lambda: self.containers[0]['Config']['Labels'].update({'com.docker.compose.project': 'foreign'}),
+                       lambda: self.containers[0]['Config']['Labels'].update({'com.docker.compose.service': 'api'}),
+                       lambda: self.containers[0]['Config']['Labels'].update({'com.docker.compose.service': 'redis'}),
+                       lambda: self.containers[0]['Config']['Labels'].clear()]:
+            original = json.loads(json.dumps(self.containers))
+            try:
+                mutate()
+                with self.subTest(mutation=mutate), self.assertRaises(ValueError):
+                    self.wait()
+            finally:
+                self.containers = original
 
 
 if __name__ == '__main__':
