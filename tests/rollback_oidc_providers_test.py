@@ -63,7 +63,10 @@ class RollbackOidcProvidersGateTests(unittest.TestCase):
         for name in ('rollback.sh', 'lib.sh', 'checkout-hygiene.py', 'backup-env.sh',
                      'release-mapping.py'):
             shutil.copyfile(ROOT / 'deploy' / name, self.tree / 'deploy' / name)
-        shutil.copytree(ROOT / 'releases', self.tree / 'releases')
+        # Keep the synthetic rollback history independent of new real releases.
+        (self.tree / 'releases').mkdir()
+        shutil.copyfile(ROOT / 'releases' / 'v0.7.7.json',
+                        self.tree / 'releases' / 'v0.7.7.json')
         (self.tree / 'vidra-bundle.manifest').write_text('tag=v0.8.1\ncore_schema_version=0182\n')
         self.env_file = self.tree / 'env/production.env'
         self.env_file.write_text('VIDRA_TLS_MODE=external\nPOSTGRES_USER=vidra\nPOSTGRES_DB=vidra\n'
