@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "scope": "Actual published-image hosted attempts; failed attempts are retained. No release qualification follows from these results.",
+  "attempts": [
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38933507608,
+        "tool_commit": "fabaac468a7d96969a60cae84cad18ba31749e08"
+      },
+      "informational_only": true,
+      "kind": "rec03",
+      "missing": [],
+      "roles": {
+        "source": {
+          "job_result": "failure",
+          "sha256": "088a03408ed8d69bb7300b893c5ba7a70a46d86a7117fa1834fbeb30855b2c31",
+          "verdict": {
+            "failed_phase": "install",
+            "failure": "missing running image services",
+            "installer_commit": "fabaac468a7d96969a60cae84cad18ba31749e08",
+            "pair": [
+              "v0.7.7",
+              "v0.7.8"
+            ],
+            "phases": {},
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "status": "FAIL"
+          }
+        }
+      },
+      "status": "FAIL"
+    },
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "release": "v0.7.8",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38933537741,
+        "tool_commit": "fabaac468a7d96969a60cae84cad18ba31749e08"
+      },
+      "informational_only": true,
+      "kind": "sealed",
+      "missing": [
+        "replacement"
+      ],
+      "roles": {
+        "replacement": {
+          "job_result": "skipped"
+        },
+        "source": {
+          "job_result": "failure",
+          "sha256": "48754ac976d164b1e228f142646f98d6f5685dba70d171121abd88abd82acf3a",
+          "verdict": {
+            "phase": "fixture",
+            "scope": "published-image synthetic cross-VM sealed-secret subset",
+            "status": "FAIL",
+            "synthetic_only": true
+          }
+        }
+      },
+      "status": "INCOMPLETE"
+    }
+  ]
+}

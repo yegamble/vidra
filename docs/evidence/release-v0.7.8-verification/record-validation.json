@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "release": "v0.7.8",
+  "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+  "local_test_commit": "05873de5f8fe843d80f053e33a653a4b4e58941f",
+  "identical_source_tree": "df127dbf450c6f4c87ea11676301a02a6b1fa6d2",
+  "local_full_suite": {
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "*_test.py"
+    ],
+    "tests": 762,
+    "result": "PASS",
+    "raw_log_sha256": "e49909ecc2c36e7998798a3b41b61b57866caf6f68ca211b50e3dafdd204890c"
+  },
+  "local_focused_suite": {
+    "tests": 252,
+    "result": "PASS",
+    "raw_log_sha256": "1a5fa65b18f03cbd48fb8e6d1ce39ec16adb6fa93e21b4563e0016901aa4561e",
+    "modules": [
+      "release_mapping_test",
+      "env_template_pins_test",
+      "recovery_release_acceptance_test",
+      "pinned_release_ci_test"
+    ]
+  },
+  "ci": [
+    {
+      "name": "pinned-release-e2e",
+      "result": "success",
+      "url": "https://github.com/yegamble/vidra/actions/runs/38931661264/job/117076899045"
+    },
+    {
+      "name": "stack-e2e",
+      "result": "success",
+      "url": "https://github.com/yegamble/vidra/actions/runs/38931661264/job/117076898719"
+    },
+    {
+      "name": "pinned-release-validate",
+      "result": "success",
+      "url": "https://github.com/yegamble/vidra/actions/runs/38931661263/job/117076898602"
+    },
+    {
+      "name": "bundle",
+      "result": "success",
+      "url": "https://github.com/yegamble/vidra/actions/runs/38931661263/job/117076898601"
+    },
+    {
+      "name": "pinned-release-boot",
+      "result": "success",
+      "url": "https://github.com/yegamble/vidra/actions/runs/38931661263/job/117076898599"
+    },
+    {
+      "name": "ci-required",
+      "result": "success",
+      "url": "https://github.com/yegamble/vidra/actions/runs/38931661279/job/117076898573"
+    },
+    {
+      "name": "boot",
+      "result": "success",
+      "url": "https://github.com/yegamble/vidra/actions/runs/38931661263/job/117076898481"
+    },
+    {
+      "name": "validate",
+      "result": "success",
+      "url": "https://github.com/yegamble/vidra/actions/runs/38931661263/job/117076898300"
+    },
+    {
+      "name": "GitGuardian Security Checks",
+      "result": "success",
+      "url": "https://dashboard.gitguardian.com"
+    }
+  ],
+  "scope": "Record and source CI only; runtime qualification is recorded separately."
+}
