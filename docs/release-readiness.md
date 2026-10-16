@@ -1,8 +1,59 @@
 # Vidra completion campaign — release readiness
 
-Audit date: **2026-09-05**. Target: a fresh-server installation, migration of the operator's PeerTube instance, and complete required user/admin workflows with maintainable code. **Release readiness is not established.** There are confirmed workflow gaps, an initial contract mismatch explained by checkout skew, and no fresh-server or representative migration rehearsal in this audit.
+Current qualification date: **2026-10-16**. **Production verdict: NO-GO.**
+v0.7.8 is published at core/search schemas **182/18**; source CI and artifact
+preflight are green, while operational and product completion gates remain open.
+No production deployment has been made in this campaign.
 
-This is the authoritative campaign record for this audit, superseding earlier readiness labels **only for the revisions and evidence below**. Historical plans remain requirement sources. The original audit used one agent with no product edits, commits, pushes, merges, deployment, or branch cleanup. The implementation session below authorizes scoped commits/pushes and a draft PR, but prohibits merge, release publication and production deployment. No production database, media bucket, credentials, or running stack was used.
+This record limits each acceptance claim to its named revisions and evidence.
+The September 5 audit and older implementation-session permissions below are
+historical records. The October 16 campaign authorizes scoped PR merges, release
+publication and disposable synthetic drills; it has used no production database
+or media bucket.
+
+## v0.7.8 release qualification — 2026-10-16
+
+The [release record](../releases/v0.7.8.json) freezes core `04a7f0e127177b631eb323d04d330673fee044f9`,
+user `e861ff57ef45f655d71502e959cd4c59bb03c75f`, search
+`63eed039aba6f3a6a520c3cfc021181adcc04dd1`, and deployment bundle
+`35d2d3c5fc174514371cd865cd065c6b8defc07d`. All four source mains passed
+required CI before publication. Actual published-asset preflight passed all four
+checks, and released core/search binaries report embedded maxima **182/18**.
+
+The release record combined with runtime tooling main `8950662a` passed **810
+metadata tests, zero skips**, and production Compose validation. Exact source CI,
+tested commits and log hashes are retained in
+[record validation](evidence/release-v0.7.8-verification/record-validation.json).
+These checks do not establish operational acceptance.
+
+**Runtime qualification is incomplete.** Failed attempts remain in
+[the attempt record](evidence/release-v0.7.8-verification/runtime-attempts.json).
+The latest [REC-03 report](runtime-acceptance-rec03-v0.7.8.md) records twelve
+accepted checks through forward restore, followed by a rejected split-worker
+proof. The latest [sealed-recovery report](runtime-acceptance-recovery-v0.7.8.md)
+records five healthy services followed by failed API fixture creation; replacement
+was skipped. Both used immutable record `da049b6e` and tooling `8950662a`.
+Neither unsuccessful run is promoted to release acceptance.
+
+The master completion gates still include these unresolved requirements:
+
+- **G2:** the strict inventory reports six operations without direct UI callers:
+  storage-migration cancellation, legacy direct file upload/replacement, bulk
+  playlist ordering, bulk video-password replacement, and ClearKey licensing.
+  Alternative mounted flows cover some use cases; ClearKey packaging remains
+  unavailable. No scanner exception suppresses these findings.
+- **G10:** representative operator database plus provider-storage migration and
+  per-user PeerTube ZIP import have no retained end-to-end rehearsal on this
+  release. The [migration runbook](peertube-migration.md) separates released
+  capabilities from acceptance requirements.
+- **G11:** three human testers' timed installs on blank Ubuntu 24.04 hosts have
+  not been measured. Hosted synthetic fixtures do not supply those results.
+- **G12:** digest scans are complete, but inherited codec/module findings and
+  owner risk decisions remain documented in the security report below.
+- Full UI copy extraction and native French review remain unfinished. French
+  catalogue key parity alone does not establish full localization.
+
+No `EXIT_SIGNAL: true`, 100% completion or production GO follows from this entry.
 
 ## v0.7.8 security evidence — 2026-10-16
 
