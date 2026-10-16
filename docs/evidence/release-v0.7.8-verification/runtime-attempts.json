@@ -63,6 +63,85 @@
         }
       },
       "status": "INCOMPLETE"
+    },
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38937708685,
+        "tool_commit": "94bed8fa4dc54b2ef9643008713ed7553340abd2"
+      },
+      "informational_only": true,
+      "kind": "rec03",
+      "missing": [],
+      "roles": {
+        "source": {
+          "job_result": "failure",
+          "sha256": "3ac85e5f2147f81ccfc2b3bfa13c1d5a962157708e69080bc8311c719a548ac2",
+          "verdict": {
+            "diagnostics": {
+              "install_steps": {
+                "deploy": 0,
+                "installer": 0,
+                "provision": 0,
+                "setup": 0,
+                "setup_check": 0
+              },
+              "probe_statuses": {
+                "healthz": 200,
+                "instance": 200,
+                "site": 200,
+                "watch": 200
+              },
+              "running_services": [
+                "api",
+                "caddy",
+                "frontend",
+                "postgres",
+                "redis",
+                "search"
+              ]
+            },
+            "failed_phase": "upgrade-fail",
+            "failure": "migration conflict not observed",
+            "installer_commit": "94bed8fa4dc54b2ef9643008713ed7553340abd2",
+            "pair": [
+              "v0.7.7",
+              "v0.7.8"
+            ],
+            "phases": {
+              "backup": {
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "data": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "fp": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "inject": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "install": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              }
+            },
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "status": "FAIL"
+          }
+        }
+      },
+      "status": "FAIL"
     }
   ]
 }
