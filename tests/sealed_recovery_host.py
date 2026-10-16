@@ -160,14 +160,22 @@ class Host(runtime.Recorder):
         def health():
             nonlocal containers
             ids = self.compose('ps', '-q', 'api', 'search', 'frontend', 'postgres', 'redis').split()
-            if len(ids) != 5:
+            if len(ids) != len(SERVICES) or len(set(ids)) != len(SERVICES):
                 return {'fixture': 'missing'}
             containers = json.loads(self.run(['docker', 'inspect', *ids], 'verify-isolated-containers'))
-            return {c['Id']: c['State'].get('Health', {}).get('Status', 'healthy')
-                    if c['State']['Running'] else 'stopped' for c in containers}
+            require(len(containers) == len(ids) and {c['Id'] for c in containers} == set(ids),
+                    'stale fixture container identities')
+            labels = [c['Config']['Labels'] for c in containers]
+            require({label.get('com.docker.compose.service') for label in labels} == set(SERVICES)
+                    and all(label.get('com.docker.compose.project') == self.env['COMPOSE_PROJECT_NAME']
+                            for label in labels), 'foreign fixture services')
+            return {c['Id']: c['State'].get('Health', {}).get('Status', 'unknown')
+                    if c['State'].get('Running') is True and c['State'].get('Restarting') is False
+                    else 'stopped' for c in containers}
         runtime.wait_for_health(health, timeout=300)
         for container in containers:
-            require(container['State']['Running'] and container['State'].get('Health', {}).get('Status', 'healthy') == 'healthy',
+            require(container['State'].get('Running') is True and container['State'].get('Restarting') is False
+                    and container['State'].get('Health', {}).get('Status') == 'healthy',
                     'unhealthy fixture service')
             name = container['Config']['Labels']['com.docker.compose.service']
             unpublished(container)
