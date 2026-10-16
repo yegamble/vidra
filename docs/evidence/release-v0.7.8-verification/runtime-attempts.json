@@ -297,6 +297,57 @@
         }
       },
       "status": "INCOMPLETE"
+    },
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "release": "v0.7.8",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38943219095,
+        "tool_commit": "cce26c92690768ef612db6802b70df12b67ba88a"
+      },
+      "informational_only": true,
+      "kind": "sealed",
+      "missing": [],
+      "roles": {
+        "replacement": {
+          "job_result": "failure",
+          "sha256": "37a59f35d7ead9c68770cd69917790f36b2284a2585f6763577e9cb4e83a2926",
+          "verdict": {
+            "diagnostics": {
+              "services": {
+                "api": "missing",
+                "frontend": "missing",
+                "postgres": "starting",
+                "redis": "starting",
+                "search": "missing"
+              }
+            },
+            "phase": "restore",
+            "scope": "published-image synthetic cross-VM sealed-secret subset",
+            "status": "FAIL",
+            "synthetic_only": true
+          }
+        },
+        "source": {
+          "job_result": "success",
+          "sha256": "5bfa64470d1d733c684a40cf73ced102c7aade688ba351eb8c80913a9908db11",
+          "verdict": {
+            "core_schema": 182,
+            "external_delivery_blocked": true,
+            "phase": "complete",
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "release": "v0.7.8",
+            "scope": "published-image synthetic cross-VM sealed-secret subset",
+            "search_schema": 18,
+            "status": "PASS",
+            "synthetic_only": true,
+            "tool_commit": "cce26c92690768ef612db6802b70df12b67ba88a"
+          }
+        }
+      },
+      "status": "FAIL"
     }
   ]
 }

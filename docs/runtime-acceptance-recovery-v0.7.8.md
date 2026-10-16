@@ -13,6 +13,7 @@ Published component bytes are pinned by [the release record](../releases/v0.7.8.
 | --- | --- | --- | --- | --- |
 | [38933537741](https://github.com/yegamble/vidra/actions/runs/38933537741) | `fabaac46` | FAIL at `fixture` | skipped | Fixture failed before backup. |
 | [38940385591](https://github.com/yegamble/vidra/actions/runs/38940385591) | `8950662a` | FAIL at `api-fixture` | skipped | All five services healthy; API fixture creation failed. |
+| [38943219095](https://github.com/yegamble/vidra/actions/runs/38943219095) | `cce26c92` | PASS, complete | FAIL at `restore` | Source backup and stop accepted; replacement reported PostgreSQL/Redis starting and no application containers. |
 
 The second attempt reported `/readyz` 200 and actual healthy API, search,
 frontend, PostgreSQL and Redis containers before entering the API fixture.
@@ -25,13 +26,24 @@ A 28.498-second wait reached the real published API with an already-aborted
 signal. That finding is a fixture correction, not retrospective acceptance of
 the hosted source failure.
 
-## Required acceptance still outstanding
+## Source acceptance and replacement requirements
 
-The source must create the synthetic owner, enable MFA, save sealed dummy SMTP
-and disabled OIDC secrets through their real APIs, fingerprint the catalogue,
-and run unchanged published backup scripts. After stopping that source, a
-different VM with empty Docker state must restore the hash-bound encrypted
-handoff using unchanged published restore scripts and original configuration.
+The third source job passed its full fixed verdict: synthetic owner/MFA, sealed
+dummy SMTP and disabled OIDC configuration through real APIs, catalogue
+fingerprint, unchanged published backup, configuration capture and stopped
+source services at schemas182/18. Its original verdict SHA-256 is
+`5bfa64470d1d733c684a40cf73ced102c7aade688ba351eb8c80913a9908db11`.
+
+The replacement job failed at the broad restore milestone, which includes
+starting database services, copying the fixture, binding the readiness relay
+and invoking the unchanged restore command. The finite diagnostics do not
+establish which substep failed or that any database reload occurred. Its original
+verdict SHA-256 is
+`37a59f35d7ead9c68770cd69917790f36b2284a2585f6763577e9cb4e83a2926`.
+
+A different VM with empty Docker state must still restore the hash-bound
+encrypted handoff using unchanged published restore scripts and original
+configuration.
 
 The replacement must verify exact schemas and catalogue/configuration bytes,
 positive mail/OIDC decryption, MFA login, wrong-code refusal, wrong-key refusal
