@@ -342,6 +342,23 @@ assert_schema_expectation() {
   { [ -n "$post" ] && [ -n "$post_s" ]; } || die "no post-upgrade schema pair recorded — run the 'recover' phase, which captures both ledgers the upgrade actually reached."
   check_same_schema_expectation "$pre" "$post" "$pre_s" "$post_s"
 }
+# >>> BEGIN transcode drain gate — exercised with a fake psq by rec03_transcode_wait_test.py
+wait_transcodes() {
+  local vid="$1" rows total done failed i
+  [[ "$vid" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]] || die "invalid fixture video id"
+  # Published is not the queue's completion signal: the web-video promotion can
+  # publish before the HLS ladder finishes. Baselines/backups need every job done.
+  for i in $(seq 1 120); do
+    rows="$(psq "SELECT count(*) || ':' || count(*) FILTER (WHERE state = 'done') || ':' || count(*) FILTER (WHERE state = 'failed') FROM transcode_jobs WHERE video_id = '$vid'")" || die "cannot read transcode queue"
+    [[ "$rows" =~ ^[0-9]+:[0-9]+:[0-9]+$ ]] || die "invalid transcode queue counts"
+    IFS=: read -r total done failed <<< "$rows"
+    [ "$failed" -eq 0 ] || die "fixture transcode failed"
+    if [ "$total" -gt 0 ] && [ "$done" -eq "$total" ]; then log "fixture transcodes drained ($done jobs, attempt $i)"; return 0; fi
+    sleep 5
+  done
+  die "fixture transcodes did not drain within 600 seconds"
+}
+# <<< END transcode drain gate
 fingerprint() {  # original + master playlist + first segment sha256, via the api proxy
   local vid t; vid="$(cat "$R/video_id")"; t="$(token)"
   local orig master variant seg hls_url renditions
@@ -415,6 +432,7 @@ data)
   vid=$(curl -sf -X POST $API/channels/drill/videos -H "Authorization: Bearer $t" -H 'content-type: application/json' -d "{\"title\":\"REC-03 fixture $OLD\",\"privacy\":\"public\"}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])'); echo "$vid" > "$R/video_id"; log "video id=$vid"
   code=$(curl -s -o "$R/upload.json" -w '%{http_code}' -X POST "$API/videos/$vid/file" -H "Authorization: Bearer $t" -F "file=@$R/fx/fixture.mp4;type=video/mp4"); log "upload http=$code"
   for i in $(seq 1 120); do st=$(curl -sf -H "Authorization: Bearer $t" "$API/videos/$vid" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("state"))'); [ "$st" = published ] && break; sleep 5; done; log "state=$st after $((i*5))s"
+  wait_transcodes "$vid"
   fingerprint | tee "$R/fp.data"; counts; ledger; probe
   facts "state=$st" "fp=$(cat "$R/fp.data")" "counts=$(counts)" "ledger=$(ledger)" "probe=$(probe)"
   ;;
@@ -558,6 +576,7 @@ PY"
   vid=$(curl -sf -X POST $API/channels/drill/videos -H "Authorization: Bearer $t" -H 'content-type: application/json' -d '{"title":"REC-03 split-topology upload","privacy":"public"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])'); log "video2 id=$vid"
   code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/videos/$vid/file" -H "Authorization: Bearer $t" -F "file=@$R/fx/fixture.mp4;type=video/mp4"); log "upload2 http=$code"
   for i in $(seq 1 120); do st=$(curl -sf -H "Authorization: Bearer $t" "$API/videos/$vid" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("state"))'); [ "$st" = published ] && break; sleep 5; done; log "video2 state=$st after $((i*5))s"
+  wait_transcodes "$vid"
   log "who transcoded it: ffmpeg/transcode lines per container"
   for c in $(docker ps --format '{{.Names}}' | grep -E 'worker|api'); do echo "$c: $(docker logs "$c" 2>&1 | grep -ciE 'transcod|ffmpeg|rendition')"; done
   api_ffmpeg=$(docker logs "$(docker ps --format '{{.Names}}' | grep -E '[-_]api[-_]' | head -1)" 2>&1 | grep -ciE 'ffmpeg'); log "api container ffmpeg mentions=$api_ffmpeg"
