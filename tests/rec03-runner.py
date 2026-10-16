@@ -38,6 +38,27 @@ def fingerprint(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
 
+def injected_migration_conflict(log):
+    """Decode the published migrator's JSON event without exporting its error.
+
+    slog JSON-escapes SQL's quoted identifiers. Searching the raw log misses
+    the real conflict; searching arbitrary decoded fields could accept an
+    unrelated event. Require this migrator failure and the injected relation.
+    """
+    for line in log.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if (isinstance(event, dict) and event.get('level') == 'ERROR'
+                and event.get('msg') == 'migrate failed'
+                and isinstance(event.get('error'), str)
+                and event['error'].startswith('dbmigrate: apply migrations: ')
+                and re.search(r'column "is_sensitive" of relation "remote_videos" already exists\b', event['error'])):
+            return True
+    return False
+
+
 def verify_running_images(phase, records, inspect):
     """Check loaded bytes, not just the mutable tag printed by docker ps.
 
@@ -101,7 +122,7 @@ def verify(phase, facts, previous, log):
             require(digest == fingerprint(previous['data']['fp']), 'media changed across upgrade or restore')
     if phase == 'upgrade-fail':
         require(facts.get('pin_exit') == '0', 'bundle unpack failed')
-        require(re.search(r'column "is_sensitive".*already exists', log), 'migration conflict not observed')
+        require(injected_migration_conflict(log), 'migration conflict not observed')
     if phase == 'backup':
         require(facts.get('pre_core_version') == '151' and facts.get('pre_search_version') == '18', 'wrong backup ledger')
     if phase in ('backup', 'backup2'):
