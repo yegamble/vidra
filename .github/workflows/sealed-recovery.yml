@@ -1,0 +1,106 @@
+name: published-sealed-recovery
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Published release with a committed PASS preflight (schema >=182)
+        type: string
+        required: true
+        default: v0.7.8
+      record_commit:
+        description: Immutable 40-hex meta commit containing the release record and evidence
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: sealed-recovery-${{ inputs.release }}-${{ inputs.record_commit }}
+  cancel-in-progress: false
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      handoff_sha: ${{ steps.export.outputs.sha }}
+    env:
+      ACTION: source
+      EXPECTED_SHA: ''
+      RELEASE: ${{ inputs.release }}
+      RECORD_COMMIT: ${{ inputs.record_commit }}
+      TOOL_COMMIT: ${{ github.sha }}
+    steps: &sealed-steps
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          persist-credentials: false
+      - name: Record metadata must use an immutable commit
+        run: '[[ "$RECORD_COMMIT" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.record_commit }}
+          path: record
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.12.0
+      - name: Install checksum-pinned fixture encryption tool
+        run: |
+          curl -fsSL --retry 3 https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz -o "$RUNNER_TEMP/age.tar.gz"
+          echo "7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50  $RUNNER_TEMP/age.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/age.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: env.ACTION == 'restore'
+        with:
+          name: synthetic-sealed-handoff-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sealed-input
+      - name: Exercise unchanged published backup or restore scripts
+        run: |
+          extra=()
+          if [ "$ACTION" = restore ]; then
+            extra=(--handoff "$RUNNER_TEMP/sealed-input/synthetic-handoff.age" --handoff-sha "$EXPECTED_SHA")
+          fi
+          sudo env -i PATH="$PATH" LANG=C.UTF-8 python3 tools/tests/hosted-sealed-recovery.py "$ACTION" \
+            --release "$RELEASE" --record-commit "$RECORD_COMMIT" --tool-commit "$TOOL_COMMIT" \
+            --record-root "$GITHUB_WORKSPACE/record" --stage "$RUNNER_TEMP/sealed-$ACTION" "${extra[@]}"
+      - name: Export only the encrypted synthetic handoff
+        id: export
+        if: env.ACTION == 'source'
+        run: |
+          mkdir -m700 "$RUNNER_TEMP/sealed-public"
+          sudo install -m600 -o "$(id -u)" -g "$(id -g)" "$RUNNER_TEMP/sealed-source/synthetic-handoff.age" "$RUNNER_TEMP/sealed-public/synthetic-handoff.age"
+          echo "sha=$(sha256sum "$RUNNER_TEMP/sealed-public/synthetic-handoff.age" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: success() && env.ACTION == 'source'
+        with:
+          name: synthetic-sealed-handoff-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sealed-public/synthetic-handoff.age
+          retention-days: 1
+          if-no-files-found: error
+      - name: Export fixed sanitized verdict only
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/sealed-verdict"
+          if sudo test -f "$RUNNER_TEMP/sealed-$ACTION/verdict.json"; then
+            sudo install -m600 -o "$(id -u)" -g "$(id -g)" "$RUNNER_TEMP/sealed-$ACTION/verdict.json" "$RUNNER_TEMP/sealed-verdict/verdict.json"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: published-sealed-verdict-${{ env.ACTION }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sealed-verdict/verdict.json
+          retention-days: 14
+          if-no-files-found: warn
+  replacement:
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      ACTION: restore
+      EXPECTED_SHA: ${{ needs.source.outputs.handoff_sha }}
+      RELEASE: ${{ inputs.release }}
+      RECORD_COMMIT: ${{ inputs.record_commit }}
+      TOOL_COMMIT: ${{ github.sha }}
+    steps: *sealed-steps
