@@ -30,6 +30,29 @@ python3 -m unittest discover -s tests -p pinned_release_ci_test.py
 Workflow tests use PyYAML 6.0.3, which meta CI ensures is available before the
 unit suite. The deployment resolver itself remains Python standard library only.
 
+## Required configuration and boot lanes
+
+`meta-ci` also runs `pinned-release-validate` and `pinned-release-boot`, both
+required in `.github/required-checks.txt`. They share the complete step sequences
+of the existing floating `validate` and `boot` jobs through YAML anchors. Each
+job has its own source mode and artifact name, so adding an assertion to the
+floating lane also adds it to its recorded-release counterpart.
+
+Before Compose validation or boot, all three checkouts must match the newest
+record's immutable commits and the core/search migration ceilings must match
+that record. Bootstrap's release-mode update uses the same three recorded SHAs,
+then verifies them again before evidence is uploaded. Its floating mode retains
+the default branch update path.
+
+The pinned boot lane additionally reads both database migration ledgers after
+the service-image migration checks. Each must contain exactly one clean row at
+the recorded version; wrong versions, dirty or absent rows, and duplicate rows
+fail the lane. Selected refs, checked-out commits and applied versions are saved
+in `stack-source-refs.json`, alongside raw ledger rows and Compose logs in the
+separate `meta-pinned-release-validate` / `meta-pinned-release-boot` artifacts.
+These remain source compatibility checks, without publishing a release or
+qualifying its image digests, recovery drills, browser playback or stopwatch tests.
+
 ## Remaining release and operational prerequisites
 
 At preparation on 2026-10-16 the newest committed record is v0.7.7: core/user

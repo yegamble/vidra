@@ -19,10 +19,19 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    steps:
+    env:
+      STACK_MODE: main
+      CI_EVIDENCE_NAME: meta-validate-python-unit
+    steps: &validate-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Resolve stack source refs
+        id: refs
+        run: |
+          python3 scripts/ci/resolve-stack-refs.py select --mode "$STACK_MODE" \
+            --github-output "$GITHUB_OUTPUT" --evidence ci-report/stack-source-refs.json
 
       - name: External actions use immutable commit pins
         run: |
@@ -247,6 +256,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yegamble/vidra-core
+          ref: ${{ steps.refs.outputs.core_ref }}
           path: vidra-core
           persist-credentials: false
 
@@ -254,6 +264,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yegamble/vidra-search
+          ref: ${{ steps.refs.outputs.search_ref }}
           path: vidra-search
           persist-credentials: false
 
@@ -261,8 +272,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yegamble/vidra-user
+          ref: ${{ steps.refs.outputs.user_ref }}
           path: vidra-user
           persist-credentials: false
+
+      - name: Verify checked-out commits and pinned migration ceilings
+        run: python3 scripts/ci/resolve-stack-refs.py verify --evidence ci-report/stack-source-refs.json
 
       # The last hand-synced pair in the platform, and the only one that spans
       # two repositories. `scripts/migrate-lint.sh` is the static half of the
@@ -780,21 +795,35 @@ jobs:
           "$RUNNER_TEMP/vidra" setup --check "$RUNNER_TEMP/production.env"
           echo "OK: the template defines every key the engine writes, every answer reached it, and the result passes --check."
 
-      - name: Upload validate-lane evidence
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: meta-validate-python-unit
-          path: ci-report/
-          retention-days: 14
-          if-no-files-found: warn
-
       - name: Exercise bootstrap.sh's idempotent update path
+        env:
+          VIDRA_CORE_REF: ${{ env.STACK_MODE == 'release' && steps.refs.outputs.core_ref || '' }}
+          VIDRA_USER_REF: ${{ env.STACK_MODE == 'release' && steps.refs.outputs.user_ref || '' }}
+          VIDRA_SEARCH_REF: ${{ env.STACK_MODE == 'release' && steps.refs.outputs.search_ref || '' }}
         run: |
           ./bootstrap.sh
           test -d vidra-core/.git
           test -d vidra-search/.git
           test -d vidra-user/.git
+          python3 scripts/ci/resolve-stack-refs.py verify --evidence ci-report/stack-source-refs.json
+
+      - name: Upload validate-lane evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.CI_EVIDENCE_NAME }}
+          path: ci-report/
+          retention-days: 14
+          if-no-files-found: warn
+
+
+  pinned-release-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      STACK_MODE: release
+      CI_EVIDENCE_NAME: meta-pinned-release-validate
+    steps: *validate-steps
 
   # THE NO-GIT BUNDLE, PROVEN THE ONLY WAY IT CAN BE: by taking the checkouts
   # away and rendering anyway.
@@ -995,15 +1024,25 @@ jobs:
   boot:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    steps:
+    env:
+      STACK_MODE: main
+      CI_EVIDENCE_NAME: meta-boot-compose-log
+    steps: &boot-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Resolve stack source refs
+        id: refs
+        run: |
+          python3 scripts/ci/resolve-stack-refs.py select --mode "$STACK_MODE" \
+            --github-output "$GITHUB_OUTPUT" --evidence ci-report/stack-source-refs.json
 
       - name: Check out vidra-core (build context + compose include)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yegamble/vidra-core
+          ref: ${{ steps.refs.outputs.core_ref }}
           path: vidra-core
           persist-credentials: false
 
@@ -1011,6 +1050,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yegamble/vidra-search
+          ref: ${{ steps.refs.outputs.search_ref }}
           path: vidra-search
           persist-credentials: false
 
@@ -1020,8 +1060,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yegamble/vidra-user
+          ref: ${{ steps.refs.outputs.user_ref }}
           path: vidra-user
           persist-credentials: false
+
+      - name: Verify checked-out commits and pinned migration ceilings
+        run: python3 scripts/ci/resolve-stack-refs.py verify --evidence ci-report/stack-source-refs.json
 
       # Dummy secrets, real shapes. Deliberately NOT env/production.env.example
       # verbatim: that template ships blank/`<generate: …>` placeholders for the
@@ -1118,6 +1162,18 @@ jobs:
             -c 'SELECT version, dirty FROM vidra_search_migrations;'
           echo "OK: core + search schemas applied by the service images themselves."
 
+      - name: Applied database schemas match the recorded release
+        if: env.STACK_MODE == 'release'
+        run: |
+          COMPOSE=(docker compose -f docker-compose.yml --env-file env/ci-boot.env --profile core)
+          "${COMPOSE[@]}" exec -T postgres psql -U vidra -d vidra -At \
+            -c 'SELECT version, dirty FROM schema_migrations;' > ci-report/core-ledger.txt
+          "${COMPOSE[@]}" exec -T postgres psql -U vidra -d vidra -At \
+            -c 'SELECT version, dirty FROM vidra_search_migrations;' > ci-report/search-ledger.txt
+          python3 scripts/ci/resolve-stack-refs.py verify-ledgers \
+            --evidence ci-report/stack-source-refs.json \
+            --core-ledger ci-report/core-ledger.txt --search-ledger ci-report/search-ledger.txt
+
       # The 200-line tails elsewhere in this job are rarely the 200 lines that
       # matter, and the run page's logs age out before a postmortem reaches them.
       - name: Capture the boot stack's logs
@@ -1131,7 +1187,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: meta-boot-compose-log
+          name: ${{ env.CI_EVIDENCE_NAME }}
           path: ci-report/
           retention-days: 14
           if-no-files-found: warn
@@ -1139,3 +1195,11 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose -f docker-compose.yml --env-file env/ci-boot.env --profile core down -v
+
+  pinned-release-boot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      STACK_MODE: release
+      CI_EVIDENCE_NAME: meta-pinned-release-boot
+    steps: *boot-steps

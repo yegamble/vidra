@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -87,8 +88,102 @@ class PinnedStackRefsTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'differs from recorded commit'):
                 refs.verify(selected, ROOT)
 
+    def test_recorded_migration_ceiling_must_match_the_checkout(self):
+        selected = refs.select('release', ROOT / 'releases')
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            wrong = selected['core_schema_version'] + 1
+            for role, ceiling in [('core', wrong), ('search', selected['search_schema_version'])]:
+                migrations = root / ('vidra-' + role) / 'migrations'
+                migrations.mkdir(parents=True)
+                (migrations / f'{ceiling:04}_fixture.up.sql').touch()
+            def checked_out(command, **_kwargs):
+                role = Path(command[2]).name.removeprefix('vidra-')
+                return subprocess.CompletedProcess(command, 0, selected['components'][role]['ref'], '')
+            with patch.object(refs.subprocess, 'run', side_effect=checked_out):
+                with self.assertRaisesRegex(ValueError, f'migration ceiling {wrong} differs'):
+                    refs.verify(selected, root)
+
+    def test_applied_ledgers_require_the_recorded_versions_and_clean_rows(self):
+        selected = refs.select('release', ROOT / 'releases')
+        core, search = selected['core_schema_version'], selected['search_schema_version']
+        verified = refs.verify_ledgers(selected, {'core': f'{core}|f\n', 'search': f'{search}|f\n'})
+        self.assertEqual(verified['applied_schemas'], {'core': core, 'search': search})
+        for bad in (f'{core + 1}|f\n', f'{core}|t\n', '', f'{core}|f\n{core}|f\n'):
+            with self.subTest(core=bad):
+                with self.assertRaisesRegex(ValueError, 'core.*ledger'):
+                    refs.verify_ledgers(selected, {'core': bad, 'search': f'{search}|f\n'})
+        with self.assertRaisesRegex(ValueError, 'search.*ledger'):
+            refs.verify_ledgers(selected, {'core': f'{core}|f\n', 'search': f'{search + 1}|f\n'})
+
+    def test_ledger_cli_retains_verified_evidence_and_fails_without_overwriting_it(self):
+        selected = refs.select('release', ROOT / 'releases')
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            evidence, core, search = [directory / name for name in ('refs.json', 'core.txt', 'search.txt')]
+            evidence.write_text(json.dumps(selected))
+            core.write_text(f'{selected["core_schema_version"]}|f\n')
+            search.write_text(f'{selected["search_schema_version"]}|f\n')
+            command = [sys.executable, str(ROOT / 'scripts/ci/resolve-stack-refs.py'), 'verify-ledgers',
+                       '--evidence', str(evidence), '--core-ledger', str(core), '--search-ledger', str(search)]
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            verified = evidence.read_text()
+            self.assertEqual(json.loads(verified)['applied_schemas']['core'], selected['core_schema_version'])
+            core.write_text('0|t\n')
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('core: ledger', result.stderr)
+            self.assertEqual(evidence.read_text(), verified)
+
 
 class PinnedStackWorkflowTest(unittest.TestCase):
+    def test_required_meta_release_lanes_reuse_all_floating_assertions(self):
+        jobs = yaml.load((ROOT / '.github/workflows/meta-ci.yml').read_text(), Loader=UniqueLoader)['jobs']
+        required = {line.split('#', 1)[0].strip() for line in (ROOT / '.github/required-checks.txt').read_text().splitlines()}
+        for name in ('validate', 'boot'):
+            floating, pinned = jobs[name], jobs['pinned-release-' + name]
+            self.assertEqual(floating['env']['STACK_MODE'], 'main')
+            self.assertEqual(pinned['env']['STACK_MODE'], 'release')
+            self.assertEqual(floating['steps'], pinned['steps'])
+            self.assertNotEqual(floating['env']['CI_EVIDENCE_NAME'], pinned['env']['CI_EVIDENCE_NAME'])
+            self.assertIn(name, required)
+            self.assertIn('pinned-release-' + name, required)
+            steps = pinned['steps']
+            resolver = next(s for s in steps if s.get('id') == 'refs')
+            self.assertIn('--mode "$STACK_MODE"', resolver['run'])
+            self.assertIn('--github-output "$GITHUB_OUTPUT"', resolver['run'])
+            for role in refs.ROLES:
+                checkout = next(s for s in steps if s.get('with', {}).get('repository') == 'yegamble/vidra-' + role)
+                self.assertEqual(checkout['with']['ref'], '${{ steps.refs.outputs.' + role + '_ref }}')
+            verification = next(i for i, s in enumerate(steps) if 'resolve-stack-refs.py verify ' in s.get('run', ''))
+            compose = next(i for i, s in enumerate(steps) if 'docker compose' in s.get('run', ''))
+            self.assertLess(verification, compose)
+            artifact = next(s for s in steps if s.get('uses', '').startswith('actions/upload-artifact@'))
+            self.assertEqual(artifact['with']['name'], '${{ env.CI_EVIDENCE_NAME }}')
+            self.assertEqual(artifact['if'], 'always()')
+        self.assertIn('bundle', required)
+
+    def test_pinned_bootstrap_preserves_refs_and_captures_final_provenance(self):
+        steps = yaml.load((ROOT / '.github/workflows/meta-ci.yml').read_text(), Loader=UniqueLoader)['jobs']['validate']['steps']
+        bootstrap = next(s for s in steps if s.get('name') == "Exercise bootstrap.sh's idempotent update path")
+        for role in refs.ROLES:
+            value = bootstrap['env']['VIDRA_' + role.upper() + '_REF']
+            self.assertIn("env.STACK_MODE == 'release'", value)
+            self.assertIn('steps.refs.outputs.' + role + '_ref', value)
+        self.assertLess(bootstrap['run'].index('./bootstrap.sh'), bootstrap['run'].index('resolve-stack-refs.py verify'))
+        artifact_index = next(i for i, s in enumerate(steps) if s.get('uses', '').startswith('actions/upload-artifact@'))
+        self.assertGreater(artifact_index, steps.index(bootstrap))
+
+    def test_release_boot_verifies_actual_database_ledgers(self):
+        steps = yaml.load((ROOT / '.github/workflows/meta-ci.yml').read_text(), Loader=UniqueLoader)['jobs']['boot']['steps']
+        ledgers = next(s for s in steps if 'resolve-stack-refs.py verify-ledgers' in s.get('run', ''))
+        self.assertIn("env.STACK_MODE == 'release'", ledgers['if'])
+        self.assertIn('schema_migrations', ledgers['run'])
+        self.assertIn('vidra_search_migrations', ledgers['run'])
+        migrations = next(i for i, s in enumerate(steps) if s.get('name') == 'Both migration one-shots run from their service images')
+        self.assertGreater(steps.index(ledgers), migrations)
+
     def test_modes_use_same_assertions_with_exact_resolved_refs_and_separate_artifacts(self):
         workflow = yaml.load((ROOT / '.github/workflows/stack-e2e.yml').read_text(), Loader=UniqueLoader)
         job = workflow['jobs']['stack-e2e']

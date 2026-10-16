@@ -21,6 +21,10 @@
 # config-key coverage, `vidra setup` answer coverage, bootstrap idempotency).
 validate
 
+# The same validation assertions against the newest recorded release's exact
+# component commits and migration ceilings, with no floating fallback.
+pinned-release-validate
+
 # meta-ci.yml — the release bundle built twice and compared byte for byte, its
 # schema version matched against migrations on disk, its contents checked, and
 # the production matrix rendered from inside the extracted tree with no
@@ -30,6 +34,10 @@ bundle
 # meta-ci.yml — the full stack booted in PRODUCTION mode from source, readiness
 # probed, and BOTH migration one-shots run from the service images themselves.
 boot
+
+# The same production-mode boot against the recorded source triple, plus
+# exact clean core/search ledger versions checked against that release record.
+pinned-release-boot
 
 # NOT required. `stack-e2e` (.github/workflows/stack-e2e.yml) also runs on
 # pull_request — path-filtered to its own inputs — but is deliberately absent
