@@ -11,6 +11,18 @@ phases plus report. Migration0152 injects `remote_videos.is_sensitive`: clean151
 at SHAs and image index digests checked. Failure facts, wrong ledgers/images,
 failed probes, changed media, unproven refusal or missing worker fail the run.
 
+The hosted runner explicitly selects `REC03_RESOURCE_PROFILE=small` and refuses
+hosts with fewer than four CPUs. The staged fixture helper applies the
+[documented small-instance sizing](../deploy/README.md#sizing): `API_CPUS=3.0`,
+`API_MEM_LIMIT=4g`, `POSTGRES_SHARED_BUFFERS=512MB` and
+`POSTGRES_EFFECTIVE_CACHE_SIZE=3GB`. These are fixture settings for the documented
+4-vCPU / 8-GB floor; the runner does not certify that droplet's performance or
+verify its memory/disk capacity. The shipped overlay still defaults to seven API
+CPUs for an eight-core host. Historical manual drill invocations retain their
+resource settings unless they explicitly select `small`; unknown profiles fail
+before the env file changes. This configuration does not establish the cause of
+any earlier hosted failure or qualify a release.
+
 Only `rec03-v0.7.8-verdict/summary.json` is uploaded: fixed labels, source SHAs,
 ledgers and booleans. Raw logs, credentials, backups and config stay root-private;
 never expose them to diagnose failures. Fix the driver and run again instead.
