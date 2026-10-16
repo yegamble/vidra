@@ -127,6 +127,14 @@ class StaticGateTest(unittest.TestCase):
         export const api = endpoints("/api/v1/me/example");'''
         self.assertEqual(findings(files), set())
 
+    def test_source_tree_excludes_test_directories_without_test_filename_suffix(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            target = root / 'components/__tests__/Fixture.tsx'
+            target.parent.mkdir(parents=True)
+            target.write_text('export default function Fixture() {}')
+            self.assertEqual(gate.sources(root), {})
+
     def test_no_broad_me_or_admin_allowlist(self):
         self.assertFalse(any(p.startswith(('/api/v1/me/', '/api/v1/admin/'))
                              for _, p in gate.BACKEND_ONLY_PATHS))

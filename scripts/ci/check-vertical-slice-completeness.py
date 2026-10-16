@@ -183,7 +183,7 @@ def sources(repo, ref=None):
             return {m.name: archive.extractfile(m).read().decode() for m in archive.getmembers()
                     if m.isfile() and is_source(m.name)}
     return {p.relative_to(repo).as_posix(): p.read_text() for d in ('app', 'components', 'lib')
-            for p in sorted((repo / d).rglob('*')) if p.is_file() and is_source(p.name)}
+            for p in sorted((repo / d).rglob('*')) if p.is_file() and is_source(p.relative_to(repo).as_posix())}
 
 
 def resolve_import(file, module, files):
