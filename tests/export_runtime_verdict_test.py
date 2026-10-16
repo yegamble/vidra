@@ -175,6 +175,35 @@ class RuntimeVerdictExportTest(unittest.TestCase):
             with self.subTest(diagnostic=diagnostic):
                 self.rejected(self.run_export(source={**failed, 'diagnostics': diagnostic}))
 
+    def test_sealed_failure_milestones_and_diagnostics_preserve_failure(self):
+        roles = {'source': 'migrations start-services ready owner-claim api-fixture snapshot'.split(),
+                 'replacement': ('restore-ready restore-snapshot restore-verify wrong-key-start wrong-key-ready '
+                                 'wrong-key-verify original-key-start original-key-ready original-key-verify').split()}
+        for role, phases in roles.items():
+            for phase in phases:
+                with self.subTest(role=role, phase=phase):
+                    failed = dict(status='FAIL', scope=sealed()['scope'], synthetic_only=True, phase=phase,
+                                  diagnostics={'readyz_status': 0, 'services': {'api': 'restarting', 'frontend': 'unhealthy'}})
+                    source, replacement = (failed, sealed(True)) if role == 'source' else (sealed(), failed)
+                    process, payload = self.run_export('sealed', source, replacement,
+                        job='failure' if role == 'source' else 'success', replacement_job='failure')
+                    self.assertEqual(process.returncode, 0, process.stderr)
+                    self.assertEqual(self.summary(payload)['status'], 'FAIL')
+                    self.assertEqual(self.summary(payload)['roles'][role]['verdict'], failed)
+
+    def test_sealed_diagnostics_reject_private_nonfinite_or_pass_values(self):
+        failed = dict(status='FAIL', scope=sealed()['scope'], synthetic_only=True, phase='ready')
+        for diagnostic in ({}, None, {'services': {}}, {'services': {'worker': 'running'}},
+                {'services': {'api': 'PRIVATE_CANARY'}}, {'services': {'api': True}},
+                {'services': {'api': []}}, {'PRIVATE_CANARY': 200}, {'readyz_status': True},
+                {'readyz_status': 200.0}, {'readyz_status': '200'}, {'readyz_status': float('nan')},
+                {'readyz_status': float('inf')}, {'readyz_status': 99}, {'readyz_status': 600}):
+            with self.subTest(diagnostic=diagnostic):
+                self.rejected(self.run_export('sealed', {**failed, 'diagnostics': diagnostic}, sealed(True)))
+        self.rejected(self.run_export('sealed', {**sealed(), 'diagnostics': {'readyz_status': 200}}, sealed(True)))
+        self.rejected(self.run_export('sealed', {**failed, 'phase': 'PRIVATE_CANARY'}, sealed(True)))
+        self.rejected(self.run_export('sealed', {**failed, 'phase': 'wrong-key-ready'}, sealed(True)))
+
 
 if __name__ == '__main__':
     unittest.main()

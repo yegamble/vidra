@@ -21,6 +21,11 @@ RESTORE = {'different_runner_boot', 'empty_destination', 'backup_hash_match', 's
            'wrong_key_refused', 'mfa_wrong_code_refused', 'mfa_correct_code_accepted', 'oidc_disabled',
            'mail_secret_status', 'oidc_secret_status'}
 SERVICES = set('api frontend search postgres redis worker caddy clamav migrate search-migrate prep-volumes'.split())
+SEALED_PHASES = {
+    'source': set('preconditions published-assets fixture migrations start-services ready owner-claim api-fixture snapshot backup complete'.split()),
+    'replacement': set(('preconditions published-assets restore restore-ready restore-snapshot restore-verify '
+                        'wrong-key-start wrong-key-ready wrong-key-verify original-key-start original-key-ready '
+                        'original-key-verify complete').split())}
 
 
 class Invalid(ValueError):
@@ -109,10 +114,22 @@ def rec03(value, args):
 
 def sealed(value, args, role):
     fields = COMMON | (RESTORE if role == 'replacement' else set())
-    keys(value, fields, {'status', 'scope', 'synthetic_only', 'phase'})
+    keys(value, fields | {'diagnostics'}, {'status', 'scope', 'synthetic_only', 'phase'})
     require(value['status'] in ('PASS', 'FAIL'))
-    require(value['phase'] in ({'preconditions', 'published-assets', 'restore', 'complete'} if role == 'replacement'
-                             else {'preconditions', 'published-assets', 'fixture', 'backup', 'complete'}))
+    require(value['phase'] in SEALED_PHASES[role])
+    if 'diagnostics' in value:
+        require(value['status'] == 'FAIL')
+        facts = value['diagnostics']
+        keys(facts, {'readyz_status', 'services'})
+        require(bool(facts))
+        if 'readyz_status' in facts:
+            code = facts['readyz_status']
+            require(type(code) is int and (code == 0 or 100 <= code <= 599))
+        if 'services' in facts:
+            keys(facts['services'], {'api', 'search', 'frontend', 'postgres', 'redis'})
+            require(bool(facts['services']) and all(type(state) is str and state in {
+                'missing', 'stopped', 'restarting', 'starting', 'healthy', 'unhealthy', 'running'}
+                for state in facts['services'].values()))
     expected = {'scope': SCOPE, 'synthetic_only': True, 'record_commit': args.record_commit,
                 'tool_commit': args.tool_commit, 'release': args.release, 'core_schema': 182, 'search_schema': 18,
                 'external_delivery_blocked': True}

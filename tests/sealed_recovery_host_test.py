@@ -12,6 +12,31 @@ import sealed_recovery_host as host
 
 
 class FixtureHostBoundaryTest(unittest.TestCase):
+    def test_failure_diagnostics_export_only_finite_service_states_and_http_code(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = host.Host(Path(temporary), {}, {})
+            states = 'api\trestarting\t\nsearch\trunning\thealthy\nfrontend\trunning\tstarting\npostgres\texited\t\n'
+            with patch.object(host.recovery, 'http', return_value={'status': 503, 'body': 'PRIVATE_CANARY'}), \
+                    patch.object(fixture, 'run', return_value=states) as run:
+                facts = fixture.failure_diagnostics()
+            self.assertEqual(facts, {'readyz_status': 503, 'services': {'api': 'restarting', 'search': 'healthy',
+                'frontend': 'starting', 'postgres': 'stopped', 'redis': 'missing'}})
+            self.assertEqual(run.call_args.kwargs['timeout'], 10)
+            self.assertNotIn('inspect', run.call_args.args[0])
+            self.assertNotIn('PRIVATE_CANARY', str(facts))
+
+    def test_diagnostic_probe_failures_and_unrecognized_values_are_omitted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = host.Host(Path(temporary), {}, {})
+            for output in ('api\trunning\tPRIVATE_CANARY\n', 'PRIVATE_CANARY\trunning\thealthy\n',
+                           'api\trunning\thealthy\napi\texited\t\n', 'PRIVATE_CANARY'):
+                with self.subTest(output=output), patch.object(host.recovery, 'http', return_value={'status': None}), \
+                        patch.object(fixture, 'run', return_value=output):
+                    self.assertEqual(fixture.failure_diagnostics(), {'readyz_status': 0})
+            with patch.object(host.recovery, 'http', side_effect=ValueError('PRIVATE_CANARY')), \
+                    patch.object(fixture, 'run', side_effect=ValueError('PRIVATE_CANARY')):
+                self.assertEqual(fixture.failure_diagnostics(), {})
+
     def test_authentic_zero_padded_bundle_schema_matches_integer_record(self):
         stream = io.BytesIO()
         with tarfile.open(fileobj=stream, mode='w:gz') as archive:
