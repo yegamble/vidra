@@ -574,7 +574,7 @@ services:
     # validate` step to the SAME tag in the same commit — otherwise CI is
     # validating deploy/Caddyfile against a different parser than production
     # runs.
-    image: caddy:2.11.4-alpine
+    image: caddy:2.11.7-alpine
     # THE `edge` PROFILE, and the reversal it records. This service used to carry
     # no profile at all, on the reasoning that this file is only ever applied to a
     # production deploy and the TLS terminator must come up with every one of
