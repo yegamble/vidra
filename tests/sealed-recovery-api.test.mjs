@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { chmodSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -62,7 +63,7 @@ test('explicit opt-in cannot authorize non-private or non-canonical origins', ()
     'http://192.167.255.255:8080', 'http://192.169.0.1:8080', 'http://8.8.8.8:8080', 'http://169.254.1.1:8080',
     'http://0.0.0.0:8080', 'http://100.64.0.1:8080', 'http://localhost:8080', 'http://api:8080',
     'http://[::1]:8080', 'http://[fd00::1]:8080', 'https://10.0.0.1:8080', 'HTTP://10.0.0.1:8080',
-    'http://user:pass@10.0.0.1:8080', 'http://10.0.0.1:8080@8.8.8.8:8080', 'http://10.0.0.1:8081',
+    `http://${randomUUID()}:${randomUUID()}@10.0.0.1:8080`, `http://${randomUUID()}:${randomUUID()}@8.8.8.8:8080`, 'http://10.0.0.1:8081',
     'http://10.0.0.1', 'http://10.0.0.1:08080', 'http://10.0.0.1:8080/', 'http://10.0.0.1:8080/a/..',
     'http://10.0.0.1:8080?query', 'http://10.0.0.1:8080#fragment', 'http://10.0.0.1:8080\n',
     ' http://10.0.0.1:8080', 'http://10.0.0.1:8080\t', 'http://10.0.\n0.1:8080', 'http:\\10.0.0.1:8080',
