@@ -154,6 +154,32 @@ class Host(runtime.Recorder):
                 require(model['services'][service]['image'] == self.candidate['images'][repo]['reference'], 'mutable fixture image')
         self.compose('pull', 'postgres', 'redis', 'api', 'search', 'frontend')
 
+    def wait_restore_dependencies(self):
+        """First-boot database initialization must finish before restore's SQL."""
+        services = ('postgres', 'redis')
+        def health():
+            ids = self.run(['bash', 'deploy/compose.sh', 'ps', '-q', *services],
+                           'restore-dependency-current', timeout=10).split()
+            if len(ids) != 2 or len(set(ids)) != 2:
+                return dict.fromkeys(services, 'missing')
+            containers = json.loads(self.run(['docker', 'inspect', *ids],
+                                    'restore-dependency-health', timeout=10))
+            require(type(containers) is list and len(containers) == 2
+                    and {c['Id'] for c in containers} == set(ids), 'stale restore dependencies')
+            labels = [c.get('Config', {}).get('Labels') or {} for c in containers]
+            require({label.get('com.docker.compose.service') for label in labels} == set(services)
+                    and all(label.get('com.docker.compose.project') == self.env['COMPOSE_PROJECT_NAME']
+                            for label in labels), 'foreign restore dependencies')
+            states = {}
+            for container, label in zip(containers, labels):
+                state = container.get('State') or {}
+                observation = state.get('Health')
+                status = observation.get('Status', 'unknown') if type(observation) is dict else 'unknown'
+                states[label['com.docker.compose.service']] = status if (
+                    state.get('Running') is True and state.get('Restarting') is False) else 'stopped'
+            return states
+        return runtime.wait_for_health(health, timeout=300)
+
     def ready(self):
         recovery.wait(lambda: self.readyz_status() == 200, 600)
         containers = []

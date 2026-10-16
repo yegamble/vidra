@@ -177,7 +177,7 @@ class RuntimeVerdictExportTest(unittest.TestCase):
 
     def test_sealed_failure_milestones_and_diagnostics_preserve_failure(self):
         roles = {'source': 'migrations start-services ready owner-claim api-fixture snapshot'.split(),
-                 'replacement': ('restore-ready restore-snapshot restore-verify wrong-key-start wrong-key-ready '
+                 'replacement': ('restore-infrastructure restore-relay restore restore-ready restore-snapshot restore-verify wrong-key-start wrong-key-ready '
                                  'wrong-key-verify original-key-start original-key-ready original-key-verify').split()}
         for role, phases in roles.items():
             for phase in phases:
@@ -203,6 +203,8 @@ class RuntimeVerdictExportTest(unittest.TestCase):
         self.rejected(self.run_export('sealed', {**sealed(), 'diagnostics': {'readyz_status': 200}}, sealed(True)))
         self.rejected(self.run_export('sealed', {**failed, 'phase': 'PRIVATE_CANARY'}, sealed(True)))
         self.rejected(self.run_export('sealed', {**failed, 'phase': 'wrong-key-ready'}, sealed(True)))
+        for phase in ('restore-infrastructure', 'restore-relay'):
+            self.rejected(self.run_export('sealed', {**failed, 'phase': phase}, sealed(True)))
 
 
 if __name__ == '__main__':

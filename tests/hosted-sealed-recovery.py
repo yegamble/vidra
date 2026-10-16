@@ -53,8 +53,10 @@ def no_smtp_listener(host):
               '/proc/net/tcp', '/proc/net/tcp6'], 'no-loopback-smtp-listener')
 
 
-def restore_dump(host, dump):
+def restore_dump(host, dump, result):
+    result['phase'] = 'restore-relay'
     with readiness_relay(host):
+        result['phase'] = 'restore'
         host.run(['bash', 'deploy/restore.sh', '--yes', str(dump)], 'published-restore', timeout=1800)
 
 
@@ -86,13 +88,14 @@ def execute(args, result, hosts):
     else:
         host.configure()
     host.pin_and_check()
-    result['phase'] = 'restore' if payload else 'migrations'
+    result['phase'] = 'restore-infrastructure' if payload else 'migrations'
     host.compose('up', '-d', 'postgres', 'redis')
     fixture = host.private / 'fixture.json'
     if payload:
+        host.wait_restore_dependencies()
         fixture.write_bytes((payload / 'fixture.json').read_bytes())
         fixture.chmod(0o600)
-        restore_dump(host, payload / 'backup.dump.gz')
+        restore_dump(host, payload / 'backup.dump.gz', result)
         result['phase'] = 'restore-ready'
         host.ready()
         no_smtp_listener(host)
