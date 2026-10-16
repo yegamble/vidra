@@ -363,7 +363,7 @@ wait_transcodes() {
 }
 # <<< END transcode drain gate
 fingerprint() {  # original + master playlist + first segment sha256, via the api proxy
-  local vid t; vid="$(cat "$R/video_id")"; t="$(token)"
+  local vid t; vid="${1:-$(cat "$R/video_id")}"; t="$(token)"
   local orig master variant seg hls_url renditions
   orig="$(curl -sf -H "Authorization: Bearer $t" "$API/videos/$vid/original" | sha256sum | cut -c1-16)"
   hls_url="$(curl -sf "$API/videos/$vid" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("hls_url",""))')"
@@ -576,16 +576,21 @@ tmp=p+'.tmp'; open(tmp,'w').write(s); os.chmod(tmp,0o600); os.replace(tmp,p)
 PY"
   grep -E '^(EXTRA_COMPOSE_PROFILES|API_ROLE)=' $DIR/env/production.env
   asv ./deploy/deploy.sh; rc=$?; log "deploy.sh exit=$rc"; imgs; docker ps --format '{{.Names}} {{.Status}}' | grep -E 'worker|api'
+  # Bind the new upload's persisted execution events to this split attempt.
+  # Capability messages mention ffmpeg even in a correct API-only process.
+  split_before="$(psq 'SELECT extract(epoch FROM clock_timestamp())')" || die "cannot capture split boundary"
+  split_cursor="$(psq 'SELECT COALESCE(max(cursor), 0) FROM job_events')" || die "cannot capture split event boundary"
   t="$(token)"
-  vid=$(curl -sf -X POST $API/channels/drill/videos -H "Authorization: Bearer $t" -H 'content-type: application/json' -d '{"title":"REC-03 split-topology upload","privacy":"public"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])'); log "video2 id=$vid"
+  vid=$(curl -sf -X POST $API/channels/drill/videos -H "Authorization: Bearer $t" -H 'content-type: application/json' -d '{"title":"REC-03 split-topology upload","privacy":"public"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
   code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/videos/$vid/file" -H "Authorization: Bearer $t" -F "file=@$R/fx/fixture.mp4;type=video/mp4"); log "upload2 http=$code"
   for i in $(seq 1 120); do st=$(curl -sf -H "Authorization: Bearer $t" "$API/videos/$vid" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("state"))'); [ "$st" = published ] && break; sleep 5; done; log "video2 state=$st after $((i*5))s"
   wait_transcodes "$vid"
-  log "who transcoded it: ffmpeg/transcode lines per container"
-  for c in $(docker ps --format '{{.Names}}' | grep -E 'worker|api'); do echo "$c: $(docker logs "$c" 2>&1 | grep -ciE 'transcod|ffmpeg|rendition')"; done
-  api_ffmpeg=$(docker logs "$(docker ps --format '{{.Names}}' | grep -E '[-_]api[-_]' | head -1)" 2>&1 | grep -ciE 'ffmpeg'); log "api container ffmpeg mentions=$api_ffmpeg"
+  log "split job attribution uses current process heartbeats and persisted execution events"
+  packaging=$(curl -sf "$API/videos/$vid" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("packaging_format", ""))')
+  fp2="$(fingerprint "$vid")"
   probe; counts
-  facts deploy_exit=$rc "images=$(imgs)" "video2_state=$st" "probe=$(probe)" "counts=$(counts)" "api_ffmpeg_mentions=$api_ffmpeg" "workers=$(docker ps --format '{{.Names}}' | grep -c worker)"
+  facts deploy_exit=$rc "images=$(imgs)" "video2_state=$st" "probe=$(probe)" "counts=$(counts)" \
+    "video2_id=$vid" "video2_packaging=$packaging" "video2_fp=$fp2" "split_before=$split_before" "split_cursor=$split_cursor"
   ;;
 report)
   asv "vidra doctor" || true; docker --version; docker compose version; python3 --version; lsb_release -ds
