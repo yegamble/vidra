@@ -2,7 +2,7 @@
 import importlib.util
 import io
 import json
-from contextlib import redirect_stdout
+from contextlib import contextmanager, redirect_stdout
 from types import SimpleNamespace
 from pathlib import Path
 import subprocess
@@ -20,6 +20,27 @@ spec.loader.exec_module(driver)
 
 
 class CrossJobBoundaryTest(unittest.TestCase):
+    def test_unchanged_restore_command_is_inside_relay_and_failure_propagates(self):
+        events = []
+        @contextmanager
+        def relay(host):
+            events.append('enter')
+            try:
+                yield
+            finally:
+                events.append('exit')
+        host = Mock()
+        def run(command, label, *, timeout):
+            self.assertEqual(events, ['enter'])
+            self.assertEqual(command, ['bash', 'deploy/restore.sh', '--yes', '/synthetic/backup.dump.gz'])
+            self.assertEqual((label, timeout), ('published-restore', 1800))
+            events.append('command')
+            raise ValueError('synthetic command failure')
+        host.run.side_effect = run
+        with patch.object(driver, 'readiness_relay', side_effect=relay), self.assertRaises(ValueError):
+            driver.restore_dump(host, Path('/synthetic/backup.dump.gz'))
+        self.assertEqual(events, ['enter', 'command', 'exit'])
+
     def test_source_operation_failures_keep_their_fixed_milestone(self):
         for milestone, method in (('migrations', 'compose'), ('start-services', 'compose'), ('ready', 'ready'),
                                   ('owner-claim', 'sql'), ('api-fixture', 'api_fixture'), ('snapshot', 'snapshot')):
