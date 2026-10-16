@@ -139,6 +139,42 @@ class RuntimeVerdictExportTest(unittest.TestCase):
         for flag in ('--repository', '--tool-commit', '--run-id', '--kind'):
             self.rejected(self.run_export(source=rec03(), extra=(flag, 'PRIVATE_CANARY')))
 
+    def test_failure_diagnostics_are_bounded_public_facts_and_never_a_pass(self):
+        failed = dict(status='FAIL', pair=['v0.7.7', 'v0.7.8'], phases={}, failed_phase='install',
+                      failure='driver phase failed', record_commit=RECORD, installer_commit=TOOL)
+        for diagnostic in ({}, {'install_steps': {}, 'running_services': [], 'probe_statuses': {}},
+                {'probe_statuses': {'site': 0}},
+                {'install_steps': {'installer': 0, 'setup': 0, 'setup_check': 0, 'provision': 0, 'deploy': 255},
+                 'running_services': ['api', 'frontend', 'search', 'postgres', 'redis', 'worker', 'caddy',
+                                      'clamav', 'migrate', 'search-migrate', 'prep-volumes'],
+                 'probe_statuses': {'instance': 100, 'healthz': 200, 'site': 599, 'watch': 404}}):
+            with self.subTest(diagnostic=diagnostic):
+                process, payload = self.run_export(source={**failed, 'diagnostics': diagnostic}, job='failure')
+                self.assertEqual(process.returncode, 0, process.stderr)
+                summary = self.summary(payload)
+                self.assertEqual((summary['status'], payload['conclusion']), ('FAIL', 'neutral'))
+                self.assertEqual(summary['roles']['source']['verdict']['diagnostics'], diagnostic)
+        for diagnostic in ({}, {'install_steps': {'deploy': 1}}):
+            self.rejected(self.run_export(source={**rec03(), 'diagnostics': diagnostic}))
+        self.rejected(self.run_export('sealed', {**sealed(), 'diagnostics': {}}, sealed(True)))
+
+    def test_private_malformed_and_nonfinite_diagnostics_are_rejected(self):
+        failed = dict(status='FAIL', pair=['v0.7.7', 'v0.7.8'], phases={}, failed_phase='install')
+        invalid = [None, [], 'PRIVATE_CANARY', {'PRIVATE_CANARY': 1},
+                   {'install_steps': []}, {'install_steps': {'PRIVATE_CANARY': 1}},
+                   {'probe_statuses': []}, {'probe_statuses': {'PRIVATE_CANARY': 200}},
+                   {'running_services': 'api'}, {'running_services': ['api', 'api']},
+                   {'running_services': ['PRIVATE_CANARY']}, {'running_services': [{}]},
+                   {'running_services': [True]}, {'running_services': ['api'] * 12}]
+        for field, name, numbers in (('install_steps', 'deploy', [-1, 256, True, 0.0, '0', {},
+                                      float('nan'), float('inf'), float('-inf')]),
+                                    ('probe_statuses', 'healthz', [1, 99, 600, False, 0.0, 200.0, '200', [],
+                                      float('nan'), float('inf'), float('-inf')])):
+            invalid.extend({field: {name: number}} for number in numbers)
+        for diagnostic in invalid:
+            with self.subTest(diagnostic=diagnostic):
+                self.rejected(self.run_export(source={**failed, 'diagnostics': diagnostic}))
+
 
 if __name__ == '__main__':
     unittest.main()

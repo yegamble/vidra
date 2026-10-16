@@ -15,6 +15,11 @@ PHASES = 'install data fp backup inject upgrade-fail recover backup2 rollback re
 PROBE = 'instance=200 healthz=200 site=200 watch=200'
 IMAGE_PHASES = {'install', 'upgrade-fail', 'recover', 'rollback', 'repin', 'restore-ok', 'split'}
 OLD_IMAGE_PHASES = {'install', 'upgrade-fail', 'rollback'}
+SERVICES = {'api', 'frontend', 'search', 'postgres', 'redis', 'worker', 'caddy', 'clamav',
+            'migrate', 'search-migrate', 'prep-volumes'}
+STEPS = {'install.sh': 'installer', 'setup': 'setup', 'setup --check': 'setup_check',
+         'provision': 'provision', 'deploy.sh': 'deploy'}
+PROBES = ('instance', 'healthz', 'site', 'watch')
 
 
 class Failure(AssertionError):
@@ -124,11 +129,46 @@ def verify(phase, facts, previous, log):
             **({'ledger': ledger} if 'ledger' in facts else {})}
 
 
+def verify_phase(phase, facts, previous, log, records, inspect):
+    verdict = verify(phase, facts, previous, log)
+    verify_running_images(phase, records, inspect)
+    return verdict  # No phase PASS until both the facts and running bytes pass.
+
+
+def diagnostics(private, facts):
+    """Construct finite public facts; never copy log lines or Docker metadata."""
+    result, steps = {}, {}
+    try:
+        with (private / 'install.private.log').open(errors='replace') as log:
+            for line in log:
+                match = re.fullmatch(r'\[rec03 install [0-9]{2}:[0-9]{2}:[0-9]{2}\] '
+                                     r'(install\.sh|setup|setup --check|provision|deploy\.sh) exit=([0-9]{1,3})\n?', line)
+                if match and int(match[2]) <= 255:
+                    steps[STEPS[match[1]]] = int(match[2])
+    except OSError:
+        pass
+    if steps:
+        result['install_steps'] = steps
+    try:
+        labels = subprocess.check_output(['docker', 'ps', '--filter', 'label=com.docker.compose.service',
+            '--format', '{{.Label "com.docker.compose.service"}}'], stderr=subprocess.DEVNULL, text=True, timeout=10)
+        result['running_services'] = sorted(set(labels.splitlines()) & SERVICES)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    probe = facts.get('probe', '') if type(facts) is dict else ''
+    if type(probe) is str and re.fullmatch(' '.join(name + r'=[0-9]{3}' for name in PROBES), probe):
+        statuses = {name: int(code) for name, code in (item.split('=') for item in probe.split())
+                    if int(code) == 0 or 100 <= int(code) <= 599}
+        if statuses:
+            result['probe_statuses'] = statuses
+    return result
+
+
 def main(out):
     # Build output solely from booleans, validated SHAs and fixed labels. Never
     # serialize raw facts, errors, subprocess stdout, owner.json or backup paths.
     result = {'status': 'FAIL', 'pair': ['v0.7.7', 'v0.7.8'], 'phases': {}}
-    phase = 'preflight'
+    phase, facts, created_private = 'preflight', {}, False
     try:
         ref, installer = os.environ.get('REC03_RECORD_REF', ''), os.environ.get('REC03_INSTALLER_REF', '')
         require(all(re.fullmatch('[a-f0-9]{40}', x) for x in (ref, installer)), 'immutable commits required')
@@ -136,6 +176,7 @@ def main(out):
         require(not Path('/opt/vidra').exists(), 'existing deployment refused')
         private = Path('/root/rec03')
         private.mkdir(mode=0o700)
+        created_private = True
         os.umask(0o077)
         result.update(record_commit=ref, installer_commit=installer)
         env = {**os.environ, 'REC03_OLD': 'v0.7.7', 'REC03_NEW': 'v0.7.8',
@@ -160,19 +201,23 @@ def main(out):
         shutil.copy(ROOT / 'deploy/release-mapping.py', '/root/release-mapping.py')
         previous = {}
         for phase in PHASES:
+            facts = {}
             print(f'REC03: {phase}', flush=True)
             with (private / f'{phase}.private.log').open('w') as log:
                 done = subprocess.run(['bash', str(ROOT / 'tests/rec03-upgrade-rollback.sh'), phase, 'baseline'], env=env, stdout=log, stderr=log, timeout=1800)
                 require(done.returncode == 0, 'driver phase failed')
-                verify_running_images(phase, records, lambda command: subprocess.check_output(
-                    command, cwd='/opt/vidra', env=env, stderr=log, text=True, timeout=60))
-            facts = json.loads((private / 'facts' / f'{phase}.json').read_text()) if phase != 'report' else {}
-            result['phases'][phase] = verify(phase, facts, previous, (private / f'{phase}.private.log').read_text())
+                facts = json.loads((private / 'facts' / f'{phase}.json').read_text()) if phase != 'report' else {}
+                log.flush()
+                verdict = verify_phase(phase, facts, previous, (private / f'{phase}.private.log').read_text(),
+                    records, lambda command: subprocess.check_output(
+                        command, cwd='/opt/vidra', env=env, stderr=log, text=True, timeout=60))
+            result['phases'][phase] = verdict
             previous[phase] = facts
         result['status'] = 'PASS'
     except Exception as error:
         result['failed_phase'] = phase
         result['failure'] = str(error) if isinstance(error, Failure) else type(error).__name__
+        result['diagnostics'] = diagnostics(private, facts) if created_private else {}
     out.mkdir(parents=True, exist_ok=True)
     out.chmod(0o755)  # Only this constructed public verdict is readable by the artifact action.
     summary = out / 'summary.json'
