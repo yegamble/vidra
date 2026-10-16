@@ -60,9 +60,26 @@ def findings(files=None, yaml=YAML):
             if f.key != 'orphan:components/auth/OAuthButtons.tsx'}
 
 
+def routes_yaml(*routes):
+    paths = {}
+    for method, path in routes:
+        paths.setdefault(path, []).append(method.lower())
+    return YAML[:YAML.index('  /api/v1/me/example/{id}:')] + ''.join(
+        f'  {path}:\n' + ''.join(f'    {method}:\n      operationId: example\n' for method in methods)
+        for path, methods in paths.items()) + 'components:\n  schemas: {}\n'
+
+
 class StaticGateTest(unittest.TestCase):
     def test_complete_wrappers_match_methods_templates_barrels_and_import_aliases(self):
         self.assertEqual(findings(), set())
+
+    def test_const_and_arrow_string_delimiters_are_not_syntax(self):
+        for literal in ('(', '{', '[', ')', '}', ']', ';'):
+            with self.subTest(literal=literal):
+                files = fixture()
+                files['lib/api/endpoints.ts'] = (
+                    f'const literal = "{literal}"; const text = () => "{literal}";\n' + CLIENT)
+                self.assertEqual(findings(files), set())
 
     def test_imported_functions_called_through_object_shorthand_and_barrel(self):
         files = fixture()
@@ -107,6 +124,113 @@ class StaticGateTest(unittest.TestCase):
         files = fixture()
         files['lib/api/endpoints.ts'] = CLIENT.replace('method: "DELETE"', 'method: "POST"')
         self.assertIn('endpoint:DELETE:/api/v1/me/example/{}', findings(files))
+
+    def test_mounted_event_stream_is_get_and_unmounted_stream_is_not_wiring(self):
+        files = fixture()
+        path = '/api/v1/admin/jobs/events'
+        files['components/Widget.tsx'] = f'''import {{ subscribeEventStream }} from "@/lib/sse";
+          export default function Widget() {{ subscribeEventStream("{path}", {{ onEvent }}); }}'''
+        files['lib/sse.ts'] = 'export function subscribeEventStream(path, options) { return fetch(path); }'
+        self.assertEqual(findings(files, routes_yaml(('GET', path))), set())
+        self.assertEqual(findings(files, routes_yaml(('GET', path), ('POST', path))),
+                         {'endpoint:POST:' + path})
+        files['components/Widget.tsx'] = f'''import {{ subscribeEventStream }} from "@/lib/sse";
+          function neverCalled() {{ subscribeEventStream("{path}", {{ onEvent }}); }}
+          export default function Widget() {{ return null; }}'''
+        self.assertEqual(findings(files, routes_yaml(('GET', path))), {'endpoint:GET:' + path})
+        files['app/page.tsx'] = 'export default function Page() { return null; }'
+        self.assertEqual(findings(files, routes_yaml(('GET', path))),
+                         {'endpoint:GET:' + path, 'orphan:components/Widget.tsx'})
+
+    def test_cached_server_json_export_requires_a_named_call(self):
+        files = fixture()
+        path = '/api/v1/instance/homepage'
+        files['lib/instance-homepage.server.ts'] = f'''import {{ cache }} from "react";
+          import {{ serverJson }} from "@/lib/server-json";
+          export const getInstanceHomepage = cache(async (): Promise<Document | null> => {{
+            return serverJson<Partial<Document>>("{path}", {{ freshness: {{ revalidateSeconds: 60 }} }});
+          }});'''
+        files['lib/server-json.ts'] = 'export async function serverJson(path, options) { return fetch(path); }'
+        for call in ('await getInstanceHomepage();', '', 'getInstanceHomepage;'):
+            with self.subTest(call=call):
+                files['app/page.tsx'] = f'''import {{ getInstanceHomepage }} from "@/lib/instance-homepage.server";
+                  export default async function Page() {{ {call} return null; }}'''
+                files.pop('components/Widget.tsx', None)
+                expected = set() if call.startswith('await') else {'endpoint:GET:' + path}
+                self.assertEqual(findings(files, routes_yaml(('GET', path))), expected)
+        files['app/page.tsx'] = '''import { getInstanceHomepage } from "@/lib/instance-homepage.server";
+          export default async function Page() { await getInstanceHomepage(); return null; }'''
+        files['lib/instance-homepage.server.ts'] = f'''import {{ cache }} from "react";
+          export const getInstanceHomepage = cache(async () => {{
+            function unused() {{ return serverJson("{path}"); }} return null;
+          }});'''
+        self.assertEqual(findings(files, routes_yaml(('GET', path))), {'endpoint:GET:' + path})
+
+    def test_dynamic_scope_dispatch_requires_the_requested_member_call(self):
+        files = fixture()
+        paths = ['/api/v1/admin/watched-word-lists', '/api/v1/me/watched-word-lists']
+        yaml = routes_yaml(*(('POST', path) for path in paths))
+        files['lib/api/endpoints.ts'] = '''function listEndpoints(base: string) {
+          return {
+            list: () => apiRequest(base),
+            create: (body: CreateBody) => apiRequest(base, { method: "POST", body }),
+          };
+        }
+        export const adminLists = listEndpoints("/api/v1/admin/watched-word-lists");
+        export const myLists = listEndpoints("/api/v1/me/watched-word-lists");'''
+        prelude = '''import { adminLists, myLists } from "@/lib/api/endpoints";
+          const ENDPOINTS = { admin: adminLists, me: myLists };'''
+        for call in ('ENDPOINTS[scope].create({});', 'const api = ENDPOINTS[scope]; api.create({});',
+                     'const api = ENDPOINTS[scope]; const selected = api; selected.create({});',
+                     'const api = ENDPOINTS[scope]; const selected = api; selected.create;',
+                     'const api = ENDPOINTS[scope]; api.create;',
+                     '', 'ENDPOINTS;', 'ENDPOINTS[scope].create;', 'ENDPOINTS[scope].list();'):
+            with self.subTest(call=call):
+                files['components/Widget.tsx'] = prelude + f'''
+                  export default function Widget({{ scope }}) {{ {call} }}'''
+                expected = set() if 'create({})' in call else {'endpoint:POST:' + path for path in paths}
+                self.assertEqual(findings(files, yaml), expected)
+        files['components/Widget.tsx'] = prelude + '''
+          export default function Widget() { ENDPOINTS["admin"].create({}); }'''
+        self.assertEqual(findings(files, yaml), {'endpoint:POST:' + paths[1]})
+
+    def test_private_chunk_transport_requires_consumed_export_and_called_helpers(self):
+        files = fixture()
+        path = '/api/v1/uploads/{id}/chunks/{n}'
+        missing = {'endpoint:PUT:/api/v1/uploads/{}/chunks/{}'}
+        transport = '''async function putUploadChunk(uploadId: string, n: number, chunk: Blob): Promise<Status> {
+          const url = `${apiBaseUrl}/api/v1/uploads/${encodeURIComponent(uploadId)}/chunks/${n}`;
+          return fetch(url, { method: "PUT", body: chunk });
+        }
+        async function putChunkWithRetry(uploadId: string, n: number, chunk: Blob): Promise<Status> {
+          return await putUploadChunk(uploadId, n, chunk);
+        }
+        export async function resumableUpload(file: File): Promise<void> {
+          await putChunkWithRetry("id", 0, file);
+        }'''
+        files['lib/api/resumable-upload.ts'] = transport
+        for call in ('resumableUpload(file);', '', 'resumableUpload;'):
+            with self.subTest(call=call):
+                files['components/Widget.tsx'] = f'''import {{ resumableUpload }} from "@/lib/api/resumable-upload";
+                  export default function Widget() {{ {call} }}'''
+                self.assertEqual(findings(files, routes_yaml(('PUT', path))), set() if '(' in call else missing)
+        files['components/Widget.tsx'] = '''import { resumableUpload } from "@/lib/api/resumable-upload";
+          export default function Widget() { resumableUpload(file); }'''
+        for unused in ('putChunkWithRetry;', 'putUploadChunk;',
+                       'function unused() { putUploadChunk("id", 0, file); }',
+                       'const unused = () => putUploadChunk("id", 0, file); return null;',
+                       'const unused = () => { return putUploadChunk("id", 0, file); }; return null;',
+                       'const unused = async () => putUploadChunk("id", 0, file); return null;'):
+            with self.subTest(unused=unused):
+                files['lib/api/resumable-upload.ts'] = transport.replace(
+                    'await putChunkWithRetry("id", 0, file);', unused)
+                self.assertEqual(findings(files, routes_yaml(('PUT', path))), missing)
+        for send in ('const send = () => putChunkWithRetry("id", 0, file); await send();',
+                     'const send = () => { return putChunkWithRetry("id", 0, file); }; await send();'):
+            with self.subTest(send=send):
+                files['lib/api/resumable-upload.ts'] = transport.replace(
+                    'await putChunkWithRetry("id", 0, file);', send)
+                self.assertEqual(findings(files, routes_yaml(('PUT', path))), set())
 
     def test_dynamic_method_is_not_misread_as_default_get(self):
         files = fixture()
