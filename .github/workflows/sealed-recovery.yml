@@ -11,6 +11,16 @@ on:
         description: Immutable 40-hex meta commit containing the release record and evidence
         type: string
         required: true
+  workflow_call:
+    inputs:
+      release:
+        description: Published release with a committed PASS preflight (schema >=182)
+        type: string
+        required: true
+      record_commit:
+        description: Immutable 40-hex meta commit containing the release record and evidence
+        type: string
+        required: true
 permissions:
   contents: read
   actions: read

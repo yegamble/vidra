@@ -15,3 +15,9 @@ environment files and raw logs never enter this API transport.
 
 Use full workflow reruns: failed-job reruns can lack current-attempt verdicts
 and therefore produce **INCOMPLETE** rather than reusing earlier artifacts.
+
+Same-repository pull requests changing `releases/v0.7.8.json` run both drills
+through `release-runtime-qualification.yml`; manual dispatch remains available.
+The record identity is the PR head commit, while the tool identity is the
+immutable PR merge commit (`github.sha`). A green source CI run alone does not
+establish either runtime verdict.

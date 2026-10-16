@@ -13,9 +13,9 @@ class SealedWorkflowTest(unittest.TestCase):
         self.workflow = yaml.safe_load((ROOT / '.github/workflows/sealed-recovery.yml').read_text())
         self.jobs = self.workflow['jobs']
 
-    def test_only_explicit_dispatch_runs_two_distinct_hosted_jobs(self):
+    def test_dispatch_or_explicit_call_runs_two_distinct_hosted_jobs(self):
         events = self.workflow.get('on', self.workflow.get(True))
-        self.assertEqual(set(events), {'workflow_dispatch'})
+        self.assertEqual(set(events), {'workflow_dispatch', 'workflow_call'})
         self.assertEqual(set(self.jobs), {'source', 'replacement', 'report'})
         self.assertEqual(self.jobs['replacement']['needs'], 'source')
         for job in (self.jobs['source'], self.jobs['replacement']):
@@ -24,7 +24,44 @@ class SealedWorkflowTest(unittest.TestCase):
             self.assertNotIn('services', job)
         self.assertFalse(self.workflow['concurrency']['cancel-in-progress'])
 
+    def test_callable_drills_keep_dispatch_input_contracts(self):
+        for name in ('rec03.yml', 'sealed-recovery.yml'):
+            workflow = yaml.safe_load((ROOT / '.github/workflows' / name).read_text())
+            events = workflow.get('on', workflow.get(True))
+            self.assertEqual(set(events), {'workflow_dispatch', 'workflow_call'})
+            expected = {name: {key: value for key, value in field.items()
+                        if key != 'default' or not field.get('required')}
+                        for name, field in events['workflow_dispatch']['inputs'].items()}
+            self.assertEqual(events['workflow_call']['inputs'], expected)
+            record = events['workflow_call']['inputs']['record_commit']
+            self.assertIs(record['required'], True)
+            self.assertEqual(record['type'], 'string')
+            self.assertIn('inputs.record_commit', workflow['concurrency']['group'])
+            self.assertFalse(workflow['concurrency']['cancel-in-progress'])
+
+    def test_only_same_repository_release_record_prs_call_runtime_drills(self):
+        caller = yaml.safe_load((ROOT / '.github/workflows/release-runtime-qualification.yml').read_text())
+        events = caller.get('on', caller.get(True))
+        self.assertEqual(events, {'pull_request': {'paths': ['releases/v0.7.8.json']}})
+        self.assertEqual(caller['permissions'], {'contents': 'read', 'actions': 'read'})
+        self.assertEqual(set(caller['jobs']), {'rec03', 'sealed'})
+        for name, filename in (('rec03', 'rec03.yml'), ('sealed', 'sealed-recovery.yml')):
+            job = caller['jobs'][name]
+            self.assertEqual(job['if'], 'github.event.pull_request.head.repo.full_name == github.repository')
+            self.assertEqual(job['uses'], './.github/workflows/' + filename)
+            self.assertEqual(job['permissions'], {'contents': 'read', 'actions': 'read', 'checks': 'write'})
+            expected = {'record_commit': '${{ github.event.pull_request.head.sha }}'}
+            if name == 'sealed':
+                expected['release'] = 'v0.7.8'
+            self.assertEqual(job['with'], expected)
+            self.assertNotIn('secrets', job)
+            self.assertNotIn('steps', job)
+            self.assertNotIn('continue-on-error', job)
+
     def test_tool_and_record_checkouts_are_separate_and_immutable(self):
+        rec03 = yaml.safe_load((ROOT / '.github/workflows/rec03.yml').read_text())
+        self.assertEqual(rec03['jobs']['rec03']['steps'][0]['with'], {
+            'ref': '${{ github.sha }}', 'persist-credentials': False})
         steps = self.jobs['source']['steps']
         self.assertEqual(steps, self.jobs['replacement']['steps'])
         checkouts = [s['with'] for s in steps if s.get('uses', '').startswith('actions/checkout@')]
