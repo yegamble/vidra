@@ -131,12 +131,20 @@ flags:
                        Required for an unattended install; without it, and
                        without a terminal to ask on, this script refuses.
       --ref <tag>      release to pin: the deployment tree and the vidra CLI both
-                       come from it (default: vidra-core's latest release). A
+                       come from it (default: the newest vidra-core release
+                       whose releases/<tag>.json is on this repo's main). A
                        release cut before the release-assets workflow landed
                        carries no CLI binary and is refused with the
                        `make build-vidra` fallback named.
       --dir <path>     absolute path to install into (default /opt/vidra)
       --owner <owner>  GitHub owner to fetch from, for a fork (default yegamble)
+      --no-setup       install the tree and the CLI, then STOP before the setup
+                       interview. For a disaster-recovery rebuild: env/production.env
+                       and deploy/Caddyfile.local come from a config archive
+                       (backups/vidra-config-<stamp>.tar.gz), because a fresh
+                       interview mints new KEKs and orphans every sealed column in
+                       the restored database. See deploy/README.md "Disaster
+                       recovery".
       --git            clone the repositories instead of unpacking the release
                        bundle: a full git checkout of this repo plus the three
                        component checkouts, which is what you want in order to
@@ -152,6 +160,7 @@ environment (the flags win when both are given):
   VIDRA_HOME=<path>    same as --dir
   VIDRA_GH_OWNER=<o>   same as --owner
   VIDRA_INSTALL_GIT=1  same as --git
+  VIDRA_NO_SETUP=1     same as --no-setup
 
 exit status: 0 when the install completed (including the macOS "wrong platform,
 here is the dev path" case), non-zero when it stopped and said why. Whatever it
@@ -176,6 +185,11 @@ case "${VIDRA_INSTALL_GIT:-}" in
   ""|0|false|no|off) ;;
   *) FORCE_GIT=1 ;;
 esac
+NO_SETUP=0
+case "${VIDRA_NO_SETUP:-}" in
+  ""|0|false|no|off) ;;
+  *) NO_SETUP=1 ;;
+esac
 
 need_value() {
   # $1 = flag name, $2 = how many arguments are left including the flag itself
@@ -192,6 +206,7 @@ while [ $# -gt 0 ]; do
     --owner)    need_value --owner "$#"; OWNER="$2"; shift 2 ;;
     --owner=*)  OWNER="${1#--owner=}";   shift ;;
     --git)      FORCE_GIT=1; shift ;;
+    --no-setup) NO_SETUP=1; shift ;;
     -h|--help)  usage; exit 0 ;;
     --)         shift; break ;;
     *)          usage >&2; die "unknown argument: $1" ;;
@@ -372,6 +387,30 @@ else
   INSTALL_DOCKER=1
 fi
 
+# Extra words for the "not empty" refusal below when the ONLY entry is backups/ -
+# the shape deploy/provision.sh leaves, and so the shape a disaster-recovery host
+# provisioned first (cloud-init, or following the old recipe) is in.
+#
+# The refusal is deliberately NOT relaxed for that shape, though unpacking a
+# bundle never writes backups/ and so would destroy nothing: make_install_dir
+# runs `install -d -o <this user>` on ${DIR}, which would hand a directory
+# provision.sh chowned to the service user back to root (or to whoever ran this)
+# and leave the 03:15 backup timer unable to write into the backups/ beneath it.
+# Accepting the directory safely needs ownership handling of its own; the order
+# "install.sh, THEN provision.sh" (which the quickstart already uses, and which
+# provision.sh's own closing message assumes) needs none. So this only explains.
+dir_refusal_hint() {
+  local d="$1" e
+  [ -d "${d}/backups" ] && [ ! -L "${d}/backups" ] || return 0
+  # A glob and not `ls | grep`: names are not ours to assume, and the dotfile
+  # patterns are what `ls -A` (the refusal's own test) would have counted.
+  for e in "$d"/* "$d"/.[!.]* "$d"/..?*; do
+    [ -e "$e" ] || [ -L "$e" ] || continue
+    [ "${e##*/}" = backups ] || return 0
+  done
+  printf ' It holds only backups/, which is what deploy/provision.sh leaves behind: run install.sh BEFORE provision.sh (the unpack needs an empty directory and provision.sh creates backups/), or move backups/ aside and put it back afterwards.'
+}
+
 # What state is the install directory in? Four cases now, and only one of them is
 # a refusal.
 #
@@ -387,7 +426,7 @@ elif [ -f "${DIR}/vidra-bundle.manifest" ]; then
   DIR_STATE=bundle
   log "${DIR}: an unpacked deployment bundle - will be left alone (see below)"
 elif [ -e "$DIR" ] && [ -n "$(ls -A "$DIR" 2>/dev/null || true)" ]; then
-  die "${DIR} exists, is neither a git checkout nor an unpacked bundle, and is not empty. Refusing to install over somebody's files - move it aside, or pass --dir <another path>."
+  die "${DIR} exists, is neither a git checkout nor an unpacked bundle, and is not empty. Refusing to install over somebody's files - move it aside, or pass --dir <another path>.$(dir_refusal_hint "$DIR")"
 else
   log "${DIR}: will be created"
 fi
@@ -405,24 +444,81 @@ if [ "$HAVE_GIT" -eq 0 ] && [ "$DIR_STATE" != "bundle" ] \
   want_pkg git
 fi
 
-# The release everything gets pinned to. ONE tag for the three component
-# checkouts AND the CLI: the release scripts cut all three component repos under
-# one version, and a host running the compose files of one release with the
-# binaries of another is a configuration nobody has ever tested.
+# The release everything gets pinned to: the tree and the CLI are ${TAG}'s. The
+# three IMAGE pins usually are too, but not always - a core-only release pairs
+# vidra-user and vidra-search at an earlier tag, and resolve_pairing (step 7)
+# reads that out of the release record before the interview writes them.
 #
-# The GitHub REST API, read with curl and cut with sed. jq is deliberately NOT a
-# dependency: it is not on a fresh droplet, and an installer that apt-installs a
-# JSON parser in order to read one string has lost the plot.
+# Which release a fresh install gets when no --ref names one: the NEWEST STABLE
+# vidra-core release WHOSE RELEASE RECORD (releases/<tag>.json) IS ON META MAIN -
+# not simply releases/latest.
+#
+# WHY: deploy/release.sh publishes the component releases first, and the record
+# that pairs core/user/search lands afterwards in its own PR (preflight evidence,
+# RAW_PREFLIGHT_RELEASES, the env template bump). resolve_pairing refuses without
+# that record, so while releases/latest already named the new tag every fresh
+# install died with "no release record is available" - and it was the PUBLISH,
+# not any reviewed step, that exposed a release to installers, before its image
+# scan or REC-03 drill had looked at it. Skipping a release whose record is not on
+# main closes that window and makes MERGING THE RECORD the switch that publishes a
+# release to installers.
+#
+# Only a 404 skips. A record that exists but is corrupt or invalid still selects
+# its release, and resolve_pairing refuses it exactly as before: stepping past a
+# broken record to an older release would hide the breakage. Any other answer (no
+# network, a 5xx) refuses rather than guess that an older release is the right
+# one. --ref bypasses all of this; so does VIDRA_RECORD_FETCH=off, which means
+# "the record is already on this host" and so cannot be probed for here.
+#
+# The GitHub REST API, read with curl and cut with tr/sed/awk. jq is deliberately
+# NOT a dependency: it is not on a fresh droplet, and an installer that
+# apt-installs a JSON parser in order to read a few strings has lost the plot.
 resolve_tag() {
-  TAG="$(
-    curl -fsSL -H 'Accept: application/vnd.github+json' \
-      "https://api.github.com/repos/${OWNER}/vidra-core/releases/latest" 2>/dev/null \
-      | grep -m 1 '"tag_name"' \
-      | sed -e 's/.*"tag_name"[^"]*"//' -e 's/".*//' || true
-  )"
+  rt_tmp="$(mktemp -d)"
+  rt_code="$(curl -sSL -H 'Accept: application/vnd.github+json' -o "${rt_tmp}/list" -w '%{http_code}' \
+    "https://api.github.com/repos/${OWNER}/vidra-core/releases?per_page=30" 2>/dev/null)" || true
+  # One "key":value per line (the API may answer minified), then the stable,
+  # canonical tags, highest version first. Drafts and prereleases never reach an
+  # installer, which is what releases/latest used to filter for us.
+  rt_tags=""
+  if [ "$rt_code" = "200" ]; then
+    rt_tags="$(awk '{ gsub(/[][{},]/, "\n"); print }' "${rt_tmp}/list" \
+      | sed -n -E 's/^[[:space:]]*"(tag_name|draft|prerelease)"[[:space:]]*:[[:space:]]*"?([^",]*)"?[[:space:]]*$/\1 \2/p' \
+      | awk '$1 == "tag_name" { t = $2; d = "" } $1 == "draft" { d = $2 }
+             $1 == "prerelease" { if (t != "" && d == "false" && $2 == "false") print t; t = "" }' \
+      | grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' \
+      | sed 's/^v//' | sort -t. -k1,1nr -k2,2nr -k3,3nr | sed 's/^/v/' || true)"
+  fi
+  [ -n "$rt_tags" ] || { rm -rf "$rt_tmp"; die "could not resolve the latest ${OWNER}/vidra-core release from the GitHub API (rate limit, no network, or no releases yet). Pass --ref <tag> to name one: https://github.com/${OWNER}/vidra-core/releases"; }
+
+  rt_switch="$(printf '%s' "${VIDRA_RECORD_FETCH:-}" | sed 's/#.*//;s/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')"
+  case "$rt_switch" in
+    off|false|0|no)
+      TAG="$(printf '%s\n' "$rt_tags" | head -n 1)"
+      rm -rf "$rt_tmp"
+      log "release: ${TAG} (newest ${OWNER}/vidra-core release; VIDRA_RECORD_FETCH=off, so its record is not checked until pairing)"
+      return 0 ;;
+  esac
+  rt_base="${VIDRA_RECORD_BASE_URL:-https://raw.githubusercontent.com/${OWNER}/vidra/main/releases}"
+  case "$rt_base" in
+    https://*) ;;
+    *) rm -rf "$rt_tmp"; die "VIDRA_RECORD_BASE_URL must use https://; no release was chosen" ;;
+  esac
+
+  TAG=""
+  for rt_tag in $rt_tags; do
+    rt_code="$(curl -sSL --proto '=https' --proto-redir '=https' --connect-timeout 5 --max-time 20 \
+      -o "${rt_tmp}/record" -w '%{http_code}' "${rt_base%/}/${rt_tag}.json" 2>/dev/null)" || true
+    case "$rt_code" in
+      200) TAG="$rt_tag"; break ;;
+      404) log "release: skipping ${rt_tag} - it is published, but releases/${rt_tag}.json is not on ${OWNER}/vidra main yet, and merging that record is what releases it to installers" ;;
+      *)   rm -rf "$rt_tmp"; die "could not check whether ${rt_tag} has a release record (HTTP ${rt_code:-000} from ${rt_base%/}/${rt_tag}.json), so no release was chosen rather than guess an older one. Re-run when the network is, or pass --ref <tag>." ;;
+    esac
+  done
+  rm -rf "$rt_tmp"
   [ -n "$TAG" ] \
-    || die "could not resolve the latest ${OWNER}/vidra-core release from the GitHub API (rate limit, no network, or no releases yet). Pass --ref <tag> to name one: https://github.com/${OWNER}/vidra-core/releases"
-  log "release: ${TAG} (latest ${OWNER}/vidra-core release)"
+    || die "none of the ${OWNER}/vidra-core releases the GitHub API listed has a release record on ${OWNER}/vidra main, so there is no release an installer can pair. Pass --ref <tag> with a recorded release: https://github.com/${OWNER}/vidra/tree/main/releases"
+  log "release: ${TAG} (newest ${OWNER}/vidra-core release with a release record on main)"
 }
 
 # Resolved here, before the confirmation, ONLY when it can be: naming the tag in
@@ -436,7 +532,7 @@ if [ -n "$REF" ]; then
 elif command -v curl >/dev/null 2>&1; then
   resolve_tag
 else
-  log "release: the latest ${OWNER}/vidra-core release, looked up once curl is installed"
+  log "release: the newest ${OWNER}/vidra-core release with a release record, looked up once curl is installed"
 fi
 TAG_SHOWN="${TAG:-<the latest release>}"
 
@@ -482,7 +578,11 @@ elif have_tty; then
       ;;
   esac
   echo "  cli             ${TAG_SHOWN}'s vidra_${TAG_SHOWN}_linux_${ARCH} -> /usr/local/bin/vidra"
-  echo "  then            'vidra setup' - the interview that writes env/production.env"
+  if [ "$NO_SETUP" -eq 1 ]; then
+    echo "  then            NOTHING - --no-setup: env/production.env must come from a config archive"
+  else
+    echo "  then            'vidra setup' - the interview that writes env/production.env"
+  fi
   echo
   echo "It starts nothing, opens no port, and never rewrites an existing env file."
   echo
@@ -686,6 +786,126 @@ fetch_verified() {
   die "CHECKSUM MISMATCH on ${asset} from release ${TAG}. The download has been deleted and nothing was installed. This is either a corrupted transfer or a tampered asset; re-run, and if it happens again do not work around it."
 }
 
+# Where step 7 writes the configuration; the git paths resolve pairing in step 5.
+ENV_FILE="${DIR}/env/production.env"
+PAIRING_DONE=0
+
+# Resolve before bootstrap/setup, using the validator that even v0.7.5 shipped.
+# A current installer can unpack an OLD bundle: that bundle has neither lib.sh's
+# fetch_release_record nor release-mapping.py's newer `resolve` command. Calling
+# them used to warn and guess one tag for all services, inventing user/search
+# images for a core-only release. Fetch data here, never newer executable helpers,
+# and refuse when no record establishes the pairing. A validated local record is
+# sufficient offline. Save a fetched record so the OLD deploy checker can use it
+# too; otherwise correct mixed pins still fail its first deployment.
+resolve_pairing() {
+  if [ "$PAIRING_DONE" -eq 1 ]; then
+    return 0
+  fi
+  command -v python3 >/dev/null 2>&1 \
+    || die "python3 is required to verify release pairing; install python3 and re-run. No component tags were guessed."
+  [ -f "${DIR}/deploy/release-mapping.py" ] \
+    || die "${TAG}'s deployment tree has no release-record validator. Install a release with deploy/release-mapping.py; no component tags were guessed."
+  case "$TAG" in
+    *[!v0-9.]*) die "release pairing requires a vMAJOR.MINOR.PATCH tag" ;;
+  esac
+  printf '%s\n' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+    || die "release pairing requires a vMAJOR.MINOR.PATCH tag"
+
+  pairing_download="${WORK}/record/${TAG}.json"
+  mkdir -p "${WORK}/record"
+  rm -f "$pairing_download"
+  pairing_switch="$(printf '%s' "${VIDRA_RECORD_FETCH:-}" | sed 's/#.*//;s/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')"
+  case "$pairing_switch" in
+    off|false|0|no) log "release record fetch disabled; checking the installed record" ;;
+    *)
+      pairing_base="${VIDRA_RECORD_BASE_URL:-https://raw.githubusercontent.com/${OWNER}/vidra/main/releases}"
+      case "$pairing_base" in
+        https://*) ;;
+        *) die "VIDRA_RECORD_BASE_URL must use https://; no component tags were guessed" ;;
+      esac
+      # A record is ~2 KiB. Bound time, size and redirect protocols; validate
+      # JSON before it can replace any local record or decide an image tag.
+      if ! curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+          --connect-timeout 5 --max-time 20 --max-filesize 262144 \
+          --output "$pairing_download" "${pairing_base%/}/${TAG}.json"; then
+        rm -f "$pairing_download"
+        log "release record download failed; checking the installed record"
+      fi
+      ;;
+  esac
+
+  pairing="$(python3 - "$DIR" "$TAG" "$pairing_download" <<'PYPAIR'
+import json
+import os
+from pathlib import Path
+import re
+import runpy
+import sys
+import tempfile
+
+root, tag, downloaded = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3])
+local = root / "releases" / (tag + ".json")
+try:
+    validate = runpy.run_path(str(root / "deploy/release-mapping.py"))["validate"]
+
+    def read_record(path):
+        if path.stat().st_size > 262144:
+            raise ValueError("release record exceeds 256 KiB")
+        data = json.loads(path.read_text())
+        problems = validate(path, data)
+        if problems:
+            raise ValueError("; ".join(problems))
+        # The historical validator checks field shapes; these two release
+        # constraints arrived later and must hold before any tags are printed.
+        tags = [data["components"][role]["tag"] for role in ("core", "user", "search")]
+        if any(not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", t) for t in tags):
+            raise ValueError("component tags must be canonical vMAJOR.MINOR.PATCH tags")
+        version = lambda t: tuple(map(int, t[1:].split(".")))
+        if any(version(t) > version(tag) for t in tags) or tag not in tags:
+            raise ValueError("component tags do not belong to the requested release")
+        return data
+
+    existing = read_record(local) if local.exists() else None
+    data = read_record(downloaded) if downloaded.exists() else existing
+    if data is None:
+        raise ValueError("no release record is available; provide the trusted releases/" + tag + ".json or retry when it is published")
+    if existing is not None and data != existing:
+        raise ValueError("downloaded release record contradicts the installed record; neither was changed")
+    if existing is None:
+        local.parent.mkdir(parents=True, exist_ok=True)
+        # Promote only validated data, atomically. Keep it for deploy.sh, which
+        # in older bundles cannot fetch the record itself.
+        with tempfile.NamedTemporaryFile(mode="w", dir=local.parent, delete=False) as out:
+            pending = Path(out.name)
+            json.dump(data, out, indent=2)
+            out.write("\n")
+        try:
+            os.chmod(pending, 0o644)
+            os.replace(pending, local)
+        finally:
+            pending.unlink(missing_ok=True)
+    for role in ("core", "user", "search"):
+        print(role, data["components"][role]["tag"])
+except Exception as error:
+    print("[install] ERROR: cannot verify release pairing: " + str(error), file=sys.stderr)
+    sys.exit(1)
+PYPAIR
+  )" || die "release ${TAG}'s component pairing could not be verified. Setup/bootstrap was not run; no component tags were guessed."
+
+  while read -r p_role p_tag; do
+    case "$p_role" in
+      core) CORE_TAG="$p_tag" ;;
+      user) USER_TAG="$p_tag" ;;
+      search) SEARCH_TAG="$p_tag" ;;
+    esac
+  done <<EOF
+$pairing
+EOF
+  PAIRING_DONE=1
+  log "release ${TAG} pairs its components as core=${CORE_TAG} user=${USER_TAG} search=${SEARCH_TAG} (validated release record)"
+}
+
 # --- 5/7 the deployment tree ------------------------------------------------------
 step "5/7 the deployment tree"
 
@@ -717,18 +937,31 @@ make_install_dir() {
   as_root install -d -m 0755 -o "$(id -un)" -g "$(id -gn)" "$DIR"
 }
 
+# bootstrap.sh is the ONE copy of "which repos, cloned how". It is idempotent, it
+# detaches each checkout at its ref, and meta-ci exercises its update path on
+# every run - three reasons not to re-implement three git clones here.
+#
+# Each component gets ITS OWN tag from the release record, not ${TAG}: a
+# core-only release (v0.7.4, v0.7.5) pairs vidra-user and vidra-search at an
+# earlier tag, and `checkout --detach ${TAG}` in either of them is a tag that
+# does not exist. The pairing is read from ${DIR}, which by now holds the
+# meta-repo (release-mapping.py) and not yet the components. The
+# same tags reach the interview in step 7, so the checkouts and the image pins
+# agree - which is what deploy.sh's checkout sync then asserts.
+run_bootstrap() {
+  resolve_pairing
+  log "bootstrapping the component checkouts: core ${CORE_TAG}, user ${USER_TAG}, search ${SEARCH_TAG}"
+  ( cd "$DIR" && VIDRA_REF="$TAG" VIDRA_CORE_REF="$CORE_TAG" VIDRA_USER_REF="$USER_TAG" \
+      VIDRA_SEARCH_REF="$SEARCH_TAG" VIDRA_GH_OWNER="$OWNER" ./bootstrap.sh ) \
+    || die "bootstrap.sh failed. The meta-repo is at ${DIR}; fix the cause (usually a tag missing from a component repo) and re-run this installer, or run it by hand from ${DIR}: VIDRA_CORE_REF=${CORE_TAG} VIDRA_USER_REF=${USER_TAG} VIDRA_SEARCH_REF=${SEARCH_TAG} ./bootstrap.sh"
+}
+
 clone_tree() {
   ensure_git
   log "cloning ${OWNER}/vidra into ${DIR}"
   make_install_dir
   git clone "https://github.com/${OWNER}/vidra.git" "$DIR"
-  log "bootstrapping the component checkouts at ${TAG}"
-  # bootstrap.sh is the ONE copy of "which repos, cloned how". It is idempotent, it
-  # honours VIDRA_REF by detaching each checkout at that tag, and meta-ci exercises
-  # its update path on every run - three reasons not to re-implement three git
-  # clones here.
-  ( cd "$DIR" && VIDRA_REF="$TAG" VIDRA_GH_OWNER="$OWNER" ./bootstrap.sh ) \
-    || die "bootstrap.sh failed. The meta-repo is cloned at ${DIR}; fix the cause (usually a tag that does not exist in every component repo) and re-run this installer, or just './bootstrap.sh' from ${DIR}."
+  run_bootstrap
   TREE_MODE=git
 }
 
@@ -793,7 +1026,21 @@ if [ "$DIR_STATE" = "bundle" ]; then
   if [ "$INSTALLED_TAG" = "$TAG" ]; then
     log "${DIR} is already the ${TAG} bundle - leaving it exactly as it is."
   else
-    warn "${DIR} holds the ${INSTALLED_TAG:-unknown} bundle and this run resolved ${TAG}. It was NOT overwritten: unpacking a different release over a live deployment tree would replace the deploy scripts and compose files under a running stack, and nothing here can tell your edits from ours. To move this host to ${TAG}, unpack the ${TAG} bundle over this tree yourself (curl -fsSLO ${BASE_URL}/${BUNDLE_ASSET} && tar -xzf ${BUNDLE_ASSET} -C ${DIR}), set the VIDRA_*_TAG values in env/production.env to ${TAG}, then run 'vidra deploy'. Bumping only the tags is refused before anything changes: deploy.sh's release-mapping preflight sees a ${INSTALLED_TAG:-unknown} bundle under ${TAG} pins."
+    # Point at the one-command upgrade (deploy/pin-release.sh verifies the bundle,
+    # unpacks it safely and pins the release's PAIRING of component tags) rather
+    # than hand tar steps: `tar -xzf` over a live tree trusts every member name
+    # in a downloaded archive, and "set the tags yourself" writes one tag three
+    # times for a release that re-released a single component. This stays a
+    # WARNING and never runs it: an installer that upgrades a live tree behind
+    # the operator's back is the failure this branch exists to prevent.
+    # A tree that predates v0.6.5 has no pin-release.sh to point at, so it keeps
+    # the manual steps - telling someone to run a missing script is worse.
+    if [ -f "${DIR}/deploy/pin-release.sh" ]; then
+      TREE_OWNER="$(stat -c %U "$DIR" 2>/dev/null || stat -f %Su "$DIR" 2>/dev/null || true)"
+      warn "${DIR} holds the ${INSTALLED_TAG:-unknown} bundle and this run resolved ${TAG}. It was NOT upgraded: moving a live deployment tree to a different release would replace the deploy scripts and compose files under a running stack, and an installer must not do that behind your back. To move this host to ${TAG}, run, as the tree's owner and never as root: cd ${DIR} && sudo -u ${TREE_OWNER:-<owner>} ./deploy/pin-release.sh ${TAG} - it verifies the ${TAG} bundle, unpacks it, and pins each VIDRA_*_TAG to the tag that release pairs it at without touching env/production.env's secrets or deploy/Caddyfile.local - then run ./deploy/deploy.sh. Do not just edit the tags: deploy.sh's release-mapping preflight refuses a ${INSTALLED_TAG:-unknown} bundle under ${TAG} pins."
+    else
+      warn "${DIR} holds the ${INSTALLED_TAG:-unknown} bundle and this run resolved ${TAG}. It was NOT overwritten: unpacking a different release over a live deployment tree would replace the deploy scripts and compose files under a running stack, and nothing here can tell your edits from ours. This tree predates deploy/pin-release.sh (v0.6.5), so move it by hand: unpack the ${TAG} bundle over this tree (curl -fsSLO ${BASE_URL}/${BUNDLE_ASSET} && tar -xzf ${BUNDLE_ASSET} -C ${DIR}), set the VIDRA_*_TAG values in env/production.env to ${TAG}, then run 'vidra deploy'. Bumping only the tags is refused before anything changes: deploy.sh's release-mapping preflight sees a ${INSTALLED_TAG:-unknown} bundle under ${TAG} pins."
+    fi
   fi
 elif [ "$DIR_STATE" = "checkout" ]; then
   # NEVER reset, never discard, never stash. A checkout on a deployment host may
@@ -816,9 +1063,7 @@ elif [ "$DIR_STATE" = "checkout" ]; then
       warn "${DIR} is on branch '${BRANCH}', not main, so it was not updated. That is usually deliberate; if it is not, 'git -C ${DIR} checkout main' and re-run."
     fi
   fi
-  log "bootstrapping the component checkouts at ${TAG}"
-  ( cd "$DIR" && VIDRA_REF="$TAG" VIDRA_GH_OWNER="$OWNER" ./bootstrap.sh ) \
-    || die "bootstrap.sh failed. The meta-repo is at ${DIR}; fix the cause (usually a tag that does not exist in every component repo) and re-run this installer, or just './bootstrap.sh' from ${DIR}."
+  run_bootstrap
 elif [ "$FORCE_GIT" -eq 1 ]; then
   log "--git given - cloning instead of unpacking the release bundle."
   clone_tree
@@ -894,7 +1139,38 @@ VIDRA_BIN=/usr/local/bin/vidra
 
 # --- 7/7 setup ---------------------------------------------------------------------
 step "7/7 setup"
-ENV_FILE="${DIR}/env/production.env"
+
+# What --no-setup ends with. A function so the one thing it must say - where the
+# env file comes from - is tested by running it (tests/install_test.sh).
+no_setup_notice() {
+  if [ -f "$ENV_FILE" ]; then
+    log "${ENV_FILE} already exists - leaving it EXACTLY as it is."
+  fi
+  cat <<EOF
+
+[install] --no-setup: the deployment tree (${TAG}) and the vidra CLI are installed
+and the setup interview was NOT run, on purpose. ${ENV_FILE}
+and ${DIR}/deploy/Caddyfile.local must come from the config archive that
+deploy/backup.sh wrote next to the dump (backups/vidra-config-<stamp>.tar.gz), not
+from a new interview: that file holds the KEKs sealing data already in the
+database, and a freshly generated set orphans it.
+
+  1. Put the config archive and the dump for the SAME stamp on this host, then:
+
+         tar -xzf vidra-config-<stamp>.tar.gz -C ${DIR}
+
+  2. Check the pins it restored. VIDRA_CORE_TAG (and the user and search tags)
+     should name the release the dump was taken under; this tree is ${TAG}. If
+     they differ, deploy.sh's release-mapping preflight will refuse - install the
+     release the env file names instead:
+
+         grep '^VIDRA_.*_TAG=' ${ENV_FILE}
+
+  3. Restore the dump, then deploy - deploy/README.md, "Disaster recovery".
+
+EOF
+}
+
 
 # The runbook's proof, at the moment it matters: BEFORE anything writes secrets
 # into that path. `git check-ignore` answers about a path, not about a file, so it
@@ -915,7 +1191,31 @@ else
     || die "env/production.env is NOT git-ignored in ${DIR}. Stop: the next command writes every secret this instance has into that file. Fix .gitignore first."
 fi
 
-if [ -f "$ENV_FILE" ]; then
+# Only when the interview is about to write the file: an existing one is left
+# exactly as it is, pins included, so there is nothing to resolve for. --no-setup
+# never writes it, so it resolves nothing either.
+if [ "$NO_SETUP" -eq 0 ] && [ ! -f "$ENV_FILE" ]; then
+  resolve_pairing
+  # Every command this step prints carries the same pins it would have run, so a
+  # re-run by hand writes what the installer would have. Semver tags only, so
+  # nothing here needs quoting.
+  TAG_FLAGS="--release-tag ${TAG} --core-tag ${CORE_TAG} --user-tag ${USER_TAG} --search-tag ${SEARCH_TAG}"
+fi
+
+if [ "$NO_SETUP" -eq 1 ]; then
+  # Disaster recovery. The interview generates a fresh JWT secret and fresh KEKs;
+  # run over a restored database, the MFA, federation and ATProto material sealed
+  # under the OLD keys becomes undecryptable, and nothing says so until a user
+  # logs in. The config archive carries the old file, so this step has nothing to
+  # write - and must exit before the `vidra setup` call below, not merely before
+  # its prompts.
+  no_setup_notice
+  if [ -n "$WARNINGS" ]; then
+    printf '[install] thing(s) that need you:\n%s\n' "$WARNINGS"
+  fi
+  log "done (--no-setup)."
+  exit 0
+elif [ -f "$ENV_FILE" ]; then
   # The whole reason this installer is safe to re-run. That file holds the KEKs
   # that seal MFA/federation/ATProto material in the database; regenerating them
   # orphans everything already sealed under the old ones. `vidra setup` refuses to
@@ -954,10 +1254,16 @@ elif have_tty; then
   # anything else was never a coherent default, and passing it is what makes the
   # closing message below ("...if you want something other than ${TAG}") true.
   # $TAG is guaranteed non-empty by the resolve_tag call above.
-  if ( cd "$DIR" && "$VIDRA_BIN" setup --template env/production.env.example --release-tag "$TAG" < /dev/tty ); then
+  #
+  # The three per-component flags come from resolve_pairing and WIN over
+  # --release-tag in setup's engine (vidra-core internal/setup: firstNonEmpty of
+  # the component tag, then the release tag). They are passed even when all
+  # three equal $TAG, so the file's bytes never depend on that precedence.
+  if ( cd "$DIR" && "$VIDRA_BIN" setup --template env/production.env.example --release-tag "$TAG" \
+         --core-tag "$CORE_TAG" --user-tag "$USER_TAG" --search-tag "$SEARCH_TAG" < /dev/tty ); then
     SETUP_RAN=1
   else
-    die "'vidra setup' exited non-zero. Nothing else was changed and ${DIR} is a complete deployment tree - re-run just the interview: 'cd ${DIR} && vidra setup --template env/production.env.example'."
+    die "'vidra setup' exited non-zero. Nothing else was changed and ${DIR} is a complete deployment tree - re-run just the interview: 'cd ${DIR} && vidra setup --template env/production.env.example ${TAG_FLAGS}'."
   fi
 else
   SETUP_RAN=0
@@ -968,10 +1274,12 @@ needs a terminal and there is none here (no /dev/tty). It is not skipped - it is
 yours to run, either way:
 
   On a terminal:
-      cd ${DIR} && vidra setup --template env/production.env.example
+      cd ${DIR} && vidra setup --template env/production.env.example \\
+          ${TAG_FLAGS}
 
   Unattended, with the answers as flags:
       cd ${DIR} && vidra setup --template env/production.env.example \\
+          ${TAG_FLAGS} \\
           --non-interactive \\
           --domain video.example.org --instance-name "Example Video" \\
           --registration closed --tls-mode acme --acme-email you@example.org \\
@@ -979,6 +1287,7 @@ yours to run, either way:
 
   Or from an answers file ("flag-name = value" lines, no dashes):
       cd ${DIR} && vidra setup --template env/production.env.example \\
+          ${TAG_FLAGS} \\
           --non-interactive --answers answers.txt
 
   'vidra setup -h' lists every flag, including the @file / \$VIDRA_SETUP_*
@@ -1009,14 +1318,18 @@ cat <<EOF
 
   Swap, the 'vidra' service user, ${DIR}'s ownership, the docker log cap,
   unattended-upgrades and the nightly backup timer - installed AND verified. It
-  With IPFS_MANAGED_NODE=true, provisioning also installs the host IPFS manager.
-  It exposes a narrow local socket; the API never receives the Docker socket.
   opens no port and never touches sshd; it prints the exact list your CLOUD
   firewall must allow (a host ufw does not filter Docker-published ports).
+  With IPFS_MANAGED_NODE=true, provisioning also installs the host IPFS manager.
+  It exposes a narrow local socket; the API never receives the Docker socket.
+
+  From here on, run vidra AS 'vidra': provisioning hands ${DIR} to that user,
+  env/production.env is readable by it alone, and it is the one in the docker
+  group. As your own login the commands below fail on a permission error.
 
   Deploy:
 
-      cd ${DIR} && vidra deploy
+      cd ${DIR} && sudo -u vidra vidra deploy
 
   That execs deploy/deploy.sh unchanged: pre-deploy dump, pull, the core and
   search migrations as two separate exit-code-gated steps, 'up -d --no-build',
@@ -1034,8 +1347,17 @@ cat <<EOF
 
   Then:
 
-      cd ${DIR} && vidra doctor     # 18 checks: compose, exposure, config, backups, reachability
-      cd ${DIR} && vidra status     # what is running, and whether it answers
+      cd ${DIR} && sudo -u vidra vidra doctor     # compose, exposure, config, backups, reachability
+      cd ${DIR} && sudo -u vidra vidra status     # what is running, and whether it answers
+
+  Once the stack is up, claim the owner account (every signup path answers 403
+  until you do). On this server, in a terminal:
+
+      cd ${DIR} && sudo -u vidra vidra claim      # prints the owner-claim link; open it
+
+  'vidra claim' is not in v0.7.5 or earlier. On an older CLI, take the newest
+  'FIRST-RUN SETUP REQUIRED' line from './deploy/compose.sh logs api' instead -
+  deploy/README.md 'First boot' has the steps.
 
   deploy/README.md is the manual path for every one of these, and the source of
   truth for all of them.

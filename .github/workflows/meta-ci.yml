@@ -126,6 +126,10 @@ jobs:
       # deploy/restore.sh or deploy/rollback.sh could silently break the tests
       # that exist to protect it. They run here, and a SKIP fails the job — an
       # unrunnable assertion must not read as a passing one.
+      # Workflow unit tests and later Compose assertions parse real YAML.
+      - name: Ensure PyYAML is available
+        run: python3 -c 'import yaml' 2>/dev/null || pip3 install --quiet PyYAML==6.0.3
+
       - name: Deploy-script unit tests (tests/*_test.py)
         run: |
           mkdir -p ci-report
@@ -310,13 +314,6 @@ jobs:
       # auto-loads docker-compose.override.yml (the api's SEARCH_* wiring).
       - name: Validate full-stack compose resolves
         run: SEARCH_INTERNAL_SECRET=dummy docker compose --profile core config -q
-
-      # Three steps below parse a rendered compose model with PyYAML. It is not
-      # guaranteed on the runner image, and a missing import would surface as a
-      # traceback rather than as the assertion failing — so install it once, here,
-      # before first use.
-      - name: Ensure PyYAML is available
-        run: python3 -c 'import yaml' 2>/dev/null || pip3 install --quiet pyyaml
 
       # deploy/cloud-init.yaml.example is pasted into a provider's user-data box
       # and never executed by anything here, so nothing else in this repo would

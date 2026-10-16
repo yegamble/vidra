@@ -6,8 +6,20 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/finished-means-merged.sh",
-            "timeout": 30,
+            "timeout": 300,
             "statusMessage": "Checking finished-means-merged"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/ci/check-vertical-slice-completeness.py\" --root \"$CLAUDE_PROJECT_DIR\" --record-session-baseline",
+            "timeout": 30,
+            "statusMessage": "Recording vertical-slice session baseline"
           }
         ]
       }

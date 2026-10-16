@@ -21,10 +21,14 @@
 //   search-catchup      stop search, edit the drill video's title, restart
 //                       search, prove the outbox retry delivered it
 //   mfa-enroll          sealed-secret fixture: TOTP on the owner, proven by a
-//                       real two-factor browser sign-in BEFORE the backup
+//                       real two-factor browser sign-in BEFORE the backup; on a
+//                       candidate with 0151, also an admin mail-config document
+//                       carrying a sealed provider key; with 0182, a disabled
+//                       OIDC provider carrying a sealed client secret
 //   rpo-marker          one write AFTER the backup, which a restore must lose
 //   verify-restore      replacement host: password+TOTP sign-in (wrong code
-//                       refused), rpo marker absent, decode old media from the
+//                       refused), the restored mail-config credential still
+//                       decrypts, rpo marker absent, decode old media from the
 //                       bucket, find the drill video through real search, then
 //                       upload and decode a NEW video
 //   verify-restore-write  only the new-upload phase (retry after a 429)
@@ -48,6 +52,8 @@ const origin = 'https://secure.video.test';
 // Recorded for the same reason the host half records them: a result file has to
 // say which release, and which prepared stage, produced it.
 const candidate = JSON.parse(readFileSync(join(baseline, 'candidate.json'), 'utf8'));
+const coreSchema = JSON.parse(readFileSync(join(baseline, 'expected-ledgers.json'), 'utf8')).schema_migrations.version;
+assert.ok(Number.isInteger(coreSchema), 'the baseline must name its frozen core schema version');
 const result = { status: 'UNVERIFIED', action, baseline, candidate_tag: candidate.tag, checks: {},
   node: process.version, commands: [], started_at: new Date().toISOString() };
 const save = () => writeFileSync(join(out, 'result.json'), JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
@@ -113,6 +119,38 @@ try {
     const text = await response.text(); let json = null; try { json = JSON.parse(text); } catch { /* not JSON */ }
     return { status: response.status, body: json, retryAfter: response.headers.get('retry-after') };
   }, { path, token, method, body });
+
+  const oidcFixture = async (page, auth, create = false) => {
+    if (coreSchema < 182) { result.oidc_provider = 'not applicable: this candidate predates 0182'; return; }
+    const path = '/api/v1/admin/oidc-providers';
+    const listed = await api(page, path, auth.token);
+    // Unlike probing a 404, the frozen schema cannot silently waive a missing
+    // admin endpoint on a candidate that must support this fixture.
+    assert.equal(listed.status, 200, 'admin OIDC provider read failed');
+    assert.equal(listed.body.secrets_available, true, 'this deployment cannot open OIDC secrets');
+    let provider;
+    if (create) {
+      const name = `recovery-drill-${randomBytes(6).toString('hex')}`;
+      const saved = await api(page, path, auth.token, 'POST', {
+        name, display_name: 'Recovery drill', issuer_url: 'https://oidc.example.com', client_id: 'recovery-drill',
+        client_secret: randomBytes(32).toString('hex'), enabled: false, auto_provision: false,
+        scopes: ['openid'], allowed_email_domains: [], current_password: owner.password });
+      assert.equal(saved.status, 201, `OIDC provider save failed (${saved.status})`);
+      provider = saved.body;
+      // Save only the random public name. Neither a secret nor a ciphertext
+      // enters shared evidence, and disabling the fixture avoids outbound OIDC.
+      writeShared('oidc.json', { name });
+      assert.equal(sql(`SELECT count(*) FROM oidc_providers WHERE name='${name}' AND client_secret LIKE 'enc:%'`), '1');
+    } else {
+      const { name } = readShared('oidc.json');
+      provider = listed.body.providers.find(p => p.name === name);
+      assert.ok(provider, 'the restored database lost its OIDC provider fixture');
+    }
+    assert.equal(provider.enabled, false);
+    assert.equal(provider.secret_configured, true);
+    assert.equal(provider.secret_status, 'ok', 'the restored KEK cannot open the OIDC client secret');
+    result.oidc_provider = { name: provider.name, secret_status: provider.secret_status };
+  };
 
   // Real sign-in form. Request limits stay ON: a 429 is waited out, not disabled.
   const signIn = async (page, { expectMfa = false, wrongCodeFirst = false } = {}) => {
@@ -352,6 +390,29 @@ print(sum(float(l.rsplit(' ',1)[1]) for l in lines if l.startswith('vidra_search
     await signIn(fresh, { expectMfa: true });
     await expect(fresh.getByRole('button', { name: 'Open account menu' })).toBeVisible();
     result.checks[phase] = 'PASS';
+    // 0151's credential is sealed under the same MFA KEK chain, so it is the
+    // second sealed fixture. A random throwaway key, never written to any file:
+    // the drill proves it is SEALED (host half) and still DECRYPTS (verify-restore),
+    // which needs no knowledge of the value. A candidate without 0151 answers 404.
+    step('mail-config-sealed-fixture');
+    const mail = await api(page, '/api/v1/admin/mail-config', auth.token);
+    if (mail.status === 404) {
+      result.mail_config = 'not applicable: this candidate predates 0151';
+    } else {
+      assert.equal(mail.status, 200, 'admin mail-config read failed');
+      assert.equal(mail.body.secrets_available, true, 'this deployment cannot seal a credential');
+      const saved = await api(page, '/api/v1/admin/mail-config', auth.token, 'PUT', {
+        transport: 'resend', from_address: 'recovery-drill@video.test',
+        resend: { api_key: `re_drill_${randomBytes(16).toString('hex')}` }, current_password: owner.password });
+      assert.equal(saved.status, 200, `mail-config save failed (${saved.status})`);
+      assert.equal(saved.body.secret_status, 'ok'); assert.equal(saved.body.config?.resend?.api_key_set, true);
+      assert.equal(sql("SELECT count(*) FROM mail_config WHERE secret LIKE 'enc:%'"), '1');
+      result.mail_config = { source: saved.body.source, secret_status: saved.body.secret_status };
+    }
+    result.checks[phase] = 'PASS';
+    step('oidc-provider-sealed-fixture');
+    await oidcFixture(page, auth, true);
+    result.checks[phase] = 'PASS';
   } else if (action === 'rpo-marker') {
     const page = await newPage();
     step('write-after-backup');
@@ -379,6 +440,22 @@ print(sum(float(l.rsplit(' ',1)[1]) for l in lines if l.startswith('vidra_search
     await expect(page.getByRole('button', { name: 'Open account menu' })).toBeVisible();
     const me = await api(page, '/api/v1/auth/me', auth.token);
     assert.equal(me.status, 200); assert.equal(me.body.username, owner.username); assert.equal(me.body.role, 'admin');
+    result.checks[phase] = 'PASS';
+    step('restored-mail-config-credential-decrypts');
+    // The host half proved the row came back enc:-sealed; only the api holds the
+    // KEK, so only it can say the restored config archive's key still opens it.
+    const mail = await api(page, '/api/v1/admin/mail-config', auth.token);
+    if (mail.status === 404) {
+      result.mail_config = 'not applicable: this candidate predates 0151';
+    } else {
+      assert.equal(mail.status, 200, 'admin mail-config read failed');
+      assert.equal(mail.body.config?.resend?.api_key_set, true, 'the restored mail-config lost its stored credential');
+      assert.equal(mail.body.secret_status, 'ok', `restored mail-config credential is ${mail.body.secret_status}, not ok`);
+      result.mail_config = { source: mail.body.source, secret_status: mail.body.secret_status };
+    }
+    result.checks[phase] = 'PASS';
+    step('restored-oidc-provider-credential-decrypts');
+    await oidcFixture(page, auth);
     result.checks[phase] = 'PASS';
     step('write-after-backup-is-lost');
     const displayName = me.body.display_name;

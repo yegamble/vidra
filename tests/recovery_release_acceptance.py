@@ -150,11 +150,93 @@ CATALOGUE = {
     # and deleted (FinishIPFSCopyCleanup), never rewritten in place, so a
     # quiesced fixture cannot drift here.
     'ipfs_copy_cleanup': (150, ()),
+    # 0151. The single-row outbound-mail document an admin saves. Operator intent,
+    # written only by an admin PUT/DELETE, so the row is compared whole —
+    # transport, from_address, settings and every other column — EXCEPT the
+    # credential, which is in SEALED below and never read, hashed or compared.
+    'mail_config': (151, ()),
+    # 0155. The staff member, reason and time explaining an account ban.
+    'user_bans': (155, ()),
+    # 0157. Outstanding mail obligations must survive. The drain leases/retries
+    # rows, so omit its clocks; delivery deletes rows, requiring a quiescent
+    # mail outbox across the comparison (as with ipfs_copy_cleanup above).
+    'notification_emails': (157, ('attempts', 'next_attempt_at')),
+    # 0162-0165. Private-feed authorization, report conversations and ownership
+    # offers/history are user intent, changed only by foreground requests.
+    'user_feed_tokens': (162, ()),
+    'report_messages': (163, ()),
+    'video_ownership_changes': (165, ()),
+    # 0166. Instance identity and federation relationships. Losing the signing
+    # key changes the actor's identity; the secret itself is in SEALED below.
+    'instance_actor_keys': (166, ()),
+    'instance_followers': (166, ()),
+    'instance_following': (166, ()),
+    # These cooldowns deliberately outlive Follow/Undo and actor-cache eviction:
+    # restoring without them resets the anti-amplification budget, so retain
+    # their rows/timestamps, rather than calling them disposable cache state.
+    'instance_follower_backfills': (166, ()),
+    'channel_follower_backfills': (169, ()),
+    # 0167. Also a durable move obligation. The worker advances state/touched_at;
+    # origin, target and claimed_at carry the request and its cooldown.
+    'remote_actor_moves': (167, ('state', 'touched_at')),
+    # 0171-0173. Admin quota overrides, moderation policy and viewer preferences.
+    'user_daily_quotas': (171, ()),
+    'watched_word_lists': (172, ()),
+    'user_content_prefs': (173, ()),
+    # 0174. Aggregated viewing history cannot be rebuilt from another source.
+    # Playback/pruning are real writes: quiesce them across the comparison.
+    'video_playback_days': (174, ()),
+    'video_playback_dims': (174, ()),
+    # 0175. Lockout budgets, remembered devices and email preferences/clocks:
+    # losing them resets security decisions. Only sign-ins/admin actions write
+    # these, so a background worker cannot legitimately move their fingerprints.
+    'login_throttles': (175, ()),
+    'user_known_devices': (175, ()),
+    'user_security_prefs': (175, ()),
+    # 0176. Subscription intent and exceptions are durable. RecordBlocklistSyncResult
+    # changes only the validator, attempt/result clocks and counts below.
+    'blocklist_subscriptions': (176, ('etag', 'last_attempt_at', 'last_synced_at', 'last_status',
+                                      'last_error', 'last_added', 'last_removed', 'entry_count')),
+    'blocklist_allowlist': (176, ()),
+    # 0177-0179. Tags are moderation snapshots; both kinds of votes are the
+    # authoritative rows for counts or a user's remote rating/Undo.
+    'comment_automatic_tags': (177, ()),
+    'remote_video_ratings': (178, ()),
+    'remote_video_user_ratings': (179, ()),
+    # 0180. Header rows have no worker state columns. Target identities are
+    # durable obligations; the drain rewrites all five progress/retry columns.
+    # Finished-job retention deletes rows, so keep those fixtures within the
+    # retention window while comparing, rather than ignoring a lost import.
+    'peertube_follow_imports': (180, ()),
+    'peertube_follow_import_targets': (180, ('state', 'attempts', 'next_attempt_at',
+                                           'last_error', 'updated_at')),
+    # 0182. Admin login-provider policy, with the write-only secret classified
+    # below. Includes disabled rows: they suppress environment fallback too.
+    'oidc_providers': (182, ()),
+}
+
+# Columns holding a credential sealed under the MFA KEK chain (mail/OIDC) or
+# FEDERATION_KEY_KEK (the instance actor in production), as
+# `table: (column, ...)`. A drill must prove a restore kept the credential
+# SEALED, and must never return its value. So each is deleted from the row's jsonb like a
+# volatile column and replaced by its CLASS — 'none' (empty: 0151 allows that
+# for a transport that needs no credential), 'sealed' (`enc:`-prefixed, the
+# internal/secretbox envelope) or 'UNSEALED' (anything else) — which the
+# fingerprint then compares; and `fingerprint` separately REFUSES any UNSEALED
+# row by table and column name, never by value. Whether the sealed value still
+# DECRYPTS under the restored KEKs is the browser half's verify-restore check
+# (mail-config and OIDC-provider secret_status), because only the api holds
+# the key. Instance actor sealing is checked here; no live federation signing
+# proof is claimed by this harness.
+SEALED = {
+    'mail_config': ('secret',),
+    'instance_actor_keys': ('private_key_pem',),
+    'oidc_providers': ('client_secret',),
 }
 
 # Tables a migration creates that the drill deliberately does NOT fingerprint,
 # as `table: (core schema version that created it, why)`. Empty today: every
-# table 0147-0150 added carries something a restore must reproduce. It exists so
+# table 0147-0182 added carries something a restore must reproduce. It exists so
 # that "pure ephemeral state, nothing worth asserting" is a diff-visible
 # decision with a reason attached, never a silent omission.
 EXCLUDED_TABLES = {}
@@ -162,7 +244,7 @@ EXCLUDED_TABLES = {}
 # What "audited" means: one line per core schema version from the floor upward,
 # naming the tables that version's migration CREATEs (an empty tuple when it
 # creates none), read out of vidra-core's `migrations/<version>_*.up.sql` at the
-# newest release this repo records. The ceiling is DERIVED from this map, so the
+# newest audited core revision (c6a0176, schema 0182). The ceiling is DERIVED from this map, so the
 # audit cannot be advanced by editing a number — landing a release with a newer
 # schema forces a new line here (the rot guard in the test module fails until it
 # exists), and every table on that line must then land in CATALOGUE or in
@@ -175,6 +257,38 @@ TABLES_ADDED = {
     148: ('ipfs_control_config', 'ipfs_control_operations'),
     149: ('ipfs_capacity',),
     150: ('ipfs_copy_cleanup',),
+    151: ('mail_config',),
+    152: (),
+    153: (),
+    154: (),
+    155: ('user_bans',),
+    156: (),
+    157: ('notification_emails',),
+    158: (),
+    159: (),
+    160: (),
+    161: (),
+    162: ('user_feed_tokens',),
+    163: ('report_messages',),
+    164: (),
+    165: ('video_ownership_changes',),
+    166: ('instance_actor_keys', 'instance_followers', 'instance_following', 'instance_follower_backfills'),
+    167: ('remote_actor_moves',),
+    168: (),
+    169: ('channel_follower_backfills',),
+    170: (),
+    171: ('user_daily_quotas',),
+    172: ('watched_word_lists',),
+    173: ('user_content_prefs',),
+    174: ('video_playback_days', 'video_playback_dims'),
+    175: ('login_throttles', 'user_known_devices', 'user_security_prefs'),
+    176: ('blocklist_subscriptions', 'blocklist_allowlist'),
+    177: ('comment_automatic_tags',),
+    178: ('remote_video_ratings',),
+    179: ('remote_video_user_ratings',),
+    180: ('peertube_follow_imports', 'peertube_follow_import_targets'),
+    181: (),
+    182: ('oidc_providers',),
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 IDENTIFIER = re.compile(r'[a-z_]+')
@@ -248,7 +362,7 @@ def check_recorded_harness(name, recorded, revision):
             'actions with the files staged on this host.')
 
 
-def fingerprint_sql(table, volatile=()):
+def fingerprint_sql(table, volatile=(), sealed=()):
     """count(*) plus an order-independent md5 over one table's stable content.
 
     `to_jsonb(t)` is the WHOLE row, so a column missing from a restored table
@@ -257,13 +371,48 @@ def fingerprint_sql(table, volatile=()):
     every column nobody excluded — including ones a later migration adds. A
     table with nothing volatile produces exactly the SQL the v0.6.x drills
     recorded, so this change moves no existing fingerprint.
+
+    A SEALED column is deleted the same way and put back as its class only
+    (see SEALED), so the credential itself never enters the hash, the output
+    or a log line.
     """
     identifier(table)
-    keys = ''
-    if volatile:
-        keys = " - ARRAY[" + ','.join(f"'{identifier(c, 'column')}'" for c in volatile) + "]::text[]"
+    keys = row = ''
+    dropped = tuple(volatile) + tuple(sealed)
+    if dropped:
+        keys = " - ARRAY[" + ','.join(f"'{identifier(c, 'column')}'" for c in dropped) + "]::text[]"
+    if sealed:
+        row = " || jsonb_build_object(" + ','.join(
+            f"'{c}', CASE WHEN t.{c} = '' THEN 'none' WHEN t.{c} LIKE 'enc:%' THEN 'sealed' ELSE 'UNSEALED' END"
+            for c in sealed) + ")"
+        return (f"SELECT count(*)||'|'||md5(COALESCE(string_agg(r::text,E'\\n' ORDER BY r::text),'')) "
+                f"FROM (SELECT (to_jsonb(t){keys}){row} AS r FROM {table} t) s")
     return (f"SELECT count(*)||'|'||md5(COALESCE(string_agg(r::text,E'\\n' ORDER BY r::text),'')) "
             f"FROM (SELECT to_jsonb(t){keys} AS r FROM {table} t) s")
+
+
+def unsealed_sql(table, column):
+    """How many rows hold a non-empty credential WITHOUT the `enc:` envelope.
+
+    A count and nothing else: the value is never selected."""
+    identifier(table)
+    identifier(column, 'column')
+    return f"SELECT count(*) FROM {table} WHERE {column} <> '' AND {column} NOT LIKE 'enc:%'"
+
+
+def check_sealed(run, tables):
+    """Refuse a catalogued credential column holding anything but a sealed value.
+
+    Named by table and column only. psql's answer arrives mixed with compose's
+    own lines (see present_tables), so only a line that is exactly a number is
+    read; no such line is a refusal, not a pass."""
+    for table in tables:
+        for column in SEALED.get(table, ()):
+            counts = [line.strip() for line in run.sql(unsealed_sql(table, column)).splitlines()
+                      if line.strip().isdigit()]
+            require(counts, f'{table}.{column}: the sealed-credential check returned no count')
+            require(counts[-1] == '0', f'{table}.{column}: {counts[-1]} row(s) hold a credential that is not '
+                                       'enc:-sealed; a restore must never yield an unsealed secret')
 
 
 def expected_ledgers(baseline):
@@ -368,8 +517,8 @@ def check_catalogue_present(run, tables, core_version):
 
 
 # One key for the shape of the WHOLE public schema, so a table or column lost
-# outside the catalogue is still caught. Only 20 of ~109 tables are catalogued
-# and the audit floor is 147, so without this a restore that dropped
+# outside the catalogue is still caught. The audit floor is 147, so without
+# this a restore that dropped a pre-floor table such as
 # `instance_settings`, `audit_log`, `reports`, `user_blocks`, `watched_words`,
 # `sessions`, `notifications` or `remote_videos` reported everything intact.
 #
@@ -410,7 +559,9 @@ def fingerprint(run, core_version):
     # anonymous psql exit 1 buried in a private log.
     check_catalogue_present(run, [qualified('public', table) for table in tables] + [SEARCH_DOCUMENTS],
                             core_version)
-    rows = {table: run.sql(fingerprint_sql(table, volatile)) for table, volatile in tables.items()}
+    check_sealed(run, tables)
+    rows = {table: run.sql(fingerprint_sql(table, volatile, SEALED.get(table, ())))
+            for table, volatile in tables.items()}
     rows[SEARCH_DOCUMENTS] = run.sql(SEARCH_SQL)
     rows[SCHEMA_SHAPE] = run.sql(SCHEMA_SHAPE_SQL)
     return rows

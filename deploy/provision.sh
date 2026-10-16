@@ -107,6 +107,9 @@ case " $PROFILES " in
   *" media "*) PORTS="$PORTS  1935/tcp (RTMP ingest)" ;;
 esac
 case " $PROFILES " in
+  *" rtmps "*) PORTS="$PORTS  1936/tcp (RTMPS ingest)" ;;
+esac
+case " $PROFILES " in
   *" ipfs "*)  PORTS="$PORTS  4001/tcp+udp (IPFS swarm)" ;;
 esac
 
@@ -227,6 +230,35 @@ else
     || die "could not chown ${VIDRA_DIR} to ${VIDRA_USER} (read-only mount? immutable files?). This is fatal on purpose: the nightly backup runs AS ${VIDRA_USER} and writes ${VIDRA_DIR}/backups, so a partial chown becomes a timer that fails at 03:15 into a log nobody reads."
   log "chowned ${VIDRA_DIR} to ${VIDRA_USER}"
 fi
+
+# backups/ is created HERE, owned by the service user, rather than left for
+# backup.sh's own `umask 077; mkdir -p`. An operator's first manual
+# deploy/backup.sh — or deploy.sh, whose pre-deploy dump calls it — typically
+# runs as root; mkdir then makes backups/ a root-owned 0700 directory, and the
+# vidra-backup.timer (User=vidra) can no longer write a single file into it. The
+# nightly backup then fails at 03:15 with "Permission denied" into a journal
+# nobody reads. The chown above is skipped whenever ${VIDRA_DIR} itself is
+# already vidra's, so a root-owned backups/ BENEATH it needs its own repair
+# (and root-written dumps inside it are chowned too: the retention prune runs as
+# vidra and cannot delete them otherwise). 0700 matches backup.sh's umask — the
+# dumps and config archives hold every secret.
+ensure_backups_dir() {
+  local dir="${VIDRA_DIR}/backups"
+  mkdir -p "$dir"
+  chmod 0700 "$dir"
+  # %u prints the owner NAME without resolving it through find's -user, which
+  # errors out on a name this host does not know. Anything not vidra's — the
+  # directory or a file in it — triggers the repair. Not `grep -q`: under
+  # pipefail an early grep exit can SIGPIPE find and turn a match into "no repair".
+  if find "$dir" -printf '%u\n' | grep -vx "$VIDRA_USER" >/dev/null; then
+    chown -R "${VIDRA_USER}:${VIDRA_USER}" "$dir" \
+      || die "could not chown ${dir} to ${VIDRA_USER}. This is fatal on purpose: vidra-backup.timer runs AS ${VIDRA_USER}, so a root-owned backups/ means every nightly backup fails with 'Permission denied'."
+    log "repaired ownership of ${dir} (was not all ${VIDRA_USER}'s — an earlier run as root)"
+  else
+    log "${dir} is already owned by ${VIDRA_USER} (0700)"
+  fi
+}
+ensure_backups_dir
 
 # The shipped units hardcode User=vidra and WorkingDirectory=/opt/vidra. An
 # override here is supported, but it makes those units wrong, and a backup timer
@@ -375,4 +407,16 @@ if [ ${#WARNINGS[@]} -gt 0 ]; then
   printf '\n'
 fi
 
-log "host provisioned. Next: install Vidra into ${VIDRA_DIR} (see deploy/README.md 'First bring-up'), then 'vidra setup'."
+# The next step depends on which order the operator came in: the quickstart runs
+# install.sh (which writes the env file) BEFORE this script, so naming 'vidra
+# setup' there sent people back to a step they had finished. Either way, the
+# commands run as ${VIDRA_USER} from now on: the tree and the 0600 env file are
+# its, and it is the one in the docker group.
+print_next_step() {
+  if [ -f "${VIDRA_DIR}/env/production.env" ]; then
+    log "host provisioned. Next: cd ${VIDRA_DIR} && sudo -u ${VIDRA_USER} vidra deploy, then sudo -u ${VIDRA_USER} vidra claim (run vidra as ${VIDRA_USER} from now on)."
+  else
+    log "host provisioned. Next: install Vidra into ${VIDRA_DIR} (curl -fsSL https://raw.githubusercontent.com/yegamble/vidra/main/install.sh | sh, or deploy/README.md 'First bring-up'), then deploy as ${VIDRA_USER}: sudo -u ${VIDRA_USER} vidra deploy."
+  fi
+}
+print_next_step

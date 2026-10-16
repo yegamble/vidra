@@ -5,6 +5,11 @@
 #
 #   ./deploy/rollback.sh v0.2.0
 #   ./deploy/rollback.sh --core v0.2.1 --user v0.2.0 --search v0.2.0
+#   ./deploy/rollback.sh v0.7.7 --remap-internal-to-private
+#
+# The bare form pins the pairing releases/<tag>.json records (v0.7.5 is core
+# v0.7.5 with user and search at v0.7.3); with no record, <tag> for all three.
+# A flag overrides its component either way.
 #
 # Rewrites VIDRA_CORE_TAG / VIDRA_USER_TAG / VIDRA_SEARCH_TAG in the env file
 # (snapshotting it outside the checkout first), pulls, restarts and re-probes.
@@ -14,10 +19,47 @@
 # depends on would boot API servers that never exit, and the rollback would hang.
 # Before the env file is touched it also holds the target triple against
 # releases/<tag>.json. A digest that contradicts a record, or an unreadable
-# record, stops it. A triple no record pairs, including the single-component
-# form above, continues with a WARNING naming what was not verified.
+# record, stops it. A triple no record pairs, such as a single --user, continues
+# with a WARNING naming what was not verified.
 #
-# WHAT THIS DOES NOT DO: it does not touch the database. That is deliberate and
+# It also REFUSES an app-only rollback that would run a core release unaware of
+# a privacy tier present in the data: a target core whose release records do
+# not show the vidra-core migration that adds the 'internal' video privacy tier
+# (INTERNAL_PRIVACY_MIGRATION) while the database holds videos at 'internal'.
+# That check is one bounded, read-only SELECT, and a check that cannot be made
+# refuses too. Two flags, both explicit:
+#   --remap-internal-to-private     remap those videos to 'private' (the UPDATE
+#                                   in 0160's down migration) just before the
+#                                   restart, record their ids under backups/,
+#                                   and proceed
+#   --allow-unchecked-privacy-tier  proceed when the check could NOT be made
+#                                   (or the target could not be placed), on
+#                                   your word, after checking by hand
+#
+# It likewise REFUSES an app-only rollback below WORD_LISTS_MIGRATION while the
+# database holds any per-account watched-word list or any list whose action is
+# 'hold' (see the word-lists gate). Old code ignores both: it would match a
+# creator's PRIVATE terms into the staff review queue and publish comments a
+# 'hold' list was holding. A check that cannot be made refuses too, unless
+# --allow-unchecked-word-lists.
+#
+# Comment approval is protected the same way: a core without migration 0161
+# publishes held comments and ignores 'requires_approval' policies. Clear that
+# data first; --allow-unchecked-comment-approval only accepts an uncheckable
+# database or a target the release records cannot place.
+#
+# And it REFUSES an app-only rollback below OIDC_PROVIDERS_MIGRATION while
+# oidc_providers holds any row: admin-managed providers can OVERRIDE or DISABLE
+# the environment-configured ones (stricter domain allow-lists, disabled). Old
+# code ignores the table, so the environment providers come back WITHOUT those
+# restrictions. An empty table only WARNS (nothing to lose). A check that cannot
+# be made refuses too. Both are overridden by --allow-oidc-env-fallback, after
+# you have reviewed or disabled the environment providers (OAUTH_PROVIDERS).
+# --allow-unchecked-oidc-providers only accepts an uncheckable database or an
+# unknown target; it never accepts definite provider loss or policy fallback.
+#
+# WHAT THIS DOES NOT DO: it does not touch the database (the one exception is
+# the remap above, which runs only when asked for by name). That is deliberate and
 # it is only safe because of the release policy stated in deploy/README.md —
 # SCHEMA CHANGES STAY BACKWARD-COMPATIBLE FOR ONE RELEASE, so release N-1's code
 # can always run against release N's schema. If you are rolling back ACROSS an
@@ -61,23 +103,107 @@ READY_TIMEOUT="${READY_TIMEOUT:-120}"
 # Kept identical in deploy.sh and restore.sh.
 MIN_EMBEDDED_MIGRATE_TAG="v0.2.0"
 
+# The vidra-core migration that adds the 'internal' video privacy tier,
+# IDENTIFIED BY ITS FILE NAME. It MUST match vidra-core's
+# migrations/<this file> exactly: if vidra-core renumbers or renames it before
+# it merges, change this line and nothing else. A core release whose release
+# record does not list this file does not know the tier; see the privacy-tier
+# gate below. A file name, because a number would identify nothing: several
+# core PRs held neighbouring numbers at once, and a release can pass 0160
+# without this migration. Not a release tag either, so cutting the release
+# that ships it needs no edit here. A stale value fails toward checking: the
+# records then never list it, and every rollback asks the database.
+INTERNAL_PRIVACY_MIGRATION="0160_video_privacy_internal.up.sql"
+
+# The vidra-core migration that adds named watched-word lists (per-account lists
+# and the 'hold' action), IDENTIFIED BY ITS FILE NAME for the same reasons as
+# INTERNAL_PRIVACY_MIGRATION above; see the word-lists gate below.
+WORD_LISTS_MIGRATION="0172_watched_word_lists.up.sql"
+
+# Older code publishes held comments and ignores the approval policy.
+COMMENT_APPROVAL_MIGRATION="0161_comment_approval.up.sql"
+
+# The vidra-core migration that adds admin-managed OIDC providers
+# (oidc_providers), IDENTIFIED BY ITS FILE NAME for the same reasons as above;
+# see the OIDC-providers gate below.
+OIDC_PROVIDERS_MIGRATION="0182_oidc_providers.up.sql"
+
 log() { printf '[rollback] %s\n' "$*"; }
 die() { printf '[rollback] ERROR: %s\n' "$*" >&2; exit 1; }
 
-CORE_TAG=""; USER_TAG=""; SEARCH_TAG=""
+CORE_TAG=""; USER_TAG=""; SEARCH_TAG=""; BARE_TAG=""
+REMAP_INTERNAL=0; ALLOW_UNCHECKED_PRIVACY=0; ALLOW_UNCHECKED_WORD_LISTS=0
+ALLOW_OIDC_ENV_FALLBACK=0
+ALLOW_UNCHECKED_COMMENT_APPROVAL=0; ALLOW_UNCHECKED_OIDC_PROVIDERS=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --core)   CORE_TAG="${2:-}";   shift 2 ;;
     --user)   USER_TAG="${2:-}";   shift 2 ;;
     --search) SEARCH_TAG="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,41p' "$0"; exit 0 ;;
+    --remap-internal-to-private)    REMAP_INTERNAL=1;          shift ;;
+    --allow-unchecked-privacy-tier) ALLOW_UNCHECKED_PRIVACY=1; shift ;;
+    --allow-unchecked-word-lists)   ALLOW_UNCHECKED_WORD_LISTS=1; shift ;;
+    --allow-unchecked-comment-approval) ALLOW_UNCHECKED_COMMENT_APPROVAL=1; shift ;;
+    --allow-unchecked-oidc-providers) ALLOW_UNCHECKED_OIDC_PROVIDERS=1; shift ;;
+    --allow-oidc-env-fallback)      ALLOW_OIDC_ENV_FALLBACK=1; shift ;;
+    -h|--help) sed -n '2,60p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
-    *)  CORE_TAG="$1"; USER_TAG="$1"; SEARCH_TAG="$1"; shift ;;
+    *)  BARE_TAG="$1"; shift ;;
   esac
 done
 
-[ -n "$CORE_TAG$USER_TAG$SEARCH_TAG" ] || die "usage: $0 <tag>  |  $0 [--core T] [--user T] [--search T]"
+[ -n "$BARE_TAG$CORE_TAG$USER_TAG$SEARCH_TAG" ] || die "usage: $0 <tag>  |  $0 [--core T] [--user T] [--search T]   [--remap-internal-to-private] [--allow-unchecked-privacy-tier] [--allow-unchecked-word-lists] [--allow-unchecked-comment-approval] [--allow-unchecked-oidc-providers] [--allow-oidc-env-fallback]"
 [ -f "$ENV_FILE" ] || die "env file not found: $ENV_FILE"
+
+# THE BARE TAG'S PAIRING. v0.7.4 and v0.7.5 re-released vidra-core alone, so
+# writing <tag> into all three keys pinned ghcr.io/yegamble/vidra-user:v0.7.5,
+# which has never existed: the rollback died at `compose pull` with the broken
+# release still serving — and `rollback.sh v0.7.5` is the command an operator
+# types to leave a broken v0.7.7. The record is read by the SAME resolver pin-release.sh
+# uses (deploy/release-mapping.py resolve), so there is one reader of records.
+#
+# Only this tree's copy is read, never a fetch: a rollback targets an OLDER
+# release, whose record a newer tree already carries, and a network wait
+# mid-incident buys nothing. Flags are applied AFTER, not passed to the
+# resolver as --component-tag: an operator's explicit flag mid-incident wins
+# over a record, and is logged as overriding it. Every answer other than "a
+# record decided it" falls back to the uniform triple this script always wrote
+# — the release-mapping preflight below then WARNS that it was not verified —
+# because refusing here predicts nothing the pull does not already catch, and
+# a failed pull restores the env file.
+resolve_bare_tag() {
+  local record="$REPO_ROOT/releases/${BARE_TAG}.json" resolved='' rc=0 role value _
+  local core="$BARE_TAG" user="$BARE_TAG" search="$BARE_TAG"
+  if [ -f "$record" ] && command -v python3 >/dev/null 2>&1; then
+    resolved="$(python3 "$REPO_ROOT/deploy/release-mapping.py" resolve \
+      --release "$BARE_TAG" --record "$record")" || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      # A here-document, not a pipe: `while read` in a pipeline runs in a
+      # subshell and the assignments would be gone by the next line.
+      while read -r role value _; do
+        case "$role" in
+          core) core="$value" ;; user) user="$value" ;; search) search="$value" ;;
+        esac
+      done <<EOF
+$resolved
+EOF
+      log "releases/${BARE_TAG}.json pairs core=${core} user=${user} search=${search}"
+    else
+      log "WARNING: deploy/release-mapping.py could not resolve releases/${BARE_TAG}.json (exit ${rc}); using ${BARE_TAG} for every component no flag names"
+    fi
+  fi
+  # `if`, not `[ ] || log`: the last command's status is the function's, and a
+  # false test there would fire errexit at the call site.
+  if [ -n "$CORE_TAG" ] && [ "$CORE_TAG" != "$core" ]; then log "--core ${CORE_TAG} overrides core=${core}"; fi
+  if [ -n "$USER_TAG" ] && [ "$USER_TAG" != "$user" ]; then log "--user ${USER_TAG} overrides user=${user}"; fi
+  if [ -n "$SEARCH_TAG" ] && [ "$SEARCH_TAG" != "$search" ]; then log "--search ${SEARCH_TAG} overrides search=${search}"; fi
+  CORE_TAG="${CORE_TAG:-$core}"
+  USER_TAG="${USER_TAG:-$user}"
+  SEARCH_TAG="${SEARCH_TAG:-$search}"
+}
+if [ -n "$BARE_TAG" ]; then
+  resolve_bare_tag
+fi
 
 # The prod overlay closes Postgres/Redis/search with the `!reset` / `!override`
 # merge tags, which need Compose >= 2.24. An older Compose does not error on
@@ -255,6 +381,387 @@ release_mapping_check "$REPO_ROOT" rollback \
   "${SEARCH_TAG:-$(env_get VIDRA_SEARCH_TAG '')}" \
   || die "the release mapping preflight stopped this rollback (findings above). $ENV_FILE was NOT rewritten and nothing was pulled or restarted; the release you are serving is untouched."
 
+# Sets COMPOSE, EXTERNAL_POSTGRES and EXTERNAL_REDIS. It used to be called just
+# before `config -q` below; it moved up because the privacy-tier gate has to
+# reach the database BEFORE the env file is rewritten. Moving it changes no
+# command: it reads only the datastore and profile keys, which the tag rewrite
+# does not touch, and every compose call it builds reads the tags out of
+# $ENV_FILE when it runs, i.e. after the rewrite exactly as before.
+vidra_compose_chain
+
+# THE PRIVACY-TIER GATE, on the TARGET core, BEFORE the env snapshot and
+# rewrite below, so a refusal — like every gate above — leaves $ENV_FILE and the
+# running stack exactly as they were.
+#
+# WHY. The one-release compat policy (deploy/README.md) keeps old code able to
+# READ a newer schema. It says nothing about what old code DOES with a value it
+# has never seen. vidra-core's INTERNAL_PRIVACY_MIGRATION adds the 'internal'
+# video privacy tier, and a core release without that migration does not know
+# the tier. This script never migrates down, so it must not put such a release
+# in front of data that uses the tier.
+#
+# "WITHOUT THAT MIGRATION" COMES FROM THE RELEASE RECORDS, by FILE NAME:
+# deploy/release.sh lists each core's migration files in releases/<tag>.json
+# (core_migrations), and `deploy/release-mapping.py core-migration` places a
+# tag that has no record by the recorded cores around it. A record cut before
+# that list existed can only say "no" — when its newest migration is below the
+# file's number — and otherwise says nothing, so the database is asked. No
+# future release tag is written down here, and nothing has to be filled in when
+# the release that ships the migration is cut.
+#
+# SEVERITY — a finding may only stop what it PREDICTS:
+#   - core not being rolled (`--user` / `--search` alone): not checked; the core
+#     that runs afterwards is the one running now.
+#   - the target carries the migration: not checked.
+#   - no video at 'internal': proceeds.
+#   - videos at 'internal' and a target that does NOT carry the migration:
+#     REFUSED unless --remap-internal-to-private. No flag waves this through,
+#     because the finding is definite.
+#   - the database cannot be asked (external Postgres, postgres not running,
+#     compose cannot list it, a psql error or TIMEOUT), or videos are at
+#     'internal' and the records cannot place the target: REFUSED unless
+#     --allow-unchecked-privacy-tier. Fail closed, not locked out. The override
+#     exists for the second case because a remap would needlessly demote videos
+#     for a target that may well know the tier.
+PGUSER="$(env_get POSTGRES_USER vidra)"
+PGDB="$(env_get POSTGRES_DB vidra)"
+BACKUP_DIR="${BACKUP_DIR:-$REPO_ROOT/backups}"
+# EVERY query below is bounded, because this runs mid-incident: a lock held by a
+# stuck migration or a wedged server must turn into a refusal that says so, not
+# into a rollback that hangs with the broken release still serving. The connect
+# bound is psql's own PGCONNECT_TIMEOUT; the other two are server settings sent
+# with the session.
+PG_TIMEOUTS="-c statement_timeout=15s -c lock_timeout=5s"
+PG_CONNECT_TIMEOUT=10
+INTERNAL_SQL="SELECT EXISTS (SELECT 1 FROM videos WHERE privacy = 'internal');"
+# Verbatim from the down migration of INTERNAL_PRIVACY_MIGRATION, which is the
+# only remap anyone has reviewed. Kept separate from RETURNING so the messages
+# can quote it as is.
+REMAP_SQL="UPDATE videos SET privacy = 'private' WHERE privacy = 'internal';"
+REMAP_IDS_FILE="$BACKUP_DIR/internal-privacy-remap-$(date -u +%FT%H%M%S).ids"
+REMAPPED_TOTAL=0
+PRIVACY_STATE=off        # off | clean | remap | accepted
+PRIVACY_UNASKED=""
+
+# privacy_pg OPTIONS SQL [PSQL FLAG...] — run ONE statement in the bundled
+# postgres container with the PG_TIMEOUTS bounds. Its output is in PG_OUT.
+# Exit 0 on success; on anything else exit 2 with PRIVACY_UNASKED saying why,
+# naming a TIMEOUT as one. No `docker exec -i`: nothing is piped in, and an
+# attached stdin would swallow the rest of a script fed to `bash -s`.
+privacy_pg() {
+  local options="$1" sql="$2" cid errf rc=0
+  shift 2
+  if [ "$EXTERNAL_POSTGRES" -eq 1 ]; then
+    PRIVACY_UNASKED="VIDRA_EXTERNAL_POSTGRES=true, so there is no bundled postgres container to ask"
+    return 2
+  fi
+  # Not `2>/dev/null || true`: a compose model that does not render is not "the
+  # container is not running", and an operator sent to start postgres would be
+  # chasing the wrong fault. Compose's own error stays on the terminal.
+  if ! cid="$("${COMPOSE[@]}" ps -q postgres)"; then
+    PRIVACY_UNASKED="'docker compose ps' could not list the postgres container (its error is above)"
+    return 2
+  fi
+  if [ -z "$cid" ]; then
+    PRIVACY_UNASKED="the bundled postgres container is not running"
+    return 2
+  fi
+  errf="$(mktemp)" || { PRIVACY_UNASKED="mktemp failed, so psql's error could not be captured"; return 2; }
+  PG_OUT="$(docker exec -e "PGCONNECT_TIMEOUT=${PG_CONNECT_TIMEOUT}" -e "PGOPTIONS=${options} ${PG_TIMEOUTS}" "$cid" \
+    psql -X -q -t -A -v ON_ERROR_STOP=1 "$@" -U "$PGUSER" -d "$PGDB" -c "$sql" 2>"$errf")" || rc=$?
+  PG_ERR="$(tr '\n' ' ' < "$errf")"
+  rm -f "$errf"
+  [ "$rc" -ne 0 ] || return 0
+  case "$PG_ERR" in
+    *"statement timeout"*|*"lock timeout"*|*"timeout expired"*)
+      PRIVACY_UNASKED="psql TIMED OUT (statement_timeout=15s, lock_timeout=5s, connect ${PG_CONNECT_TIMEOUT}s): ${PG_ERR}" ;;
+    *) PRIVACY_UNASKED="psql failed (exit ${rc}): ${PG_ERR:-no error text}" ;;
+  esac
+  return 2
+}
+
+# internal_privacy_rows — exit 0 when a video is at privacy 'internal', 1 when
+# none is, and 2 when the question could not be asked (PRIVACY_UNASKED says
+# why). READ-ONLY twice over: a SELECT, in a session the SERVER holds read-only
+# (default_transaction_read_only), so no later edit of the query can turn the
+# check into a write.
+internal_privacy_rows() {
+  privacy_pg '-c default_transaction_read_only=on' "$INTERNAL_SQL" || return 2
+  case "$PG_OUT" in
+    t) return 0 ;;
+    f) return 1 ;;
+  esac
+  PRIVACY_UNASKED="psql answered '${PG_OUT}', which is neither t nor f"
+  return 2
+}
+
+# remap_internal_to_private — REMAP_SQL and nothing else: every 'internal' video
+# becomes 'private', the stricter tier, so the remap can only narrow who sees a
+# video. One statement under psql --single-transaction: all of them or none.
+# On failure PRIVACY_UNASKED says why. The ids go to REMAP_IDS_FILE (0600,
+# appended, one per line) because once remapped they cannot be told apart from
+# videos that were always private; a later roll-forward needs the list.
+remap_internal_to_private() {
+  local count
+  privacy_pg '' "${REMAP_SQL%;} RETURNING id;" -1 || return 1
+  count="$(printf '%s\n' "$PG_OUT" | awk 'NF { n++ } END { print n + 0 }')"
+  REMAPPED_TOTAL=$((REMAPPED_TOTAL + count))
+  log "remapped ${count} video(s) from privacy 'internal' to 'private' (${REMAP_SQL})"
+  [ "$count" -gt 0 ] || return 0
+  if mkdir -p "$BACKUP_DIR" && (umask 077 && printf '%s\n' "$PG_OUT" >> "$REMAP_IDS_FILE"); then
+    log "their ids are in ${REMAP_IDS_FILE}. After rolling forward to a release that knows the tier, an owner can set them back, or: UPDATE videos SET privacy = 'internal' WHERE id = '<id>';"
+  else
+    log "WARNING: could not write ${REMAP_IDS_FILE}; the remapped ids follow, so they are not lost:"
+    printf '%s\n' "$PG_OUT" >&2
+  fi
+}
+
+# remap_note — one sentence for every failure message printed after a remap ran:
+# the ids file is the only record of what it changed.
+remap_note() {
+  if [ "$REMAPPED_TOTAL" -gt 0 ]; then
+    printf " This run already remapped %s video(s) from 'internal' to 'private'; their ids are in %s — keep that file." \
+      "$REMAPPED_TOTAL" "$REMAP_IDS_FILE"
+  fi
+}
+
+privacy_tier_gate() {
+  local how rc=0 rows=0 target nothing_changed
+  nothing_changed="Nothing was changed: $ENV_FILE was NOT rewritten and nothing was pulled or restarted."
+  if [ -z "$CORE_TAG" ]; then
+    log "privacy-tier check: core is not being rolled back, so the core that runs afterwards is the one running now — not checked"
+    if [ "$REMAP_INTERNAL" -eq 1 ]; then log "--remap-internal-to-private: nothing to do, and NOTHING was remapped"; fi
+    return 0
+  fi
+  how="$(python3 "$REPO_ROOT/deploy/release-mapping.py" core-migration --releases "$REPO_ROOT/releases" \
+    --core "$CORE_TAG" --migration "$INTERNAL_PRIVACY_MIGRATION")" || rc=$?
+  case "$rc" in
+    0)
+      log "privacy-tier check: core ${CORE_TAG} carries migration ${INTERNAL_PRIVACY_MIGRATION} (${how}) — not checked"
+      if [ "$REMAP_INTERNAL" -eq 1 ]; then log "--remap-internal-to-private: not needed for this target, and NOTHING was remapped"; fi
+      return 0 ;;
+    4) target="core ${CORE_TAG} does not carry migration ${INTERNAL_PRIVACY_MIGRATION} (${how})" ;;
+    *) target="core ${CORE_TAG} could not be placed relative to migration ${INTERNAL_PRIVACY_MIGRATION} (${how:-deploy/release-mapping.py core-migration exited ${rc}}), so it is treated as not carrying it" ;;
+  esac
+  internal_privacy_rows || rows=$?
+  if [ "$rows" -eq 1 ]; then
+    log "privacy-tier check: ${target}; no video is at privacy 'internal' — proceeding"
+    PRIVACY_STATE=clean
+    return 0
+  fi
+  if [ "$rows" -eq 0 ] && [ "$REMAP_INTERNAL" -eq 1 ]; then
+    log "privacy-tier check: ${target}; videos ARE at privacy 'internal'. --remap-internal-to-private was given: they are remapped after the pull, immediately before the restart"
+    PRIVACY_STATE=remap
+    return 0
+  fi
+  if [ "$rows" -eq 0 ] && [ "$rc" -eq 4 ]; then
+    die "this app-only rollback would run ${target} against a database with videos at privacy 'internal', a tier that release does not know. Refusing. Remap them first: re-run with --remap-internal-to-private, which runs the UPDATE from that migration's down migration (${REMAP_SQL}) as one transaction just before the restart, records the ids it changed under ${BACKUP_DIR}/, and proceeds. ${nothing_changed}"
+  fi
+  if [ "$ALLOW_UNCHECKED_PRIVACY" -eq 1 ]; then
+    log "WARNING: privacy-tier check NOT settled: ${PRIVACY_UNASKED:-videos are at privacy 'internal' and the target could not be placed}. ${target}. --allow-unchecked-privacy-tier was given, so this rollback proceeds on your word."
+    # Only reachable with REMAP_INTERNAL=1 when the database could not be asked.
+    if [ "$REMAP_INTERNAL" -eq 1 ]; then log "--remap-internal-to-private needs that same connection, so NOTHING was remapped"; fi
+    PRIVACY_STATE=accepted
+    return 0
+  fi
+  if [ "$rows" -eq 0 ]; then
+    die "${target}, and the database has videos at privacy 'internal'. Refusing rather than guessing. If the target DOES carry migration ${INTERNAL_PRIVACY_MIGRATION} (its release record is missing from this tree, say), re-run with --allow-unchecked-privacy-tier; otherwise re-run with --remap-internal-to-private. ${nothing_changed}"
+  fi
+  die "the privacy-tier check could not be made: ${PRIVACY_UNASKED}. ${target}, so this rollback is refused rather than guessed. Check by hand against the database: SELECT count(*) FROM videos WHERE privacy = 'internal'; — if it is 0, or once you have run ${REMAP_SQL} yourself, re-run with --allow-unchecked-privacy-tier.$( [ "$REMAP_INTERNAL" -eq 0 ] || printf ' (--remap-internal-to-private cannot help here: it needs the same database connection.)' ) ${nothing_changed}"
+}
+privacy_tier_gate
+
+# THE WORD-LISTS GATE, same place and same shape as the privacy-tier gate, same
+# bounded read-only psql (privacy_pg). vidra-core's WORD_LISTS_MIGRATION adds
+# per-account watched-word lists and a 'hold' action per list. A core release
+# without it does not know either: it matches EVERY term in watched_words
+# (including creators' private ones) and files the hit in the staff review queue,
+# and a comment a 'hold' list would have held is published. This script never
+# migrates down, so it must not put such a release in front of that data.
+#
+# Severity, as for the privacy tier: core not being rolled, or a target that
+# carries the migration: not checked. No private list and no 'hold' list:
+# proceeds (a missing watched_word_lists table is that case too). Otherwise
+# REFUSED, with no flag, because the finding is definite - clear the data by
+# hand (the SQL is in the message), then re-run. A check that cannot be made, or
+# a target the records cannot place with the data present, is refused unless
+# --allow-unchecked-word-lists.
+WORD_LISTS_SQL="SELECT count(*) > 0 FROM watched_word_lists WHERE owner_id IS NOT NULL OR action = 'hold';"
+WORD_LISTS_FIX_SQL="DELETE FROM watched_word_lists WHERE owner_id IS NOT NULL; UPDATE watched_word_lists SET action = 'flag' WHERE action = 'hold';"
+
+word_lists_in_use() {
+  PG_ERR=""
+  privacy_pg '-c default_transaction_read_only=on' "$WORD_LISTS_SQL" && {
+    case "$PG_OUT" in
+      t) return 0 ;;
+      f) return 1 ;;
+    esac
+    PRIVACY_UNASKED="psql answered '${PG_OUT}', which is neither t nor f"
+    return 2
+  }
+  # A database below the migration has no such table: nothing to protect.
+  case "$PG_ERR" in *'"watched_word_lists" does not exist'*) return 1 ;; esac
+  return 2
+}
+
+word_lists_gate() {
+  local how rc=0 rows=0 target nothing_changed
+  nothing_changed="Nothing was changed: $ENV_FILE was NOT rewritten and nothing was pulled or restarted."
+  if [ -z "$CORE_TAG" ]; then
+    log "word-lists check: core is not being rolled back — not checked"
+    return 0
+  fi
+  how="$(python3 "$REPO_ROOT/deploy/release-mapping.py" core-migration --releases "$REPO_ROOT/releases" \
+    --core "$CORE_TAG" --migration "$WORD_LISTS_MIGRATION")" || rc=$?
+  case "$rc" in
+    0) log "word-lists check: core ${CORE_TAG} carries migration ${WORD_LISTS_MIGRATION} (${how}) — not checked"; return 0 ;;
+    4) target="core ${CORE_TAG} does not carry migration ${WORD_LISTS_MIGRATION} (${how})" ;;
+    *) target="core ${CORE_TAG} could not be placed relative to migration ${WORD_LISTS_MIGRATION} (${how:-deploy/release-mapping.py core-migration exited ${rc}}), so it is treated as not carrying it" ;;
+  esac
+  word_lists_in_use || rows=$?
+  if [ "$rows" -eq 1 ]; then
+    log "word-lists check: ${target}; no per-account or 'hold' watched-word list exists — proceeding"
+    return 0
+  fi
+  if [ "$rows" -eq 0 ] && [ "$rc" -eq 4 ]; then
+    die "this app-only rollback would run ${target} against a database with per-account or 'hold' watched-word lists. That release would put creators' private terms in the staff review queue and publish comments a 'hold' list holds. Refusing. Clear them first, by hand: ${WORD_LISTS_FIX_SQL} then re-run. ${nothing_changed}"
+  fi
+  if [ "$ALLOW_UNCHECKED_WORD_LISTS" -eq 1 ]; then
+    log "WARNING: word-lists check NOT settled: ${PRIVACY_UNASKED:-lists exist and the target could not be placed}. ${target}. --allow-unchecked-word-lists was given, so this rollback proceeds on your word."
+    return 0
+  fi
+  if [ "$rows" -eq 0 ]; then
+    die "${target}, and the database has per-account or 'hold' watched-word lists. Refusing rather than guessing. If the target DOES carry migration ${WORD_LISTS_MIGRATION}, re-run with --allow-unchecked-word-lists; otherwise clear them by hand: ${WORD_LISTS_FIX_SQL} ${nothing_changed}"
+  fi
+  die "the word-lists check could not be made: ${PRIVACY_UNASKED}. ${target}, so this rollback is refused rather than guessed. Check by hand: ${WORD_LISTS_SQL} - if it is f, re-run with --allow-unchecked-word-lists. ${nothing_changed}"
+}
+word_lists_gate
+
+# THE COMMENT-APPROVAL GATE follows word_lists_gate: a definite finding cannot
+# be overridden; only an uncheckable database or unknown target can. Never
+# release held comments as a side effect of an application rollback.
+COMMENT_APPROVAL_SQL="SELECT count(*) > 0 FROM comments WHERE held_for_review UNION ALL SELECT count(*) > 0 FROM videos WHERE comments_policy = 'requires_approval';"
+COMMENT_POLICY_SQL="SELECT count(*) > 0 FROM videos WHERE comments_policy = 'requires_approval';"
+
+comment_approval_in_use() {
+  PG_ERR=""
+  PRIVACY_UNASKED=""
+  if privacy_pg '-c default_transaction_read_only=on' "$COMMENT_APPROVAL_SQL"; then
+    case "$PG_OUT" in
+      $'f\nf') return 1 ;;
+      $'t\nf'|$'f\nt'|$'t\nt') return 0 ;;
+    esac
+  else
+    case "$PG_ERR" in
+      *'column "held_for_review" does not exist'*)
+        # Pre-0161 schemas have no held comments. Still check the policy so a
+        # partially changed schema cannot hide approval-only videos.
+        if privacy_pg '-c default_transaction_read_only=on' "$COMMENT_POLICY_SQL"; then
+          case "$PG_OUT" in t) return 0 ;; f) return 1 ;; esac
+        else
+          case "$PG_ERR" in *'column "comments_policy" does not exist'*) return 1 ;; esac
+          return 2
+        fi ;;
+      *) return 2 ;;
+    esac
+  fi
+  PRIVACY_UNASKED="psql answered '${PG_OUT}', which is not the expected boolean result"
+  return 2
+}
+
+comment_approval_gate() {
+  local how rc=0 rows=0 target nothing_changed
+  nothing_changed="Nothing was changed: $ENV_FILE was NOT rewritten and nothing was pulled or restarted."
+  if [ -z "$CORE_TAG" ]; then
+    log "comment-approval check: core is not being rolled back — not checked"
+    return 0
+  fi
+  how="$(python3 "$REPO_ROOT/deploy/release-mapping.py" core-migration --releases "$REPO_ROOT/releases" \
+    --core "$CORE_TAG" --migration "$COMMENT_APPROVAL_MIGRATION")" || rc=$?
+  case "$rc" in
+    0) log "comment-approval check: core ${CORE_TAG} carries migration ${COMMENT_APPROVAL_MIGRATION} (${how}) — not checked"; return 0 ;;
+    4) target="core ${CORE_TAG} does not carry migration ${COMMENT_APPROVAL_MIGRATION} (${how})" ;;
+    *) target="core ${CORE_TAG} could not be placed relative to migration ${COMMENT_APPROVAL_MIGRATION} (${how:-deploy/release-mapping.py core-migration exited ${rc}}), so it is treated as not carrying it" ;;
+  esac
+  comment_approval_in_use || rows=$?
+  if [ "$rows" -eq 1 ]; then
+    log "comment-approval check: ${target}; no held comments or approval-only videos exist — proceeding"
+    return 0
+  fi
+  if [ "$rows" -eq 0 ] && [ "$rc" -eq 4 ]; then
+    die "this app-only rollback would run ${target} against held comments or videos requiring comment approval. That release would publicly display held comments and ignore approval policies. Refusing. Review and approve or delete held comments, then change requires_approval policies before retrying. ${nothing_changed}"
+  fi
+  if [ "$ALLOW_UNCHECKED_COMMENT_APPROVAL" -eq 1 ]; then
+    log "WARNING: comment-approval check NOT settled: ${PRIVACY_UNASKED:-approval data exists and the target could not be placed}. ${target}. --allow-unchecked-comment-approval was given, so this rollback proceeds on your word."
+    return 0
+  fi
+  die "the comment-approval check is not settled: ${PRIVACY_UNASKED:-held comments or approval-only videos exist}. ${target}, so this rollback is refused rather than guessed. Check by hand: ${COMMENT_APPROVAL_SQL} If both answers are f, or the target carries the migration, re-run with --allow-unchecked-comment-approval. ${nothing_changed}"
+}
+comment_approval_gate
+
+# THE OIDC-PROVIDERS GATE, same place, same bounded read-only psql. vidra-core's
+# OIDC_PROVIDERS_MIGRATION adds admin-managed OIDC providers that can OVERRIDE or
+# DISABLE the environment-configured ones (stricter domain allow-lists, off). A
+# core release without it ignores the table, so the environment providers come
+# back WITHOUT the admin's restrictions. This script never migrates down.
+#
+# Severity: a finding may only stop what it PREDICTS. Core not being rolled, or a
+# target that carries the migration: not checked. No rows (or no table): the
+# environment providers are all there is, so WARN and proceed. Rows present and
+# the target known to predate it: REFUSED unless --allow-oidc-env-fallback. A
+# check that cannot be made, or a target the records cannot place with rows
+# present, is refused the same way.
+OIDC_SQL="SELECT count(*) > 0 FROM oidc_providers;"
+
+oidc_providers_in_use() {
+  PG_ERR=""
+  privacy_pg '-c default_transaction_read_only=on' "$OIDC_SQL" && {
+    case "$PG_OUT" in
+      t) return 0 ;;
+      f) return 1 ;;
+    esac
+    PRIVACY_UNASKED="psql answered '${PG_OUT}', which is neither t nor f"
+    return 2
+  }
+  # A database below the migration has no such table: nothing to protect.
+  case "$PG_ERR" in *'"oidc_providers" does not exist'*) return 1 ;; esac
+  return 2
+}
+
+oidc_providers_gate() {
+  local how rc=0 rows=0 target nothing_changed
+  nothing_changed="Nothing was changed: $ENV_FILE was NOT rewritten and nothing was pulled or restarted."
+  if [ -z "$CORE_TAG" ]; then
+    log "oidc-providers check: core is not being rolled back — not checked"
+    return 0
+  fi
+  how="$(python3 "$REPO_ROOT/deploy/release-mapping.py" core-migration --releases "$REPO_ROOT/releases" \
+    --core "$CORE_TAG" --migration "$OIDC_PROVIDERS_MIGRATION")" || rc=$?
+  case "$rc" in
+    0) log "oidc-providers check: core ${CORE_TAG} carries migration ${OIDC_PROVIDERS_MIGRATION} (${how}) — not checked"; return 0 ;;
+    4) target="core ${CORE_TAG} does not carry migration ${OIDC_PROVIDERS_MIGRATION} (${how})" ;;
+    *) target="core ${CORE_TAG} could not be placed relative to migration ${OIDC_PROVIDERS_MIGRATION} (${how:-deploy/release-mapping.py core-migration exited ${rc}}), so it is treated as not carrying it" ;;
+  esac
+  oidc_providers_in_use || rows=$?
+  if [ "$rows" -eq 1 ]; then
+    log "WARNING: oidc-providers check: ${target}; oidc_providers is empty, so only environment-configured providers (OAUTH_PROVIDERS) apply — proceeding. Providers an admin adds after this rollback will be ignored by that release."
+    return 0
+  fi
+  if [ "$ALLOW_UNCHECKED_OIDC_PROVIDERS" -eq 1 ] && { [ "$rows" -ne 0 ] || [ "$rc" -ne 4 ]; }; then
+    log "WARNING: oidc-providers check NOT settled: ${PRIVACY_UNASKED:-providers exist and the target could not be placed}. ${target}. --allow-unchecked-oidc-providers was given, so this rollback proceeds on your word."
+    return 0
+  fi
+  if [ "$ALLOW_OIDC_ENV_FALLBACK" -eq 1 ]; then
+    log "WARNING: oidc-providers check: ${target}; ${PRIVACY_UNASKED:-oidc_providers has rows}. --allow-oidc-env-fallback was given, so this rollback proceeds on your word: environment providers will return without any admin override or disable."
+    return 0
+  fi
+  if [ "$rows" -eq 0 ]; then
+    die "this app-only rollback would run ${target} against a database with admin-managed OIDC providers. That release ignores them, so environment-configured providers come back WITHOUT the admin's overrides, stricter domain allow-lists or disables. Refusing. Review OAUTH_PROVIDERS and the oidc_providers table first (disable any environment provider the admin had turned off or restricted), then re-run with --allow-oidc-env-fallback. ${nothing_changed}"
+  fi
+  die "the oidc-providers check could not be made: ${PRIVACY_UNASKED}. ${target}, so this rollback is refused rather than guessed. Check by hand: ${OIDC_SQL} - if it is f, re-run with --allow-unchecked-oidc-providers. ${nothing_changed}"
+}
+oidc_providers_gate
+
 HTTP_PORT="$(env_get HTTP_PORT 8080)"
 FRONTEND_PORT="$(env_get FRONTEND_PORT 3000)"
 
@@ -328,9 +835,7 @@ else
   done
 fi
 
-# Sets COMPOSE, EXTERNAL_POSTGRES and EXTERNAL_REDIS.
-vidra_compose_chain
-
+# COMPOSE was set by vidra_compose_chain, above the privacy-tier gate.
 "${COMPOSE[@]}" config -q \
   || restore_env_and_die "the compose model does not render with the rollback tags — aborted; nothing was changed on the running stack"
 
@@ -341,6 +846,23 @@ log "pulling"
 # this path (`no matching manifest for linux/arm64/v8`).
 "${COMPOSE[@]}" pull \
   || restore_env_and_die "pull failed — does that tag exist in the registry, for this architecture? Nothing was changed on the running stack"
+
+# THE PRIVACY-TIER GATE, SECOND LOOK: after the pull, immediately before the
+# restart. The remap runs HERE and not at the gate, so a refusal or a failed
+# pull above leaves every video exactly as it was. A "no 'internal' videos"
+# answer is asked AGAIN, because the pull can take minutes with the newer
+# release still serving, and still able to put a video at 'internal'.
+case "$PRIVACY_STATE" in
+  remap)
+    remap_internal_to_private \
+      || restore_env_and_die "--remap-internal-to-private failed: ${PRIVACY_UNASKED}. Nothing was restarted. The remap is one transaction, so it changed every such video or none; re-running this command retries it" ;;
+  clean)
+    privacy_rows=0; internal_privacy_rows || privacy_rows=$?
+    case "$privacy_rows" in
+      0) restore_env_and_die "a video was put at privacy 'internal' while this rollback was pulling, so the target would now meet the tier it does not know. Nothing was restarted. Re-run with --remap-internal-to-private" ;;
+      2) restore_env_and_die "the privacy-tier check passed before the pull but could not be repeated now: ${PRIVACY_UNASKED}. Nothing was restarted. Re-run once the database answers, or see --allow-unchecked-privacy-tier" ;;
+    esac ;;
+esac
 
 # THE TRAILER, and it is a function so that EVERY path that leaves the site down
 # reaches it (A38 rehearsal, 2026-09-07, run 4). It used to be inline at the very
@@ -358,6 +880,14 @@ rollback_target_unhealthy() {
   the new schema — restore the pre-deploy dump before rolling back again:
       ./deploy/restore.sh backups/pre-deploy-<ts>.dump.gz
 EOF
+  # After a remap, the ids file is the only record of what it changed, and an
+  # operator about to restore or roll forward again needs it. Plain variables
+  # with defaults, not remap_note: this function must stand on its own
+  # (tests/rollback_floor_test.py runs it in isolation).
+  if [ "${REMAPPED_TOTAL:-0}" -gt 0 ]; then
+    printf "\n  This run remapped %s video(s) from privacy 'internal' to 'private' before the\n  restart. Their ids are in %s — keep that file:\n  rolling forward again needs it to set them back.\n" \
+      "$REMAPPED_TOTAL" "${REMAP_IDS_FILE:-backups/}" >&2
+  fi
   exit 1
 }
 
@@ -386,6 +916,24 @@ probe() {
   done
   log "${name} OK"
 }
+
+# THE PRIVACY-TIER GATE, LAST LOOK, now that the target owns the data. The newer
+# api kept serving until `up -d` replaced it — through the migration one-shots —
+# so the remap is repeated (normally 0 rows) and a clean answer is re-asked. It
+# sits after probe()'s definition only so the `up -d` block above stays one
+# contiguous unit (tests/rollback_floor_test.py runs it in isolation); nothing
+# has executed in between.
+case "$PRIVACY_STATE" in
+  remap)
+    remap_internal_to_private \
+      || die "the rollback target is RUNNING, but the post-restart remap failed: ${PRIVACY_UNASKED}. Run it by hand now: ${REMAP_SQL}$(remap_note)" ;;
+  clean)
+    privacy_rows=0; internal_privacy_rows || privacy_rows=$?
+    case "$privacy_rows" in
+      0) die "the rollback target is RUNNING, and a video was put at privacy 'internal' before the newer release stopped. Remap it now: ./deploy/rollback.sh --core ${CORE_TAG} --remap-internal-to-private" ;;
+      2) log "WARNING: the rollback target is running, and the privacy-tier check could not be repeated: ${PRIVACY_UNASKED}. Check by hand: SELECT count(*) FROM videos WHERE privacy = 'internal';" ;;
+    esac ;;
+esac
 
 rc=0
 probe "api /readyz" "http://127.0.0.1:${HTTP_PORT}/readyz" || rc=1

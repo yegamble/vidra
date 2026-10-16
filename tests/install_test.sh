@@ -319,7 +319,7 @@ for tmpl in env/production.env.example env/staging.env.example; do
       pins_ok=0
       continue
     fi
-    pin_values="${pin_values}${tag}
+    pin_values="${pin_values}${key}=${tag}
 "
     [ -n "$floor" ] || continue
 
@@ -343,16 +343,20 @@ for tmpl in env/production.env.example env/staging.env.example; do
     rc=0
     semver_ge "$floor" "$tag" || rc=$?
     if [ "$rc" -eq 0 ]; then
-      echo "FAIL: env pins -> ${tmpl}'s ${key}=${tag} is still sitting ON the ${floor} floor. That floor is a compatibility bound; these pins are the release a fresh install deploys and must be bumped every release (deploy/release.sh prints the instruction when it finishes cutting one). If you deliberately RAISED the floor to the newest release, bump these to it and relax this assertion in the same commit."
+      echo "FAIL: env pins -> ${tmpl}'s ${key}=${tag} is still sitting ON the ${floor} floor. That floor is a compatibility bound; these pins are the release a fresh install deploys and must be bumped every release (tests/env_template_pins_test.py fails the release PR until they are). If you deliberately RAISED the floor to the newest release, bump these to it and relax this assertion in the same commit."
       pins_ok=0
     fi
   done
 done
 
+# Compared PER KEY: a core-only release (v0.7.5 is core v0.7.5 with user and
+# search at v0.7.3) is three tags, not one, so "all six values equal" was only
+# ever true for uniform releases. Production and staging must still agree on
+# each key, and tests/env_template_pins_test.py holds both to the newest record.
 if [ -n "$pin_values" ]; then
   distinct="$(printf '%s' "$pin_values" | sort -u | wc -l | tr -d ' ')"
-  if [ "$distinct" -ne 1 ]; then
-    echo "FAIL: env pins -> production and staging do not name ONE release ($(printf '%s' "$pin_values" | sort -u | tr '\n' ' ')). Staging validates the exact tags production runs; if the six differ, a green staging says nothing about the artifact production pulls."
+  if [ "$distinct" -ne 3 ]; then
+    echo "FAIL: env pins -> production and staging do not pin the same tag per key ($(printf '%s' "$pin_values" | sort -u | tr '\n' ' ')). Staging validates the exact tags production runs; if they differ, a green staging says nothing about the artifact production pulls."
     pins_ok=0
   fi
 fi
@@ -376,6 +380,436 @@ fi
 if [ "$pins_ok" -eq 1 ]; then
   echo "PASS: env template release pins name one release above the ${floor} floor, and install.sh does not defer to them"
 else
+  failures=$((failures + 1))
+fi
+
+# ---------------------------------------------------------------------------
+# resolve_pairing: a fresh install must establish the released component triple,
+# including when today's installer unpacks an older bundle. v0.7.5 has no
+# fetch_release_record shell function and no `resolve` checker command. The
+# original tests copied today's helpers into the fake bundle and missed that.
+# Exercise both helper surfaces; only curl is stubbed. Every successful result
+# must pass the installed checker's deploy check using the installed records,
+# proving the fetched record survives for the first `vidra deploy` as well.
+# ---------------------------------------------------------------------------
+
+log "Testing resolve_pairing (per-component pins for a fresh install)..."
+
+PAIR_TMP="$(mktemp -d)"
+trap 'rm -rf "$UNPACK_TMP" "$PAIR_TMP"' EXIT
+sed -n '/^resolve_pairing() {/,/^}/p' install.sh > "$PAIR_TMP/func.sh"
+# shellcheck disable=SC2016  # a literal to find in install.sh's source
+grep -q 'SEARCH_TAG="\$p_tag"' "$PAIR_TMP/func.sh" \
+  || die "extraction self-check: sed did not capture the whole resolve_pairing function from install.sh"
+
+mkdir -p "$PAIR_TMP/tree/deploy" "$PAIR_TMP/tree/releases" "$PAIR_TMP/bin" "$PAIR_TMP/served"
+cp deploy/lib.sh deploy/release-mapping.py "$PAIR_TMP/tree/deploy/"
+cp releases/v0.7.3.json releases/v0.7.5.json "$PAIR_TMP/served/"
+cat > "$PAIR_TMP/bin/curl" <<'STUB'
+#!/bin/sh
+# Serves $SERVED/<tag>.json for .../<tag>.json; anything else is curl's 404 exit.
+out=""; url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --output) out="$2"; shift 2 ;;
+    https://*) url="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+f="$SERVED/${url##*/}"
+[ -f "$f" ] || exit 22
+cp "$f" "$out"
+STUB
+chmod +x "$PAIR_TMP/bin/curl"
+
+run_pairing() {
+  local tag="$1"; shift
+  mkdir -p "$PAIR_TMP/work"
+  # shellcheck disable=SC2016  # the inline script expands its own positionals
+  env "$@" PATH="$PAIR_TMP/bin:$PATH" SERVED="$PAIR_TMP/served" sh -eu -c '
+    OWNER=yegamble
+    log()  { :; }
+    warn() { echo "WARNING: $*" >&2; }
+    die()  { echo "DIE: $*" >&2; exit 9; }
+    . "$1"
+    TAG="$2"; DIR="$3"; WORK="$4"; PAIRING_DONE=0
+    resolve_pairing
+    echo "$CORE_TAG $USER_TAG $SEARCH_TAG"
+  ' pairing "$PAIR_TMP/func.sh" "$tag" "$PAIR_TMP/tree" "$PAIR_TMP/work"
+}
+
+assert_pairing() {
+  local tag="$1" want="$2" out core user search
+  shift 2
+  out="$(run_pairing "$tag" "$@" 2>&1)" || { echo "FAIL: resolve_pairing ${tag} exited non-zero: ${out}"; failures=$((failures + 1)); return; }
+  if [ "$out" != "$want" ]; then
+    echo "FAIL: resolve_pairing ${tag} ($*) -> '${out}', expected '${want}'"
+    failures=$((failures + 1)); return
+  fi
+  read -r core user search <<< "$out"
+  if ! python3 "$PAIR_TMP/tree/deploy/release-mapping.py" check --mode deploy \
+       --core "$core" --user "$user" --search "$search" \
+       --releases "$PAIR_TMP/tree/releases" >/dev/null 2>&1; then
+    echo "FAIL: resolve_pairing ${tag} -> '${out}', which the installed deploy checker REFUSES using the installed records"
+    failures=$((failures + 1)); return
+  fi
+  echo "PASS: resolve_pairing ${tag} ($*) -> ${out}; installed deploy checker accepts it"
+}
+
+assert_pairing_refused() {
+  local label="$1" tag="$2" reason="$3" out
+  shift 3
+  if out="$(run_pairing "$tag" "$@" 2>&1)"; then
+    echo "FAIL: resolve_pairing ${label} succeeded: ${out}"
+    failures=$((failures + 1)); return
+  fi
+  if ! printf '%s\n' "$out" | grep -qF "$reason" || ! printf '%s\n' "$out" | grep -q 'no component tags were guessed'; then
+    echo "FAIL: resolve_pairing ${label} did not explain its refusal: ${out}"
+    failures=$((failures + 1)); return
+  fi
+  echo "PASS: resolve_pairing ${label} -> refused before setup/bootstrap"
+}
+
+# Today's helpers, followed by the helper API actually present in v0.7.5.
+assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3"
+rm -f "$PAIR_TMP/tree/releases/"*.json
+printf '# Old bundles have no fetch_release_record function.\n' > "$PAIR_TMP/tree/deploy/lib.sh"
+if [ -n "${INSTALL_TEST_RELEASE_MAPPING:-}" ]; then
+  # Optional real historical source, e.g. `git show v0.7.5:deploy/release-mapping.py`.
+  # CI's shallow checkout need not fetch old tags to run the API regression.
+  cp "$INSTALL_TEST_RELEASE_MAPPING" "$PAIR_TMP/tree/deploy/release-mapping.py"
+else
+  cp deploy/release-mapping.py "$PAIR_TMP/tree/deploy/record-validator.py"
+  cat > "$PAIR_TMP/tree/deploy/release-mapping.py" <<'LEGACY'
+import argparse
+from pathlib import Path
+import runpy
+
+source = str(Path(__file__).with_name("record-validator.py"))
+validate = runpy.run_path(source)["validate"]
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", choices=("check",))
+    parser.parse_known_args()
+    runpy.run_path(source, run_name="__main__")
+LEGACY
+fi
+if python3 "$PAIR_TMP/tree/deploy/release-mapping.py" resolve --release v0.7.5 >/dev/null 2>&1; then
+  die "legacy fixture must refuse the resolve command that did not exist in v0.7.5"
+fi
+assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3"
+assert_pairing v0.7.3 "v0.7.3 v0.7.3 v0.7.3"
+rm -f "$PAIR_TMP/tree/releases/"*.json
+# No record means no guessed pins, even for an apparently uniform release.
+assert_pairing_refused "missing record" v0.9.9 "no release record is available"
+assert_pairing_refused "fetch disabled without a local record" v0.7.5 "no release record is available" VIDRA_RECORD_FETCH=off
+# Offline/retry operation is safe with a validated local record.
+cp releases/v0.7.5.json "$PAIR_TMP/tree/releases/"
+assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3" VIDRA_RECORD_FETCH=off
+assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3" 'VIDRA_RECORD_FETCH= OFF # offline'
+mv "$PAIR_TMP/served/v0.7.5.json" "$PAIR_TMP/served/saved.json"
+assert_pairing v0.7.5 "v0.7.5 v0.7.3 v0.7.3"
+mv "$PAIR_TMP/served/saved.json" "$PAIR_TMP/served/v0.7.5.json"
+
+# A well-formed but changed fetched record must not overwrite installed truth.
+python3 - "$PAIR_TMP/served/v0.7.5.json" <<'CONFLICT'
+import json
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+data = json.loads(p.read_text())
+data["components"]["user"]["tag"] = "v0.7.4"
+p.write_text(json.dumps(data))
+CONFLICT
+assert_pairing_refused "contradictory record" v0.7.5 "contradicts the installed record"
+cmp -s releases/v0.7.5.json "$PAIR_TMP/tree/releases/v0.7.5.json" \
+  || die "a refused fetched record modified the installed record"
+rm -f "$PAIR_TMP/tree/releases/"*.json
+
+# Structurally valid does not establish the requested release's pairing.
+python3 - "$PAIR_TMP/served/v0.7.5.json" <<'FUTURE'
+import json
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+data = json.loads(p.read_text())
+data["components"]["user"]["tag"] = "v0.7.6"
+p.write_text(json.dumps(data))
+FUTURE
+assert_pairing_refused "component newer than release" v0.7.5 "component tags do not belong"
+printf '{"invalid": true}\n' > "$PAIR_TMP/served/v0.7.5.json"
+assert_pairing_refused "malformed record" v0.7.5 "the record is missing"
+[ ! -f "$PAIR_TMP/tree/releases/v0.7.5.json" ] || die "a refused record was installed"
+cp releases/v0.7.5.json "$PAIR_TMP/served/"
+assert_pairing_refused "unencrypted record URL" v0.7.5 "must use https://" VIDRA_RECORD_BASE_URL=http://example.invalid/releases
+
+# ---------------------------------------------------------------------------
+# resolve_tag: a fresh install with no --ref takes the newest core release WITH
+# a release record on meta main, not releases/latest. Between release.sh
+# publishing vN and the vN record PR merging, releases/latest named a tag
+# resolve_pairing refuses, so every fresh install died; skipping it makes the
+# record merge the publish switch. Only a 404 skips: a corrupt record still
+# selects its release and resolve_pairing refuses it, and an unreadable answer
+# refuses outright, rather than quietly installing something older. curl is the
+# only stub: it serves the API list and the records from RT_SERVED.
+# ---------------------------------------------------------------------------
+
+log "Testing resolve_tag (newest core release with a record on main)..."
+
+RT_TMP="$PAIR_TMP/rt"
+mkdir -p "$RT_TMP/bin" "$RT_TMP/served/records" "$RT_TMP/work"
+sed -n '/^resolve_tag() {/,/^}/p' install.sh > "$RT_TMP/func.sh"
+grep -q 'merging that record is what releases it' "$RT_TMP/func.sh" \
+  || die "extraction self-check: sed did not capture a record-aware resolve_tag from install.sh"
+cat > "$RT_TMP/bin/curl" <<'STUB'
+#!/bin/sh
+# -w prints the status like curl does; --fail turns a miss into exit 22.
+out=""; url=""; fmt=""; fail=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|--output) out="$2"; shift 2 ;;
+    -w) fmt="$2"; shift 2 ;;
+    -H|--proto|--proto-redir|--connect-timeout|--max-time|--max-filesize) shift 2 ;;
+    --fail) fail=1; shift ;;
+    https://*) url="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+echo "$url" >> "$RT_SERVED/requests"
+case "$url" in
+  https://api.github.com/*) f="$RT_SERVED/list.json" ;;
+  *) f="$RT_SERVED/records/${url##*/}" ;;
+esac
+if [ -n "${RT_DOWN:-}" ] && [ "${url##*/}" = "$RT_DOWN" ]; then
+  [ -n "$fmt" ] && printf 503; [ "$fail" -eq 1 ] && exit 22; exit 0
+fi
+if [ -f "$f" ]; then
+  cp "$f" "$out"; [ -n "$fmt" ] && printf 200; exit 0
+fi
+[ -n "$fmt" ] && printf 404
+[ "$fail" -eq 1 ] && exit 22
+exit 0
+STUB
+chmod +x "$RT_TMP/bin/curl"
+
+# A trimmed real-shape listing: newest-created first, a prerelease above the
+# stable line, a draft, nested objects, and a body that mentions a tag_name.
+rt_release() { # <tag> <draft> <prerelease>
+  printf '{"url":"u","author":{"login":"yegamble","id":1,"type":"User"},"node_id":"n","tag_name":"%s","target_commitish":"main","name":"%s","draft":%s,"immutable":false,"prerelease":%s,"assets":[{"name":"SHA256SUMS","uploader":{"login":"bot"}}],"body":"pairs \\"tag_name\\": \\"v9.9.9\\", see notes"}' "$1" "$1" "$2" "$3"
+}
+{
+  printf '['
+  rt_release v0.8.0 false true; printf ','
+  rt_release v0.7.7 true false; printf ','
+  rt_release v0.7.6 false false; printf ','
+  rt_release v0.7.5 false false; printf ','
+  rt_release v0.7.3 false false
+  printf ']'
+} > "$RT_TMP/served/list.json"
+# The same listing pretty-printed, as the API answers a terminal client.
+python3 -m json.tool "$RT_TMP/served/list.json" > "$RT_TMP/pretty.json"
+
+run_resolve_tag() {
+  : > "$RT_TMP/served/requests"
+  rm -rf "$RT_TMP/work/tree" && cp -R "$PAIR_TMP/tree" "$RT_TMP/work/tree" && rm -f "$RT_TMP/work/tree/releases/"*.json
+  # shellcheck disable=SC2016  # the inline script expands its own positionals
+  env "$@" PATH="$RT_TMP/bin:$PATH" RT_SERVED="$RT_TMP/served" sh -eu -c '
+    OWNER=yegamble
+    log()  { echo "LOG: $*"; }
+    die()  { echo "DIE: $*"; exit 9; }
+    . "$1"; . "$2"
+    resolve_tag
+    echo "TAG=$TAG"
+    if [ -n "${RT_PAIR:-}" ]; then
+      DIR="$3"; WORK="$4"; PAIRING_DONE=0
+      resolve_pairing
+      echo "PAIR=$CORE_TAG $USER_TAG $SEARCH_TAG"
+    fi
+  ' resolve "$RT_TMP/func.sh" "$PAIR_TMP/func.sh" "$RT_TMP/work/tree" "$RT_TMP/work"
+}
+
+# rt_case <label> <want-exit> <want-line> [<line that must NOT appear>] [-- env...]
+rt_case() {
+  local label="$1" want_rc="$2" want="$3" absent="$4" out rc
+  shift 4
+  set +e
+  out="$(run_resolve_tag "$@" 2>&1)"; rc=$?
+  set -e
+  if [ "$rc" -ne "$want_rc" ] || ! printf '%s\n' "$out" | grep -qF -- "$want" \
+     || { [ -n "$absent" ] && printf '%s\n' "$out" | grep -qF -- "$absent"; }; then
+    echo "FAIL: resolve_tag [${label}] -> exit ${rc} (want ${want_rc}), want '${want}'${absent:+ and no \"${absent}\"}:"
+    printf '%s\n' "$out" | sed 's/^/       /'
+    failures=$((failures + 1)); return 0
+  fi
+  echo "PASS: resolve_tag [${label}] -> ${want}"
+}
+
+rm -f "$RT_TMP/served/records/"*
+cp releases/v0.7.5.json releases/v0.7.3.json "$RT_TMP/served/records/"
+# Latest v0.7.6 has no record yet: v0.7.5, saying which newer tag it skipped and why.
+rt_case "v0.7.6 published, no record" 0 "TAG=v0.7.5" ""
+rt_case "skip is logged with its reason" 0 "skipping v0.7.6 - it is published, but releases/v0.7.6.json is not on yegamble/vidra main yet" "skipping v0.8.0"
+grep -q 'v0.8.0.json\|v0.7.7.json' "$RT_TMP/served/requests" \
+  && { echo "FAIL: resolve_tag probed a record for a prerelease or draft"; failures=$((failures + 1)); } \
+  || echo "PASS: resolve_tag never considers prereleases or drafts"
+mv "$RT_TMP/served/list.json" "$RT_TMP/min.json" && cp "$RT_TMP/pretty.json" "$RT_TMP/served/list.json"
+rt_case "pretty-printed listing" 0 "TAG=v0.7.5" ""
+mv "$RT_TMP/min.json" "$RT_TMP/served/list.json"
+
+# The record merges: v0.7.6, with no skip. Its pairing (search held back) resolves.
+python3 - "$RT_TMP/served/records" <<'REC'
+import json, sys
+from pathlib import Path
+d = Path(sys.argv[1])
+rec = json.loads((d / "v0.7.5.json").read_text())
+rec["release"] = "v0.7.6"
+rec["components"]["core"]["tag"] = "v0.7.6"
+rec["components"]["user"]["tag"] = "v0.7.6"
+rec["core_schema_version"] = 151
+(d / "v0.7.6.json").write_text(json.dumps(rec, indent=2) + "\n")
+REC
+rt_case "v0.7.6 recorded" 0 "TAG=v0.7.6" "skipping"
+
+# A corrupt record still selects its release (no silent fallback to v0.7.5) and
+# resolve_pairing refuses it, as it always has.
+printf '{"release": "v0.7.6", "components": ' > "$RT_TMP/served/records/v0.7.6.json"
+rt_case "corrupt v0.7.6 record selects v0.7.6" 0 "TAG=v0.7.6" "TAG=v0.7.5"
+rt_case "corrupt v0.7.6 record refuses at pairing" 9 "component pairing could not be verified" "PAIR=" RT_PAIR=1
+# Negative control for the pairing leg: the record removed, v0.7.5 pairs cleanly.
+rm -f "$RT_TMP/served/records/v0.7.6.json"
+rt_case "no v0.7.6 record pairs v0.7.5" 0 "PAIR=v0.7.5 v0.7.3 v0.7.3" "" RT_PAIR=1
+
+# Neither 200 nor 404 refuses instead of falling back past an unknown answer.
+rt_case "record probe 503" 9 "could not check whether v0.7.6 has a release record (HTTP 503" "TAG=" RT_DOWN=v0.7.6.json
+rm -f "$RT_TMP/served/records/"*
+rt_case "no recorded release at all" 9 "none of the yegamble/vidra-core releases" "TAG="
+rt_case "API unreachable" 9 "could not resolve the latest yegamble/vidra-core release" "TAG=" RT_DOWN=releases?per_page=30
+rt_case "plain-http record base refused" 9 "VIDRA_RECORD_BASE_URL must use https://" "TAG=" VIDRA_RECORD_BASE_URL=http://example.invalid/releases
+rt_case "fetch off keeps the newest stable" 0 "TAG=v0.7.6" "skipping" VIDRA_RECORD_FETCH=off
+
+# ---------------------------------------------------------------------------
+# The --git clone path: bootstrap.sh puts EACH component on its own tag.
+#
+# install.sh --git (and any release without a bundle asset) clones this repo and
+# runs bootstrap.sh, which detached every component at the one VIDRA_REF. For a
+# core-only release that is a tag vidra-user and vidra-search do not have, so the
+# install died in bootstrap before setup ever ran. Real git against local repos
+# laid out like v0.7.5 (core has v0.7.5; user/search stop at v0.7.3); the
+# https://github.com/<owner>/ URLs bootstrap.sh builds are redirected to them
+# with url.insteadOf, so nothing touches the network.
+# ---------------------------------------------------------------------------
+
+log "Testing bootstrap.sh per-component refs (the --git install path)..."
+
+BOOT_TMP="$PAIR_TMP/boot"
+mkdir -p "$BOOT_TMP/remotes" "$BOOT_TMP/meta"
+boot_git() {
+  git -c user.name=t -c user.email=t@example.invalid -c init.defaultBranch=main \
+      -c commit.gpgsign=false -c tag.gpgsign=false "$@"
+}
+# Named <repo>.git: bootstrap.sh clones https://github.com/<owner>/<repo>.git.
+for r in vidra-core vidra-user vidra-search; do
+  boot_git init -q "$BOOT_TMP/remotes/$r.git"
+  for t in v0.7.3 v0.7.5; do
+    if [ "$t" = v0.7.5 ] && [ "$r" != vidra-core ]; then continue; fi
+    boot_git -C "$BOOT_TMP/remotes/$r.git" commit -q --allow-empty -m "$t"
+    boot_git -C "$BOOT_TMP/remotes/$r.git" tag "$t"
+  done
+done
+cp bootstrap.sh "$BOOT_TMP/meta/"
+
+# run_bootstrap_at <env...> - bootstrap.sh from $BOOT_TMP/meta; prints "core user search" tags.
+run_bootstrap_at() {
+  (
+    cd "$BOOT_TMP/meta"
+    env GIT_CONFIG_COUNT=1 \
+        GIT_CONFIG_KEY_0="url.file://$BOOT_TMP/remotes/.insteadOf" \
+        GIT_CONFIG_VALUE_0="https://github.com/boot-test/" \
+        GIT_TERMINAL_PROMPT=0 VIDRA_GH_OWNER=boot-test "$@" ./bootstrap.sh >/dev/null 2>&1
+  ) || return 1
+  for r in vidra-core vidra-user vidra-search; do
+    git -C "$BOOT_TMP/meta/$r" describe --tags --exact-match HEAD 2>/dev/null || echo "?"
+  done | tr '\n' ' ' | sed 's/ $//'
+}
+
+# assert_bootstrap <label> <expected "core user search"|FAIL> <env...>
+assert_bootstrap() {
+  local label="$1" want="$2" got rc=0
+  shift 2
+  got="$(run_bootstrap_at "$@")" || rc=$?
+  if [ "$want" = FAIL ]; then
+    if [ "$rc" -eq 0 ]; then
+      echo "FAIL: bootstrap.sh ${label} -> exit 0 (${got}); expected a refusal"; failures=$((failures + 1))
+    else
+      echo "PASS: bootstrap.sh ${label} -> refused"
+    fi
+  elif [ "$rc" -ne 0 ] || [ "$got" != "$want" ]; then
+    echo "FAIL: bootstrap.sh ${label} -> exit ${rc}, checkouts '${got}', expected '${want}'"
+    failures=$((failures + 1))
+  else
+    echo "PASS: bootstrap.sh ${label} -> ${got}"
+  fi
+}
+
+# The defect, as the old installer called it: one tag, and two repos lack it.
+assert_bootstrap "fresh clone, VIDRA_REF=v0.7.5 alone" FAIL VIDRA_REF=v0.7.5
+rm -rf "$BOOT_TMP/meta/vidra-"*
+# The fix, on a fresh clone...
+assert_bootstrap "fresh clone, per-component refs" "v0.7.5 v0.7.3 v0.7.3" \
+  VIDRA_REF=v0.7.5 VIDRA_CORE_REF=v0.7.5 VIDRA_USER_REF=v0.7.3 VIDRA_SEARCH_REF=v0.7.3
+# ...and on the update path an installer re-run takes over an existing checkout.
+assert_bootstrap "existing checkouts, uniform VIDRA_REF" "v0.7.3 v0.7.3 v0.7.3" VIDRA_REF=v0.7.3
+assert_bootstrap "existing checkouts, per-component refs" "v0.7.5 v0.7.3 v0.7.3" \
+  VIDRA_REF=v0.7.5 VIDRA_CORE_REF=v0.7.5 VIDRA_USER_REF=v0.7.3 VIDRA_SEARCH_REF=v0.7.3
+
+# And install.sh hands bootstrap.sh the pairing on BOTH git paths (fresh clone,
+# existing checkout): run_bootstrap is the one call site, run with the real
+# resolve_pairing and a stand-in bootstrap.sh that reports what it was given.
+sed -n '/^run_bootstrap() {/,/^}/p' install.sh > "$PAIR_TMP/boot_func.sh"
+if ! grep -q 'bootstrap.sh' "$PAIR_TMP/boot_func.sh"; then
+  echo "FAIL: install.sh has no run_bootstrap() wrapping bootstrap.sh"
+  failures=$((failures + 1))
+else
+  # shellcheck disable=SC2016  # a script body for the stand-in, expanded when IT runs
+  printf '#!/bin/sh\necho "$VIDRA_REF $VIDRA_CORE_REF $VIDRA_USER_REF $VIDRA_SEARCH_REF" > "$REPORT"\n' \
+    > "$PAIR_TMP/tree/bootstrap.sh"
+  chmod +x "$PAIR_TMP/tree/bootstrap.sh"
+  # shellcheck disable=SC2016  # the inline script expands its own positionals
+  PATH="$PAIR_TMP/bin:$PATH" SERVED="$PAIR_TMP/served" REPORT="$PAIR_TMP/boot_report" sh -eu -c '
+    WARNINGS=""; OWNER=yegamble
+    log()  { :; }
+    warn() { :; }
+    die()  { echo "DIE: $*" >&2; exit 9; }
+    . "$1"; . "$2"
+    TAG=v0.7.5; DIR="$3"; WORK="$4"; ENV_FILE="$DIR/env/production.env"; PAIRING_DONE=0
+    run_bootstrap 2>/dev/null
+  ' boot "$PAIR_TMP/func.sh" "$PAIR_TMP/boot_func.sh" "$PAIR_TMP/tree" "$PAIR_TMP/work" || true
+  got="$(cat "$PAIR_TMP/boot_report" 2>/dev/null || echo 'bootstrap.sh never ran')"
+  if [ "$got" = "v0.7.5 v0.7.5 v0.7.3 v0.7.3" ]; then
+    echo "PASS: install.sh run_bootstrap v0.7.5 -> VIDRA_REF/CORE/USER/SEARCH = ${got}"
+  else
+    echo "FAIL: install.sh run_bootstrap v0.7.5 -> '${got}', expected 'v0.7.5 v0.7.5 v0.7.3 v0.7.3'"
+    failures=$((failures + 1))
+  fi
+  rm -f "$PAIR_TMP/tree/bootstrap.sh"
+fi
+if [ "$(grep -c 'run_bootstrap$' install.sh)" -lt 2 ]; then
+  echo "FAIL: install.sh must call run_bootstrap on both the fresh-clone and existing-checkout paths"
+  failures=$((failures + 1))
+fi
+# shellcheck disable=SC2016  # a literal to find in install.sh's source
+if grep -q 'VIDRA_REF="\$TAG".*bootstrap.sh' install.sh; then
+  echo "FAIL: install.sh still runs bootstrap.sh with VIDRA_REF alone somewhere; a core-only release then dies in bootstrap"
+  failures=$((failures + 1))
+fi
+
+# And the pins actually reach the interview. Source-level, like --release-tag
+# above: $CORE_TAG etc must not expand here.
+# shellcheck disable=SC2016
+if grep -qF -- '--core-tag "$CORE_TAG" --user-tag "$USER_TAG" --search-tag "$SEARCH_TAG"' install.sh; then
+  echo "PASS: install.sh passes the resolved per-component pins to 'vidra setup'"
+else
+  echo "FAIL: install.sh does not pass --core-tag/--user-tag/--search-tag from resolve_pairing to 'vidra setup'; --release-tag alone pins a core-only release's user and search images at a tag that was never published"
   failures=$((failures + 1))
 fi
 
@@ -465,6 +899,100 @@ fi
 if [ "$lock_ok" -eq 1 ]; then
   echo "PASS: both migration one-shots bound their lock WAIT (not their work) from one documented knob"
 else
+  failures=$((failures + 1))
+fi
+
+# ---------------------------------------------------------------------------
+# --no-setup: the disaster-recovery install.
+#
+# On a rebuilt host the env file comes out of the config archive, and the setup
+# interview must NOT run: it would mint fresh KEKs and the restored database's
+# sealed columns would be unreadable. So the flag has to (a) be accepted and
+# documented, (b) short-circuit step 7 BEFORE any `vidra setup` invocation, and
+# (c) end with text that names the config archive. install.sh is not runnable
+# here (apt, root, GitHub), so (a) runs the real --help path, (b) reads the
+# source in order like the --release-tag check above, and (c) executes the
+# extracted notice function.
+# ---------------------------------------------------------------------------
+
+log "Testing install.sh --no-setup..."
+
+NOSETUP_TMP="$(mktemp -d)"
+trap 'rm -rf "$UNPACK_TMP" "$NOSETUP_TMP"' EXIT
+
+if sh install.sh --no-setup --help 2>&1 | grep -q -- '--no-setup'; then
+  echo "PASS: install.sh parses --no-setup and documents it in --help"
+else
+  echo "FAIL: 'install.sh --no-setup --help' does not mention --no-setup (unknown flag, or undocumented)"
+  failures=$((failures + 1))
+fi
+
+step7="$(sed -n '/^step "7\/7 setup"/,$p' install.sh)"
+# shellcheck disable=SC2016  # a literal to find in install.sh's source
+first_setup_line="$(printf '%s\n' "$step7" | grep -n '"\$VIDRA_BIN" setup' | head -n1 | cut -d: -f1)"
+guard_line="$(printf '%s\n' "$step7" | grep -n 'NO_SETUP" -eq 1' | tail -n1 | cut -d: -f1)"
+if [ -n "$guard_line" ] && [ -n "$first_setup_line" ] && [ "$guard_line" -lt "$first_setup_line" ]; then
+  echo "PASS: step 7 leaves on --no-setup before it can run 'vidra setup'"
+else
+  echo "FAIL: step 7 has no NO_SETUP guard ahead of the first '\$VIDRA_BIN setup' (guard line '${guard_line:-none}', setup line '${first_setup_line:-none}'); --no-setup would still run the interview and mint fresh KEKs over a restore"
+  failures=$((failures + 1))
+fi
+if printf '%s\n' "$step7" | grep -n 'NO_SETUP" -eq 0' | grep -q .; then
+  echo "PASS: resolve_pairing for the interview is skipped under --no-setup"
+else
+  echo "FAIL: the interview's resolve_pairing call is not gated on NO_SETUP=0; a DR host would need the release record fetched for nothing"
+  failures=$((failures + 1))
+fi
+
+sed -n '/^no_setup_notice() {/,/^}/p' install.sh > "$NOSETUP_TMP/notice.sh"
+if grep -q 'no_setup_notice' "$NOSETUP_TMP/notice.sh"; then
+  # shellcheck source=/dev/null
+  source "$NOSETUP_TMP/notice.sh"
+  notice="$(DIR=/opt/vidra TAG=v9.9.9 ENV_FILE=/opt/vidra/env/production.env no_setup_notice)"
+  for want in "config archive" "vidra-config-" "tar -xzf" "VIDRA_CORE_TAG" "v9.9.9" "KEK"; do
+    if printf '%s' "$notice" | grep -qF -- "$want"; then
+      echo "PASS: --no-setup closing text contains '$want'"
+    else
+      echo "FAIL: --no-setup closing text does not contain '$want'"
+      failures=$((failures + 1))
+    fi
+  done
+  if printf '%s' "$notice" | grep -q 'vidra setup --template'; then
+    echo "FAIL: --no-setup closing text tells the operator to run the interview, the one thing a DR must not do"
+    failures=$((failures + 1))
+  else
+    echo "PASS: --no-setup closing text does not point at the interview"
+  fi
+else
+  echo "FAIL: install.sh has no no_setup_notice() function"
+  failures=$((failures + 1))
+fi
+
+# The non-empty refusal stays. A backups/-only dir (what provision.sh leaves) is
+# still refused - make_install_dir would chown it away from the service user -
+# but the refusal must say WHY and name the order that works.
+sed -n '/^dir_refusal_hint() {/,/^}/p' install.sh > "$NOSETUP_TMP/hint.sh"
+if grep -q 'dir_refusal_hint' "$NOSETUP_TMP/hint.sh"; then
+  # shellcheck source=/dev/null
+  source "$NOSETUP_TMP/hint.sh"
+  mkdir -p "$NOSETUP_TMP/prov/backups" "$NOSETUP_TMP/other/backups"
+  : > "$NOSETUP_TMP/other/notes.txt"
+  hint_prov="$(dir_refusal_hint "$NOSETUP_TMP/prov")"
+  hint_other="$(dir_refusal_hint "$NOSETUP_TMP/other")"
+  if printf '%s' "$hint_prov" | grep -q 'provision.sh' && printf '%s' "$hint_prov" | grep -q 'BEFORE'; then
+    echo "PASS: a backups/-only directory is refused with the install-before-provision order"
+  else
+    echo "FAIL: a backups/-only directory's refusal does not name 'install.sh BEFORE provision.sh': '${hint_prov}'"
+    failures=$((failures + 1))
+  fi
+  if [ -z "$hint_other" ]; then
+    echo "PASS: a directory holding anything besides backups/ gets no provision hint"
+  else
+    echo "FAIL: a directory with other files got the provision hint: '${hint_other}'"
+    failures=$((failures + 1))
+  fi
+else
+  echo "FAIL: install.sh has no dir_refusal_hint() function"
   failures=$((failures + 1))
 fi
 

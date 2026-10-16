@@ -225,9 +225,21 @@ fatal, in deploys and rollbacks alike.
     "user":   {"...": "same shape"},
     "search": {"...": "same shape"}
   },
-  "evidence": "docs/evidence/<optional path to the verification record>"
+  "evidence": "docs/evidence/<optional path to the verification record>",
+  "core_migrations": ["0001_<name>.up.sql", "...", "0146_<name>.up.sql"]
 }
 ```
+
+`core_migrations` (optional; written by `deploy/release.sh` from the core commit's
+`migrations/` listing since the privacy-tier rollback guard) is every core
+**up-migration file name**, sorted; its newest must be `core_schema_version`.
+`deploy/rollback.sh` asks it whether a target core carries one specific migration
+by NAME (`INTERNAL_PRIVACY_MIGRATION`), because a schema number says how far the
+ledger reaches, not what is in it. A record without the list can only say "not
+carried" when its `core_schema_version` is below that file's number; otherwise it
+says nothing and the rollback asks the database. A checker from before this key
+existed refuses it as unknown, which for a fetched record means "unusable": the
+documented warning and fallback, never a silent pass.
 
 Images are still **pulled by tag**. The checker compares a digest only when a
 tag is pinned as `VIDRA_*_TAG=<tag>@sha256:<digest>`, the one digest form compose

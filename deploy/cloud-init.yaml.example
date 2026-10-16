@@ -76,12 +76,18 @@ write_files:
 
       3. ./deploy/deploy.sh
 
-      4. Claim the owner account. The api mints a one-time token at boot and
-         prints it in its own log; every restart mints a fresh one and
-         invalidates the previous, so take the newest line:
+      4. Claim the owner account. Every signup path answers 403 until you do.
+         Once the deploy finishes, on this server, in a terminal (over SSH
+         that means `ssh -t`, or log in first):
 
-           ./deploy/compose.sh logs api
-           https://<your domain>/setup/claim
+           cd /opt/vidra && vidra claim
+
+         It prints <your domain>/setup/claim#token=... - open that link. The
+         token is a one-time admin credential, so vidra claim prints it only
+         to a terminal; that is why this file does not run it for you. Every
+         api restart mints a fresh token, so run it again after one. (vidra
+         v0.7.5 and earlier have no `claim`: see deploy/README.md "First
+         boot" for the log method.)
 
       5. Attach a cloud firewall. This host has none. Allow 22 (your admin IP
          only), 80 and 443; add 1935 for the media profile and 4001 for ipfs.

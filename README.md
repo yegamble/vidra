@@ -76,7 +76,7 @@ runtime-mutable instance settings, and audit-enveloped job observability.
 **Operate.** One compose file; health/readiness probes (`/healthz`, `/readyz`, `/schemaz` migration probe, `/admin/system` 6-component status); Prometheus metrics and
 OpenTelemetry tracing; local or S3-compatible storage with optional dual-tier
 IPFS mirroring (public gateway offload plus a private swarm-keyed tier);
-scripted deploy, rollback, backup, and restore plus the `vidra` operator CLI (`doctor` 18 checks, `status`, `logs`). WCAG 2.2 AA is enforced by axe
+scripted deploy, rollback, backup, and restore plus the `vidra` operator CLI (`doctor`, `status`, `logs`). WCAG 2.2 AA is enforced by axe
 as a hard CI gate, on the tokens of a documented
 [design system](https://github.com/yegamble/vidra-branding/blob/main/design-system/README.md).
 
@@ -266,7 +266,7 @@ verified); for a release cut before those existed, `make build-vidra` in
 ```bash
 vidra setup --template env/production.env.example   # interview → env/production.env + deploy/Caddyfile.local
 vidra setup --answers a.txt  # or --non-interactive with the answers as flags
-vidra doctor                 # 18 checks: compose, port exposure, config, backups, reachability
+vidra doctor                 # compose, port exposure, config, backups, reachability
 vidra status                 # what is running, and whether it answers
 vidra logs [service] | vidra restart <service>
 vidra deploy | rollback <tag> | backup | restore <dump> | release <tag>
@@ -279,8 +279,10 @@ Three rules worth internalizing: **staging is production config with throwaway
 data** (promote the exact image tags); the containerized frontend resolves its
 origin at **runtime** (`PUBLIC_API_BASE_URL` via `/runtime-config.js`), so one
 image serves any domain; and **claim the owner account first** — on a fresh
-install every signup path refuses until the one-time owner-claim token from the
-api's boot log is redeemed at `/setup/claim`. Production is fail-secure
+install every signup path refuses until the one-time owner-claim token is
+redeemed at `/setup/claim` — run `vidra claim` on the server, in a terminal, for
+the link (it reads the api's boot log; terminal-only because the token is a
+one-time admin credential). Production is fail-secure
 (`VIDRA_ENV=production` refuses dev secrets and dev mail capture); see
 [`deploy/README.md`](deploy/README.md) for first-boot ordering, host
 prerequisites, the firewall caveat, backups/restore, secret rotation, and the
@@ -331,6 +333,7 @@ directories are independent git checkouts, git-ignored by this repo.
 | [`.ralph/specs/search.md`](.ralph/specs/search.md) | Cross-repo map of the `vidra-search` service and how it plugs into core and user. |
 | [`.ralph/specs/environments.md`](.ralph/specs/environments.md) | Canonical environment matrix (local / dev / QA / staging / production) and the DX contract. |
 | [`deploy/README.md`](deploy/README.md) | Reference single-host deployment: first-boot ordering, host prerequisites + firewall, droplet sizing, the prod compose overlay + Caddy TLS, deploy/rollback/backup/restore scripts, dirty-migration runbook, secret-rotation table, email. |
+| [`docs/peertube-migration.md`](docs/peertube-migration.md) | PeerTube operator migration guide: read-only source snapshots, Backblaze B2, existing media and storyboard reuse, reconciliation, backups and cutover. |
 | [`docs/outbound-email.md`](docs/outbound-email.md) | Operator guide to outbound email: which hosts block which SMTP ports (DigitalOcean blocks 25, 465 and 587), environment vs admin-panel configuration and which wins, choosing an API provider or an SMTP relay, SPF/DKIM/DMARC, and triage by test-send failure reason. |
 | [`docs/production-readiness-2026-07.md`](docs/production-readiness-2026-07.md) | **Archival** launch-gate audit (2026-07-28 → 2026-08-02) — superseded by `docs/productionization/`; VERDICT and `101 migrations` count are stale, kept for history. |
 

@@ -30,6 +30,7 @@ comes from not running every round at maximum.
 | B — cross-examination | `medium` | A bounded response to text you have been handed, in a fixed four-part shape. |
 | C — rebuttal | `medium` | Same — a bounded response to a named challenge. |
 | D — ruling | `high` | Where ambiguous judgement concentrates. |
+| E — verification | `high` | Falsify completion against code and execution evidence. |
 
 Leaving every round at `xhigh` is the default failure. Match effort to the
 difficulty of the round, not to the importance of the scope.
@@ -120,6 +121,65 @@ P2 — high-value improvements
 P3 — experiments and future opportunities
 DECLINED — considered and rejected, with the reason
 ```
+
+## Round E — post-implementation verification (`/council --verify <scope>`)
+
+Run after implementation PRs are opened or merged, and again after material
+follow-up changes. The chair records scope, acceptance criteria, checkout paths,
+commit SHAs, dependency PRs and actual test/CI evidence in a shared evidence pack.
+Refresh `origin/main` before checking merge state. Open PRs cannot receive a complete verdict while a required dependency is unmerged.
+
+Dispatch exactly three independent, read-only seats with that evidence pack:
+
+- **`vidra-product-completeness`**: walk every applicable row of the slice table
+  in `.claude/agents/product/vidra-product-completeness.md` against all affected
+  repos. The current table has 20 rows (the older proposal called it 17); do
+  not omit accessibility, mobile, tests or degraded-dependency behaviour.
+  Prove typed `endpoints.ts` callers, mounted components and reachable navigation
+  for user/admin endpoints; loading (`Spinner`), empty (`EmptyState`), error
+  (`ErrorState`) and disabled reasons; `useT()` keys in both `en` and `fr`.
+  Configurable admin controls belong in `internal/instancesettings` or sealed
+  settings tables such as `mail_config`/`oidc_providers`; justify any exception.
+- **`vidra-qa-release`**: audit core unit/tagged-integration results and audit
+  assertions (`findAudit`), frontend component and applicable `e2e/` plus
+  `e2e-backed/` proof of real DB mutation and fresh refetch, and meta recovery
+  classification plus rollback compatibility guards. Check search tests when
+  affected. Name unrun, missing, skipped or stale proof explicitly.
+- **`vidra-devils-advocate`**: try to falsify completion using silent skips,
+  components imported only by tests, ignored response fields, unhandled error
+  codes, stale docs and unavailable-dependency paths. Confirm reachability
+  from a route, rather than assuming an exported component is mounted.
+
+Each seat returns row-by-row `PASS | FAIL | NOT_APPLICABLE`, a `file:line`
+citation and execution artifact where relevant, plus an exact punch-list.
+`NOT_APPLICABLE` requires a scope-specific reason; a missing test or service is
+`FAIL`, not an exemption. Static citations cannot replace runtime proof; share disputed findings for rebuttal.
+
+Before the ruling, run from the meta checkout and retain actual output:
+
+```sh
+python3 scripts/ci/check-vertical-slice-completeness.py
+```
+
+For release qualification add `--strict-migrations`, verify pinned-release CI,
+release preflight, real upgrade/rollback/replacement-host restore, migration,
+install-stopwatch and digest vulnerability evidence in `docs/release-readiness.md`.
+A green source-branch check alone does not qualify a released image.
+
+Return one verdict with the evidence matrix and punch-list:
+
+```text
+VERDICT: 100% COMPLETE
+# or
+VERDICT: INCOMPLETE — SEND BACK TO WAR ROOM LOOP
+```
+
+Complete requires every applicable row, all affected PRs merged to their own
+`main`, their required CI green, and the mechanical gate passing. Label lifecycle
+state separately: implemented / merged / released / deployed. An incomplete
+verdict keeps the slice `IN_PROGRESS` and `EXIT_SIGNAL: false`; route each item
+back to its owning repository. Never manufacture test output or mark a planned
+drill executed. Verification review itself does not change application code.
 
 ## The chair seat
 

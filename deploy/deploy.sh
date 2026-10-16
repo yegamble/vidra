@@ -597,6 +597,7 @@ log "tags: core=$(env_get VIDRA_CORE_TAG '?') user=$(env_get VIDRA_USER_TAG '?')
 step "1/6 pre-deploy database dump"
 mkdir -p "$BACKUP_DIR"
 PG_CID=""
+FIRST_DEPLOY=0
 if [ "$EXTERNAL_POSTGRES" -eq 0 ]; then
   PG_CID="$("${COMPOSE[@]}" ps -q postgres || true)"
 fi
@@ -614,6 +615,7 @@ elif [ -z "$PG_CID" ]; then
     die "postgres exists but is not running — start it and retry, or investigate before deploying"
   fi
   log "no postgres container yet (first deploy on this host) — skipping pre-deploy dump"
+  FIRST_DEPLOY=1
 else
   DUMP="$BACKUP_DIR/pre-deploy-$(date -u +%FT%H%M%S).dump.gz"
   # `set -e` + pipefail: a failed pg_dump aborts the deploy here, which is the
@@ -913,3 +915,16 @@ EOF
 fi
 
 log "deploy complete"
+
+# Only after a FIRST deploy, and only a pointer: on a fresh host nobody can sign
+# in until the owner is claimed (every signup path answers 403), and an operator
+# whose deploy just went green has no reason to know a second step exists. The
+# signal is "there was no postgres container to dump", the one fact this run
+# already holds that means a new database — so a routine deploy stays quiet, and
+# so does an external-Postgres first deploy (no container to look at; the
+# install and quickstart text still carries the step there). The token itself is
+# never read or printed here: it is a one-time admin credential, deploy output
+# lands in CI logs and tee'd files, and `vidra claim` prints it to a terminal only.
+if [ "$FIRST_DEPLOY" -eq 1 ]; then
+  log "Next: run \`vidra claim\` on this server to get the owner-claim link."
+fi

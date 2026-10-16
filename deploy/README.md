@@ -40,24 +40,46 @@ registration owned your instance. It does not work that way any more
 (`vidra-core/internal/auth/ownerclaim.go`). While the instance is unclaimed —
 empty `users` table plus an unredeemed token — **every** signup path answers
 `403 owner_claim_required`, and the only way in is a one-time token the api
-mints at boot and prints to its own log.
+mints at boot and prints to its own log (`vidra claim` reads it for you).
 
 1. **Bring the stack up** and confirm `/readyz` is 200 — see
    [First bring-up](#first-bring-up) below. `vidra setup` prints these same two
    steps at the end of its run, for the same reason they are here: generating an
    env file otherwise leaves you two commands away from an instance nobody can
    log into.
-2. **Read the token out of the api log:**
+2. **Get the claim link with `vidra claim`**, on the server, in a terminal, from
+   the deployment directory:
    ```bash
-   ./deploy/compose.sh logs api | grep 'FIRST-RUN SETUP REQUIRED'
+   cd /opt/vidra && vidra claim
    ```
-   Use `compose.sh`, never a bare `docker compose logs api` — on a deployment
-   host the bare form auto-loads `docker-compose.override.yml` and addresses a
-   different project than the deploy scripts do. **Take the newest line.** Every
-   api restart mints a fresh token and *invalidates* the previous one, which is
+   It prints `<PUBLIC_BASE_URL>/setup/claim#token=<token>` (`PUBLIC_BASE_URL`
+   comes from the env file); open that link. It reads the token out of the api
+   log through `compose.sh` and takes the **newest** matching line, because every
+   api restart mints a fresh token and *invalidates* the previous one — which is
    what turns a token copied ten minutes and one deploy ago into a confusing
-   `owner_claim_invalid`.
-3. **Redeem it**, at `https://<your domain>/setup/claim` in the UI, or directly:
+   `owner_claim_invalid`. Run it again after any api restart.
+
+   `vidra claim` prints **only to a terminal**: the token is a one-time admin
+   credential, so a pipe, redirect or CI step is refused rather than allowed to
+   write it into a log that outlives the claim window. Over SSH, a remote command
+   needs `ssh -t <host> 'cd /opt/vidra && vidra claim'` (or log in first and run
+   it). That is also why cloud-init and `deploy.sh` only *point* at it and never
+   run it. No token found means the owner is probably already claimed or the api
+   has not started — check `vidra status`.
+
+   **Fallback — a host without `vidra claim`** (`vidra` v0.7.5 and earlier does
+   not have it; `install.sh` fetches the CLI from the release assets):
+   ```bash
+   ./deploy/compose.sh logs api | grep -E 'FIRST-RUN SETUP REQUIRED|OWNER STILL UNCLAIMED'
+   ```
+   Take the **last** line: the token is the text after the final `: `. The first
+   message is logged on a fresh instance, the second on a restart of an instance
+   that has users but was never claimed; both mint a new token. Use `compose.sh`,
+   never a bare `docker compose logs api` — on a deployment host the bare form
+   auto-loads `docker-compose.override.yml` and addresses a different project than
+   the deploy scripts do. Then open `https://<your domain>/setup/claim` and paste
+   the token (the link `vidra claim` prints just carries it in the URL fragment).
+3. **Redeem it** in the UI at that link, or directly:
    ```bash
    curl -X POST https://example.com/api/v1/setup/claim-owner \
      -H 'Content-Type: application/json' \
@@ -175,6 +197,10 @@ Prefer the first: it uses the same env parsing as the stack, and the address is
 not stable across recreates.
 
 ### Run the shipped PeerTube importer from the admin page
+
+For the full sequence, including a read-only snapshot, Backblaze B2, reuse of
+existing HLS/storyboards, reconciliation and cutover, follow the
+[PeerTube migration guide](../docs/peertube-migration.md).
 
 The release API image contains the importer and its worker. The standalone
 `peertube-import` executable is not distributed; no Go build or copied binary
@@ -363,9 +389,10 @@ half-provisions.
   | Port | Open it when | Why it cannot be loopback |
   |---|---|---|
   | **1935/tcp** | `VIDRA_COMPOSE_PROFILES` contains `media` | RTMP ingest. OBS on a creator's laptop connects to it from the internet. |
+  | **1936/tcp** | …contains `rtmps` | RTMPS ingest (TLS front for the stream key; needs `media` too). Same reason as 1935. Once every encoder uses RTMPS you may close 1935. Certificate options and the renewal timer (`deploy/vidra-rtmps-certs.timer`, runs `deploy/sync-rtmps-certs.sh`): `env/production.env.example`. |
   | **4001/tcp+udp** | …contains `ipfs` | libp2p swarm. Peers dial in; a node nobody can reach only ever pushes. |
 
-  Both stay **closed** on an instance that has not enabled those profiles, which
+  These stay **closed** on an instance that has not enabled those profiles, which
   is the default. `deploy/provision.sh` reads the profiles out of your env file
   and prints exactly the list your firewall needs, so re-run it after changing
   them rather than working it out again. meta-ci renders the overlay with
@@ -496,7 +523,9 @@ curl -fsSL https://raw.githubusercontent.com/yegamble/vidra/main/install.sh | sh
 [`../install.sh`](../install.sh) does everything down to `vidra setup`: detects the
 platform (Linux amd64/arm64; on macOS it prints the dev quick start and stops),
 installs `curl`, Docker Engine and the Compose v2 plugin from **Docker's own apt
-repository** when they are missing, resolves vidra-core's latest release,
+repository** when they are missing, resolves the newest vidra-core release whose
+release record (`releases/<tag>.json`) is on this repo's `main` — so merging the
+record is what publishes a release to installers —
 downloads that release's `vidra-bundle_<tag>.tar.gz`, verifies it against the
 release's `SHA256SUMS` and unpacks it into `/opt/vidra`, then downloads
 `vidra_<tag>_linux_<arch>` the same way — **refusing to install either on a
@@ -514,7 +543,10 @@ sync, and read the expected schema version from the manifest instead of from a
 release that carries no bundle asset — every release cut before the bundle
 existed, which must keep installing. Both say so. That path is the old one
 exactly: clone this repo, run `./bootstrap.sh` with `VIDRA_REF` set so all three
-component checkouts are pinned to the release. Take it deliberately if you want
+component checkouts are pinned to the release — each at the tag the release
+record pairs it at (`VIDRA_CORE_REF`/`VIDRA_USER_REF`/`VIDRA_SEARCH_REF`), since
+a core-only release such as v0.7.5 has no tag of that name in vidra-user or
+vidra-search. Take it deliberately if you want
 history, local patches, or to follow `main`; `git` is installed only if that path
 is actually taken.
 
@@ -832,10 +864,12 @@ record itself is wrong.
 
 ```bash
 # UPGRADE — tag a release in the component repo, wait for GHCR, then, AS vidra:
-./deploy/pin-release.sh v0.2.0                 # tree to v0.2.0 + each VIDRA_*_TAG at the tag the RECORD pairs it at; env snapshot first; CHECKOUT TREES ONLY
+./deploy/pin-release.sh v0.2.0                 # tree to v0.2.0 + each VIDRA_*_TAG at the tag the RECORD pairs it at; env snapshot first (a bundle tree: downloads, verifies and unpacks that release's bundle instead)
 ./deploy/deploy.sh                             # dump -> pull -> gated migrate -> up -> probe
 
-# ROLLBACK — app only; fine across an ADDITIVE migration (one-release rule below):
+# ROLLBACK — app only; fine across an ADDITIVE migration (one-release rule below).
+# Refused while the data uses a privacy tier the target core predates — see
+# "Rollback compatibility: what old code does with new values" below.
 ./deploy/rollback.sh v0.2.0
 
 # ROLLBACK across an INCOMPATIBLE schema change (a rename, a drop):
@@ -856,23 +890,66 @@ it. Note the check can only be made against an image that answers
 `migrate embedded-max`; against an older image it reports **NOT CHECKED** and
 continues, which is not the same as reporting that the pairing is fine.
 
-**On a bundle tree there is no `git pull`.** An upgrade is the tag bump plus
-`vidra deploy` — a release changes the images, and that is what the tags name.
-To take a release's new compose files and deploy scripts as well, unpack its
-bundle over the tree (it contains no `env/` secrets and no `Caddyfile.local`, so
-neither is touched), then deploy:
+### Upgrade a bundle tree
+
+**A bundle tree has no `git pull`, and bumping the tags alone is refused.** The
+tree's `vidra-bundle.manifest` names the release its compose files and expected
+schema version belong to. If `VIDRA_CORE_TAG` differs from it, `deploy.sh` stops
+in its pre-flight (`release-mapping.py`), before the dump, with nothing changed.
+One command does the whole upgrade except the deploy itself, AS THE TREE'S OWNER:
 
 ```bash
-cd /opt/vidra
-curl -fsSLO https://github.com/yegamble/vidra-core/releases/download/v0.2.0/vidra-bundle_v0.2.0.tar.gz
-tar -xzf vidra-bundle_v0.2.0.tar.gz            # overwrites tracked files, keeps yours
-$EDITOR env/production.env                     # VIDRA_CORE_TAG=v0.2.0 …
-./deploy/deploy.sh
+sudo -u vidra ./deploy/pin-release.sh vX.Y.Z   # pairing -> download -> verify -> unpack -> tags
+sudo -u vidra ./deploy/deploy.sh               # or: vidra deploy
 ```
 
-Verify its checksum against the release's `SHA256SUMS` first if you did not get
-it through `install.sh`. A bundle-aware `vidra update` is a recorded follow-up;
-today it warns rather than refuses on a tree with no git.
+`pin-release.sh` reads the pairing from the release record, downloads
+`vidra-bundle_<core tag>.tar.gz` and `SHA256SUMS` from the vidra-core release
+and **verifies the checksum before unpacking anything**. It lists the archive's
+members first and refuses one with an absolute or `..` path, a symlink, a
+hardlink or device, no `vidra-bundle.manifest`, or an `env/*.env` or
+`deploy/Caddyfile.local` of its own. It unpacks into a staging directory inside
+the tree and copies over it only after every check passed, so a refusal leaves the
+tree and the env file as they were. It snapshots the env file, writes the three
+tags, prints the next command and stops: it never runs `deploy.sh`. The bundle
+contains no `env/` secrets and no `Caddyfile.local`, so neither is touched. Run
+it as the owner, never as root (it refuses root). The same steps, with their
+reasoning, are in the docs under
+[Upgrade a bundle tree](https://vidra.yosef.app/docs/install/upgrading#upgrade-a-bundle-tree).
+
+The manual procedure below is the fallback: a tree whose copy of `pin-release.sh`
+predates this behaviour (unpack once by hand, and every later upgrade is the
+command above), or a host that cannot reach GitHub from the script.
+
+```bash
+# 1. Read the pairing from the release record (it is not always inside the
+#    bundle you are about to unpack). The bundle is a vidra-core asset named for
+#    the CORE tag; note the user and search tags too.
+TAG=vX.Y.Z
+curl -fsSL "https://raw.githubusercontent.com/yegamble/vidra/main/releases/$TAG.json" -o "/tmp/$TAG.json"
+python3 -c 'import json,sys; c=json.load(open(sys.argv[1]))["components"]; [print(k, c[k]["tag"]) for k in ("core","user","search")]' "/tmp/$TAG.json"
+
+# 2. Download the bundle and SHA256SUMS, and verify. Stop unless this prints OK.
+cd /opt/vidra
+CORE=vX.Y.Z                                    # the core tag from step 1
+BASE="https://github.com/yegamble/vidra-core/releases/download/$CORE"
+curl -fsSLO "$BASE/vidra-bundle_$CORE.tar.gz"
+curl -fsSLO "$BASE/SHA256SUMS"
+awk -v want="vidra-bundle_$CORE.tar.gz" '$2 == want || $2 == "*" want' SHA256SUMS | sha256sum -c -
+
+# 3. Unpack AS THE TREE'S OWNER. As root, tar keeps the archive's uid 0 and
+#    leaves root-owned scripts in a tree the deploy user owns.
+sudo -u vidra tar -xzf "vidra-bundle_$CORE.tar.gz" -C /opt/vidra   # overwrites tracked files, keeps yours
+
+# 4. Set VIDRA_CORE_TAG, VIDRA_USER_TAG and VIDRA_SEARCH_TAG to step 1's tags.
+$EDITOR env/production.env
+
+# 5. Deploy.
+sudo -u vidra ./deploy/deploy.sh               # or: vidra deploy
+```
+
+Do steps 3 and 4 together: every later `deploy.sh` run depends on the manifest and
+the tags agreeing.
 
 `vidra deploy`, `vidra rollback v0.2.0`, `vidra backup`, `vidra restore <dump>` and
 `vidra release v0.2.0` are the same four lines: each execs the script above with
@@ -966,14 +1043,22 @@ vidra release --yes v0.2.0                     # the CLI, which execs that scrip
 Each component repo's `publish-container.yml` runs on `release: published` and
 pushes `ghcr.io/<owner>/<repo>:<tag>` — the owner `deploy/release.sh` targets
 via `GITHUB_OWNER`, which must agree with the `VIDRA_IMAGE_OWNER` the deploy
-overlay pulls from — so cutting the release *is* building the image. `deploy/release.sh` creates the release in each repo
-(`--generate-notes --latest`), watches the resulting workflow run to its
+overlay pulls from — so cutting the release *is* building the image. `deploy/release.sh` resolves every target repo's
+default-branch HEAD in its pre-flight, shows that cut set in the confirmation, and creates
+the release in each repo AT that commit (`--target <sha> --generate-notes --latest`), so
+a PR merged while an earlier repo's image builds is not in the release; it watches the resulting workflow run to its
 conclusion, and then verifies the image is really in GHCR
 (`docker manifest inspect`, falling back to the GitHub packages API and saying
 which check it used). It exits non-zero with a per-image summary if any repo
 fails, and it does **not** deploy anything — on the host, as the deploy user,
 `./deploy/pin-release.sh <tag>` then `./deploy/deploy.sh` when you want the
 release live.
+
+**Bump the env templates in the same PR that lands `releases/<tag>.json`.**
+`release.sh` writes the record but does not edit `env/production.env.example` or
+`env/staging.env.example`, and a manual-path operator deploys whatever those
+three `VIDRA_*_TAG` lines say. `tests/env_template_pins_test.py` pins them to the
+newest record's pairing, so that PR is red until the templates move with it.
 
 **Prefer releasing the three repos at the same version.** Nothing enforces it,
 staging→production promotion copies three identical lines, and "which build is
@@ -983,19 +1068,19 @@ v0.7.4 and v0.7.5 did not: both re-released **vidra-core alone**, and
 `releases/<tag>.json` is where the pairing is written down. `pin-release.sh`
 reads it (above) and `deploy/release-preflight.py` resolves it (see
 "Core-only releases: the components are not all at `--tag`" below), so the
-upgrade path handles that shape.
-**`rollback.sh` does not.** `./deploy/rollback.sh v0.7.5` still sets all three
-`VIDRA_*_TAG` values from one argument, so rolling back *to* a core-only
-release that way pins `ghcr.io/yegamble/vidra-user:v0.7.5`, which does not
-exist, and the rollback fails at the pull with the broken release still
-serving. Spell the pairing out with the per-component flags it already has:
+upgrade path handles that shape, and so does `rollback.sh`: given a bare tag
+with a record, `./deploy/rollback.sh v0.7.5` pins core v0.7.5 with user and
+search at v0.7.3 and logs that pairing. A `--core`/`--user`/`--search` flag
+still overrides its component, and a tag with no record keeps the old
+behaviour (that one tag for all three, with a WARNING that the triple was not
+verified). Spelling the pairing out is equivalent:
 
 ```bash
 ./deploy/rollback.sh --core v0.7.5 --user v0.7.3 --search v0.7.3
 ```
 
-A rollback between two **uniform** releases, and a rollback *from* a core-only
-release to a uniform one (`./deploy/rollback.sh v0.6.6`), are unaffected.
+Released v0.7.5 and older `rollback.sh` copies set all three keys from the
+bare tag, so on those trees use the flags above.
 
 **This repository is tagged too — first, and without a release.** vidra-core's
 `release-assets.yml` builds `vidra-bundle_<tag>.tar.gz` by checking *this* repo
@@ -1172,6 +1257,58 @@ An app-only `rollback.sh` across an additive migration therefore works now. It
 is still not enough across an *incompatible* one — old code cannot read a
 renamed column — and that path is still restore-then-rollback.
 
+#### Rollback compatibility: what old code does with new values
+
+One-release compatibility has to hold for what release *N−1*'s code **does**
+with values release *N* can write, not only for whether *N−1* can read *N*'s
+schema. A new value in an existing enumerated column (a privacy tier, a state, a
+role) changes no column type, passes `migrate-lint`, and reads fine through the
+old code; it is still a compat break if the old code decides behaviour by
+comparing against the values it knew. Review a new enum value as a compat change,
+with the same care as a dropped column.
+
+The same mixed-version window exists without any rollback: a multi-replica
+rolling deploy runs *N−1* and *N* side by side against *N*'s schema, so a value
+*N* writes is handled by *N−1* replicas until the last of them drains.
+
+`rollback.sh` enforces this for one case. It refuses an app-only rollback that
+would run a core release unaware of a privacy tier present in the data: a target
+core that does not carry vidra-core's `0160_video_privacy_internal.up.sql` (the
+`internal` video privacy tier; `INTERNAL_PRIVACY_MIGRATION` in the script, which
+must match that file name) while the database holds videos at `internal`.
+
+- **Which targets.** Read from the release records **by file name**: records cut
+  by `release.sh` list the core's migration files (`core_migrations`), and
+  `deploy/release-mapping.py core-migration` places an unrecorded tag by the
+  recorded cores around it. A number cannot decide it — several core PRs held
+  neighbouring numbers, so a release can pass 0160 without this migration — and
+  only says "not carried" for a record whose newest migration is below 0160. A
+  target the records cannot place is treated as not carrying it, so the
+  database is asked. A rollback that leaves core alone (`--user` / `--search`
+  only) is not checked.
+- **The check** is one read-only `SELECT EXISTS` through the bundled postgres
+  container, in a session the server holds read-only, bounded by
+  `statement_timeout=15s`, `lock_timeout=5s` and a 10 s connect timeout (the
+  remap carries the same bounds). It runs before the env file is touched, again
+  after the pull, and once more after the restart.
+- **When it cannot run** (external Postgres, postgres not running, compose
+  unable to list it, a psql error or a timeout) the rollback is refused, saying
+  which. `--allow-unchecked-privacy-tier` proceeds after you
+  have checked by hand (`SELECT count(*) FROM videos WHERE privacy = 'internal';`).
+  The same flag covers a target the records cannot place; it never overrides a
+  definite finding.
+- **To proceed anyway**, `--remap-internal-to-private` runs the `UPDATE` from
+  0160's down migration (`internal` → `private`, the stricter tier) as one
+  transaction after the pull and immediately before the restart, logs the row
+  count, writes the remapped ids to `backups/internal-privacy-remap-<ts>.ids`
+  (0600), and proceeds. The remap is lossy until undone — after rolling forward
+  again, those ids are the list to set back.
+
+```bash
+./deploy/rollback.sh v0.7.7                                # refused while videos are at 'internal'
+./deploy/rollback.sh v0.7.7 --remap-internal-to-private    # remap, then roll back
+```
+
 #### Release notes: accepted compat breaks
 
 Each entry is a schema change the team accepted as a break of the additive-only
@@ -1294,7 +1431,19 @@ format is a contract; do not "improve" it.
   CLI). Use a bucket in a **different region from the media Space**. Both files
   go to the same target; there is deliberately no separate knob, because sending
   the dump away and leaving its config on the dead host is the exact failure the
-  archive closes.
+  archive closes. Without `BACKUP_AGE_RECIPIENTS` (see "Off-site with
+  client-side encryption (age)") or an rclone remote of `type = crypt`, the
+  config archive is **refused** off-site: the dump still uploads, the archive
+  stays local, and the run exits non-zero (pinging `/fail`, leaving
+  `last_success` alone) until you set one of those or accept plaintext with
+  `BACKUP_OFFSITE_PLAINTEXT=true`. These backup/monitor knobs are read from the
+  selected `ENV_FILE` as well as the process environment; an exported value
+  wins, including an explicitly empty value for a one-off disable. Released
+  v0.7.5 scripts require the process environment instead; the [migration
+  guide](../docs/peertube-migration.md) includes the compatible systemd
+  `EnvironmentFile` setup. Client settings such as `RCLONE_CONFIG` and AWS
+  credentials still belong in the client environment or its private
+  configuration, not in Vidra's env file.
 - **Alert on a *missing* backup**, not just a failing one. Set
   `HEALTHCHECKS_URL=https://hc-ping.com/<uuid>`; the script pings `/start`,
   `/fail` on any error, and success at the end, so a droplet that stops running
@@ -1319,15 +1468,26 @@ format is a contract; do not "improve" it.
 - **Restore drill (quarterly).** Restore the latest dump into a scratch stack,
   boot, and click through login / watch / upload.
 
+### Off-site with client-side encryption (age)
+
+Set `BACKUP_AGE_RECIPIENTS` (one or more age `age1…` public keys, space- or
+comma-separated) and `backup.sh` encrypts every off-site file with `age` before
+upload, storing `<name>.age`; local copies stay plaintext so `restore.sh` is
+unchanged. Works with both `BACKUP_RCLONE_REMOTE` and `BACKUP_S3_URI`. It aborts
+if `age` is missing or encryption fails — never a plaintext fallback. Generate
+the pair with `age-keygen -o key.txt`, put only the public key on the server,
+and keep `key.txt` **off the server** (a password manager or offline media). To
+restore: `age -d -i key.txt file.age > file`, then proceed as below.
+
 ### Off-site with client-side encryption (rclone crypt)
 
-The bullet above sends the dump and config **plaintext** to whatever
-`BACKUP_RCLONE_REMOTE` names. For an off-site copy on a provider you do not fully
-trust — and for provider independence in general — point `BACKUP_RCLONE_REMOTE`
-at an **rclone `crypt` remote layered over your object store**, so everything is
-encrypted **client-side before upload** and the provider only ever stores
-ciphertext. This is the shipped, no-code-change path; `deploy/backup.sh` just
-runs `rclone copyto` to the remote you configure.
+Without age, a plain remote receives the dump **plaintext** (and the config
+archive only if you set `BACKUP_OFFSITE_PLAINTEXT=true`). For an off-site copy
+on a provider you do not fully trust — and for provider independence in general
+— point `BACKUP_RCLONE_REMOTE` at an **rclone `crypt` remote layered over your
+object store**, so everything is encrypted **client-side before upload** and the
+provider only ever stores ciphertext. This is the shipped, no-code-change path;
+`deploy/backup.sh` just runs `rclone copyto` to the remote you configure.
 
 Choose an off-site provider that is independent of your media store — a
 **different company and region**, not just a different bucket — so that a single
@@ -1392,26 +1552,52 @@ that file, and a missing bind-mount source is created by Docker as an empty
 So the configuration has to land before the database, not after:
 
 ```bash
-# 1. A host and a checkout.
-sudo ./deploy/provision.sh --yes                     # or boot it from cloud-init
-git clone https://github.com/yegamble/vidra.git /opt/vidra && cd /opt/vidra
-./bootstrap.sh
+# 1. Fetch both files for the SAME stamp from off-site into a scratch directory
+#    that is NOT /opt/vidra (the installer refuses a non-empty one, see below).
+mkdir -p ~/dr && cd ~/dr
+rclone copy "$BACKUP_RCLONE_REMOTE/vidra-config-20260820T031500Z.tar.gz" .
+rclone copy "$BACKUP_RCLONE_REMOTE/vidra-20260820T031500Z.dump.gz"        .
+# With BACKUP_AGE_RECIPIENTS set the objects are <name>.age: decrypt each with
+# `age -d -i key.txt` first (see "Off-site with client-side encryption (age)").
 
-# 2. Fetch both files for the SAME stamp from off-site.
-rclone copy "$BACKUP_RCLONE_REMOTE/vidra-config-20260820T031500Z.tar.gz" backups/
-rclone copy "$BACKUP_RCLONE_REMOTE/vidra-20260820T031500Z.dump.gz"        backups/
+# 2. Find the release the dump was taken under: the config archive's env file
+#    pins it. Read it without extracting anything.
+tar -xzOf vidra-config-20260820T031500Z.tar.gz env/production.env | grep '^VIDRA_.*_TAG='
+#    VIDRA_CORE_TAG=v0.7.5 -> use that tag below.
 
-# 3. Configuration FIRST. Restores env/production.env (0600) and
+# 3. The release tree and the CLI, WITHOUT the setup interview. --no-setup is the
+#    whole point: the interview mints a fresh JWT secret and fresh *_KEK values,
+#    and over a restored database that orphans every sealed column.
+curl -fsSL https://raw.githubusercontent.com/yegamble/vidra/main/install.sh \
+  | sh -s -- --yes --no-setup --ref v0.7.5
+#    A host that was a git checkout install: add --git to get a checkout pinned
+#    at that tag (never `git clone` main - that is not the release the dump was
+#    taken under).
+
+# 4. Then the service user, backups/ and the timer - AFTER the install, never
+#    before: install.sh refuses a non-empty /opt/vidra. A host that cloud-init
+#    already ran provision.sh on: move /opt/vidra/backups aside, install, then
+#    move it back. Create backups/ explicitly: v0.7.5's provision.sh does not,
+#    and its bundle ships none, so the copy below would fail without it.
+cd /opt/vidra && sudo ./deploy/provision.sh --yes
+sudo install -d -m 0700 -o vidra -g vidra /opt/vidra/backups
+sudo install -m 0600 -o vidra -g vidra ~/dr/vidra-* backups/
+
+# 5. Configuration FIRST. Restores env/production.env (0600) and
 #    deploy/Caddyfile.local to exactly where the compose chain looks for them.
-tar -xzf backups/vidra-config-20260820T031500Z.tar.gz -C /opt/vidra
-git check-ignore -v env/production.env               # MUST match
+#    As the service user, so the 0600 env file is readable by what runs deploy.
+sudo -u vidra tar -xzf backups/vidra-config-20260820T031500Z.tar.gz -C /opt/vidra
+#    A git-checkout install only: git check-ignore -v env/production.env  (MUST match)
+#    A bundle tree has no .git, so there is nothing to commit it to.
 
-# 4. Bring up just enough to restore into, then restore.
-./deploy/compose.sh up -d postgres
-./deploy/restore.sh backups/vidra-20260820T031500Z.dump.gz
+# 6. Bring up just enough to restore into, then restore. As the service user:
+#    after provision.sh it alone can read the 0600 env file, and it is the one
+#    in the docker group, so the login user gets a permission error here.
+sudo -u vidra ./deploy/compose.sh up -d postgres
+sudo -u vidra ./deploy/restore.sh backups/vidra-20260820T031500Z.dump.gz
 
-# 5. Media, if STORAGE_BACKEND=local — see the next section.
-# 6. Point DNS at the new host, then ./deploy/deploy.sh.
+# 7. Media, if STORAGE_BACKEND=local — see the next section.
+# 8. Point DNS at the new host, then: sudo -u vidra ./deploy/deploy.sh
 ```
 
 Two things to check before you trust the result. The env file pins
@@ -1806,12 +1992,12 @@ Reach for the flag only in the window before the record exists, since the
 record and this preflight's evidence land in the same PR:
 
 ```bash
-python3 deploy/release-preflight.py --tag v0.7.6 --platform linux/amd64 \
+python3 deploy/release-preflight.py --tag v0.7.7 --platform linux/amd64 \
   --component-tag vidra-user=v0.7.3 --component-tag vidra-search=v0.7.3 \
   --out /tmp/vidra-candidate-unique > /tmp/vidra-candidate-unique.log 2>&1
 ```
 
-Once `releases/v0.7.6.json` is on the tree, drop the flags: `--tag v0.7.6`
+Once `releases/v0.7.7.json` is on the tree, drop the flags: `--tag v0.7.7`
 alone then reproduces the same frozen tree.
 
 **History, stated plainly:** the committed v0.7.4 and v0.7.5 evidence was

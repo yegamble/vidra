@@ -30,6 +30,7 @@ dirty-ledger shape v0.6.5 already covered.
 
 ```
 scp tests/rec03-envfix.py root@HOST:/root/
+scp deploy/release-mapping.py root@HOST:/root/   # the record resolver every pinning phase uses
 ```
 
 Only the driver itself crosses the `bash -s` pipe. The scan-posture helper is a
@@ -41,11 +42,14 @@ staged it at `/root` for exactly this reason.
 Then, per phase:
 
 ```
-ssh root@HOST "REC03_OLD=v0.6.6 REC03_NEW=v0.7.5 REC03_INJECT=column \
+ssh root@HOST "REC03_OLD=v0.6.6 REC03_NEW=v0.7.5 REC03_INSTALL=git REC03_INJECT=column \
 REC03_INJECT_TABLE=federation_deliveries \
 REC03_INJECT_COLUMN=authored_remote_comment_id \
 REC03_INJECT_TYPE=UUID bash -s -- <phase>" < tests/rec03-upgrade-rollback.sh
 ```
+
+`REC03_INSTALL=git` keeps this page's drill on the `--git` checkout path it was
+written for; the driver's default is now `bundle`, the default operator path.
 
 **The assignments belong inside the quoted remote command.** Written to the left
 of `ssh` they set the variables on the *local* ssh client, and OpenSSH forwards
@@ -158,7 +162,7 @@ indexes go with it) and record the finding, because the re-run would then die on
 
 | Phase | Expected |
 |---|---|
-| `install` | v0.6.6 installed from its released `install.sh` via the git path, `deploy.sh` exit 0, ledgers **146 / 18** |
+| `install` | v0.6.6 installed by meta main's `install.sh --git --ref v0.6.6` (the driver no longer runs the released installer: one tagged before per-component pairing bootstraps a core-only release's user and search at a tag they never had), `deploy.sh` exit 0, ledgers **146 / 18** |
 | `data` | fixture published, fingerprint recorded (original + HLS master + first segment) |
 | `fp <label>` | the same fingerprint at every later checkpoint — the drill's "no data was harmed" assertion |
 | `backup` | pre-upgrade dump at 146; `pre_core_version=146` and `pre_search_version=18` captured into the facts (the core one is what `recover` forces back to) |
@@ -186,16 +190,20 @@ evidence.
 
 ```
 # v0.6.3 -> v0.6.4  (core 144 -> 146; the column-conflict injection)
-ssh root@HOST "REC03_OLD=v0.6.3 REC03_NEW=v0.6.4 REC03_INJECT=column \
+ssh root@HOST "REC03_OLD=v0.6.3 REC03_NEW=v0.6.4 REC03_INSTALL=git REC03_INJECT=column \
 REC03_INJECT_TABLE=storage_migrations REC03_INJECT_COLUMN=paused_reason \
 REC03_INJECT_TYPE=TEXT bash -s -- <phase>" < tests/rec03-upgrade-rollback.sh
 
 # v0.6.4 -> v0.6.5  (core 146 -> 146; nothing to migrate, so a dirty ledger)
-ssh root@HOST "REC03_OLD=v0.6.4 REC03_NEW=v0.6.5 REC03_INJECT=dirty \
+ssh root@HOST "REC03_OLD=v0.6.4 REC03_NEW=v0.6.5 REC03_INSTALL=git REC03_INJECT=dirty \
 REC03_SAME_SCHEMA=1 bash -s -- <phase>" < tests/rec03-upgrade-rollback.sh
 ```
 
-Both need `scp tests/rec03-envfix.py root@HOST:/root/` first, as above.
+Both need `scp tests/rec03-envfix.py root@HOST:/root/` first, as above, and now
+`scp deploy/release-mapping.py root@HOST:/root/` too: every pinning phase reads the
+pair's per-component tags out of `releases/<tag>.json` and refuses when no record
+decides them. **The v0.6.3 → v0.6.4 restatement therefore no longer runs**:
+v0.6.3 predates release records, and the driver will not guess its pairing.
 
 Two honest differences from what those runs actually executed:
 

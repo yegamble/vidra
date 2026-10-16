@@ -1,0 +1,4 @@
+$ docker run --rm --platform linux/amd64 --network none --read-only --cap-drop ALL ghcr.io/yegamble/vidra-core@sha256:1c58107047c67b9819d1e9b64a507c9cfa1a1565ad1b1048af862191826f43d2 migrate embedded-max
+151
+$ docker run --rm --platform linux/amd64 --network none --read-only --cap-drop ALL ghcr.io/yegamble/vidra-search@sha256:a2195eaf9738ff049984db5913372d59dcc4c8736e3a2e4c7bf8a0c77d6046b1 migrate embedded-max
+18

@@ -1,0 +1,204 @@
+{
+  "planPath": "docs/superpowers/plans/2026-09-26-jev-metadata-autofill.md",
+  "revision": 3,
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: Extract the circuit breaker into `internal/breaker` (PR C1, core)",
+      "status": "pending",
+      "description": "**Goal:** One exported breaker that both `searchclient` and the new `judgment` client use, with searchclient's behaviour unchanged.\n\n**Verify:** `go test ./internal/breaker/ ./internal/searchclient/ -race` shows `ok` for both.\n\n```json:metadata\n{\"files\": [\"internal/breaker/breaker.go\", \"internal/breaker/breaker_test.go\", \"internal/searchclient\", \"internal/searchclient/breaker.go\", \"internal/searchclient/client.go\", \"internal/searchclient/prober_test.go:147\", \"internal/searchclient/searchclient_test.go:185\"], \"verifyCommand\": \"`go test ./internal/breaker/ ./internal/searchclient/ -race` shows `ok` for both.\", \"acceptanceCriteria\": [\"`breaker.New(now)` opens after `breaker.Threshold` (5) consecutive failures, refuses calls until `breaker.Cooldown` (30s) has passed, then admits exactly one probe.\", \"A failed probe restarts the cooldown; a successful one closes the breaker.\", \"`TestBreakerOpensAndRecovers` and `TestHealthyCombinesProberAndBreaker` pass unchanged apart from the renamed identifiers.\", \"No `breaker` type is left in `internal/searchclient`.\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: `internal/judgment`, the Jev client (PR C2, core)",
+      "status": "pending",
+      "description": "**Goal:** A video-agnostic client that sends a JSON state and `choice` questions to `POST /v1/systemone` and returns validated picks and probabilities, or a closed error code.\n\n**Verify:** `go test ./internal/judgment/ -race -v` \u2192 every test `PASS`.\n\n```json:metadata\n{\"files\": [\"internal/judgment/judgment.go\", \"internal/judgment/judgment_test.go\"], \"verifyCommand\": \"`go test ./internal/judgment/ -race -v` \\u2192 every test `PASS`.\", \"acceptanceCriteria\": [\"200 with valid answers returns a `Result` whose picks are in each question's option set.\", \"401 or 403 gives `auth`. 429 gives `rate_limited`. 400 or 422 gives `invalid_request`. 5xx, 529, 404 or 405 (a wrong `TYPESAFE_ENDPOINT` path), a transport error or a timeout gives `unavailable`. A malformed body, a body over the cap, a missing answer, or a pick outside the options gives `bad_response`. An empty key gives `not_configured`, and no request is made.\", \"Five consecutive transport/5xx failures open the breaker; the next call fails `unavailable` without reaching the server.\", \"The key is sent only as `Authorization: Bearer <key>`. No error string contains the key or the upstream body.\", \"More than 255 options is rejected locally as `invalid_request`.\"]}\n```",
+      "blockedBy": [
+        1
+      ]
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: Env config, compose consumers, `.env.example`, denylist (PR C3, core)",
+      "status": "pending",
+      "description": "**Goal:** The four env keys are parsed, validated, passed through compose, documented, and the key can never reach a log or audit record.\n\n**Verify:** `go test ./internal/config/ ./internal/observability/ -race` \u2192 `ok`. `TYPESAFE_ENDPOINT= docker compose --profile core config | grep -E 'TYPESAFE|METADATA_AUTOFILL'` shows 4 lines.\n\n```json:metadata\n{\"files\": [\"internal/config/config.go\", \"internal/config/config_test.go\", \"internal/config/loadfrom_test.go\", \"internal/observability/audit.go\", \"internal/observability/audit_test.go\", \"internal/observability/audit_test.go:151\"], \"verifyCommand\": \"`go test ./internal/config/ ./internal/observability/ -race` \\u2192 `ok`. `TYPESAFE_ENDPOINT= docker compose --profile core config | grep -E 'TYPESAFE|METADATA_AUTOFILL'` shows 4 lines.\", \"acceptanceCriteria\": [\"Unset gives `TypeSafeEndpoint=https://api.typesafe.ai`, `TypeSafeModel=jev-1.13.0`, `MetadataAutofillEnabled=false`, `TypeSafeAPIKey=\\\"\\\"`.\", \"A non-http(s) `TYPESAFE_ENDPOINT` is a boot error naming the variable.\", \"`docker compose config` renders each key, and the empty compose defaults fall through to the Go defaults.\", \"`IsSensitiveKey(\\\"typesafe_api_key\\\")` and `IsSensitiveKey(\\\"typesafe.api_key\\\")` are true.\"]}\n```",
+      "blockedBy": [
+        2
+      ]
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Migration 0152 and the queries (PR C4, core)",
+      "status": "pending",
+      "description": "**Goal:** Create the four tables, the claim index and the run projection into `job_runs`, plus every query the later tasks call, proven against a scratch Postgres database.\n\n**Verify:** The \u00a70.4 integration command with `-run 'MetadataFill|RecordAndApply'`. All PASS.\n\n```json:metadata\n{\"files\": [\"cmd/api/verify_blobs_integration_test.go:48\", \"internal/dbmigrate\", \"internal/peertubeimport/importer_integration_test.go:2205\", \"internal/store/metadata_fill_integration_test.go\", \"internal/store/queries/metadata_fill.sql\", \"internal/store/sqlcgen/metadata_fill.sql.go\", \"migrations/0152_metadata_autofill.down.sql\", \"migrations/0152_metadata_autofill.up.sql\"], \"verifyCommand\": \"The \\u00a70.4 integration command with `-run 'MetadataFill|RecordAndApply'`. All PASS.\", \"acceptanceCriteria\": [\"`make migrate-up`, then `go run ./cmd/api migrate down 1`, then `make migrate-up` round-trips; `make migrate-lint` passes.\", \"`ClaimNewMetadataJudgments` claims only public, published, unblocked videos of non-unlisted owners with an empty category or language and no judgment row. With `since` set, it claims only videos updated at or after `since`.\", \"Two concurrent claimers over a scratch database get disjoint sets.\", \"`RecordAndApplyMetadataJudgment` writes only empty fields, and only on a video that is still fully eligible and still `running`. It records the picks and `*_applied` in the same statement, reports what it wrote, and leaves `updated_at` untouched.\", \"Only one `metadata_fill_runs` row can be `running`. A second `StartMetadataFillRun` fails with a unique violation and requeues nothing.\", \"A run projects to one `job_runs` row (`queue='metadata_fill_runs'`, `actor_id = started_by`) whose state follows the run.\"]}\n```",
+      "blockedBy": [
+        3
+      ]
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: `video.Service` seams: narrow hook, best-effort clear, `AutoFilled` (PR C5, core)",
+      "status": "pending",
+      "description": "**Goal:** An automatic fill can notify search, and only search. A human edit clears the marker without ever failing the edit. Callers can ask which fields are auto-filled.\n\n**Verify:** `go test ./internal/video/ ./internal/httpapi/ -race` \u2192 PASS.\n\n```json:metadata\n{\"files\": [\"internal/httpapi/videos_test.go:56\", \"internal/video\", \"internal/video/inferred.go\", \"internal/video/inferred_test.go\", \"internal/video/service.go\", \"internal/video/service_test.go\"], \"verifyCommand\": \"`go test ./internal/video/ ./internal/httpapi/ -race` \\u2192 PASS.\", \"acceptanceCriteria\": [\"`WithInferredMetadataHook(fn)` registers a `func(ctx, videoID)`, and `NotifyInferredMetadata(ctx, id)` calls every such hook and nothing else. The `onUpdate` hooks do not fire.\", \"`UpdateForActor` with `Category` and/or `Language` set calls `ClearInferredApplied` for exactly those fields, including when the value equals the current one. **A failing clear is logged and the edit still succeeds**, with tags replaced and hooks fired.\", \"`AutoFilled` returns subsets of `[]string{\\\"category\\\",\\\"language\\\"}`, and `nil` for no row.\", \"`go test ./internal/httpapi/` still compiles and passes (the second fake).\"]}\n```",
+      "blockedBy": [
+        4
+      ]
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: PeerTube re-sync keeps a category or language the source is silent about (PR C6, core)",
+      "status": "pending",
+      "description": "**Goal:** A re-run sync no longer erases a category or language when the PeerTube source has none. Without this fix, every re-run on beta (a PeerTube import) wipes the auto-fills, and their judgment rows then block any re-judge.\n\n**Verify:** `go test ./internal/peertubeimport/ -race -run 'Keep|Resync|Digest'`, then the \u00a70.4 integration command with `-run Resync`.\n\n```json:metadata\n{\"files\": [\"internal/peertubeimport/importer_integration_test.go\", \"internal/peertubeimport/resync.go\", \"internal/peertubeimport/resync_test.go\"], \"verifyCommand\": \"`go test ./internal/peertubeimport/ -race -run 'Keep|Resync|Digest'`, then the \\u00a70.4 integration command with `-run Resync`.\", \"acceptanceCriteria\": [\"A source video with no category (`v.Category == nil`) or no language (`nil` or `\\\"\\\"`) leaves the Vidra value in place. It also does not count as a change: the digest compares against the kept value.\", \"A source that *does* carry a category or language still overwrites, which is today's behaviour.\", \"An existing re-sync integration test still passes; a new one proves the keep.\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: `metadatafill` request builder and decision (PR C7, core)",
+      "status": "pending",
+      "description": "**Goal:** Pure functions that turn a video's public fields and the live vocabulary into one Jev request, and turn the answer into raw picks plus the values that clear the bars.\n\n**Verify:** `go test ./internal/metadatafill/ -race -run 'Build|Decide'` \u2192 PASS.\n\n```json:metadata\n{\"files\": [\"internal/metadatafill/request.go\", \"internal/metadatafill/request_test.go\", \"internal/video/config.go:19-38\"], \"verifyCommand\": \"`go test ./internal/metadatafill/ -race -run 'Build|Decide'` \\u2192 PASS.\", \"acceptanceCriteria\": [\"The state is `{\\\"video\\\":{\\\"title\\\",\\\"description\\\"(\\u22642,000 runes),\\\"channel\\\",\\\"tags\\\"}}` and nothing else.\", \"The category options are the live list by **label**, plus `none_of_these`. Each built-in label carries its description only when the id and label both match a built-in. Labels that collide are disambiguated as `Label (id)`.\", \"The language options are the 30 codes with their labels as descriptions, plus `unclear`.\", \"With more than 254 categories, the category question is omitted.\", \"With the category already set, the category question is omitted. The same holds for language.\", \"`Decide` maps answers back to ids and codes, records the winning probability, and fills only at or above `CategoryBar` (0.70) and `LanguageBar` (0.90).\"]}\n```",
+      "blockedBy": [
+        5
+      ]
+    },
+    {
+      "id": 8,
+      "subject": "Task 8: `judgment.Account` pause and `metadatafill.Service.Tick` (PR C8, core)",
+      "status": "pending",
+      "description": "**Goal:** One leader-gated tick claims up to 25 videos, judges them, and records-and-applies each answer in one statement. It notifies search, pauses the account on account-level failures without spending attempts, and backs off only on per-video failures. It maintains `enabled_since` and runs from global facts only.\n\n**Verify:** `go test ./internal/judgment/ ./internal/metadatafill/ -race -v` \u2192 PASS.\n\n```json:metadata\n{\"files\": [\"internal/judgment/account.go\", \"internal/judgment/account_test.go\", \"internal/metadatafill/fakes_test.go\", \"internal/metadatafill/service.go\", \"internal/metadatafill/service_test.go\"], \"verifyCommand\": \"`go test ./internal/judgment/ ./internal/metadatafill/ -race -v` \\u2192 PASS.\", \"acceptanceCriteria\": [\"The toggle off (a global DB setting) clears `enabled_since` and stops a running run. A missing key only idles: it never clears the cutoff, because \\\"no key in this process\\\" is not a global fact.\", \"Toggle on with a key: `enabled_since` is stamped once, and new claims pass it as `since`. A running run passes `since = NULL`.\", \"A run finishes `done` only when `CountUnjudgedEligibleVideos` and `CountOpenMetadataJudgments` are both 0. An empty claim alone never finishes it.\", \"`auth` pauses the account for 15 minutes; `rate_limited` and `unavailable` pause it for 2 minutes. Every claim still held is released without spending an attempt, and nothing is sent while paused. An expired pause is cleared.\", \"`bad_response` and `invalid_request` record a failure with backoff of exactly 1, 2, 4 and 8 minutes, capped at 1 h; the 5th failure is `failed`.\", \"A confident answer goes through `RecordAndApplyMetadataJudgment` with the id and code, and `NotifyInferredMetadata` fires only when a field was written. An unconfident answer is recorded with nil `category`/`language`.\", \"Vocabulary is validated against the live lists (`video.IsCategory`, `video.IsLanguage`) before the write.\", \"A database error mid-batch releases the remaining claims and returns the error; run counts for videos already judged are still added.\", \"A video that makes the **server** fail (a 5xx/529 with `ServerAnswered`) pays one bounded attempt while the rest of the batch is released for free, so it reaches `failed` after `MaxAttempts` instead of pinning the account. Transport errors, an open breaker, 404/405, 401 and 429 spend nothing.\", \"A video with nothing to ask (for example more than 254 categories and only the category empty) is recorded `done` once, and never claimed again.\", \"Category validation at write time uses the same `s.categories()` list the question was built from.\", \"`enabled_since` is stamped even while the account is paused, because a pause does not mean the feature is off.\", \"A lost lease (`recorded=false`) is not counted as judged. Rule: a video that lost eligibility *before* it was asked has its claim deleted, so it is judged again if republished. One that lost it *during* the \\u22645 s ask is recorded as judged, with nothing written.\"]}\n```",
+      "blockedBy": [
+        7
+      ]
+    },
+    {
+      "id": 9,
+      "subject": "Task 9: Toggle, infra row, category provider, wiring, metrics (PR C9, core)",
+      "status": "pending",
+      "description": "**Goal:** The worker runs, leader-gated, in the api binary. It is switched on at runtime through the admin toggle, reports itself on the infrastructure snapshot, sees the instance's own category list in every role, and exports its queue depth.\n\n**Verify:** `go test ./internal/instancesettings/ ./internal/httpapi/ -race -run 'Registry|Settings|Infrastructure'` \u2192 PASS. Then `make ci` and the integration command (Step 5).\n\n```json:metadata\n{\"files\": [\"api/openapi.yaml\", \"cmd/api/main.go\", \"internal/httpapi/admin_infra.go\", \"internal/httpapi/admin_infra_test.go\", \"internal/httpapi/admin_instance_settings_test.go\", \"internal/httpapi/server.go\", \"internal/instancesettings/service.go\", \"internal/instancesettings/service_test.go\", \"internal/metadatafill/worker_integration_test.go\", \"internal/store/queries/search.sql:33-34,61-62\", \"internal/video/config.go\"], \"verifyCommand\": \"`go test ./internal/instancesettings/ ./internal/httpapi/ -race -run 'Registry|Settings|Infrastructure'` \\u2192 PASS. Then `make ci` and the integration command (Step 5).\", \"acceptanceCriteria\": [\"`metadata_autofill_enabled` is a `KindBool` on `PageVOD`, section `autofill`, whose default is `cfg.MetadataAutofillEnabled`. The settings count is 119.\", \"`video.SetCategoryProvider(settingssvc.Categories)` runs right after the boot `settingssvc.Load`, before any worker goroutine and in every role. The provider is stored in an `atomic.Pointer`: `httpapi.WithSettingsService` stores it again after the worker goroutine has started, and a plain package variable would be a data race under `-race`.\", \"The worker loop is `jobloop.Loop{Interval: 30s, Leader: <the cron leader>}` and starts whenever `runWorkers`.\", \"`infrastructure.features` ends with `metadata_autofill`, and it carries the missing-key note when enabled but not configured.\", \"`vidra_queue_depth{queue=\\\"video_metadata_judgments\\\",state=\\u2026}` is exported when metrics are on.\", \"The search enqueuer is registered as the `WithInferredMetadataHook` consumer.\"]}\n```",
+      "blockedBy": [
+        8
+      ]
+    },
+    {
+      "id": 10,
+      "subject": "Task 10: Admin endpoints, runs, audit, all OpenAPI prose (PR C10, core)",
+      "status": "pending",
+      "description": "**Goal:** An admin can read status, test the connection (which also clears a pause), start a \"fill existing videos\" run and stop it. Every action is audited with closed codes, and the OpenAPI contract gets all of slice 1's prose in this one PR.\n\n**Verify:** `go test ./internal/httpapi/ ./internal/metadatafill/ -race -run 'MetadataFill'` \u2192 PASS. Then `make ci`.\n\n```json:metadata\n{\"files\": [\"api/openapi.yaml\", \"cmd/api/main.go\", \"internal/httpapi/admin_metadata_fill.go\", \"internal/httpapi/admin_metadata_fill_test.go\", \"internal/httpapi/errors.go\", \"internal/httpapi/openapi_contract_test.go\", \"internal/httpapi/ratelimit.go\", \"internal/httpapi/server.go\", \"internal/metadatafill/fakes_test.go\", \"internal/metadatafill/service.go\", \"internal/metadatafill/service_test.go\", \"internal/observability/audit.go\", \"internal/pgconv/pgconv.go:115\"], \"verifyCommand\": \"`go test ./internal/httpapi/ ./internal/metadatafill/ -race -run 'MetadataFill'` \\u2192 PASS. Then `make ci`.\", \"acceptanceCriteria\": [\"All four routes: anonymous gets 401 and a non-admin gets 403.\", \"Test sends one fixed state and a language-only question, never a real video. On success it clears any account pause.\", \"Start is atomic (Task 4's `StartMetadataFillRun`): a refused start requeues nothing, and a failed requeue leaves no run.\", \"The Test button has its own limiter (`\\\"metadata-fill-test:\\\"+userID`, audit reason `metadata_fill_test_rate_limited`) and never spends the mail probe's budget.\", \"Audit actions: `admin.metadata_fill.test`, `admin.metadata_fill.run_start` and `admin.metadata_fill.run_stop`. `Reason` is always a closed code, and `count` metadata carries requeued rows.\", \"`TestOpenAPIContract` passes in both directions.\"]}\n```",
+      "blockedBy": [
+        9
+      ]
+    },
+    {
+      "id": 11,
+      "subject": "Task 11: `auto_filled` on the video view (PR C11, core)",
+      "status": "pending",
+      "description": "**Goal:** `GET /api/v1/videos/{id}` returns `auto_filled` to anyone who may manage the video (owner, channel editor, staff) and to no one else.\n\n**Verify:** `go test ./internal/httpapi/ -race -run AutoFilled` \u2192 PASS. Then `make ci`.\n\n```json:metadata\n{\"files\": [\"api/openapi.yaml\", \"internal/httpapi/videos.go\", \"internal/httpapi/videos_auto_filled_test.go\"], \"verifyCommand\": \"`go test ./internal/httpapi/ -race -run AutoFilled` \\u2192 PASS. Then `make ci`.\", \"acceptanceCriteria\": [\"The owner, a channel editor (per `canManageChannelContent`, `channel_members.go:23`, the check `canManageVideo` makes, without its re-fetch) and staff (`isStaff`) get `auto_filled: [\\\"category\\\"]` when that field holds the worker's value.\", \"An anonymous caller or an unrelated user never sees the key, not even as an empty array.\", \"An error from `AutoFilled` omits the field and never fails the read.\"]}\n```",
+      "blockedBy": [
+        10
+      ]
+    },
+    {
+      "id": 12,
+      "subject": "Task 12: Contract sync, a codegen-only vidra-user PR (S1, S2, S3)",
+      "status": "pending",
+      "description": "**Goal:** Keep vidra-user's required `contract-ci` green after each core PR that changes `api/openapi.yaml` (C10, C11, C14).\n\n**Verify:** In the vidra-user worktree:\n\n```json:metadata\n{\"files\": [\"api/openapi.yaml\", \"lib/api/generated.ts\", \"lib/api/types.ts\"], \"verifyCommand\": \"In the vidra-user worktree:\", \"acceptanceCriteria\": [\"`lib/api/generated.ts` equals codegen output from core `main`'s spec at the merge SHA, which the PR body names.\", \"`npx tsc --noEmit` passes: the new optional fields break no existing code.\", \"The PR's `contract-ci` is green.\"]}\n```",
+      "blockedBy": [
+        10
+      ]
+    },
+    {
+      "id": 13,
+      "subject": "Task 13: `api evaluate-metadata` (PR C12, core)",
+      "status": "pending",
+      "description": "**Goal:** A read-only subcommand that measures Jev against human-labelled public videos, so the bars are set from data. It writes nothing.\n\n**Verify:** `go test ./cmd/api/ ./internal/metadatafill/ -race -run 'Evaluate'` \u2192 PASS.\n\n```json:metadata\n{\"files\": [\"cmd/api/evaluate_metadata.go\", \"cmd/api/evaluate_metadata_test.go\", \"cmd/api/main.go\", \"cmd/api/verify_blobs.go:73\", \"internal/metadatafill/evaluate.go\", \"internal/metadatafill/evaluate_test.go\"], \"verifyCommand\": \"`go test ./cmd/api/ ./internal/metadatafill/ -race -run 'Evaluate'` \\u2192 PASS.\", \"acceptanceCriteria\": [\"`Evaluate(samples, answers)` is pure and tested: band assignment, coverage at the bar, agreement, confusion ordering.\", \"`evaluate-metadata` appears in the usage line, and unknown flags or a positional argument exit 1.\", \"No `UPDATE`/`INSERT` is reachable. The subcommand's repository interface contains only `SampleLabelledVideosForEvaluation` and `ListVideoTags`.\"]}\n```",
+      "blockedBy": [
+        9
+      ]
+    },
+    {
+      "id": 14,
+      "subject": "Task 14: `jev-stub` compose profile (PR C13, core)",
+      "status": "pending",
+      "description": "**Goal:** A deterministic stand-in for `/v1/systemone` that backed e2e can start, so CI proves the whole chain with no real key.\n\n**Verify:** `python3 -m unittest discover -s scripts/dev -p 'jevstub_test.py' && docker compose --profile jev-stub config | grep -A3 'jev-stub:'`.\n\n```json:metadata\n{\"files\": [\"scripts/dev/jevstub.py\", \"scripts/dev/jevstub_test.py\"], \"verifyCommand\": \"`python3 -m unittest discover -s scripts/dev -p 'jevstub_test.py' && docker compose --profile jev-stub config | grep -A3 'jev-stub:'`.\", \"acceptanceCriteria\": [\"`python3 -m unittest discover -s scripts/dev -p 'jevstub_test.py'` passes: title match, `en` fallback, no-match, and 401.\", \"No core CI lane runs Python tests; the PR body says the stub test was run locally and pastes its output.\", \"`docker compose --profile jev-stub config` renders a service `jev-stub` on the compose network with **no published port**.\"]}\n```",
+      "blockedBy": [
+        9
+      ]
+    },
+    {
+      "id": 15,
+      "subject": "Task 15: Sealed key setting (PR C14, core)",
+      "status": "pending",
+      "description": "**Goal:** The admin can set or clear the TypeSafe key in the panel with no restart. It is stored sealed or not at all, in the account-level `typesafe_state` row, and it wins over `TYPESAFE_API_KEY`.\n\n**Verify:** `go test ./internal/judgment/ ./internal/httpapi/ -race -run 'Key|MetadataFill|Account'` \u2192 PASS. Then `make ci`.\n\n```json:metadata\n{\"files\": [\"api/openapi.yaml\", \"cmd/api/main.go\", \"internal/httpapi/admin_metadata_fill.go\", \"internal/httpapi/server.go\", \"internal/judgment/account.go\", \"internal/judgment/account_test.go\", \"internal/metadatafill/service.go\", \"internal/observability/audit.go\", \"internal/setup/secrets.go\", \"internal/setup/secrets.go:85-86\", \"internal/store/queries/metadata_fill.sql\"], \"verifyCommand\": \"`go test ./internal/judgment/ ./internal/httpapi/ -race -run 'Key|MetadataFill|Account'` \\u2192 PASS. Then `make ci`.\", \"acceptanceCriteria\": [\"Resolution order: a sealed admin key that opens, then `TYPESAFE_API_KEY`, then \\\"\\\". An undecryptable sealed value is reported, and resolution falls back to env.\", \"A **database error** reading the key resolves to \\\"\\\" for this call. The Task 8 tick then idles and never moves the cutoff; no global state changes on a read error.\", \"With a nil cipher, a non-empty `PUT` gets 409 and stores nothing. Clearing works without a cipher.\", \"Audit `admin.metadata_fill.key_update` records `secret_changed=true` and `Reason` `set` or `cleared`. The key string never appears in a response, log or audit record (the test greps the captured log buffer).\", \"The key is read per call: a key saved in the panel is used by the next tick.\", \"`internal/setup/secrets.go` states that rotating `MFA_KEY_KEK` makes TOTP secrets, the stored mail credential and the stored TypeSafe key undecryptable.\"]}\n```",
+      "blockedBy": [
+        10
+      ]
+    },
+    {
+      "id": 16,
+      "subject": "Task 16: Toggle and warning, infrastructure labels, API wrappers (PR U1, user)",
+      "status": "pending",
+      "description": "**Goal:** The admin can switch the feature on under Config \u2192 VOD, is warned when no key is set, sees the Infrastructure row, and the client can call the four endpoints.\n\n**Verify:** `npx tsc --noEmit && npm run lint && npm run test -- lib/admin-config-ia components/AdminInfrastructureView && npm run check:contract`.\n\n```json:metadata\n{\"files\": [\"components/AdminInfrastructureView.test.tsx\", \"components/AdminInfrastructureView.tsx\", \"lib/admin-config-ia.test.ts\", \"lib/admin-config-ia.ts\", \"lib/api/endpoints.ts\", \"lib/api/types.ts\"], \"verifyCommand\": \"`npx tsc --noEmit && npm run lint && npm run test -- lib/admin-config-ia components/AdminInfrastructureView && npm run check:contract`.\", \"acceptanceCriteria\": [\"`metadata_autofill_enabled` renders as a toggle in a new VOD section `autofill` titled \\\"Automatic category & language\\\", with the \\u00a78 privacy text as help.\", \"The warning shows when `features` has `{key:\\\"metadata_autofill\\\", configured:false}`, and not otherwise.\", \"The Infrastructure row reads \\\"Automatic category & language\\\" and links to `/admin/config/vod#config-section-autofill`.\", \"`api.getMetadataFillStatus`, `testMetadataFill`, `startMetadataFillRun` and `stopMetadataFillRun` exist, and `npm run check:contract` passes.\"]}\n```",
+      "blockedBy": [
+        11,
+        12
+      ]
+    },
+    {
+      "id": 17,
+      "subject": "Task 17: `MetadataFillCard` on Config \u2192 VOD (PR U2, user)",
+      "status": "pending",
+      "description": "**Goal:** The feature's controls sit beside its toggle: state, counts, **Test connection**, and **Fill existing videos (N)** / **Stop filling**. On a core that lacks the endpoints, the card renders nothing.\n\n**Verify:** `npm run test -- components/admin/MetadataFillCard components/AdminInstanceConfigView && npx tsc --noEmit && npm run lint && npm run lint:icons`.\n\n```json:metadata\n{\"files\": [\"components/AdminInstanceConfigView.tsx\", \"components/admin/MetadataFillCard.test.tsx\", \"components/admin/MetadataFillCard.tsx\", \"e2e/admin-config.spec.ts\", \"lib/api/client.ts\", \"lib/use-api-resource.ts:57\"], \"verifyCommand\": \"`npm run test -- components/admin/MetadataFillCard components/AdminInstanceConfigView && npx tsc --noEmit && npm run lint && npm run lint:icons`.\", \"acceptanceCriteria\": [\"Unit tests cover:\", \"The card is mounted by `sectionPanel(\\\"vod\\\", \\\"autofill\\\")` and nowhere else.\", \"A mocked e2e run renders the card on `/admin/config/vod` from a mocked status and clicks Test connection against a mocked 200.\"]}\n```",
+      "blockedBy": [
+        16
+      ]
+    },
+    {
+      "id": 18,
+      "subject": "Task 18: Studio marker and mocked e2e (PR U3, user)",
+      "status": "pending",
+      "description": "**Goal:** In Studio's edit form, an automatically set category or language carries a quiet note that disappears when the creator changes the field.\n\n**Verify:** `npm run test -- components/studio && npx tsc --noEmit && npm run lint`.\n\n```json:metadata\n{\"files\": [\"components/studio/VideoRow.tsx\", \"components/studio/shared.test.tsx\", \"components/studio/shared.tsx\", \"e2e/studio.spec.ts\"], \"verifyCommand\": \"`npm run test -- components/studio && npx tsc --noEmit && npm run lint`.\", \"acceptanceCriteria\": [\"`TaxonomySelect` with `autoFilled` renders \\\"Set automatically \\u00b7 change it if it's wrong\\\" and wires it to the select with `aria-describedby`. Without the prop it renders exactly as before.\", \"`VideoRow` shows the note on a field while its value equals the value loaded with `auto_filled` including it, and hides it once the creator picks a different value.\", \"The note never names an engine and never shows a number.\", \"A mocked e2e run proves the note shows on a mocked `auto_filled:[\\\"category\\\"]` video and disappears after changing the category.\"]}\n```",
+      "blockedBy": [
+        16
+      ]
+    },
+    {
+      "id": 19,
+      "subject": "Task 19: Backed e2e spec and optional-workflow job (PR U4, user; touches `.github/workflows`)",
+      "status": "pending",
+      "description": "**Goal:** Prove, against the real stack and the stub, that publishing leads to filling, then to the Studio marker, and that the category filter finds the video. This PR's task *is* the workflow change (AGENTS.md hard rule 6 exception); say so in the PR body.\n\n**Verify:** In CI, trigger `frontend-e2e-optional.yml` via `gh workflow run frontend-e2e-optional.yml --ref <branch>` and paste the run link and the job's pass line into the PR. Locally: `npx tsc --noEmit && npm run lint`.\n\n```json:metadata\n{\"files\": [\".github/workflows/frontend-e2e-optional.yml\", \"e2e-backed/fixtures.ts\", \"e2e-backed/metadata-autofill.spec.ts\", \"scripts/ci/allowed-skips-backed.txt\"], \"verifyCommand\": \"In CI, trigger `frontend-e2e-optional.yml` via `gh workflow run frontend-e2e-optional.yml --ref <branch>` and paste the run link and the job's pass line into the PR. Locally: `npx tsc --noEmit && npm run lint`.\", \"acceptanceCriteria\": [\"With the stub profile up, `METADATA_AUTOFILL_ENABLED=true TYPESAFE_API_KEY=stub TYPESAFE_ENDPOINT=http://jev-stub:8080`, the spec: publishes a public video titled \\\"Music \\u2026 <uuid>\\\" with no category or language through the Studio UI; polls the API (up to 120 s, since the leader ticks every 30 s) until `category` is the id of \\\"Music\\\" and `language` is `en`; opens the edit form and sees the note; then queries the public video list filtered by that category and finds the video.\", \"In the ordinary backed lane the spec is skipped and listed in `allowed-skips-backed.txt`.\", \"The optional workflow job runs only on `workflow_dispatch` and the Sunday cron, never on push or PR.\"]}\n```",
+      "blockedBy": [
+        18,
+        14
+      ]
+    },
+    {
+      "id": 20,
+      "subject": "Task 20: Key field on the card (PR U5, user)",
+      "status": "pending",
+      "description": "**Goal:** The admin can paste, replace or remove the TypeSafe key on the card with `SecretInput`.\n\n**Verify:** `npm run test -- components/admin/MetadataFillCard && npx tsc --noEmit && npm run lint`.\n\n```json:metadata\n{\"files\": [\"components/admin/MetadataFillCard.test.tsx\", \"components/admin/MetadataFillCard.tsx\", \"components/ui/SecretInput.tsx\", \"lib/api/endpoints.ts\"], \"verifyCommand\": \"`npm run test -- components/admin/MetadataFillCard && npx tsc --noEmit && npm run lint`.\", \"acceptanceCriteria\": [\"Untouched: no request is made. Replace: a PUT with the value. Remove: a PUT with `\\\"\\\"`.\", \"The key never appears in the rendered DOM after saving: the input resets to `undefined`.\", \"The three hints render in their conditions.\"]}\n```",
+      "blockedBy": [
+        17,
+        15
+      ]
+    },
+    {
+      "id": 21,
+      "subject": "Task 21: Env example and runbook (PR M1, meta)",
+      "status": "pending",
+      "description": "**Goal:** An operator can find, understand, enable, measure and undo the feature from this repo alone.\n\n**Verify:** \n\n```json:metadata\n{\"files\": [\"docs/metadata-autofill.md\", \"env/production.env.example\"], \"verifyCommand\": \"\", \"acceptanceCriteria\": [\"The runbook opens with \\\"Requires vidra-core \\u2265 vX.Y.Z and vidra-user \\u2265 vA.B.C\\\", with the numbers taken from those releases' notes. The panel-key paragraph carries its own \\\"from vidra-core \\u2265 \\u2026 / vidra-user \\u2265 \\u2026\\\", from the releases containing C14 and U5, or \\\"not yet released\\\".\", \"Until the panel key ships, the runbook states that `TYPESAFE_API_KEY` must be identical for every api and worker service. The status card reads the key of the replica that serves it, while the elected worker leader uses its own.\", \"The four keys are present with empty or `false` values and the \\u00a78 privacy statement.\", \"The compose gate passes with the unedited example.\", \"The runbook covers: what is sent and never sent; enabling (env or panel); the `enabled_since` rule, stated plainly; \\\"Fill existing videos\\\"; the status meanings; the evaluation gate (`docker compose exec api /app/api evaluate-metadata`, with the real binary path checked against the api Dockerfile); turning it off; undoing fills (SQL below); and the operator's privacy-notice duty.\"]}\n```",
+      "blockedBy": [
+        13,
+        17
+      ]
+    },
+    {
+      "id": 22,
+      "subject": "Task 22: Beta evaluation, bars, scope ledger (PR M2, meta)",
+      "status": "pending",
+      "description": "**Goal:** The confidence bars come from a measurement on the beta's human-labelled PeerTube imports, recorded honestly, before auto-fill is switched on there.\n\n**Verify:** `python3 -m unittest discover -s tests -p '*_test.py'` (the docs tests, e.g. `docs_image_refs_test.py`, still pass), and the record renders on GitHub.\n\n```json:metadata\n{\"files\": [\"docs/metadata-autofill-evaluation-<YYYY-MM-DD>.md\", \"docs/release-readiness.md\", \"docs/runtime-acceptance-*.md\", \"internal/metadatafill/request.go\"], \"verifyCommand\": \"`python3 -m unittest discover -s tests -p '*_test.py'` (the docs tests, e.g. `docs_image_refs_test.py`, still pass), and the record renders on GitHub.\", \"acceptanceCriteria\": [\"`api evaluate-metadata --sample 500 --json` ran on beta. The record contains the header (model, sample, seed, date), both field tables, the confused pairs, and the cost (input tokens \\u00d7 $0.042/M).\", \"The chosen bars are justified in one paragraph each. The rule: the lowest band whose agreement is at least 90% for category and at least 97% for language, rounded up to 0.05. If no band qualifies, the record says auto-fill should not be enabled for that field. The owner confirms the rule in the PR; this plan only proposes it.\", \"The record carries the caveat verbatim: \\\"Agreement with creator-chosen values is a floor on accuracy, not ground truth; creator categories are noisy.\\\"\", \"If the bars change, a separate core PR updates the constants and cites the record.\", \"One manual run with the real key and the feature **on**, for a short window chosen by the owner, is recorded with before and after counts from the status card. Then the feature is switched back off, or left on, per the owner's call.\"]}\n```",
+      "blockedBy": [
+        21,
+        6
+      ]
+    }
+  ],
+  "lastUpdated": "2026-09-27T01:03:51.700995+00:00"
+}
