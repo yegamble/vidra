@@ -12,3 +12,6 @@ The original workflow jobs remain authoritative. Missing verdicts report
 **INCOMPLETE**; invalid or private fields prevent publication. Only exact
 current-attempt verdict artifacts enter the reporter. Encrypted handoffs,
 environment files and raw logs never enter this API transport.
+
+Use full workflow reruns: failed-job reruns can lack current-attempt verdicts
+and therefore produce **INCOMPLETE** rather than reusing earlier artifacts.

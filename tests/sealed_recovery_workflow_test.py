@@ -74,14 +74,17 @@ class SealedWorkflowTest(unittest.TestCase):
                 self.assertNotIn('permissions', job)
                 self.assertNotIn('GH_TOKEN', str(job))
                 self.assertIn('verdict_id', job['outputs'])
+                self.assertTrue(all('continue-on-error' not in step for step in job['steps']))
         steps = reporter['jobs']['publish']['steps']
         downloads = [step for step in steps if step.get('uses', '').startswith('actions/download-artifact@')]
         self.assertEqual(len(downloads), 2)
         for step in downloads:
+            self.assertIs(step['continue-on-error'], True)
             self.assertEqual(set(step['with']), {'name', 'path'})
             self.assertIn('artifact_id', step['if'])
             self.assertIn('verdict', step['with']['name'])
             self.assertNotRegex(str(step), r'handoff|\.env|\.log|pattern:')
+        self.assertTrue(all('continue-on-error' not in step for step in steps if step not in downloads))
         publish = steps[-1]
         self.assertEqual(publish['env']['GH_TOKEN'], '${{ github.token }}')
         self.assertIn('--input "$RUNNER_TEMP/verdict-check.json"', publish['run'])
