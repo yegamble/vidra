@@ -1,0 +1,66 @@
+
+=== payloads ===
+total 336904
+-rw-r--r--@ 1 <user> <group>   8388608 Sep 20 13:30 a__dup.bin
+-rw-r--r--@ 1 <user> <group>   8388608 Sep 20 13:30 b__dup.bin
+-rw-r--r--@ 1 <user> <group>       700 Sep 20 13:18 hls__720p__init.mp4
+-rw-r--r--@ 1 <user> <group>   3145728 Sep 20 13:18 hls__720p__seg-1.m4s
+-rw-r--r--@ 1 <user> <group>       225 Sep 20 13:18 hls__master.m3u8
+-rw-r--r--@ 1 <user> <group>       700 Sep 20 13:22 hls2__720p__init.mp4
+-rw-r--r--@ 1 <user> <group>   3145728 Sep 20 13:22 hls2__720p__seg-1.m4s
+-rw-r--r--@ 1 <user> <group>       120 Sep 20 13:22 hls2__master.m3u8
+-rw-r--r--@ 1 <user> <group>    262145 Sep 20 13:22 mc_justover.bin
+-rw-r--r--@ 1 <user> <group>   1000000 Sep 20 13:22 mc_pin_true.bin
+-rw-r--r--@ 1 <user> <group>   3145728 Sep 20 13:22 mid1.bin
+-rw-r--r--@ 1 <user> <group>       700 Sep 20 13:31 mix__720p__init.mp4
+-rw-r--r--@ 1 <user> <group>   2097152 Sep 20 13:31 mix__720p__seg-1.m4s
+-rw-r--r--@ 1 <user> <group>       225 Sep 20 13:31 mix__master.m3u8
+-rw-r--r--@ 1 <user> <group>       100 Sep 20 13:31 mix2__720p__bad.m3u8
+-rw-r--r--@ 1 <user> <group>   2097152 Sep 20 13:31 mix2__720p__seg-1.m4s
+-rw-r--r--@ 1 <user> <group>       100 Sep 20 13:32 mix3__720p__bad.m3u8
+-rw-r--r--@ 1 <user> <group>   2097152 Sep 20 13:32 mix3__720p__seg-1.m4s
+-rw-r--r--@ 1 <user> <group>  67108864 Sep 20 13:18 payload1.bin
+-rw-r--r--@ 1 <user> <group>  67108864 Sep 20 13:18 payload2.bin
+-rw-r--r--@ 1 <user> <group>    262144 Sep 20 13:22 sc_exact.bin
+-rw-r--r--@ 1 <user> <group>       400 Sep 20 13:22 sc_pin_false.bin
+-rw-r--r--@ 1 <user> <group>       400 Sep 20 13:22 sc_pin_true.bin
+-rw-r--r--@ 1 <user> <group>   4194304 Sep 20 13:23 t4.bin
+-rw-r--r--@ 1 <user> <group>       300 Sep 20 13:22 tiny1.bin
+
+=== origin ===
+ready: origin (after 1 polls)
+
+=== kubo repo init + offline/no-routing config ===
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+removed auto
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+--- bootstrap list (must be empty) ---
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+--- routing ---
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+none
+
+=== kubo daemon (offline) ===
+ready: kubo rpc (after 1 polls)
+{"Version":"0.43.0","Commit":"e9914bb","Repo":"18","System":"arm64/linux","Golang":"go1.26.5"}
+curl 8.7.1 (x86_64-apple-darwin25.0) libcurl/8.7.1 (SecureTransport) LibreSSL/3.3.6 zlib/1.2.12 nghttp2/1.68.1

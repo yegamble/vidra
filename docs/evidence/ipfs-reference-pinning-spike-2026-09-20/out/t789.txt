@@ -1,0 +1,38 @@
+
+=== T7 chunk size: 256 KiB default vs size-1048576 ===
+  256 KiB chunker CID: bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq
+  1 MiB   chunker CID: bafybeifa42em4wnwbafxgmfohpwhmrersyauet26xfihiynnp4ht4ljtnu
+  CIDs DIFFER (expected: chunking is part of the CID)
+  filestore entries for the 1 MiB variant: 64
+  full read @256 KiB: 256 request(s), 67108864 bytes
+  full read @1 MiB:   64 request(s), 67108864 bytes
+  t7-def bytes MATCH
+  t7-big bytes MATCH
+
+=== T8 rough throughput: gateway read of 64 MiB, copy mode vs nocopy ===
+  copy-mode CID: bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i   nocopy CID: bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq
+  copy mode : median 0.401s  (runs: 0.314, 0.401, 0.412)
+  nocopy    : median 2.635s  (runs: 2.565, 2.635, 2.815)
+  NOTE: the origin is on localhost. This says NOTHING about S3/Spaces latency.
+
+=== T9 concurrency: 8 parallel gateway range reads of the nocopy file ===
+range 2 http=206 size=1048576
+range 1 http=206 size=1048576
+range 7 http=206 size=1048576
+range 6 http=206 size=1048576
+range 0 http=206 size=1048576
+range 3 http=206 size=1048576
+range 5 http=206 size=1048576
+range 4 http=206 size=1048576
+  all curls exited 0: yes
+  range 0: MATCH (1048576 bytes)
+  range 1: MATCH (1048576 bytes)
+  range 2: MATCH (1048576 bytes)
+  range 3: MATCH (1048576 bytes)
+  range 4: MATCH (1048576 bytes)
+  range 5: MATCH (1048576 bytes)
+  range 6: MATCH (1048576 bytes)
+  range 7: MATCH (1048576 bytes)
+  origin traffic for the 8 parallel reads: 39 request(s), 10223616 bytes
+--- kubo daemon log: any errors during the spike? ---
+  (no error/warn lines)

@@ -1,0 +1,13 @@
+
+=== T4d gateway read through the 307 ===
+http=200 size=4194304 time=0.033042s
+REDIRECT GATEWAY MATCH
+origin hits: 32  (307s: 16, 206s: 16)
+
+=== back to normal: does the pin heal with no operator action? ===
+http=200 size=4194304
+HEALED: MATCH (no re-add, no restart)
+
+=== filestore/verify for one known-good leaf after all that abuse ===
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiaft7mg2ingqhci374fn3wavwaljlot2jcpmgjoguxiotw7iykkwi"},"FilePath":"http://host.docker.internal:18090/t4.bin","Offset":2621440,"Size":262144}
+

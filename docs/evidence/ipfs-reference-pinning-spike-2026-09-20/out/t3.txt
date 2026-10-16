@@ -1,0 +1,83 @@
+
+=== T3a nocopy directory add ===
+{"Name":"hls/master.m3u8","Hash":"bafkreiede27t6tjhxurohbuw2p6e3xjgb6kcgshp2fdia734sr7zqtbfde","Size":"225"}
+{"Name":"hls/720p/init.mp4","Hash":"bafkreih7gjtzws5254vo7yexz3mqyrt243zatux33crai7rc65d27uvr7e","Size":"700"}
+{"Name":"hls/720p/seg-1.m4s","Hash":"bafybeib44snfojlej6s6rj7fodgvwu3yu2xstiax67b6imkecj3hmh7ooe","Size":"3146337"}
+{"Name":"hls/720p","Hash":"bafybeibramkbli5w74ehwlrxfcyv53ilffybpd56qwfnktuolrntrxgjoa","Size":"3147150"}
+{"Name":"hls","Hash":"bafybeibd7f3cxgxubtqhaelihdxejdt4dsfx7feyrfw34uq33ym4qmyvf4","Size":"3147486"}
+{"Name":"","Hash":"bafybeidosoqui4j57nlswzl3whsrjyc2xsytn7hmmybawofr3hv6fsggie","Size":"3147540"}
+RepoSize delta: 19523 bytes for a 3146653-byte tree
+nocopy root CID: bafybeidosoqui4j57nlswzl3whsrjyc2xsytn7hmmybawofr3hv6fsggie
+--- origin requests during the directory add (expect 0) ---
+2026-09-20T13:35:53.776 127.0.0.1 "GET /hls/720p/init.mp4" Range=bytes=0-699 mode=normal -> 206 bytes=700
+2026-09-20T13:35:53.776 127.0.0.1 "GET /hls/master.m3u8" Range=bytes=0-224 mode=normal -> 206 bytes=225
+
+=== T3b copy-mode add of the identical tree ===
+{"Name":"hls/master.m3u8","Hash":"bafkreiede27t6tjhxurohbuw2p6e3xjgb6kcgshp2fdia734sr7zqtbfde","Size":"225"}
+{"Name":"hls/720p/init.mp4","Hash":"bafkreih7gjtzws5254vo7yexz3mqyrt243zatux33crai7rc65d27uvr7e","Size":"700"}
+{"Name":"hls/720p/seg-1.m4s","Hash":"bafybeib44snfojlej6s6rj7fodgvwu3yu2xstiax67b6imkecj3hmh7ooe","Size":"3146337"}
+{"Name":"hls/720p","Hash":"bafybeibramkbli5w74ehwlrxfcyv53ilffybpd56qwfnktuolrntrxgjoa","Size":"3147150"}
+{"Name":"hls","Hash":"bafybeibd7f3cxgxubtqhaelihdxejdt4dsfx7feyrfw34uq33ym4qmyvf4","Size":"3147486"}
+{"Name":"","Hash":"bafybeidosoqui4j57nlswzl3whsrjyc2xsytn7hmmybawofr3hv6fsggie","Size":"3147540"}
+copy-mode root CID: bafybeidosoqui4j57nlswzl3whsrjyc2xsytn7hmmybawofr3hv6fsggie
+ROOT CIDs IDENTICAL
+
+=== T3c gateway resolution of the nested path ===
+http=200 size=3145728
+want b5f2b898a5f8c1bfeebeb90067618db964f9b12cf1e6d42dab5a40d2d76c2c87
+got  b5f2b898a5f8c1bfeebeb90067618db964f9b12cf1e6d42dab5a40d2d76c2c87
+SEGMENT MATCH
+--- master.m3u8 through the gateway ---
+#EXTM3U
+#EXT-X-VERSION:7
+#EXT-X-STREAM-INF:BANDWIDTH=1400000,RESOLUTION=1280x720,CODECS="avc1.64001f,mp4a.40.2"
+720p/index.m3u8
+# pad xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+
+=== T3d is the 225-byte playlist a reference or an inlined/real block? ===
+total filestore entries now: 270
+--- entries whose FilePath mentions hls ---
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiapo3jkgddtxsdwlfhwrzkhdlbo5lehrn6abq7bqqjfknzq7ojyba"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":0,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiasjcu2pmj5ceg3x2bqjf2opek7eekb45ns6nerydlb6pmclgwyuu"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":262144,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreia272u4rel7sc4moplu33jjvnrxqegwb4l7inyolsse6krcxkvavi"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":786432,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreibldaxrzdjzjd6prvv3qy4luzcxpapp7zxlt57pywh67r3r4yzycq"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":1572864,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreib3b7tmw4h336frixjairqus63dsxy5ho622yth54mvfgtzbkvage"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":2359296,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreicg7toy6xdxjxdlssqktsc2rvnapuex4u3iijshheqzrodgihqm3u"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":1835008,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreicytmnnu7oq325ufzutbi5gfuotcm6y4bdbxsmw2gcqizhbnjatm4"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":2097152,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiede27t6tjhxurohbuw2p6e3xjgb6kcgshp2fdia734sr7zqtbfde"},"FilePath":"http://host.docker.internal:18090/hls/master.m3u8","Offset":0,"Size":225}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreifleufypcjmlu4r7tpsbdkheo4adfhkffctvcwyxxuypdhkho5u5m"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":2621440,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiggewc3lez5duakizjieeto3v3dhnxce2cfp3oxtkc6ftngc2angq"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":2883584,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreihn7jpuop462yyu3xsczf6p6fqgc3x7xwh2v4k2tj6jp74t3xwxyq"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":1310720,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreih7gjtzws5254vo7yexz3mqyrt243zatux33crai7rc65d27uvr7e"},"FilePath":"http://host.docker.internal:18090/hls/720p/init.mp4","Offset":0,"Size":700}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreihsn4552b3dahe5zfczubecmzir7k5oeg7sugp5c4f65htdbqhldq"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":1048576,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiht6mmslusrj2z2523nfptssjvncdu7acsxktxlhlsapdk5hzxtgu"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":2621440,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreih273v2bzcjynmenmijtzorfb2pjorw53loasn6hl2s6rcdth4hbi"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":524288,"Size":262144}
+--- ls of the tree (CIDs + sizes) ---
+{
+    "Objects": [
+        {
+            "Hash": "bafybeidosoqui4j57nlswzl3whsrjyc2xsytn7hmmybawofr3hv6fsggie/hls",
+            "Links": [
+                {
+                    "Name": "720p",
+                    "Hash": "bafybeibramkbli5w74ehwlrxfcyv53ilffybpd56qwfnktuolrntrxgjoa",
+                    "Size": 0,
+                    "Type": 1,
+                    "Target": "",
+                    "Mode": 0,
+                    "ModTime": "0001-01-01T00:00:00Z"
+                },
+                {
+                    "Name": "master.m3u8",
+                    "Hash": "bafkreiede27t6tjhxurohbuw2p6e3xjgb6kcgshp2fdia734sr7zqtbfde",
+                    "Size": 225,
+                    "Type": 2,
+                    "Target": "",
+                    "Mode": 0,
+                    "ModTime": "0001-01-01T00:00:00Z"
+                }
+            ]
+        }
+    ]
+}

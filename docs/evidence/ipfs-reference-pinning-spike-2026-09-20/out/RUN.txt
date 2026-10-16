@@ -1,0 +1,1001 @@
+
+=== payloads ===
+total 336904
+-rw-r--r--@ 1 <user> <group>   8388608 Sep 20 13:30 a__dup.bin
+-rw-r--r--@ 1 <user> <group>   8388608 Sep 20 13:30 b__dup.bin
+-rw-r--r--@ 1 <user> <group>       700 Sep 20 13:18 hls__720p__init.mp4
+-rw-r--r--@ 1 <user> <group>   3145728 Sep 20 13:18 hls__720p__seg-1.m4s
+-rw-r--r--@ 1 <user> <group>       225 Sep 20 13:18 hls__master.m3u8
+-rw-r--r--@ 1 <user> <group>       700 Sep 20 13:22 hls2__720p__init.mp4
+-rw-r--r--@ 1 <user> <group>   3145728 Sep 20 13:22 hls2__720p__seg-1.m4s
+-rw-r--r--@ 1 <user> <group>       120 Sep 20 13:22 hls2__master.m3u8
+-rw-r--r--@ 1 <user> <group>    262145 Sep 20 13:22 mc_justover.bin
+-rw-r--r--@ 1 <user> <group>   1000000 Sep 20 13:22 mc_pin_true.bin
+-rw-r--r--@ 1 <user> <group>   3145728 Sep 20 13:22 mid1.bin
+-rw-r--r--@ 1 <user> <group>       700 Sep 20 13:31 mix__720p__init.mp4
+-rw-r--r--@ 1 <user> <group>   2097152 Sep 20 13:31 mix__720p__seg-1.m4s
+-rw-r--r--@ 1 <user> <group>       225 Sep 20 13:31 mix__master.m3u8
+-rw-r--r--@ 1 <user> <group>       100 Sep 20 13:31 mix2__720p__bad.m3u8
+-rw-r--r--@ 1 <user> <group>   2097152 Sep 20 13:31 mix2__720p__seg-1.m4s
+-rw-r--r--@ 1 <user> <group>       100 Sep 20 13:32 mix3__720p__bad.m3u8
+-rw-r--r--@ 1 <user> <group>   2097152 Sep 20 13:32 mix3__720p__seg-1.m4s
+-rw-r--r--@ 1 <user> <group>  67108864 Sep 20 13:18 payload1.bin
+-rw-r--r--@ 1 <user> <group>  67108864 Sep 20 13:18 payload2.bin
+-rw-r--r--@ 1 <user> <group>    262144 Sep 20 13:22 sc_exact.bin
+-rw-r--r--@ 1 <user> <group>       400 Sep 20 13:22 sc_pin_false.bin
+-rw-r--r--@ 1 <user> <group>       400 Sep 20 13:22 sc_pin_true.bin
+-rw-r--r--@ 1 <user> <group>   4194304 Sep 20 13:23 t4.bin
+-rw-r--r--@ 1 <user> <group>       300 Sep 20 13:22 tiny1.bin
+
+=== origin ===
+ready: origin (after 1 polls)
+
+=== kubo repo init + offline/no-routing config ===
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+removed auto
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+--- bootstrap list (must be empty) ---
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+--- routing ---
+Changing user to ipfs
+ipfs version 0.43.0
+Found IPFS fs-repo at /data/ipfs
+none
+
+=== kubo daemon (offline) ===
+ready: kubo rpc (after 1 polls)
+{"Version":"0.43.0","Commit":"e9914bb","Repo":"18","System":"arm64/linux","Golang":"go1.26.5"}
+curl 8.7.1 (x86_64-apple-darwin25.0) libcurl/8.7.1 (SecureTransport) LibreSSL/3.3.6 zlib/1.2.12 nghttp2/1.68.1
+
+=== config state before T0 ===
+{
+  "FilestoreEnabled": false,
+  "Libp2pStreamMounting": false,
+  "OptimisticProvide": false,
+  "OptimisticProvideJobsPoolSize": 0,
+  "P2pHttpProxy": false,
+  "UrlstoreEnabled": false
+}
+
+=== T0 add nocopy=true with URL Abspath, urlstore DISABLED ===
+curl_exit_status_code=500
+--- response status line + trailers ---
+HTTP/1.1 100 Continue
+HTTP/1.1 500 Internal Server Error
+Trailer: X-Stream-Error
+--- body ---
+{"Message":"either the filestore or the urlstore must be enabled to use nocopy, see: https://github.com/ipfs/kubo/blob/master/docs/experimental-features.md#ipfs-filestore","Code":0,"Type":"error"}
+
+--- origin requests during T0 (expect none) ---
+
+=== enable Experimental.UrlstoreEnabled and restart ===
+ready: kubo rpc (after 1 polls)
+{
+  "FilestoreEnabled": false,
+  "Libp2pStreamMounting": false,
+  "OptimisticProvide": false,
+  "OptimisticProvideJobsPoolSize": 0,
+  "P2pHttpProxy": false,
+  "UrlstoreEnabled": true
+}
+
+=== copy-mode reference CID (only-hash, writes nothing) ===
+only-hash CID: bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq
+
+=== repo/stat BEFORE ===
+{"RepoSize":26247,"StorageMax":10000000000,"NumObjects":1,"RepoPath":"/data/ipfs","Version":"fs-repo@18"}
+
+
+=== nocopy add (streamed body + URL Abspath) ===
+http=200 time=0.303441s
+{"Name":"payload1.bin","Hash":"bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq","Size":"67121797"}
+
+nocopy CID: bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq
+wall seconds: 0.35
+
+=== CID identity ===
+IDENTICAL: nocopy CID == copy-mode CID (bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq)
+
+=== repo/stat AFTER ===
+{"RepoSize":89246,"StorageMax":10000000000,"NumObjects":261,"RepoPath":"/data/ipfs","Version":"fs-repo@18"}
+
+RepoSize before 26247  after 89246  delta 62999 bytes (0.060 MiB) = 0.0939% of 64 MiB payload
+
+=== filestore/ls (first 5 + count) ===
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiaohsapmqdamm4pjprs6ckiks24bbj67k3r325gtp3ljfl2htdlp4"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":6815744,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiap7gl5opb5p42zajlw6jc3lird4r7bkwwjqs4trlh6tt56wpgbvq"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":21495808,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiaac5s3dbtqde46eep6gerv3bpdzprm2l3uqzhpaqac64sj5cmjdy"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":66322432,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiabesjxbcmzoi6m66o3ojrl5gvu66zkchd4ax5lmajpxggmw7pyny"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":48496640,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiacym2lalwmc3kqfrryg64jzhwesb7ayx246wjkrw3vhdjvbwvtrm"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":19660800,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiadsuu5xrfzg5lyzrhizec262mw7gq7ydl3r4cmwbwwljiywvdknm"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":30932992,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkr
+entries: 256
+
+=== did Kubo contact the origin AT ADD TIME? ===
+origin request count during add: 0
+payload sha256: cc0a910b2e615fb049091570780b29c4bc47d0583971a3ea60769c52b22c2cc4   cid: bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq
+
+=== cat via RPC ===
+http=200 time=2.546556s size=67108864
+rpc sha256: cc0a910b2e615fb049091570780b29c4bc47d0583971a3ea60769c52b22c2cc4
+RPC MATCH
+origin requests: 256
+with Range: 256   without Range: 0
+--- distinct Range spans requested (size histogram) ---
+ 256 262144
+--- first 3 / last 2 request lines ---
+2026-09-20T13:35:48.115 127.0.0.1 "GET /payload1.bin" Range=bytes=0-262143 mode=normal -> 206 bytes=262144
+2026-09-20T13:35:48.130 127.0.0.1 "GET /payload1.bin" Range=bytes=262144-524287 mode=normal -> 206 bytes=262144
+2026-09-20T13:35:48.142 127.0.0.1 "GET /payload1.bin" Range=bytes=524288-786431 mode=normal -> 206 bytes=262144
+2026-09-20T13:35:50.626 127.0.0.1 "GET /payload1.bin" Range=bytes=66060288-66322431 mode=normal -> 206 bytes=262144
+2026-09-20T13:35:50.636 127.0.0.1 "GET /payload1.bin" Range=bytes=66322432-66584575 mode=normal -> 206 bytes=262144
+
+=== cat via gateway ===
+http=200 time=2.575012s size=67108864
+gw sha256: cc0a910b2e615fb049091570780b29c4bc47d0583971a3ea60769c52b22c2cc4
+GATEWAY MATCH
+origin requests: 256
+non-Range requests: 0
+ 256 262144
+
+=== T3a nocopy directory add ===
+{"Name":"hls/master.m3u8","Hash":"bafkreiede27t6tjhxurohbuw2p6e3xjgb6kcgshp2fdia734sr7zqtbfde","Size":"225"}
+{"Name":"hls/720p/init.mp4","Hash":"bafkreih7gjtzws5254vo7yexz3mqyrt243zatux33crai7rc65d27uvr7e","Size":"700"}
+{"Name":"hls/720p/seg-1.m4s","Hash":"bafybeib44snfojlej6s6rj7fodgvwu3yu2xstiax67b6imkecj3hmh7ooe","Size":"3146337"}
+{"Name":"hls/720p","Hash":"bafybeibramkbli5w74ehwlrxfcyv53ilffybpd56qwfnktuolrntrxgjoa","Size":"3147150"}
+{"Name":"hls","Hash":"bafybeibd7f3cxgxubtqhaelihdxejdt4dsfx7feyrfw34uq33ym4qmyvf4","Size":"3147486"}
+{"Name":"","Hash":"bafybeidosoqui4j57nlswzl3whsrjyc2xsytn7hmmybawofr3hv6fsggie","Size":"3147540"}
+RepoSize delta: 19523 bytes for a 3146653-byte tree
+nocopy root CID: bafybeidosoqui4j57nlswzl3whsrjyc2xsytn7hmmybawofr3hv6fsggie
+--- origin requests during the directory add (expect 0) ---
+2026-09-20T13:35:53.776 127.0.0.1 "GET /hls/720p/init.mp4" Range=bytes=0-699 mode=normal -> 206 bytes=700
+2026-09-20T13:35:53.776 127.0.0.1 "GET /hls/master.m3u8" Range=bytes=0-224 mode=normal -> 206 bytes=225
+
+=== T3b copy-mode add of the identical tree ===
+{"Name":"hls/master.m3u8","Hash":"bafkreiede27t6tjhxurohbuw2p6e3xjgb6kcgshp2fdia734sr7zqtbfde","Size":"225"}
+{"Name":"hls/720p/init.mp4","Hash":"bafkreih7gjtzws5254vo7yexz3mqyrt243zatux33crai7rc65d27uvr7e","Size":"700"}
+{"Name":"hls/720p/seg-1.m4s","Hash":"bafybeib44snfojlej6s6rj7fodgvwu3yu2xstiax67b6imkecj3hmh7ooe","Size":"3146337"}
+{"Name":"hls/720p","Hash":"bafybeibramkbli5w74ehwlrxfcyv53ilffybpd56qwfnktuolrntrxgjoa","Size":"3147150"}
+{"Name":"hls","Hash":"bafybeibd7f3cxgxubtqhaelihdxejdt4dsfx7feyrfw34uq33ym4qmyvf4","Size":"3147486"}
+{"Name":"","Hash":"bafybeidosoqui4j57nlswzl3whsrjyc2xsytn7hmmybawofr3hv6fsggie","Size":"3147540"}
+copy-mode root CID: bafybeidosoqui4j57nlswzl3whsrjyc2xsytn7hmmybawofr3hv6fsggie
+ROOT CIDs IDENTICAL
+
+=== T3c gateway resolution of the nested path ===
+http=200 size=3145728
+want b5f2b898a5f8c1bfeebeb90067618db964f9b12cf1e6d42dab5a40d2d76c2c87
+got  b5f2b898a5f8c1bfeebeb90067618db964f9b12cf1e6d42dab5a40d2d76c2c87
+SEGMENT MATCH
+--- master.m3u8 through the gateway ---
+#EXTM3U
+#EXT-X-VERSION:7
+#EXT-X-STREAM-INF:BANDWIDTH=1400000,RESOLUTION=1280x720,CODECS="avc1.64001f,mp4a.40.2"
+720p/index.m3u8
+# pad xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+
+=== T3d is the 225-byte playlist a reference or an inlined/real block? ===
+total filestore entries now: 270
+--- entries whose FilePath mentions hls ---
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiapo3jkgddtxsdwlfhwrzkhdlbo5lehrn6abq7bqqjfknzq7ojyba"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":0,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiasjcu2pmj5ceg3x2bqjf2opek7eekb45ns6nerydlb6pmclgwyuu"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":262144,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreia272u4rel7sc4moplu33jjvnrxqegwb4l7inyolsse6krcxkvavi"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":786432,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreibldaxrzdjzjd6prvv3qy4luzcxpapp7zxlt57pywh67r3r4yzycq"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":1572864,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreib3b7tmw4h336frixjairqus63dsxy5ho622yth54mvfgtzbkvage"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":2359296,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreicg7toy6xdxjxdlssqktsc2rvnapuex4u3iijshheqzrodgihqm3u"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":1835008,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreicytmnnu7oq325ufzutbi5gfuotcm6y4bdbxsmw2gcqizhbnjatm4"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":2097152,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiede27t6tjhxurohbuw2p6e3xjgb6kcgshp2fdia734sr7zqtbfde"},"FilePath":"http://host.docker.internal:18090/hls/master.m3u8","Offset":0,"Size":225}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreifleufypcjmlu4r7tpsbdkheo4adfhkffctvcwyxxuypdhkho5u5m"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":2621440,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiggewc3lez5duakizjieeto3v3dhnxce2cfp3oxtkc6ftngc2angq"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":2883584,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreihn7jpuop462yyu3xsczf6p6fqgc3x7xwh2v4k2tj6jp74t3xwxyq"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":1310720,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreih7gjtzws5254vo7yexz3mqyrt243zatux33crai7rc65d27uvr7e"},"FilePath":"http://host.docker.internal:18090/hls/720p/init.mp4","Offset":0,"Size":700}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreihsn4552b3dahe5zfczubecmzir7k5oeg7sugp5c4f65htdbqhldq"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":1048576,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiht6mmslusrj2z2523nfptssjvncdu7acsxktxlhlsapdk5hzxtgu"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":2621440,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreih273v2bzcjynmenmijtzorfb2pjorw53loasn6hl2s6rcdth4hbi"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":524288,"Size":262144}
+--- ls of the tree (CIDs + sizes) ---
+{
+    "Objects": [
+        {
+            "Hash": "bafybeidosoqui4j57nlswzl3whsrjyc2xsytn7hmmybawofr3hv6fsggie/hls",
+            "Links": [
+                {
+                    "Name": "720p",
+                    "Hash": "bafybeibramkbli5w74ehwlrxfcyv53ilffybpd56qwfnktuolrntrxgjoa",
+                    "Size": 0,
+                    "Type": 1,
+                    "Target": "",
+                    "Mode": 0,
+                    "ModTime": "0001-01-01T00:00:00Z"
+                },
+                {
+                    "Name": "master.m3u8",
+                    "Hash": "bafkreiede27t6tjhxurohbuw2p6e3xjgb6kcgshp2fdia734sr7zqtbfde",
+                    "Size": 225,
+                    "Type": 2,
+                    "Target": "",
+                    "Mode": 0,
+                    "ModTime": "0001-01-01T00:00:00Z"
+                }
+            ]
+        }
+    ]
+}
+
+=== P1: nocopy add of a SINGLE small file (225B-class), nothing else ===
+{"Name":"tiny1.bin","Hash":"bafkreiaqhrvc5a7tohlly5d424idlt2jxto3jt3dpi6q5z6tci4ffcobpe","Size":"300"}
+origin requests caused by single-small-file nocopy add: 1
+2026-09-20T13:35:54.178 127.0.0.1 "GET /tiny1.bin" Range=bytes=0-299 mode=normal -> 206 bytes=300
+
+=== P2: nocopy add of a single MULTI-chunk file (3 MiB) ===
+{"Name":"mid1.bin","Hash":"bafybeidurqx462hj2wygafvwa7cnubdls5qfrdw64wegb75kjymuz5axua","Size":"3146337"}
+origin requests caused by single-multichunk nocopy add: 0
+
+=== P3: nocopy DIRECTORY add (fresh tree), nothing read afterwards ===
+{"Name":"hls2/master.m3u8","Hash":"bafkreick45jzlavwptmmsy7xe7v2wjr3twbyvfivweukc7cxawlef7uwqm","Size":"120"}
+{"Name":"hls2/720p/init.mp4","Hash":"bafkreib2vbzmpx3jsnkkfxy3bqaux4agkhyvp2kfbkpd3rasswjpscnxbm","Size":"700"}
+{"Name":"hls2/720p/seg-1.m4s","Hash":"bafybeiayhswuojkx6azky77wzluvyg4tcjmubegn265yfckng7je4oj554","Size":"3146337"}
+{"Name":"hls2/720p","Hash":"bafybeicayym5qvdf4tzf6awb37qn6byaouujb7sejqkm22tvzi4rbdte54","Size":"3147150"}
+{"Name":"hls2","Hash":"bafybeih4ucme5u32ukvls3oz2jk42fuhnh5mqmcrqwui7zq4qfefa4w5ra","Size":"3147380"}
+{"Name":"","Hash":"bafybeihkjzir4ky2bipr5qpn3tys2ocukcabuqwqx32umiuff6o5zqp4k4","Size":"3147435"}
+origin requests caused by the directory nocopy add: 2
+2026-09-20T13:35:54.307 127.0.0.1 "GET /hls2/720p/init.mp4" Range=bytes=0-699 mode=normal -> 206 bytes=700
+2026-09-20T13:35:54.308 127.0.0.1 "GET /hls2/master.m3u8" Range=bytes=0-119 mode=normal -> 206 bytes=120
+sc_pin_true.bin (400 B)      pin=true           -> 1 origin read(s)
+    2026-09-20T13:35:54.368 127.0.0.1 "GET /sc_pin_true.bin" Range=bytes=0-399 mode=normal -> 206 bytes=400
+sc_pin_false.bin (400 B)     pin=false          -> 1 origin read(s)
+    2026-09-20T13:35:54.419 127.0.0.1 "GET /sc_pin_false.bin" Range=bytes=0-399 mode=normal -> 206 bytes=400
+sc_exact.bin (262144 B)      pin=false          -> 1 origin read(s)
+    2026-09-20T13:35:54.474 127.0.0.1 "GET /sc_exact.bin" Range=bytes=0-262143 mode=normal -> 206 bytes=262144
+mc_justover.bin (262145 B)   pin=false          -> 0 origin read(s)
+mc_pin_true.bin (1000000 B)  pin=true           -> 0 origin read(s)
+t4 CID: bafybeieuqbx3r5o66zrqyojy54zunlk45zxz333jzecg6ebauk4nbqidiq (4 MiB, 16 chunks)
+sanity read http=200 size=4194304
+sanity: MATCH
+
+=== T4a origin STOPPED ===
+ready: origin down (after 0 polls)
+--- RPC cat ---
+http=200 size=0
+real 0.03
+user 0.00
+sys 0.00
+response head:
+HTTP/1.1 200 OK
+Trailer: X-Stream-Error
+X-Stream-Error: failed to fetch all nodes
+body (first 400 bytes, may be partial data + error):
+
+--- gateway ---
+http=500 size=54
+real 0.03
+user 0.00
+sys 0.00
+cannot detect content-type: failed to fetch all nodes
+
+--- filestore/verify (whole store) while origin is down, first 8 lines ---
+real 0.31
+user 0.00
+sys 0.00
+{"Status":10,"ErrorMsg":"Get \"http://host.docker.internal:18090/payload1.bin\": dial tcp 192.168.65.254:18090: connect: connection refused","Key":{"/":"bafkreiaohsapmqdamm4pjprs6ckiks24bbj67k3r325gtp3ljfl2htdlp4"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":6815744,"Size":262144}
+{"Status":10,"ErrorMsg":"Get \"http://host.docker.internal:18090/hls/720p/seg-1.m4s\": dial tcp 192.168.65.254:18090: connect: connection refused","Key":{"/":"bafkreiapo3jkgddtxsdwlfhwrzkhdlbo5lehrn6abq7bqqjfknzq7ojyba"},"FilePath":"http://host.docker.internal:18090/hls/720p/seg-1.m4s","Offset":0,"Size":262144}
+{"Status":10,"ErrorMsg":"Get \"http://host.docker.internal:18090/payload1.bin\": dial tcp 192.168.65.254:18090: connect: connection refused","Key":{"/":"bafkreiap7gl5opb5p42zajlw6jc3lird4r7bkwwjqs4trlh6tt56wpgbvq"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offs
+status histogram:
+256 (10, 'Get "http://host.docker.internal:18090/payload1.bin": dial t')
+16 (10, 'Get "http://host.docker.internal:18090/t4.bin": dial tcp 192')
+12 (10, 'Get "http://host.docker.internal:18090/hls/720p/seg-1.m4s": ')
+12 (10, 'Get "http://host.docker.internal:18090/mid1.bin": dial tcp 1')
+12 (10, 'Get "http://host.docker.internal:18090/hls2/720p/seg-1.m4s":')
+4 (10, 'Get "http://host.docker.internal:18090/mc_pin_true.bin": dia')
+2 (10, 'Get "http://host.docker.internal:18090/mc_justover.bin": dia')
+1 (10, 'Get "http://host.docker.internal:18090/tiny1.bin": dial tcp ')
+1 (10, 'Get "http://host.docker.internal:18090/sc_pin_true.bin": dia')
+1 (10, 'Get "http://host.docker.internal:18090/hls2/720p/init.mp4": ')
+1 (10, 'Get "http://host.docker.internal:18090/hls2/master.m3u8": di')
+1 (10, 'Get "http://host.docker.internal:18090/hls/master.m3u8": dia')
+1 (10, 'Get "http://host.docker.internal:18090/sc_exact.bin": dial t')
+1 (10, 'Get "http://host.docker.internal:18090/sc_pin_false.bin": di')
+1 (10, 'Get "http://host.docker.internal:18090/hls/720p/init.mp4": d')
+
+=== T4a-recover: restart origin, no re-add ===
+ready: origin up (after 1 polls)
+http=200 size=4194304
+RECOVERED without re-add: MATCH
+
+=== T4b origin serves DIFFERENT bytes at the same URL ===
+--- RPC cat ---
+http=200 size=0
+real 3.20
+user 0.00
+sys 0.00
+response head:
+HTTP/1.1 200 OK
+Trailer: X-Stream-Error
+X-Stream-Error: failed to fetch all nodes
+body (first 400 bytes, may be partial data + error):
+
+--- gateway ---
+http=500 size=54
+real 3.19
+user 0.00
+sys 0.00
+cannot detect content-type: failed to fetch all nodes
+
+--- filestore/verify for just this CID ---
+{"Status":30,"ErrorMsg":"ipld: could not find bafkreieuqbx3r5o66zrqyojy54zunlk45zxz333jzecg6ebauk4nbqidiq","Key":{"/":"bafkreieuqbx3r5o66zrqyojy54zunlk45zxz333jzecg6ebauk4nbqidiq"},"FilePath":"","Offset":0,"Size":0}
+
+
+=== T4c origin returns 404 ===
+--- RPC cat ---
+http=200 size=0
+real 0.03
+user 0.00
+sys 0.00
+response head:
+HTTP/1.1 200 OK
+Trailer: X-Stream-Error
+X-Stream-Error: failed to fetch all nodes
+body (first 400 bytes, may be partial data + error):
+
+--- gateway ---
+http=500 size=54
+real 0.04
+user 0.00
+sys 0.00
+cannot detect content-type: failed to fetch all nodes
+
+
+=== T4d origin returns 307 to a path that serves the right bytes ===
+--- RPC cat ---
+http=200 size=4194304
+real 0.04
+user 0.00
+sys 0.01
+response head:
+HTTP/1.1 200 OK
+Trailer: X-Stream-Error
+body (first 400 bytes, may be partial data + error):
+@.f#......>.&.n.N$NI..X...e......m\|e..%'....H(SZ..)n.).P....E..&z._.9.z..-....S..z........RTl..]....72".'.....5....4*XJJ#
+........y7..x;:rX.Q.=....^S.b.W...e;../. .....Nh.F]oC...Q.......b.8+c.&....R.Ky....[....Q.....sXd..kd...@5..J......]+.~.....?u.l....m.\.`.J....M...7...............4Pp...u.t.Y[..2a.fX......ml.\......&^..M2Y.3s~............T]..M$.G...!:>Y.......9..r.....$..yC...QaeO.z..v..E. .?F
+--- gateway ---
+http=200 size=4194304
+real 0.04
+user 0.00
+sys 0.00
+@.f#......>.&.n.N$NI..X...e......m\|e..%'....H(SZ..)n.).P....E..&z._.9.z..-....S..z........RTl..]....72".'.....5....4*XJJ#
+........y7..x;:rX.Q.=....^S.b.W...e;../. .....Nh.F]oC...Q.......b.8+c.&....R.Ky....[....Q.....sXd..kd...@5..J......]+.~.....?u.l....m.\.`.J....M...7...............4Pp...u.t.Y[..
+--- origin log for the redirect test (does Range survive?) ---
+2026-09-20T13:36:02.247 127.0.0.1 "GET /t4.bin" Range=bytes=0-262143 mode=redirect -> 307 bytes=0
+2026-09-20T13:36:02.248 127.0.0.1 "GET /redir/t4.bin" Range=bytes=0-262143 mode=redirect -> 206 bytes=262144
+2026-09-20T13:36:02.249 127.0.0.1 "GET /t4.bin" Range=bytes=262144-524287 mode=redirect -> 307 bytes=0
+2026-09-20T13:36:02.250 127.0.0.1 "GET /redir/t4.bin" Range=bytes=262144-524287 mode=redirect -> 206 bytes=262144
+2026-09-20T13:36:02.251 127.0.0.1 "GET /t4.bin" Range=bytes=524288-786431 mode=redirect -> 307 bytes=0
+2026-09-20T13:36:02.252 127.0.0.1 "GET /redir/t4.bin" Range=bytes=524288-786431 mode=redirect -> 206 bytes=262144
+2026-09-20T13:36:02.253 127.0.0.1 "GET /t4.bin" Range=bytes=786432-1048575 mode=redirect -> 307 bytes=0
+2026-09-20T13:36:02.254 127.0.0.1 "GET /redir/t4.bin" Range=bytes=786432-1048575 mode=redirect -> 206 bytes=262144
+2026-09-20T13:36:02.255 127.0.0.1 "GET /t4.bin" Range=bytes=1048576-1310719 mode=redirect -> 307 bytes=0
+2026-09-20T13:36:02.258 127.0.0.1 "GET /redir/t4.bin" Range=bytes=1048576-1310719 mode=redirect -> 206 bytes=262144
+2026-09-20T13:36:02.260 127.0.0.1 "GET /t4.bin" Range=bytes=1310720-1572863 mode=redirect -> 307 bytes=0
+2026-09-20T13:36:02.261 127.0.0.1 "GET /redir/t4.bin" Range=bytes=1310720-1572863 mode=redirect -> 206 bytes=262144
+
+=== back to normal + does it heal by itself? ===
+http=200 size=4194304
+HEALED: MATCH
+
+=== T4d gateway read through the 307 ===
+http=200 size=4194304 time=0.033042s
+REDIRECT GATEWAY MATCH
+origin hits: 32  (307s: 16, 206s: 16)
+
+=== back to normal: does the pin heal with no operator action? ===
+http=200 size=4194304
+HEALED: MATCH (no re-add, no restart)
+
+=== filestore/verify for one known-good leaf after all that abuse ===
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiaft7mg2ingqhci374fn3wavwaljlot2jcpmgjoguxiotw7iykkwi"},"FilePath":"http://host.docker.internal:18090/t4.bin","Offset":2621440,"Size":262144}
+
+0. before anything                         RepoSize=186579  NumObjects=347
+
+=== T5.1 COPY-mode add of payload2 (64 MiB), pinned ===
+copy-mode CID: bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i
+1. after copy add                          RepoSize=68218129  NumObjects=607
+filestore refs mentioning payload2.bin: 0
+
+=== T5.2 nocopy RE-ADD of the very same bytes with a URL Abspath ===
+{"Name":"payload2.bin","Hash":"bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i","Size":"67121797"}
+2. after nocopy re-add                     RepoSize=68218660  NumObjects=607
+filestore refs mentioning payload2.bin: 0
+--- filestore/dups ---
+dups lines: 0
+--- origin hits during the re-add ---
+count: 0
+
+=== T5.3 pin/rm ===
+{"Pins":["bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i"]}
+
+3. after pin/rm                            RepoSize=68218940  NumObjects=607
+filestore refs mentioning payload2.bin: 0
+
+=== T5.4 repo/gc ===
+gc removed 274 entries
+4. after repo/gc                           RepoSize=1119793  NumObjects=333
+filestore refs mentioning payload2.bin: 0
+
+=== T5.5 nocopy re-add after the blocks are gone ===
+CID after migration: bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i
+CID UNCHANGED across the migration
+5. after nocopy re-add                     RepoSize=1166408  NumObjects=593
+filestore refs mentioning payload2.bin: 256
+origin hits during migration re-add: 0
+--- pin still there? ---
+{"Keys":{"bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i":{"Type":"recursive","Name":""}}}
+
+--- readback ---
+http=200 size=67108864
+READBACK MATCH
+
+=== T6a repo/gc WITH the nocopy pin in place ===
+refs before gc: 256
+gc removed 1 entries
+refs after gc:  256
+read after gc: http=200 size=67108864
+SURVIVES GC: MATCH
+{"Keys":{"bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i":{"Type":"recursive","Name":""}}}
+
+
+=== T6b pin/rm then repo/gc ===
+{"Pins":["bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i"]}
+
+gc removed 259 entries
+refs after unpin+gc: 0
+--- does the gc output name the filestore refs it dropped? ---
+{"Key":{"/":"bafkreibys35boserwnz5ncad43jnt3h75i2ehvfkbd4ypsdm32vacutwpy"}}
+{"Key":{"/":"bafkreigojler2iv2jtyg5756tb7sckxlqx6flicf4ctmqkkhhc64s5o3li"}}
+{"Key":{"/":"bafkreifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i"}}
+--- read attempt (node is OFFLINE, so no network fallback exists) ---
+http=404 size=273 time=0.001056s
+failed to resolve /ipfs/bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i: block was not found locally (offline): ipld: could not find bafkreifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffne
+--- RPC cat attempt ---
+http=500 size=158
+HTTP/1.1 500 Internal Server Error
+--- repo/stat ---
+{"RepoSize":1176265,"StorageMax":10000000000,"NumObjects":333,"RepoPath":"/data/ipfs","Version":"fs-repo@18"}
+
+clean slate: 0 filestore refs, RepoSize=1191341
+
+=== T10.1 nocopy add, Abspath .../a/dup.bin, pinned ===
+CID X = bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq   (8 MiB => 32 chunks)
+     32 refs -> http://host.docker.internal:18090/a/dup.bin
+leaf blocks: 32   first: bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi
+
+=== T10.2 nocopy add of the SAME bytes, Abspath .../b/dup.bin ===
+{"Name":"dup.bin","Hash":"bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq","Size":"8390218"}
+reference sources after the second add:
+     32 refs -> http://host.docker.internal:18090/a/dup.bin
+
+=== T10.3 /a/dup.bin now 404s; /b/dup.bin still healthy ===
+   origin /a/dup.bin -> 404
+   origin /b/dup.bin -> 200
+   gateway: http=500 size=54 time=0.026570s
+cannot detect content-type: failed to fetch all nodes
+
+
+=== T10.3b filestore/verify: whole store vs a single root CID ===
+real 0.04
+user 0.00
+sys 0.00
+   lines: 32   bad: 32
+{"Status":10,"ErrorMsg":"expected HTTP 200 or 206 got 404","Key":{"/":"bafkreiagpzyitxtyaing6n466ee4zuigtxvxf2bdxdqx3patjcvbje27oa"},"FilePath":"http://host.docker.internal:18090/a/dup.bin","Offset":4194304,"Size":262144}
+{"Status":10,"ErrorMsg":"expected HTTP 200 or 206 got 404","Key":{"/":"bafkreiaybkrm2jlobwjxmf7ocivlufmoifcmr7cvnvc33xxmwbfuhwnlgq"},"FilePath":"http://host.docker.internal:18090/a/dup.bin","Offset":6291456,"Size":262144}
+   -- verify?arg=<root CID> --
+real 0.00
+user 0.00
+sys 0.00
+{"Status":30,"ErrorMsg":"ipld: could not find bafkreieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq","Key":{"/":"bafkreieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq"},"FilePath":"","Offset":0,"Size":0}
+   -- verify?arg=<one leaf key> --
+   leaf: bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi
+{"Status":10,"ErrorMsg":"expected HTTP 200 or 206 got 404","Key":{"/":"bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi"},"FilePath":"http://host.docker.internal:18090/a/dup.bin","Offset":0,"Size":262144}
+
+
+=== T10.4-i heal attempt (i): plain nocopy re-add from /b, nothing else ===
+{"Name":"dup.bin","Hash":"bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq","Size":"8390218"}
+reference sources after:
+     32 refs -> http://host.docker.internal:18090/a/dup.bin
+   gateway: http=500 size=54
+
+=== T10.4-ii heal attempt (ii): block/rm while X is STILL PINNED ===
+   block/rm (no force):
+{"Hash":"bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi","Error":"pinned via bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq"}
+
+   block/rm force=true:
+{"Hash":"bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi","Error":"pinned via bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq"}
+
+   leaf still in filestore/ls? 1
+
+=== T10.4-iii does a SECOND pin (wrapping dir) keep block/rm refusing? ===
+   wrapping dir CID: bafybeifckcfh6kzetpggf6vlcan6sjkwrsmcma4o7pczyewtiy5v4ffeji
+{"Pins":["bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq"]}
+   (X unpinned; only the directory pin now covers the leaf)
+   block/rm force:
+{"Hash":"bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi","Error":"pinned via bafybeifckcfh6kzetpggf6vlcan6sjkwrsmcma4o7pczyewtiy5v4ffeji"}
+
+   leaf still present? 1
+
+=== T10.4-iv unpin everything, block/rm ALL 32 leaves, re-add from /b ===
+   dir unpinned
+   leaf count: 32
+   block/rm results: 32 lines, errors: 0
+{"Hash":"bafkreibgcmm4333agrebcep4nr4gjimepwmk6hic7syu77mcx5s4f275qi"}
+{"Hash":"bafkreichq7zvoanjqabzsqbsk2zqtxm2pdqiftacf45xl7uh7kkiuqtxmm"}
+   root block too:
+{"Hash":"bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq"}
+
+reference sources after block/rm:
+   (no dup.bin references)   re-add from /b:
+   CID after heal: bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq
+   CID UNCHANGED
+reference sources after heal:
+     32 refs -> http://host.docker.internal:18090/b/dup.bin
+   gateway: http=200 size=8388608
+   HEALED: MATCH (no daemon restart needed)
+{"Keys":{"bafybeieb3idxciyqy237nwqdfavye77rx7qy4s6dgxf6tunjtnxaf55xjq":{"Type":"recursive","Name":""}}}
+
+clean slate: 0 filestore refs, RepoSize=1224748
+playlist is 225 bytes
+
+=== T11a nocopy directory add with ONE part missing its Abspath ===
+{"Message":"missing file path or URL, can't create filestore reference","Code":0,"Type":"error"}
+
+http=500
+--- resulting filestore refs mentioning mix/ ---
+   (none)
+
+=== T11b the pre-copy trick ===
+clean slate: 0 filestore refs, RepoSize=1224748
+--- 1. add the playlist ALONE in copy mode, pin=false ---
+playlist CID: bafkreia3r6mevd3p4e5o4tusda4y46flb76sps25tmzlh5sr7ygdqy2zgm
+   in filestore/ls? 0  (0 == it is a real block)
+--- 2. full nocopy tree add, Abspath on EVERY part including the playlist ---
+{"Name":"mix/master.m3u8","Hash":"bafkreia3r6mevd3p4e5o4tusda4y46flb76sps25tmzlh5sr7ygdqy2zgm","Size":"225"}
+{"Name":"mix/720p/init.mp4","Hash":"bafkreignvx3l4y57mfmtkutjcuhk2mw4ljkbpz7d6xarkru5vgqsljzw6i","Size":"700"}
+{"Name":"mix/720p/seg-1.m4s","Hash":"bafybeifcwc5dblukgf7zdsjvvhsf4hi4hx34uorbjclxzzh7h5zsbn76cm","Size":"2097561"}
+{"Name":"mix/720p","Hash":"bafybeidtfh3vp32kczr4sjargs6lfbnlizflrofqg3azv7x645qytd54ky","Size":"2098374"}
+{"Name":"mix","Hash":"bafybeidbfmhzq4vavlwlfalhx4pjc3kezutgedgtz7bmzvvo4xtqznlowq","Size":"2098710"}
+{"Name":"","Hash":"bafybeif5fi73yo6jpzogyb76wd2qrq7mrqb6zg5lg2elw3i6kz72bx2qc4","Size":"2098764"}
+
+http=200
+tree root: bafybeif5fi73yo6jpzogyb76wd2qrq7mrqb6zg5lg2elw3i6kz72bx2qc4
+   playlist CID in the tree == standalone CID? yes
+   playlist in filestore/ls? 0  (0 == still a real block)
+   seg-1 refs: 8
+   init.mp4 refs: 1
+
+=== T11b-2 with the ORIGIN DOWN: playlist readable, segment not? ===
+   playlist: http=200 size=225
+   PLAYLIST SERVED FROM LOCAL BLOCK: bytes match
+   segment:  http=500 size=54
+   init.mp4: http=500 size=204
+
+=== T11b-3 does the real block survive repo/gc while the tree is pinned? ===
+   gc removed 1 entries
+   playlist block still there? {"Key":"bafkreia3r6mevd3p4e5o4tusda4y46flb76sps25tmzlh5sr7ygdqy2zgm","Size":225}
+   playlist after gc (origin 404): http=200 size=225
+   SURVIVES GC: bytes match
+clean slate: 0 filestore refs, RepoSize=1244278
+
+=== directory add: good part (with Abspath) FIRST, bad part (no Abspath) LAST ===
+{"Name":"mix2/720p/seg-1.m4s","Hash":"bafybeifa2twkul2cs3zpllknehodlpcrhwl6rbezrgfbnvbekfiktlolwi","Size":"2097561"}
+
+http=200
+--- refs written for the GOOD part despite the failed request ---
+   seg-1 refs now: 8
+   total filestore entries: 8
+   pins: 0
+clean slate: 0 filestore refs, RepoSize=1246153
+
+=== fixtures: one 64 MiB nocopy pin + one nocopy HLS directory ===
+file CID: bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq
+dir  CID: bafybeidosoqui4j57nlswzl3whsrjyc2xsytn7hmmybawofr3hv6fsggie
+filestore refs: 270
+
+=== T12 maintenance operations (0 origin reads is the hoped-for answer) ===
+  pin-ls-all                         0 request(s), 0 bytes (0.00 MiB)
+  pin-ls-one                         0 request(s), 0 bytes (0.00 MiB)
+  pin-verify                         0 request(s), 0 bytes (0.00 MiB)
+  repo-stat                          0 request(s), 0 bytes (0.00 MiB)
+  repo-stat-sizeonly                 0 request(s), 0 bytes (0.00 MiB)
+  repo-gc                            0 request(s), 0 bytes (0.00 MiB)
+  refs-recursive                     256 request(s), 67108864 bytes (64.00 MiB)
+  refs-dir-recursive                 14 request(s), 3146653 bytes (3.00 MiB)
+  dag-stat                           256 request(s), 67108864 bytes (64.00 MiB)
+  files-stat                         0 request(s), 0 bytes (0.00 MiB)
+  ls-dir                             0 request(s), 0 bytes (0.00 MiB)
+  block-stat-root                    0 request(s), 0 bytes (0.00 MiB)
+  gateway-HEAD                       2 request(s), 524288 bytes (0.50 MiB)
+  gateway-range-1k                   2 request(s), 524288 bytes (0.50 MiB)
+  filestore-verify                   270 request(s), 70255517 bytes (67.00 MiB)
+  filestore-ls                       0 request(s), 0 bytes (0.00 MiB)
+
+=== what did the 1 KiB ranged gateway GET actually ask the origin for? ===
+2026-09-20T13:36:20.307 127.0.0.1 "GET /payload1.bin" Range=bytes=0-262143 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.317 127.0.0.1 "GET /payload1.bin" Range=bytes=262144-524287 mode=normal -> 206 bytes=262144
+---- MARK filestore-verify ----
+2026-09-20T13:36:20.369 127.0.0.1 "GET /payload1.bin" Range=bytes=6815744-7077887 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.371 127.0.0.1 "GET /hls/720p/seg-1.m4s" Range=bytes=0-262143 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.381 127.0.0.1 "GET /payload1.bin" Range=bytes=21495808-21757951 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.392 127.0.0.1 "GET /payload1.bin" Range=bytes=66322432-66584575 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.403 127.0.0.1 "GET /payload1.bin" Range=bytes=48496640-48758783 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.414 127.0.0.1 "GET /payload1.bin" Range=bytes=19660800-19922943 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.427 127.0.0.1 "GET /payload1.bin" Range=bytes=30932992-31195135 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.439 127.0.0.1 "GET /payload1.bin" Range=bytes=8912896-9175039 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.451 127.0.0.1 "GET /payload1.bin" Range=bytes=15728640-15990783 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.463 127.0.0.1 "GET /payload1.bin" Range=bytes=57409536-57671679 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.475 127.0.0.1 "GET /payload1.bin" Range=bytes=13369344-13631487 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.488 127.0.0.1 "GET /payload1.bin" Range=bytes=8388608-8650751 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.501 127.0.0.1 "GET /payload1.bin" Range=bytes=58458112-58720255 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.514 127.0.0.1 "GET /payload1.bin" Range=bytes=22020096-22282239 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.526 127.0.0.1 "GET /payload1.bin" Range=bytes=21233664-21495807 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.539 127.0.0.1 "GET /payload1.bin" Range=bytes=12582912-12845055 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.551 127.0.0.1 "GET /payload1.bin" Range=bytes=24903680-25165823 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.565 127.0.0.1 "GET /payload1.bin" Range=bytes=54263808-54525951 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.578 127.0.0.1 "GET /payload1.bin" Range=bytes=52428800-52690943 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.582 127.0.0.1 "GET /hls/720p/seg-1.m4s" Range=bytes=262144-524287 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.600 127.0.0.1 "GET /payload1.bin" Range=bytes=49545216-49807359 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.611 127.0.0.1 "GET /payload1.bin" Range=bytes=11272192-11534335 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.624 127.0.0.1 "GET /payload1.bin" Range=bytes=53477376-53739519 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.637 127.0.0.1 "GET /payload1.bin" Range=bytes=57147392-57409535 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.650 127.0.0.1 "GET /payload1.bin" Range=bytes=29884416-30146559 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.662 127.0.0.1 "GET /payload1.bin" Range=bytes=28311552-28573695 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.675 127.0.0.1 "GET /payload1.bin" Range=bytes=19922944-20185087 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.690 127.0.0.1 "GET /hls/720p/seg-1.m4s" Range=bytes=786432-1048575 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.701 127.0.0.1 "GET /payload1.bin" Range=bytes=25427968-25690111 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.711 127.0.0.1 "GET /payload1.bin" Range=bytes=30146560-30408703 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.722 127.0.0.1 "GET /payload1.bin" Range=bytes=20447232-20709375 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.733 127.0.0.1 "GET /payload1.bin" Range=bytes=54788096-55050239 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.744 127.0.0.1 "GET /payload1.bin" Range=bytes=2359296-2621439 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.758 127.0.0.1 "GET /payload1.bin" Range=bytes=4980736-5242879 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.771 127.0.0.1 "GET /payload1.bin" Range=bytes=44564480-44826623 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.784 127.0.0.1 "GET /payload1.bin" Range=bytes=7602176-7864319 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.797 127.0.0.1 "GET /payload1.bin" Range=bytes=3407872-3670015 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.809 127.0.0.1 "GET /payload1.bin" Range=bytes=24117248-24379391 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.821 127.0.0.1 "GET /payload1.bin" Range=bytes=17825792-18087935 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.834 127.0.0.1 "GET /payload1.bin" Range=bytes=59768832-60030975 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.838 127.0.0.1 "GET /hls/720p/seg-1.m4s" Range=bytes=1572864-1835007 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.850 127.0.0.1 "GET /payload1.bin" Range=bytes=19136512-19398655 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.862 127.0.0.1 "GET /payload1.bin" Range=bytes=16252928-16515071 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.875 127.0.0.1 "GET /payload1.bin" Range=bytes=2097152-2359295 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.888 127.0.0.1 "GET /payload1.bin" Range=bytes=8126464-8388607 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.901 127.0.0.1 "GET /payload1.bin" Range=bytes=53215232-53477375 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.914 127.0.0.1 "GET /payload1.bin" Range=bytes=29622272-29884415 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.926 127.0.0.1 "GET /payload1.bin" Range=bytes=0-262143 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.940 127.0.0.1 "GET /payload1.bin" Range=bytes=22544384-22806527 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.952 127.0.0.1 "GET /payload1.bin" Range=bytes=52690944-52953087 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.964 127.0.0.1 "GET /payload1.bin" Range=bytes=49020928-49283071 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.976 127.0.0.1 "GET /payload1.bin" Range=bytes=30408704-30670847 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:20.989 127.0.0.1 "GET /payload1.bin" Range=bytes=33292288-33554431 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.002 127.0.0.1 "GET /payload1.bin" Range=bytes=23068672-23330815 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.012 127.0.0.1 "GET /payload1.bin" Range=bytes=13631488-13893631 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.026 127.0.0.1 "GET /payload1.bin" Range=bytes=7864320-8126463 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.038 127.0.0.1 "GET /payload1.bin" Range=bytes=15204352-15466495 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.049 127.0.0.1 "GET /payload1.bin" Range=bytes=51904512-52166655 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.062 127.0.0.1 "GET /payload1.bin" Range=bytes=61079552-61341695 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.074 127.0.0.1 "GET /payload1.bin" Range=bytes=10485760-10747903 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.078 127.0.0.1 "GET /hls/720p/seg-1.m4s" Range=bytes=2359296-2621439 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.089 127.0.0.1 "GET /payload1.bin" Range=bytes=39845888-40108031 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.101 127.0.0.1 "GET /payload1.bin" Range=bytes=56623104-56885247 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.113 127.0.0.1 "GET /payload1.bin" Range=bytes=23592960-23855103 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.126 127.0.0.1 "GET /payload1.bin" Range=bytes=63176704-63438847 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.137 127.0.0.1 "GET /payload1.bin" Range=bytes=64487424-64749567 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.150 127.0.0.1 "GET /payload1.bin" Range=bytes=40370176-40632319 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.153 127.0.0.1 "GET /hls/720p/seg-1.m4s" Range=bytes=1835008-2097151 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.165 127.0.0.1 "GET /payload1.bin" Range=bytes=8650752-8912895 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.177 127.0.0.1 "GET /payload1.bin" Range=bytes=40894464-41156607 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.190 127.0.0.1 "GET /payload1.bin" Range=bytes=47972352-48234495 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.202 127.0.0.1 "GET /payload1.bin" Range=bytes=66584576-66846719 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.215 127.0.0.1 "GET /payload1.bin" Range=bytes=47710208-47972351 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.228 127.0.0.1 "GET /payload1.bin" Range=bytes=62652416-62914559 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.240 127.0.0.1 "GET /payload1.bin" Range=bytes=16777216-17039359 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.252 127.0.0.1 "GET /payload1.bin" Range=bytes=14417920-14680063 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.266 127.0.0.1 "GET /payload1.bin" Range=bytes=38273024-38535167 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.278 127.0.0.1 "GET /payload1.bin" Range=bytes=52166656-52428799 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.292 127.0.0.1 "GET /payload1.bin" Range=bytes=262144-524287 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.304 127.0.0.1 "GET /payload1.bin" Range=bytes=37224448-37486591 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.317 127.0.0.1 "GET /payload1.bin" Range=bytes=4194304-4456447 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.330 127.0.0.1 "GET /payload1.bin" Range=bytes=55574528-55836671 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.342 127.0.0.1 "GET /payload1.bin" Range=bytes=36700160-36962303 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.355 127.0.0.1 "GET /payload1.bin" Range=bytes=65536000-65798143 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.368 127.0.0.1 "GET /payload1.bin" Range=bytes=6029312-6291455 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.371 127.0.0.1 "GET /hls/720p/seg-1.m4s" Range=bytes=2097152-2359295 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.383 127.0.0.1 "GET /payload1.bin" Range=bytes=37486592-37748735 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.395 127.0.0.1 "GET /payload1.bin" Range=bytes=19398656-19660799 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.408 127.0.0.1 "GET /payload1.bin" Range=bytes=35127296-35389439 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.420 127.0.0.1 "GET /payload1.bin" Range=bytes=41156608-41418751 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.433 127.0.0.1 "GET /payload1.bin" Range=bytes=42205184-42467327 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.445 127.0.0.1 "GET /payload1.bin" Range=bytes=21757952-22020095 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.457 127.0.0.1 "GET /payload1.bin" Range=bytes=44826624-45088767 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.469 127.0.0.1 "GET /payload1.bin" Range=bytes=35651584-35913727 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.486 127.0.0.1 "GET /payload1.bin" Range=bytes=20709376-20971519 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.497 127.0.0.1 "GET /payload1.bin" Range=bytes=15466496-15728639 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.507 127.0.0.1 "GET /payload1.bin" Range=bytes=63963136-64225279 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.518 127.0.0.1 "GET /payload1.bin" Range=bytes=50593792-50855935 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.528 127.0.0.1 "GET /payload1.bin" Range=bytes=18350080-18612223 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.537 127.0.0.1 "GET /payload1.bin" Range=bytes=22282240-22544383 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.547 127.0.0.1 "GET /payload1.bin" Range=bytes=3145728-3407871 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.558 127.0.0.1 "GET /payload1.bin" Range=bytes=46399488-46661631 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.568 127.0.0.1 "GET /payload1.bin" Range=bytes=24641536-24903679 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.579 127.0.0.1 "GET /payload1.bin" Range=bytes=5505024-5767167 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.590 127.0.0.1 "GET /payload1.bin" Range=bytes=40632320-40894463 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.601 127.0.0.1 "GET /payload1.bin" Range=bytes=4456448-4718591 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.612 127.0.0.1 "GET /payload1.bin" Range=bytes=1835008-2097151 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.622 127.0.0.1 "GET /payload1.bin" Range=bytes=9437184-9699327 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.633 127.0.0.1 "GET /payload1.bin" Range=bytes=14942208-15204351 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.644 127.0.0.1 "GET /payload1.bin" Range=bytes=45875200-46137343 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.655 127.0.0.1 "GET /payload1.bin" Range=bytes=18874368-19136511 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.666 127.0.0.1 "GET /payload1.bin" Range=bytes=12058624-12320767 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.677 127.0.0.1 "GET /payload1.bin" Range=bytes=786432-1048575 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.689 127.0.0.1 "GET /payload1.bin" Range=bytes=20971520-21233663 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.700 127.0.0.1 "GET /payload1.bin" Range=bytes=4718592-4980735 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.713 127.0.0.1 "GET /payload1.bin" Range=bytes=65011712-65273855 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.726 127.0.0.1 "GET /payload1.bin" Range=bytes=11534336-11796479 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.739 127.0.0.1 "GET /payload1.bin" Range=bytes=55836672-56098815 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.751 127.0.0.1 "GET /payload1.bin" Range=bytes=11010048-11272191 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.765 127.0.0.1 "GET /payload1.bin" Range=bytes=62128128-62390271 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.777 127.0.0.1 "GET /payload1.bin" Range=bytes=38535168-38797311 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.790 127.0.0.1 "GET /payload1.bin" Range=bytes=51380224-51642367 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.801 127.0.0.1 "GET /payload1.bin" Range=bytes=44040192-44302335 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.815 127.0.0.1 "GET /payload1.bin" Range=bytes=18087936-18350079 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.827 127.0.0.1 "GET /payload1.bin" Range=bytes=28049408-28311551 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.840 127.0.0.1 "GET /payload1.bin" Range=bytes=24379392-24641535 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.854 127.0.0.1 "GET /payload1.bin" Range=bytes=27000832-27262975 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.868 127.0.0.1 "GET /payload1.bin" Range=bytes=12845056-13107199 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.881 127.0.0.1 "GET /payload1.bin" Range=bytes=66846720-67108863 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.893 127.0.0.1 "GET /payload1.bin" Range=bytes=38010880-38273023 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.906 127.0.0.1 "GET /payload1.bin" Range=bytes=27525120-27787263 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.920 127.0.0.1 "GET /payload1.bin" Range=bytes=64749568-65011711 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.933 127.0.0.1 "GET /payload1.bin" Range=bytes=50855936-51118079 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.946 127.0.0.1 "GET /payload1.bin" Range=bytes=59244544-59506687 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.959 127.0.0.1 "GET /payload1.bin" Range=bytes=14155776-14417919 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.973 127.0.0.1 "GET /payload1.bin" Range=bytes=56098816-56360959 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.984 127.0.0.1 "GET /payload1.bin" Range=bytes=43515904-43778047 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:21.997 127.0.0.1 "GET /payload1.bin" Range=bytes=49283072-49545215 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.006 127.0.0.1 "GET /payload1.bin" Range=bytes=52953088-53215231 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.009 127.0.0.1 "GET /hls/master.m3u8" Range=bytes=0-224 mode=normal -> 206 bytes=225
+2026-09-20T13:36:22.019 127.0.0.1 "GET /payload1.bin" Range=bytes=31981568-32243711 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.030 127.0.0.1 "GET /payload1.bin" Range=bytes=66060288-66322431 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.041 127.0.0.1 "GET /payload1.bin" Range=bytes=10223616-10485759 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.052 127.0.0.1 "GET /payload1.bin" Range=bytes=31719424-31981567 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.065 127.0.0.1 "GET /payload1.bin" Range=bytes=41680896-41943039 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.077 127.0.0.1 "GET /payload1.bin" Range=bytes=55050240-55312383 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.088 127.0.0.1 "GET /payload1.bin" Range=bytes=524288-786431 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.100 127.0.0.1 "GET /payload1.bin" Range=bytes=42467328-42729471 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.111 127.0.0.1 "GET /payload1.bin" Range=bytes=25690112-25952255 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.122 127.0.0.1 "GET /payload1.bin" Range=bytes=15990784-16252927 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.135 127.0.0.1 "GET /payload1.bin" Range=bytes=51642368-51904511 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.147 127.0.0.1 "GET /payload1.bin" Range=bytes=42729472-42991615 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.161 127.0.0.1 "GET /payload1.bin" Range=bytes=61603840-61865983 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.173 127.0.0.1 "GET /payload1.bin" Range=bytes=56885248-57147391 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.186 127.0.0.1 "GET /payload1.bin" Range=bytes=33816576-34078719 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.199 127.0.0.1 "GET /payload1.bin" Range=bytes=43778048-44040191 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.211 127.0.0.1 "GET /payload1.bin" Range=bytes=44302336-44564479 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.223 127.0.0.1 "GET /payload1.bin" Range=bytes=45088768-45350911 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.236 127.0.0.1 "GET /payload1.bin" Range=bytes=60030976-60293119 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.248 127.0.0.1 "GET /payload1.bin" Range=bytes=26214400-26476543 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.262 127.0.0.1 "GET /payload1.bin" Range=bytes=34865152-35127295 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.274 127.0.0.1 "GET /payload1.bin" Range=bytes=62914560-63176703 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.298 127.0.0.1 "GET /payload1.bin" Range=bytes=26476544-26738687 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.309 127.0.0.1 "GET /payload1.bin" Range=bytes=59506688-59768831 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.320 127.0.0.1 "GET /payload1.bin" Range=bytes=30670848-30932991 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.331 127.0.0.1 "GET /payload1.bin" Range=bytes=48234496-48496639 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.344 127.0.0.1 "GET /payload1.bin" Range=bytes=58720256-58982399 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.357 127.0.0.1 "GET /payload1.bin" Range=bytes=36175872-36438015 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.368 127.0.0.1 "GET /payload1.bin" Range=bytes=35913728-36175871 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.381 127.0.0.1 "GET /payload1.bin" Range=bytes=5767168-6029311 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.393 127.0.0.1 "GET /payload1.bin" Range=bytes=47185920-47448063 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.406 127.0.0.1 "GET /payload1.bin" Range=bytes=60555264-60817407 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.417 127.0.0.1 "GET /payload1.bin" Range=bytes=40108032-40370175 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.431 127.0.0.1 "GET /payload1.bin" Range=bytes=7340032-7602175 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.443 127.0.0.1 "GET /payload1.bin" Range=bytes=46137344-46399487 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.456 127.0.0.1 "GET /payload1.bin" Range=bytes=17039360-17301503 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.468 127.0.0.1 "GET /payload1.bin" Range=bytes=20185088-20447231 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.481 127.0.0.1 "GET /payload1.bin" Range=bytes=33554432-33816575 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.484 127.0.0.1 "GET /hls/720p/seg-1.m4s" Range=bytes=2621440-2883583 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.496 127.0.0.1 "GET /payload1.bin" Range=bytes=9699328-9961471 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.508 127.0.0.1 "GET /payload1.bin" Range=bytes=34078720-34340863 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.521 127.0.0.1 "GET /payload1.bin" Range=bytes=39059456-39321599 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.533 127.0.0.1 "GET /payload1.bin" Range=bytes=61865984-62128127 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.548 127.0.0.1 "GET /payload1.bin" Range=bytes=33030144-33292287 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.560 127.0.0.1 "GET /payload1.bin" Range=bytes=63438848-63700991 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.573 127.0.0.1 "GET /payload1.bin" Range=bytes=58195968-58458111 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.586 127.0.0.1 "GET /payload1.bin" Range=bytes=14680064-14942207 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.598 127.0.0.1 "GET /payload1.bin" Range=bytes=39583744-39845887 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.611 127.0.0.1 "GET /payload1.bin" Range=bytes=32768000-33030143 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.623 127.0.0.1 "GET /payload1.bin" Range=bytes=23330816-23592959 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.635 127.0.0.1 "GET /payload1.bin" Range=bytes=34603008-34865151 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.647 127.0.0.1 "GET /payload1.bin" Range=bytes=3670016-3932159 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.659 127.0.0.1 "GET /payload1.bin" Range=bytes=1310720-1572863 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.671 127.0.0.1 "GET /payload1.bin" Range=bytes=6553600-6815743 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.685 127.0.0.1 "GET /payload1.bin" Range=bytes=62390272-62652415 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.698 127.0.0.1 "GET /payload1.bin" Range=bytes=32505856-32767999 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.711 127.0.0.1 "GET /payload1.bin" Range=bytes=38797312-39059455 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.723 127.0.0.1 "GET /payload1.bin" Range=bytes=45613056-45875199 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.736 127.0.0.1 "GET /payload1.bin" Range=bytes=37748736-38010879 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.748 127.0.0.1 "GET /payload1.bin" Range=bytes=60817408-61079551 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.761 127.0.0.1 "GET /payload1.bin" Range=bytes=55312384-55574527 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.773 127.0.0.1 "GET /payload1.bin" Range=bytes=2883584-3145727 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.785 127.0.0.1 "GET /payload1.bin" Range=bytes=23855104-24117247 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.797 127.0.0.1 "GET /payload1.bin" Range=bytes=31457280-31719423 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.800 127.0.0.1 "GET /hls/720p/seg-1.m4s" Range=bytes=2883584-3145727 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.813 127.0.0.1 "GET /payload1.bin" Range=bytes=13893632-14155775 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.826 127.0.0.1 "GET /payload1.bin" Range=bytes=53739520-54001663 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.839 127.0.0.1 "GET /payload1.bin" Range=bytes=41418752-41680895 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.851 127.0.0.1 "GET /payload1.bin" Range=bytes=46923776-47185919 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.863 127.0.0.1 "GET /payload1.bin" Range=bytes=9175040-9437183 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.876 127.0.0.1 "GET /payload1.bin" Range=bytes=60293120-60555263 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.888 127.0.0.1 "GET /payload1.bin" Range=bytes=56360960-56623103 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.900 127.0.0.1 "GET /payload1.bin" Range=bytes=6291456-6553599 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.913 127.0.0.1 "GET /payload1.bin" Range=bytes=58982400-59244543 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.926 127.0.0.1 "GET /payload1.bin" Range=bytes=54525952-54788095 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.939 127.0.0.1 "GET /payload1.bin" Range=bytes=41943040-42205183 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.951 127.0.0.1 "GET /payload1.bin" Range=bytes=27262976-27525119 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.963 127.0.0.1 "GET /payload1.bin" Range=bytes=57933824-58195967 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.975 127.0.0.1 "GET /payload1.bin" Range=bytes=64225280-64487423 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.988 127.0.0.1 "GET /payload1.bin" Range=bytes=3932160-4194303 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:22.999 127.0.0.1 "GET /payload1.bin" Range=bytes=50331648-50593791 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.013 127.0.0.1 "GET /payload1.bin" Range=bytes=65273856-65535999 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.029 127.0.0.1 "GET /payload1.bin" Range=bytes=1572864-1835007 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.042 127.0.0.1 "GET /payload1.bin" Range=bytes=13107200-13369343 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.054 127.0.0.1 "GET /payload1.bin" Range=bytes=17563648-17825791 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.066 127.0.0.1 "GET /payload1.bin" Range=bytes=25165824-25427967 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.079 127.0.0.1 "GET /payload1.bin" Range=bytes=63700992-63963135 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.091 127.0.0.1 "GET /payload1.bin" Range=bytes=5242880-5505023 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.105 127.0.0.1 "GET /payload1.bin" Range=bytes=10747904-11010047 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.121 127.0.0.1 "GET /payload1.bin" Range=bytes=29360128-29622271 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.123 127.0.0.1 "GET /hls/720p/seg-1.m4s" Range=bytes=1310720-1572863 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.133 127.0.0.1 "GET /payload1.bin" Range=bytes=50069504-50331647 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.144 127.0.0.1 "GET /payload1.bin" Range=bytes=51118080-51380223 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.155 127.0.0.1 "GET /payload1.bin" Range=bytes=36962304-37224447 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.166 127.0.0.1 "GET /payload1.bin" Range=bytes=25952256-26214399 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.178 127.0.0.1 "GET /payload1.bin" Range=bytes=28835840-29097983 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.192 127.0.0.1 "GET /payload1.bin" Range=bytes=49807360-50069503 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.204 127.0.0.1 "GET /payload1.bin" Range=bytes=29097984-29360127 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.217 127.0.0.1 "GET /payload1.bin" Range=bytes=61341696-61603839 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.230 127.0.0.1 "GET /payload1.bin" Range=bytes=11796480-12058623 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.242 127.0.0.1 "GET /payload1.bin" Range=bytes=12320768-12582911 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.255 127.0.0.1 "GET /payload1.bin" Range=bytes=28573696-28835839 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.268 127.0.0.1 "GET /payload1.bin" Range=bytes=17301504-17563647 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.280 127.0.0.1 "GET /payload1.bin" Range=bytes=35389440-35651583 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.292 127.0.0.1 "GET /payload1.bin" Range=bytes=48758784-49020927 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.305 127.0.0.1 "GET /payload1.bin" Range=bytes=46661632-46923775 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.317 127.0.0.1 "GET /payload1.bin" Range=bytes=45350912-45613055 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.332 127.0.0.1 "GET /payload1.bin" Range=bytes=22806528-23068671 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.345 127.0.0.1 "GET /payload1.bin" Range=bytes=18612224-18874367 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.362 127.0.0.1 "GET /payload1.bin" Range=bytes=65798144-66060287 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.370 127.0.0.1 "GET /hls/720p/init.mp4" Range=bytes=0-699 mode=normal -> 206 bytes=700
+2026-09-20T13:36:23.386 127.0.0.1 "GET /payload1.bin" Range=bytes=43253760-43515903 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.399 127.0.0.1 "GET /payload1.bin" Range=bytes=9961472-10223615 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.401 127.0.0.1 "GET /hls/720p/seg-1.m4s" Range=bytes=1048576-1310719 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.411 127.0.0.1 "GET /payload1.bin" Range=bytes=34340864-34603007 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.421 127.0.0.1 "GET /payload1.bin" Range=bytes=1048576-1310719 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.432 127.0.0.1 "GET /payload1.bin" Range=bytes=42991616-43253759 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.444 127.0.0.1 "GET /payload1.bin" Range=bytes=2621440-2883583 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.455 127.0.0.1 "GET /payload1.bin" Range=bytes=47448064-47710207 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.466 127.0.0.1 "GET /payload1.bin" Range=bytes=54001664-54263807 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.482 127.0.0.1 "GET /payload1.bin" Range=bytes=31195136-31457279 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.494 127.0.0.1 "GET /payload1.bin" Range=bytes=57671680-57933823 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.497 127.0.0.1 "GET /hls/720p/seg-1.m4s" Range=bytes=524288-786431 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.509 127.0.0.1 "GET /payload1.bin" Range=bytes=26738688-27000831 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.522 127.0.0.1 "GET /payload1.bin" Range=bytes=27787264-28049407 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.534 127.0.0.1 "GET /payload1.bin" Range=bytes=32243712-32505855 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.547 127.0.0.1 "GET /payload1.bin" Range=bytes=36438016-36700159 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.559 127.0.0.1 "GET /payload1.bin" Range=bytes=39321600-39583743 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.570 127.0.0.1 "GET /payload1.bin" Range=bytes=16515072-16777215 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:23.583 127.0.0.1 "GET /payload1.bin" Range=bytes=7077888-7340031 mode=normal -> 206 bytes=262144
+---- MARK filestore-ls ----
+bytes returned to the client: 1024
+--- gateway HEAD response ---
+HTTP/1.1 200 OK
+Accept-Ranges: bytes
+Access-Control-Allow-Headers: Content-Type
+Access-Control-Allow-Headers: Range
+Access-Control-Allow-Headers: User-Agent
+Access-Control-Allow-Headers: X-Requested-With
+Access-Control-Allow-Methods: GET
+Access-Control-Allow-Methods: HEAD
+Access-Control-Allow-Methods: OPTIONS
+Access-Control-Allow-Origin: *
+Access-Control-Expose-Headers: Content-Length
+Access-Control-Expose-Headers: Content-Range
+
+=== reprovide / provide RPCs (node is OFFLINE — recorded as best-effort) ===
+  provide/stat       -> {"Message":"this command must be run in online mode. Try running 'ipfs daemon' first","Code":0,"Type":"error"}
+  routing/provide    -> argument "key" is required
+  bitswap/stat       -> {"Message":"unable to run offline: this command must be run in online mode. Try running 'ipfs daemon' first","Code":1,"Type":"error"}
+  stats/provide      -> {"Message":"this command must be run in online mode. Try running 'ipfs daemon' first","Code":0,"Type":"error"}
+  stats/repo         -> {"RepoSize":1295884,"StorageMax":10000000000,"NumObjects":278,"RepoPath":"/data/ipfs","Version":"fs-repo@18"}
+--- Reprovider config ---
+{}
+--- dag/stat output (for the record) ---
+{"UniqueBlocks":259,"TotalSize":67121797,"Ratio":1,"DagStats":[{"Cid":"bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq","Size":67121797,"NumBlocks":259}]}
+
+--- pin/verify output ---
+
+
+=== refs: recursive vs non-recursive vs edges ===
+  refs-nonrecursive          0 request(s), 0 bytes
+  refs-recursive-2           256 request(s), 67108864 bytes
+  refs-unique                256 request(s), 67108864 bytes
+
+=== gateway: HEAD, 1-byte range, 1 KiB range, mid-file range ===
+  gw-head-2                  2 request(s), 524288 bytes
+  gw-1byte                   2 request(s), 524288 bytes
+  gw-1kib                    2 request(s), 524288 bytes
+  gw-mid                     2 request(s), 524288 bytes
+--- exact origin ranges for the mid-file 1 KiB request ---
+2026-09-20T13:36:30.764 127.0.0.1 "GET /payload1.bin" Range=bytes=33554432-33816575 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:30.777 127.0.0.1 "GET /payload1.bin" Range=bytes=33816576-34078719 mode=normal -> 206 bytes=262144
+--- exact origin ranges for gw-1byte ---
+2026-09-20T13:36:30.430 127.0.0.1 "GET /payload1.bin" Range=bytes=0-262143 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:30.459 127.0.0.1 "GET /payload1.bin" Range=bytes=262144-524287 mode=normal -> 206 bytes=262144
+---- MARK gw-1kib ----
+2026-09-20T13:36:30.525 127.0.0.1 "GET /payload1.bin" Range=bytes=0-262143 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:30.536 127.0.0.1 "GET /payload1.bin" Range=bytes=262144-524287 mode=normal -> 206 bytes=262144
+---- MARK gw-mid ----
+2026-09-20T13:36:30.764 127.0.0.1 "GET /payload1.bin" Range=bytes=33554432-33816575 mode=normal -> 206 bytes=262144
+2026-09-20T13:36:30.777 127.0.0.1 "GET /payload1.bin" Range=bytes=33816576-34078719 mode=normal -> 206 bytes=262144
+
+=== T7 chunk size: 256 KiB default vs size-1048576 ===
+  256 KiB chunker CID: bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq
+  1 MiB   chunker CID: bafybeifa42em4wnwbafxgmfohpwhmrersyauet26xfihiynnp4ht4ljtnu
+  CIDs DIFFER (expected: chunking is part of the CID)
+  filestore entries for the 1 MiB variant: 64
+  full read @256 KiB: 256 request(s), 67108864 bytes
+  full read @1 MiB:   64 request(s), 67108864 bytes
+  t7-def bytes MATCH
+  t7-big bytes MATCH
+
+=== T8 rough throughput: gateway read of 64 MiB, copy mode vs nocopy ===
+  copy-mode CID: bafybeifnh6du3fblj6jrvq4fj5epyuuwgk3p2iphczfkdc66idffnept7i   nocopy CID: bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq
+  copy mode : median 0.401s  (runs: 0.314, 0.401, 0.412)
+  nocopy    : median 2.635s  (runs: 2.565, 2.635, 2.815)
+  NOTE: the origin is on localhost. This says NOTHING about S3/Spaces latency.
+
+=== T9 concurrency: 8 parallel gateway range reads of the nocopy file ===
+range 2 http=206 size=1048576
+range 1 http=206 size=1048576
+range 7 http=206 size=1048576
+range 6 http=206 size=1048576
+range 0 http=206 size=1048576
+range 3 http=206 size=1048576
+range 5 http=206 size=1048576
+range 4 http=206 size=1048576
+  all curls exited 0: yes
+  range 0: MATCH (1048576 bytes)
+  range 1: MATCH (1048576 bytes)
+  range 2: MATCH (1048576 bytes)
+  range 3: MATCH (1048576 bytes)
+  range 4: MATCH (1048576 bytes)
+  range 5: MATCH (1048576 bytes)
+  range 6: MATCH (1048576 bytes)
+  range 7: MATCH (1048576 bytes)
+  origin traffic for the 8 parallel reads: 39 request(s), 10223616 bytes
+--- kubo daemon log: any errors during the spike? ---
+  (no error/warn lines)
+
+Done. Evidence transcripts in out/. Run 'bash run.sh teardown' to clean up.

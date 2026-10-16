@@ -1,0 +1,20 @@
+
+=== P1: nocopy add of a SINGLE small file (225B-class), nothing else ===
+{"Name":"tiny1.bin","Hash":"bafkreiaqhrvc5a7tohlly5d424idlt2jxto3jt3dpi6q5z6tci4ffcobpe","Size":"300"}
+origin requests caused by single-small-file nocopy add: 1
+2026-09-20T13:35:54.178 127.0.0.1 "GET /tiny1.bin" Range=bytes=0-299 mode=normal -> 206 bytes=300
+
+=== P2: nocopy add of a single MULTI-chunk file (3 MiB) ===
+{"Name":"mid1.bin","Hash":"bafybeidurqx462hj2wygafvwa7cnubdls5qfrdw64wegb75kjymuz5axua","Size":"3146337"}
+origin requests caused by single-multichunk nocopy add: 0
+
+=== P3: nocopy DIRECTORY add (fresh tree), nothing read afterwards ===
+{"Name":"hls2/master.m3u8","Hash":"bafkreick45jzlavwptmmsy7xe7v2wjr3twbyvfivweukc7cxawlef7uwqm","Size":"120"}
+{"Name":"hls2/720p/init.mp4","Hash":"bafkreib2vbzmpx3jsnkkfxy3bqaux4agkhyvp2kfbkpd3rasswjpscnxbm","Size":"700"}
+{"Name":"hls2/720p/seg-1.m4s","Hash":"bafybeiayhswuojkx6azky77wzluvyg4tcjmubegn265yfckng7je4oj554","Size":"3146337"}
+{"Name":"hls2/720p","Hash":"bafybeicayym5qvdf4tzf6awb37qn6byaouujb7sejqkm22tvzi4rbdte54","Size":"3147150"}
+{"Name":"hls2","Hash":"bafybeih4ucme5u32ukvls3oz2jk42fuhnh5mqmcrqwui7zq4qfefa4w5ra","Size":"3147380"}
+{"Name":"","Hash":"bafybeihkjzir4ky2bipr5qpn3tys2ocukcabuqwqx32umiuff6o5zqp4k4","Size":"3147435"}
+origin requests caused by the directory nocopy add: 2
+2026-09-20T13:35:54.307 127.0.0.1 "GET /hls2/720p/init.mp4" Range=bytes=0-699 mode=normal -> 206 bytes=700
+2026-09-20T13:35:54.308 127.0.0.1 "GET /hls2/master.m3u8" Range=bytes=0-119 mode=normal -> 206 bytes=120

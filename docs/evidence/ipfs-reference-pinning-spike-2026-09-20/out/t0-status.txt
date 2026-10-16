@@ -1,0 +1,1 @@
+curl_exit_status_code=500

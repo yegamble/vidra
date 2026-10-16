@@ -1,0 +1,46 @@
+
+=== enable Experimental.UrlstoreEnabled and restart ===
+ready: kubo rpc (after 1 polls)
+{
+  "FilestoreEnabled": false,
+  "Libp2pStreamMounting": false,
+  "OptimisticProvide": false,
+  "OptimisticProvideJobsPoolSize": 0,
+  "P2pHttpProxy": false,
+  "UrlstoreEnabled": true
+}
+
+=== copy-mode reference CID (only-hash, writes nothing) ===
+only-hash CID: bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq
+
+=== repo/stat BEFORE ===
+{"RepoSize":26247,"StorageMax":10000000000,"NumObjects":1,"RepoPath":"/data/ipfs","Version":"fs-repo@18"}
+
+
+=== nocopy add (streamed body + URL Abspath) ===
+http=200 time=0.303441s
+{"Name":"payload1.bin","Hash":"bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq","Size":"67121797"}
+
+nocopy CID: bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq
+wall seconds: 0.35
+
+=== CID identity ===
+IDENTICAL: nocopy CID == copy-mode CID (bafybeibnsrbh65nrgdpsvlpwilk6ozx6phs6wunsmel7tu5mjsry4c5zsq)
+
+=== repo/stat AFTER ===
+{"RepoSize":89246,"StorageMax":10000000000,"NumObjects":261,"RepoPath":"/data/ipfs","Version":"fs-repo@18"}
+
+RepoSize before 26247  after 89246  delta 62999 bytes (0.060 MiB) = 0.0939% of 64 MiB payload
+
+=== filestore/ls (first 5 + count) ===
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiaohsapmqdamm4pjprs6ckiks24bbj67k3r325gtp3ljfl2htdlp4"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":6815744,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiap7gl5opb5p42zajlw6jc3lird4r7bkwwjqs4trlh6tt56wpgbvq"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":21495808,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiaac5s3dbtqde46eep6gerv3bpdzprm2l3uqzhpaqac64sj5cmjdy"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":66322432,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiabesjxbcmzoi6m66o3ojrl5gvu66zkchd4ax5lmajpxggmw7pyny"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":48496640,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiacym2lalwmc3kqfrryg64jzhwesb7ayx246wjkrw3vhdjvbwvtrm"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":19660800,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkreiadsuu5xrfzg5lyzrhizec262mw7gq7ydl3r4cmwbwwljiywvdknm"},"FilePath":"http://host.docker.internal:18090/payload1.bin","Offset":30932992,"Size":262144}
+{"Status":0,"ErrorMsg":"","Key":{"/":"bafkr
+entries: 256
+
+=== did Kubo contact the origin AT ADD TIME? ===
+origin request count during add: 0
