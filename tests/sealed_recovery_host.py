@@ -85,7 +85,7 @@ class Host(runtime.Recorder):
 
     def configure(self):
         self.run([str(self.cli), 'setup', '--non-interactive', '--yes', '--domain', 'https://synthetic-recovery.invalid',
-                  '--instance-name', 'Synthetic sealed recovery', '--registration', 'closed', '--tls-mode', 'external',
+                  '--instance-name', 'Synthetic sealed recovery', '--registration', 'closed', '--tls-mode', 'internal',
                   '--storage', 'local', '--release-tag', self.record['release'], '--template', 'env/production.env.example'], 'fixture-setup')
         path = INSTALL / 'env/production.env'
         tags = {'VIDRA_' + role.upper() + '_TAG': component['tag'] for role, component in self.record['components'].items()}
@@ -106,9 +106,16 @@ class Host(runtime.Recorder):
 
     def ready(self):
         recovery.wait(lambda: recovery.http('/readyz')['status'] == 200, 600)
-        ids = self.compose('ps', '-q', 'api', 'search', 'frontend', 'postgres', 'redis').split()
-        require(len(ids) == 5, 'missing fixture services')
-        containers = json.loads(self.run(['docker', 'inspect', *ids], 'verify-isolated-containers'))
+        containers = []
+        def health():
+            nonlocal containers
+            ids = self.compose('ps', '-q', 'api', 'search', 'frontend', 'postgres', 'redis').split()
+            if len(ids) != 5:
+                return {'fixture': 'missing'}
+            containers = json.loads(self.run(['docker', 'inspect', *ids], 'verify-isolated-containers'))
+            return {c['Id']: c['State'].get('Health', {}).get('Status', 'healthy')
+                    if c['State']['Running'] else 'stopped' for c in containers}
+        runtime.wait_for_health(health, timeout=300)
         ports = {}
         for container in containers:
             require(container['State']['Running'] and container['State'].get('Health', {}).get('Status', 'healthy') == 'healthy',

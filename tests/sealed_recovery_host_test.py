@@ -10,6 +10,21 @@ import sealed_recovery_host as host
 
 
 class FixtureHostBoundaryTest(unittest.TestCase):
+    def test_setup_generates_archivable_caddy_config_before_disabling_edge(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stage, install = root / 'stage', root / 'install'
+            stage.mkdir()
+            (install / 'env').mkdir(parents=True)
+            (install / 'env/production.env').write_text('MFA_KEY_KEK=synthetic\n')
+            fixture = host.Host(stage, {'release': 'v0.7.8', 'components': {}}, {})
+            fixture.cli = root / 'fixture-cli'
+            with patch.object(host, 'INSTALL', install), patch.object(fixture, 'run') as run:
+                fixture.configure()
+            command = run.call_args.args[0]
+            self.assertEqual(command[command.index('--tls-mode') + 1], 'internal')
+            self.assertIn('VIDRA_TLS_MODE=external\n', (install / 'env/production.env').read_text())
+
     def test_asset_hash_failure_leaves_install_absent(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
