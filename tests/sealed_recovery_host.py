@@ -17,6 +17,7 @@ SAFE = {'VIDRA_ENV': 'production', 'STORAGE_BACKEND': 'local', 'MAIL_ENABLED': '
         'OIDC_ALLOW_PRIVATE_ISSUERS': 'false', 'TRANSCODING_ENABLED': 'false',
         'MALWARE_SCAN_MODE': 'disabled', 'CLAMAV_ADDR': '',
         'VIDRA_TLS_MODE': 'external', 'VIDRA_COMPOSE_PROFILES': 'core frontend'}
+SERVICES = ('api', 'search', 'frontend', 'postgres', 'redis')
 
 
 def set_values(text, values):
@@ -62,6 +63,31 @@ class Host(runtime.Recorder):
         Path(self.env['HOME']).mkdir(mode=0o700)
         self.env['DOCKER_CONFIG'] = str(self.private / 'docker')
         Path(self.env['DOCKER_CONFIG']).mkdir(mode=0o700)
+
+    def failure_diagnostics(self):
+        """Fresh, bounded read-only probes; never export Docker text or HTTP bodies."""
+        facts = {}
+        try:
+            code = recovery.http('/readyz', timeout=2)['status']
+            if code is None or type(code) is int and 100 <= code <= 599:
+                facts['readyz_status'] = 0 if code is None else code
+        except Exception:
+            pass
+        try:
+            output = self.run(['bash', 'deploy/compose.sh', 'ps', '--all', '--format',
+                '{{.Service}}\t{{.State}}\t{{.Health}}', *SERVICES], 'failure-service-states', timeout=10)
+            observed = {}
+            for line in output.splitlines():
+                service, state, health = line.split('\t')
+                require(service in SERVICES and service not in observed, 'unknown service observation')
+                require(state in {'created', 'running', 'paused', 'restarting', 'removing', 'exited', 'dead'}
+                        and health in {'', 'starting', 'healthy', 'unhealthy'}, 'unknown state observation')
+                observed[service] = (health or 'running') if state == 'running' else (
+                    'restarting' if state == 'restarting' else 'stopped')
+            facts['services'] = {service: observed.get(service, 'missing') for service in SERVICES}
+        except Exception:
+            pass  # Unavailable or malformed observations never become healthy/missing facts.
+        return facts
 
     def install(self):
         assets = self.private / 'assets'

@@ -52,7 +52,7 @@ def no_smtp_listener(host):
               '/proc/net/tcp', '/proc/net/tcp6'], 'no-loopback-smtp-listener')
 
 
-def execute(args, result):
+def execute(args, result, hosts):
     require(support.head(support.ROOT) == args.tool_commit and re.fullmatch(r'[0-9a-f]{40}', args.tool_commit),
             'tool commit must be immutable and match checkout')
     record, candidate = support.published(args.record_root, args.release, args.record_commit)
@@ -63,6 +63,7 @@ def execute(args, result):
             'new canonical private stage required')
     args.stage.mkdir(mode=0o700)
     host = Host(args.stage, record, candidate)
+    hosts.append(host)
     require(not host.run(['docker', 'ps', '-aq'], 'empty-containers', cwd=args.stage).strip(), 'existing containers refused')
     require(not host.run(['docker', 'volume', 'ls', '-q'], 'empty-volumes', cwd=args.stage).strip(), 'existing volumes refused')
     payload = None
@@ -79,24 +80,33 @@ def execute(args, result):
     else:
         host.configure()
     host.pin_and_check()
+    result['phase'] = 'restore' if payload else 'migrations'
     host.compose('up', '-d', 'postgres', 'redis')
-    result['phase'] = 'restore' if payload else 'fixture'
     fixture = host.private / 'fixture.json'
     if payload:
         fixture.write_bytes((payload / 'fixture.json').read_bytes())
         fixture.chmod(0o600)
         host.run(['bash', 'deploy/restore.sh', '--yes', str(payload / 'backup.dump.gz')], 'published-restore', timeout=1800)
+        result['phase'] = 'restore-ready'
         host.ready()
         no_smtp_listener(host)
+        result['phase'] = 'restore-snapshot'
         require(not recovery.differing(proof['catalogue'], host.snapshot()), 'restored catalogue differs')
+        result['phase'] = 'restore-verify'
         host.api_fixture('verify', fixture)
+        result['phase'] = 'wrong-key-start'
         host.env['MFA_KEY_KEK'] = base64.b64encode(secrets.token_bytes(32)).decode()
         host.compose('up', '-d', '--no-build', '--force-recreate', 'api')
+        result['phase'] = 'wrong-key-ready'
         host.ready()
+        result['phase'] = 'wrong-key-verify'
         host.api_fixture('wrong-key', fixture)
+        result['phase'] = 'original-key-start'
         del host.env['MFA_KEY_KEK']
         host.compose('up', '-d', '--no-build', '--force-recreate', 'api')
+        result['phase'] = 'original-key-ready'
         host.ready()
+        result['phase'] = 'original-key-verify'
         host.api_fixture('verify', fixture)
         result.update(different_runner_boot=True, empty_destination=True, backup_hash_match=True,
                       schema_and_catalogue_match=True, wrong_key_refused=True, mfa_wrong_code_refused=True,
@@ -104,14 +114,19 @@ def execute(args, result):
     else:
         host.compose('run', '--rm', 'migrate')
         host.compose('run', '--rm', 'search-migrate')
+        result['phase'] = 'start-services'
         host.compose('up', '-d', '--no-build', 'api', 'search', 'frontend')
+        result['phase'] = 'ready'
         host.ready()
+        result['phase'] = 'owner-claim'
         require(host.sql('SELECT count(*) FROM users').splitlines()[-1] == '0', 'existing accounts refused')
         no_smtp_listener(host)
         logs = host.compose('logs', '--no-color', 'api')
         tokens = re.findall(r'403 owner_claim_required until claimed\): ([A-Za-z0-9_-]+)', logs)
         require(tokens, 'owner claim token missing')
+        result['phase'] = 'api-fixture'
         host.api_fixture('source', fixture, tokens[-1])
+        result['phase'] = 'snapshot'
         before = host.snapshot()
         result['phase'] = 'backup'
         log = host.run(['bash', 'deploy/backup.sh'], 'published-backup', timeout=1800)
@@ -146,10 +161,16 @@ def main():
     new_stage = not args.stage.exists()
     os.umask(0o077)
     result = {'status': 'FAIL', 'scope': SCOPE, 'synthetic_only': True, 'phase': 'preconditions'}
+    hosts = []
     try:
-        execute(args, result)
+        execute(args, result, hosts)
     except Exception:
-        pass  # Fixed verdict only: exception bodies/commands can contain credentials.
+        try:
+            facts = hosts[-1].failure_diagnostics() if hosts else {}
+            if facts:
+                result['diagnostics'] = facts
+        except Exception:
+            pass  # Diagnostics must never mask failure or expose exception text.
     if new_stage and (args.stage / 'private').is_dir():
         (args.stage / 'verdict.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(result))
