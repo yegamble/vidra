@@ -77,5 +77,26 @@
       "url": "https://dashboard.gitguardian.com"
     }
   ],
-  "scope": "Record and source CI only; runtime qualification is recorded separately."
+  "scope": "Record and source CI only; runtime qualification is recorded separately.",
+  "final_tool_union_validation": {
+    "tested_commit": "1ff42fe0e64ef73b2063cdf730f5c752a84b0f4e",
+    "tool_main": "8950662a4a26b196e04416e8ee532dd619a195f3",
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "*_test.py"
+    ],
+    "tests": 810,
+    "seconds": 157.04,
+    "skipped": 0,
+    "result": "PASS",
+    "raw_log_sha256": "0b179e18db6ba823cf0ef56e1e6a11fe2c86ed5c4aa17bd7b940fbcce01ced26",
+    "production_compose_config": "PASS",
+    "scope": "Merged release record plus current runtime tools; no runtime acceptance inferred."
+  }
 }
