@@ -79,8 +79,8 @@
   ],
   "scope": "Record and source CI only; runtime qualification is recorded separately.",
   "final_tool_union_validation": {
-    "tested_commit": "1ff42fe0e64ef73b2063cdf730f5c752a84b0f4e",
-    "tool_main": "8950662a4a26b196e04416e8ee532dd619a195f3",
+    "tested_commit": "78f99f285dadb359e0961855cd9afea2407bf85f",
+    "tool_main": "198391e335d756f656d4049e6ec39ca336b91657",
     "command": [
       "python3",
       "-m",
@@ -89,14 +89,90 @@
       "-s",
       "tests",
       "-p",
-      "*_test.py"
+      "*_test.py",
+      "-v"
     ],
-    "tests": 810,
-    "seconds": 157.04,
+    "tests": 837,
+    "seconds": 161.185,
     "skipped": 0,
     "result": "PASS",
-    "raw_log_sha256": "0b179e18db6ba823cf0ef56e1e6a11fe2c86ed5c4aa17bd7b940fbcce01ced26",
+    "raw_log_sha256": "22277e6141a83b75ff9b4825fa413fe2562fd485cb2df88b049847176bfaa4ee",
     "production_compose_config": "PASS",
-    "scope": "Merged release record plus current runtime tools; no runtime acceptance inferred."
-  }
+    "source_ci": [
+      {
+        "name": "ci-required",
+        "result": "SUCCESS",
+        "url": "https://github.com/yegamble/vidra/actions/runs/38945133657/job/117122231983"
+      },
+      {
+        "name": "validate",
+        "result": "SUCCESS",
+        "url": "https://github.com/yegamble/vidra/actions/runs/38945133983/job/117122233544"
+      },
+      {
+        "name": "stack-e2e",
+        "result": "SUCCESS",
+        "url": "https://github.com/yegamble/vidra/actions/runs/38945133666/job/117122232057"
+      },
+      {
+        "name": "pinned-release-e2e",
+        "result": "SUCCESS",
+        "url": "https://github.com/yegamble/vidra/actions/runs/38945133666/job/117122232278"
+      },
+      {
+        "name": "pinned-release-validate",
+        "result": "SUCCESS",
+        "url": "https://github.com/yegamble/vidra/actions/runs/38945133983/job/117122233641"
+      },
+      {
+        "name": "bundle",
+        "result": "SUCCESS",
+        "url": "https://github.com/yegamble/vidra/actions/runs/38945133983/job/117122233508"
+      },
+      {
+        "name": "boot",
+        "result": "SUCCESS",
+        "url": "https://github.com/yegamble/vidra/actions/runs/38945133983/job/117122233748"
+      },
+      {
+        "name": "pinned-release-boot",
+        "result": "SUCCESS",
+        "url": "https://github.com/yegamble/vidra/actions/runs/38945133983/job/117122233271"
+      },
+      {
+        "name": "GitGuardian Security Checks",
+        "result": "SUCCESS",
+        "url": "https://dashboard.gitguardian.com"
+      }
+    ],
+    "raw_capture_diff_check": {
+      "result": "FAIL",
+      "exit": 2,
+      "scope": "Twelve trailing-whitespace lines in the original platform-digests.txt capture; normalized separately with original provenance retained."
+    },
+    "scope": "Exact release record plus main198391 source union; no runtime acceptance inferred."
+  },
+  "historical_tool_union_validation": [
+    {
+      "tested_commit": "1ff42fe0e64ef73b2063cdf730f5c752a84b0f4e",
+      "tool_main": "8950662a4a26b196e04416e8ee532dd619a195f3",
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "*_test.py"
+      ],
+      "tests": 810,
+      "seconds": 157.04,
+      "skipped": 0,
+      "result": "PASS",
+      "raw_log_sha256": "0b179e18db6ba823cf0ef56e1e6a11fe2c86ed5c4aa17bd7b940fbcce01ced26",
+      "production_compose_config": "PASS",
+      "scope": "Merged release record plus current runtime tools; no runtime acceptance inferred."
+    }
+  ]
 }

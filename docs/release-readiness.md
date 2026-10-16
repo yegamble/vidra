@@ -20,7 +20,7 @@ user `e861ff57ef45f655d71502e959cd4c59bb03c75f`, search
 required CI before publication. Actual published-asset preflight passed all four
 checks, and released core/search binaries report embedded maxima **182/18**.
 
-The release record combined with runtime tooling main `8950662a` passed **810
+The release record combined with runtime tooling main `198391e3` passed **837
 metadata tests, zero skips**, and production Compose validation. Exact source CI,
 tested commits and log hashes are retained in
 [record validation](evidence/release-v0.7.8-verification/record-validation.json).
@@ -28,12 +28,13 @@ These checks do not establish operational acceptance.
 
 **Runtime qualification is incomplete.** Failed attempts remain in
 [the attempt record](evidence/release-v0.7.8-verification/runtime-attempts.json).
-The latest [REC-03 report](runtime-acceptance-rec03-v0.7.8.md) records twelve
-accepted checks through forward restore, followed by a rejected split-worker
-proof. The latest [sealed-recovery report](runtime-acceptance-recovery-v0.7.8.md)
-records five healthy services followed by failed API fixture creation; replacement
-was skipped. Both used immutable record `da049b6e` and tooling `8950662a`.
-Neither unsuccessful run is promoted to release acceptance.
+The [REC-03 report](runtime-acceptance-rec03-v0.7.8.md) records a successful fourth
+run on tooling `07afa5a4`: all thirteen operational phases and the final report
+passed, including persisted worker execution attribution. The latest completed
+[sealed-recovery attempt](runtime-acceptance-recovery-v0.7.8.md), on `cce26c92`,
+accepted its full source fixture and backup but failed early replacement restore.
+A new attempt is running with strict database/Redis readiness and finer failure
+phases. All use immutable record `da049b6e`; replacement recovery remains pending.
 
 The master completion gates still include these unresolved requirements:
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "Actual published-image hosted attempts; failed attempts are retained. No release qualification follows from these results.",
+  "scope": "Actual published-image hosted attempts; failed attempts are retained. Each successful result qualifies only its documented synthetic subset.",
   "attempts": [
     {
       "context": {
@@ -348,6 +348,102 @@
         }
       },
       "status": "FAIL"
+    },
+    {
+      "context": {
+        "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+        "repository": "yegamble/vidra",
+        "run_attempt": 1,
+        "run_id": 38944885813,
+        "tool_commit": "07afa5a4d9c9ab5d137a1c7875d3a1e3a999c238"
+      },
+      "informational_only": true,
+      "kind": "rec03",
+      "missing": [],
+      "roles": {
+        "source": {
+          "job_result": "success",
+          "sha256": "4b5aaef8099825c802d8fd6ca0c1cd7aca5cf30a1341ade28d9be0b19ae1c1c3",
+          "verdict": {
+            "installer_commit": "07afa5a4d9c9ab5d137a1c7875d3a1e3a999c238",
+            "pair": [
+              "v0.7.7",
+              "v0.7.8"
+            ],
+            "phases": {
+              "backup": {
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "backup2": {
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "data": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "fp": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "inject": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "install": {
+                "ledger": "core=151:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "recover": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "repin": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "report": {
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "restore-ok": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "restore-refuse": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "rollback": {
+                "ledger": "core=182:false search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              },
+              "split": {
+                "media_fingerprint_verified": false,
+                "status": "PASS"
+              },
+              "upgrade-fail": {
+                "ledger": "core=152:true search=18:false",
+                "media_fingerprint_verified": true,
+                "status": "PASS"
+              }
+            },
+            "record_commit": "da049b6e07f59d2e5e51d7152ade4857f3d89bf6",
+            "status": "PASS"
+          }
+        }
+      },
+      "status": "PASS"
     }
   ]
 }
