@@ -4,6 +4,20 @@ Audit date: **2026-09-05**. Target: a fresh-server installation, migration of th
 
 This is the authoritative campaign record for this audit, superseding earlier readiness labels **only for the revisions and evidence below**. Historical plans remain requirement sources. The original audit used one agent with no product edits, commits, pushes, merges, deployment, or branch cleanup. The implementation session below authorizes scoped commits/pushes and a draft PR, but prohibits merge, release publication and production deployment. No production database, media bucket, credentials, or running stack was used.
 
+## v0.7.8 security evidence — 2026-10-16
+
+Published assets and all four real preflight checks passed at immutable record
+`79cb14b38e20dcc80749d6c44e1ab60f34378ab4`; published embedded schema maxima
+are **182/18**. The [digest security scan](security-scan-v0.7.8-2026-10-16.md)
+reports unchanged advisory IDs versus v0.7.5, OpenSSL **3.5.9-r0** in all three
+images, separately measured source Go reachability and a clean full frontend
+lockfile audit with a firing negative control. Existing glib/AV1/Go residuals
+and the image scanner's zero-npm coverage limit are explicitly retained.
+**REC-03 and sealed recovery remain pending here**; their actual runtime proof
+must be recorded separately. Residual risk acceptance, full untranslated-copy
+extraction/guard coverage, human acceptance and G10/G2 debt remain unresolved.
+This entry grants no GO, waiver or inherited runtime acceptance.
+
 ## v0.7.5 candidate — 2026-09-20
 
 **v0.7.5: released and running on beta, NOT accepted.** The preflight record
