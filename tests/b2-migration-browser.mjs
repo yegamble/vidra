@@ -209,12 +209,30 @@ try {
     && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   assert.equal((await loginResponse).status(), 200);
+  await expect(page.getByRole('button', { name: 'Open account menu', exact: true })).toBeVisible();
   await page.goto('/admin/import-peertube');
   await expect(page.getByRole('heading', { name: 'Import from PeerTube', exact: true })).toBeVisible();
+  const history = await api(owner.context, '/api/v1/admin/peertube-import', { token: owner.token });
+  assert.equal(history.status(), 200);
+  const latest = (await history.json()).runs[0];
+  assert.equal(latest.state, 'done'); assert.equal(latest.source_version, 1040);
+  assert.equal(latest.media_mode, 'copy');
+  for (const counts of Object.values(latest.report.entities)) assert.equal(counts.failed, 0);
+  assert.equal(latest.report.entities.video_no_media.imported, 1);
   const report = page.getByRole('region', { name: 'Import run', exact: true });
   await expect(report).toBeVisible();
-  await expect(report.getByText('Done', { exact: true })).toBeVisible();
+  // A completed run with the deliberately missing-media case must tell the
+  // operator about its gap. The backend state 'done' is not a clean UI badge.
+  await expect(report.getByText('Finished with gaps', { exact: true })).toBeVisible();
   await expect(report.getByText('PeerTube schema v1040', { exact: true })).toBeVisible();
+  await expect(report.getByRole('alert').filter({ hasText: /1 video arrived with nothing to play\./ })).toBeVisible();
+  for (const [kind, counts] of Object.entries(latest.report.entities)) {
+    const row = report.getByRole('row').filter({ has: page.getByRole('rowheader', { name: kind, exact: true }) });
+    await expect(row.getByRole('cell')).toHaveText(
+      ['planned', 'imported', 'updated', 'skipped', 'failed', 'unsupported'].map(key => String(counts[key])));
+  }
+  result.persisted_report = { id: latest.id, state: latest.state, source_version: latest.source_version,
+    media_mode: latest.media_mode, entities: latest.report.entities, badge: 'Finished with gaps' };
   await page.screenshot({ path: join(output, 'persisted-admin-report.png') });
   result.checks.persisted_admin_report = 'PASS';
   result.status = 'PASS';

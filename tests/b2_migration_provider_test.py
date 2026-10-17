@@ -136,6 +136,70 @@ class ProviderReadbackTests(unittest.TestCase):
                     provider.verify(bucket, self.pairs(), self.private)
                 self.assertFalse(bucket.gets)
 
+    def probe_versions(self, key='.vidra/write-probe/ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+        return [
+            {'fileName': key, 'fileId': 'private-hide-id', 'action': 'hide', 'contentLength': 0,
+             'contentType': 'application/x-bz-hide-marker',
+             'contentSha1': 'da39a3ee5e6b4b0d3255bfef95601890afd80709', 'uploadTimestamp': 1001},
+            {'fileName': key, 'fileId': 'private-upload-id', 'action': 'upload', 'contentLength': 62,
+             'contentType': 'application/octet-stream',
+             'contentSha1': 'unverified:2e2e018763a941041be9cc97369e15d5ff0781de',
+             'uploadTimestamp': 1000}]
+
+    def test_only_completed_frozen_capability_probes_are_separately_accounted_for(self):
+        bucket = ReadOnlyBucket(self.objects)
+        native = bucket.inventory() + self.probe_versions()
+        with patch.object(bucket, 'inventory', return_value=native):
+            result = provider.verify(bucket, self.pairs(), self.private)
+        self.assertEqual(result['verified_objects'], len(self.rows))
+        self.assertEqual(result['provider_version_count'], len(self.rows) + 3)
+        self.assertEqual(set(bucket.gets), set(self.objects))
+        probes = result['capability_probes']
+        self.assertEqual((probes['objects'], probes['provider_versions'], probes['upload_bytes']), (1, 2, 62))
+        self.assertEqual(probes['expected_body_sha256'],
+                         'a7fe41bf7b24cf3a7472e83a693b1e0b9c6b25f1fc6b7f3f315f371167cb2e07')
+        self.assertTrue(probes['frozen_metadata_matches'])
+        self.assertFalse(probes['independently_downloaded'])
+        self.assertEqual(probes['object_key_sha256'], [sha(self.probe_versions()[0]['fileName'].encode())])
+        public = json.dumps(result)
+        for private in ('.vidra/write-probe/', 'private-hide-id', 'private-upload-id'):
+            self.assertNotIn(private, public)
+
+    def test_probe_key_grammar_is_exact_and_cannot_claim_media_or_an_asset_pair(self):
+        for suffix in ('A' * 25, 'A' * 27, 'a' * 26, '0' * 26, '1' * 26, 'A' * 26 + '/media'):
+            native = ReadOnlyBucket(self.objects).inventory() + self.probe_versions('.vidra/write-probe/' + suffix)
+            with self.subTest(suffix=suffix), self.assertRaisesRegex(ValueError, 'malformed capability'):
+                provider.validate_inventory(native, self.pairs())
+        native = [row for row in ReadOnlyBucket(self.objects).inventory()
+                  if row['fileName'] != self.original] + self.probe_versions(self.original)
+        with self.assertRaisesRegex(ValueError, 'hidden/deleted'):
+            provider.validate_inventory(native, self.pairs())
+        rows = copy.deepcopy(self.rows)
+        rows[0]['key'] = self.probe_versions()[0]['fileName']
+        with self.assertRaisesRegex(ValueError, 'unsafe relative asset path'):
+            provider.validate_pairs(rows, self.source)
+
+    def test_probe_missing_pair_extra_versions_and_nonupload_hide_actions_fail(self):
+        versions = self.probe_versions()
+        for invalid in (versions[:1], versions[1:], versions + [dict(versions[0])],
+                        versions + [dict(versions[1])],
+                        [dict(versions[0], action='start'), versions[1]]):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, 'exactly one upload'):
+                provider.validate_inventory(ReadOnlyBucket(self.objects).inventory() + invalid, self.pairs())
+
+    def test_probe_payload_and_hide_metadata_must_match_frozen_write_and_cleanup(self):
+        changes = [(1, {'contentLength': 61}), (1, {'contentLength': 63}),
+                   (1, {'contentSha1': 'unverified:' + '0' * 40}),
+                   (1, {'contentType': 'text/plain'}), (0, {'contentLength': 1}),
+                   (0, {'contentSha1': 'none'}), (0, {'contentType': 'application/octet-stream'}),
+                   (0, {'uploadTimestamp': 1000}), (0, {'uploadTimestamp': 999}),
+                   (0, {'fileId': 'private-upload-id'})]
+        for index, change in changes:
+            versions = self.probe_versions()
+            versions[index].update(change)
+            with self.subTest(index=index, change=change), self.assertRaises(ValueError):
+                provider.validate_inventory(ReadOnlyBucket(self.objects).inventory() + versions, self.pairs())
+
     def test_pairs_cannot_omit_an_asset_visible_in_provider_inventory(self):
         rows = [row for row in self.rows if row['kind'] != 'artwork']
         with self.assertRaisesRegex(ValueError, 'absent from asset pairs'):

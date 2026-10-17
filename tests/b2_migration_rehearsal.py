@@ -45,11 +45,19 @@ def read_private_json(path):
     path = Path(path)
     require(path.is_absolute() and path.resolve() == path and path.is_file()
             and not path.is_symlink(), 'private_path_refused')
+    # Managed sandboxes can hide .git metadata while leaving checkout files
+    # visible. The harness knows its own checkout independently of that probe.
+    require(ROOT not in path.parents, 'repository_secret_refused')
     require(path.stat().st_uid == os.getuid() and stat.S_IMODE(path.stat().st_mode) == 0o600,
             'private_permissions_refused')
     require(not any((parent / '.git').is_file() or (parent / '.git/HEAD').exists()
                     for parent in path.parents), 'repository_secret_refused')
     return json.loads(path.read_text())
+
+
+def validate_stage_path(path):
+    require(path.is_absolute() and path.resolve() == path, 'stage_path_refused')
+    require(path != ROOT and ROOT not in path.parents, 'repository_stage_refused')
 
 
 def validate_storage(spec, credentials):
@@ -514,7 +522,7 @@ def disconnect(args, result):
             key.startswith('PEERTUBE_SOURCE_') for key in actual_env), 'source_config_still_attached')
     result.update(status='PASS', phase='disconnected', source_database_stopped=True,
                   source_mount_removed=True, source_configuration_removed=True,
-                  catalogue_and_assets_preserved=True, running_images=run.images())
+                  catalogue_and_assets_preserved=True, running_images=run.images(), search_service=True)
     run.save('disconnected.json', result)
     return run
 
@@ -530,10 +538,12 @@ def main(argv=None):
     args = parser.parse_args(argv)
     os.umask(0o077)
     result = dict(status='FAIL', phase='preconditions', scope=SCOPE, synthetic_only=True, g10_closed=False,
-                  scanner='disabled', tls='loopback plain HTTP; B2 HTTPS verified', search_service=False)
+                  scanner='disabled', tls='loopback plain HTTP; B2 HTTPS verified')
     run = None
+    stage_validated = False
     try:
-        require(args.stage.is_absolute() and args.stage.resolve() == args.stage, 'stage_path_refused')
+        validate_stage_path(args.stage)
+        stage_validated = True
         if args.action == 'prepare':
             require(args.spec and args.credentials, 'private_storage_inputs_required')
             require(1024 <= args.api_port <= 65535 and 1024 <= args.frontend_port <= 65535
@@ -547,9 +557,9 @@ def main(argv=None):
             result.update(status='PASS', phase='cleaned', project_removed=True)
     except Exception as error:
         result['error'] = str(error) if isinstance(error, (Failure, media.FixtureError)) else 'rehearsal_failed'
-        if (args.stage / 'private').is_dir():
+        if stage_validated and (args.stage / 'private').is_dir():
             media.write_private(args.stage / 'private' / ('failure-' + secrets.token_hex(4) + '.log'), traceback.format_exc())
-    if (args.stage / 'private').is_dir():
+    if stage_validated and (args.stage / 'private').is_dir():
         media.write_private(args.stage / ('result-' + args.action + '-' + secrets.token_hex(4) + '.json'),
                             json.dumps(result, indent=2) + '\n')
     print(json.dumps(result, sort_keys=True))

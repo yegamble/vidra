@@ -1,6 +1,8 @@
 """Offline checks for the B2 rehearsal's evidence and credential boundaries."""
 import copy
+from contextlib import redirect_stdout
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -63,6 +65,46 @@ class PrivateInputTests(unittest.TestCase):
         (self.root / '.git').write_text('gitdir: /unrelated/worktrees/test\n')
         with self.assertRaises(rehearsal.Failure):
             rehearsal.read_private_json(self.path)
+
+    def test_known_checkout_refused_when_git_metadata_is_hidden(self):
+        self.assertFalse((self.root / '.git').exists())
+        with patch.object(rehearsal, 'ROOT', self.root):
+            with self.assertRaisesRegex(rehearsal.Failure, '^repository_secret_refused$'):
+                rehearsal.read_private_json(self.path)
+        self.assertIn('PRIVATE-CANARY', self.path.read_text())
+
+
+class StageBoundaryTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        self.checkout = self.root / 'checkout'
+        self.checkout.mkdir()
+
+    def test_stage_at_or_below_known_checkout_is_refused_without_git_metadata(self):
+        self.assertFalse((self.checkout / '.git').exists())
+        with patch.object(rehearsal, 'ROOT', self.checkout):
+            for stage in (self.checkout, self.checkout / 'artifacts' / 'run'):
+                with self.subTest(stage=stage), self.assertRaisesRegex(
+                        rehearsal.Failure, '^repository_stage_refused$'):
+                    rehearsal.validate_stage_path(stage)
+            # A sibling with the same name prefix is outside the checkout.
+            rehearsal.validate_stage_path(self.root / 'checkout-artifacts' / 'run')
+
+    def test_refused_stage_never_runs_docker_or_writes_diagnostics_in_checkout(self):
+        stage = self.checkout / 'run'
+        (stage / 'private').mkdir(parents=True)
+        output = io.StringIO()
+        with patch.object(rehearsal, 'ROOT', self.checkout), patch.object(
+                rehearsal, 'Rehearsal') as constructor, patch.object(
+                rehearsal.media, 'write_private') as write, redirect_stdout(output):
+            code = rehearsal.main(['cleanup', '--stage', str(stage)])
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads(output.getvalue())['error'], 'repository_stage_refused')
+        constructor.assert_not_called()
+        write.assert_not_called()
+        self.assertEqual(list((stage / 'private').iterdir()), [])
 
 
 class StorageBoundaryTests(unittest.TestCase):

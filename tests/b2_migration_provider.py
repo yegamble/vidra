@@ -30,6 +30,15 @@ KINDS = {'original': 'web-videos/', 'hls_binary': 'streaming-playlists/hls/',
          'artwork': ('thumbnails/', 'avatars/', 'banners/'),
          'storyboard': 'storyboards/', 'storyboard_vtt': 'storyboards/'}
 LOCAL_HLS_NAME = re.compile(r'[A-Za-z0-9_-][A-Za-z0-9_.-]*\Z')
+WRITE_PROBE_KEY = re.compile(r'\.vidra/write-probe/[A-Z2-7]{26}\Z')
+# Frozen storage/writeprobe.go uses PutSized for this exact UTF-8 body, then
+# deletes its unique key. B2 retains an upload plus a hide version. These are
+# capability diagnostics, never imported assets and never an excuse to ignore
+# a hidden or overwritten media object.
+WRITE_PROBE_BODY = 'vidra storage write probe — scratch object, safe to delete.\n'.encode('utf-8')
+WRITE_PROBE_SHA1 = hashlib.sha1(WRITE_PROBE_BODY).hexdigest()
+WRITE_PROBE_SHA256 = hashlib.sha256(WRITE_PROBE_BODY).hexdigest()
+EMPTY_SHA1 = hashlib.sha1(b'').hexdigest()
 
 
 def digest(path):
@@ -198,12 +207,49 @@ def playlist_shape(body, key, available, mapping=None):
     return result, references
 
 
+def capability_probe_evidence(groups):
+    for versions in groups.values():
+        require(len(versions) == 2 and {row.get('action') for row in versions} == {'upload', 'hide'},
+                'capability probe must have exactly one upload and one hide version')
+        uploaded = next(row for row in versions if row['action'] == 'upload')
+        hidden = next(row for row in versions if row['action'] == 'hide')
+        require(isinstance(uploaded.get('fileId'), str) and uploaded['fileId'] and
+                isinstance(hidden.get('fileId'), str) and hidden['fileId'] and
+                uploaded['fileId'] != hidden['fileId'],
+                'capability probe versions must have distinct native version IDs')
+        require(type(uploaded.get('contentLength')) is int and
+                uploaded['contentLength'] == len(WRITE_PROBE_BODY) and
+                uploaded.get('contentType') == 'application/octet-stream' and
+                uploaded.get('contentSha1') in (WRITE_PROBE_SHA1, 'unverified:' + WRITE_PROBE_SHA1),
+                'capability probe upload differs from frozen diagnostic metadata')
+        require(type(hidden.get('contentLength')) is int and hidden['contentLength'] == 0 and
+                hidden.get('contentType') == 'application/x-bz-hide-marker' and
+                hidden.get('contentSha1') == EMPTY_SHA1,
+                'capability probe hide differs from empty deletion marker')
+        require(type(uploaded.get('uploadTimestamp')) is int and uploaded['uploadTimestamp'] > 0 and
+                type(hidden.get('uploadTimestamp')) is int and
+                hidden['uploadTimestamp'] > uploaded['uploadTimestamp'],
+                'capability probe hide must follow its upload')
+    return {'objects': len(groups), 'provider_versions': 2 * len(groups),
+            'upload_bytes': len(WRITE_PROBE_BODY) * len(groups),
+            'expected_body_sha256': WRITE_PROBE_SHA256,
+            'frozen_metadata_matches': True, 'exact_upload_hide_pairs': True,
+            # Native unverified:SHA1 is metadata, not an independent readback.
+            # Only migration assets count toward signed GET/SHA256 assertions.
+            'independently_downloaded': False,
+            'object_key_sha256': sorted(hashlib.sha256(key.encode()).hexdigest() for key in groups)}
+
+
 def validate_inventory(rows, pairs):
     require(isinstance(rows, list) and len(rows) <= 1000, 'unbounded provider version inventory')
     expected = {row['key']: row for row in pairs}
-    found, owners = {}, 0
+    found, probes, owners = {}, {}, 0
     for row in rows:
         key = row.get('fileName')
+        if isinstance(key, str) and key.startswith('.vidra/write-probe/'):
+            require(WRITE_PROBE_KEY.fullmatch(key) is not None, 'malformed capability probe key')
+            probes.setdefault(key, []).append(row)
+            continue
         require(row.get('action') == 'upload', 'test bucket contains a hidden/deleted object version')
         if key == '.vidra/owner':
             owners += 1
@@ -220,7 +266,7 @@ def validate_inventory(rows, pairs):
             require(row['contentLength'] == pair['bytes'], 'provider asset length differs from source')
         found[key] = row
     require(owners == 1 and set(found) == set(expected), 'provider inventory lacks owner marker or expected media')
-    return found
+    return found, capability_probe_evidence(probes)
 
 
 def verify(bucket, pairs, private):
@@ -228,7 +274,7 @@ def verify(bucket, pairs, private):
     # The full native inventory contains bucket-local object/version IDs and
     # belongs only in private evidence, never the published result.
     save(private / 'inventory.json', inventory)
-    found = validate_inventory(inventory, pairs)
+    found, probes = validate_inventory(inventory, pairs)
     available = {row['key'] for row in pairs}
     mapping = {row['source_key']: row['key'] for row in pairs if 'source_key' in row}
     evidence = []
@@ -252,10 +298,12 @@ def verify(bucket, pairs, private):
             require(matches, 'signed S3 readback SHA256 differs from retained source')
         evidence.append(entry)
     return {'status': 'PASS', 'provider': 'Backblaze B2', 'provider_version_count': len(inventory),
+            'capability_probes': probes,
             'verified_objects': len(evidence), 'verified_bytes': sum(row['readback_bytes'] for row in evidence),
             'object_counts': dict(sorted(Counter(row['kind'] for row in pairs).items())),
             'checks': {'dedicated_bucket_scope': True, 'bounded_version_inventory': True,
                        'every_media_inventory_object_covered': True, 'every_asset_signed_get': True,
+                       'only_completed_frozen_capability_probes_exempted': True,
                        'all_binary_sha256_match': True, 'playlist_rewrites_and_local_references': True},
             'assets': evidence}
 
