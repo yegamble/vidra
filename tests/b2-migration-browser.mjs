@@ -35,7 +35,7 @@ const result = {
   tool_sha256: createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).digest('hex'),
   node: process.version, browser_package: createRequire(packageFile)('@playwright/test/package.json').version,
 };
-let browser, phase = 'api-login';
+let browser, page, phase = 'api-login';
 const clients = [];
 const save = () => writeFileSync(join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
 const client = async () => {
@@ -127,10 +127,14 @@ try {
   result.browser = browser.version(); result.browser_executable_override = Boolean(process.env.CHROMIUM_PATH);
   const context = await browser.newContext({ baseURL: input.frontend_origin,
     viewport: { width: 1600, height: 1000 } });
-  const page = await context.newPage(); page.setDefaultTimeout(60000);
+  page = await context.newPage(); page.setDefaultTimeout(60000);
+  result.browser_requests = [];
   let mediaResponses = [];
   page.on('response', response => {
     const path = new URL(response.url()).pathname;
+    if (path.startsWith('/api/')) result.browser_requests.push({ path,
+      method: response.request().method(), status: response.status(),
+      retry_after: response.headers()['retry-after'] ?? null });
     if (/\/api\/v1\/videos\/[^/]+\/(hls\/|original)/.test(path)) {
       mediaResponses.push({ path, status: response.status() });
     }
@@ -210,8 +214,27 @@ try {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   assert.equal((await loginResponse).status(), 200);
   await expect(page.getByRole('button', { name: 'Open account menu', exact: true })).toBeVisible();
+  const historyResponse = () => page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/v1/admin/peertube-import'
+    && response.request().method() === 'GET');
+  let pendingHistory = historyResponse();
   await page.goto('/admin/import-peertube');
   await expect(page.getByRole('heading', { name: 'Import from PeerTube', exact: true })).toBeVisible();
+  // The preceding smoke requests can exhaust the shipped rate limit. Retry
+  // through the real UI only after an observed 429 and its Retry-After window;
+  // a successful separate API read cannot repair the page's error state.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const response = await pendingHistory;
+    if (response.status() === 200) break;
+    assert.equal(response.status(), 429, 'admin history must load or explicitly rate limit');
+    assert.ok(attempt < 3, 'admin history remained rate limited');
+    const seconds = Number(response.headers()['retry-after']);
+    assert.ok(seconds > 0 && seconds <= 120, 'bounded UI rate-limit retry required');
+    await page.waitForTimeout((seconds + 1) * 1000);
+    const retry = page.getByRole('button', { name: 'Retry', exact: true });
+    await expect(retry).toBeVisible({ timeout: 60000 });
+    pendingHistory = historyResponse(); await retry.click();
+  }
   const history = await api(owner.context, '/api/v1/admin/peertube-import', { token: owner.token });
   assert.equal(history.status(), 200);
   const latest = (await history.json()).runs[0];
@@ -220,7 +243,7 @@ try {
   for (const counts of Object.values(latest.report.entities)) assert.equal(counts.failed, 0);
   assert.equal(latest.report.entities.video_no_media.imported, 1);
   const report = page.getByRole('region', { name: 'Import run', exact: true });
-  await expect(report).toBeVisible();
+  await expect(report).toBeVisible({ timeout: 60000 });
   // A completed run with the deliberately missing-media case must tell the
   // operator about its gap. The backend state 'done' is not a clean UI badge.
   await expect(report.getByText('Finished with gaps', { exact: true })).toBeVisible();
@@ -239,6 +262,14 @@ try {
 } catch (error) {
   result.status = 'FAIL'; result.failed_phase = phase;
   writeFileSync(join(output, 'private-error.txt'), String(error.stack), { mode: 0o600 });
+  if (page) {
+    try {
+      await page.screenshot({ path: join(output, 'private-failure.png') });
+      writeFileSync(join(output, 'private-page.html'), await page.content(), { mode: 0o600 });
+      result.final_page = { path: new URL(page.url()).pathname,
+        regions: await page.getByRole('region').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label'))) };
+    } catch { result.failure_capture = 'unavailable'; }
+  }
 } finally {
   await browser?.close(); await Promise.all(clients.map(context => context.dispose()));
   result.finished_at = new Date().toISOString(); save();
