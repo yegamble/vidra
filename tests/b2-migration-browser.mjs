@@ -214,26 +214,38 @@ try {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   assert.equal((await loginResponse).status(), 200);
   await expect(page.getByRole('button', { name: 'Open account menu', exact: true })).toBeVisible();
-  const historyResponse = () => page.waitForResponse(response =>
-    new URL(response.url()).pathname === '/api/v1/admin/peertube-import'
-    && response.request().method() === 'GET');
-  let pendingHistory = historyResponse();
+  const report = page.getByRole('region', { name: 'Import run', exact: true });
+  let requestStart = result.browser_requests.length;
   await page.goto('/admin/import-peertube');
   await expect(page.getByRole('heading', { name: 'Import from PeerTube', exact: true })).toBeVisible();
   // The preceding smoke requests can exhaust the shipped rate limit. Retry
-  // through the real UI only after an observed 429 and its Retry-After window;
-  // a successful separate API read cannot repair the page's error state.
+  // only after an observed 429 and its Retry-After window. A throttled session
+  // refresh prevents the role gate from mounting history at all; in that case
+  // reload the real page after the window, rather than waiting for no request.
   for (let attempt = 0; attempt < 4; attempt++) {
-    const response = await pendingHistory;
-    if (response.status() === 200) break;
-    assert.equal(response.status(), 429, 'admin history must load or explicitly rate limit');
-    assert.ok(attempt < 3, 'admin history remained rate limited');
-    const seconds = Number(response.headers()['retry-after']);
+    let blocked;
+    await expect(async () => {
+      if (await report.isVisible()) { blocked = null; return; }
+      const requests = result.browser_requests.slice(requestStart);
+      blocked = requests.find(item => item.status === 429 &&
+        ['/api/v1/auth/refresh', '/api/v1/instance'].includes(item.path))
+        ?? requests.find(item => item.path === '/api/v1/admin/peertube-import' && item.status === 429);
+      if (blocked) return;
+      const history = requests.find(item => item.path === '/api/v1/admin/peertube-import');
+      if (history) assert.equal(history.status, 200, 'admin history must load or explicitly rate limit');
+      assert.fail('waiting for real authenticated admin report');
+    }).toPass({ timeout: 60000, intervals: [250, 500, 1000] });
+    if (!blocked) break;
+    assert.ok(attempt < 3, 'admin page remained rate limited');
+    const seconds = Number(blocked.retry_after);
     assert.ok(seconds > 0 && seconds <= 120, 'bounded UI rate-limit retry required');
+    (result.admin_retries ??= []).push({ path: blocked.path, retry_after: seconds }); save();
     await page.waitForTimeout((seconds + 1) * 1000);
-    const retry = page.getByRole('button', { name: 'Retry', exact: true });
-    await expect(retry).toBeVisible({ timeout: 60000 });
-    pendingHistory = historyResponse(); await retry.click();
+    requestStart = result.browser_requests.length;
+    if (blocked.path === '/api/v1/admin/peertube-import') {
+      const retry = page.getByRole('button', { name: 'Retry', exact: true });
+      await expect(retry).toBeVisible({ timeout: 60000 }); await retry.click();
+    } else await page.reload();
   }
   const history = await api(owner.context, '/api/v1/admin/peertube-import', { token: owner.token });
   assert.equal(history.status(), 200);
@@ -242,7 +254,6 @@ try {
   assert.equal(latest.media_mode, 'copy');
   for (const counts of Object.values(latest.report.entities)) assert.equal(counts.failed, 0);
   assert.equal(latest.report.entities.video_no_media.imported, 1);
-  const report = page.getByRole('region', { name: 'Import run', exact: true });
   await expect(report).toBeVisible({ timeout: 60000 });
   // A completed run with the deliberately missing-media case must tell the
   // operator about its gap. The backend state 'done' is not a clean UI badge.

@@ -1,6 +1,6 @@
 # Vidra completion campaign — release readiness
 
-Current qualification date: **2026-10-16**. **Production verdict: NO-GO.**
+Current qualification date: **2026-10-17**. **Production verdict: NO-GO.**
 v0.7.8 is published at core/search schemas **182/18**; source CI and artifact
 preflight are green, while operational and product completion gates remain open.
 No production deployment has been made in this campaign.
@@ -47,10 +47,13 @@ The master completion gates still include these unresolved requirements:
   playlist ordering, bulk video-password replacement, and ClearKey licensing.
   Alternative mounted flows cover some use cases; ClearKey packaging remains
   unavailable. No scanner exception suppresses these findings.
-- **G10:** representative operator database plus provider-storage migration and
-  per-user PeerTube ZIP import have no retained end-to-end rehearsal on this
-  release. The [migration runbook](peertube-migration.md) separates released
-  capabilities from acceptance requirements.
+- **G10:** the representative operator database/provider-storage migration and
+  per-user PeerTube ZIP import remain unverified. The [synthetic B2
+  rehearsal](runtime-acceptance-b2-migration-v0.7.8.md) now exercises ten generated
+  cases, independent provider readback and source-disconnected playback; this
+  importer-query subset supplies no real PeerTube export or source-server fidelity.
+  The [migration runbook](peertube-migration.md) separates released capabilities
+  from acceptance requirements.
 - **G11:** three human testers' timed installs on blank Ubuntu 24.04 hosts have
   not been measured. Hosted synthetic fixtures do not supply those results.
 - **G12:** digest scans are complete, but inherited codec/module findings and

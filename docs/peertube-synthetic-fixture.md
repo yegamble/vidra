@@ -3,8 +3,10 @@
 This preparatory tool generates playable media for an **importer schema subset**
 grounded in `vidra-core@04a7f0e127177b631eb323d04d330673fee044f9` (v0.7.8).
 It does not run a PeerTube server, generate a real PeerTube export, certify a
-PeerTube version, provision hosts/storage, or qualify G10. Representative source
-migration, recovery, and browser playback remain unverified.
+PeerTube version, provision hosts/storage, or qualify G10. The generator itself
+supplies no migration, recovery or playback evidence. A separate
+[published-image B2 rehearsal](runtime-acceptance-b2-migration-v0.7.8.md) records
+execution of this subset; representative-source qualification remains open.
 
 The media-only first slice requires Python 3.11+ and `ffmpeg`/`ffprobe` on PATH,
 including the `libx264` and AAC encoders. It installs nothing and uses no network:
@@ -78,5 +80,7 @@ The default actor origin is `https://synthetic-peertube.invalid`.
 origin; it starts no listener or network request. For an S3-source rehearsal,
 host artwork must separately be served under the frozen importer's `/lazy-static/`
 routes. No remote followers, plugin auth, history or per-user ZIP are generated.
-Neither source SQL has been imported through the released CLI as qualification;
-G10 and representative-source/browser evidence remain **UNVERIFIED**.
+The separate B2 rehearsal imports schema 1040 through the published v0.7.8 admin
+API and tests default refusal of 1041. It does not qualify a real PeerTube export,
+the CLI migration path, recovery or representative-source fidelity. **G10 remains
+UNVERIFIED.**

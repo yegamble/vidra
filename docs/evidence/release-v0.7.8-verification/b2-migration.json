@@ -1,0 +1,2150 @@
+{
+  "boundaries": [
+    "Generated importer-query subset, no actual PeerTube server/export",
+    "Malware scanning disabled; no installer or deploy qualification",
+    "Loopback plain HTTP, system Chromium differs from pinned Playwright browser",
+    "No S3-source server-side copy, CDN, presigned delivery, or production timing",
+    "No representative G10, per-user ZIP import, federation continuity, or G11 result"
+  ],
+  "browser": {
+    "admin_retries": [
+      {
+        "path": "/api/v1/instance",
+        "retry_after": 34
+      }
+    ],
+    "browser": "154.0.8037.57",
+    "browser_executable_override": true,
+    "browser_package": "1.63.0",
+    "browser_requests": [
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/thumbnail",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/refresh",
+        "retry_after": null,
+        "status": 422
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/playback-session",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/rating",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/captions",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/chapters",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/config",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/comments",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/recommendations",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/users/2972ec0f-336c-4e96-8495-aa60f847a0f4/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/view",
+        "retry_after": null,
+        "status": 204
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/original",
+        "retry_after": null,
+        "status": 206
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/master.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video-init.mp4",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/captions/en",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video-000.m4s",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video-001.m4s",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/playback",
+        "retry_after": null,
+        "status": 204
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/playback",
+        "retry_after": null,
+        "status": 204
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/storyboard.vtt",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/storyboard.jpg",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/search/events",
+        "retry_after": null,
+        "status": 202
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/thumbnail",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/playback-session",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/chapters",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/captions",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/config",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/master.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/refresh",
+        "retry_after": null,
+        "status": 422
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/captions/en",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video-init.mp4",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video-000.m4s",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/refresh",
+        "retry_after": null,
+        "status": 422
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/captions",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/config",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/playback-session",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/rating",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/comments",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/recommendations",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/view",
+        "retry_after": null,
+        "status": 204
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/thumbnail",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/users/2972ec0f-336c-4e96-8495-aa60f847a0f4/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/hls/master.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/hls/peertube/video.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/hls/peertube/video-000.m4s",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/hls/peertube/video-init.mp4",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/hls/peertube/video-001.m4s",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/playback",
+        "retry_after": null,
+        "status": 204
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/playback",
+        "retry_after": null,
+        "status": 204
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/search/events",
+        "retry_after": null,
+        "status": 202
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/playback-session",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/config",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/captions",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/hls/master.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/refresh",
+        "retry_after": null,
+        "status": 422
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/playback-session",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/captions",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/config",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/rating",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/recommendations",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/comments",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/view",
+        "retry_after": null,
+        "status": 204
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/thumbnail",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/users/2972ec0f-336c-4e96-8495-aa60f847a0f4/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/master.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/video.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/audio.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/video-init.mp4",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/video-000.m4s",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/audio-init.mp4",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/audio-000.m4s",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/playback",
+        "retry_after": null,
+        "status": 204
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/video-001.m4s",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/audio-001.m4s",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/audio-002.m4s",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/playback",
+        "retry_after": null,
+        "status": 204
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/playback-session",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/captions",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/config",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/master.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/video.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/audio.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/refresh",
+        "retry_after": null,
+        "status": 422
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/thumbnail",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/refresh",
+        "retry_after": null,
+        "status": 422
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/config",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/captions",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/playback-session",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/chapters",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/master.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video.m3u8",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/captions/en",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video-init.mp4",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video-000.m4s",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/rating",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/recommendations",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/comments",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/view",
+        "retry_after": null,
+        "status": 204
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/users/2972ec0f-336c-4e96-8495-aa60f847a0f4/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/channels/alice_channel/donation-addresses",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video-001.m4s",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/original",
+        "retry_after": null,
+        "status": 206
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/refresh",
+        "retry_after": null,
+        "status": 422
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/me/player-settings",
+        "retry_after": "34",
+        "status": 429
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/me/content-preferences",
+        "retry_after": "34",
+        "status": 429
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/me/notifications/unread-count",
+        "retry_after": "34",
+        "status": 429
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "retry_after": "34",
+        "status": 429
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/refresh",
+        "retry_after": "34",
+        "status": 429
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/refresh",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/auth/me",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/me/player-settings",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/me/content-preferences",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/me/blocks",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/me/mutes/accounts",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/me/notifications/unread-count",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/admin/reports",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/admin/registration-requests",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/admin/peertube-import",
+        "retry_after": null,
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/me/notifications/unread-count",
+        "retry_after": null,
+        "status": 200
+      }
+    ],
+    "checks": {
+      "access_controls": "PASS",
+      "assets_and_search": "PASS",
+      "imported_login_and_suspension": "PASS",
+      "persisted_admin_report": "PASS",
+      "progressive_original_decode": "PASS",
+      "watch_decode_audio_seek_reload": "PASS"
+    },
+    "finished_at": "2026-10-17T04:58:36.896Z",
+    "node": "v26.12.0",
+    "persisted_report": {
+      "badge": "Finished with gaps",
+      "entities": {
+        "actor_avatar": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "actor_banner": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "caption": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 1,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "category_taxonomy": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "channel": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 2,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "chapter": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 2,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "comment": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 2,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "follow": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 1,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "hls_playlist": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "playlist": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 1,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "playlist_item": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "rating": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 1,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "remote_follower": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "rendition": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 4,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "storyboard": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 1,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "tag": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "thumbnail": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 1,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "user": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 2,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "user_quota_unlimited": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "user_sensitive_policy": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "user_suspension": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "video": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 10,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "video_block": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "video_comment_policy": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "video_file": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "video_no_media": {
+          "failed": 0,
+          "imported": 1,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "video_original_date": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "video_sensitive": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "view_count": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        },
+        "watch_history": {
+          "failed": 0,
+          "imported": 0,
+          "planned": 0,
+          "skipped": 0,
+          "unsupported": 0,
+          "updated": 0
+        }
+      },
+      "id": "5e360581-59be-483e-9c41-3911dc839593",
+      "media_mode": "copy",
+      "source_version": 1040,
+      "state": "done"
+    },
+    "playback": [
+      {
+        "end": {
+          "audio_bytes": 24086,
+          "error": null,
+          "frames": 68,
+          "height": 180,
+          "time": 1.71695,
+          "width": 320
+        },
+        "media_responses": [
+          {
+            "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/original",
+            "status": 206
+          },
+          {
+            "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/master.m3u8",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video.m3u8",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video-init.mp4",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video-000.m4s",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/hls/peertube/video-001.m4s",
+            "status": 200
+          }
+        ],
+        "name": "public",
+        "start": {
+          "audio_bytes": 9067,
+          "error": null,
+          "frames": 24,
+          "height": 180,
+          "time": 0,
+          "width": 320
+        }
+      },
+      {
+        "end": {
+          "audio_bytes": 26451,
+          "error": null,
+          "frames": 73,
+          "height": 180,
+          "time": 1.71827,
+          "width": 320
+        },
+        "media_responses": [
+          {
+            "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/hls/master.m3u8",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/hls/peertube/video.m3u8",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/hls/peertube/video-000.m4s",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/hls/peertube/video-init.mp4",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/hls/peertube/video-001.m4s",
+            "status": 200
+          }
+        ],
+        "name": "hls_only",
+        "start": {
+          "audio_bytes": 11432,
+          "error": null,
+          "frames": 30,
+          "height": 180,
+          "time": 0,
+          "width": 320
+        }
+      },
+      {
+        "end": {
+          "audio_bytes": 19735,
+          "error": null,
+          "frames": 54,
+          "height": 180,
+          "time": 1.706147,
+          "width": 320
+        },
+        "media_responses": [
+          {
+            "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/hls/master.m3u8",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/master.m3u8",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/video.m3u8",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/audio.m3u8",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/video-init.mp4",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/video-000.m4s",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/audio-init.mp4",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/audio-000.m4s",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/video-001.m4s",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/audio-001.m4s",
+            "status": 200
+          },
+          {
+            "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/hls/peertube/audio-002.m4s",
+            "status": 200
+          }
+        ],
+        "name": "split_audio",
+        "start": {
+          "audio_bytes": 4899,
+          "error": null,
+          "frames": 11,
+          "height": 180,
+          "time": 0,
+          "width": 320
+        }
+      },
+      {
+        "end": {
+          "audio_bytes": 16030,
+          "error": null,
+          "frames": 45,
+          "height": 180,
+          "time": 1.703962,
+          "width": 320
+        },
+        "name": "progressive-original",
+        "start": {
+          "audio_bytes": 1767,
+          "error": null,
+          "frames": 4,
+          "height": 180,
+          "time": 0,
+          "width": 320
+        }
+      }
+    ],
+    "requests": [
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "status": 403
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/original",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/6fdd1a85-5abc-4ec7-a2ba-81f383024147/original",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/6fdd1a85-5abc-4ec7-a2ba-81f383024147",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/4a0a4e3c-5059-4ae7-91e7-fa25f1a59562/original",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/4a0a4e3c-5059-4ae7-91e7-fa25f1a59562",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/28de2dae-797f-4efd-88a9-e9955cdf3f69/original",
+        "status": 401
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/28de2dae-797f-4efd-88a9-e9955cdf3f69",
+        "status": 401
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/15dc5ade-e3a1-4c97-84e9-18595c6fc0d0/original",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/15dc5ade-e3a1-4c97-84e9-18595c6fc0d0",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/abba4326-7eb4-49e9-9b2b-4e79bee19e48/original",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/abba4326-7eb4-49e9-9b2b-4e79bee19e48",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558/original",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/632fda4d-5808-4943-8c35-9286dc3d2558",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f/original",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/95602573-2325-4b93-a14e-49fd0665696f",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/177d03c5-9161-44b2-a668-c0fb01055f30/original",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/177d03c5-9161-44b2-a668-c0fb01055f30",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/956a92e7-d207-450b-9e7e-29f127019e19/original",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/956a92e7-d207-450b-9e7e-29f127019e19",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/4a0a4e3c-5059-4ae7-91e7-fa25f1a59562/original",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/15dc5ade-e3a1-4c97-84e9-18595c6fc0d0/original",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/28de2dae-797f-4efd-88a9-e9955cdf3f69/original",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/abba4326-7eb4-49e9-9b2b-4e79bee19e48/original",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/177d03c5-9161-44b2-a668-c0fb01055f30/original",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/28de2dae-797f-4efd-88a9-e9955cdf3f69/original",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/4a0a4e3c-5059-4ae7-91e7-fa25f1a59562/original",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/15dc5ade-e3a1-4c97-84e9-18595c6fc0d0/original",
+        "status": 404
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/thumbnail",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/storyboard.jpg",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/storyboard.vtt",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/captions/en",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/39e93fdf-6301-4fbb-857c-1feb461b1bc4/chapters",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/videos/search",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/admin/peertube-import",
+        "status": 200
+      }
+    ],
+    "scope": "Synthetic importer query subset; browser proof requires separate source-disconnection and image-digest evidence.",
+    "started_at": "2026-10-17T04:57:35.208Z",
+    "status": "PASS",
+    "tool_sha256": "0db0a5cd49e4fcb56a3f9c3532d8fca6fddbdb0d62fa19827c6fbef320b45bda"
+  },
+  "browser_attempts": [
+    {
+      "accepted_checks": {
+        "access_controls": "PASS",
+        "assets_and_search": "PASS",
+        "imported_login_and_suspension": "PASS",
+        "progressive_original_decode": "PASS",
+        "watch_decode_audio_seek_reload": "PASS"
+      },
+      "attempt": 1,
+      "failed_phase": "persisted-admin-report",
+      "reason": "fixture_expected_done_badge_instead_of_intentional_gaps",
+      "result_sha256": "59c344eb0684485a8e26044a59004b3661e231779967d24f2066a51168799480",
+      "status": "FAIL",
+      "tool_sha256": "d6b86090f052ba60674e61b8e5b699f6e22c554fa76600fd6bf264a42a0321e5"
+    },
+    {
+      "accepted_checks": {
+        "access_controls": "PASS",
+        "assets_and_search": "PASS",
+        "imported_login_and_suspension": "PASS",
+        "progressive_original_decode": "PASS",
+        "watch_decode_audio_seek_reload": "PASS"
+      },
+      "attempt": 2,
+      "failed_phase": "persisted-admin-report",
+      "reason": "observed_history_429_required_real_ui_retry",
+      "result_sha256": "505767e0685664c3f79015b88267d16159dde80063914a732957d4e8ab318b3f",
+      "status": "FAIL",
+      "tool_sha256": "38321ecbb9a8dd90a8459fe051d82396f90c9772eeac0f186669d3b46b54886f"
+    },
+    {
+      "accepted_checks": {
+        "access_controls": "PASS",
+        "assets_and_search": "PASS",
+        "imported_login_and_suspension": "PASS",
+        "progressive_original_decode": "PASS",
+        "watch_decode_audio_seek_reload": "PASS"
+      },
+      "attempt": 3,
+      "failed_phase": "persisted-admin-report",
+      "reason": "observed_session_refresh_429_prevented_history_mount",
+      "result_sha256": "77492f9b95e2457ad8787e58fa60fa338dd7e253f7e10d48ffd86acfa40b67b2",
+      "status": "FAIL",
+      "tool_sha256": "9c1c57d685facecbeb9f9aef4321e86417dc4297fab8a896ee57c7db6aeb5698"
+    },
+    {
+      "accepted_checks": {
+        "access_controls": "PASS",
+        "assets_and_search": "PASS",
+        "imported_login_and_suspension": "PASS",
+        "persisted_admin_report": "PASS",
+        "progressive_original_decode": "PASS",
+        "watch_decode_audio_seek_reload": "PASS"
+      },
+      "attempt": 4,
+      "failed_phase": null,
+      "reason": null,
+      "result_sha256": "a7f878a34f104f63897f04899d66d5ded0f1d8ef73edfdd1ccfddeb1dcc17ed0",
+      "status": "PASS",
+      "tool_sha256": "0db0a5cd49e4fcb56a3f9c3532d8fca6fddbdb0d62fa19827c6fbef320b45bda"
+    }
+  ],
+  "cleanup": {
+    "accepted_attempt_storage": {
+      "dedicated_bucket_deleted": true,
+      "deleted_file_versions": 48,
+      "empty_before_bucket_delete": true,
+      "status": "PASS",
+      "temporary_key_deleted": true,
+      "unrelated_buckets_accessed": false
+    },
+    "docker": {
+      "isolated_compose_projects_removed": 2,
+      "remaining_project_containers": 0,
+      "remaining_project_networks": 0,
+      "remaining_project_volumes": 0,
+      "status": "PASS"
+    },
+    "first_attempt_storage": {
+      "dedicated_bucket_deleted": true,
+      "deleted_file_versions": 3,
+      "empty_before_bucket_delete": true,
+      "status": "PASS",
+      "temporary_key_deleted": true,
+      "unrelated_buckets_accessed": false
+    }
+  },
+  "disconnected": {
+    "catalogue_and_assets_preserved": true,
+    "g10_closed": false,
+    "phase": "disconnected",
+    "running_images": {
+      "api": {
+        "image_id": "sha256:cdc9e748f71dacabf027ac872cd995f6e180427b8477e5ed955a03813d087ac2",
+        "reference": "ghcr.io/yegamble/vidra-core@sha256:cdefb612589423bb394bfa37e001d5d1666aed32c1e3eb6547b0240a54c419d0"
+      },
+      "frontend": {
+        "image_id": "sha256:57c5c9822086daa6c206a5115f7e1a6a9471ae78f2cc98e809f93d585699bb15",
+        "reference": "ghcr.io/yegamble/vidra-user@sha256:349cf5a440e9350f866b9b638b595fd1c467903453762f6ce577cb2938f7f3c6"
+      },
+      "search": {
+        "image_id": "sha256:700e2b548263da346b53664df1e65902246b960f7d0f1eddfead1bacc35fd47f",
+        "reference": "ghcr.io/yegamble/vidra-search@sha256:85ceb4cf6192e2ca1e8fca0e27efb008f84c6a03a11641f5754dc8f277f23b83"
+      }
+    },
+    "scanner": "disabled",
+    "scope": "published v0.7.8 synthetic importer subset to Backblaze B2",
+    "source_configuration_removed": true,
+    "source_database_stopped": true,
+    "source_mount_removed": true,
+    "status": "PASS",
+    "synthetic_only": true,
+    "tls": "loopback plain HTTP; B2 HTTPS verified"
+  },
+  "environment": {
+    "architecture": "x86_64",
+    "browser": "system Chromium; differs from Playwright pinned browser",
+    "candidate_transport": "loopback HTTP; verified HTTPS to B2",
+    "docker_server": "28.4.0",
+    "execution": "managed cloud container with isolated Docker Compose project",
+    "kernel": "6.18.55",
+    "python": "3.12.14"
+  },
+  "exported_at": "2026-10-17T04:59:31.207345+00:00",
+  "g10_closed": false,
+  "original_result_hashes": {
+    "browser": "a7f878a34f104f63897f04899d66d5ded0f1d8ef73edfdd1ccfddeb1dcc17ed0",
+    "disconnect": "60462d7f3f998719715672c7574119ac4e7c3a4744b4bd0b182d9d2b6f4c6c0d",
+    "prepare": "643625a335d41fb87ea5c3d382b9864dcf76175810d128ed5383dec08a044fcb",
+    "provider": "ca754b6e8d0bd7692e1d63a7da54e0ff87ecee5ff8d596e03d0a8299c4e2da83",
+    "runtime_storage_binding": "ea3bd4bcf4133a061febf96c02a35adb0bbb95eb15eb600b26ce25af671bdb35"
+  },
+  "preparation_attempts": [
+    {
+      "attempt": 1,
+      "before_source_import": true,
+      "phase": "owner",
+      "reason": "fixture_outer_proxy_hostname_then_nonexistent_tags_table",
+      "result_sha256": "042e2fea46d14248fd70911ffec6341555232c7bb4a2e3acf8520e7372fb174a",
+      "status": "FAIL"
+    },
+    {
+      "attempt": 2,
+      "status": "PASS",
+      "tool_commit": "bc2d266adaf547f7eeb0bd8a2c5a40ae9f34db2c"
+    }
+  ],
+  "prepared": {
+    "catalogue_counts": {
+      "captions": 1,
+      "channel_follows": 1,
+      "channels": 2,
+      "comments": 2,
+      "playlist_items": 2,
+      "playlists": 1,
+      "streaming_playlists": 3,
+      "users": 3,
+      "video_chapters": 2,
+      "video_files": 10,
+      "video_ratings": 1,
+      "video_renditions": 3,
+      "video_tags": 1,
+      "videos": 10
+    },
+    "database_inventory_sha256": "cb1ab837fa69319c90a923830d2914a7106a440204c731744571f2b35df291d1",
+    "expected_asset_count": 31,
+    "g10_closed": false,
+    "phase": "prepared",
+    "preview_no_catalogue_writes": true,
+    "record_sha256": "e54c847c6831c80c47f5fd4aef731f8035f610532246ab7e3f5abf3905e40a67",
+    "repeat_preserved_ids_assets": true,
+    "running_images": {
+      "api": {
+        "image_id": "sha256:cdc9e748f71dacabf027ac872cd995f6e180427b8477e5ed955a03813d087ac2",
+        "reference": "ghcr.io/yegamble/vidra-core@sha256:cdefb612589423bb394bfa37e001d5d1666aed32c1e3eb6547b0240a54c419d0"
+      },
+      "frontend": {
+        "image_id": "sha256:57c5c9822086daa6c206a5115f7e1a6a9471ae78f2cc98e809f93d585699bb15",
+        "reference": "ghcr.io/yegamble/vidra-user@sha256:349cf5a440e9350f866b9b638b595fd1c467903453762f6ce577cb2938f7f3c6"
+      },
+      "search": {
+        "image_id": "sha256:700e2b548263da346b53664df1e65902246b960f7d0f1eddfead1bacc35fd47f",
+        "reference": "ghcr.io/yegamble/vidra-search@sha256:85ceb4cf6192e2ca1e8fca0e27efb008f84c6a03a11641f5754dc8f277f23b83"
+      }
+    },
+    "scanner": "disabled",
+    "schema_1041_refused": true,
+    "scope": "published v0.7.8 synthetic importer subset to Backblaze B2",
+    "search_service": true,
+    "source_inventory_sha256": "d31e469dfefe547cc13193a1540d09283083e16df232612e7f0de1426d87849f",
+    "source_read_only": true,
+    "source_snapshot_unchanged": true,
+    "status": "PASS",
+    "synthetic_only": true,
+    "tls": "loopback plain HTTP; B2 HTTPS verified"
+  },
+  "prepared_tool_commit": "bc2d266adaf547f7eeb0bd8a2c5a40ae9f34db2c",
+  "provider": {
+    "asset_pairs_sha256": "c0aa3c4ea255a33d86ac4459b2bd12477bac43ba2794a26d27e45cfc4fe17b36",
+    "assets": [
+      {
+        "hash_matches_source": true,
+        "kind": "caption",
+        "object_key_sha256": "7f0f813e17848a7ee928d3593c51a8b0012389ba1d2b971e095c83723a16f96a",
+        "readback_bytes": 60,
+        "readback_sha256": "9b1ec519e65892bc3b6f7340725f9e9f48a2da85bf3849f158be956608dd603d",
+        "signed_get_200": true,
+        "source_bytes": 60,
+        "source_sha256": "9b1ec519e65892bc3b6f7340725f9e9f48a2da85bf3849f158be956608dd603d"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "storyboard",
+        "object_key_sha256": "068fdb5568ab27d4565f1082922c9eb1539b08641aafd046532ee75761f73b21",
+        "readback_bytes": 13811,
+        "readback_sha256": "461ee0973908e26276b2113c992ab261f3a9c36de88823b97090813b58a27b6e",
+        "signed_get_200": true,
+        "source_bytes": 13811,
+        "source_sha256": "461ee0973908e26276b2113c992ab261f3a9c36de88823b97090813b58a27b6e"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "storyboard_vtt",
+        "object_key_sha256": "120ac5f759612835d9ac9fc0bf7f492197ccaba460064462ba250cc7e6ddb150",
+        "readback_bytes": 262,
+        "readback_sha256": "bf88820c3d3909a6ac830f279c565b64b57b86f4f94d39dd07142dec02b7ff17",
+        "signed_get_200": true,
+        "source_bytes": 262,
+        "source_sha256": "bf88820c3d3909a6ac830f279c565b64b57b86f4f94d39dd07142dec02b7ff17"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "playlist",
+        "local_reference_count": 1,
+        "object_key_sha256": "1a742cae34a3d38dd67badcbeffd4cbdc44a6a860e2299395002c01915288e22",
+        "playlist_rewrite_valid": true,
+        "readback_bytes": 91,
+        "readback_sha256": "6e67e2b4319729c530a1fd1e7892964cebe1e4043ec325fe839c57dcff3037f0",
+        "signed_get_200": true,
+        "source_bytes": 91,
+        "source_sha256": "6e67e2b4319729c530a1fd1e7892964cebe1e4043ec325fe839c57dcff3037f0"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "f59520e6266eb4969f2bcfb811588cddd3c7ee43aa5d88596513987f6fa59e94",
+        "readback_bytes": 166685,
+        "readback_sha256": "67145673637a42d8e53a6839714843b893bdd01e911f3c8cd51f8646f13a6cc2",
+        "signed_get_200": true,
+        "source_bytes": 166685,
+        "source_sha256": "67145673637a42d8e53a6839714843b893bdd01e911f3c8cd51f8646f13a6cc2"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "90335350aa3b9ffbf138b4f2bc4b42193673d4a372342778595275bfde1d9c0e",
+        "readback_bytes": 186830,
+        "readback_sha256": "9aa2ec911d52a916e17d28032726b564a81aa7011598395ee4ce160f8a75c2c1",
+        "signed_get_200": true,
+        "source_bytes": 186830,
+        "source_sha256": "9aa2ec911d52a916e17d28032726b564a81aa7011598395ee4ce160f8a75c2c1"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "55f3b74d9dec08f8b4f730f4a287050815580bab3bd385f3e0e9d3471949445c",
+        "readback_bytes": 1353,
+        "readback_sha256": "8d9c2524e58258bf1324eef55c7f9a8aeafdf85e2de9be4bfb7ba9ba72a8cc6b",
+        "signed_get_200": true,
+        "source_bytes": 1353,
+        "source_sha256": "8d9c2524e58258bf1324eef55c7f9a8aeafdf85e2de9be4bfb7ba9ba72a8cc6b"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "playlist",
+        "local_reference_count": 3,
+        "object_key_sha256": "4e33bd908a86319764db873fa3c0fb524883bb1445dd062814b4d418347de8e1",
+        "playlist_rewrite_valid": true,
+        "readback_bytes": 237,
+        "readback_sha256": "1064f2dad697ed1994a96c5f3a19e0a3529fca08c331c68ef65765e8b0df3a52",
+        "signed_get_200": true,
+        "source_bytes": 237,
+        "source_sha256": "1064f2dad697ed1994a96c5f3a19e0a3529fca08c331c68ef65765e8b0df3a52"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "playlist",
+        "local_reference_count": 1,
+        "object_key_sha256": "3bf5ae257c478f336d8903c304e002f193f56bdf05a8cedd6f49bc756aaeba87",
+        "playlist_rewrite_valid": true,
+        "readback_bytes": 91,
+        "readback_sha256": "6e67e2b4319729c530a1fd1e7892964cebe1e4043ec325fe839c57dcff3037f0",
+        "signed_get_200": true,
+        "source_bytes": 91,
+        "source_sha256": "6e67e2b4319729c530a1fd1e7892964cebe1e4043ec325fe839c57dcff3037f0"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "4aa4898d319c11f44d85f4f3e47b881664e370f70f5f4dba371d5f3e282c2d7e",
+        "readback_bytes": 166685,
+        "readback_sha256": "67145673637a42d8e53a6839714843b893bdd01e911f3c8cd51f8646f13a6cc2",
+        "signed_get_200": true,
+        "source_bytes": 166685,
+        "source_sha256": "67145673637a42d8e53a6839714843b893bdd01e911f3c8cd51f8646f13a6cc2"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "be16de6db727d4bd0663f9b6504d76bc86c60611f8dde1731aeb7e2b9585760b",
+        "readback_bytes": 186830,
+        "readback_sha256": "9aa2ec911d52a916e17d28032726b564a81aa7011598395ee4ce160f8a75c2c1",
+        "signed_get_200": true,
+        "source_bytes": 186830,
+        "source_sha256": "9aa2ec911d52a916e17d28032726b564a81aa7011598395ee4ce160f8a75c2c1"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "7dbbaf7271dcff8c56327c50f9c8d34745eb5839df1a40071a572727b26d2d19",
+        "readback_bytes": 1353,
+        "readback_sha256": "8d9c2524e58258bf1324eef55c7f9a8aeafdf85e2de9be4bfb7ba9ba72a8cc6b",
+        "signed_get_200": true,
+        "source_bytes": 1353,
+        "source_sha256": "8d9c2524e58258bf1324eef55c7f9a8aeafdf85e2de9be4bfb7ba9ba72a8cc6b"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "playlist",
+        "local_reference_count": 3,
+        "object_key_sha256": "6feb01d6595ba5c80456cdbee9e8687b7c57ff22d9d3ccf905dcc87e9d79709e",
+        "playlist_rewrite_valid": true,
+        "readback_bytes": 237,
+        "readback_sha256": "1064f2dad697ed1994a96c5f3a19e0a3529fca08c331c68ef65765e8b0df3a52",
+        "signed_get_200": true,
+        "source_bytes": 237,
+        "source_sha256": "1064f2dad697ed1994a96c5f3a19e0a3529fca08c331c68ef65765e8b0df3a52"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "eff1bdf7aa1a25d7889b00a906d97efdfd20933cb5cbce424685f1af4de3915b",
+        "readback_bytes": 16414,
+        "readback_sha256": "0fffeca32bc44595e7888ac46fce3069f7a2a7dfb47b514a534fe00d02f23be0",
+        "signed_get_200": true,
+        "source_bytes": 16414,
+        "source_sha256": "0fffeca32bc44595e7888ac46fce3069f7a2a7dfb47b514a534fe00d02f23be0"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "8760343e347d3e216f7f2e0f3a03f47b3452835893c51ceb3de7c66c994fdec5",
+        "readback_bytes": 16696,
+        "readback_sha256": "970feadd568ed0a239878777f63a02232dbb1c174ac6cb3bcab6b9c4137e8d3a",
+        "signed_get_200": true,
+        "source_bytes": 16696,
+        "source_sha256": "970feadd568ed0a239878777f63a02232dbb1c174ac6cb3bcab6b9c4137e8d3a"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "37815fa4d3c36c25f9a9f5a9202999649899fa4e29cb0c1b70bcfb5301435ae8",
+        "readback_bytes": 371,
+        "readback_sha256": "5625f11f5f55747dd137fec9906ed81734285d923777f3d8a0599b9decc94223",
+        "signed_get_200": true,
+        "source_bytes": 371,
+        "source_sha256": "5625f11f5f55747dd137fec9906ed81734285d923777f3d8a0599b9decc94223"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "be636d559daa68007dd8a793f86e933fa6e5db47f471bc2df33a4f2af8a44aa8",
+        "readback_bytes": 764,
+        "readback_sha256": "c799b2484819e5f03650a2e18068d3464d3012957aa8c5d0b2fbf42b0ebbfd42",
+        "signed_get_200": true,
+        "source_bytes": 764,
+        "source_sha256": "c799b2484819e5f03650a2e18068d3464d3012957aa8c5d0b2fbf42b0ebbfd42"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "playlist",
+        "local_reference_count": 4,
+        "object_key_sha256": "500acf77ee56dc5e2d2020ab7b77cfdb8a9a1f3c457553d5d135c4f2dee2df5a",
+        "playlist_rewrite_valid": true,
+        "readback_bytes": 241,
+        "readback_sha256": "26289f678b78dbf13ffcaa9ef3d2dee5fa26463c1bbe12b9dd632b61e52c9e0d",
+        "signed_get_200": true,
+        "source_bytes": 241,
+        "source_sha256": "26289f678b78dbf13ffcaa9ef3d2dee5fa26463c1bbe12b9dd632b61e52c9e0d"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "playlist",
+        "local_reference_count": 2,
+        "object_key_sha256": "1846e010a4c8c19cee4eb0846fa1e23bb26913db886f1c49e4c4c144088312f7",
+        "playlist_rewrite_valid": true,
+        "readback_bytes": 207,
+        "readback_sha256": "cd8ee5e965aef1bae4bd696fb6f9ae9dd9c43fa818db8d663e6ace2fae3086e1",
+        "signed_get_200": true,
+        "source_bytes": 207,
+        "source_sha256": "cd8ee5e965aef1bae4bd696fb6f9ae9dd9c43fa818db8d663e6ace2fae3086e1"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "10d6e55dd4e890fa6e9d9575685d7097a410461f773b3994904f057681562745",
+        "readback_bytes": 150147,
+        "readback_sha256": "139607e43be4a4fed7893c2b7753eef228ddbb2227ab2e710b9ff21bb4dca091",
+        "signed_get_200": true,
+        "source_bytes": 150147,
+        "source_sha256": "139607e43be4a4fed7893c2b7753eef228ddbb2227ab2e710b9ff21bb4dca091"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "3c164acb126d2ced7145afd887d15b3c93d74c345219511695fc969dc9b9800c",
+        "readback_bytes": 169803,
+        "readback_sha256": "d6ed4b26b2418700bf581cf997e95a9ec4c87cadcdee806c4472602a72cb2d00",
+        "signed_get_200": true,
+        "source_bytes": 169803,
+        "source_sha256": "d6ed4b26b2418700bf581cf997e95a9ec4c87cadcdee806c4472602a72cb2d00"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "hls_binary",
+        "object_key_sha256": "7ea7d9069c23592545ebc3783f29c1c9025afdd7c470077dab6dde7d73063741",
+        "readback_bytes": 826,
+        "readback_sha256": "491a773171310b89fcdf64fbd114a564c17e5e089f2789c231733084bfb3e614",
+        "signed_get_200": true,
+        "source_bytes": 826,
+        "source_sha256": "491a773171310b89fcdf64fbd114a564c17e5e089f2789c231733084bfb3e614"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "playlist",
+        "local_reference_count": 3,
+        "object_key_sha256": "ba75ef7a2aa6c931b461cd518168e2bb97dda44efb828b070f21bb0ce314c3a4",
+        "playlist_rewrite_valid": true,
+        "readback_bytes": 237,
+        "readback_sha256": "1064f2dad697ed1994a96c5f3a19e0a3529fca08c331c68ef65765e8b0df3a52",
+        "signed_get_200": true,
+        "source_bytes": 237,
+        "source_sha256": "1064f2dad697ed1994a96c5f3a19e0a3529fca08c331c68ef65765e8b0df3a52"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "artwork",
+        "object_key_sha256": "ded584278bd57dae722cda9c3955427f9fd93db7d185e90f68b46a4054fe1bf0",
+        "readback_bytes": 7687,
+        "readback_sha256": "62043bb22d6266b16f32a2a8abdb69349244ef19c87bab30548bb3c0dfc9efc4",
+        "signed_get_200": true,
+        "source_bytes": 7687,
+        "source_sha256": "62043bb22d6266b16f32a2a8abdb69349244ef19c87bab30548bb3c0dfc9efc4"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "original",
+        "object_key_sha256": "62759533882650ed326e9f31aa0ff3080b2d856f60d9e964873ba87a9f5ee597",
+        "readback_bytes": 355026,
+        "readback_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16",
+        "signed_get_200": true,
+        "source_bytes": 355026,
+        "source_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "original",
+        "object_key_sha256": "dd414ffcfeb60ec723fbc13f7e179d133296037ca048184a05139d8fab8fb710",
+        "readback_bytes": 355026,
+        "readback_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16",
+        "signed_get_200": true,
+        "source_bytes": 355026,
+        "source_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "original",
+        "object_key_sha256": "4b5b3a3e37289727dc510f8f164e8c0a00892069271b4c5bc1ee032c9560a629",
+        "readback_bytes": 355026,
+        "readback_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16",
+        "signed_get_200": true,
+        "source_bytes": 355026,
+        "source_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "original",
+        "object_key_sha256": "469d03ffa280dc6dee8f1d65070bd649f9bcef13a8e847625c4fcf5eb219a9ed",
+        "readback_bytes": 355026,
+        "readback_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16",
+        "signed_get_200": true,
+        "source_bytes": 355026,
+        "source_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "original",
+        "object_key_sha256": "144c01fbcf059c7f992cf9d97bbad6337d037a04e85e8b2de57864305c916976",
+        "readback_bytes": 355026,
+        "readback_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16",
+        "signed_get_200": true,
+        "source_bytes": 355026,
+        "source_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "original",
+        "object_key_sha256": "e728797534e53d990d26783f0128efb4e0482b6440a882078bf9b619360c5b05",
+        "readback_bytes": 355026,
+        "readback_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16",
+        "signed_get_200": true,
+        "source_bytes": 355026,
+        "source_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16"
+      },
+      {
+        "hash_matches_source": true,
+        "kind": "original",
+        "object_key_sha256": "e9cb5c121dd972ce94432f99691770c0dcef496d5030d68a5bdf408971badf09",
+        "readback_bytes": 355026,
+        "readback_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16",
+        "signed_get_200": true,
+        "source_bytes": 355026,
+        "source_sha256": "510bc2b48d4b99d51315fd238d566cb9f4e1d3ea4b4ea2849b47cfe467ceab16"
+      }
+    ],
+    "candidate_tag": "v0.7.8",
+    "capability_probes": {
+      "exact_upload_hide_pairs": true,
+      "expected_body_sha256": "a7fe41bf7b24cf3a7472e83a693b1e0b9c6b25f1fc6b7f3f315f371167cb2e07",
+      "frozen_metadata_matches": true,
+      "independently_downloaded": false,
+      "object_key_sha256": [
+        "1a2e1332f3500a98ae2cdf49635ff9ec1a93e6c8ea164fe1bd3be8f4a84a42bf",
+        "5669ba9c413b90d68a0f450d623b8820c42439efa6cf2069fad3fe9283d88501",
+        "b9506a9222a017f56c8e543fd6eb7590855d891bb01e127d35e69598bb40926d",
+        "ba5c1e976913101a0fc704e5fccb9e6cf689cc19eb3c18c506f02cd36615ebb1",
+        "cbaddd9a737296bb9e0ebe722e7e26de98d17e38cab903a15f2ea1992226b6af",
+        "ed8ddf4f680485795524db03494f9414fb7979f5c09ec839f65cd545f428a719"
+      ],
+      "objects": 6,
+      "provider_versions": 12,
+      "upload_bytes": 372
+    },
+    "checks": {
+      "all_binary_sha256_match": true,
+      "bounded_version_inventory": true,
+      "dedicated_bucket_scope": true,
+      "every_asset_signed_get": true,
+      "every_media_inventory_object_covered": true,
+      "only_completed_frozen_capability_probes_exempted": true,
+      "playlist_rewrites_and_local_references": true
+    },
+    "finished_at": 1792212638.314958,
+    "object_counts": {
+      "artwork": 1,
+      "caption": 1,
+      "hls_binary": 13,
+      "original": 7,
+      "playlist": 7,
+      "storyboard": 1,
+      "storyboard_vtt": 1
+    },
+    "provider": "Backblaze B2",
+    "provider_version_count": 44,
+    "started_at": 1792212621.4981947,
+    "status": "PASS",
+    "tool_sha256": "e53eb5a0c404fad306937d4db0446bc19fad664d02deea94e6e4e44e54f43710",
+    "verified_bytes": 3573100,
+    "verified_objects": 31
+  },
+  "record": {
+    "core_schema": 182,
+    "path": "releases/v0.7.8.json",
+    "search_schema": 18,
+    "sha256": "e54c847c6831c80c47f5fd4aef731f8035f610532246ab7e3f5abf3905e40a67"
+  },
+  "runtime_storage_binding": {
+    "credential_capabilities_match_required_set": true,
+    "runtime_bucket_endpoint_region_tls_match": true,
+    "runtime_credentials_match_verified_single_bucket_key": true,
+    "source_mount_and_credentials_absent": true,
+    "status": "PASS",
+    "storage_spec_sha256": "53c027eb0d9c59cdb75f5e8b23edb6ef91f7a533f8808715b2097f8aa349ef99"
+  },
+  "schema_version": 1,
+  "scope": "Published v0.7.8 synthetic importer subset; local read-only source to dedicated Backblaze B2",
+  "search_image_present_after_disconnect": true,
+  "status": "PASS",
+  "synthetic_only": true,
+  "unsigned_storage_denial": {
+    "signed_original_already_verified": true,
+    "status": "PASS",
+    "unsigned_existing_original_head_status": 401
+  },
+  "validation": {
+    "browser_syntax": "PASS",
+    "metadata_tests": 897,
+    "production_compose_config": "PASS",
+    "skipped_tests": 0
+  }
+}
