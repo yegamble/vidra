@@ -17,10 +17,12 @@ independent captions and subtitle manifest normalization are released in this
 cut set. Their implementation and configuration were checked against the frozen
 core commit above; this runbook supplies no representative migration result.
 
-**G10 remains unverified:** the representative PeerTube import, provider transfer,
-browser playback and reconciliation rehearsal on these published images has not
-been completed. Source fixtures, image publication, upgrade drills and scoped
-sealed-data recovery checks do not establish that result. Complete the checks
+**G10 remains unverified:** the representative PeerTube rehearsal on these
+published images has not been completed. A [ten-case synthetic B2 COPY
+rehearsal](runtime-acceptance-b2-migration-v0.7.8.md) now records provider-byte
+reconciliation and disconnected playback within its explicit fixture limits.
+Source fixtures, image publication, upgrade drills and scoped
+sealed-data recovery checks do not establish representative fidelity. Complete the checks
 below before cutover; a successful import or healthy home page alone does not
 establish production readiness. See [release readiness](release-readiness.md).
 
