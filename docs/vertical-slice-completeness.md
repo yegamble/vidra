@@ -107,7 +107,7 @@ Verification evidence retained for this session:
 
 | Check | Actual result |
 | --- | --- |
-| Password-manager regression | Initial focused run: 3 of 4 tests failed. Final focused component/parity run: 14 passed (8 component, 6 parity). Independent QA also ran 23 tests on an earlier patch; that result is supporting evidence, not final-patch proof. |
+| Password-manager regression | Initial focused run: 3 failed and 4 passed (7 total). Final focused component/parity run: 14 passed (8 component, 6 parity). Independent QA also ran 23 tests on an earlier patch; that result is supporting evidence, not final-patch proof. |
 | User local gates | Restored lockfile dependencies (`Next 16.4.0`, `Vitest 5.0.3`) before final checks. Full unit suite: **388 files, 3,909 tests passed** (`/tmp/vidra-user-final-unit.log`). TypeScript, lint (four existing warnings), icon hygiene, contract check, and production build passed (`/tmp/vidra-user-final-static.log`, `/tmp/vidra-user-final-build.log`). The earlier run interrupted under stale dependencies is not a passing result. Mocked password-recovery browser coverage was added for CI; no local browser fleet was run. |
 | Core checks | Enqueue-error regression and targeted race/tagged vet passed. `make ci` passed (`fmt-check`, `vet`, `migrate-lint`, `openapi-verify`, `sqlc-verify`, `test-race`); actual output retained at `/tmp/vidra-core-reconcile-make-ci.log`. Required remote-CI/merge evidence pending. |
 | Meta Python suites | **897 passed, zero skips**; output retained at `/tmp/vidra-war-room-meta-python.log`. |
