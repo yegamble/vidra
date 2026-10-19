@@ -76,3 +76,48 @@ All paths in this table are beneath `/api/v1`. These findings do not establish
 that the corresponding product features are absent, nor that production is
 ready: the scanner requires direct operation evidence, and no alternative or
 deferred-capability policy is implemented here.
+
+## War-room follow-up — 2026-10-18
+
+Scope: recover the studio password editor after a failed list request, and stop
+a search reconciliation sweep when its outbox writes fail. This is a source
+development record; the platform slice remains **IN_PROGRESS** with
+**EXIT_SIGNAL: false**.
+
+| Concern | Result and acceptance boundary |
+| --- | --- |
+| Password-list recovery | A failed GET leaves the count unknown (`null`), renders `ErrorState` with Retry, and disables mutations until a successful load. `Spinner` covers loading; a successful empty response alone renders the existing compact empty warning. Video changes reset pending mutation state and drafts. Loading/error copy exists in English and French. |
+| Reconciliation enqueue errors | `RunReconcile` returns failed `reconcile.begin`, `reconcile.page`, and `reconcile.end` enqueue errors; a failed begin/page aborts the remaining sweep. This prevents a failed enqueue from reporting a successful complete sweep. |
+| Search outage recovery | **Open.** Enqueue error propagation does not fix outbox delivery ordering. [core issue #267](https://github.com/yegamble/vidra-core/issues/267) tracks retry ordering that can let `reconcile.end` suppress newly indexed documents. Public search already falls back to SQL for an empty first page, so this does not mean all public search disappears; a partially populated index or later page can still omit results. |
+| Bulk password replacement | **Open.** No bulk-replacement UI was added. The earlier inventory's “atomic bulk replacement” wording describes the intended capability, not a proven implementation guarantee: core `ReplacePasswords` calls `DeleteVideoPasswords` followed by `InsertVideoPasswords` without a transaction, so an insert failure can erase the previous set. Repair atomicity before exposing that operation. |
+
+Core implementation: [PR #429](https://github.com/yegamble/vidra-core/pull/429),
+commit `8be066562a697ad84e89a97a4b79dc3313b8e3dd`. User implementation:
+[PR #403](https://github.com/yegamble/vidra-user/pull/403), commit
+`0c24ec02a99e062ca2c49320c69cf81075cda422`. Both are **implemented and pushed;
+open — awaiting required CI and merge**. Neither is released or deployed.
+
+The QA, product-completeness, and devil's-advocate reviews checked the actual
+diffs and kept the two fixes separate from the unresolved capabilities above.
+The compact empty warning is deliberate inside the editor; it distinguishes an
+actual zero-password result without replacing the surrounding form with a
+large `EmptyState`.
+
+Verification evidence retained for this session:
+
+| Check | Actual result |
+| --- | --- |
+| Password-manager regression | Initial focused run: 3 of 4 tests failed. Final focused component/parity run: 14 passed (8 component, 6 parity). Independent QA also ran 23 tests on an earlier patch; that result is supporting evidence, not final-patch proof. |
+| User local gates | Restored lockfile dependencies (`Next 16.4.0`, `Vitest 5.0.3`) before final checks. Full unit suite: **388 files, 3,909 tests passed** (`/tmp/vidra-user-final-unit.log`). TypeScript, lint (four existing warnings), icon hygiene, contract check, and production build passed (`/tmp/vidra-user-final-static.log`, `/tmp/vidra-user-final-build.log`). The earlier run interrupted under stale dependencies is not a passing result. Mocked password-recovery browser coverage was added for CI; no local browser fleet was run. |
+| Core checks | Enqueue-error regression and targeted race/tagged vet passed. `make ci` passed (`fmt-check`, `vet`, `migrate-lint`, `openapi-verify`, `sqlc-verify`, `test-race`); actual output retained at `/tmp/vidra-core-reconcile-make-ci.log`. Required remote-CI/merge evidence pending. |
+| Meta Python suites | **897 passed, zero skips**; output retained at `/tmp/vidra-war-room-meta-python.log`. |
+| Production Compose model | PASS: `docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file /tmp/vidra-war-room-check.env config -q` with temporary dummy required values; output retained at `/tmp/vidra-war-room-compose.log`. No scripts changed. |
+| Mechanical completeness | **FAIL: six unchanged endpoint findings, zero migration findings** from `python3 scripts/ci/check-vertical-slice-completeness.py`; actual output retained at `/tmp/vidra-war-room-mechanical.log`. The open operations remain cancel, direct file upload, direct replacement, playlist full-list PUT, passwords PUT, and ClearKey. No endpoint exemption was added. |
+
+**VERDICT: INCOMPLETE — SEND BACK TO WAR ROOM LOOP.** These focused changes
+do not establish production release/deployment, browser-backed database
+mutation/refetch, fleet recovery, migration/rollback safety, or security
+certification. Lifecycle and remaining owner actions must remain explicit:
+finish and verify source merges; repair search delivery ordering and password
+replacement atomicity in core; resolve the six endpoint product/API decisions;
+then supply the runtime and release evidence required by the council protocol.
