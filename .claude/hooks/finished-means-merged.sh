@@ -120,4 +120,7 @@ reminder $blocks/$MAX_BLOCKS is not an automatic permission to declare done."
 
 python3 -c 'import json,sys
 print(json.dumps({"hookSpecificOutput": {"hookEventName": "Stop", "permissionDecision": "deny", "permissionDecisionReason": sys.argv[1]}}))' "$reason"
+# On exit 2 Claude Code relays STDERR only; the stdout JSON alone arrived as
+# "No stderr output" (2026-10-12, again 2026-10-20), hiding every finding.
+printf '%s\n' "$reason" >&2
 exit 2
