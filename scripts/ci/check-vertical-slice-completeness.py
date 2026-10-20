@@ -62,6 +62,23 @@ for _path in (
     '/api/v1/instance/custom.css', '/api/v1/instance/custom.js',
 ):
     BACKEND_ONLY_PATHS[('GET', _path)] = 'HTML img/link/script or player preview asset request'
+# The browser's CDM calls the ClearKey license URL named in a playback
+# session's drm block (EME), never app code; 404 on every install until
+# media packaging mints content keys.
+BACKEND_ONLY_PATHS[('POST', '/api/v1/videos/{}/license/clearkey')] = 'EME CDM license request'
+
+# Supported public API the SPA deliberately does not call, each mapped to the
+# operation it uses instead. Unlike BACKEND_ONLY_PATHS these have no external
+# protocol consumer; they are excused only while the alternative is still in
+# the contract, and the alternative must itself be wired.
+API_CLIENT_ONLY = {
+    ('POST', '/api/v1/videos/{}/file'): ('POST', '/api/v1/videos/{}/upload-session'),
+    ('POST', '/api/v1/videos/{}/replace'): ('POST', '/api/v1/videos/{}/replace-session'),
+    ('PUT', '/api/v1/videos/{}/passwords'): ('POST', '/api/v1/videos/{}/passwords'),
+    # Core: abort without clean_destination "is exactly the cancel"; the
+    # controls page offers both outcomes through abort.
+    ('POST', '/api/v1/admin/storage/migrations/{}/cancel'): ('POST', '/api/v1/admin/storage/migrations/{}/abort'),
+}
 
 
 @dataclass(frozen=True)
@@ -137,6 +154,21 @@ def openapi_operations(yaml):
     if not operations:
         raise ValueError('no OpenAPI operations found')
     return operations, {p: '\n'.join(b) for p, b in blocks.items()}
+
+
+def deprecated_operations(blocks):
+    """Operations whose OWN keys say `deprecated: true`; deeper flags (a
+    parameter or schema property) do not deprecate the operation."""
+    deprecated = set()
+    for path, block in blocks.items():
+        verb = None
+        for line in block.splitlines():
+            match = re.match(r'^    (get|post|put|patch|delete|head|options):\s*$', line)
+            if match:
+                verb = match[1].upper()
+            elif verb and re.match(r'^      deprecated:\s*true\s*$', line):
+                deprecated.add((verb, normalize(path)))
+    return deprecated
 
 
 def oauth_findings(blocks, source):
@@ -595,8 +627,21 @@ def static_findings(yaml, files):
             for name, (_, exported) in bodies.items():
                 if exported and name[0].isupper():
                     direct.update(function_requests(name, bodies, {}))
+    # A deprecated operation is on its way out; clients are told to stop
+    # calling it, so the SPA must not be required to.
+    excused = deprecated_operations(blocks)
+    for op, alternative in API_CLIENT_ONLY.items():
+        if op not in operations:
+            continue
+        if alternative in operations:
+            excused.add(op)
+        else:
+            findings.append(Finding(f'api-client-only:{op[0]}:{op[1]}',
+                                    f'{op[0]} {op[1]}: SPA alternative {alternative[0]} {alternative[1]} '
+                                    'is gone from the contract; wire this operation or re-map it'))
+            excused.add(op)
     for method, path in sorted(operations):
-        if not path.startswith('/api/v1/') or (method, path) in BACKEND_ONLY_PATHS:
+        if not path.startswith('/api/v1/') or (method, path) in BACKEND_ONLY_PATHS or (method, path) in excused:
             continue
         identities = clients.get((method, path), [])
         if (method, path) not in direct and not any(w in consumed for w in identities):
