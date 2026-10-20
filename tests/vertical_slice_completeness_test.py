@@ -305,6 +305,42 @@ class StaticGateTest(unittest.TestCase):
         self.assertIn('endpoint:POST:/api/v1/admin/new-feature', findings(yaml=yaml))
 
 
+    def test_deprecated_operation_needs_no_wrapper_but_its_sibling_does(self):
+        yaml = YAML.replace('components:', '  /api/v1/me/list/{id}:\n'
+                            '    put:\n      operationId: oldReorder\n      deprecated: true\n'
+                            '    post:\n      operationId: add\ncomponents:')
+        got = findings(yaml=yaml)
+        self.assertNotIn('endpoint:PUT:/api/v1/me/list/{}', got)
+        self.assertIn('endpoint:POST:/api/v1/me/list/{}', got)
+
+    def test_nested_deprecated_flag_does_not_deprecate_the_operation(self):
+        # A deprecated parameter or schema property sits deeper than the
+        # operation's own keys; it must not excuse the whole operation.
+        yaml = YAML.replace('components:', '  /api/v1/me/list/{id}:\n'
+                            '    put:\n      parameters:\n        - name: legacy\n'
+                            '          deprecated: true\ncomponents:')
+        self.assertIn('endpoint:PUT:/api/v1/me/list/{}', findings(yaml=yaml))
+
+    def test_api_client_only_operation_is_excused_only_while_its_alternative_exists(self):
+        (method, path), (alt_method, alt_path) = next(iter(gate.API_CLIENT_ONLY.items()))
+        spec_path = lambda p: p.replace('{}', '{id}', 1).replace('{}', '{sub}')
+        both = YAML.replace('components:', f'  {spec_path(path)}:\n    {method.lower()}:\n'
+                            f'      operationId: apiOnly\n  {spec_path(alt_path)}:\n'
+                            f'    {alt_method.lower()}:\n      operationId: alt\ncomponents:')
+        got = findings(yaml=both)
+        self.assertNotIn(f'endpoint:{method}:{path}', got)
+        self.assertIn(f'endpoint:{alt_method}:{alt_path}', got)  # the alternative itself must be wired
+        alone = YAML.replace('components:', f'  {spec_path(path)}:\n    {method.lower()}:\n'
+                             f'      operationId: apiOnly\ncomponents:')
+        self.assertIn(f'api-client-only:{method}:{path}', findings(yaml=alone))
+
+    def test_api_client_only_entries_are_exact_and_not_backend_only(self):
+        for op, alt in gate.API_CLIENT_ONLY.items():
+            self.assertNotIn(op, gate.BACKEND_ONLY_PATHS)
+            self.assertNotEqual(op, alt)
+            self.assertTrue(op[1].startswith('/api/v1/') and alt[1].startswith('/api/v1/'))
+
+
 class ContractAndMigrationTest(unittest.TestCase):
     def test_type_generation_uses_temporary_output_and_detects_byte_drift(self):
         with tempfile.TemporaryDirectory() as temp:
