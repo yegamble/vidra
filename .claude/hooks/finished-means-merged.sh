@@ -32,7 +32,9 @@ fi
 repos=("$root")
 all_present=true
 for component in core user search; do
-  variable="VIDRA_${component^^}_ROOT"
+  # macOS ships bash 3.2, which has no ${var^^}; a bad substitution there
+  # aborts the hook before it checks anything.
+  variable="VIDRA_$(printf %s "$component" | tr "[:lower:]" "[:upper:]")_ROOT"
   repo="${!variable:-}"
   if [ -z "$repo" ]; then
     repo="$root/vidra-$component"
@@ -86,6 +88,8 @@ done
 if [ "$all_present" = true ]; then
   # Compare to immutable session-start SHAs: merging a backend PR during the
   # session must not bless its missing frontend. No snapshot means full audit.
+  # bash 3.2 (macOS) calls an empty "${arr[@]}" unbound under set -u, hence
+  # the ${arr[@]+...} guard where it is expanded.
   baseline_args=()
   baseline_file="$state_dir/$session_key.baseline.json"
   if [ -f "$baseline_file" ]; then
@@ -93,7 +97,7 @@ if [ "$all_present" = true ]; then
   fi
   if ! completeness="$(python3 "$root/scripts/ci/check-vertical-slice-completeness.py" \
       --root "$root" --core-root "$core_root" --user-root "$user_root" \
-      "${baseline_args[@]}" 2>&1)"; then
+      ${baseline_args[@]+"${baseline_args[@]}"} 2>&1)"; then
     unfinished+="  - cross-repo completeness failed:"$'\n'"$completeness"$'\n'
   fi
 fi
