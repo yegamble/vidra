@@ -64,6 +64,23 @@ secrets.
   `vidra-search/docs/{architecture,evaluation,operations,privacy}.md`.
   **The pinned checkout predates this file** — see the traps below.
 
+## Reading large files
+
+Every tool call re-sends what you have already read, so one whole-file read is
+paid again on every later turn. Run `wc -c` before reading a doc; anything over
+40 KB is read by section: `grep -n '^#' <file>` for the outline, or
+`grep -n <term> <file>`, then only that range. Known large files:
+`docs/release-readiness.md` (~1.5 MB), `docs/superpowers/plans/*.md` (up to
+240 KB), `docs/productionization/*.md` and `docs/peertube-parity-*.md`
+(~75 KB each), `.ralph/specs/backport/**` (up to ~95 KB) and
+`vidra-user/.ralph/specs/design-system.md` (~57 KB).
+
+Run gate commands through `.claude/council/quiet.sh <label> <command…>` (from
+the meta checkout; `cd` into a component first if the gate needs it, e.g.
+`.claude/council/quiet.sh core-ci make -C vidra-core ci`). The full output goes
+to a log file; you get a PASS line or the failure lines, with the command's exit
+status. Quote those lines as evidence.
+
 ## Verification gates (quote these, do not invent them)
 
 | Repo | Gate |

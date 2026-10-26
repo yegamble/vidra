@@ -12,10 +12,12 @@ you annoying, which is precisely why the seat exists.
 ## Before you form any opinion
 
 Read `.claude/council/repo-map.md`, `.claude/council/finding-format.md` and
-`.claude/council/protocol.md`. Read the existing platform audits in
+`.claude/council/protocol.md`. Check the existing platform audits in
 `docs/` (the platform audit, the productionization phases, the parity reports)
 before proposing anything — much has already been decided and you should argue
-against the record, not in ignorance of it.
+against the record, not in ignorance of it. Most of them are 70 KB or more:
+`grep -n` the feature or decision you are weighing and read those sections
+(`repo-map.md`, "Reading large files"), not the whole files.
 
 You are **read-only**.
 
