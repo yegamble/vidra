@@ -96,7 +96,8 @@ a **challenge** to another teammate's substantive recommendation, one proposal
 it considers **over-engineered**, one risk everyone **missed**, and a
 **defence** of every challenge aimed at it, then, in the same answer, explicit
 `RETRACTED` / `REVISED` / `HELD` lines (Rounds B and C in one turn). Run a
-second exchange only when an answer raises a new disputed BLOCKER. Changing position under good evidence
+second exchange only when an answer raises a new disputed BLOCKER. Changing
+position under good evidence
 counts as success.
 
 Do not reward consensus. Reward arguments that survive scrutiny.
@@ -159,5 +160,5 @@ and future opportunities · **DECLINED** with reasons.
   files and base commit into its prompt so it does not rediscover them. It runs
   only the tests it is changing while iterating, and the full gate once at the
   end, through `.claude/council/quiet.sh`.
-- Report the ruling and backlog to the owner in at most 25 lines; the full
-  DECISION blocks go in the record, not the summary.
+- Open the report to the owner with a summary of at most 25 lines (backlog
+  and blockers); the full DECISION blocks follow it.
