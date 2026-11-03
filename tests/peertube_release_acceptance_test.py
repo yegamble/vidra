@@ -156,6 +156,13 @@ class RebootCatalogueTests(unittest.TestCase):
                       'ipfs_capacity', 'ipfs_copy_cleanup'):
             self.assertIn(table, state['catalogue'])
 
+    def test_reboot_requires_the_candidates_receiver_authority(self):
+        run = FakeRun(present=FakeRun().relations(183),
+                      ledgers={'schema_migrations': 183, 'vidra_search_migrations': 21})
+        with self.assertRaisesRegex(ValueError, 'search.catalog_scopes'):
+            checks.reboot_state(run, self.baseline(core=183, search=21))
+        self.assertEqual(len(run.queries), 1)
+
     # One host, but the pair straddles a REBOOT and the drill tools are a
     # hand-staged directory: re-staging between the halves is the window in
     # which "reboot changed persisted catalogue/media state" would really mean

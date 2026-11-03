@@ -218,7 +218,7 @@ class Host(runtime.Recorder):
             runtime.check_ledger(self.sql(f'SELECT version, dirty FROM {table}'), self.record[role + '_schema_version'])
         require(self.sql('SELECT count(*) FROM users').splitlines()[-1] == '1', 'unexpected fixture accounts')
         require(self.sql('SELECT count(*) FROM videos').splitlines()[-1] == '0', 'media fixture is out of scope')
-        return recovery.fingerprint(self, self.record['core_schema_version'])
+        return recovery.fingerprint(self, self.record['core_schema_version'], self.record['search_schema_version'])
 
     def assert_scripts(self):
         require(all(runtime.sha(INSTALL / name) == digest for name, digest in self.script_hashes.items()),

@@ -294,6 +294,17 @@ TABLES_ADDED = {
     183: (),
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
+# Receiver authority is not disposable inbox/cache state. Compare whole rows:
+# quiesce all search writers (capture, delivery, stats/config and staging cleanup)
+# across the drill, rather
+# than excluding the fences or frozen payloads that a correct restore needs.
+SEARCH_TABLES_ADDED = {
+    18: (),  # Oldest search schema in this harness's release candidates.
+    19: ('catalog_epochs', 'catalog_scopes'),
+    20: ('catalog_snapshots', 'catalog_snapshot_pages'),
+    21: (),  # Adds the bounded canonical-byte ledger to catalog_snapshots.
+}
+SEARCH_AUDITED_THROUGH = max(SEARCH_TABLES_ADDED)
 IDENTIFIER = re.compile(r'[a-z_]+')
 
 
@@ -365,7 +376,7 @@ def check_recorded_harness(name, recorded, revision):
             'actions with the files staged on this host.')
 
 
-def fingerprint_sql(table, volatile=(), sealed=()):
+def fingerprint_sql(table, volatile=(), sealed=(), *, schema=None):
     """count(*) plus an order-independent md5 over one table's stable content.
 
     `to_jsonb(t)` is the WHOLE row, so a column missing from a restored table
@@ -380,6 +391,7 @@ def fingerprint_sql(table, volatile=(), sealed=()):
     or a log line.
     """
     identifier(table)
+    relation = qualified(schema, table) if schema is not None else table
     keys = row = ''
     dropped = tuple(volatile) + tuple(sealed)
     if dropped:
@@ -389,9 +401,9 @@ def fingerprint_sql(table, volatile=(), sealed=()):
             f"'{c}', CASE WHEN t.{c} = '' THEN 'none' WHEN t.{c} LIKE 'enc:%' THEN 'sealed' ELSE 'UNSEALED' END"
             for c in sealed) + ")"
         return (f"SELECT count(*)||'|'||md5(COALESCE(string_agg(r::text,E'\\n' ORDER BY r::text),'')) "
-                f"FROM (SELECT (to_jsonb(t){keys}){row} AS r FROM {table} t) s")
+                f"FROM (SELECT (to_jsonb(t){keys}){row} AS r FROM {relation} t) s")
     return (f"SELECT count(*)||'|'||md5(COALESCE(string_agg(r::text,E'\\n' ORDER BY r::text),'')) "
-            f"FROM (SELECT to_jsonb(t){keys} AS r FROM {table} t) s")
+            f"FROM (SELECT to_jsonb(t){keys} AS r FROM {relation} t) s")
 
 
 def unsealed_sql(table, column):
@@ -455,6 +467,21 @@ def catalogue_for(core_version):
             f'{CATALOGUE_AUDITED_THROUGH + 1:04d}..{core_version:04d}, add a TABLES_ADDED line per '
             'version, and catalogue or explicitly exclude every table they CREATE before drilling')
     return {table: volatile for table, (since, volatile) in CATALOGUE.items() if since <= core_version}
+
+
+def search_schema_version(ledgers):
+    spec = ledgers.get('vidra_search_migrations')
+    version = spec.get('version') if isinstance(spec, dict) else None
+    require(type(version) is int, 'expected-ledgers.json names no vidra_search_migrations version')
+    return version
+
+
+def search_catalogue_for(search_version):
+    require(type(search_version) is int and min(SEARCH_TABLES_ADDED) <= search_version <= SEARCH_AUDITED_THROUGH,
+            f'candidate search schema {search_version} is outside the audited range '
+            f'{min(SEARCH_TABLES_ADDED)}..{SEARCH_AUDITED_THROUGH}: read its migrations before drilling')
+    return tuple(table for version, tables in SEARCH_TABLES_ADDED.items()
+                 if version <= search_version for table in tables)
 
 
 def unclassified_tables(added=None):
@@ -548,25 +575,34 @@ SCHEMA_SHAPE_SQL = (
     "AND a.attnum > 0 AND NOT a.attisdropped")
 
 
-# search.documents carries reconcile timestamps that a healthy sweep rewrites, so
-# only the fields a search result depends on are compared.
+# Preserve the archived search-18 projection exactly. From19 onward the FULL
+# manifest attests all canonical metadata: a title/id/eligible projection would
+# miss lost tags, ownership or sensitive-content policy with the fence intact.
+# Those candidates therefore compare whole document rows with writers quiesced.
 SEARCH_DOCUMENTS = 'search.documents'
 SEARCH_SQL = ("SELECT count(*)||'|'||md5(COALESCE(string_agg(video_id::text||':'||title||':'||eligible::text,"
               "E'\\n' ORDER BY video_id::text),'')) FROM search.documents")
 
 
-def fingerprint(run, core_version):
+def fingerprint(run, core_version, search_version):
     tables = catalogue_for(core_version)
+    search_tables = search_catalogue_for(search_version)
     # Existence first, in ONE query, before anything is hashed: a relation the
     # schema requires but the database lacks must fail by NAME, not as an
     # anonymous psql exit 1 buried in a private log.
-    check_catalogue_present(run, [qualified('public', table) for table in tables] + [SEARCH_DOCUMENTS],
+    check_catalogue_present(run, [qualified('public', table) for table in tables] + [SEARCH_DOCUMENTS]
+                            + [qualified('search', table) for table in search_tables],
                             core_version)
     check_sealed(run, tables)
     rows = {table: run.sql(fingerprint_sql(table, volatile, SEALED.get(table, ())))
             for table, volatile in tables.items()}
-    rows[SEARCH_DOCUMENTS] = run.sql(SEARCH_SQL)
+    rows[SEARCH_DOCUMENTS] = run.sql(SEARCH_SQL if search_version == 18
+                                    else fingerprint_sql('documents', schema='search'))
     rows[SCHEMA_SHAPE] = run.sql(SCHEMA_SHAPE_SQL)
+    for table in search_tables:
+        rows[qualified('search', table)] = run.sql(fingerprint_sql(table, schema='search'))
+    if search_tables:
+        rows['search.schema_shape'] = run.sql(SCHEMA_SHAPE_SQL.replace("n.nspname = 'public'", "n.nspname = 'search'"))
     return rows
 
 
@@ -620,7 +656,7 @@ def snapshot(run, candidate, baseline, with_images=True):
     # tables this candidate's schema requires, and which versions it must be at.
     ledgers = expected_ledgers(baseline)
     result = {'at': time.time(), 'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
-              'catalogue': fingerprint(run, core_schema_version(ledgers)), 'ledgers': {},
+              'catalogue': fingerprint(run, core_schema_version(ledgers), search_schema_version(ledgers)), 'ledgers': {},
               'api': api_identity(run)}
     if with_images:
         result['runtime'] = runtime.runtime_snapshot(run, candidate)

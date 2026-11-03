@@ -326,7 +326,7 @@ class FingerprintWiringTest(unittest.TestCase):
         # Everything the newest schema has is present, so nothing can be missing:
         # this test is only about WHICH tables are asked for.
         run = FakeRun(present=FakeRun().relations(recovery.CATALOGUE_AUDITED_THROUGH))
-        rows = recovery.fingerprint(run, 146)
+        rows = recovery.fingerprint(run, 146, 18)
         self.assertEqual(self.keys(rows), set(recovery.catalogue_for(146)))
         self.assertNotIn('ipfs_copy_cleanup', ' '.join(run.queries))
         self.assertNotIn('authored_remote_comments', ' '.join(run.queries))
@@ -335,7 +335,7 @@ class FingerprintWiringTest(unittest.TestCase):
         lost = ('public.authored_remote_comments', 'public.ipfs_control_config')
         run = FakeRun(present=[r for r in FakeRun().relations(150) if r not in lost])
         with self.assertRaises(ValueError) as raised:
-            recovery.fingerprint(run, 150)
+            recovery.fingerprint(run, 150, 18)
         for name in lost:
             self.assertIn(name, str(raised.exception))
         self.assertEqual(len(run.queries), 1, 'the probe must refuse before a single row is hashed')
@@ -343,11 +343,11 @@ class FingerprintWiringTest(unittest.TestCase):
     def test_search_documents_absence_is_named_like_any_other_relation(self):
         run = FakeRun(present=[r for r in FakeRun().relations(150) if r != 'search.documents'])
         with self.assertRaises(ValueError) as raised:
-            recovery.fingerprint(run, 150)
+            recovery.fingerprint(run, 150, 18)
         self.assertIn('search.documents', str(raised.exception))
 
     def test_the_whole_public_schema_shape_is_part_of_every_fingerprint(self):
-        rows = recovery.fingerprint(FakeRun(), 150)
+        rows = recovery.fingerprint(FakeRun(), 150, 18)
         self.assertIn(recovery.SCHEMA_SHAPE, rows)
         self.assertEqual(rows[recovery.SCHEMA_SHAPE], '812|' + 'c' * 32)
 
@@ -365,7 +365,7 @@ class MailConfigCatalogueTest(unittest.TestCase):
     def test_a_151_candidate_is_drilled_against_mail_config(self):
         self.assertIn('mail_config', recovery.catalogue_for(151))
         self.assertNotIn('mail_config', recovery.catalogue_for(150))
-        rows = recovery.fingerprint(FakeRun(), 151)
+        rows = recovery.fingerprint(FakeRun(), 151, 18)
         self.assertIn('mail_config', rows)
         self.assertIn('public.mail_config', ' '.join(FakeRun().relations(151)))
 
@@ -376,7 +376,7 @@ class MailConfigCatalogueTest(unittest.TestCase):
 
     def test_a_150_candidate_runs_no_sealed_check(self):
         run = FakeRun()
-        recovery.fingerprint(run, 150)
+        recovery.fingerprint(run, 150, 18)
         self.assertNotIn('mail_config', ' '.join(run.queries))
 
     def test_the_credential_is_replaced_by_its_class_before_hashing(self):
@@ -403,7 +403,7 @@ class MailConfigCatalogueTest(unittest.TestCase):
         planted = 'enc:NOT-A-REAL-CIPHERTEXT-' + 'z' * 16
         run = FakeRun(unsealed='1\n')
         with self.assertRaises(ValueError) as raised:
-            recovery.fingerprint(run, 151)
+            recovery.fingerprint(run, 151, 18)
         message = str(raised.exception)
         self.assertIn('mail_config.secret', message)
         self.assertNotIn(planted, message)
@@ -411,22 +411,66 @@ class MailConfigCatalogueTest(unittest.TestCase):
 
     def test_a_check_that_returns_no_count_is_a_refusal_not_a_pass(self):
         with self.assertRaises(ValueError):
-            recovery.fingerprint(FakeRun(unsealed='ERROR:  relation "mail_config" does not exist\n'), 151)
+            recovery.fingerprint(FakeRun(unsealed='ERROR:  relation "mail_config" does not exist\n'), 151, 18)
 
     def test_the_fingerprint_output_carries_no_secret_text(self):
-        rows = recovery.fingerprint(FakeRun(), 151)
+        rows = recovery.fingerprint(FakeRun(), 151, 18)
         dumped = json.dumps(rows)
         self.assertNotIn('enc:', dumped)
         self.assertRegex(rows['mail_config'], r'^[0-9]+\|[0-9a-f]{32}$')
 
 
 class RecentCatalogueTest(unittest.TestCase):
+    def test_search_schema_must_come_from_the_frozen_candidate(self):
+        self.assertEqual(recovery.search_schema_version({'vidra_search_migrations': {'version': 21}}), 21)
+        with self.assertRaisesRegex(ValueError, 'vidra_search_migrations'):
+            recovery.search_schema_version({'schema_migrations': {'version': 183}})
+
+    def test_receiver_relation_names_are_validated_before_interpolation(self):
+        self.assertIn('FROM search.catalog_epochs t', recovery.fingerprint_sql('catalog_epochs', schema='search'))
+        for schema in ('search; DROP TABLE users', 'search.public'):
+            with self.assertRaises(ValueError):
+                recovery.fingerprint_sql('catalog_epochs', schema=schema)
+
+    def test_newer_search_authority_is_refused_before_querying(self):
+        run = FakeRun()
+        with self.assertRaisesRegex(ValueError, 'search schema 22'):
+            recovery.fingerprint(run, 183, 22)
+        self.assertEqual(run.queries, [])
+
+    def test_search_authority_and_pending_full_payloads_are_fingerprinted(self):
+        run = FakeRun()
+        tables = ('catalog_epochs', 'catalog_scopes', 'catalog_snapshots', 'catalog_snapshot_pages')
+        present = run.relations(183) + ['search.' + table for table in tables]
+        run.present = present
+        rows = recovery.fingerprint(run, 183, 21)
+        for table in tables:
+            self.assertIn('search.' + table, rows)
+            self.assertIn('FROM search.' + table + ' t', ' '.join(run.queries))
+        self.assertIn('search.schema_shape', rows)
+        self.assertTrue(any("n.nspname = 'search'" in query for query in run.queries))
+        self.assertIn(recovery.fingerprint_sql('documents', schema='search'), run.queries)
+        self.assertNotIn(recovery.SEARCH_SQL, run.queries)
+
+    def test_missing_receiver_fence_is_named_before_hashing(self):
+        run = FakeRun(present=FakeRun().relations(183))
+        with self.assertRaisesRegex(ValueError, 'search.catalog_scopes'):
+            recovery.fingerprint(run, 183, 21)
+        self.assertEqual(len(run.queries), 1)
+
+    def test_search_18_does_not_require_later_catalog_state(self):
+        run = FakeRun()
+        rows = recovery.fingerprint(run, 183, 18)
+        self.assertNotIn('search.catalog_epochs', rows)
+        self.assertNotIn('search.schema_shape', rows)
+        self.assertIn(recovery.SEARCH_SQL, run.queries)
+
     def test_schema_183_fingerprints_existing_relations(self):
         # 0183 creates a helper function and repairs cached inbox values, with
         # no new tables. A candidate at 183 must still prove every 182 relation.
         run = FakeRun(present=FakeRun().relations(182))
-        rows = recovery.fingerprint(run, 183)
-        self.assertEqual(rows, recovery.fingerprint(FakeRun(), 182))
+        rows = recovery.fingerprint(run, 183, 18)
+        self.assertEqual(rows, recovery.fingerprint(FakeRun(), 182, 18))
         self.assertIn('oidc_providers', rows)
         self.assertIn(recovery.SCHEMA_SHAPE, rows)
 
@@ -434,7 +478,7 @@ class RecentCatalogueTest(unittest.TestCase):
         lost = ('public.report_messages', 'public.blocklist_allowlist', 'public.oidc_providers')
         run = FakeRun(present=[r for r in FakeRun().relations(182) if r not in lost])
         with self.assertRaises(ValueError) as raised:
-            recovery.fingerprint(run, 182)
+            recovery.fingerprint(run, 182, 18)
         for table in lost:
             self.assertIn(table, str(raised.exception))
         self.assertEqual(len(run.queries), 1, 'missing tables must refuse before hashing')
@@ -444,11 +488,11 @@ class RecentCatalogueTest(unittest.TestCase):
                                      ('oidc_providers', 'client_secret', 182)):
             with self.subTest(table=table):
                 before = FakeRun()
-                recovery.fingerprint(before, since - 1)
+                recovery.fingerprint(before, since - 1, 18)
                 self.assertNotIn(table, ' '.join(before.queries))
                 after = FakeRun(unsealed={table: '1'})
                 with self.assertRaisesRegex(ValueError, f'{table}.{column}'):
-                    recovery.fingerprint(after, since)
+                    recovery.fingerprint(after, since, 18)
                 # A count-only predicate may inspect the envelope class; the
                 # secret value must never be selected into a command log.
                 self.assertIn(recovery.unsealed_sql(table, column), after.queries)
@@ -460,7 +504,7 @@ class RecentCatalogueTest(unittest.TestCase):
                 query = recovery.fingerprint_sql(table, (), recovery.SEALED[table])
                 self.assertIn(f"to_jsonb(t) - ARRAY['{column}']::text[]", query)
                 self.assertIn(f"'{column}', CASE WHEN t.{column} = '' THEN 'none'", query)
-                rows = recovery.fingerprint(FakeRun(), 182)
+                rows = recovery.fingerprint(FakeRun(), 182, 18)
                 self.assertNotIn('enc:', json.dumps(rows))
 
 
@@ -489,6 +533,13 @@ class CatalogueRotTest(unittest.TestCase):
             f"release {newest['release']} embeds core schema {newest['core_schema_version']} but the "
             f'drill catalogue is audited only through {recovery.CATALOGUE_AUDITED_THROUGH}: read the new '
             'vidra-core migrations and add a TABLES_ADDED line for each schema version they introduce')
+
+    def test_search_audit_covers_every_recorded_release_without_gaps(self):
+        for record in self.records():
+            with self.subTest(release=record['release']):
+                self.assertLessEqual(record['search_schema_version'], recovery.SEARCH_AUDITED_THROUGH)
+        self.assertEqual(sorted(recovery.SEARCH_TABLES_ADDED),
+                         list(range(18, recovery.SEARCH_AUDITED_THROUGH + 1)))
 
     def test_the_audit_leaves_no_migration_between_the_floor_and_the_ceiling_unread(self):
         expected = list(range(recovery.CATALOGUE_AUDIT_FLOOR, recovery.CATALOGUE_AUDITED_THROUGH + 1))
