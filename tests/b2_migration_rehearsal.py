@@ -251,7 +251,7 @@ class Rehearsal:
 
     def catalogue(self):
         """The reviewed schema-182 recovery catalogue, plus importer relations."""
-        snapshot = recovery.fingerprint(self, 182)
+        snapshot = recovery.fingerprint(self, 182, 18)
         for table in ('peertube_import_ledger', 'video_renditions', 'video_blocks',
                       'account_actor_keys', 'channel_actor_keys'):
             snapshot[table] = self.sql(recovery.fingerprint_sql(table))

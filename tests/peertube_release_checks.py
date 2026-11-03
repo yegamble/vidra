@@ -67,7 +67,8 @@ def reboot_state(run, baseline):
     # file, so THAT is the revision a later comparison has to match — and this
     # file's own `tool_sha256` would not notice it changing underneath.
     state = {'catalogue_tool_sha256': recovery.harness_revision(),
-             'catalogue': recovery.fingerprint(run, recovery.core_schema_version(ledgers)), 'ledgers': {}}
+             'catalogue': recovery.fingerprint(run, recovery.core_schema_version(ledgers),
+                                               recovery.search_schema_version(ledgers)), 'ledgers': {}}
     for table, spec in ledgers.items():
         actual = run.sql(f'SELECT version, dirty FROM {table}')
         runtime.check_ledger(actual, spec['version'])
