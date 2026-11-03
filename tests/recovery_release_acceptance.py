@@ -295,7 +295,8 @@ TABLES_ADDED = {
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 # Receiver authority is not disposable inbox/cache state. Compare whole rows:
-# quiesce catalog capture, delivery and staging cleanup across the drill, rather
+# quiesce all search writers (capture, delivery, stats/config and staging cleanup)
+# across the drill, rather
 # than excluding the fences or frozen payloads that a correct restore needs.
 SEARCH_TABLES_ADDED = {
     18: (),  # Oldest search schema in this harness's release candidates.
@@ -574,8 +575,10 @@ SCHEMA_SHAPE_SQL = (
     "AND a.attnum > 0 AND NOT a.attisdropped")
 
 
-# search.documents carries reconcile timestamps that a healthy sweep rewrites, so
-# only the fields a search result depends on are compared.
+# Preserve the archived search-18 projection exactly. From19 onward the FULL
+# manifest attests all canonical metadata: a title/id/eligible projection would
+# miss lost tags, ownership or sensitive-content policy with the fence intact.
+# Those candidates therefore compare whole document rows with writers quiesced.
 SEARCH_DOCUMENTS = 'search.documents'
 SEARCH_SQL = ("SELECT count(*)||'|'||md5(COALESCE(string_agg(video_id::text||':'||title||':'||eligible::text,"
               "E'\\n' ORDER BY video_id::text),'')) FROM search.documents")
@@ -593,7 +596,8 @@ def fingerprint(run, core_version, search_version):
     check_sealed(run, tables)
     rows = {table: run.sql(fingerprint_sql(table, volatile, SEALED.get(table, ())))
             for table, volatile in tables.items()}
-    rows[SEARCH_DOCUMENTS] = run.sql(SEARCH_SQL)
+    rows[SEARCH_DOCUMENTS] = run.sql(SEARCH_SQL if search_version == 18
+                                    else fingerprint_sql('documents', schema='search'))
     rows[SCHEMA_SHAPE] = run.sql(SCHEMA_SHAPE_SQL)
     for table in search_tables:
         rows[qualified('search', table)] = run.sql(fingerprint_sql(table, schema='search'))

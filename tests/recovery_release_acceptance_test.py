@@ -449,6 +449,8 @@ class RecentCatalogueTest(unittest.TestCase):
             self.assertIn('FROM search.' + table + ' t', ' '.join(run.queries))
         self.assertIn('search.schema_shape', rows)
         self.assertTrue(any("n.nspname = 'search'" in query for query in run.queries))
+        self.assertIn(recovery.fingerprint_sql('documents', schema='search'), run.queries)
+        self.assertNotIn(recovery.SEARCH_SQL, run.queries)
 
     def test_missing_receiver_fence_is_named_before_hashing(self):
         run = FakeRun(present=FakeRun().relations(183))
@@ -461,6 +463,7 @@ class RecentCatalogueTest(unittest.TestCase):
         rows = recovery.fingerprint(run, 183, 18)
         self.assertNotIn('search.catalog_epochs', rows)
         self.assertNotIn('search.schema_shape', rows)
+        self.assertIn(recovery.SEARCH_SQL, run.queries)
 
     def test_schema_183_fingerprints_existing_relations(self):
         # 0183 creates a helper function and repairs cached inbox values, with
