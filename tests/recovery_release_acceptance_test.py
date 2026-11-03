@@ -369,10 +369,10 @@ class MailConfigCatalogueTest(unittest.TestCase):
         self.assertIn('mail_config', rows)
         self.assertIn('public.mail_config', ' '.join(FakeRun().relations(151)))
 
-    def test_a_183_candidate_is_refused_naming_the_migration_to_read(self):
+    def test_a_184_candidate_is_refused_naming_the_migration_to_read(self):
         with self.assertRaises(ValueError) as raised:
-            recovery.catalogue_for(183)
-        self.assertIn('0183', str(raised.exception))
+            recovery.catalogue_for(184)
+        self.assertIn('0184', str(raised.exception))
 
     def test_a_150_candidate_runs_no_sealed_check(self):
         run = FakeRun()
@@ -421,6 +421,15 @@ class MailConfigCatalogueTest(unittest.TestCase):
 
 
 class RecentCatalogueTest(unittest.TestCase):
+    def test_schema_183_fingerprints_existing_relations(self):
+        # 0183 creates a helper function and repairs cached inbox values, with
+        # no new tables. A candidate at 183 must still prove every 182 relation.
+        run = FakeRun(present=FakeRun().relations(182))
+        rows = recovery.fingerprint(run, 183)
+        self.assertEqual(rows, recovery.fingerprint(FakeRun(), 182))
+        self.assertIn('oidc_providers', rows)
+        self.assertIn(recovery.SCHEMA_SHAPE, rows)
+
     def test_schema_182_requires_new_content_and_operator_configuration(self):
         lost = ('public.report_messages', 'public.blocklist_allowlist', 'public.oidc_providers')
         run = FakeRun(present=[r for r in FakeRun().relations(182) if r not in lost])
