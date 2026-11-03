@@ -146,6 +146,21 @@ useful evidence, but does not close these runtime gates.
 
 Broader completion work remains: human blank-host installation measurements,
 security finding disposition, full UI-copy extraction/native French review,
-representative per-user ZIP import, and refreshing the endpoint inventory after
-the newer scanner policy. Older six-endpoint findings must not be repeated as
-six current missing product features without rerunning that inventory.
+and representative per-user ZIP import.
+
+The full mechanical inventory was rerun on **2026-11-03** with
+`--strict-migrations`, core checkout `88409417` (API and migration inputs
+identical to main `07ddf1b0`) and frontend main `4f4f0b01`. It reports **zero
+failures and zero migration findings** after auditing schema 183. That migration
+adds a helper function and repairs cached inbox values, with no new tables.
+The recovery catalogue now records that reviewed empty table inventory;
+schema 184 remains refused. This supplies no schema-183 recovery drill or
+production acceptance. The older six-endpoint inventory is superseded by this
+current static result under the scanner's present policy.
+
+The same frontend lockfile was audited under Node **26.12.0** and npm
+**11.20.0**. Non-dev dependencies report **zero advisories**; the full tree
+reports **17 moderate, zero high and zero critical** findings. The repository's
+unchanged dependency policy passes, examining **714 packages** against its
+400-package floor. These are current source-lockfile results, not a scan of a
+deployed image. No dependency versions or lockfile entries were changed.

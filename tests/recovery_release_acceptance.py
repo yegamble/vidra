@@ -236,7 +236,7 @@ SEALED = {
 
 # Tables a migration creates that the drill deliberately does NOT fingerprint,
 # as `table: (core schema version that created it, why)`. Empty today: every
-# table 0147-0182 added carries something a restore must reproduce. It exists so
+# table 0147-0183 added carries something a restore must reproduce. It exists so
 # that "pure ephemeral state, nothing worth asserting" is a diff-visible
 # decision with a reason attached, never a silent omission.
 EXCLUDED_TABLES = {}
@@ -244,7 +244,7 @@ EXCLUDED_TABLES = {}
 # What "audited" means: one line per core schema version from the floor upward,
 # naming the tables that version's migration CREATEs (an empty tuple when it
 # creates none), read out of vidra-core's `migrations/<version>_*.up.sql` at the
-# newest audited core revision (c6a0176, schema 0182). The ceiling is DERIVED from this map, so the
+# newest audited core revision (07ddf1b0, schema 0183). The ceiling is DERIVED from this map, so the
 # audit cannot be advanced by editing a number — landing a release with a newer
 # schema forces a new line here (the rot guard in the test module fails until it
 # exists), and every table on that line must then land in CATALOGUE or in
@@ -289,6 +289,9 @@ TABLES_ADDED = {
     180: ('peertube_follow_imports', 'peertube_follow_import_targets'),
     181: (),
     182: ('oidc_providers',),
+    # 0183 at core 55d380d7 creates a helper function and repairs cached inbox
+    # values; it creates no tables. This records SQL review, not a recovery drill.
+    183: (),
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 IDENTIFIER = re.compile(r'[a-z_]+')
