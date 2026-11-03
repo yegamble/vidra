@@ -4,7 +4,7 @@ Planning date: **2026-11-03**. The operator selected a **private migration
 rehearsal first** at `beta.sizetube.com`, hosted on DigitalOcean.
 `sizetube.com` continues serving PeerTube throughout rehearsal.
 
-**Production remains NO-GO.** Inventory and host provisioning are underway;
+**Production remains NO-GO.** The private edge and source database clone are prepared;
 no Vidra application or imported catalogue is deployed on the new host yet.
 Production database, media and DNS remain unchanged.
 The current [qualification record](release-readiness.md) and
@@ -19,7 +19,8 @@ acknowledge an unsupported version to make an automated rehearsal proceed.
 
 The [schema-1130 support](https://github.com/yegamble/vidra-core/pull/458)
 and [retained-original COPY fix](https://github.com/yegamble/vidra-core/pull/457)
-are merged on core main `f57a7f09`, but must still be published and pinned
+are merged, as is the [encoded search-page bound](https://github.com/yegamble/vidra-core/pull/459),
+but must still be published and pinned
 before replacing that released baseline. Source tests and a disposable
 upstream fixture do not supply representative SizeTube migration acceptance.
 The existing synthetic B2 rehearsal is useful evidence within its
@@ -27,15 +28,21 @@ The existing synthetic B2 rehearsal is useful evidence within its
 
 The new `sizetube-beta` droplet is provisioned in DigitalOcean NYC2:
 Ubuntu 24.04, 4 vCPU, 16 GB RAM, 200 GB disk, quoted **$84/month** at creation.
-Docker and Compose execute successfully. Ingress currently permits SSH only
-from the observed operator address; application ingress remains closed.
-The beta DNS record still points to the older address, whose earlier HTTPS
-probes timed out. Repoint it only after the private edge is verified.
+Docker and Compose execute successfully. Beta DNS now points to the new host.
+The Caddy maintenance edge has a trusted certificate and restricts application
+routes by transport remote IP. Independent probes returned 403 for frontend,
+API, media, lazy-static and federation paths, including spoofed forwarding
+headers. Host/gateway access is limited to `/healthz`; it reports 503 because
+no application candidate is deployed. The authorized operator also sees a 503
+setup-in-progress response. Repeat these checks after the real stack is installed.
 
 ### Authoritative inventory so far
 
-The read-only database inventory found **5,520 accounts**, **5,571 local
-channels** and **15,492 local videos**. Another 44,978 videos are federated
+The initial read-only inventory found 5,520 accounts and 5,571 local channels.
+The later consistent PostgreSQL dump restored successfully in an isolated clone:
+**5,521 accounts**, **5,572 local channels** and **15,492 local videos**.
+The extra account/channel reflects continued source writes during rehearsal.
+Another 44,978 videos are federated
 cache records. All **11 MFA-enrolled accounts are active**; their target holds
 or approved re-enrollment must be verified before public imported-password access.
 
@@ -43,8 +50,12 @@ Local video-file metadata totals **4,260,245,274,200 bytes** across 85,219 HLS
 and 1,927 progressive rows. Exhausted B2 version pagination found **223,313
 live objects**, totaling **4,171,350,894,839 bytes**, across the configured
 HLS, progressive and caption prefixes. These independent totals differ;
-neither proves missing bytes until database references, playlist dependencies
-and local files are reconciled. Metadata rows are not object counts.
+metadata rows are not object counts. Reference reconciliation identified
+unavailable source assets. The operator confirmed the affected cohort was
+intentionally purged: preserve its restrictions and record unavailable media;
+do not recover those bytes. The exact snapshot, affected IDs and owner decision
+are retained privately. This does not waive unrelated missing or failed assets.
+Playlist dependencies, artwork and available bytes still need full reconciliation.
 
 The database has zero retained-original filename rows, and the configured
 `original-video-files/` prefix has zero provider versions. The configured local
@@ -55,12 +66,18 @@ files and artwork that must be captured and reconciled independently of B2.
 
 The source bucket is public, hidden versions expire after 30 days and object
 lock is absent. A version manifest alone is not an immutable recovery copy.
-Use a private destination and independent backup; never install the source's
-unrestricted storage credential on beta. Raw snapshots, account details,
+The approved private beta bucket is created. A live probe verified a bucket-scoped
+read-only source key, a separate destination-only writable key, destination
+write/read/delete and anonymous denial (401). These temporary keys expire
+**2026-12-03**; rotate them if rehearsal continues beyond that date. The original
+unrestricted credential stays on production. An independent backup is still
+required. Raw snapshots, account details,
 credentials and object manifests stay outside Git with restricted permissions.
 
-The approved database snapshot transfer is separate from qualification of a
-matched DB/config/media capture. No representative COPY, decoded playback or
+The root-only database archive is 253,567,950 bytes and restored from PostgreSQL
+18.6 at schema 1130 without publishing a database port. This proves a source
+clone restore, not Vidra recovery or a matched DB/config/media capture.
+No representative COPY, decoded playback or
 replacement-host restore is accepted yet.
 
 ### Current production gate board
@@ -68,8 +85,8 @@ replacement-host restore is accepted yet.
 | Gate | Current state | Evidence still required |
 |---|---|---|
 | Importer compatibility | Merged; unreleased | Exact published images, embedded schema maxima and release pins |
-| Source snapshot and bytes | Read-only inventory; capture underway | Matched immutable DB/config/media inputs and full reference/hash reconciliation |
-| Private beta | Host provisioned; no application deployed | Route-wide remote-IP restrictions, direct-port denial, ACME and trusted TLS |
+| Source snapshot and bytes | DB clone restored; source purge disposition recorded | Matched immutable DB/config/media inputs and full available-reference/hash reconciliation |
+| Private beta | Restricted maintenance edge and TLS verified; no application deployed | Install exact candidate and repeat route/direct-port/access proofs |
 | COPY and repeat | Not run on SizeTube | Stable identities, restrictions, asset hashes and explicit exception dispositions |
 | Playback and new publication | Not run on candidate | Source-disconnected decoded browser playback and scanned multi-chunk upload/transcode |
 | Search recovery | Open core issue 267 | Fenced complete observations, safe compatibility fallback and full eligible-ID set equality after outage |
