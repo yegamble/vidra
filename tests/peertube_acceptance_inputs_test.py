@@ -134,6 +134,18 @@ for (const actual of [{version:'v8.0.0',commit:'a'.repeat(12)},
         self.assertIn('compose project differs', result.stderr)
         self.assertFalse((self.root / 'preview-browser.json').exists())
 
+    def test_omitting_inputs_cannot_treat_a_representative_stage_as_a_fixture(self):
+        self.write('preparation.json', {'status': 'PASS', 'scope': 'representative'})
+        (self.root / 'private').mkdir()
+        result = subprocess.run(['node', 'tests/peertube-release-acceptance.mjs',
+                                 str(self.root), 'preview', 'preview', str(self.root)],
+                                cwd=ROOT, text=True, capture_output=True, timeout=15,
+                                env=dict(os.environ, COMPOSE_PROJECT_NAME='vidra-release-acceptance'))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('representative stage requires explicit inputs',
+                      (self.root / 'private/preview-error.txt').read_text())
+        self.assertEqual(json.loads((self.root / 'preview-browser.json').read_text())['commands'], [])
+
     def test_changed_candidate_source_or_expectations_are_refused(self):
         for name in ['candidate.json', 'source.json', 'expectations.json']:
             with self.subTest(name=name):

@@ -62,6 +62,7 @@ try {
   const preparation = JSON.parse(readFileSync(join(stage, 'preparation.json')));
   assert.equal(preparation.status, 'PASS');
   if (inputs) assertPreparedSource(inputs, preparation);
+  else assert.notEqual(preparation.scope, 'representative', 'representative stage requires explicit inputs');
   const { chromium, expect } = createRequire(join(baseline, 'browser/package.json'))('@playwright/test');
   // The stage records the baseline it was prepared against; a legacy stage
   // records none, but a DISAGREEING one means this driver is reading one

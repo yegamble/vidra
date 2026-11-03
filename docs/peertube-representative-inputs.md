@@ -6,7 +6,7 @@ The browser driver accepts a fifth argument for hash-bound representative previe
 node tests/peertube-release-acceptance.mjs PRIVATE_STAGE preview preview BASELINE INPUTS_JSON
 ```
 
-BASELINE must contain the frozen candidate.json. Omitting INPUTS_JSON retains the historical generated fixture and its fixed schema/count expectations; it supplies no representative acceptance.
+BASELINE must contain the frozen candidate.json. Omitting INPUTS_JSON retains the historical generated fixture and its fixed schema/count expectations; it supplies no representative acceptance. A recorded representative stage refuses to fall back when inputs are omitted.
 
 INPUTS_JSON contains schema_version: 2, scope: "representative", candidate_sha256, and source / expectations references. Each reference has path and sha256; paths resolve relative to INPUTS_JSON. Version 1 representative inputs are refused rather than silently using fixture transport.
 Its target object requires origin (canonical HTTPS, no trailing slash/path/credentials), project (the actual Compose project), install_dir (absolute candidate directory), and timeout_ms (1,000–2,147,483,647). Set COMPOSE_PROJECT_NAME to that recorded project. Certificate checks stay enabled; the fixture DNS override is not applied.
