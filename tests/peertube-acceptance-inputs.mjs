@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 
 export const CATALOGUE_TABLES = 'users channels videos comments playlists playlist_items channel_follows video_ratings video_tags video_chapters streaming_playlists video_files captions'.split(' ');
 const COUNTERS = ['planned', 'imported', 'updated', 'skipped', 'failed', 'unsupported'];
@@ -17,7 +17,18 @@ export function loadAcceptanceInputs(path, candidatePath, mode) {
     'representative mode supports preview/import/repeat only; fixture marker actions are forbidden');
   const bytes = readFileSync(path);
   const spec = JSON.parse(bytes);
-  assert.ok(spec.schema_version === 1 && spec.scope === 'representative', 'representative scope required');
+  assert.ok(spec.schema_version === 2, 'representative input version 2 required');
+  assert.ok(spec.scope === 'representative', 'representative scope required');
+  const target = spec.target;
+  const targetError = 'candidate target requires canonical HTTPS origin, project, absolute install_dir and bounded timeout_ms';
+  let url;
+  try { url = new URL(target?.origin); } catch { assert.fail(targetError); }
+  assert.ok(object(target) && Object.keys(target).sort().join(',') === 'install_dir,origin,project,timeout_ms' &&
+    url.protocol === 'https:' && url.origin === target.origin &&
+    typeof target.project === 'string' && /^[a-z0-9][a-z0-9_-]*$/.test(target.project) &&
+    typeof target.install_dir === 'string' && isAbsolute(target.install_dir) &&
+    Number.isSafeInteger(target.timeout_ms) && target.timeout_ms >= 1000 && target.timeout_ms <= 2147483647,
+  targetError);
   assert.ok(sha(spec.candidate_sha256), 'candidate hash required');
   const candidate = readFileSync(candidatePath);
   assert.equal(digest(candidate), spec.candidate_sha256, 'candidate hash mismatch');
@@ -58,7 +69,7 @@ export function loadAcceptanceInputs(path, candidatePath, mode) {
       action + ' requires explicit video and missing-media counts');
     if (action === 'preview') assert.ok(count(entities.user.planned), 'preview user count required');
   }
-  return { source, expectations, provenance: { scope: spec.scope, inputs_sha256: digest(bytes),
+  return { source, expectations, target, candidate: JSON.parse(candidate), provenance: { scope: spec.scope, target, inputs_sha256: digest(bytes),
     candidate_sha256: digest(candidate), source_sha256: spec.source.sha256,
     expectations_sha256: spec.expectations.sha256 } };
 }
@@ -82,4 +93,20 @@ export function assertPreparedSource(input, preparation) {
   assert.equal(preparation.candidate_sha256, input.provenance.candidate_sha256, 'prepared candidate differs');
   assert.equal(preparation.source_snapshot_sha256, input.source.snapshot_sha256, 'prepared source snapshot differs');
   assert.equal(preparation.source_media_manifest_sha256, input.source.media_manifest_sha256, 'prepared source media differs');
+  assert.ok(object(preparation.target) && Object.entries(input.target).every(([key, value]) => preparation.target[key] === value),
+    'prepared candidate target differs');
+}
+
+export function acceptanceBrowserOptions(input) {
+  return {
+    launch: { args: [...(input ? [] : ['--host-resolver-rules=MAP secure.video.test 127.0.0.1']),
+      '--no-proxy-server', '--autoplay-policy=no-user-gesture-required'] },
+    context: { baseURL: input?.target.origin ?? 'https://secure.video.test',
+      ignoreHTTPSErrors: !input, viewport: { width: 1600, height: 1000 } },
+  };
+}
+
+export function assertTargetVersion(candidate, actual) {
+  assert.ok(actual?.version === candidate.tag && typeof actual?.commit === 'string' && /^[a-f0-9]{7,40}$/.test(actual.commit) &&
+    candidate.images?.['vidra-core']?.revision?.startsWith(actual.commit), 'candidate API identity differs');
 }
