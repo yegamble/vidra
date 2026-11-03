@@ -8,13 +8,29 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import b2_migration_rehearsal as rehearsal
 import peertube_fixture_media as media
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class ActorFingerprintTests(unittest.TestCase):
+    def test_b2_catalogue_keeps_the_shared_classified_actor_fingerprints(self):
+        classified = {'account_actor_keys': '2|classified-account',
+                      'channel_actor_keys': '2|classified-channel'}
+        run = rehearsal.Rehearsal.__new__(rehearsal.Rehearsal)
+        run.sql = Mock(return_value='fixture-extra')
+        with patch.object(rehearsal.recovery, 'fingerprint', return_value=classified.copy()) as fingerprint:
+            snapshot = run.catalogue()
+        fingerprint.assert_called_once_with(run, 182, 18)
+        for table, value in classified.items():
+            self.assertEqual(snapshot[table], value)
+        self.assertEqual(run.sql.call_count, 3)
+        for call in run.sql.call_args_list:
+            self.assertNotIn('actor_keys', call.args[0])
 
 
 class PrivateInputTests(unittest.TestCase):
