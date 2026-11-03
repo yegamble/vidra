@@ -6,19 +6,25 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
+import { CATALOGUE_TABLES, loadAcceptanceInputs, assertExpectedReport, assertPreparedSource } from './peertube-acceptance-inputs.mjs';
 
 // The runtime baseline names the release under rehearsal, so it is an input:
 // `VIDRA_BASELINE=/root/vidra-v065-runtime` or a fourth argument (after an
 // explicit label), defaulting to the v0.6.4 drill's stage.
-const [stageArg, mode, label = mode, baselineArg] = process.argv.slice(2);
+// A fifth argument enables hash-bound representative inputs; omission retains
+// the historical generated fixture's 970/1041 schema and fixed-count scope.
+const [stageArg, mode, label = mode, baselineArg, inputsPath] = process.argv.slice(2);
 assert.ok(stageArg && ['preview', 'import', 'repeat', 'schema-refusal', 'search', 'playback'].includes(mode));
 assert.match(label, /^[a-z][a-z0-9-]*$/);
 assert.equal(process.env.COMPOSE_PROJECT_NAME, 'vidra-release-acceptance');
 const stage = resolve(stageArg);
 const baseline = resolve(baselineArg ?? process.env.VIDRA_BASELINE ?? '/root/vidra-v064-runtime');
+const inputs = inputsPath ? loadAcceptanceInputs(resolve(inputsPath), join(baseline, 'candidate.json'), mode) : null;
 const output = join(stage, `${label}-browser.json`);
 assert.ok(!existsSync(output), 'preserve old results; use a separate attempt directory');
 const result = { status: 'UNVERIFIED', started_at: new Date().toISOString(), mode, checks: {}, requests: [], commands: [] };
+result.provenance = inputs?.provenance ?? { scope: 'legacy generated fixture; not representative source acceptance' };
+result.scope = inputs ? 'Representative provenance/count/UI checks; not full migration qualification' : result.provenance.scope;
 const save = () => writeFileSync(output, JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
 const host = args => {
   const record = { argv: args, started_at: new Date().toISOString() }; result.commands.push(record);
@@ -31,7 +37,7 @@ const sql = query => {
   assert.ok(query.startsWith('SELECT '), 'destination evidence is read only');
   return host(['bash', 'deploy/compose.sh', 'exec', '-T', 'postgres', 'psql', '-U', 'vidra', '-d', 'vidra', '-At', '-v', 'ON_ERROR_STOP=1', '-c', query]);
 };
-const catalogue = () => Object.fromEntries(['users', 'channels', 'videos', 'comments', 'playlists', 'playlist_items', 'channel_follows', 'video_ratings', 'video_tags', 'video_chapters', 'streaming_playlists', 'video_files', 'captions'].map(table =>
+const catalogue = () => Object.fromEntries(CATALOGUE_TABLES.map(table =>
   [table, Number(sql(`SELECT count(*) FROM ${table}`))]));
 const fingerprints = () => Object.fromEntries(Object.keys(catalogue()).map(table => [table,
   sql(`SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM ${table} t) s`)]));
@@ -52,9 +58,10 @@ const imageSnapshot = () => {
 };
 let browser, phase = 'login';
 try {
-  const { chromium, expect } = createRequire(join(baseline, 'browser/package.json'))('@playwright/test');
   const preparation = JSON.parse(readFileSync(join(stage, 'preparation.json')));
   assert.equal(preparation.status, 'PASS');
+  if (inputs) assertPreparedSource(inputs, preparation);
+  const { chromium, expect } = createRequire(join(baseline, 'browser/package.json'))('@playwright/test');
   // The stage records the baseline it was prepared against; a legacy stage
   // records none, but a DISAGREEING one means this driver is reading one
   // release's credentials against another release's run. Compare REAL paths:
@@ -129,7 +136,9 @@ try {
       // v0.7.8 accepts schema 1040; the next version must still be refused.
       assert.equal(run.state, 'failed'); assert.equal(run.error_code, 'unverified_schema'); assert.equal(run.source_version, 1041);
     } else {
-      assert.equal(run.state, 'done'); assert.equal(run.source_version, 970);
+      assert.equal(run.state, 'done');
+      if (inputs) assertExpectedReport(inputs, mode, run);
+      else assert.equal(run.source_version, 970);
       for (const kind of ['user', 'channel', 'video', 'video_file', 'hls_playlist', 'video_no_media', 'comment', 'caption', 'tag', 'chapter', 'rating', 'playlist', 'playlist_item', 'follow']) {
         assert.ok(run.report.entities[kind], `missing entity report: ${kind}`);
       }
@@ -137,16 +146,16 @@ try {
         for (const key of ['planned', 'imported', 'updated', 'skipped', 'failed', 'unsupported']) assert.ok(Number.isInteger(counts[key]) && counts[key] >= 0);
         assert.equal(counts.failed, 0);
       }
-      assert.equal(run.report.entities.video_no_media?.imported ?? 0, 0);
-      if (mode === 'preview') {
+      if (!inputs) assert.equal(run.report.entities.video_no_media?.imported ?? 0, 0);
+      if (mode === 'preview' && !inputs) {
         assert.equal(run.report.entities.video.planned, 7);
         assert.equal(run.report.entities.user.planned, 6);
       }
-      if (mode === 'import') assert.equal(run.report.entities.video.imported, 7);
+      if (mode === 'import' && !inputs) assert.equal(run.report.entities.video.imported, 7);
       if (mode === 'repeat') for (const counts of Object.values(run.report.entities)) {
         assert.equal(counts.imported, 0); assert.equal(counts.updated, 0);
       }
-      if (mode === 'repeat') assert.equal(run.report.entities.video.skipped, 7);
+      if (mode === 'repeat' && !inputs) assert.equal(run.report.entities.video.skipped, 7);
     }
     result.catalogue_after = catalogue();
     result.content_after = fingerprints();
@@ -154,7 +163,7 @@ try {
       assert.deepEqual(result.catalogue_after, result.catalogue_before);
       assert.deepEqual(result.content_after, result.content_before);
     } else {
-      const delta = { users: 6, channels: 6, videos: 7, comments: 4, playlists: 1, playlist_items: 2,
+      const delta = inputs?.expectations.catalogue_delta ?? { users: 6, channels: 6, videos: 7, comments: 4, playlists: 1, playlist_items: 2,
         channel_follows: 1, video_ratings: 1, video_tags: 12, video_chapters: 2, streaming_playlists: 6, video_files: 26, captions: 1 };
       for (const [table, count] of Object.entries(delta)) assert.equal(result.catalogue_after[table] - result.catalogue_before[table], count);
     }
