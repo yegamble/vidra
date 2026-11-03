@@ -23,8 +23,10 @@ class RepresentativeInputsTests(unittest.TestCase):
                          'preview': {'user': {'planned': 2}, 'video': {'planned': 3}, 'video_no_media': {'planned': 0}},
                          'import': {'video': {'imported': 3}, 'video_no_media': {'imported': 0}},
                          'repeat': {'video': {'skipped': 3}, 'video_no_media': {'imported': 0}}}
-        self.spec = {'schema_version': 1, 'scope': 'representative',
-                     'candidate_sha256': self.digest(self.candidate)}
+        self.spec = {'schema_version': 2, 'scope': 'representative',
+                     'candidate_sha256': self.digest(self.candidate),
+                     'target': {'origin': 'https://beta.example.test', 'project': 'private-beta',
+                                'install_dir': '/opt/vidra', 'timeout_ms': 86400000}}
         self.freeze()
 
     def write(self, name, value):
@@ -68,12 +70,69 @@ console.log(JSON.stringify(input));"""
 
     def test_preparation_must_match_the_representative_candidate_and_source(self):
         prepared = {'scope': 'representative', 'candidate_sha256': self.digest(self.candidate),
-                    'source_snapshot_sha256': 'a' * 64, 'source_media_manifest_sha256': 'b' * 64}
+                    'source_snapshot_sha256': 'a' * 64, 'source_media_manifest_sha256': 'b' * 64,
+                    'target': self.spec['target']}
         self.assertEqual(self.invoke(prepared=prepared).returncode, 0)
         for key in prepared:
             result = self.invoke(prepared=dict(prepared, **{key: 'legacy-fixture'}))
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('AssertionError', result.stderr)
+
+    def test_older_representative_inputs_cannot_silently_use_fixture_transport(self):
+        self.spec['schema_version'] = 1
+        self.freeze()
+        self.rejects('representative input version 2 required')
+
+    def test_target_rejects_http_credentials_paths_project_and_timer_errors(self):
+        for key, value in [('origin', 'http://beta.example.test'),
+                           ('origin', 'https://user:secret@beta.example.test'),
+                           ('origin', 'https://beta.example.test/path'),
+                           ('origin', 'not-a-url'), ('project', 'BAD PROJECT'),
+                           ('install_dir', 'relative/path'), ('timeout_ms', True),
+                           ('timeout_ms', 0), ('timeout_ms', 2147483648)]:
+            with self.subTest(key=key, value=value):
+                original = self.spec['target'][key]
+                self.spec['target'][key] = value
+                self.freeze()
+                self.rejects('candidate target')
+                self.spec['target'][key] = original
+
+    def test_representative_browser_keeps_certificate_checks_and_real_origin(self):
+        code = """import assert from 'node:assert/strict';
+import {acceptanceBrowserOptions} from './tests/peertube-acceptance-inputs.mjs';
+const real = acceptanceBrowserOptions({target:{origin:'https://beta.example.test'}});
+assert.equal(real.context.baseURL, 'https://beta.example.test');
+assert.equal(real.context.ignoreHTTPSErrors, false);
+assert.ok(!real.launch.args.some(arg => arg.includes('host-resolver-rules')));
+const old = acceptanceBrowserOptions(null);
+assert.equal(old.context.baseURL, 'https://secure.video.test');
+assert.equal(old.context.ignoreHTTPSErrors, true);
+assert.ok(old.launch.args.some(arg => arg.includes('secure.video.test')));"""
+        result = subprocess.run(['node', '--input-type=module', '-e', code],
+                                cwd=ROOT, text=True, capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_target_api_must_match_the_frozen_release_before_login(self):
+        code = """import assert from 'node:assert/strict';
+import {assertTargetVersion} from './tests/peertube-acceptance-inputs.mjs';
+const candidate = {tag:'v9.0.0',images:{'vidra-core':{revision:'a'.repeat(40)}}};
+assertTargetVersion(candidate, {version:'v9.0.0',commit:'a'.repeat(12)});
+for (const actual of [{version:'v8.0.0',commit:'a'.repeat(12)},
+  {version:'v9.0.0',commit:'b'.repeat(12)}, {version:'v9.0.0',commit:'a'}]) {
+  assert.throws(() => assertTargetVersion(candidate, actual), /candidate API identity/);
+}"""
+        result = subprocess.run(['node', '--input-type=module', '-e', code],
+                                cwd=ROOT, text=True, capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_wrong_compose_project_is_refused_before_execution(self):
+        result = subprocess.run(['node', 'tests/peertube-release-acceptance.mjs',
+                                 str(self.root), 'preview', 'preview', str(self.root), str(self.input)],
+                                cwd=ROOT, text=True, capture_output=True, timeout=15,
+                                env=dict(os.environ, COMPOSE_PROJECT_NAME='wrong-project'))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('compose project differs', result.stderr)
+        self.assertFalse((self.root / 'preview-browser.json').exists())
 
     def test_changed_candidate_source_or_expectations_are_refused(self):
         for name in ['candidate.json', 'source.json', 'expectations.json']:

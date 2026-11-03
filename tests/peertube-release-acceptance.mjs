@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
-import { CATALOGUE_TABLES, loadAcceptanceInputs, assertExpectedReport, assertPreparedSource } from './peertube-acceptance-inputs.mjs';
+import { CATALOGUE_TABLES, loadAcceptanceInputs, assertExpectedReport, assertPreparedSource, acceptanceBrowserOptions, assertTargetVersion } from './peertube-acceptance-inputs.mjs';
 
 // The runtime baseline names the release under rehearsal, so it is an input:
 // `VIDRA_BASELINE=/root/vidra-v065-runtime` or a fourth argument (after an
@@ -16,10 +16,10 @@ import { CATALOGUE_TABLES, loadAcceptanceInputs, assertExpectedReport, assertPre
 const [stageArg, mode, label = mode, baselineArg, inputsPath] = process.argv.slice(2);
 assert.ok(stageArg && ['preview', 'import', 'repeat', 'schema-refusal', 'search', 'playback'].includes(mode));
 assert.match(label, /^[a-z][a-z0-9-]*$/);
-assert.equal(process.env.COMPOSE_PROJECT_NAME, 'vidra-release-acceptance');
 const stage = resolve(stageArg);
 const baseline = resolve(baselineArg ?? process.env.VIDRA_BASELINE ?? '/root/vidra-v064-runtime');
 const inputs = inputsPath ? loadAcceptanceInputs(resolve(inputsPath), join(baseline, 'candidate.json'), mode) : null;
+assert.equal(process.env.COMPOSE_PROJECT_NAME, inputs?.target.project ?? 'vidra-release-acceptance', 'compose project differs');
 const output = join(stage, `${label}-browser.json`);
 assert.ok(!existsSync(output), 'preserve old results; use a separate attempt directory');
 const result = { status: 'UNVERIFIED', started_at: new Date().toISOString(), mode, checks: {}, requests: [], commands: [] };
@@ -29,7 +29,7 @@ const save = () => writeFileSync(output, JSON.stringify(result, null, 2) + '\n',
 const host = args => {
   const record = { argv: args, started_at: new Date().toISOString() }; result.commands.push(record);
   try {
-    const text = execFileSync(args[0], args.slice(1), { cwd: '/opt/vidra', encoding: 'utf8', timeout: 60000, stdio: ['ignore', 'pipe', 'pipe'] });
+    const text = execFileSync(args[0], args.slice(1), { cwd: inputs?.target.install_dir ?? '/opt/vidra', encoding: 'utf8', timeout: 60000, stdio: ['ignore', 'pipe', 'pipe'] });
     record.exit_code = 0; return text.trim();
   } catch (error) { record.exit_code = error.status ?? 'TIMEOUT'; throw error; }
 };
@@ -42,13 +42,14 @@ const catalogue = () => Object.fromEntries(CATALOGUE_TABLES.map(table =>
 const fingerprints = () => Object.fromEntries(Object.keys(catalogue()).map(table => [table,
   sql(`SELECT md5(COALESCE(string_agg(row::text, E'\\n' ORDER BY row::text),'')) FROM (SELECT to_jsonb(t) AS row FROM ${table} t) s`)]));
 const imageSnapshot = () => {
-  const candidate = JSON.parse(readFileSync(join(baseline, 'candidate.json')));
+  const candidate = inputs?.candidate ?? JSON.parse(readFileSync(join(baseline, 'candidate.json')));
   const images = {};
   for (const [service, repo] of Object.entries({ api: 'vidra-core', frontend: 'vidra-user', search: 'vidra-search' })) {
     const cid = host(['bash', 'deploy/compose.sh', 'ps', '-q', service]);
     const c = JSON.parse(host(['docker', 'inspect', cid]))[0];
     const i = JSON.parse(host(['docker', 'image', 'inspect', c.Image]))[0];
     assert.ok(c.State.Running && i.RepoDigests.includes(candidate.images[repo].reference));
+    if (inputs) assert.equal(c.Config.Labels['com.docker.compose.project'], inputs.target.project, 'container project differs');
     assert.equal(c.Config.Image, candidate.images[repo].reference);
     assert.equal(i.Os + '/' + i.Architecture, 'linux/amd64');
     assert.equal(i.Config.Labels['org.opencontainers.image.revision'], candidate.images[repo].revision);
@@ -73,9 +74,17 @@ try {
   result.images_before = imageSnapshot();
   result.tool_sha256 = createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
   result.node = process.version;
-  browser = await chromium.launch({ args: ['--host-resolver-rules=MAP secure.video.test 127.0.0.1', '--no-proxy-server', '--autoplay-policy=no-user-gesture-required'] });
+  const options = acceptanceBrowserOptions(inputs);
+  browser = await chromium.launch(options.launch);
   result.browser = browser.version();
-  const context = await browser.newContext({ baseURL: 'https://secure.video.test', ignoreHTTPSErrors: true, viewport: { width: 1600, height: 1000 } });
+  const context = await browser.newContext(options.context);
+  if (inputs) {
+    const response = await context.request.get('/version', { timeout: 30000 });
+    assert.equal(response.status(), 200);
+    const version = await response.json();
+    assertTargetVersion(inputs.candidate, version);
+    result.candidate_api = { version: version.version, commit: version.commit };
+  }
   const page = await context.newPage(); page.setDefaultTimeout(60000);
   const owner = JSON.parse(readFileSync(join(baseline, 'private/owner.json')));
   await page.goto('/login');
@@ -126,7 +135,7 @@ try {
     await expect(async () => {
       const current = await api(`/api/v1/admin/peertube-import/${initial.id}`); assert.equal(current.status, 200);
       run = current.body; assert.ok(['done', 'failed'].includes(run.state));
-    }).toPass({ timeout: 600000, intervals: [2000, 4000, 5000] });
+    }).toPass({ timeout: inputs?.target.timeout_ms ?? 600000, intervals: [2000, 4000, 5000] });
     assert.equal(run.mode, expectedMode);
     writeFileSync(join(stage, 'private', `${label}-run.json`), JSON.stringify(run, null, 2), { mode: 0o600 });
     result.run = { id: run.id, state: run.state, mode: run.mode, media_mode: run.media_mode, source_version: run.source_version,
