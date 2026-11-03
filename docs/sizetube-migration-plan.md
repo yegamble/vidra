@@ -4,29 +4,86 @@ Planning date: **2026-11-03**. The operator selected a **private migration
 rehearsal first** at `beta.sizetube.com`, hosted on DigitalOcean.
 `sizetube.com` continues serving PeerTube throughout rehearsal.
 
-**Production remains NO-GO.** This plan is not a deployment record. No
-production database, media bucket or DNS record was changed for this review.
+**Production remains NO-GO.** Inventory and host provisioning are underway;
+no Vidra application or imported catalogue is deployed on the new host yet.
+Production database, media and DNS remain unchanged.
 The current [qualification record](release-readiness.md) and
 [PeerTube migration runbook](peertube-migration.md) define the acceptance gates.
 
 ## Current findings
 
-The public SizeTube configuration reports **PeerTube 8.3.1**, split-audio HLS
-enabled and web-video generation disabled. Upstream 8.3.1 targets schema
-**1130**, while the released Vidra **v0.7.8** importer accepts **700–1040**.
-Confirm the actual marker from a restored source snapshot; the public version
-does not prove the deployed database's state. Do not rewrite its marker or
+Read-only SSH inventory confirms native **PeerTube 8.3.1**, actual database
+schema **1130**, split-audio HLS enabled and web-video generation disabled.
+The released Vidra **v0.7.8** importer accepts **700–1040**. Do not rewrite the marker or
 acknowledge an unsupported version to make an automated rehearsal proceed.
 
-The newer importer compatibility work must be merged, published and pinned
-before it can replace the released baseline. Source tests and a disposable
+The [schema-1130 support](https://github.com/yegamble/vidra-core/pull/458)
+and [retained-original COPY fix](https://github.com/yegamble/vidra-core/pull/457)
+are merged on core main `f57a7f09`, but must still be published and pinned
+before replacing that released baseline. Source tests and a disposable
 upstream fixture do not supply representative SizeTube migration acceptance.
 The existing synthetic B2 rehearsal is useful evidence within its
 [explicit limits](runtime-acceptance-b2-migration-v0.7.8.md).
 
-The beta hostname currently resolves, but public HTTPS version/readiness probes
-timed out during this review. Identify the intended host and DNS ownership
-before installation; an old beta address is not proof of a usable candidate.
+The new `sizetube-beta` droplet is provisioned in DigitalOcean NYC2:
+Ubuntu 24.04, 4 vCPU, 16 GB RAM, 200 GB disk, quoted **$84/month** at creation.
+Docker and Compose execute successfully. Ingress currently permits SSH only
+from the observed operator address; application ingress remains closed.
+The beta DNS record still points to the older address, whose earlier HTTPS
+probes timed out. Repoint it only after the private edge is verified.
+
+### Authoritative inventory so far
+
+The read-only database inventory found **5,520 accounts**, **5,571 local
+channels** and **15,492 local videos**. Another 44,978 videos are federated
+cache records. All **11 MFA-enrolled accounts are active**; their target holds
+or approved re-enrollment must be verified before public imported-password access.
+
+Local video-file metadata totals **4,260,245,274,200 bytes** across 85,219 HLS
+and 1,927 progressive rows. Exhausted B2 version pagination found **223,313
+live objects**, totaling **4,171,350,894,839 bytes**, across the configured
+HLS, progressive and caption prefixes. These independent totals differ;
+neither proves missing bytes until database references, playlist dependencies
+and local files are reconciled. Metadata rows are not object counts.
+
+The database has zero retained-original filename rows, and the configured
+`original-video-files/` prefix has zero provider versions. The configured local
+originals directory also contains zero files. This source therefore supplies
+no positive retained-original acquisition case; keep the upstream/native-original
+regressions separately. Local storage additionally contains progressive/HLS
+files and artwork that must be captured and reconciled independently of B2.
+
+The source bucket is public, hidden versions expire after 30 days and object
+lock is absent. A version manifest alone is not an immutable recovery copy.
+Use a private destination and independent backup; never install the source's
+unrestricted storage credential on beta. Raw snapshots, account details,
+credentials and object manifests stay outside Git with restricted permissions.
+
+The approved database snapshot transfer is separate from qualification of a
+matched DB/config/media capture. No representative COPY, decoded playback or
+replacement-host restore is accepted yet.
+
+### Current production gate board
+
+| Gate | Current state | Evidence still required |
+|---|---|---|
+| Importer compatibility | Merged; unreleased | Exact published images, embedded schema maxima and release pins |
+| Source snapshot and bytes | Read-only inventory; capture underway | Matched immutable DB/config/media inputs and full reference/hash reconciliation |
+| Private beta | Host provisioned; no application deployed | Route-wide remote-IP restrictions, direct-port denial, ACME and trusted TLS |
+| COPY and repeat | Not run on SizeTube | Stable identities, restrictions, asset hashes and explicit exception dispositions |
+| Playback and new publication | Not run on candidate | Source-disconnected decoded browser playback and scanned multi-chunk upload/transcode |
+| Search recovery | Open core issue 267 | Fenced complete observations, safe compatibility fallback and full eligible-ID set equality after outage |
+| Media and sealed recovery | Not run on candidate | Independent media restoration on empty replacement host, correct/wrong-key tests and measured RPO/RTO |
+| Installation | Four-core default mismatch identified | Conservative generated defaults, actual scanned hardware-floor run and three unfamiliar-human timed trials |
+| ZIP import | Representative acceptance open | Official export from isolated restored source, persisted results and owner isolation |
+| English usability | Required | Accurate preview effects, reachable recovery states, mobile and accessibility proof |
+| Security dispositions | Candidate proof open | Fresh exact-digest/dependency evidence and accountable residual-risk dispositions |
+| Final origin and rollback | Open | MFA holds, old URLs/identity, final freeze/delta and preservation of new Vidra writes |
+
+The operator explicitly selected **English only**. Native French review and
+full French UI-copy extraction are excluded from this cutover's requirements.
+Existing locale infrastructure is retained; English usability and actual human
+installation trials remain required. Historical records are not new acceptance.
 
 ## 1. Inventory the authoritative source
 
@@ -145,8 +202,8 @@ qualification of the release actually deployed. Current-main CI success is
 useful evidence, but does not close these runtime gates.
 
 Broader completion work remains: human blank-host installation measurements,
-security finding disposition, full UI-copy extraction/native French review,
-and representative per-user ZIP import.
+security finding disposition, English usability and representative per-user
+ZIP import. French certification is excluded by the operator's scope decision.
 
 The full mechanical inventory was rerun on **2026-11-03** with
 `--strict-migrations`, core checkout `88409417` (API and migration inputs
