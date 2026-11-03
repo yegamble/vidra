@@ -442,8 +442,8 @@ Expect roughly 1.5–2.5× source duration of wall clock on 4 vCPU at
 
 | Launch profile | Droplet | Why |
 |---|---|---|
-| Small / private (<50 users, occasional uploads) | **Premium AMD 4 vCPU / 8 GB / 160 GB — ~$63/mo** | The floor. Set `API_CPUS=3.0`, `API_MEM_LIMIT=4g`, `POSTGRES_SHARED_BUFFERS=512MB`, `POSTGRES_EFFECTIVE_CACHE_SIZE=3GB` — the overlay's defaults target the 16 GB box, and **Docker refuses to start a container whose `cpus` exceeds the host core count**. |
-| Public launch | **Premium Intel 8 vCPU / 16 GB / 160 GB — ~$168/mo** | The overlay's defaults (`API_CPUS=7.0`, `API_MEM_LIMIT=6g`): transcoding takes seven cores and still leaves one for the API and Postgres. Roughly halves upload-to-playable time. |
+| Small / private (<50 users, occasional uploads) | **Premium AMD 4 vCPU / 8 GB / 160 GB — ~$63/mo** | The floor. New production templates set `API_CPUS=3.0`, `API_MEM_LIMIT=4g`, `POSTGRES_SHARED_BUFFERS=512MB`, `POSTGRES_EFFECTIVE_CACHE_SIZE=3GB`. Older env files need these explicit values: **Docker refuses to start a container whose `cpus` exceeds the host core count**. |
+| Public launch | **Premium Intel 8 vCPU / 16 GB / 160 GB — ~$168/mo** | Explicitly raise `API_CPUS=7.0`, `API_MEM_LIMIT=6g`, `POSTGRES_SHARED_BUFFERS=2GB`, `POSTGRES_EFFECTIVE_CACHE_SIZE=6GB`. These are also the overlay's fallbacks when keys are absent. Transcoding takes seven cores and leaves one for the API and Postgres. Roughly halves upload-to-playable time. |
 | + ClamAV (`MALWARE_SCAN_ENABLED=true`) | **add 2 GB RAM** | `clamd` loads the full signature database into memory: ~1.5–2 GiB resident, and it OOM-kills on a small host. |
 
 **Do not use a 2 GB droplet.** Even though production *pulls* images (so
