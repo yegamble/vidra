@@ -320,6 +320,7 @@ TABLES_ADDED = {
     185: (),  # Adds original source CAS predecessor, fresh-full threshold and blocker code.
     186: ('search_catalog_snapshots', 'search_catalog_pages'),
     187: (),  # Transactional dirty function and 24 statement triggers; checked separately.
+    188: (),  # Whole state retains last_error_id; require its paired/nonzero CHECKs too.
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 # Receiver authority is not disposable inbox/cache state. Compare whole rows:
@@ -637,21 +638,36 @@ CATALOG_PROGRAM_SQL = (
     "AND c.relname IN ('videos','channels','users','video_metadata','video_tags','video_blocks') "
     "AND t.tgname IN ('search_catalog_dirty_insert','search_catalog_dirty_update',"
     "'search_catalog_dirty_delete','search_catalog_dirty_truncate')")
+CATALOG_ERROR_OBJECTS = {
+    f'constraint:public.search_catalog_state.search_catalog_error_evidence_{name}': 'T'
+    for name in ('pair', 'nonzero')
+}
+CATALOG_ERROR_SQL = (
+    " UNION ALL SELECT 'constraint:public.search_catalog_state.'||conname||'|'||"
+    "CASE WHEN convalidated THEN 'T' ELSE 'F' END||'|'||md5(pg_get_constraintdef(oid)) "
+    "FROM pg_constraint WHERE conrelid='public.search_catalog_state'::regclass "
+    "AND contype='c' AND conname IN ('search_catalog_error_evidence_pair',"
+    "'search_catalog_error_evidence_nonzero')")
 
 
-def catalog_program_fingerprint(run):
+def catalog_program_fingerprint(run, core_version=187):
+    expected = dict(CATALOG_PROGRAM_OBJECTS)
+    query = CATALOG_PROGRAM_SQL
+    if core_version >= 188:
+        expected.update(CATALOG_ERROR_OBJECTS)
+        query += CATALOG_ERROR_SQL
     objects = {}
-    for line in run.sql(CATALOG_PROGRAM_SQL).splitlines():
+    for line in run.sql(query).splitlines():
         # Recorder includes Compose diagnostics; only exact evidence rows count.
-        match = re.fullmatch(r'((?:function|trigger):[^|]+)\|([-ADORT])\|([0-9a-f]{32})', line)
+        match = re.fullmatch(r'((?:function|trigger|constraint):[^|]+)\|([-ADORTF])\|([0-9a-f]{32})', line)
         if not match:
             continue
         key, mode, digest = match.groups()
         require(key not in objects, f'duplicate catalog program object: {key}')
-        require(key in CATALOG_PROGRAM_OBJECTS, f'unexpected catalog program object: {key}')
-        require(mode == CATALOG_PROGRAM_OBJECTS[key], f'catalog program is not enabled as shipped: {key}')
+        require(key in expected, f'unexpected catalog program object: {key}')
+        require(mode == expected[key], f'catalog program is not enabled/validated as shipped: {key}')
         objects[key] = f'{mode}|{digest}'
-    missing = sorted(set(CATALOG_PROGRAM_OBJECTS) - set(objects))
+    missing = sorted(set(expected) - set(objects))
     require(not missing, 'missing catalog program objects: ' + ', '.join(missing))
     canonical = '\n'.join(f'{key}|{objects[key]}' for key in sorted(objects))
     return f'{len(objects)}|{hashlib.sha256(canonical.encode()).hexdigest()}'
@@ -667,7 +683,7 @@ def fingerprint(run, core_version, search_version):
                             + [qualified('search', table) for table in search_tables],
                             core_version)
     check_sealed(run, tables)
-    program = catalog_program_fingerprint(run) if core_version >= 187 else None
+    program = catalog_program_fingerprint(run, core_version) if core_version >= 187 else None
     rows = {table: run.sql(fingerprint_sql(table, volatile, SEALED.get(table, ()),
                                         digest_rows=table in DIGEST_ROW_TABLES))
             for table, volatile in tables.items()}
