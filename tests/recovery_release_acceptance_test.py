@@ -46,7 +46,7 @@ class FakeRun:
             found = self.relations(recovery.CATALOGUE_AUDITED_THROUGH) if self.present is None else self.present
             # Real psql output carries compose's own stderr lines; so does this.
             return '[compose] docker compose exec -T postgres psql\n' + '\n'.join(found) + '\n'
-        if "NOT LIKE 'enc:%'" in query:                  # the sealed-credential check
+        if "NOT LIKE 'enc:" in query:                   # the sealed-credential check
             answer = self.unsealed
             if isinstance(answer, dict):
                 answer = next((n for table, n in answer.items() if f'FROM {table} ' in query), '0')
@@ -401,7 +401,7 @@ class MailConfigCatalogueTest(unittest.TestCase):
 
     def test_an_unsealed_credential_refuses_by_name_and_shows_no_value(self):
         planted = 'enc:NOT-A-REAL-CIPHERTEXT-' + 'z' * 16
-        run = FakeRun(unsealed='1\n')
+        run = FakeRun(unsealed={'mail_config': '1\n'})
         with self.assertRaises(ValueError) as raised:
             recovery.fingerprint(run, 151, 18)
         message = str(raised.exception)
@@ -411,13 +411,63 @@ class MailConfigCatalogueTest(unittest.TestCase):
 
     def test_a_check_that_returns_no_count_is_a_refusal_not_a_pass(self):
         with self.assertRaises(ValueError):
-            recovery.fingerprint(FakeRun(unsealed='ERROR:  relation "mail_config" does not exist\n'), 151, 18)
+            recovery.fingerprint(FakeRun(unsealed={'mail_config': 'ERROR: no count\n'}), 151, 18)
 
     def test_the_fingerprint_output_carries_no_secret_text(self):
         rows = recovery.fingerprint(FakeRun(), 151, 18)
         dumped = json.dumps(rows)
         self.assertNotIn('enc:', dumped)
         self.assertRegex(rows['mail_config'], r'^[0-9]+\|[0-9a-f]{32}$')
+
+
+class ActorKeyCatalogueTest(unittest.TestCase):
+    tables = ('account_actor_keys', 'channel_actor_keys')
+
+    def test_existing_actor_keys_are_required_on_the_oldest_candidate(self):
+        for table in self.tables:
+            with self.subTest(table=table):
+                self.assertEqual(recovery.CATALOGUE.get(table), (recovery.PRE_EXISTING, ()))
+                run = FakeRun(present=[name for name in FakeRun().relations(146)
+                                       if name != 'public.' + table])
+                with self.assertRaisesRegex(ValueError, table):
+                    recovery.fingerprint(run, 146, 18)
+                self.assertEqual(len(run.queries), 1)
+
+    def test_public_identity_and_row_loss_are_compared_without_private_bytes(self):
+        for table in self.tables:
+            with self.subTest(table=table):
+                query = recovery.fingerprint_sql(table, (), recovery.SEALED.get(table, ()))
+                self.assertIn("to_jsonb(t) - ARRAY['private_key_pem']::text[]", query)
+                # The only removed field is the private PEM: public PEM, actor
+                # FK, creation time and future fields remain in the whole row.
+                self.assertNotIn("'public_key_pem']", query)
+                run = FakeRun()
+                base_sql = run.sql
+                with mock.patch.object(run, 'sql', side_effect=lambda sql:
+                                       '1|' + 'a' * 32 if sql == query else base_sql(sql)):
+                    before = recovery.fingerprint(run, 146, 18)
+                for changed in ('0|' + 'b' * 32, '1|' + 'c' * 32):
+                    with mock.patch.object(run, 'sql', side_effect=lambda sql:
+                                           changed if sql == query else base_sql(sql)):
+                        after = recovery.fingerprint(run, 146, 18)
+                    self.assertEqual(recovery.differing(before, after), [table])
+                self.assertNotIn('enc:', json.dumps(before))
+
+    def test_actor_private_keys_cannot_be_plaintext_empty_or_a_bare_prefix(self):
+        for table in self.tables:
+            with self.subTest(table=table):
+                query = recovery.unsealed_sql(table, 'private_key_pem')
+                self.assertIn("WHERE private_key_pem NOT LIKE 'enc:_%'", query)
+                self.assertNotIn("<> ''", query)
+                self.assertTrue(query.startswith('SELECT count(*) FROM '))
+                with self.assertRaisesRegex(ValueError, table + '.private_key_pem'):
+                    recovery.fingerprint(FakeRun(unsealed={table: '1'}), 146, 18)
+
+    def test_optional_mail_and_oidc_empty_credentials_keep_their_policy(self):
+        for table, column in (('mail_config', 'secret'), ('oidc_providers', 'client_secret')):
+            self.assertIn(f"WHERE {column} <> '' AND {column} NOT LIKE 'enc:%'",
+                          recovery.unsealed_sql(table, column))
+        recovery.fingerprint(FakeRun(), 183, 18)
 
 
 class RecentCatalogueTest(unittest.TestCase):

@@ -91,6 +91,10 @@ CATALOGUE = {
     'captions': (PRE_EXISTING, ()),
     'user_mfa': (PRE_EXISTING, ()),
     'mfa_recovery_codes': (PRE_EXISTING, ()),
+    # 0035 predates the audit floor. Losing these rows rotates imported actors
+    # on first use; preserve their public identity and classify the private PEM.
+    'account_actor_keys': (PRE_EXISTING, ()),
+    'channel_actor_keys': (PRE_EXISTING, ()),
     # 0147. Comments this instance's own users authored on REMOTE videos. The
     # home instance hosts them, so a lost row is a user's content gone — there
     # is no origin to re-fetch it from. The four federation columns are mirrored
@@ -231,7 +235,7 @@ CATALOGUE = {
 DIGEST_ROW_TABLES = {'search_catalog_snapshots', 'search_catalog_pages'}
 
 # Columns holding a credential sealed under the MFA KEK chain (mail/OIDC) or
-# FEDERATION_KEY_KEK (the instance actor in production), as
+# FEDERATION_KEY_KEK (actor keys in production), as
 # `table: (column, ...)`. A drill must prove a restore kept the credential
 # SEALED, and must never return its value. So each is deleted from the row's jsonb like a
 # volatile column and replaced by its CLASS — 'none' (empty: 0151 allows that
@@ -241,13 +245,18 @@ DIGEST_ROW_TABLES = {'search_catalog_snapshots', 'search_catalog_pages'}
 # row by table and column name, never by value. Whether the sealed value still
 # DECRYPTS under the restored KEKs is the browser half's verify-restore check
 # (mail-config and OIDC-provider secret_status), because only the api holds
-# the key. Instance actor sealing is checked here; no live federation signing
+# the key. Actor sealing is checked here; no live federation signing
 # proof is claimed by this harness.
 SEALED = {
     'mail_config': ('secret',),
+    'account_actor_keys': ('private_key_pem',),
+    'channel_actor_keys': ('private_key_pem',),
     'instance_actor_keys': ('private_key_pem',),
     'oidc_providers': ('client_secret',),
 }
+# An existing imported account/channel key row must contain an envelope, not
+# an empty credential. Mail/OIDC retain their optional-empty credential policy.
+REQUIRED_SEALED = {'account_actor_keys', 'channel_actor_keys'}
 
 # Tables a migration creates that the drill deliberately does NOT fingerprint,
 # as `table: (core schema version that created it, why)`. Empty today: every
@@ -425,11 +434,13 @@ def fingerprint_sql(table, volatile=(), sealed=(), *, schema=None, digest_rows=F
 
 
 def unsealed_sql(table, column):
-    """How many rows hold a non-empty credential WITHOUT the `enc:` envelope.
+    """Count invalid envelope classes, requiring payload for imported actor keys.
 
     A count and nothing else: the value is never selected."""
     identifier(table)
     identifier(column, 'column')
+    if table in REQUIRED_SEALED:
+        return f"SELECT count(*) FROM {table} WHERE {column} NOT LIKE 'enc:_%'"
     return f"SELECT count(*) FROM {table} WHERE {column} <> '' AND {column} NOT LIKE 'enc:%'"
 
 
