@@ -36,8 +36,10 @@ acceptance; its failure is retained separately from the corrected observation.
 - Hashes of all 5,521 imported users, 5,520 account keys, 5,572 channel keys,
   27,481 ledger rows and 410 block rows matched across migration and owner claim.
   A pending-hash-only host repair enabled the native one-time claim for a new
-  beta operator. No imported password, role, key or MFA hold changed.
-- API, frontend and Redis have no published ports. The API runs `VIDRA_ROLE=api`
+  beta operator. No imported password, role, key or MFA hold changed during
+  that paused migration/claim interval; later COPY ledger changes are separate.
+- Trial API, frontend, Redis and target PostgreSQL have no published ports;
+  separate synthetic-lab loopback ports are outside this claim. The API runs `VIDRA_ROLE=api`
   with no source DSN/credentials, worker, mail transport, federation, search,
   IPFS or ingestion. `/readyz` body reports `ok` for PostgreSQL, Redis, storage
   and MFA KEK. API-only boot still writes its own probes/heartbeat/auth state;

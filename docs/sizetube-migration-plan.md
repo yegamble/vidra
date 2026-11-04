@@ -39,8 +39,9 @@ transport remote IP. The operator receives the homepage and exact runtime
 version over HTTPS; non-operator and spoofed-forwarding probes return 403.
 Host/gateway access is limited to `/healthz`, now 200. The trial permits
 GET/HEAD/OPTIONS and exact POST login/refresh/logout routes; other mutations and
-real HTTP/1.1 WebSocket upgrades return 403. No app, PostgreSQL or Redis port is
-published. Responses carry noindex and no-store. This narrow trial disables
+real HTTP/1.1 WebSocket upgrades return 403. No trial app, target PostgreSQL or
+trial Redis port is published; separate synthetic-lab loopback ports are not
+part of this claim. Responses carry noindex and no-store. This narrow trial disables
 workers, mail, federation, search integration, scanning and ingestion; it does
 not qualify those features.
 
@@ -144,7 +145,8 @@ all eleven MFA holds passed, and no target connections remained before the
 encrypted checkpoint and discrete migration. The published API image's embedded
 maximum and the independent source maximum are both 188; the ledger is clean
 and all 24 transactional dirty triggers are present. A source/schema review and
-an actual schema-188 dry run passed before one continuation resumed. The old
+an actual schema-188 dry run passed before one continuation resumed; its service
+was active at 05:01 UTC with zero restarts. The old
 run record is retained. All 5,521 users and 5,572 channels have imported; media
 and the final exception report remain incomplete.
 
