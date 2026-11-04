@@ -44,9 +44,12 @@ The later consistent PostgreSQL dump restored successfully in an isolated clone:
 **5,521 accounts**, **5,572 local channels** and **15,492 local videos**.
 The extra account/channel reflects continued source writes during rehearsal.
 Another 44,978 videos are federated
-cache records. All **11 MFA-enrolled accounts are active**; their target holds
-must be held until target re-enrollment. All eleven target holds are now verified;
-repeat the check after each source-authoritative resync and before application access.
+cache records. The snapshot contains **11 active MFA-enrolled accounts**; all
+eleven imported accounts are held inactive until target re-enrollment. Repeat
+the hold check after each source-authoritative resync and before application access.
+The sole imported administrator is among those held accounts. The target has no
+instance owner or owner-claim row, so private operator bootstrap is still required;
+do not reset or reactivate an imported account merely to obtain rehearsal access.
 
 Local video-file metadata totals **4,260,245,274,200 bytes** across 85,219 HLS
 and 1,927 progressive rows. Exhausted B2 version pagination found **223,313
@@ -60,14 +63,31 @@ are retained privately. This does not waive unrelated missing or failed assets.
 Playlist dependencies, artwork and available bytes still need full reconciliation.
 
 Exact filesystem checks found 12,706 unavailable storyboard references outside
-the confirmed purge, plus one thumbnail. PeerTube 8.3.1 treats these local
+the confirmed purge, plus one playlist-cover thumbnail. PeerTube 8.3.1 treats these local
 storyboards as direct files: their rows have no remote URL, and the serving path
 does not regenerate them. Recover or regenerate the non-purged assets on beta
 and verify their playback integration; do not extend the purge exception.
-Mixed local/S3 media and native private subdirectories also require the
-[read-only fallback](https://github.com/yegamble/vidra-core/pull/467) and its
-complete wiring. Missing database file references still need comparison with
-the actual HLS dependency graph before their playback impact is classified.
+The [read-only fallback](https://github.com/yegamble/vidra-core/pull/467) and
+[complete mixed-storage wiring](https://github.com/yegamble/vidra-core/pull/468)
+are merged. A read-only local capture transferred 83,574 files, totaling
+8,021,627,453 bytes, to restricted beta staging with matching per-file hashes.
+The source-built resume carried all four available local progressive files,
+including the private subdirectory; independent exact-version B2 reads matched
+their complete source SHA-256 values. This proves that slice, not candidate playback.
+
+A beta-only walk of nine mixed-storage masters found nine required variant
+playlists unavailable across six masters. Both B2 path forms returned 404;
+the recorded history contains no recovery versions, and the local capture has
+no matching files. The eight B2 master versions remain unchanged since inventory.
+Other media dependencies exist for the affected videos, but decoding and repair
+remain unproven. Missing playlists also hide their descendant dependencies;
+do not call nine a complete count of missing media or waive them as purged.
+
+Two missing local progressive references are a separate snapshot-drift case:
+both videos were still transcoding in the dump. Read-only current production
+checks show both now published with HLS records and without those old web-file
+rows. Refresh or apply a controlled delta; do not classify the obsolete files as
+lost published videos or pretend this is a matched media freeze.
 
 The database has zero retained-original filename rows, and the configured
 `original-video-files/` prefix has zero provider versions. The configured local
@@ -94,16 +114,23 @@ credentials and object manifests stay outside Git with restricted permissions.
 The root-only database archive is 253,567,950 bytes and restored from PostgreSQL
 18.6 at schema 1130 without publishing a database port. This proves a source
 clone restore, not Vidra recovery or a matched DB/config/media capture.
-The running COPY uses an exact merged core commit and embedded schema 183;
-it is source-built preparation, not published-candidate acceptance. All 5,521
-users and 5,572 channels have imported. Media work and its exception report are
-incomplete. No candidate playback or replacement-host restore is accepted yet.
+The running COPY resume uses merged core `b59b14c3` and embedded schema 183;
+it is source-built preparation, not published-candidate acceptance. The prior
+process was stopped gracefully, all eleven MFA holds were verified, and the
+new dry-run left target counts unchanged. One importer resumed from the existing
+ledger using the completed local capture; 55 completed HLS records survived the
+handoff. All 5,521 users and 5,572 channels have imported. Media work and its
+exception report are incomplete. No candidate playback or replacement-host
+restore is accepted yet.
 
 One official PeerTube ZIP was generated offline from the isolated source clone.
 Native metadata, captions and actual artwork passed independent checks; its
 muxed video and audio decoded completely with encoded packet payloads preserved.
 Importing that archive into the published Vidra candidate, persisted read-back
 and owner/job isolation remain open.
+The released ZIP path is synchronous metadata import. Media ingestion and an
+asynchronous ZIP-import job are not supplied by that path; an account-export
+job test must not be presented as proof of either capability.
 
 ### Current production gate board
 
@@ -114,13 +141,13 @@ and owner/job isolation remain open.
 | Private beta | Restricted maintenance edge and TLS verified; no application deployed | Install exact candidate and repeat route/direct-port/access proofs |
 | COPY and repeat | Source-built preparation running; candidate acceptance open | Stable identities, restrictions, asset hashes, repeat and explicit exception dispositions |
 | Playback and new publication | Not run on candidate | Source-disconnected decoded browser playback and scanned multi-chunk upload/transcode |
-| Search recovery | Open core issue 267 | Fenced complete observations, safe compatibility fallback and full eligible-ID set equality after outage |
+| Search recovery | Receiver implementation merged; producer integration open | Complete paired-runtime observations, safe compatibility fallback and full eligible-ID set equality after outage |
 | Media and sealed recovery | Encrypted source DB/config B2 read-back verified | Candidate media restoration on empty replacement host, correct/wrong-key tests and measured RPO/RTO; cross-region recovery unproven |
 | Installation | Conservative defaults merged; generated configuration verified | Actual scanned hardware-floor run and three unfamiliar-human timed trials |
 | ZIP import | Official source archive generated and decoded | Candidate import, persisted results and owner isolation |
 | English usability | Required | Accurate preview effects, reachable recovery states, mobile and accessibility proof |
 | Security dispositions | Candidate proof open | Fresh exact-digest/dependency evidence and accountable residual-risk dispositions |
-| Final origin and rollback | Open | MFA holds, old URLs/identity, final freeze/delta and preservation of new Vidra writes |
+| Final origin and rollback | Open | Private owner bootstrap, MFA re-enrollment, old URLs/identity, final freeze/delta and preservation of new Vidra writes |
 
 The operator explicitly selected **English only**. Native French review and
 full French UI-copy extraction are excluded from this cutover's requirements.
