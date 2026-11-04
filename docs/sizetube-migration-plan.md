@@ -171,8 +171,19 @@ The exact beta API served a ready public HLS master and decoded 60 video frames
 (1,966,667 microseconds) through its private API origin with no source credential
 in the app, no media saved and no HTTPS enabled in the decoder. Browser
 homepage/navigation also rendered. This is one short host-decoder
-sample, not browser playback, separate-audio/seek/caption coverage, a whole-corpus
-deep verification, or a source-disconnected rehearsal.
+sample. A later bounded browser check played that HLS sample to its
+7.216666-second end at 1280×720 with no media error, then sought to zero and five
+seconds. Separate/audible audio, captions, longer media, a whole-corpus deep
+verification and a source-disconnected rehearsal remain open. An earlier
+audio-only progressive response from a video with source HLS still needs
+reconciliation after COPY; it does not establish video playback. At 06:33 UTC,
+COPY was active with zero restarts, 592 ready HLS entries and 24 failed ledger
+entries. These are progress observations, not final failure dispositions.
+
+[HLS copy diagnostics](https://github.com/yegamble/vidra-core/pull/510) are merged
+and passed explicit PostgreSQL 18 coverage. They preserve safe stage/error
+categories for future failures; the running old importer and discarded earlier
+causes are unchanged.
 
 One official PeerTube ZIP was generated offline from the isolated source clone.
 Native metadata, captions and actual artwork passed independent checks; its
@@ -198,7 +209,7 @@ storage and scanner; these diagnostic passes do not qualify that candidate.
 | Source snapshot and bytes | DB clone restored; source purge disposition recorded | Matched immutable DB/config/media inputs and full available-reference/hash reconciliation |
 | Private beta | Operator-only read trial running; runtime version, readiness body and edge/access checks passed | Full application and ingestion acceptance on the selected release |
 | COPY and repeat | Source-built preparation running; candidate acceptance open | Stable identities, restrictions, asset hashes, repeat and explicit exception dispositions |
-| Playback and new publication | One short host-decoded HLS sample; browser homepage rendered | Source-disconnected browser playback and scanned multi-chunk upload/transcode |
+| Playback and new publication | One short HLS sample host-decoded and played/seeked in the browser | Full source-disconnected media/access coverage and scanned multi-chunk upload/transcode |
 | Search recovery | Receiver implementation merged; producer integration open | Complete paired-runtime observations, safe compatibility fallback and full eligible-ID set equality after outage |
 | Media and sealed recovery | Two target checkpoints decrypted; first 500 backup objects byte-proven and supporting maps recovered | Full media map/copy, strict empty replacement-host restore, actual imported-key correct/wrong-key proofs and measured RPO/RTO; cross-region recovery unproven |
 | Installation | Conservative defaults merged; generated configuration verified | Actual scanned hardware-floor run and three unfamiliar-human timed trials |

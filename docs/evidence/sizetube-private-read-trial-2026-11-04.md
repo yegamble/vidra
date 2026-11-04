@@ -113,6 +113,33 @@ the new continuation. The original discarded I/O causes remain unknown. SQL
 completion establishes neither complete bytes nor decode/playback. The overall
 failed-ledger count was nine at 05:25 UTC; COPY is still active.
 
+At **06:33 UTC**, the same non-restarting COPY service remained active with
+zero restarts, and the API container was healthy. A read-only aggregate query
+reported schema 188, **592** ready HLS entries, **24** failed ledger entries,
+one beta owner and no source catalog state. These changing counts are neither
+a completed import nor a final exception report.
+
+One public imported HLS sample also passed a bounded **browser** check against
+the published API/frontend above. After the content prompt, the media element
+reported 1280×720, ready state 4 and no media error. Playback advanced from
+0.234443 seconds to its 7.216666-second end; the player showed playback finished.
+The seek control then returned to zero and advanced to five seconds without a
+media error. Autoplay-next was disabled for this check. This browser exposed no
+decoded-frame counter; audible/separate audio, captions, other renditions,
+longer media, source disconnection and complete-corpus playback remain unproven.
+
+An earlier sample served an AAC-only progressive file and reported zero video
+dimensions. Independent track inspection confirmed one AAC-LC audio track and
+no video track. Its frozen source has one resolution-zero web file and one HLS
+playlist; the target API did not yet advertise HLS. This partial-media response
+is not video-playback acceptance and needs reconciliation after COPY completes.
+
+[CORE #510](https://github.com/yegamble/vidra-core/pull/510) now records closed,
+sanitized HLS copy stage/error categories while preserving wrapped error
+identity. All eight hosted checks passed, including the modified PostgreSQL 18
+integration test (2.44 seconds; no skipped subcase). The running old importer
+does not contain this change. It cannot recover previously discarded causes.
+
 ## Open production gates
 
 Complete available-media COPY, exact reconciliation and per-failure dispositions.
