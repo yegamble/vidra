@@ -73,6 +73,46 @@ acceptance; its failure is retained separately from the corrected observation.
   The beta image includes no standalone importer. Continuing preparation does
   not qualify published operator artifacts or implicitly reverify ready HLS.
 
+## Follow-up observations
+
+The unchanged copy/proof runtimes completed the exact first **500** eligible
+primary-version mappings, totaling **4,046,228,508 bytes**. The second batch
+read both immutable versions of every one of its 250 objects; the exact union
+of both proof batches equals the copied first-500 ID set. No merely same-name,
+size, listing or provider-checksum equivalence substitutes for these reads.
+The frozen plan still has 5,067 other eligible objects and one deferred large
+object; live COPY additions are outside this plan.
+
+B2 support point `20261104T053401Z-ec04b98a` contains the canonical plan,
+observed versions, wire plan, strict journal/init marker, runtime hashes and
+completed proof maps. The exact twelve-file allowlist plus its manifest is
+bound by manifest SHA-256
+`2f40ec6ab60e35dd34feca51f5e0fba64ac4394289b65100ff1c971129001444`.
+The journal was exclusively locked; every input hash matched before and after
+tar-to-age streaming. Both ciphertext objects passed complete immutable-ID
+SHA-256 readback and anonymous 401. An independent Mac decryption recovered all
+thirteen members in memory with their exact hashes. The package contains no
+database, provider/SSH credential or age private identity. It preserves a
+partial pool's recovery records, not a matched DB point, full media restore or
+replacement host acceptance.
+
+Native password login, authenticated `/auth/me`, refresh rotation and logout
+passed for the new beta operator alone, without exporting its credentials or
+persisting the new session tokens. Browser login and imported-user login were
+not tested. One public imported sample's original PeerTube UUID and short watch
+paths and both embed forms returned the expected same-origin 302 targets through
+the private HTTPS edge; watch start time survived. This is redirect resolution,
+not iframe playback or same-domain federation acceptance.
+
+At **05:38 UTC**, an actual read-only repeatable-read audit compared the exact
+thirteen failed-HLS cohort IDs, rather than inferring recovery from counts.
+Eleven now had done HLS/video ledgers, matching target IDs, ready nonempty
+playlists and the exact frozen master keys. Two remained failed without ready
+bindings; their present state does not establish whether they have retried in
+the new continuation. The original discarded I/O causes remain unknown. SQL
+completion establishes neither complete bytes nor decode/playback. The overall
+failed-ledger count was nine at 05:25 UTC; COPY is still active.
+
 ## Open production gates
 
 Complete available-media COPY, exact reconciliation and per-failure dispositions.

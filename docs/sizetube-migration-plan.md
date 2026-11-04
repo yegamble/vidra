@@ -129,10 +129,14 @@ complete authenticated exact-version SHA-256 readback; anonymous access returned
 401. Both DB and config streams also decrypted under the operator-held key with
 their original stream hashes, without persisted plaintext or the private identity
 on beta. These are partial-media checkpoints, not a full matched recovery point.
-The first 250 immutable primary-to-backup mappings, totaling 100,853,238 bytes,
-also passed full byte verification. The observed plan still has 5,317 other
-eligible objects and one deferred 16,527,038,005-byte object; later COPY writes
-are outside that plan. Full media backup and replacement-host restore remain open.
+The first 500 immutable primary-to-backup mappings, totaling 4,046,228,508 bytes,
+also passed full byte verification. Their canonical plan, journal and proof maps
+are encrypted in B2 at `20261104T053401Z-ec04b98a`; an independent in-memory
+recovery matched all thirteen support files to the exact approved hashes. This
+point contains no database, provider/SSH credential or age private identity.
+The observed plan still has 5,067 other eligible objects and one deferred
+16,527,038,005-byte object; later COPY writes are outside that plan. Full media
+backup and replacement-host restore remain open.
 The current account is authorized for this rehearsal; cross-region recovery
 remains outside the demonstrated evidence.
 
@@ -155,8 +159,13 @@ failed ledger entries. These are observations, not final exception dispositions.
 A 13-failed-HLS investigation found all 169 discovered source dependencies still
 present by exact immutable ID/size; 91 frozen playlist bodies also passed the
 actual old parser. The discarded original I/O errors remain undiagnosed; do not
-waive these failures as purged. The two obsolete progressive references still
-require the controlled source refresh described above.
+waive these failures as purged. At 05:38 UTC, a repeatable-read SQL audit of the
+exact thirteen-member cohort found eleven done with matching ready target and
+frozen master keys; two remained failed. This demonstrates ledger recovery for
+those eleven, not byte/decode proof or the original I/O cause. The overall
+failure count was nine at 05:25 UTC and is not a final exception report. The two
+obsolete progressive references still require the controlled source refresh
+described above.
 
 The exact beta API served a ready public HLS master and decoded 60 video frames
 (1,966,667 microseconds) through its private API origin with no source credential
@@ -191,7 +200,7 @@ storage and scanner; these diagnostic passes do not qualify that candidate.
 | COPY and repeat | Source-built preparation running; candidate acceptance open | Stable identities, restrictions, asset hashes, repeat and explicit exception dispositions |
 | Playback and new publication | One short host-decoded HLS sample; browser homepage rendered | Source-disconnected browser playback and scanned multi-chunk upload/transcode |
 | Search recovery | Receiver implementation merged; producer integration open | Complete paired-runtime observations, safe compatibility fallback and full eligible-ID set equality after outage |
-| Media and sealed recovery | Two target checkpoints decrypted; first 250 backup objects byte-proven | Full media map/copy, strict empty replacement-host restore, actual imported-key correct/wrong-key proofs and measured RPO/RTO; cross-region recovery unproven |
+| Media and sealed recovery | Two target checkpoints decrypted; first 500 backup objects byte-proven and supporting maps recovered | Full media map/copy, strict empty replacement-host restore, actual imported-key correct/wrong-key proofs and measured RPO/RTO; cross-region recovery unproven |
 | Installation | Conservative defaults merged; generated configuration verified | Actual scanned hardware-floor run and three unfamiliar-human timed trials |
 | ZIP import | Official source archive generated and decoded | Candidate import, persisted results and owner isolation |
 | English usability | Required | Accurate preview effects, reachable recovery states, mobile and accessibility proof |
