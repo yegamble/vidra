@@ -4,8 +4,9 @@ Planning date: **2026-11-03**. The operator selected a **private migration
 rehearsal first** at `beta.sizetube.com`, hosted on DigitalOcean.
 `sizetube.com` continues serving PeerTube throughout rehearsal.
 
-**Production remains NO-GO.** The private edge and source database clone are prepared;
-no Vidra application or imported catalogue is deployed on the new host yet.
+**Production remains NO-GO.** The private edge and source database clone are prepared.
+A source-built COPY preparation is running against an isolated target; the web
+application remains undeployed and the edge continues serving restricted maintenance.
 Production database, media and DNS remain unchanged.
 The current [qualification record](release-readiness.md) and
 [PeerTube migration runbook](peertube-migration.md) define the acceptance gates.
@@ -44,7 +45,8 @@ The later consistent PostgreSQL dump restored successfully in an isolated clone:
 The extra account/channel reflects continued source writes during rehearsal.
 Another 44,978 videos are federated
 cache records. All **11 MFA-enrolled accounts are active**; their target holds
-or approved re-enrollment must be verified before public imported-password access.
+must be held until target re-enrollment. All eleven target holds are now verified;
+repeat the check after each source-authoritative resync and before application access.
 
 Local video-file metadata totals **4,260,245,274,200 bytes** across 85,219 HLS
 and 1,927 progressive rows. Exhausted B2 version pagination found **223,313
@@ -56,6 +58,16 @@ intentionally purged: preserve its restrictions and record unavailable media;
 do not recover those bytes. The exact snapshot, affected IDs and owner decision
 are retained privately. This does not waive unrelated missing or failed assets.
 Playlist dependencies, artwork and available bytes still need full reconciliation.
+
+Exact filesystem checks found 12,706 unavailable storyboard references outside
+the confirmed purge, plus one thumbnail. PeerTube 8.3.1 treats these local
+storyboards as direct files: their rows have no remote URL, and the serving path
+does not regenerate them. Recover or regenerate the non-purged assets on beta
+and verify their playback integration; do not extend the purge exception.
+Mixed local/S3 media and native private subdirectories also require the
+[read-only fallback](https://github.com/yegamble/vidra-core/pull/467) and its
+complete wiring. Missing database file references still need comparison with
+the actual HLS dependency graph before their playback impact is classified.
 
 The database has zero retained-original filename rows, and the configured
 `original-video-files/` prefix has zero provider versions. The configured local
@@ -70,15 +82,28 @@ The approved private beta bucket is created. A live probe verified a bucket-scop
 read-only source key, a separate destination-only writable key, destination
 write/read/delete and anonymous denial (401). These temporary keys expire
 **2026-12-03**; rotate them if rehearsal continues beyond that date. The original
-unrestricted credential stays on production. An independent backup is still
-required. Raw snapshots, account details,
+unrestricted credential stays on production. A separate private B2 backup bucket
+uses a thirty-day bucket-only read/write key without delete permission, retained
+separately in operator recovery storage. The operator selected the current B2
+account for rehearsal. Encrypted source-DB and preparation-config archives passed
+provider checksum and complete authenticated read-back verification; anonymous
+access returned 401. This does not prove target-media recovery or cross-region
+recovery. Raw snapshots, account details,
 credentials and object manifests stay outside Git with restricted permissions.
 
 The root-only database archive is 253,567,950 bytes and restored from PostgreSQL
 18.6 at schema 1130 without publishing a database port. This proves a source
 clone restore, not Vidra recovery or a matched DB/config/media capture.
-No representative COPY, decoded playback or
-replacement-host restore is accepted yet.
+The running COPY uses an exact merged core commit and embedded schema 183;
+it is source-built preparation, not published-candidate acceptance. All 5,521
+users and 5,572 channels have imported. Media work and its exception report are
+incomplete. No candidate playback or replacement-host restore is accepted yet.
+
+One official PeerTube ZIP was generated offline from the isolated source clone.
+Native metadata, captions and actual artwork passed independent checks; its
+muxed video and audio decoded completely with encoded packet payloads preserved.
+Importing that archive into the published Vidra candidate, persisted read-back
+and owner/job isolation remain open.
 
 ### Current production gate board
 
@@ -87,12 +112,12 @@ replacement-host restore is accepted yet.
 | Importer compatibility | Merged; unreleased | Exact published images, embedded schema maxima and release pins |
 | Source snapshot and bytes | DB clone restored; source purge disposition recorded | Matched immutable DB/config/media inputs and full available-reference/hash reconciliation |
 | Private beta | Restricted maintenance edge and TLS verified; no application deployed | Install exact candidate and repeat route/direct-port/access proofs |
-| COPY and repeat | Not run on SizeTube | Stable identities, restrictions, asset hashes and explicit exception dispositions |
+| COPY and repeat | Source-built preparation running; candidate acceptance open | Stable identities, restrictions, asset hashes, repeat and explicit exception dispositions |
 | Playback and new publication | Not run on candidate | Source-disconnected decoded browser playback and scanned multi-chunk upload/transcode |
 | Search recovery | Open core issue 267 | Fenced complete observations, safe compatibility fallback and full eligible-ID set equality after outage |
-| Media and sealed recovery | Not run on candidate | Independent media restoration on empty replacement host, correct/wrong-key tests and measured RPO/RTO |
-| Installation | Four-core default mismatch identified | Conservative generated defaults, actual scanned hardware-floor run and three unfamiliar-human timed trials |
-| ZIP import | Representative acceptance open | Official export from isolated restored source, persisted results and owner isolation |
+| Media and sealed recovery | Encrypted source DB/config B2 read-back verified | Candidate media restoration on empty replacement host, correct/wrong-key tests and measured RPO/RTO; cross-region recovery unproven |
+| Installation | Conservative defaults merged; generated configuration verified | Actual scanned hardware-floor run and three unfamiliar-human timed trials |
+| ZIP import | Official source archive generated and decoded | Candidate import, persisted results and owner isolation |
 | English usability | Required | Accurate preview effects, reachable recovery states, mobile and accessibility proof |
 | Security dispositions | Candidate proof open | Fresh exact-digest/dependency evidence and accountable residual-risk dispositions |
 | Final origin and rollback | Open | MFA holds, old URLs/identity, final freeze/delta and preservation of new Vidra writes |
