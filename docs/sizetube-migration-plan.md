@@ -4,10 +4,12 @@ Planning date: **2026-11-03**. The operator selected a **private migration
 rehearsal first** at `beta.sizetube.com`, hosted on DigitalOcean.
 `sizetube.com` continues serving PeerTube throughout rehearsal.
 
-**Production remains NO-GO.** The private edge and source database clone are prepared.
-A source-built COPY preparation is running against an isolated target; the web
-application remains undeployed and the edge continues serving restricted maintenance.
-Production database, media and DNS remain unchanged.
+**Production remains NO-GO.** A published beta API and the released frontend now
+serve an operator-IP-only read trial. The target migrated cleanly to schema 188;
+one source-built COPY continuation is still preparation work. Production
+database, media and DNS remain unchanged. The
+[2026-11-04 trial record](evidence/sizetube-private-read-trial-2026-11-04.md)
+separates the observed passes from the remaining acceptance gates.
 The current [qualification record](release-readiness.md) and
 [PeerTube migration runbook](peertube-migration.md) define the acceptance gates.
 
@@ -21,8 +23,10 @@ acknowledge an unsupported version to make an automated rehearsal proceed.
 The [schema-1130 support](https://github.com/yegamble/vidra-core/pull/458)
 and [retained-original COPY fix](https://github.com/yegamble/vidra-core/pull/457)
 are merged, as is the [encoded search-page bound](https://github.com/yegamble/vidra-core/pull/459),
-but must still be published and pinned
-before replacing that released baseline. Source tests and a disposable
+and are included in the published beta-only CORE image described below.
+The image contains no standalone importer: the running COPY binary remains
+source-built, and the coordinated release/bundle and production pins remain open.
+Source tests and a disposable
 upstream fixture do not supply representative SizeTube migration acceptance.
 The existing synthetic B2 rehearsal is useful evidence within its
 [explicit limits](runtime-acceptance-b2-migration-v0.7.8.md).
@@ -30,12 +34,16 @@ The existing synthetic B2 rehearsal is useful evidence within its
 The new `sizetube-beta` droplet is provisioned in DigitalOcean NYC2:
 Ubuntu 24.04, 4 vCPU, 16 GB RAM, 200 GB disk, quoted **$84/month** at creation.
 Docker and Compose execute successfully. Beta DNS now points to the new host.
-The Caddy maintenance edge has a trusted certificate and restricts application
-routes by transport remote IP. Independent probes returned 403 for frontend,
-API, media, lazy-static and federation paths, including spoofed forwarding
-headers. Host/gateway access is limited to `/healthz`; it reports 503 because
-no application candidate is deployed. The authorized operator also sees a 503
-setup-in-progress response. Repeat these checks after the real stack is installed.
+The Caddy edge has a trusted certificate and restricts application routes by
+transport remote IP. The operator receives the homepage and exact runtime
+version over HTTPS; non-operator and spoofed-forwarding probes return 403.
+Host/gateway access is limited to `/healthz`, now 200. The trial permits
+GET/HEAD/OPTIONS and exact POST login/refresh/logout routes; other mutations and
+real HTTP/1.1 WebSocket upgrades return 403. No trial app, target PostgreSQL or
+trial Redis port is published; separate synthetic-lab loopback ports are not
+part of this claim. Responses carry noindex and no-store. This narrow trial disables
+workers, mail, federation, search integration, scanning and ingestion; it does
+not qualify those features.
 
 ### Authoritative inventory so far
 
@@ -47,9 +55,12 @@ Another 44,978 videos are federated
 cache records. The snapshot contains **11 active MFA-enrolled accounts**; all
 eleven imported accounts are held inactive until target re-enrollment. Repeat
 the hold check after each source-authoritative resync and before application access.
-The sole imported administrator is among those held accounts. The target has no
-instance owner or owner-claim row, so private operator bootstrap is still required;
-do not reset or reactivate an imported account merely to obtain rehearsal access.
+The sole imported administrator is among those held accounts. A reviewed host
+repair seeded only a pending token hash, then the shipped claim flow created a
+new beta-only owner. Imported-user, actor-key, ledger and block fingerprints
+remained identical across migration and claim; none of the imported accounts
+was reset or reactivated. The beta owner is excluded from source reconciliation
+and is not production ownership.
 
 Local video-file metadata totals **4,260,245,274,200 bytes** across 85,219 HLS
 and 1,927 progressive rows. Exhausted B2 version pagination found **223,313
@@ -111,34 +122,48 @@ access returned 401. This does not prove target-media recovery or cross-region
 recovery. Raw snapshots, account details,
 credentials and object manifests stay outside Git with restricted permissions.
 
-The target-progress DB, preparation config and encrypted point manifest are also
-stored in that private backup bucket at point `20261104T015808Z-f5c87d84`.
-All three ciphertext objects passed provider checksums and complete authenticated,
-exact-version SHA-256 readback; anonymous access returned 401. This is a progress
-backup while COPY is running. Decryption of this new point, a matched media freeze,
-the actual target-media backup and replacement-host restore remain unproven.
+The quiesced pre-migration point `20261104T043744Z-866a4441` and schema-188
+beta-operator point `20261104T045318Z-ad90e914` are stored in that private backup
+bucket. Each DB/config/encrypted-manifest triplet passed provider checksums and
+complete authenticated exact-version SHA-256 readback; anonymous access returned
+401. Both DB and config streams also decrypted under the operator-held key with
+their original stream hashes, without persisted plaintext or the private identity
+on beta. These are partial-media checkpoints, not a full matched recovery point.
+The first 250 immutable primary-to-backup mappings, totaling 100,853,238 bytes,
+also passed full byte verification. The observed plan still has 5,317 other
+eligible objects and one deferred 16,527,038,005-byte object; later COPY writes
+are outside that plan. Full media backup and replacement-host restore remain open.
 The current account is authorized for this rehearsal; cross-region recovery
 remains outside the demonstrated evidence.
 
 The root-only database archive is 253,567,950 bytes and restored from PostgreSQL
 18.6 at schema 1130 without publishing a database port. This proves a source
 clone restore, not Vidra recovery or a matched DB/config/media capture.
-The running COPY resume uses merged core `b59b14c3` and embedded schema 183;
-it is source-built preparation, not published-candidate acceptance. The prior
-process was stopped gracefully, all eleven MFA holds were verified, and the
-new dry-run left target counts unchanged. One importer resumed from the existing
-ledger using the completed local capture; 55 completed HLS records survived the
-handoff. All 5,521 users and 5,572 channels have imported. Media work and its
-exception report are incomplete. No candidate playback or replacement-host
-restore is accepted yet.
+The COPY binary remains merged core `b59b14c3`, source-built preparation. It was
+stopped by signalling only its positively identified child; the wrapper exited,
+all eleven MFA holds passed, and no target connections remained before the
+encrypted checkpoint and discrete migration. The published API image's embedded
+maximum and the independent source maximum are both 188; the ledger is clean
+and all 24 transactional dirty triggers are present. A source/schema review and
+an actual schema-188 dry run passed before one continuation resumed; its service
+was active at 05:01 UTC with zero restarts. The old
+run record is retained. All 5,521 users and 5,572 channels have imported; media
+and the final exception report remain incomplete.
 
-At **2026-11-04 02:32 UTC**, a read-only observation of the changing private
-primary bucket counted 4,730 live objects and 137,887,417,943 bytes. This is
-transfer progress, not a consistent inventory or completed backup. The target
-then contained 15,490 video, 1,921 file and 178 HLS records; the two obsolete
-progressive references still require the controlled source refresh described
-above. Retryable HLS failures remain in the ledger and require reconciliation;
-the running process's failure count is not a final exception report.
+At **2026-11-04 04:48 UTC**, the paused target had 462 ready HLS entries and 31
+failed ledger entries. These are observations, not final exception dispositions.
+A 13-failed-HLS investigation found all 169 discovered source dependencies still
+present by exact immutable ID/size; 91 frozen playlist bodies also passed the
+actual old parser. The discarded original I/O errors remain undiagnosed; do not
+waive these failures as purged. The two obsolete progressive references still
+require the controlled source refresh described above.
+
+The exact beta API served a ready public HLS master and decoded 60 video frames
+(1,966,667 microseconds) through its private API origin with no source credential
+in the app, no media saved and no HTTPS enabled in the decoder. Browser
+homepage/navigation also rendered. This is one short host-decoder
+sample, not browser playback, separate-audio/seek/caption coverage, a whole-corpus
+deep verification, or a source-disconnected rehearsal.
 
 One official PeerTube ZIP was generated offline from the isolated source clone.
 Native metadata, captions and actual artwork passed independent checks; its
@@ -160,18 +185,18 @@ storage and scanner; these diagnostic passes do not qualify that candidate.
 
 | Gate | Current state | Evidence still required |
 |---|---|---|
-| Importer compatibility | Merged; unreleased | Exact published images, embedded schema maxima and release pins |
+| Importer compatibility | Beta API published at frozen digest; standalone COPY remains source-built | Coordinated operator artifacts/bundle, release pins and actual candidate COPY acceptance |
 | Source snapshot and bytes | DB clone restored; source purge disposition recorded | Matched immutable DB/config/media inputs and full available-reference/hash reconciliation |
-| Private beta | Restricted maintenance edge and TLS verified; no application deployed | Install exact candidate and repeat route/direct-port/access proofs |
+| Private beta | Operator-only read trial running; runtime version, readiness body and edge/access checks passed | Full application and ingestion acceptance on the selected release |
 | COPY and repeat | Source-built preparation running; candidate acceptance open | Stable identities, restrictions, asset hashes, repeat and explicit exception dispositions |
-| Playback and new publication | Not run on candidate | Source-disconnected decoded browser playback and scanned multi-chunk upload/transcode |
+| Playback and new publication | One short host-decoded HLS sample; browser homepage rendered | Source-disconnected browser playback and scanned multi-chunk upload/transcode |
 | Search recovery | Receiver implementation merged; producer integration open | Complete paired-runtime observations, safe compatibility fallback and full eligible-ID set equality after outage |
-| Media and sealed recovery | Encrypted source DB/config B2 read-back verified | Candidate media restoration on empty replacement host, correct/wrong-key tests and measured RPO/RTO; cross-region recovery unproven |
+| Media and sealed recovery | Two target checkpoints decrypted; first 250 backup objects byte-proven | Full media map/copy, strict empty replacement-host restore, actual imported-key correct/wrong-key proofs and measured RPO/RTO; cross-region recovery unproven |
 | Installation | Conservative defaults merged; generated configuration verified | Actual scanned hardware-floor run and three unfamiliar-human timed trials |
 | ZIP import | Official source archive generated and decoded | Candidate import, persisted results and owner isolation |
 | English usability | Required | Accurate preview effects, reachable recovery states, mobile and accessibility proof |
 | Security dispositions | Candidate proof open | Fresh exact-digest/dependency evidence and accountable residual-risk dispositions |
-| Final origin and rollback | Open | Private owner bootstrap, MFA re-enrollment, old URLs/identity, final freeze/delta and preservation of new Vidra writes |
+| Final origin and rollback | Beta-only owner claimed; production design open | MFA re-enrollment, same-domain URLs/identity, final freeze/delta and preservation of new Vidra writes |
 
 The operator explicitly selected **English only**. Native French review and
 full French UI-copy extraction are excluded from this cutover's requirements.
@@ -222,8 +247,10 @@ channel sync and destructive
 media jobs during import. Configure and test an HTTPS mail provider separately;
 DigitalOcean blocks standard outbound SMTP submission ports.
 
-Keep encrypted database/config backups with a separate provider and region, and
-preserve recovery keys separately. Media recovery requires its own copy/versioning policy;
+Use the authorized separate private B2 backup bucket for rehearsal and preserve
+recovery keys separately. The current-account plan is approved; it does not
+demonstrate cross-region recovery. Settle production resilience requirements
+before cutover. Media recovery requires its own copy/versioning policy;
 database and configuration archives do not contain object-store media.
 
 ## 3. Qualify compatibility and freeze a release
@@ -303,10 +330,13 @@ The full mechanical inventory was rerun on **2026-11-03** with
 identical to main `07ddf1b0`) and frontend main `4f4f0b01`. It reports **zero
 failures and zero migration findings** after auditing schema 183. That migration
 adds a helper function and repairs cached inbox values, with no new tables.
-The recovery catalogue now records that reviewed empty table inventory;
-schema 184 remains refused. This supplies no schema-183 recovery drill or
-production acceptance. The older six-endpoint inventory is superseded by this
-current static result under the scanner's present policy.
+That is historical schema-183 static evidence. The recovery catalogue has since
+been extended through schema 188, and the
+[strict restore option](https://github.com/yegamble/vidra/pull/350) now refuses
+media inconsistencies or an absent exact dependency-verification marker before
+app startup. Neither change supplies an actual schema-188 replacement-host drill
+or production acceptance. Rerun the mechanical inventory against the final
+frozen component set.
 
 The same frontend lockfile was audited under Node **26.12.0** and npm
 **11.20.0**. Non-dev dependencies report **zero advisories**; the full tree
