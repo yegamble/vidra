@@ -319,6 +319,7 @@ TABLES_ADDED = {
     184: ('search_catalog_epochs', 'search_catalog_state', 'search_catalog_dirty'),
     185: (),  # Adds original source CAS predecessor, fresh-full threshold and blocker code.
     186: ('search_catalog_snapshots', 'search_catalog_pages'),
+    187: (),  # Transactional dirty function and 24 statement triggers; checked separately.
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 # Receiver authority is not disposable inbox/cache state. Compare whole rows:
@@ -613,6 +614,49 @@ SEARCH_SQL = ("SELECT count(*)||'|'||md5(COALESCE(string_agg(video_id::text||':'
               "E'\\n' ORDER BY video_id::text),'')) FROM search.documents")
 
 
+# Rows and columns survive even when a restore silently drops the transactional
+# invalidation program. Require every shipped object before accepting a baseline;
+# then compare definitions and enabled state across restore, without OIDs.
+CATALOG_PROGRAM = 'public.search_catalog_program'
+CATALOG_PROGRAM_OBJECTS = {'function:public.search_catalog_mark_dirty()': '-'}
+CATALOG_PROGRAM_OBJECTS.update({
+    f'trigger:public.{table}.search_catalog_dirty_{operation}': 'O'
+    for table in ('videos', 'channels', 'users', 'video_metadata', 'video_tags', 'video_blocks')
+    for operation in ('insert', 'update', 'delete', 'truncate')
+})
+CATALOG_PROGRAM_SQL = (
+    "SELECT 'function:public.search_catalog_mark_dirty()|-|'||md5(pg_get_functiondef(p.oid)) "
+    "FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace "
+    "WHERE n.nspname = 'public' AND p.proname='search_catalog_mark_dirty' "
+    "AND p.pronargs=0 AND p.prorettype='trigger'::regtype "
+    "UNION ALL SELECT 'trigger:public.'||c.relname||'.'||t.tgname||'|'||t.tgenabled::text||'|'||"
+    "md5(pg_get_triggerdef(t.oid)) FROM pg_trigger t "
+    "JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace "
+    "WHERE n.nspname = 'public' AND NOT t.tgisinternal "
+    "AND t.tgfoid=to_regprocedure('public.search_catalog_mark_dirty()') "
+    "AND c.relname IN ('videos','channels','users','video_metadata','video_tags','video_blocks') "
+    "AND t.tgname IN ('search_catalog_dirty_insert','search_catalog_dirty_update',"
+    "'search_catalog_dirty_delete','search_catalog_dirty_truncate')")
+
+
+def catalog_program_fingerprint(run):
+    objects = {}
+    for line in run.sql(CATALOG_PROGRAM_SQL).splitlines():
+        # Recorder includes Compose diagnostics; only exact evidence rows count.
+        match = re.fullmatch(r'((?:function|trigger):[^|]+)\|([-ADORT])\|([0-9a-f]{32})', line)
+        if not match:
+            continue
+        key, mode, digest = match.groups()
+        require(key not in objects, f'duplicate catalog program object: {key}')
+        require(key in CATALOG_PROGRAM_OBJECTS, f'unexpected catalog program object: {key}')
+        require(mode == CATALOG_PROGRAM_OBJECTS[key], f'catalog program is not enabled as shipped: {key}')
+        objects[key] = f'{mode}|{digest}'
+    missing = sorted(set(CATALOG_PROGRAM_OBJECTS) - set(objects))
+    require(not missing, 'missing catalog program objects: ' + ', '.join(missing))
+    canonical = '\n'.join(f'{key}|{objects[key]}' for key in sorted(objects))
+    return f'{len(objects)}|{hashlib.sha256(canonical.encode()).hexdigest()}'
+
+
 def fingerprint(run, core_version, search_version):
     tables = catalogue_for(core_version)
     search_tables = search_catalogue_for(search_version)
@@ -623,6 +667,7 @@ def fingerprint(run, core_version, search_version):
                             + [qualified('search', table) for table in search_tables],
                             core_version)
     check_sealed(run, tables)
+    program = catalog_program_fingerprint(run) if core_version >= 187 else None
     rows = {table: run.sql(fingerprint_sql(table, volatile, SEALED.get(table, ()),
                                         digest_rows=table in DIGEST_ROW_TABLES))
             for table, volatile in tables.items()}
@@ -634,6 +679,8 @@ def fingerprint(run, core_version, search_version):
             table, schema='search', digest_rows=table == 'catalog_snapshot_pages'))
     if search_tables:
         rows['search.schema_shape'] = run.sql(SCHEMA_SHAPE_SQL.replace("n.nspname = 'public'", "n.nspname = 'search'"))
+    if program is not None:
+        rows[CATALOG_PROGRAM] = program
     return rows
 
 

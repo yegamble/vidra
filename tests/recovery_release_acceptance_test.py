@@ -369,10 +369,10 @@ class MailConfigCatalogueTest(unittest.TestCase):
         self.assertIn('mail_config', rows)
         self.assertIn('public.mail_config', ' '.join(FakeRun().relations(151)))
 
-    def test_a_187_candidate_is_refused_naming_the_migration_to_read(self):
+    def test_a_188_candidate_is_refused_naming_the_migration_to_read(self):
         with self.assertRaises(ValueError) as raised:
-            recovery.catalogue_for(187)
-        self.assertIn('0187', str(raised.exception))
+            recovery.catalogue_for(188)
+        self.assertIn('0188', str(raised.exception))
 
     def test_a_150_candidate_runs_no_sealed_check(self):
         run = FakeRun()
@@ -1004,6 +1004,66 @@ class ExportTest(unittest.TestCase):
         written = json.loads((drill / 'out/artifact-hashes.json').read_text())
         self.assertEqual(written['secrets_loaded']['bucket_key'], export.DECLARED_ABSENT)
         self.assertEqual(written['secrets_loaded']['owner'], True)
+
+
+class CatalogProgramRecoveryTest(unittest.TestCase):
+    @staticmethod
+    def objects():
+        result = {'function:public.search_catalog_mark_dirty()': ('-', 'a' * 32)}
+        for table in ('videos', 'channels', 'users', 'video_metadata', 'video_tags', 'video_blocks'):
+            for operation in ('insert', 'update', 'delete', 'truncate'):
+                result[f'trigger:public.{table}.search_catalog_dirty_{operation}'] = ('O', 'b' * 32)
+        return result
+
+    def run_with(self, objects):
+        class ProgramRun(FakeRun):
+            def sql(self, query):
+                if 'pg_trigger' in query:
+                    self.queries.append(query)
+                    return '[compose] psql\n' + '\n'.join(f'{key}|{mode}|{digest}'
+                                                         for key, (mode, digest) in objects.items())
+                return super().sql(query)
+        return ProgramRun()
+
+    def test_older_candidate_keeps_its_archived_fingerprint(self):
+        run = self.run_with({})
+        rows = recovery.fingerprint(run, 186, 18)
+        self.assertNotIn('public.search_catalog_program', rows)
+        self.assertFalse(any('pg_trigger' in query for query in run.queries))
+
+    def test_every_required_function_and_trigger_is_present_before_certification(self):
+        for missing in self.objects():
+            with self.subTest(missing=missing):
+                objects = self.objects()
+                del objects[missing]
+                with self.assertRaisesRegex(ValueError, missing.replace('(', r'\(').replace(')', r'\)')):
+                    recovery.fingerprint(self.run_with(objects), 187, 18)
+
+    def test_disabled_or_replica_only_trigger_cannot_be_a_recovery_baseline(self):
+        for mode in ('D', 'R'):
+            objects = self.objects()
+            key = 'trigger:public.users.search_catalog_dirty_update'
+            objects[key] = (mode, 'b' * 32)
+            with self.assertRaisesRegex(ValueError, 'enabled.*' + key):
+                recovery.fingerprint(self.run_with(objects), 187, 18)
+
+    def test_changed_function_or_trigger_definition_changes_recovery_evidence(self):
+        before = recovery.fingerprint(self.run_with(self.objects()), 187, 18)
+        for key in ('function:public.search_catalog_mark_dirty()',
+                    'trigger:public.video_tags.search_catalog_dirty_insert'):
+            objects = self.objects()
+            objects[key] = (objects[key][0], 'c' * 32)
+            after = recovery.fingerprint(self.run_with(objects), 187, 18)
+            self.assertEqual(recovery.differing(before, after), ['public.search_catalog_program'])
+
+    def test_program_query_binds_triggers_to_the_required_function_and_definitions(self):
+        run = self.run_with(self.objects())
+        recovery.fingerprint(run, 187, 18)
+        query = next(query for query in run.queries if 'pg_trigger' in query)
+        for fragment in ('pg_get_functiondef', 'pg_get_triggerdef', 't.tgenabled::text',
+                         "to_regprocedure('public.search_catalog_mark_dirty()')", 't.tgfoid',
+                         "n.nspname = 'public'", 'NOT t.tgisinternal'):
+            self.assertIn(fragment, query)
 
 
 if __name__ == '__main__':
