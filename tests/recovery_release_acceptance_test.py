@@ -369,10 +369,10 @@ class MailConfigCatalogueTest(unittest.TestCase):
         self.assertIn('mail_config', rows)
         self.assertIn('public.mail_config', ' '.join(FakeRun().relations(151)))
 
-    def test_a_188_candidate_is_refused_naming_the_migration_to_read(self):
+    def test_a_189_candidate_is_refused_naming_the_migration_to_read(self):
         with self.assertRaises(ValueError) as raised:
-            recovery.catalogue_for(188)
-        self.assertIn('0188', str(raised.exception))
+            recovery.catalogue_for(189)
+        self.assertIn('0189', str(raised.exception))
 
     def test_a_150_candidate_runs_no_sealed_check(self):
         run = FakeRun()
@@ -1063,6 +1063,45 @@ class CatalogProgramRecoveryTest(unittest.TestCase):
         for fragment in ('pg_get_functiondef', 'pg_get_triggerdef', 't.tgenabled::text',
                          "to_regprocedure('public.search_catalog_mark_dirty()')", 't.tgfoid',
                          "n.nspname = 'public'", 'NOT t.tgisinternal'):
+            self.assertIn(fragment, query)
+
+
+class CatalogErrorEvidenceRecoveryTest(unittest.TestCase):
+    run_with = CatalogProgramRecoveryTest.run_with
+
+    @staticmethod
+    def objects():
+        objects = CatalogProgramRecoveryTest.objects()
+        for name in ('pair', 'nonzero'):
+            objects[f'constraint:public.search_catalog_state.search_catalog_error_evidence_{name}'] = ('T', 'd' * 32)
+        return objects
+
+    def test_188_requires_both_validated_error_guards_before_a_baseline(self):
+        for name in ('pair', 'nonzero'):
+            key = f'constraint:public.search_catalog_state.search_catalog_error_evidence_{name}'
+            missing = self.objects()
+            del missing[key]
+            with self.assertRaisesRegex(ValueError, key):
+                recovery.fingerprint(self.run_with(missing), 188, 18)
+            invalid = self.objects()
+            invalid[key] = ('F', 'd' * 32)
+            with self.assertRaisesRegex(ValueError, key):
+                recovery.fingerprint(self.run_with(invalid), 188, 18)
+
+    def test_changed_error_constraint_definition_is_detected_after_restore(self):
+        before = recovery.fingerprint(self.run_with(self.objects()), 188, 18)
+        objects = self.objects()
+        objects['constraint:public.search_catalog_state.search_catalog_error_evidence_pair'] = ('T', 'e' * 32)
+        after = recovery.fingerprint(self.run_with(objects), 188, 18)
+        self.assertEqual(recovery.differing(before, after), ['public.search_catalog_program'])
+        self.assertTrue(before['public.search_catalog_program'].startswith('27|'))
+
+    def test_188_audits_the_complete_state_and_validated_constraint_definitions(self):
+        run = self.run_with(self.objects())
+        recovery.fingerprint(run, 188, 18)
+        self.assertIn(recovery.fingerprint_sql('search_catalog_state'), run.queries)
+        query = next(q for q in run.queries if 'pg_trigger' in q)
+        for fragment in ('pg_get_constraintdef', 'convalidated', "'public.search_catalog_state'::regclass"):
             self.assertIn(fragment, query)
 
 
