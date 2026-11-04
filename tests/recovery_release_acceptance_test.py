@@ -369,10 +369,10 @@ class MailConfigCatalogueTest(unittest.TestCase):
         self.assertIn('mail_config', rows)
         self.assertIn('public.mail_config', ' '.join(FakeRun().relations(151)))
 
-    def test_a_184_candidate_is_refused_naming_the_migration_to_read(self):
+    def test_a_187_candidate_is_refused_naming_the_migration_to_read(self):
         with self.assertRaises(ValueError) as raised:
-            recovery.catalogue_for(184)
-        self.assertIn('0184', str(raised.exception))
+            recovery.catalogue_for(187)
+        self.assertIn('0187', str(raised.exception))
 
     def test_a_150_candidate_runs_no_sealed_check(self):
         run = FakeRun()
@@ -421,6 +421,30 @@ class MailConfigCatalogueTest(unittest.TestCase):
 
 
 class RecentCatalogueTest(unittest.TestCase):
+    def test_producer_authority_and_frozen_payloads_follow_the_candidate_schema(self):
+        authority = {'search_catalog_epochs', 'search_catalog_state', 'search_catalog_dirty'}
+        payloads = {'search_catalog_snapshots', 'search_catalog_pages'}
+        self.assertTrue(authority.isdisjoint(recovery.catalogue_for(183)))
+        self.assertTrue(authority <= set(recovery.catalogue_for(184)))
+        self.assertTrue(payloads.isdisjoint(recovery.catalogue_for(185)))
+        self.assertTrue(authority | payloads <= set(recovery.catalogue_for(186)))
+
+    def test_missing_producer_payload_is_named_before_hashing(self):
+        run = FakeRun(present=[name for name in FakeRun().relations(186)
+                               if name != 'public.search_catalog_pages'])
+        with self.assertRaisesRegex(ValueError, 'public.search_catalog_pages'):
+            recovery.fingerprint(run, 186, 18)
+        self.assertEqual(len(run.queries), 1)
+
+    def test_frozen_bytea_rows_are_hashed_before_the_catalogue_aggregate(self):
+        run = FakeRun()
+        rows = recovery.fingerprint(run, 186, 18)
+        for table in ('search_catalog_snapshots', 'search_catalog_pages'):
+            self.assertIn(table, rows)
+            query = next(query for query in run.queries if 'FROM ' + table + ' t' in query)
+            self.assertIn('to_jsonb(t) AS r', query)
+            self.assertIn("string_agg(md5(r::text),E'\\n' ORDER BY md5(r::text))", query)
+
     def test_search_schema_must_come_from_the_frozen_candidate(self):
         self.assertEqual(recovery.search_schema_version({'vidra_search_migrations': {'version': 21}}), 21)
         with self.assertRaisesRegex(ValueError, 'vidra_search_migrations'):
@@ -451,6 +475,8 @@ class RecentCatalogueTest(unittest.TestCase):
         self.assertTrue(any("n.nspname = 'search'" in query for query in run.queries))
         self.assertIn(recovery.fingerprint_sql('documents', schema='search'), run.queries)
         self.assertNotIn(recovery.SEARCH_SQL, run.queries)
+        self.assertIn(recovery.fingerprint_sql('catalog_snapshot_pages', schema='search', digest_rows=True),
+                      run.queries)
 
     def test_missing_receiver_fence_is_named_before_hashing(self):
         run = FakeRun(present=FakeRun().relations(183))

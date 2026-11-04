@@ -213,7 +213,22 @@ CATALOGUE = {
     # 0182. Admin login-provider policy, with the write-only secret classified
     # below. Includes disabled rows: they suppress environment fallback too.
     'oidc_providers': (182, ()),
+    # 0184-0185. Source epoch/CAS history, recovery controls and exact immutable
+    # dirty identities must survive together. Quiesce catalog workers and
+    # controls across comparisons; none of their authority is disposable.
+    'search_catalog_epochs': (184, ()),
+    'search_catalog_state': (184, ()),
+    'search_catalog_dirty': (184, ()),
+    # 0186. The retained verified FULL proof and frozen pending wire requests.
+    # Losing pages can silently change what a restored sender delivers.
+    'search_catalog_snapshots': (186, ()),
+    'search_catalog_pages': (186, ()),
 }
+
+# BYTEA is hex-encoded by to_jsonb. Aggregating a 512MiB frozen snapshot can
+# therefore exceed PostgreSQL's 1GiB text limit. Hash each COMPLETE row first,
+# then aggregate its bounded digest; no payload or column is omitted.
+DIGEST_ROW_TABLES = {'search_catalog_snapshots', 'search_catalog_pages'}
 
 # Columns holding a credential sealed under the MFA KEK chain (mail/OIDC) or
 # FEDERATION_KEY_KEK (the instance actor in production), as
@@ -236,7 +251,7 @@ SEALED = {
 
 # Tables a migration creates that the drill deliberately does NOT fingerprint,
 # as `table: (core schema version that created it, why)`. Empty today: every
-# table 0147-0183 added carries something a restore must reproduce. It exists so
+# table 0147-0186 added carries something a restore must reproduce. It exists so
 # that "pure ephemeral state, nothing worth asserting" is a diff-visible
 # decision with a reason attached, never a silent omission.
 EXCLUDED_TABLES = {}
@@ -244,7 +259,7 @@ EXCLUDED_TABLES = {}
 # What "audited" means: one line per core schema version from the floor upward,
 # naming the tables that version's migration CREATEs (an empty tuple when it
 # creates none), read out of vidra-core's `migrations/<version>_*.up.sql` at the
-# newest audited core revision (07ddf1b0, schema 0183). The ceiling is DERIVED from this map, so the
+# newest audited core revision (66d20920, schema 0186). The ceiling is DERIVED from this map, so the
 # audit cannot be advanced by editing a number — landing a release with a newer
 # schema forces a new line here (the rot guard in the test module fails until it
 # exists), and every table on that line must then land in CATALOGUE or in
@@ -292,12 +307,14 @@ TABLES_ADDED = {
     # 0183 at core 55d380d7 creates a helper function and repairs cached inbox
     # values; it creates no tables. This records SQL review, not a recovery drill.
     183: (),
+    184: ('search_catalog_epochs', 'search_catalog_state', 'search_catalog_dirty'),
+    185: (),  # Adds original source CAS predecessor, fresh-full threshold and blocker code.
+    186: ('search_catalog_snapshots', 'search_catalog_pages'),
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 # Receiver authority is not disposable inbox/cache state. Compare whole rows:
 # quiesce all search writers (capture, delivery, stats/config and staging cleanup)
-# across the drill, rather
-# than excluding the fences or frozen payloads that a correct restore needs.
+# across the drill, rather than excluding authority or frozen payloads.
 SEARCH_TABLES_ADDED = {
     18: (),  # Oldest search schema in this harness's release candidates.
     19: ('catalog_epochs', 'catalog_scopes'),
@@ -376,7 +393,7 @@ def check_recorded_harness(name, recorded, revision):
             'actions with the files staged on this host.')
 
 
-def fingerprint_sql(table, volatile=(), sealed=(), *, schema=None):
+def fingerprint_sql(table, volatile=(), sealed=(), *, schema=None, digest_rows=False):
     """count(*) plus an order-independent md5 over one table's stable content.
 
     `to_jsonb(t)` is the WHOLE row, so a column missing from a restored table
@@ -392,6 +409,7 @@ def fingerprint_sql(table, volatile=(), sealed=(), *, schema=None):
     """
     identifier(table)
     relation = qualified(schema, table) if schema is not None else table
+    item = 'md5(r::text)' if digest_rows else 'r::text'
     keys = row = ''
     dropped = tuple(volatile) + tuple(sealed)
     if dropped:
@@ -400,9 +418,9 @@ def fingerprint_sql(table, volatile=(), sealed=(), *, schema=None):
         row = " || jsonb_build_object(" + ','.join(
             f"'{c}', CASE WHEN t.{c} = '' THEN 'none' WHEN t.{c} LIKE 'enc:%' THEN 'sealed' ELSE 'UNSEALED' END"
             for c in sealed) + ")"
-        return (f"SELECT count(*)||'|'||md5(COALESCE(string_agg(r::text,E'\\n' ORDER BY r::text),'')) "
+        return (f"SELECT count(*)||'|'||md5(COALESCE(string_agg({item},E'\\n' ORDER BY {item}),'')) "
                 f"FROM (SELECT (to_jsonb(t){keys}){row} AS r FROM {relation} t) s")
-    return (f"SELECT count(*)||'|'||md5(COALESCE(string_agg(r::text,E'\\n' ORDER BY r::text),'')) "
+    return (f"SELECT count(*)||'|'||md5(COALESCE(string_agg({item},E'\\n' ORDER BY {item}),'')) "
             f"FROM (SELECT to_jsonb(t){keys} AS r FROM {relation} t) s")
 
 
@@ -594,13 +612,15 @@ def fingerprint(run, core_version, search_version):
                             + [qualified('search', table) for table in search_tables],
                             core_version)
     check_sealed(run, tables)
-    rows = {table: run.sql(fingerprint_sql(table, volatile, SEALED.get(table, ())))
+    rows = {table: run.sql(fingerprint_sql(table, volatile, SEALED.get(table, ()),
+                                        digest_rows=table in DIGEST_ROW_TABLES))
             for table, volatile in tables.items()}
     rows[SEARCH_DOCUMENTS] = run.sql(SEARCH_SQL if search_version == 18
                                     else fingerprint_sql('documents', schema='search'))
     rows[SCHEMA_SHAPE] = run.sql(SCHEMA_SHAPE_SQL)
     for table in search_tables:
-        rows[qualified('search', table)] = run.sql(fingerprint_sql(table, schema='search'))
+        rows[qualified('search', table)] = run.sql(fingerprint_sql(
+            table, schema='search', digest_rows=table == 'catalog_snapshot_pages'))
     if search_tables:
         rows['search.schema_shape'] = run.sql(SCHEMA_SHAPE_SQL.replace("n.nspname = 'public'", "n.nspname = 'search'"))
     return rows
