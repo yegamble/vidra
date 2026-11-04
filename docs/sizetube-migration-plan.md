@@ -111,6 +111,15 @@ access returned 401. This does not prove target-media recovery or cross-region
 recovery. Raw snapshots, account details,
 credentials and object manifests stay outside Git with restricted permissions.
 
+The target-progress DB, preparation config and encrypted point manifest are also
+stored in that private backup bucket at point `20261104T015808Z-f5c87d84`.
+All three ciphertext objects passed provider checksums and complete authenticated,
+exact-version SHA-256 readback; anonymous access returned 401. This is a progress
+backup while COPY is running. Decryption of this new point, a matched media freeze,
+the actual target-media backup and replacement-host restore remain unproven.
+The current account is authorized for this rehearsal; cross-region recovery
+remains outside the demonstrated evidence.
+
 The root-only database archive is 253,567,950 bytes and restored from PostgreSQL
 18.6 at schema 1130 without publishing a database port. This proves a source
 clone restore, not Vidra recovery or a matched DB/config/media capture.
@@ -123,14 +132,29 @@ handoff. All 5,521 users and 5,572 channels have imported. Media work and its
 exception report are incomplete. No candidate playback or replacement-host
 restore is accepted yet.
 
+At **2026-11-04 02:32 UTC**, a read-only observation of the changing private
+primary bucket counted 4,730 live objects and 137,887,417,943 bytes. This is
+transfer progress, not a consistent inventory or completed backup. The target
+then contained 15,490 video, 1,921 file and 178 HLS records; the two obsolete
+progressive references still require the controlled source refresh described
+above. Retryable HLS failures remain in the ledger and require reconciliation;
+the running process's failure count is not a final exception report.
+
 One official PeerTube ZIP was generated offline from the isolated source clone.
 Native metadata, captions and actual artwork passed independent checks; its
 muxed video and audio decoded completely with encoded packet payloads preserved.
-Importing that archive into the published Vidra candidate, persisted read-back
-and owner/job isolation remain open.
-The released ZIP path is synchronous metadata import. Media ingestion and an
-asynchronous ZIP-import job are not supplied by that path; an account-export
-job test must not be presented as proof of either capability.
+An isolated diagnostic using cached published CORE v0.7.8 passed synchronous
+metadata import of that actual archive: channel, private playlist and settings
+persisted across API replacement, repeat import created no duplicates, and
+cross-user reads/writes were refused. Its carried video and captions were
+explicitly skipped; no video or caption rows were created. The released ZIP
+path supplies neither media ingestion nor an asynchronous ZIP-import job.
+A separate account-export job persisted across process replacement and returned
+identical downloads while its storage stayed continuously mounted. This does
+not prove volume remount or host recovery. The initial failed run is preserved:
+stopping both processes released the last tmpfs mount and lost export bytes.
+Repeat the supported tests on the eventual published candidate with its actual
+storage and scanner; these diagnostic passes do not qualify that candidate.
 
 ### Current production gate board
 
