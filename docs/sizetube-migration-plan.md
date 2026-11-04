@@ -247,8 +247,10 @@ channel sync and destructive
 media jobs during import. Configure and test an HTTPS mail provider separately;
 DigitalOcean blocks standard outbound SMTP submission ports.
 
-Keep encrypted database/config backups with a separate provider and region, and
-preserve recovery keys separately. Media recovery requires its own copy/versioning policy;
+Use the authorized separate private B2 backup bucket for rehearsal and preserve
+recovery keys separately. The current-account plan is approved; it does not
+demonstrate cross-region recovery. Settle production resilience requirements
+before cutover. Media recovery requires its own copy/versioning policy;
 database and configuration archives do not contain object-store media.
 
 ## 3. Qualify compatibility and freeze a release
