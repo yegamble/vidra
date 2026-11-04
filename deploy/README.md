@@ -1701,11 +1701,30 @@ before the stack comes back up it runs the fast pass:
 docker compose … run --rm api verify-blobs --timeout=10m
 ```
 
-It **never blocks the restore.** Exit `3` (verified, and it is wrong) prints a
+By default it **does not block the restore.** Exit `3` (verified, and it is wrong) prints a
 warning block naming the missing keys and continues; exit `1` (could not verify
 — bucket or database unreachable) prints a different warning and continues.
 Aborting there would leave the site down over a media problem that not booting
 does not fix.
+
+For a recovery acceptance drill, require the stronger check before application
+startup:
+
+```bash
+RESTORE_MEDIA_TIMEOUT=36h ./deploy/restore.sh --yes --require-media-consistent backups/<point>.dump.gz
+```
+
+This mode runs `verify-blobs --hash --deep --json` and fails on every nonzero exit,
+including missing media, timeout, an unreachable store or an unsupported command.
+The database has already been restored; api, search and frontend stay stopped.
+The timeout defaults to 24h and accepts a positive integer followed by `s`, `m`
+or `h`; invalid values refuse before Docker or database actions. Python 3 is
+required to validate the report. The JSON must carry integer
+`deep_verification_version=1`; an older image's successful directory-only check,
+malformed output or an unknown version also keeps apps stopped. Use the exact
+published candidate with complete dependency verification. A passing command
+does not prove decoder/browser playback, independent hashes for objects without
+recorded digests, source disconnection or a matched backup point.
 
 **When to run it by hand, with `--hash`.** The fast pass reads no bytes — it
 asks the store whether each object exists. `--hash` re-downloads every object

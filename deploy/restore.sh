@@ -7,6 +7,10 @@
 #
 # Options:
 #   --yes, -y                 skip the confirmation prompt (see CONFIRMATION)
+#   --require-media-consistent require successful hash + deep media verification
+#                             before starting apps (recovery acceptance). Timeout
+#                             is RESTORE_MEDIA_TIMEOUT, default 24h; positive
+#                             integer seconds/minutes/hours, e.g. 36h.
 #   --allow-schema-mismatch   proceed even when the SCHEMA PREFLIGHT says the
 #                             pinned images cannot reach the dump's schema. Only
 #                             do this if you know why: the default refusal exists
@@ -70,17 +74,32 @@ die() { printf '[restore] ERROR: %s\n' "$*" >&2; exit 1; }
 
 FORCE=0
 ALLOW_SCHEMA_MISMATCH=0
+REQUIRE_MEDIA_CONSISTENT=0
+RESTORE_MEDIA_TIMEOUT="${RESTORE_MEDIA_TIMEOUT:-24h}"
 DUMP=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --yes|-y) FORCE=1 ;;
     --allow-schema-mismatch) ALLOW_SCHEMA_MISMATCH=1 ;;
-    -h|--help) sed -n '2,43p' "$0"; exit 0 ;;
+    --require-media-consistent) REQUIRE_MEDIA_CONSISTENT=1 ;;
+    -h|--help) sed -n '2,47p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *)  DUMP="$1" ;;
   esac
   shift
 done
+
+if [ "$REQUIRE_MEDIA_CONSISTENT" -eq 1 ]; then
+  command -v python3 >/dev/null 2>&1 || die "python3 is required for strict media verification"
+  python3 -c 'import re,sys
+value=sys.argv[1]
+try:
+    valid=bool(re.fullmatch(r"[1-9][0-9]*[smh]",value)) and int(value[:-1])*{"s":10**9,"m":60*10**9,"h":3600*10**9}[value[-1]] <= 2**63-1
+except ValueError:
+    valid=False
+sys.exit(0 if valid else 1)' "$RESTORE_MEDIA_TIMEOUT" \
+    || die "RESTORE_MEDIA_TIMEOUT must be a positive integer followed by s, m or h within Go duration range"
+fi
 
 [ -n "$DUMP" ] || die "usage: $0 [--yes] <dump-file>"
 [ -f "$DUMP" ] || die "dump not found: $DUMP"
@@ -434,21 +453,42 @@ log "running search migrations"
 # which bucket or directory to ask. Same image, same env file, same compose
 # chain as every other call in this script.
 #
-# THIS NEVER BLOCKS THE RESTORE. `set -e` is deliberately suspended for the call
-# (the `|| rc=$?` form), because a restore that aborted here would leave the site
-# down over a media problem that not booting does not fix. Exit codes:
+# The default emergency restore continues with a warning. Recovery acceptance
+# opts into --require-media-consistent: missing or unverifiable bytes must keep
+# apps stopped, rather than producing a successful rehearsal from a DB alone.
+# `set -e` is deliberately suspended for the call
+# (the `|| rc=$?` form) to distinguish the failure classes. Default-mode exits:
 #   0  consistent
 #   3  verified, and it is wrong  -> WARN and continue
 #   1  could not verify at all    -> WARN and continue
 # The two are kept apart on purpose: "the media is gone" and "I could not reach
 # the bucket" send an operator to completely different places.
 #
-# --timeout is short here, unlike the command's own generous default: this is
-# the fast existence-only pass, and a hung object store must not add an hour to
-# a restore that is otherwise finished.
+# The emergency default is a short existence pass; strict acceptance deliberately
+# allows time for the full hash/dependency walk. Neither mode repairs anything.
 log "verifying that the restored database's media is present"
 verify_rc=0
-"${COMPOSE[@]}" run --rm api verify-blobs --timeout=10m || verify_rc=$?
+if [ "$REQUIRE_MEDIA_CONSISTENT" -eq 1 ]; then
+  verify_report="$("${COMPOSE[@]}" run --rm api verify-blobs --hash --deep --json "--timeout=$RESTORE_MEDIA_TIMEOUT")" || verify_rc=$?
+  printf '%s\n' "$verify_report"
+  if [ "$verify_rc" -eq 0 ]; then
+    # Older images can return 0 after checking only a nonempty HLS directory.
+    # Require the exact-dependency verifier's versioned machine contract too.
+    python3 -c 'import json,sys
+try:
+    report=json.load(sys.stdin)
+    valid=isinstance(report,dict) and type(report.get("deep_verification_version")) is int and report["deep_verification_version"]==1
+except (ValueError,TypeError):
+    valid=False
+sys.exit(0 if valid else 1)' <<< "$verify_report" \
+      || die "strict media verification requires a valid exact-dependency report (deep_verification_version=1); applications remain stopped"
+  fi
+else
+  "${COMPOSE[@]}" run --rm api verify-blobs --timeout=10m || verify_rc=$?
+fi
+if [ "$REQUIRE_MEDIA_CONSISTENT" -eq 1 ] && [ "$verify_rc" -ne 0 ]; then
+  die "strict media verification failed (verify-blobs exited $verify_rc); database restored, but api, search and frontend remain stopped. Preserve the findings and repair or recover the media before retrying acceptance."
+fi
 case "$verify_rc" in
   0)
     log "media consistency: every object the restored database references is present"
