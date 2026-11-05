@@ -191,6 +191,14 @@ opened for it (#218) was closed unmerged by the owner on 2026-09-15 as
 intended behaviour, not a missing record**; a rollback to it still proceeds
 with the WARNING above. Do not add `releases/v0.6.7.json`.
 
+**v0.7.10 — superseded by v0.7.11 before any deployment.** Its vidra-user
+image was cut before vidra-user#454 regenerated `lib/api/generated.ts` for core
+#517's `user_mfa_hold` report kind, so `release-preflight.py` refused the triple
+("generated API types drift from frozen core spec"). It was re-cut as v0.7.11
+and never deployed; its record PR (#355) was closed unmerged as "Superseded — do
+not merge". **`deploy.sh` refusing a v0.7.10 triple is the intended behaviour,
+not a missing record.** Do not add `releases/v0.7.10.json`.
+
 ### Records frozen retroactively
 
 **v0.6.8 and v0.6.9** were recorded on **2026-09-20**, days after they were
