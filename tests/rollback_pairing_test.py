@@ -101,10 +101,10 @@ class RollbackPairingTests(unittest.TestCase):
                 self.assertIn('--user v0.7.2 overrides', out)
 
     def test_negative_control_a_bare_tag_with_no_record_stays_uniform_and_warns(self):
-        self.assertFalse((self.tree / 'releases/v0.7.9.json').exists())
-        code, out = self.rollback('v0.7.9')
+        self.assertFalse((self.tree / 'releases/v0.7.99.json').exists())
+        code, out = self.rollback('v0.7.99')
         self.assertEqual(code, 0, out)
-        self.assertEqual(self.pins(), ('v0.7.9', 'v0.7.9', 'v0.7.9'))
+        self.assertEqual(self.pins(), ('v0.7.99', 'v0.7.99', 'v0.7.99'))
         self.assertIn('NOT verified', out)
         self.assertNotIn('pairs core=', out)
 
