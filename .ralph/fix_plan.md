@@ -15,45 +15,45 @@
 
 ## vidra-core (Go backend) — phase gate
 
-- [ ] P0 — Ralph control plane and PeerTube parity tracking (`vidra-core`)
-- [ ] P1 — Backend project foundation (module, config, Docker, CI)
-- [ ] P2 — Database, migrations, and sqlc
-- [ ] P3 — HTTP API foundation and contracts (OpenAPI, system endpoints)
-- [ ] P4 — Auth, accounts, and identity
-- [ ] P5 — Channels, profiles, and instance metadata
-- [ ] P6 — Video publishing and media pipeline
-- [ ] P7 — Playback, discovery, and public video API
-- [ ] P8 — Library, playlists, comments, and notifications
-- [ ] P9 — Moderation, admin, and safety
-- [ ] P10 — Federation (ActivityPub, ATProto extension)
-- [ ] P11 — Messaging (normal + encrypted foundation)
-- [ ] P12 — Live streaming
-- [ ] P13 — Captions and Whisper
-- [ ] P14 — Simple crypto donations
-- [ ] P15 — Security hardening
-- [ ] P16 — Testing strategy
-- [ ] P17 — Observability and operations
-- [ ] P18 — PeerTube import and migration (import an existing PeerTube DB + instance)
-- [ ] P19 — Backend release gates
+- [ ] P0 — Ralph control plane and PeerTube parity tracking (`vidra-core`) (sub-plan 13 open, L52–L68: PeerTube reference pin + the endpoint/model/job/config/moderation/federation mapping tables + route/control inventory rules at vidra-core `4995d024`, 2026-11-06)
+- [ ] P1 — Backend project foundation (module, config, Docker, CI) (sub-plan 8 open, L79–L149: `cmd/worker`, `internal/testutil`, `Dockerfile.worker`, run-subset docs, Docker build/cache/artifact CI steps at vidra-core `4995d024`, 2026-11-06)
+- [ ] P2 — Database, migrations, and sqlc (sub-plan 2 open, L164/L166: transactional test helper, migration rollback test at vidra-core `4995d024`, 2026-11-06)
+- [ ] P3 — HTTP API foundation and contracts (OpenAPI, system endpoints) (sub-plan 1 open, L244: TS client/types for vidra-user — the work exists in vidra-user (`contract-ci.yml` + `npm run codegen`); the core sub-plan item is stale at vidra-core `4995d024`, 2026-11-06)
+- [x] P4 — Auth, accounts, and identity (sub-plan 24/24 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P5 — Channels, profiles, and instance metadata (sub-plan 12/12 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P6 — Video publishing and media pipeline (sub-plan 39/39 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P7 — Playback, discovery, and public video API (sub-plan 14/14 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P8 — Library, playlists, comments, and notifications (sub-plan 17/17 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P9 — Moderation, admin, and safety (sub-plan 24/24 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P10 — Federation (ActivityPub, ATProto extension) (sub-plan 21/21 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P11 — Messaging (normal + encrypted foundation) (sub-plan 21/21 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P12 — Live streaming (sub-plan 11/11 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P13 — Captions and Whisper (sub-plan 8/8 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P14 — Simple crypto donations (sub-plan 7/7 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P15 — Security hardening (sub-plan 14/14 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P16 — Testing strategy (sub-plan 13/13 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [ ] P17 — Observability and operations (sub-plan 1 open, L940: request-scoped logger propagation through service/store layers at vidra-core `4995d024`, 2026-11-06)
+- [x] P18 — PeerTube import and migration (import an existing PeerTube DB + instance) (sub-plan 17/17 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
+- [x] P19 — Backend release gates (sub-plan 19/19 ticked at vidra-core `4995d024`, reconciled 2026-11-06)
 
 ## vidra-user (Next.js frontend) — phase gate
 
-- [ ] P0 — Ralph control plane and PeerTube parity tracking (`vidra-user`)
-- [ ] P1 — Frontend project foundation (Next.js, TS, Tailwind, API client, Docker, CI)
-- [ ] P2 — App shell and navigation
-- [ ] P3 — Auth and account UI
-- [ ] P4 — Public video browsing and watch page
-- [ ] P5 — Library, playlists, subscriptions, and notifications
-- [ ] P6 — Publishing and upload UX
-- [ ] P7 — Studio and creator tools
-- [ ] P8 — Messaging UX
-- [ ] P9 — Moderation and reporting UI
-- [ ] P10 — Admin UI
-- [ ] P11 — Federation, search, and external identity UI
-- [ ] P12 — Captions, accessibility, and i18n readiness
-- [ ] P13 — Simple crypto donation UI
-- [ ] P14 — Frontend testing strategy (incl. backend-backed DB-effect e2e)
-- [ ] P15 — Frontend release gates
+- [x] P0 — Ralph control plane and PeerTube parity tracking (`vidra-user`) (sub-plan 22/22 ticked at vidra-user `595ac805`, reconciled 2026-11-06)
+- [ ] P1 — Frontend project foundation (Next.js, TS, Tailwind, API client, Docker, CI) (sub-plan 11 open, L200–L259: Prettier, compose override, Makefile, Docker build check, reusable workflow, Playwright cache, secrets-in-logs check, and the four OTel items — `instrumentation.ts` + `@vercel/otel` exist in the code, so the sub-plan (last edited 2026-07-08) is stale here at vidra-user `595ac805`, 2026-11-06)
+- [x] P2 — App shell and navigation (sub-plan 12/12 ticked at vidra-user `595ac805`, reconciled 2026-11-06)
+- [ ] P3 — Auth and account UI (sub-plan 1 open, L285: terms-of-use signup step at vidra-user `595ac805`, 2026-11-06)
+- [x] P4 — Public video browsing and watch page (sub-plan 34/34 ticked at vidra-user `595ac805`, reconciled 2026-11-06)
+- [x] P5 — Library, playlists, subscriptions, and notifications (sub-plan 18/18 ticked at vidra-user `595ac805`, reconciled 2026-11-06)
+- [ ] P6 — Publishing and upload UX (sub-plan 1 open, L397: save-draft/publish controls at vidra-user `595ac805`, 2026-11-06)
+- [ ] P7 — Studio and creator tools (sub-plan 2 open, L468/L469: remote channel sync page, quota/storage display at vidra-user `595ac805`, 2026-11-06)
+- [x] P8 — Messaging UX (sub-plan 16/16 ticked at vidra-user `595ac805`, reconciled 2026-11-06)
+- [ ] P9 — Moderation and reporting UI (sub-plan 1 open, L533: bulk moderation actions at vidra-user `595ac805`, 2026-11-06)
+- [ ] P10 — Admin UI (sub-plan 1 open, L549: federation settings page at vidra-user `595ac805`, 2026-11-06)
+- [ ] P11 — Federation, search, and external identity UI (sub-plan 1 open, L569: fake-remote federation harness follow-up at vidra-user `595ac805`, 2026-11-06)
+- [x] P12 — Captions, accessibility, and i18n readiness (sub-plan 11/11 ticked at vidra-user `595ac805`, reconciled 2026-11-06)
+- [x] P13 — Simple crypto donation UI (sub-plan 8/8 ticked at vidra-user `595ac805`, reconciled 2026-11-06)
+- [ ] P14 — Frontend testing strategy (incl. backend-backed DB-effect e2e) (sub-plan 2 open, L621/L632: MSW (not adopted), focused-vs-full suite docs at vidra-user `595ac805`, 2026-11-06)
+- [x] P15 — Frontend release gates (sub-plan 21/21 ticked at vidra-user `595ac805`, reconciled 2026-11-06)
 
 ## Backport programme (`.ralph/specs/backport/PROGRAM.md`) — phase gate
 
@@ -131,14 +131,28 @@
 - [ ] Observability is enforced in both projects per `.ralph/specs/observability.md`:
       structured developer-friendly logging, no secrets/PII/plaintext in
       logs/traces, and OpenTelemetry with `traceparent` correlation across the
-      `vidra-user` → `vidra-core` boundary.
-- [ ] Backend ↔ frontend API contract is proven compatible (generated types / contract tests).
-- [ ] PeerTube import path exists: an existing PeerTube instance (PostgreSQL DB +
+      `vidra-user` → `vidra-core` boundary. (Open in the sub-plans at 2026-11-06: core P17 L940
+      logger propagation; user P1 L255–L259 — though `instrumentation.ts` exists, see P1 above.)
+- [x] Backend ↔ frontend API contract is proven compatible (generated types / contract tests).
+      Evidence 2026-11-06: vidra-user `contract-ci.yml` (required check `contract`) runs
+      `scripts/check-contract.mjs` and fails when `lib/api/generated.ts` is stale vs core's
+      `openapi.yaml`; locally at core `4995d024` / user `595ac805` it reports 307 paths / 412
+      operations with every frontend path and method present. This repo's
+      `scripts/ci/check-vertical-slice-completeness.py` (contract + type freshness, always run)
+      exits 0 with `0 failure(s), 0 migration finding(s)` at the same SHAs.
+- [x] PeerTube import path exists: an existing PeerTube instance (PostgreSQL DB +
       media storage) can be imported into Vidra per
       `vidra-core/.ralph/specs/peertube-import.md` (read-only source, idempotent,
       dry-runnable, audited), with the `vidra-user` admin import UI consuming it.
+      Evidence 2026-11-06: core sub-plan P18 17/17 ticked at `4995d024` (`cmd/peertube-import`,
+      `internal/peertubeimport`, `/api/v1/admin/peertube-import`); vidra-user
+      `app/admin/import-peertube` → `AdminPeerTubeImportView` consumes it; meta runbook
+      `docs/peertube-migration.md` and acceptance records `docs/runtime-acceptance-migration-v0.6.{4,5}.md`,
+      `docs/runtime-acceptance-b2-migration-v0.7.8.md` (Verdict: PASS within the synthetic subset).
 - [ ] Every in-scope data-mutating `vidra-user` flow is verified against the real
-      database (row changed AND visible in the UI after refetch).
+      database (row changed AND visible in the UI after refetch). (User sub-plan P14 has 2
+      open items at `595ac805`; the backed suite exists — 55 `e2e-backed/` specs — but "every
+      flow" has no inventory to certify against from this repo.)
 
 ## Optional / Deferred / Non-Blocking
 
