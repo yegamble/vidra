@@ -1,0 +1,7 @@
+{
+  "scope": "Presentation-only normalization; digest tokens and original captured command output are unchanged.",
+  "normalization": "Remove trailing ASCII spaces and tabs from each line of platform-digests.txt.",
+  "original_sha256": "5b78141679fec61ef4311ccc551cb2d9f21c4c37fa8b45615d02c3d806b9baed",
+  "normalized_sha256": "cea5e4a93e94b3c8d0681defc2c7815e23d1abd1374468c608d42d29f9d7b563",
+  "original_output_retained_in": "capture-commands.json"
+}
