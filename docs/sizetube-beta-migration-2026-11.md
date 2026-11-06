@@ -112,3 +112,51 @@ chapters (6 avatars and 1 banner whose actor is neither an account nor a channel
 - Byte-level integrity of every copied object. The importer checks each copy;
   this record re-hashes nothing.
 - That beta behaviour matches production feature by feature. That is the parity QA's job.
+
+## v0.7.13 beta deployment (2026-11-06)
+
+Before the deploy, no import run was pending or running. An off-site backup ran
+first (`vidra-20261106T043842Z`).
+
+- The first `pin-release.sh v0.7.13` **refused** (exit 1, nothing changed): it could
+  not read a release record for v0.7.13 before #359 merged, and a bundle upgrade will
+  not guess the pairing. That is the intended behaviour. After #359 merged, it fetched
+  `releases/v0.7.13.json`, verified the bundle checksum and pinned
+  `VIDRA_CORE_TAG=VIDRA_USER_TAG=VIDRA_SEARCH_TAG=v0.7.13`.
+- `deploy.sh` ran in its fixed order and exited 0:
+  1. pre-deploy dump `pre-deploy-2026-11-06T044341.dump.gz` (88M)
+  2. pull
+  3. migrate: core `schema already up to date version=188 dirty=false`, search `version=21 dirty=false`
+  4. `up -d`
+  5. Caddy reload
+  6. health probes: api `/readyz`, frontend and edge `/healthz` all OK
+- **Ledger assertion:** deploy.sh expected core schema `0188` from
+  `vidra-bundle.manifest` and logged `core schema OK (version 188)`. An independent
+  read afterwards: `schema_migrations` = `188|f`, `vidra_search_migrations` = `21|f`.
+- **Running images:** `vidra-core:v0.7.13`, `vidra-user:v0.7.13`, `vidra-search:v0.7.13`.
+  `deploy/Caddyfile.local` (IP gate and CDN block) is byte-identical to before.
+- `GET https://beta.sizetube.com/healthz` → `200 {"status":"ok"}`.
+
+### Rate limit: the 30-page signed-in browse
+
+The check was headless Chromium signed in as a regular user, visiting 30 pages (home,
+watch pages, channel pages, trending, recent, search, subscriptions, library, history,
+playlists, notifications, settings). 429s were counted both in the browser and in the
+API's own request log.
+
+| `RATE_LIMIT_REQUESTS` | Pace | Duration | 429s (browser) | 429s (api log) |
+|---|---|---|---|---|
+| 120 (default) | 0.4 s/page | 18.4 s | **80** | 84 |
+| 120 (default) | 3 s/page | 99.7 s | **23** | 25 |
+| 300 | 0.4 s/page | 20.8 s | **0** | 0 |
+| 300 | 3 s/page | 98.3 s | **0** | 0 |
+
+**Why 120/min fails ordinary browsing:** each page costs about **8.4 requests on the
+general API budget** (media is on its own 3,000/min budget). At one page every 3 s that
+is ~170/min. The biggest per-page contributors, over 30 pages: `GET /instance` 34,
+`POST /auth/refresh` 30, `GET /channels/:h/donation-addresses` 27, `GET /videos/resolve` 20,
+`GET /channels/:h` 20, `GET /users/:u/donation-addresses` 17. PeerTube's shipped API
+limit is 50 requests per 10 s (300/min), so the beta now sets `RATE_LIMIT_REQUESTS=300`
+in its env (backup of the previous env in `/root/production.env.pre-ratelimit300-*`).
+**The per-page request overhead itself is not fixed.** It is a frontend follow-up; until
+it lands, 120/min is too low a default for a signed-in viewer.
