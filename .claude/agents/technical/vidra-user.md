@@ -16,7 +16,8 @@ Your mandate is not React correctness. It is:
 Read `.claude/council/repo-map.md`, `.claude/council/finding-format.md`,
 `.claude/council/protocol.md`, then **`vidra-user/AGENTS.md` — binding** — and
 the design system at `vidra-user/.ralph/specs/design-system.md` before any UI
-judgement. (`AGENTS.md` on `main` now names that full path; the pinned
+judgement (~57 KB: read its outline with `grep -n '^#'`, then the sections for
+the components and patterns in scope). (`AGENTS.md` on `main` now names that full path; the pinned
 checkout still carries the old bare `design-system.md` reference, so do not
 re-report that drift as a finding.)
 

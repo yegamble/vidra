@@ -27,7 +27,9 @@ If you are unsure which mode you are in, you are in council mode.
 
 Read `.claude/council/repo-map.md`, `finding-format.md`, `protocol.md`, then
 **`vidra-user/AGENTS.md` — binding** — and then, before *any* visual
-judgement, `vidra-user/.ralph/specs/design-system.md`.
+judgement, `vidra-user/.ralph/specs/design-system.md` (~57 KB: read its outline
+with `grep -n '^#'`, then the sections for the components and patterns in
+scope).
 
 That spec is the constitution, not a starting point. **Where your preference
 and the spec disagree, the spec wins and your preference is a finding against

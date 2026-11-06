@@ -25,7 +25,11 @@ unjustified as a use of effort.
 When `$ARGUMENTS` begins with `--verify`, run **Round E** in
 `.claude/council/protocol.md` after implementation PRs are opened or merged.
 Seat exactly `vidra-product-completeness`, `vidra-qa-release`, and
-`vidra-devils-advocate` concurrently, with the same scope and commit/PR refs.
+`vidra-devils-advocate` concurrently, with the same scope and commit/PR refs,
+and paste into each prompt the acceptance criteria, `git diff --stat` per
+affected repo and the CI results, so they start from the diff. They still run
+or cite the execution evidence each row needs; a row is never passed from the
+diff alone.
 They remain read-only. Review the actual implementation and captured checks;
 pre-implementation recommendations are not verification evidence. Report
 `VERDICT: 100% COMPLETE` only when every applicable audit row and merge gate is
@@ -69,17 +73,31 @@ finding format (`.claude/council/finding-format.md`), and close with a position
 summary. Round A output is grouped BLOCKERS / REQUIRED / SHOULD / EXPERIMENT /
 NOT WORTH DOING.
 
-While they run, read the scope yourself so you can referee on evidence rather
-than on confidence.
+Build the evidence pack first (`protocol.md`, Round 0) and give every teammate
+the same pack. It cites `path:line` ranges and quotes only the lines that
+matter; large docs come from `grep -n` ranges (`repo-map.md`, "Reading large
+files"). Tell each teammate the pack is its starting point: do not re-read
+files the pack already excerpts, and say which reads went beyond it and why.
+Do not cap a teammate's investigation.
+
+While they run, do not read the scope wholesale. When they return, read the
+`path:line` ranges behind each BLOCKER or REQUIRED item and each contradiction
+between teammates, so you referee on evidence rather than on confidence.
 
 ## Phase 2 — cross-examination
 
-When all Round A reports are in, send each teammate (via `SendMessage`, so it
-keeps its context) the other teammates' findings. Each must return all four:
+Skip this phase when Round A produced no disputed BLOCKER or REQUIRED item.
+Otherwise write a dispute brief: each disputed BLOCKER/REQUIRED finding in full,
+plus a one-line index of every other teammate's BLOCKER/REQUIRED titles. Leave
+out SHOULD, EXPERIMENT and NOT WORTH DOING. Send it (via `SendMessage`, so it
+keeps its context) to the teammates party to a dispute, not to everyone. Each
+answers once, with all four:
 a **challenge** to another teammate's substantive recommendation, one proposal
 it considers **over-engineered**, one risk everyone **missed**, and a
-**defence** of every challenge aimed at it. Then Round C: explicit
-`RETRACTED` / `REVISED` / `HELD` lines. Changing position under good evidence
+**defence** of every challenge aimed at it, then, in the same answer, explicit
+`RETRACTED` / `REVISED` / `HELD` lines (Rounds B and C in one turn). Run a
+second exchange only when an answer raises a new disputed BLOCKER. Changing
+position under good evidence
 counts as success.
 
 Do not reward consensus. Reward arguments that survive scrutiny.
@@ -138,4 +156,9 @@ and future opportunities · **DECLINED** with reasons.
   worktrees (`isolation: "worktree"`).
 - Each implementer obeys that repo's `AGENTS.md`: TDD, one small PR
   (<300 lines), the repo's own verification gate pasted into the PR body, and
-  finished-means-merged.
+  finished-means-merged. Paste the ruling's acceptance criteria, test plan,
+  files and base commit into its prompt so it does not rediscover them. It runs
+  only the tests it is changing while iterating, and the full gate once at the
+  end, through `.claude/council/quiet.sh`.
+- Open the report to the owner with a summary of at most 25 lines (backlog
+  and blockers); the full DECISION blocks follow it.

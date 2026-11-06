@@ -27,8 +27,7 @@ comes from not running every round at maximum.
 |---|---|---|
 | 0 — evidence | `low` / `medium` | Enumeration, not judgement. |
 | A — blind review | `high` | Open-ended investigation — the round that earns the money. `xhigh` only for a genuinely novel scope. |
-| B — cross-examination | `medium` | A bounded response to text you have been handed, in a fixed four-part shape. |
-| C — rebuttal | `medium` | Same — a bounded response to a named challenge. |
+| B+C — cross-examination and rebuttal | `medium` | One bounded response to a dispute brief, in a fixed shape; disputing teammates only. |
 | D — ruling | `high` | Where ambiguous judgement concentrates. |
 | E — verification | `high` | Falsify completion against code and execution evidence. |
 
@@ -67,9 +66,13 @@ that recommends everything it noticed has done no prioritisation.
 Close Round A with a **Position summary**: at most five lines stating what you
 believe and what would change your mind.
 
-## Round B — cross-examination
+## Round B+C — cross-examination and rebuttal (one turn)
 
-You now receive the other teammates' Round A output. You MUST produce all four:
+Runs only when Round A produced a disputed BLOCKER or REQUIRED item, and only
+for the teammates party to a dispute. The chair sends them a dispute brief: the
+disputed findings in full and a one-line index of the other teammates'
+BLOCKER/REQUIRED titles, never SHOULD, EXPERIMENT or NOT WORTH DOING items. You
+MUST produce all four:
 
 1. **CHALLENGE** — attack at least one substantive recommendation from another
    teammate. Name the teammate, the finding, and the evidence that undermines it.
@@ -82,9 +85,7 @@ You now receive the other teammates' Round A output. You MUST produce all four:
 Do not soften a challenge to keep the peace. Consensus is not the goal;
 arguments that survive scrutiny are the goal.
 
-## Round C — rebuttal and revision
-
-Teammates may move. State explicitly:
+Then, in the same answer, state explicitly:
 
 ```
 RETRACTED: <finding> — <who disproved it and how>
@@ -93,7 +94,8 @@ HELD:      <finding> — <the challenge> — <why it does not land>
 ```
 
 Changing your mind under good evidence is a **successful outcome** and is
-scored as such. Holding a position you cannot defend is the failure.
+scored as such. Holding a position you cannot defend is the failure. A second
+exchange runs only when an answer raises a new disputed BLOCKER.
 
 ## Round D — ruling (chair only)
 
@@ -158,12 +160,13 @@ citation and execution artifact where relevant, plus an exact punch-list.
 Before the ruling, run from the meta checkout and retain actual output:
 
 ```sh
-python3 scripts/ci/check-vertical-slice-completeness.py
+.claude/council/quiet.sh slice-gate python3 scripts/ci/check-vertical-slice-completeness.py
 ```
 
 For release qualification add `--strict-migrations`, verify pinned-release CI,
 release preflight, real upgrade/rollback/replacement-host restore, migration,
-install-stopwatch and digest vulnerability evidence in `docs/release-readiness.md`.
+install-stopwatch and digest vulnerability evidence in `docs/release-readiness.md`
+(~1.5 MB: `grep -n` the release or check, never read it whole).
 A green source-branch check alone does not qualify a released image.
 
 Return one verdict with the evidence matrix and punch-list:
