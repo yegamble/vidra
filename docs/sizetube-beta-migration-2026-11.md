@@ -54,6 +54,9 @@ The source `root` account was skipped as a name conflict. The beta's own owner
 
 ## Import ledger, by kind
 
+As of run `b650966e` (2026-11-06 02:44 UTC). The later reruns and the current figures
+are in [2026-11-06 reruns: v0.7.14 and v0.7.15](#2026-11-06-reruns-v0714-and-v0715).
+
 | Kind | Done | Failed | Unsupported | Skipped |
 |---|---|---|---|---|
 | user | 5,521 | 0 | 0 | 1 (username/email exists) |
@@ -91,9 +94,16 @@ chapters (6 avatars and 1 banner whose actor is neither an account nor a channel
 ## Production follow-ups
 
 - The 5 state-8 videos were queued for HLS re-transcoding on production
-  (`POST /api/v1/videos/{id}/transcoding`, `hls`, forced → 204 each). As of
-  2026-11-06 04:04 UTC all 5 still read "To transcode" behind a single-worker queue.
-  A further retry run picks them up once production finishes.
+  (`POST /api/v1/videos/{id}/transcoding`, `hls`, forced → 204 each). Each one's
+  automatic move to object storage had failed mid-transcode (`ENOENT` on a replaced
+  rendition) and PeerTube does not retry it, so once a video's own jobs were done the
+  operator-approved `create-move-video-storage-job --to-object-storage -v <uuid>` moved it.
+  Status at 2026-11-06 20:50 UTC:
+  - `eeba2cf5`, `b765335e`: moved and Published; **imported** by run `0c6475c3`.
+  - `039ec94f`: moved and Published at 20:15 (8 renditions on `cdn.sizetube.com`). Its new
+    renditions postdate the 16:54 source snapshot, so a refresh and a rerun are still needed.
+  - `6f2fdd7e`, `892d1947`: still "To transcode", 7 jobs each among 32 queued behind
+    production's single worker (1–2 h per long rendition).
 
 ## Beta configuration decisions this migration required
 
@@ -160,3 +170,61 @@ limit is 50 requests per 10 s (300/min), so the beta now sets `RATE_LIMIT_REQUES
 in its env (backup of the previous env in `/root/production.env.pre-ratelimit300-*`).
 **The per-page request overhead itself is not fixed.** It is a frontend follow-up; until
 it lands, 120/min is too low a default for a signed-in viewer.
+
+## 2026-11-06 reruns: v0.7.14 and v0.7.15
+
+Two importer defects kept 7 long videos out of HLS, and fixing them needed two releases:
+
+- **v0.7.14** (core #521): repeated `EXT-X-BYTERANGE` lines counted toward the 10,000
+  reference cap, so a 1.4–6.3 h byte-range ladder failed `tree/other`. #522 (echo v5) is
+  in the same release because a govulncheck failure blocked every vidra-core merge.
+- **v0.7.15** (core #523, #524): the beta has no server-copy key, so HLS objects stream
+  through the API. Measured on the beta, B2 drops a download left unread for ~30 s (a
+  15 s idle survived, 45 s did not), and a streamed copy leaves its source unread whenever
+  a destination part upload waits on B2. `a2ed643c`'s 22.17 GB 4K ladder failed
+  `stream_copy/other` 5 minutes into a 4.8 GB file. #523 resumes a dropped S3 body (ETag
+  pinned, so a replaced object fails rather than splicing). #524 sizes the tree deadline
+  to the recorded ladder instead of a fixed 30 minutes, which would need 36 MB/s to fill
+  the 64 GiB tree cap.
+
+**Source snapshot refreshed** before these runs. The production dump was streamed
+16:54–16:59 UTC (349,731,375 bytes, identical SHA-256 at both ends), restored as a new
+database, re-granted to the read-only role per the runbook, and checked as that role
+(`default_transaction_read_only` on, `UPDATE` refused). It was then swapped in by
+rename. The previous snapshot is kept as `peertube_source_snapshot_20261104`.
+
+| Run | Mode | Release | Created (UTC) | Finished (UTC) | Attempts | Notes |
+|---|---|---|---|---|---|---|
+| `6f5cf154` | run | v0.7.13 | 2026-11-06 15:08 | 15:29 | 1 | retry: 1 HLS (`server_copy/deadline_exceeded`), ~580 storyboards |
+| `3455fb00` | dry_run | v0.7.14 | 17:04 | 17:04 | 1 | clean preview on the refreshed snapshot |
+| `0c6475c3` | run | v0.7.14 | 17:04 | 17:47 | 1 | +16 videos, +17 users and channels; HLS +30 (5 of the 6 byte-range ladders, `eeba2cf5`, `b765335e`) |
+| `e7ba8be1` | dry_run | v0.7.15 | 19:12 | 19:13 | 1 | clean preview |
+| `13d98e9d` | run | v0.7.15 | 19:14 | 20:49 | 1 | HLS +1: `a2ed643c`, 22.17 GB streamed |
+
+All conflict policy `skip`, media mode `copy`, `source_authoritative=false`, launched
+from `/admin/import-peertube`. Each run used the deployed release image named in its row.
+During `13d98e9d` the API was seen opening a fresh source connection after a dropped one
+(the #523 resume). B2's upload latency swung from about 10 s to under 1 s per 16 MiB part,
+so the 2160p file alone took about 45 minutes. `a2ed643c` plays from the beta: 7 variants;
+the 2160p init and its last byte-range segment, 11.67 GB in, both answer 206 with valid
+ISOBMFF boxes.
+
+Ledger after `13d98e9d`:
+
+| Kind | Done | Failed |
+|---|---|---|
+| user / channel | 5,538 / 5,590 | 0 / 0 |
+| video / video_file | 15,508 / 15,508 | 2 / 0 |
+| hls_playlist | 14,775 | **687**, all `source_open/not_found` |
+| thumbnail / caption | 14,825 / 14,102 | 683 / 669 |
+| storyboard | 2,100 | 12,329 (source missing, as above) |
+| comment / playlist / follow / rating | 789 / 2,141 / 6,434 / 20,592 | 0 |
+
+No transient HLS failure remains: every one left is a source file that production
+itself lacks. Running images: `vidra-core`, `vidra-user`, `vidra-search` **v0.7.15**
+(record `releases/v0.7.15.json`). `deploy/Caddyfile.local` is unchanged.
+
+Not done here: the 11 unfinished B2 large files (427.6 MB of parts) left in the beta
+bucket by the 2026-11-05 09:18 API restart are still there. They are billable and invisible
+to `b2 ls`.
+
