@@ -93,7 +93,11 @@ class HandoffBoundaryTest(unittest.TestCase):
             with tarfile.open(fileobj=stream, mode='w') as archive:
                 info = tarfile.TarInfo('proof.json')
                 info.type, info.size, info.linkname = kind, size, '/tmp/token'
-                archive.addfile(info)
+                # Header only, claiming a size with no body: Python 3.14's addfile()
+                # refuses that, and 128 MiB of real bytes would only slow the test.
+                header = info.tobuf(archive.format, archive.encoding, archive.errors)
+                archive.fileobj.write(header)
+                archive.offset += len(header)
             with self.assertRaises(ValueError):
                 support.inspect_handoff(stream.getvalue())
 
