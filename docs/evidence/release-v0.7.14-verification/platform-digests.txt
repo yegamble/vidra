@@ -1,0 +1,47 @@
+Name:      ghcr.io/yegamble/vidra-core:v0.7.14
+MediaType: application/vnd.oci.image.index.v1+json
+Digest:    sha256:a34ad325cf60709789eb474932b19fea234d592e12b3c4be778a2b78e780405f
+
+Manifests:
+  Name:        ghcr.io/yegamble/vidra-core:v0.7.14@sha256:034913299246aeff96653872074df682ea31c8d9dc2c9fff48afec4d8f4e4ba2
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    linux/amd64
+
+  Name:        ghcr.io/yegamble/vidra-core:v0.7.14@sha256:bef63ec877734a52d50b8d618e2942c41bfe16d4d5824f4256a9ce8d5faaa55d
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    unknown/unknown
+  Annotations:
+    vnd.docker.reference.digest: sha256:034913299246aeff96653872074df682ea31c8d9dc2c9fff48afec4d8f4e4ba2
+    vnd.docker.reference.type:   attestation-manifest
+
+Name:      ghcr.io/yegamble/vidra-user:v0.7.14
+MediaType: application/vnd.oci.image.index.v1+json
+Digest:    sha256:3edbeb846933f00ed106544194402155330814b3ca212aa476872690763cc068
+
+Manifests:
+  Name:        ghcr.io/yegamble/vidra-user:v0.7.14@sha256:faac3394e5e237ec2619b271fb4882bf419b3c5a905a6321a05569f4e3431e63
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    linux/amd64
+
+  Name:        ghcr.io/yegamble/vidra-user:v0.7.14@sha256:7c72fa7c25de723a240e41bd3bc9ab25e6a093a6c451c29a0cc824fa9a83cbc1
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    unknown/unknown
+  Annotations:
+    vnd.docker.reference.digest: sha256:faac3394e5e237ec2619b271fb4882bf419b3c5a905a6321a05569f4e3431e63
+    vnd.docker.reference.type:   attestation-manifest
+
+Name:      ghcr.io/yegamble/vidra-search:v0.7.14
+MediaType: application/vnd.oci.image.index.v1+json
+Digest:    sha256:cd20940e77a1e101ba8bcb45032a417fd9c3e03b129035105fc842e054c5aed5
+
+Manifests:
+  Name:        ghcr.io/yegamble/vidra-search:v0.7.14@sha256:87f4fdea359567050da9a8b7a5e46de6db618ab08debd9f551831f44729498f9
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    linux/amd64
+
+  Name:        ghcr.io/yegamble/vidra-search:v0.7.14@sha256:6d86a3ccd06d8215420b6ff21d94b0255364d9839ba6fd9b95d2b25ee47ea31b
+  MediaType:   application/vnd.oci.image.manifest.v1+json
+  Platform:    unknown/unknown
+  Annotations:
+    vnd.docker.reference.digest: sha256:87f4fdea359567050da9a8b7a5e46de6db618ab08debd9f551831f44729498f9
+    vnd.docker.reference.type:   attestation-manifest
