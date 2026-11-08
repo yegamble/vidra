@@ -29,6 +29,8 @@ new and its failure set is identical to run `13d98e9d`'s (RUNTIME).
    first dry run (CODE `cmd/api/main.go:4083-4110`), so the next delete sweep is due
    **≈ 2026-11-08 19:12 UTC**. Deleted keys are not logged at INFO. Runbook §5 asks for GC
    off during the migration; the beta has had it on throughout. See §8 and D12.
+   **Done 2026-11-08 02:55 UTC:** `MEDIA_GC_ENABLED=false` deployed via `deploy.sh` (pre-deploy dump
+   `pre-deploy-2026-11-08T025518.dump.gz`); the new api logs "media gc worker disabled" (RUNTIME).
 2. **Prod's outbound mail is broken.** PeerTube is configured for `127.0.0.1:2525` (TLS,
    from `no-reply@sizetube.com`), nothing listens on 2525, and the live log shows
    `connect ECONNREFUSED 127.0.0.1:2525` 28 times, the latest at 2026-11-08 01:00 UTC on a
@@ -173,11 +175,11 @@ import write persists an absolute URL, a local actor id or anything derived from
 | 10.1 | Final import counts; no unexplained failures or tombstones | RUNTIME after `bff44fc2` (2026-11-08 01:15): users 5,538, channels 5,590, videos 15,508 (+1 failed `7e23b8d9`, stuck at the source), hls 14,775 done / **687 failed, all `source_open/not_found`** (683 = one banned owner's private videos, 4 renditions each; the rest missing at source), thumbnails 683 and captions 669 failed (source missing), storyboards 10,982 failed (prod has no files) + 2,100 done + 4,507 skipped (beta-generated sheets). `video_no_media` 687. Every failure is explained; none is fixable from the source except the two state-8 videos once prod moves them. | pass (explained) / **decision** on the 687 media-less published videos (D7) and storyboards (D8) |
 | 10.2a | Login with imported accounts | **Not observed by this audit.** QA used freshly created accounts; the owner `root` is beta-native; hash carry is proven on fixtures (release-readiness A19). Operator statement 2026-11-08: an imported-account login was tested and works. | operator-reported — record the account and date in the private log before cutover |
 | 10.2b | Owner/admin permissions | All admin pages load (RUNTIME QA #28, v0.7.13). Beta has 1 admin/owner (native root); prod has 1 admin + 1 moderator (RUNTIME) — the prod moderator's role carries (`ImportUpdateUser` writes `role`), but no imported account is admin here (RUNTIME `admins=0` among imported). | pass / note |
-| 10.2c | Password reset and mail delivery after deliberate SMTP enablement | `MAIL_ENABLED=false`, SMTP keys empty (RUNTIME env). Prod's own sender is a dead relay (finding 2), so there is nothing to copy. DigitalOcean blocks 25/465/587 (`docs/outbound-email.md:30`); use an HTTPS API transport or an SMTP relay on 2525/2587 via Admin → Email. The settings secret is sealed with `MailKEK()` = `MFA_KEY_KEK` (falls back to `FEDERATION_KEY_KEK`) (CODE `config.go:2902-2924`); RUNTIME: `MFA_KEY_KEK` is set. Interim for ordinary users: admin-minted reset link `POST /api/v1/admin/users/:id/password-reset-link` (`server.go:2379`, needs `PUBLIC_BASE_URL`). | **fail** → D4 |
+| 10.2c | Password reset and mail delivery after deliberate SMTP enablement | `MAIL_ENABLED=false`, SMTP keys empty (RUNTIME env). Prod's own sender is a dead relay (finding 2), so there is nothing to copy. DigitalOcean blocks 25/465/587 (`docs/outbound-email.md:30`); use an HTTPS API transport or an SMTP relay on 2525/2587 via Admin → Email. RUNTIME 2026-11-08 03:05: `smtp.improvmx.com` 587/465/2525 are unreachable from **both** droplets (the operator's ImprovMX SMTP credential itself works from outside DigitalOcean); ImprovMX has no HTTPS API, so **Resend** was chosen (account created; domain records, API key and the Admin → Email test still pending). The settings secret is sealed with `MailKEK()` = `MFA_KEY_KEK` (falls back to `FEDERATION_KEY_KEK`) (CODE `config.go:2902-2924`); RUNTIME: `MFA_KEY_KEK` is set. Interim for ordinary users: admin-minted reset link `POST /api/v1/admin/users/:id/password-reset-link` (`server.go:2379`, needs `PUBLIC_BASE_URL`). | **fail** → D4 |
 | 10.2d | Registration policy and quotas | Beta: `REGISTRATION_ENABLED=false`, `registration_enabled=false`, `REGISTRATION_REQUIRE_APPROVAL=false`, `INSTANCE_DEFAULT_QUOTA_BYTES=5368709120` (RUNTIME env) vs runbook §5 `0`. Prod (RUNTIME public config): signup allowed, `limit -1`, no approval, no e-mail verification, `minimumAge 18`, quotas unlimited (`-1`), 822 logins in the last 7 days. Imported accounts: all 5,538 have `storage_quota_bytes=0` (RUNTIME). No default channel after signup (QA #37). `registration_minimum_age` unset → 0 (CODE `instancesettings/service.go:1185`). | **decision** (D6) |
 | 10.3 | Synthetic upload through the real scanner → transcode → playback → seek → captions → previews → search → delete | Upload → `published` (~20 s) → plays → delete 204 under `MALWARE_SCAN_MODE=fail-closed` (RUNTIME QA #38, v0.7.13). Seek, captions/previews and search indexing of that upload not asserted; EICAR rejection never run. `TRANSCODING_ENABLED=true` (RUNTIME env). | **partial** |
 | 10.4 | Representative imported originals/HLS incl. restricted media; old links; mobile/browser playback; federation | HLS playback incl. 4K `a2ed643c` (RUNTIME 2026-11-06), quality switch and captions (QA #12-14); audio group present (finding 6). Imported originals (`/original` on 1,920 videos) and restricted imported media as a permitted user: not tested. Old links: 9.13. Mobile: shots captured, not reviewed (QA #18). Federation: off. | **partial** |
-| 10.5 | Independent DB/config restore; media recovery; backup alerting; dependency-outage recovery | Restore drill PASS (RUNTIME 2026-11-04) is **pre-import, schema 182**; not repeated on the 102 MB post-import dump. Nightly backup ran 2026-11-07 03:16 UTC: dump + config archive, both uploaded to the rclone crypt remote, next 2026-11-08 03:24 (RUNTIME journal). **No `HEALTHCHECKS_URL`** in `/etc/vidra/backup.env` (RUNTIME) → silent on failure. Media DR open: bucket has no lifecycle, Object Lock or replication (RUNTIME `b2 bucket get`), the runtime key can delete, 11 unfinished large files (427.6 MB, 2026-11-05) still stranded (RUNTIME), lost-object restore untested. **GC deleted 38 objects live** (finding 1). Search-outage recovery (reconcile_orphan defect, AGENTS.md): not tested. | **partial / High** → D12 |
+| 10.5 | Independent DB/config restore; media recovery; backup alerting; dependency-outage recovery | **Restore drill PASS on the post-import data (RUNTIME 2026-11-08 03:27–03:34 UTC):** newest off-site pair `vidra-20261108T032456Z` (112 MB) fetched from the crypt remote in 3 s, SHA-256 identical to the local copy, restored into a throwaway `postgres:18-alpine` container (same digest as the stack) with `pg_restore` rc 0 in 38 s, schema 188 / search 21, 164 of 165 table counts identical to live (`video_files` +8 from the live storyboard backfill), then `verify-blobs` on the restored DB: 55,260 referenced objects, 55,260 present, 0 missing, exit 0 in <4 min. **RTO ≈ 45 s for the database, ≈ 5 min with the blob check.** Caveats: same host as the stack (separate container and volume, not a separate machine); `--hash` not run. The earlier 2026-11-04 drill was pre-import, schema 182. Nightly backup ran 2026-11-07 03:16 UTC: dump + config archive, both uploaded to the rclone crypt remote, next 2026-11-08 03:24 (RUNTIME journal). **No `HEALTHCHECKS_URL`** in `/etc/vidra/backup.env` (RUNTIME) → silent on failure. Media DR open: bucket has no lifecycle, Object Lock or replication (RUNTIME `b2 bucket get`), the runtime key can delete, 11 unfinished large files (427.6 MB, 2026-11-05) still stranded (RUNTIME), lost-object restore untested. **GC deleted 38 objects live** (finding 1). Search-outage recovery (reconcile_orphan defect, AGENTS.md): not tested. | **partial / High** → D12 |
 | 10.6 | Only then switch DNS/proxy; recheck TLS, API origin, cookies/CORS, playback, search, old URLs | Not started. RUNTIME DNS: `sizetube.com` and `cdn.sizetube.com` are Cloudflare-proxied (edge cert Google Trust Services, to 2026-12-15); `beta.sizetube.com` is DNS-only to 159.203.29.27 with a Let's Encrypt cert. Prod nginx has a `cloudflare-realip` snippet; the beta's `TRUSTED_PROXY_CIDRS` is already the Cloudflare range list (RUNTIME env). | pending → D3 |
 | 10.7 | Enable mail/federation/background features deliberately | Pending D4, D8, D9. `TRANSCODING_ENABLED=true` throughout the import (RUNTIME env) — a §5 deviation, harmless for copy mode (the importer never enqueues transcodes), recorded here. `storyboards_enabled` has no override → default **on** (CODE `service.go:1049`): the beta generated 2,100 + 4,507 sheets the import then skipped (RUNTIME). | pending |
 | 10.8 | Revoke importer access after the reconciliation window | `PEERTUBE_IMPORT_ENABLED=true`, source DSN and read-only S3 key present, `pt_import_reader` role and both snapshot DBs (1,384 MB each) in place (RUNTIME). | pending |
@@ -190,7 +192,7 @@ import write persists an absolute URL, a local actor id or anything derived from
 | `REGISTRATION_ENABLED` | false | `false` (+ `registration_enabled=false`, `REGISTRATION_REQUIRE_APPROVAL=false`) | prod is open (10.2d) |
 | `FEDERATION_ENABLED` | false | `false` | 20 followers wait on the post-flip rerun |
 | `MAIL_ENABLED` | false, then deliberate | `false`; `SMTP_HOST/USERNAME/PASSWORD/FROM` empty, `SMTP_PORT=587` | D4 |
-| `MEDIA_GC_ENABLED` | **false during migration** | **`true`**, `MEDIA_GC_MAX_ORPHAN_PERCENT=25` | one live delete sweep already (finding 1) |
+| `MEDIA_GC_ENABLED` | **false during migration** | `false` since 2026-11-08 02:55 UTC (was `true`; one live delete sweep on 11-07), `MEDIA_GC_MAX_ORPHAN_PERCENT=25` | D12 applied |
 | `INSTANCE_DEFAULT_QUOTA_BYTES` | 0 | `5368709120` | prod unlimited; imported users 0 |
 | `MALWARE_SCAN_MODE` | fail-closed | `fail-closed`, `CLAMAV_TIMEOUT=60s`, `QUARANTINE_NEW_UPLOADS=false` | |
 | `storyboards_enabled` (runtime) | off before the run | unset → default on | generation ran during the import |
@@ -266,8 +268,10 @@ import write persists an absolute URL, a local actor id or anything derived from
 - **D6** New-signup policy: `INSTANCE_DEFAULT_QUOTA_BYTES` 0 vs 5 GiB, registration
   open/approval, e-mail verification, terms acceptance at signup, default channel,
   `registration_minimum_age` (prod shows 18).
-- **D7** The 683 published-but-media-less videos of the banned owner (+4 others): block via
-  `video_blocks`, leave as 404-on-play, or hide the owner's channel.
+- **D7** The 683 published-but-media-less videos (RUNTIME 2026-11-08: all belong to the one
+  source-banned, inactive owner; all are already `private`; 394 already carry a `video_blocks` row,
+  so 289 remain): block via `video_blocks`, leave as 404-on-play, or hide the owner's channel.
+  The 4 other media-less videos are drafts pending prod (`039ec94f`, `6f2fdd7e`, `892d1947`, `967f57d6`).
 - **D8** Storyboards: keep `storyboards_enabled` on and let `storyboardbackfill` render the
   ~11k missing sheets from HLS masters (`storyboard_backfill.sql.go:90-138`: eligible =
   published, no sheet, original or ready HLS; paused while an import is pending/running; one
@@ -303,23 +307,32 @@ import write persists an absolute URL, a local actor id or anything derived from
 | D1 | `source_authoritative=true` for the final rerun |
 | D2 | Freeze = nginx returns 503 for non-GET/HEAD on `/api/v1/` (reads stay up); operator owns rollback |
 | D3 | Cloudflare-proxied + Origin CA cert in `Caddyfile.local`; `VIDRA_SKIP_DNS_PREFLIGHT=1` |
-| D4 | HTTPS API mail transport via Admin → Email (prod's relay is dead; net-new provider + SPF/DKIM/DMARC) |
+| D4 | **Resend** (HTTPS API) via Admin → Email — chosen 2026-11-08 after ImprovMX SMTP proved unreachable from DigitalOcean; account created, domain records / API key / test pending. Free tier (100/day) covers resets, not a 5,538-user notice |
 | D5 | One-off audited `UPDATE` of `profile_public` on ledger users, after a backup, with approval |
 | D6 | Registration open at cutover with e-mail verification, `registration_minimum_age=18`, terms/privacy acceptance first; `INSTANCE_DEFAULT_QUOTA_BYTES=0` |
-| D7 | Block the 687 media-less published videos via `video_blocks` |
+| D7 | Block the remaining 289 of the 683 media-less published videos via `video_blocks` (394 already blocked; all private; one owner) |
 | D8 | Keep `storyboards_enabled` on; let the backfill run after cutover |
 | D9 | Federation stays off through cutover and the rollback window; enable later with §9 checks 1–3 |
 | D10 | Export moderation state from PeerTube for the record; re-apply suspension/blacklist deltas by hand; accept losing mutes and reports |
 | D11 | Operator-restricted MFA re-enrolment window for the 10 held accounts |
-| D12 | `MEDIA_GC_ENABLED=false` now, kept off through the rollback window; the remaining DR items follow separately |
+| D12 | `MEDIA_GC_ENABLED=false` **applied 2026-11-08 02:55 UTC**, kept off through the rollback window; post-import restore drill PASS 03:34 UTC (10.5); replication/Object Lock, non-deleting key, `HEALTHCHECKS_URL` still open |
 | D13 | Operator states an imported-account login was tested and works (not observed here) |
 | D14 | Accept the loss of Vidra-side writes on rollback; registrations closed during the window; `backup.sh` at rollback time |
 | D15 | **Open** — the five compliance intake questions were not answered |
 | D16 | Wait for the prod transcoding queue to drain, move the state-8 pair, then freeze and snapshot |
 | — | White-label: operator enables `branding_hide_software_name` and sets the instance imagery before cutover (finding 10) |
 
-None of these has been executed; every one is a change the operator (or a later, separately
-approved task) makes.
+Executed so far (each with the operator's explicit go-ahead):
+
+- 2026-11-08 02:55 UTC — D12: `MEDIA_GC_ENABLED=false` deployed (env backup kept; `deploy.sh` exit 0).
+- 2026-11-08 03:27–03:34 UTC — 10.5: post-import restore drill + `verify-blobs`, PASS (details in 10.5).
+- 2026-11-08 — prepared, **not applied**, in the operator's private log (`cutover-prep/`): D5 and D7 audited SQL
+  with dry-run counts, the D10 moderation export from the 2026-11-06 snapshot, the D2 nginx freeze snippet, the flip
+  env patch and the target `Caddyfile.local` (the file is generated by `vidra setup`, so the flip is edit env →
+  `vidra setup` → re-add the hand-added blocks), and the Resend → Admin → Email steps.
+- A read-only watcher reports when prod's transcoding backlog (61 prioritized jobs at 03:23 UTC, from 70) drains (D16).
+
+Everything else above is still a change the operator (or a later, separately approved task) makes.
 
 ## 7. What this audit does NOT establish
 
