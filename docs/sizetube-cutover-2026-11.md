@@ -76,6 +76,13 @@ new and its failure set is identical to run `13d98e9d`'s (RUNTIME).
    rows, so code defaults govern their e-mail once mail is enabled (RUNTIME 0 rows).
    Prod also has 13 instance-actor followers and 30 outbound follows (RUNTIME snapshot)
    that the importer does not carry.
+10. **The white-label switch is off.** `branding_hide_software_name` has no row on the beta
+    (default false, CODE `instancesettings/service.go:196-208, 950`); `GET /api/v1/instance`
+    reports `branding.hide_software_name=false`, `hide_instance_name=false`, and `/login`
+    renders "Powered by …" (RUNTIME 2026-11-08 01:55 UTC). Every imagery slot (avatar, banner,
+    favicon, header logos, OpenGraph) is `is_fallback=true`. Both are database-stored instance
+    settings (Admin → General → Branding) that survive deploys, the hostname flip and the final
+    rerun — they only need to be set once, before cutover (§5 step 0).
 
 ## 1. What flipping `PUBLIC_BASE_URL` does to imported data
 
@@ -150,7 +157,7 @@ import write persists an absolute URL, a local actor id or anything derived from
 | 9.5 | Source-deleted videos/accounts/comments need explicit reconciliation | RUNTIME `comm` of ledger ids vs snapshot: videos — 1 ledger uuid absent from the snapshot (`86c97689`, import *failed*, not on the beta); users identical; comments identical. **Nothing to reconcile as of the 2026-11-06 snapshot**; repeat the same three diffs after the final snapshot (no delete path exists in `resync.go`, CODE). | pass (now) / repeat at final |
 | 9.6 | Later suspension / blacklist changes are not mirrored by reruns | CODE unchanged at v0.7.15 (`ImportUpdateUser` never writes `is_active`; no `video_blocks` resync). RUNTIME: the 11 prod-blocked users are all `is_active=false` here; blacklist 410 = 410 identical. Prod has since added 1 blacklist entry and 1 account-blocklist entry (RUNTIME prod); the final diff must be re-run and applied by hand. | pass (now) / **decision** at final run (D10) |
 | 9.7 | Visibility mapping | RUNTIME beta imported: public 13,801 (13,792 published + 9 draft), private 1,638 (1,635 + 3 draft), unlisted 40, internal 29. Snapshot local: privacy 1 → 13,803, 2 → 40, 3 → 1,637, 4 → 29; the 2 failed videos are public, and `7476ede8` explains the private +1 / public −1. `videoPassword`: 1 row, its video is `private/published` here. Only state 1 → `published` (CODE `mapping.go:70-75`): the 12 drafts are the 4 genuinely unpublished + the 8 of finding 4. | pass (mapping) / drafts → D1 |
-| 9.8 | Restricted access anonymously and as permitted/denied users | RUNTIME 2026-11-08 anon: imported **internal** video → API `401 sign_in_required`, page renders a "not found" shell; same for the password-protected video (now private). Beta-native private: anon 404 / owner 200 (RUNTIME 2026-11-04, Step 10). Permitted-user side (a signed-in imported account, internal = any account) **not tested**: no imported login has ever been performed (10.2a). | **partial** → D13 |
+| 9.8 | Restricted access anonymously and as permitted/denied users | RUNTIME 2026-11-08 anon: imported **internal** video → API `401 sign_in_required`, page renders a "not found" shell; same for the password-protected video (now private). Beta-native private: anon 404 / owner 200 (RUNTIME 2026-11-04, Step 10). Permitted-user side (a signed-in imported account, internal = any account) **not tested**: no imported login was observed by this audit; the operator reports one succeeded (10.2a). | **partial** (permitted-user playback of internal/private media still untested) |
 | 9.9 | Per-video download/comment policies | RUNTIME identical: `commentsPolicy` 1 → 15,507 / 2 → 2 vs beta `enabled` 15,506 (+1 failed) / `disabled` 2; `downloadEnabled` true 4,146 / false 11,363 vs beta 4,146 / 11,360 (+2 failed +1). No approval-only policy on the source. | pass |
 | 9.10 | User sensitive-content preferences, category granularity | Source `nsfwPolicy`: display 5,533, do_not_list 4, warn 1, blur 1; beta: display 5,527, hide 9, warn 1, blur 1 (RUNTIME). 7 `user_sensitive_policy unsupported` → "granular or unknown … map conservatively to hide" (run `deferred` list). Instance default `display` matches prod. Lost granularity for the 7 is reported here. | pass with note |
 | 9.11 | MFA: inventory only, hold accounts | Source `otpSecret`: 11 users (incl. root, which was skipped); beta: the other 10 are `is_active=false` (RUNTIME). A resync cannot release a hold (CODE). Re-enrolment process for the 10 undefined. | pass (hold) / **decision** (D11) |
@@ -164,7 +171,7 @@ import write persists an absolute URL, a local actor id or anything derived from
 | # | Criterion (§10) | Evidence | Status |
 |---|---|---|---|
 | 10.1 | Final import counts; no unexplained failures or tombstones | RUNTIME after `bff44fc2` (2026-11-08 01:15): users 5,538, channels 5,590, videos 15,508 (+1 failed `7e23b8d9`, stuck at the source), hls 14,775 done / **687 failed, all `source_open/not_found`** (683 = one banned owner's private videos, 4 renditions each; the rest missing at source), thumbnails 683 and captions 669 failed (source missing), storyboards 10,982 failed (prod has no files) + 2,100 done + 4,507 skipped (beta-generated sheets). `video_no_media` 687. Every failure is explained; none is fixable from the source except the two state-8 videos once prod moves them. | pass (explained) / **decision** on the 687 media-less published videos (D7) and storyboards (D8) |
-| 10.2a | Login with imported accounts | **Never performed.** QA used freshly created accounts; the owner `root` is beta-native. Hash carry is proven only on fixtures (release-readiness A19). | **unverified** → D13 |
+| 10.2a | Login with imported accounts | **Not observed by this audit.** QA used freshly created accounts; the owner `root` is beta-native; hash carry is proven on fixtures (release-readiness A19). Operator statement 2026-11-08: an imported-account login was tested and works. | operator-reported — record the account and date in the private log before cutover |
 | 10.2b | Owner/admin permissions | All admin pages load (RUNTIME QA #28, v0.7.13). Beta has 1 admin/owner (native root); prod has 1 admin + 1 moderator (RUNTIME) — the prod moderator's role carries (`ImportUpdateUser` writes `role`), but no imported account is admin here (RUNTIME `admins=0` among imported). | pass / note |
 | 10.2c | Password reset and mail delivery after deliberate SMTP enablement | `MAIL_ENABLED=false`, SMTP keys empty (RUNTIME env). Prod's own sender is a dead relay (finding 2), so there is nothing to copy. DigitalOcean blocks 25/465/587 (`docs/outbound-email.md:30`); use an HTTPS API transport or an SMTP relay on 2525/2587 via Admin → Email. The settings secret is sealed with `MailKEK()` = `MFA_KEY_KEK` (falls back to `FEDERATION_KEY_KEK`) (CODE `config.go:2902-2924`); RUNTIME: `MFA_KEY_KEK` is set. Interim for ordinary users: admin-minted reset link `POST /api/v1/admin/users/:id/password-reset-link` (`server.go:2379`, needs `PUBLIC_BASE_URL`). | **fail** → D4 |
 | 10.2d | Registration policy and quotas | Beta: `REGISTRATION_ENABLED=false`, `registration_enabled=false`, `REGISTRATION_REQUIRE_APPROVAL=false`, `INSTANCE_DEFAULT_QUOTA_BYTES=5368709120` (RUNTIME env) vs runbook §5 `0`. Prod (RUNTIME public config): signup allowed, `limit -1`, no approval, no e-mail verification, `minimumAge 18`, quotas unlimited (`-1`), 822 logins in the last 7 days. Imported accounts: all 5,538 have `storage_quota_bytes=0` (RUNTIME). No default channel after signup (QA #37). `registration_minimum_age` unset → 0 (CODE `instancesettings/service.go:1185`). | **decision** (D6) |
@@ -209,7 +216,9 @@ import write persists an absolute URL, a local actor id or anything derived from
    login proven (D13); post-import restore re-drill on the current dump with `verify-blobs`;
    fresh off-site backup; if D3 = Cloudflare-proxied, an Origin CA cert for `sizetube.com`
    on the droplet and `VIDRA_SKIP_DNS_PREFLIGHT=1`; `profile_public`, quota, terms/privacy
-   URLs and anonymous-NSFW decisions applied; this doc merged.
+   URLs and anonymous-NSFW decisions applied; `branding_hide_software_name` **on** and the
+   instance imagery set in Admin → General → Branding (both off / fallback today, finding 10);
+   this doc merged.
 1. **Freeze prod** (D2 mechanism) at T0, verify a write is refused, record T0. Prod stays up
    read-only for artwork, rollback and `/lazy-static`.
 2. **Snapshot** (Step 25 procedure): dump → SHA-256 both ends → restore as a new DB → §3
@@ -286,6 +295,31 @@ import write persists an absolute URL, a local actor id or anything derived from
   importer will not re-copy a ready tree (CODE `hls_backfill.go:93-131`). A supported
   refresh path does not exist; the unsupported alternative is deleting those videos' HLS
   rows/ledger rows and re-running, which this audit does not recommend without a core change.
+
+### Decisions recorded 2026-11-08 (operator answers, 01:40–02:05 UTC)
+
+| # | Decision |
+|---|---|
+| D1 | `source_authoritative=true` for the final rerun |
+| D2 | Freeze = nginx returns 503 for non-GET/HEAD on `/api/v1/` (reads stay up); operator owns rollback |
+| D3 | Cloudflare-proxied + Origin CA cert in `Caddyfile.local`; `VIDRA_SKIP_DNS_PREFLIGHT=1` |
+| D4 | HTTPS API mail transport via Admin → Email (prod's relay is dead; net-new provider + SPF/DKIM/DMARC) |
+| D5 | One-off audited `UPDATE` of `profile_public` on ledger users, after a backup, with approval |
+| D6 | Registration open at cutover with e-mail verification, `registration_minimum_age=18`, terms/privacy acceptance first; `INSTANCE_DEFAULT_QUOTA_BYTES=0` |
+| D7 | Block the 687 media-less published videos via `video_blocks` |
+| D8 | Keep `storyboards_enabled` on; let the backfill run after cutover |
+| D9 | Federation stays off through cutover and the rollback window; enable later with §9 checks 1–3 |
+| D10 | Export moderation state from PeerTube for the record; re-apply suspension/blacklist deltas by hand; accept losing mutes and reports |
+| D11 | Operator-restricted MFA re-enrolment window for the 10 held accounts |
+| D12 | `MEDIA_GC_ENABLED=false` now, kept off through the rollback window; the remaining DR items follow separately |
+| D13 | Operator states an imported-account login was tested and works (not observed here) |
+| D14 | Accept the loss of Vidra-side writes on rollback; registrations closed during the window; `backup.sh` at rollback time |
+| D15 | **Open** — the five compliance intake questions were not answered |
+| D16 | Wait for the prod transcoding queue to drain, move the state-8 pair, then freeze and snapshot |
+| — | White-label: operator enables `branding_hide_software_name` and sets the instance imagery before cutover (finding 10) |
+
+None of these has been executed; every one is a change the operator (or a later, separately
+approved task) makes.
 
 ## 7. What this audit does NOT establish
 
