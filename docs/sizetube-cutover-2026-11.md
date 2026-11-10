@@ -5,7 +5,8 @@ runbook [§9](peertube-migration.md#9-reconcile-the-final-delta-and-domain-behav
 [§10](peertube-migration.md#10-accept-switch-traffic-and-retain-rollback), written before any
 cutover action. Nothing was changed: no env, Caddyfile, DNS, database, bucket or prod write.
 It complements the [beta migration record](sizetube-beta-migration-2026-11.md), which says
-what ran; this says what still stands between the beta and `sizetube.com`.
+what ran; this says what still stands between the beta and `sizetube.com`. Execution status
+of the open items is tracked in the [cutover checklist](sizetube-cutover-checklist.md).
 
 **Evidence labels.** **RUNTIME** = observed on the beta or prod, with a UTC date (all RUNTIME
 reads here were taken 2026-11-08 00:44–01:30 UTC unless dated otherwise; database reads ran
