@@ -1,8 +1,8 @@
 # sizetube.com cutover — tracked checklist (living)
 
 A working checklist for cutting `sizetube.com` over from PeerTube to the Vidra beta
-(`beta.sizetube.com`, v0.7.15 = core `ce2ea05c`). It tracks **execution status**; the
-reasoning, evidence and decisions live in the audit
+(`beta.sizetube.com`, v0.7.17 = core `d419f11c` since 2026-11-10). It tracks **execution
+status**; the reasoning, evidence and decisions live in the audit
 ([`sizetube-cutover-2026-11.md`](sizetube-cutover-2026-11.md)) and the run record
 ([`sizetube-beta-migration-2026-11.md`](sizetube-beta-migration-2026-11.md)). When an item
 here and the audit disagree, fix one of them in the same change — do not let them drift.
@@ -65,20 +65,25 @@ read-only monitor already running.
 - [~] **Ads parity.** Prod earns from HilltopAds + ExoClick through a PeerTube custom script
   and a PHP anti-adblock file; none of it carries over by itself (the audit's §8 notes the
   `vast-ads` plugin, not this). Three pieces, all needed:
-  (a) vidra-core ad proxy for the anti-adblock tag — core #530 and #531 merged, **core #536
-  open** (without it no provider path is both accepted and reachable through Caddy);
+  (a) vidra-core ad proxy for the anti-adblock tag — **done**: core #530, #531 and #536
+  (the last one makes a provider path both accepted and reachable through Caddy), in v0.7.17;
   (b) frontend policy switches `CSP_ALLOW_EVAL` / `CSP_FRAME_SRC` /
-  `CSP_ALLOW_INLINE_EVENT_HANDLERS` — vidra-user change in review, passthrough and template
-  in this repo. Measured in headless Chrome against the real tags: the popunder and ExoClick
-  need eval, the banners need https frames, ExoClick recommendations need inline handlers;
+  `CSP_ALLOW_INLINE_EVENT_HANDLERS` — **done**: vidra-user #465, passthrough and template
+  in this repo (#371), in v0.7.17. Measured in headless Chrome against the real tags: the
+  popunder and ExoClick need eval, the banners need https frames, ExoClick recommendations
+  need inline handlers;
   under the strict policy the popunder does not run at all;
   (c) the ported custom script, prepared in the private `cutover-prep/ads-custom.js`,
   **not applied**.
-  Still to do: a release carrying (a)+(b); `AD_ANTIADBLOCK_PROVIDERS` and the switches in
-  the env file; paste (c) into Admin → Advanced → Custom JavaScript; then check on the beta
+  Applied on the beta 2026-11-10: `AD_ANTIADBLOCK_PROVIDERS` (built from the network's PHP
+  file by `deploy/ad-provider-from-php.py`) and the three switches in the env file, 16:21
+  UTC; v0.7.17 deployed 16:56 UTC. Verified there: the api logs the proxy route as mounted,
+  the provider path returns the network's JavaScript through Caddy, and the enforced page
+  policy carries all three allowances. No ad is shown yet: that is (c).
+  Still to do: paste (c) into Admin → Advanced → Custom JavaScript; then check on the beta
   with real ad fill and a real blocker (neither was exercised). The script's consent and
-  Global Privacy Control defaults are the cautious ones and belong to D15. `AGENT` (code) /
-  `OPERATOR` (release, env, admin).
+  Global Privacy Control defaults are the cautious ones and belong to D15. `OPERATOR`
+  (admin).
 
 ### D12 media-DR tail (open, not all window-blocking)
 
