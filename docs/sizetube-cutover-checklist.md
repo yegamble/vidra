@@ -1,8 +1,8 @@
 # sizetube.com cutover — tracked checklist (living)
 
 A working checklist for cutting `sizetube.com` over from PeerTube to the Vidra beta
-(`beta.sizetube.com`, v0.7.17 = core `d419f11c` since 2026-11-10). It tracks **execution status**; the
-reasoning, evidence and decisions live in the audit
+(`beta.sizetube.com`, v0.7.17 = core `d419f11c` since 2026-11-10). It tracks **execution
+status**; the reasoning, evidence and decisions live in the audit
 ([`sizetube-cutover-2026-11.md`](sizetube-cutover-2026-11.md)) and the run record
 ([`sizetube-beta-migration-2026-11.md`](sizetube-beta-migration-2026-11.md)). When an item
 here and the audit disagree, fix one of them in the same change — do not let them drift.
@@ -69,8 +69,9 @@ read-only monitor already running.
   (the last one makes a provider path both accepted and reachable through Caddy), in v0.7.17;
   (b) frontend policy switches `CSP_ALLOW_EVAL` / `CSP_FRAME_SRC` /
   `CSP_ALLOW_INLINE_EVENT_HANDLERS` — **done**: vidra-user #465, passthrough and template
-  in this repo (#371), in v0.7.17. Measured in headless Chrome against the real tags: the popunder and ExoClick
-  need eval, the banners need https frames, ExoClick recommendations need inline handlers;
+  in this repo (#371), in v0.7.17. Measured in headless Chrome against the real tags: the
+  popunder and ExoClick need eval, the banners need https frames, ExoClick recommendations
+  need inline handlers;
   under the strict policy the popunder does not run at all;
   (c) the ported custom script, prepared in the private `cutover-prep/ads-custom.js`,
   **not applied**.
