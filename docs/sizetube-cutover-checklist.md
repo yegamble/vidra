@@ -61,7 +61,24 @@ read-only monitor already running.
   `OPERATOR`.
 - [ ] **D3 prerequisite · Origin CA cert for `sizetube.com`** on the droplet and
   `VIDRA_SKIP_DNS_PREFLIGHT=1` in the env file (Cloudflare-proxied path). `OPERATOR`.
-- [ ] **This checklist + the audit merged to `main`.** `AGENT`.
+- [x] **This checklist + the audit merged to `main`** — #369, 2026-11-10. `AGENT`.
+- [~] **Ads parity.** Prod earns from HilltopAds + ExoClick through a PeerTube custom script
+  and a PHP anti-adblock file; none of it carries over by itself (the audit's §8 notes the
+  `vast-ads` plugin, not this). Three pieces, all needed:
+  (a) vidra-core ad proxy for the anti-adblock tag — core #530 and #531 merged, **core #536
+  open** (without it no provider path is both accepted and reachable through Caddy);
+  (b) frontend policy switches `CSP_ALLOW_EVAL` / `CSP_FRAME_SRC` /
+  `CSP_ALLOW_INLINE_EVENT_HANDLERS` — vidra-user change in review, passthrough and template
+  in this repo. Measured in headless Chrome against the real tags: the popunder and ExoClick
+  need eval, the banners need https frames, ExoClick recommendations need inline handlers;
+  under the strict policy the popunder does not run at all;
+  (c) the ported custom script, prepared in the private `cutover-prep/ads-custom.js`,
+  **not applied**.
+  Still to do: a release carrying (a)+(b); `AD_ANTIADBLOCK_PROVIDERS` and the switches in
+  the env file; paste (c) into Admin → Advanced → Custom JavaScript; then check on the beta
+  with real ad fill and a real blocker (neither was exercised). The script's consent and
+  Global Privacy Control defaults are the cautious ones and belong to D15. `AGENT` (code) /
+  `OPERATOR` (release, env, admin).
 
 ### D12 media-DR tail (open, not all window-blocking)
 

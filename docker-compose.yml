@@ -153,6 +153,18 @@ services:
       # Without this line the variable never reaches the container and the
       # escape hatch silently does nothing. Unset = enforced, the safe default.
       CSP_REPORT_ONLY: ${CSP_REPORT_ONLY:-}
+      # The narrower alternatives to CSP_REPORT_ONLY (vidra-user
+      # lib/security-headers.ts): the policy stays ENFORCED and each one gives up
+      # a single protection, for third-party tags an admin custom.js loads (ad
+      # networks, widgets) that the strict policy blocks. Report-only is all or
+      # nothing — it also stops enforcing frame-ancestors, the clickjacking guard
+      # — so an operator who needs ads would otherwise run with no policy at all.
+      # Same two caveats as above: named here or they never reach the container,
+      # and applied by `vidra deploy`, not `vidra restart`. All unset = strict. A
+      # frontend image that predates them ignores them without a word.
+      CSP_ALLOW_EVAL: ${CSP_ALLOW_EVAL:-}
+      CSP_FRAME_SRC: ${CSP_FRAME_SRC:-}
+      CSP_ALLOW_INLINE_EVENT_HANDLERS: ${CSP_ALLOW_INLINE_EVENT_HANDLERS:-}
     depends_on:
       api:
         # service_healthy, not service_started: the frontend server-renders its
