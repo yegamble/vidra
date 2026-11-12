@@ -165,6 +165,15 @@ services:
       - "effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-6GB}"
       - "-c"
       - "max_connections=${POSTGRES_MAX_CONNECTIONS:-100}"
+      # JIT off. Every statement vidra runs per request is short, and the JIT
+      # compiles any plan whose ESTIMATED cost passes jit_above_cost before it
+      # runs it: measured on a 13,776-video instance, 74-94 ms of compilation
+      # on each public list and search count, 92 ms of a 184 ms search count.
+      # It pays back on analytics queries running for seconds, which nothing
+      # here issues. Changing the command recreates the container, so the
+      # deploy that first carries this restarts Postgres once.
+      - "-c"
+      - "jit=off"
     environment:
       # Same assertion pattern as the api's JWT_SECRET below. The base file
       # deliberately declares `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vidra}`
