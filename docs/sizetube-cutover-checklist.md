@@ -43,8 +43,9 @@ beta was changed. `REHEARSAL` = observed in that run.
   **Still open 2026-11-12.** No answer is recorded. On the beta `terms_url` and `privacy_url`
   are empty, `sensitive_content_policy=display`, `registration_minimum_age=0`; the counts are
   unchanged at 12,401 of 15,508 (RUNTIME).
-  Code needed whichever way counsel answers — **scoped 2026-11-11, not built**; whether to
-  build ahead of the answers is the operator's call (engineering guidance, not legal advice):
+  Code needed whichever way counsel answers — **scoped 2026-11-11, not built.** Operator
+  decision 2026-11-12: build both ahead of counsel's answers, the anonymous gate shipped
+  switched off until counsel answers (engineering guidance, not legal advice):
   - *Signup consent record.* The only consent field signup sends is `age_attestation`, which
     the api checks and does not store (CODE core `e6d83aa4`
     `internal/httpapi/auth.go:100-103,358`; user `ef1cb9c6`
@@ -126,6 +127,8 @@ beta was changed. `REHEARSAL` = observed in that run.
   database is what runs out (section G). Either make those three cheaper (`AGENT`, then a
   release) or accept the measured ceiling for the window (`OPERATOR`). Prod's real peak is
   still unknown (section H), so how close that ceiling is cannot be said.
+  Operator decision 2026-11-12: a plan to make the three cheaper first; no code before the
+  plan is approved.
 - [x] **This checklist + the audit merged to `main`** — #369, 2026-11-10. `AGENT`.
 - [~] **Ads parity.** Prod earns from HilltopAds + ExoClick through a PeerTube custom script,
   a PHP anti-adblock file and the `vast-ads` plugin (still registered on prod, RUNTIME
@@ -310,7 +313,7 @@ D1–D14 and D16 were answered 2026-11-08 (audit §6 table). **D15 is the only o
   private log. A listing of
   every version written to that bucket during the run shows nothing else from the
   rehearsal: none of the beta's own objects was overwritten or hidden. Removing the test
-  objects needs a delete-capable key and is the operator's call.
+  objects needs a delete-capable key; the operator decided on 2026-11-12 to leave them.
   **It could not rehearse** the real Origin CA certificate, Cloudflare in front, the DNS
   change, prod's own nginx config around the freeze snippet, or the reset mail.
 - [x] **One read-path load check — run 2026-11-12; FAILED at the estimated peak.** `AGENT`.
