@@ -1,9 +1,8 @@
 # sizetube.com cutover — tracked checklist (living)
 
 A working checklist for cutting `sizetube.com` over from PeerTube to the Vidra beta
-(`beta.sizetube.com`, v0.7.19 = core `e6d83aa4`, user `ef1cb9c6`, search `baa6d74f`, deployed
-2026-11-11 22:20 UTC; **v0.7.20 is released and recorded, 2026-11-12, and not yet deployed to
-the beta**). It tracks **execution status**; the reasoning, evidence and decisions
+(`beta.sizetube.com`, v0.7.20 = core `5b7c22aa`, user `1e1a3553`, search `d018b07f`, deployed
+2026-11-12 18:06 UTC). It tracks **execution status**; the reasoning, evidence and decisions
 live in the audit ([`sizetube-cutover-2026-11.md`](sizetube-cutover-2026-11.md)) and the run
 record ([`sizetube-beta-migration-2026-11.md`](sizetube-beta-migration-2026-11.md)). When an
 item here and the audit disagree, fix one of them in the same change — do not let them drift.
@@ -44,9 +43,14 @@ beta was changed. `REHEARSAL` = observed in that run.
   **Still open 2026-11-12.** No answer is recorded. On the beta `terms_url` and `privacy_url`
   are empty, `sensitive_content_policy=display`, `registration_minimum_age=0`; the counts are
   unchanged at 12,401 of 15,508 (RUNTIME).
-  Code needed whichever way counsel answers — **built and released in v0.7.20, 2026-11-12;
-  not yet deployed to the beta.** Both pieces are CODE, covered by their PRs' tests; neither
-  has run on the beta. What exists (engineering guidance, not legal advice):
+  Code needed whichever way counsel answers — **built, released in v0.7.20 and deployed to
+  the beta 2026-11-12 18:06 UTC; both pieces are switched off there.** On the beta (RUNTIME):
+  migration `0189` applied in 76 ms, `user_consents` exists and is empty, `terms_url`,
+  `privacy_url` and both version labels are empty, `sensitive_anonymous_access` reads `open`,
+  an anonymous read of a sensitive public video still answers 200 and no list card carries
+  `sign_in_required`. **Neither the signup refusal nor the sign-in wall has been exercised on
+  the beta**: registration is closed there and the wall is off, so both rest on their PRs'
+  tests (CODE). What exists (engineering guidance, not legal advice):
   - *Signup consent record* (core #545–#549, user #470). Migration `0189` adds `user_consents`
     (document `terms` / `privacy` / `age`, the operator's version label, URL, source,
     accepted-at; append-only by trigger; removed with the account). While `terms_url` or
@@ -142,9 +146,10 @@ beta was changed. `REHEARSAL` = observed in that run.
   already loaded" for `beta.sizetube.com` and served the loaded certificate on that name. On
   the beta that would replace the Let's Encrypt certificate on the DNS-only `beta.` redirect
   with one browsers do not trust. The existing `cdn-beta` certificate is single-name (RUNTIME).
-- [ ] **Read-path capacity — found 2026-11-12; fix released in v0.7.20, not deployed, not
-  re-measured end to end.** Three anonymous endpoints take
-  about a second each with nobody else on the box, and a repeat call costs the same:
+- [x] **Read-path capacity — found 2026-11-12; fixed in v0.7.20, deployed and re-measured the
+  same day.** `AGENT`. What follows is the finding, then the fix, then the re-measurement.
+  Three anonymous endpoints took
+  about a second each with nobody else on the box, and a repeat call cost the same:
   `GET /api/v1/videos?sort=trending` 1.1–1.2 s, `GET /api/v1/videos/search` 0.5–0.7 s,
   `GET /api/v1/recommendations/home` 0.5–0.7 s (RUNTIME 2026-11-12, the beta itself, one
   request at a time; every other path a page uses answers in 0.1 s or less). Under load the
@@ -167,10 +172,19 @@ beta was changed. `REHEARSAL` = observed in that run.
   467), trending 56 ms (was 807), the total 15 ms (was 246), search total 56 ms with JIT off
   (was 334). On a 15,000-video fixture (Apple M2, PostgreSQL 18.6, each call = list + total):
   trending 932.7 → 70.2 ms with JIT on and 378.3 → 27.7 ms with it off; a cached call is under
-  0.02 ms. **Not established:** the endpoints' real response times on the beta (v0.7.20 is not
-  deployed there) and the 270-page-views-a-minute target (the load ladder has not been
-  rerun). The cache is per process; a second api container would need shared invalidation.
-  Signed-in callers and filtered lists still run the general statement.
+  0.02 ms.
+  **Re-measured on the beta after the deploy** (RUNTIME 2026-11-12 18:07–18:11 UTC, the api's
+  loopback, one request at a time, each round 16 s after the last so the cache had expired;
+  v0.7.19 timed the same way an hour earlier in brackets): trending 60–108 ms, 4–10 ms when
+  repeated [0.92–1.83 s]; recent 26–39 ms [0.55–1.26 s]; search 170–214 ms, 85–122 ms when
+  repeated [0.40–0.47 s]; home rail 92–135 ms, the same when repeated [0.42–0.48 s]. The
+  plan's target of 150 ms for a first call is met by the list and the home rail and **missed
+  by search**: each search asks vidra-search for its page (85–120 ms, not cached) and only the
+  total is cached. The home rail's cache does nothing on this instance: it is shared only
+  when `search_mode` is `simple`, and the beta's is `advanced` (ranked per session).
+  **Under load:** the rerun in section G passes at 270 page views a minute for 10 minutes.
+  Still true: the cache is per process (a second api container would need shared
+  invalidation); signed-in callers and filtered lists run the general statement.
 - [x] **This checklist + the audit merged to `main`** — #369, 2026-11-10. `AGENT`.
 - [~] **Ads parity.** Prod earns from HilltopAds + ExoClick through a PeerTube custom script,
   a PHP anti-adblock file and the `vast-ads` plugin (still registered on prod, RUNTIME
@@ -305,7 +319,7 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
   cookies/CORS, playback, search, old URLs publicly; watch api logs for 429/5xx; then enable
   registration / mail / federation per decisions, each with its own check. `OPERATOR`.
 - [ ] **7 · Rollback window (length per D14):** PeerTube frozen-but-running, env pinned at
-  the release deployed on the day (v0.7.19 today), both snapshots + dumps kept, source bucket
+  the release deployed on the day (v0.7.20 today), both snapshots + dumps kept, source bucket
   untouched, GC still off. Rollback = DNS back + unfreeze + a final `backup.sh`. `OPERATOR`.
   The beta's side of a rollback was rehearsed 2026-11-12 on the copy: `restore.sh` with the
   pre-flip backup 340 s including its media existence pass (every referenced object
@@ -365,7 +379,8 @@ D1–D14 and D16 were answered 2026-11-08 (audit §6 table). **D15 is the only o
   objects needs a delete-capable key; the operator decided on 2026-11-12 to leave them.
   **It could not rehearse** the real Origin CA certificate, Cloudflare in front, the DNS
   change, prod's own nginx config around the freeze snippet, or the reset mail.
-- [x] **One read-path load check — run 2026-11-12; FAILED at the estimated peak.** `AGENT`.
+- [x] **One read-path load check — run 2026-11-12 on v0.7.19; FAILED at the estimated peak.**
+  `AGENT`. Rerun on v0.7.20 the same day: next item.
   Method: anonymous page views replayed from a browser recording, about 25 requests each
   (1 page, about 10 api calls, about 15 thumbnails; watch pages add playlists and three
   media segments), every view under its own visitor address so the per-address limit sees
@@ -398,12 +413,53 @@ D1–D14 and D16 were answered 2026-11-08 (audit §6 table). **D15 is the only o
   not the 8.4 the parity QA recorded; thumbnails average 137 KB.
   Limits: the 1× figure is an estimate from bandwidth, not prod's measured peak; ladder steps
   were 3 minutes; latencies include the generator's own line.
+- [x] **The load check rerun on v0.7.20 — 2026-11-12 18:39–19:15 UTC; PASSED at the estimated
+  peak.** `AGENT`. A second throwaway droplet (same size; `nyc1`, because `tor1` had none of
+  that size free), the beta's 18:05 UTC backup restored and neutered as before, v0.7.20, the
+  same driver, mix and pass marks. Its storage key could only read, so the copy could write
+  nothing to the beta's bucket. Destroyed afterwards with its firewall and key (52 minutes,
+  about $0.13).
+  **Two generators, because the first one's line is too small.** The home line carried
+  52 Mbps from the copy (measured); the 270 mix needs about 69. So the rungs up to 150 were
+  run from the home line as before, and 30, 150 and 270 from a generator in a container on
+  the copy itself, through the same Caddy. Those on-box figures have no internet in them and
+  the generator shares the 8 vCPUs.
+
+  | Page views / min | Generator | Page p50 / p95 | Api p50 / p95 | Timeouts | Result |
+  |---|---|---|---|---|---|
+  | 30 | home line | 0.17 / 0.43 s | 0.05 / 0.23 s | 0 | pass |
+  | 90 | home line | 0.13 / 0.35 s | 0.05 / 0.21 s | 0 | pass |
+  | 120 | home line | 0.13 / 0.33 s | 0.05 / 0.21 s | 0 | pass |
+  | 150 | home line | 0.64 / 5.44 s | 0.24 / 2.29 s | 0 | **line-limited** |
+  | 30 | on the box | 0.05 / 0.11 s | 0.01 / 0.12 s | 0 | pass |
+  | 150 | on the box | 0.06 / 0.23 s | 0.01 / 0.14 s | 0 | pass |
+  | 270 | on the box | 0.04 / 0.12 s | 0.01 / 0.10 s | 0 | pass |
+  | **270 (1×), 10 min** | on the box | **0.05 / 0.14 s** | **0.01 / 0.12 s** | **0** | **pass** |
+
+  The 10-minute row: 2,600 page views completed, 4 still in flight at the end, none dropped,
+  no 5xx, nobody but the deliberately over-limit visitor refused; thumbnails p95 0.17 s, media
+  segments p95 0.39 s. The box averaged 32 % CPU busy (peak 57 %) and no container restarted.
+  The api's own request log for those 10 minutes: every api call p95 105 ms; the video list
+  p95 36 ms; search p50 142 / p95 358 ms; the home rail p50 132 / p95 269 ms. On v0.7.19 the
+  same row completed 74 a minute with 15,358 timeouts.
+  The 150 row from the home line failed on latency for the generator's reasons, not the
+  box's: in that window the api's own log shows every api call p95 83 ms and the box at most
+  31 % busy, and the over-limit visitor's tiny requests were slow too. The morning's rungs at
+  120 and above went through the same line, so part of what they showed may have been the
+  line; its 1× collapse was the database (all 8 vCPUs), which is what v0.7.20 fixed.
+  Limits: at 150 and above the generator was on the box it loaded; `nyc1` is nearer the media
+  bucket than the beta is, so thumbnails and media may be quicker here than there; no
+  Cloudflare in front; 1× is still the bandwidth estimate; **3× was not run**, so where it
+  falls over now is not known; ladder steps were 3 minutes.
 
 ## H. What is still not checked (after the 2026-11-12 re-read and rehearsal)
 
 - **Prod's transcoding queue now, and prod's real request rate.** Both need read-only SSH to
   prod, which the operator declined on 2026-11-12. D16 therefore rests on the 2026-11-09
   reading, and the load check's "1×" is an estimate (section G).
+- **Where the read path gives out on v0.7.20.** The rerun stopped at the estimated 1× and
+  passed; 3× was not run, and at 150 a minute and above the generator sat on the box it was
+  loading (section G).
 - **The final rerun in copy mode with `source_authoritative=true`.** Never run anywhere
   (section C, step 4).
 - **The admin infrastructure page on the beta.** Read on the rehearsal copy only; on the beta
