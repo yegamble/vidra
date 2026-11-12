@@ -2,7 +2,8 @@
 
 A working checklist for cutting `sizetube.com` over from PeerTube to the Vidra beta
 (`beta.sizetube.com`, v0.7.19 = core `e6d83aa4`, user `ef1cb9c6`, search `baa6d74f`, deployed
-2026-11-11 22:20 UTC). It tracks **execution status**; the reasoning, evidence and decisions
+2026-11-11 22:20 UTC; **v0.7.20 is released and recorded, 2026-11-12, and not yet deployed to
+the beta**). It tracks **execution status**; the reasoning, evidence and decisions
 live in the audit ([`sizetube-cutover-2026-11.md`](sizetube-cutover-2026-11.md)) and the run
 record ([`sizetube-beta-migration-2026-11.md`](sizetube-beta-migration-2026-11.md)). When an
 item here and the audit disagree, fix one of them in the same change — do not let them drift.
@@ -43,9 +44,31 @@ beta was changed. `REHEARSAL` = observed in that run.
   **Still open 2026-11-12.** No answer is recorded. On the beta `terms_url` and `privacy_url`
   are empty, `sensitive_content_policy=display`, `registration_minimum_age=0`; the counts are
   unchanged at 12,401 of 15,508 (RUNTIME).
-  Code needed whichever way counsel answers — **scoped 2026-11-11, not built.** Operator
-  decision 2026-11-12: build both ahead of counsel's answers, the anonymous gate shipped
-  switched off until counsel answers (engineering guidance, not legal advice):
+  Code needed whichever way counsel answers — **built and released in v0.7.20, 2026-11-12;
+  not yet deployed to the beta.** Both pieces are CODE, covered by their PRs' tests; neither
+  has run on the beta. What exists (engineering guidance, not legal advice):
+  - *Signup consent record* (core #545–#549, user #470). Migration `0189` adds `user_consents`
+    (document `terms` / `privacy` / `age`, the operator's version label, URL, source,
+    accepted-at; append-only by trigger; removed with the account). While `terms_url` or
+    `privacy_url` is set, `POST /auth/register` without `terms_accepted` is a 422 and no
+    account is created; the approval queue keeps the applicant's acceptance and its time; a
+    first sign-in through OIDC or ATProto without it returns `oauth_error=terms_required`;
+    an existing account is never asked. The record is in the account export. New settings
+    `terms_version` / `privacy_version` (Admin → General → About). **Does nothing until the
+    two URLs are set**, which is still the case on the beta. Not built: asking the existing
+    5,541 accounts to accept on their next sign-in (the `reaccept` source exists for it).
+    Also found: a provider signup is not asked for the age attestation the form requires.
+  - *Sign-in wall for sensitive videos* (core #550, #551, user #471). Setting
+    `sensitive_anonymous_access`: `open` (default, today's behaviour) or `sign_in` (Admin →
+    General → Moderation). With `sign_in`, every read of a sensitive video by a visitor
+    without an account answers 401 `sign_in_required` (detail, embed policy, captions,
+    chapters, downloads, poster, storyboard, HLS, original), its bytes are no longer sent to
+    the CDN, RSS / podcast / sitemap / oEmbed leave it out, and a listed card carries
+    `sign_in_required` and no poster. Switching it on is refused while CDN delivery is on
+    with no purge endpoint; with one, the response says to purge the CDN zone. **Shipped
+    `open`.** A sign-in wall, not age verification. Not covered: the IPFS mirror (a gated
+    video's CIDs stay on a public gateway), and playlist item cards.
+  The scoping notes of 2026-11-11 that this replaced:
   - *Signup consent record.* The only consent field signup sends is `age_attestation`, which
     the api checks and does not store (CODE core `e6d83aa4`
     `internal/httpapi/auth.go:100-103,358`; user `ef1cb9c6`
@@ -119,7 +142,8 @@ beta was changed. `REHEARSAL` = observed in that run.
   already loaded" for `beta.sizetube.com` and served the loaded certificate on that name. On
   the beta that would replace the Let's Encrypt certificate on the DNS-only `beta.` redirect
   with one browsers do not trust. The existing `cdn-beta` certificate is single-name (RUNTIME).
-- [ ] **Read-path capacity — found 2026-11-12, undecided.** Three anonymous endpoints take
+- [ ] **Read-path capacity — found 2026-11-12; fix released in v0.7.20, not deployed, not
+  re-measured end to end.** Three anonymous endpoints take
   about a second each with nobody else on the box, and a repeat call costs the same:
   `GET /api/v1/videos?sort=trending` 1.1–1.2 s, `GET /api/v1/videos/search` 0.5–0.7 s,
   `GET /api/v1/recommendations/home` 0.5–0.7 s (RUNTIME 2026-11-12, the beta itself, one
@@ -129,6 +153,24 @@ beta was changed. `REHEARSAL` = observed in that run.
   still unknown (section H), so how close that ceiling is cannot be said.
   Operator decision 2026-11-12: a plan to make the three cheaper first; no code before the
   plan is approved.
+  **Explained and fixed in code, 2026-11-12** (plan approved the same day). Read-only
+  `EXPLAIN (ANALYZE, BUFFERS)` on the beta (RUNTIME): the list built all 13,776 public rows to
+  keep 20 and counted them again in a second statement (246 ms); 10,702 of the 13,792 public
+  rows are sensitive and each called a policy function the planner cannot inline (about 190 ms
+  per statement); trending used numeric `power()` (about 350 ms; the home rail's 426 ms is the
+  same expression in vidra-search); JIT compiled each statement (74–94 ms). v0.7.20 changes:
+  statements for the anonymous unfiltered feed (core #542), the per-row costs (#539, search
+  #103), a 15-second shared cache for anonymous lists, search totals and the home rail, with
+  publish, edit, delete and block effective at once (#540, #543, #544), and `jit=off` for the
+  bundled Postgres (meta #379; the first deploy that carries it restarts Postgres once).
+  The new statements on the beta's data, by EXPLAIN only (RUNTIME): recent page 5 ms (was
+  467), trending 56 ms (was 807), the total 15 ms (was 246), search total 56 ms with JIT off
+  (was 334). On a 15,000-video fixture (Apple M2, PostgreSQL 18.6, each call = list + total):
+  trending 932.7 → 70.2 ms with JIT on and 378.3 → 27.7 ms with it off; a cached call is under
+  0.02 ms. **Not established:** the endpoints' real response times on the beta (v0.7.20 is not
+  deployed there) and the 270-page-views-a-minute target (the load ladder has not been
+  rerun). The cache is per process; a second api container would need shared invalidation.
+  Signed-in callers and filtered lists still run the general statement.
 - [x] **This checklist + the audit merged to `main`** — #369, 2026-11-10. `AGENT`.
 - [~] **Ads parity.** Prod earns from HilltopAds + ExoClick through a PeerTube custom script,
   a PHP anti-adblock file and the `vast-ads` plugin (still registered on prod, RUNTIME
@@ -220,7 +262,14 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
   `remote_follower.imported=20`, the state-8 pair's HLS, the 8 drafts now `published`, zero
   transient failures; re-run the §9.5 / §9.6 / §9.12 diffs and apply D10 by hand. `OPERATOR`.
   No run has used `source_authoritative=true` yet; `remote_follows` is empty (RUNTIME
-  2026-11-12). Prod has moved on since the 2026-11-06 snapshot: its public stats show 5,577
+  2026-11-12). **Runs between now and the window import nothing new, and that is expected:**
+  the importer reads `peertube_source_snapshot`, a copy on the beta's own Postgres restored
+  2026-11-06 16:59 UTC, whose newest video is from 11-06 15:06; the beta already holds all
+  15,508 of its videos, and the run after the last swap did import the 10 that copy had
+  gained. Prod's public API shows 38 public videos created since (RUNTIME 2026-11-12 14:16
+  UTC). Step 2 of this window is what refreshes the copy. From v0.7.20 the import report and
+  the admin import page show the newest video date in the source (core #541, user #469).
+  Prod has moved on since the 2026-11-06 snapshot: its public stats show 5,577
   accounts against 5,539 on the beta.
   Rehearsed 2026-11-12 on the copy, against the 2026-11-06 snapshot. Dry run with
   `source_authoritative=true`: 79 s. It lists planned totals per kind and **does not say what
