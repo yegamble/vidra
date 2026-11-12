@@ -345,23 +345,33 @@ Executed so far (each with the operator's explicit go-ahead):
   `source_authoritative`. Each ended `done` with nothing imported or updated and the failure sets already known.
 - 2026-11-11 — in-player VAST: v0.7.18 deployed 06:11 UTC (DEDUCED from the pre-deploy dump and the release record)
   and v0.7.19 at 22:20 UTC; the white-label switch turned on at 14:28 UTC; the VAST settings saved from 14:30 UTC.
-- 2026-11-11 — planned, **not run**: a dress rehearsal of window steps 1–5 and the rollback on a throwaway droplet,
-  and one read-path load check (checklist section G). Both wait on the operator's approval of the spend.
+- 2026-11-11 — planned: a dress rehearsal of window steps 1–5 and the rollback on a throwaway droplet, and one
+  read-path load check (run 2026-11-12, below).
 - 2026-11-12 10:20–10:31 UTC — read-only status re-read of the beta, DNS, the buckets and prod's public API; the
   per-item results are in the [checklist](sizetube-cutover-checklist.md). **Still not applied:** D5, D7, D6, the
   anonymous-NSFW policy, the terms and privacy URLs, the instance imagery, the D3 certificate and
   `VIDRA_SKIP_DNS_PREFLIGHT`, and the whole D12 tail (replication or Object Lock, a non-deleting media key,
   `HEALTHCHECKS_URL`, the 11 unfinished large files). Not read: prod's queue and request rate (prod SSH had not
   been approved).
+- 2026-11-12 11:14–13:07 UTC — the dress rehearsal and the load check, on a throwaway droplet built from the beta's
+  03:26 UTC backup and destroyed afterwards; per-step results are in the [checklist](sizetube-cutover-checklist.md),
+  sections C and G. Steps 1–5 and the rollback ran: about 15 minutes of machine time for steps 2–5 without the
+  rerun's media part, about 7 minutes for the rollback. Found and fixed: the D2 freeze snippet failed `nginx -t`.
+  Found and open: the Origin CA certificate must name `sizetube.com` only; the final rerun in copy mode has still
+  never run; three read endpoints take 0.5–1.2 s each, and the read path failed the load check at the estimated peak
+  (270 page views a minute asked, 74 completed; it keeps up to roughly 120–150). D13 was proven on the copy, the
+  operator typing the password. Nothing on prod or the beta was changed; the beta's bucket gained one test upload
+  and some hidden write probes, and none of its own objects was overwritten or hidden.
 
 Everything else above is still a change the operator (or a later, separately approved task) makes.
 
 ## 7. What this audit does NOT establish
 
 Byte-level integrity beyond the importer's own checks; feature parity (the parity QA's job);
-media disaster recovery; which 38 objects the GC deleted; login with an imported password;
-that the cutover can run without a maintenance window (the `acme` path cannot); anything
-legal — §8 is engineering guidance.
+media disaster recovery; which 38 objects the GC deleted; that the cutover can run without a
+maintenance window (the `acme` path cannot); anything legal — §8 is engineering guidance.
+Login with an imported password was not established by this audit either; it was proven on a
+rehearsal copy on 2026-11-12 (checklist D13).
 
 ## 8. Skill reviews (durable, compliance-guard)
 
