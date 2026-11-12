@@ -362,6 +362,9 @@ Executed so far (each with the operator's explicit go-ahead):
   (270 page views a minute asked, 74 completed; it keeps up to roughly 120–150). D13 was proven on the copy, the
   operator typing the password. Nothing on prod or the beta was changed; the beta's bucket gained one test upload
   and some hidden write probes, and none of its own objects was overwritten or hidden.
+- 2026-11-12 — operator decisions after the rehearsal: build both pieces of D15 code ahead of counsel's answers (the
+  signup consent record, and the anonymous gate for sensitive videos shipped switched off); plan a fix for the three
+  slow read endpoints before any code; leave the rehearsal's test objects in the bucket. Nothing is built yet.
 
 Everything else above is still a change the operator (or a later, separately approved task) makes.
 
