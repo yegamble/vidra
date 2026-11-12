@@ -227,6 +227,11 @@ CATALOGUE = {
     # Losing pages can silently change what a restored sender delivers.
     'search_catalog_snapshots': (186, ()),
     'search_catalog_pages': (186, ()),
+    # 0189. What each account holder accepted (terms, privacy policy, age
+    # attestation), in which version and when. Append-only evidence — a trigger
+    # refuses UPDATE — so nothing rewrites a row between backup and restore:
+    # whole rows. Losing them loses the record of consent itself.
+    'user_consents': (189, ()),
 }
 
 # BYTEA is hex-encoded by to_jsonb. Aggregating a 512MiB frozen snapshot can
@@ -321,6 +326,10 @@ TABLES_ADDED = {
     186: ('search_catalog_snapshots', 'search_catalog_pages'),
     187: (),  # Transactional dirty function and 24 statement triggers; checked separately.
     188: (),  # Whole state retains last_error_id; require its paired/nonzero CHECKs too.
+    # 0189 at core 5b7c22aa creates user_consents (with an append-only trigger
+    # function) and adds nullable consent_* columns to registration_requests.
+    # This records SQL review, not a recovery drill.
+    189: ('user_consents',),
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 # Receiver authority is not disposable inbox/cache state. Compare whole rows:
