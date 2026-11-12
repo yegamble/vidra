@@ -1,0 +1,148 @@
+[
+  {
+    "argv": [
+      "docker",
+      "buildx",
+      "imagetools",
+      "inspect",
+      "ghcr.io/yegamble/vidra-core:v0.7.20",
+      "--format",
+      "{{json .Manifest}}"
+    ],
+    "exit": 0,
+    "captured_utc": "2026-11-12T17:31:27.507584+00:00",
+    "stdout": "{\n  \"schemaVersion\": 2,\n  \"mediaType\": \"application/vnd.oci.image.index.v1+json\",\n  \"digest\": \"sha256:7eb4e8e5406a849225e6659e6e5905ac4fc1bbdebc8069f03ce93df78c21da25\",\n  \"size\": 856,\n  \"manifests\": [\n    {\n      \"mediaType\": \"application/vnd.oci.image.manifest.v1+json\",\n      \"digest\": \"sha256:e3e61354e18f86c6cc7d411389e54edb6f2f4918a881716ed13972fc2526e23e\",\n      \"size\": 1247,\n      \"platform\": {\n        \"architecture\": \"amd64\",\n        \"os\": \"linux\"\n      }\n    },\n    {\n      \"mediaType\": \"application/vnd.oci.image.manifest.v1+json\",\n      \"digest\": \"sha256:fc1e13344c9933da39d71caf2c55827acc1921723863bd1db56ba4a4dd3eb743\",\n      \"size\": 838,\n      \"annotations\": {\n        \"vnd.docker.reference.digest\": \"sha256:e3e61354e18f86c6cc7d411389e54edb6f2f4918a881716ed13972fc2526e23e\",\n        \"vnd.docker.reference.type\": \"attestation-manifest\"\n      },\n      \"platform\": {\n        \"architecture\": \"unknown\",\n        \"os\": \"unknown\"\n      }\n    }\n  ]\n}",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "buildx",
+      "imagetools",
+      "inspect",
+      "ghcr.io/yegamble/vidra-core:v0.7.20"
+    ],
+    "exit": 0,
+    "captured_utc": "2026-11-12T17:31:28.376277+00:00",
+    "stdout": "Name:      ghcr.io/yegamble/vidra-core:v0.7.20\nMediaType: application/vnd.oci.image.index.v1+json\nDigest:    sha256:7eb4e8e5406a849225e6659e6e5905ac4fc1bbdebc8069f03ce93df78c21da25\n           \nManifests: \n  Name:        ghcr.io/yegamble/vidra-core:v0.7.20@sha256:e3e61354e18f86c6cc7d411389e54edb6f2f4918a881716ed13972fc2526e23e\n  MediaType:   application/vnd.oci.image.manifest.v1+json\n  Platform:    linux/amd64\n               \n  Name:        ghcr.io/yegamble/vidra-core:v0.7.20@sha256:fc1e13344c9933da39d71caf2c55827acc1921723863bd1db56ba4a4dd3eb743\n  MediaType:   application/vnd.oci.image.manifest.v1+json\n  Platform:    unknown/unknown\n  Annotations: \n    vnd.docker.reference.digest: sha256:e3e61354e18f86c6cc7d411389e54edb6f2f4918a881716ed13972fc2526e23e\n    vnd.docker.reference.type:   attestation-manifest\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "pull",
+      "--platform",
+      "linux/amd64",
+      "ghcr.io/yegamble/vidra-core@sha256:e3e61354e18f86c6cc7d411389e54edb6f2f4918a881716ed13972fc2526e23e"
+    ],
+    "exit": 0,
+    "captured_utc": "2026-11-12T17:31:52.774987+00:00",
+    "stdout": "ghcr.io/yegamble/vidra-core@sha256:e3e61354e18f86c6cc7d411389e54edb6f2f4918a881716ed13972fc2526e23e: Pulling from yegamble/vidra-core\n4bc8a73d33fb: Pulling fs layer\n4958e8ec24e0: Pulling fs layer\n881fc932939e: Pulling fs layer\n128e4b469c2d: Pulling fs layer\n858735d50772: Pulling fs layer\n881fc932939e: Already exists\n128e4b469c2d: Download complete\n4bc8a73d33fb: Download complete\n858735d50772: Download complete\n4958e8ec24e0: Download complete\n4958e8ec24e0: Pull complete\n128e4b469c2d: Pull complete\n858735d50772: Pull complete\n4bc8a73d33fb: Pull complete\nDigest: sha256:e3e61354e18f86c6cc7d411389e54edb6f2f4918a881716ed13972fc2526e23e\nStatus: Downloaded newer image for ghcr.io/yegamble/vidra-core@sha256:e3e61354e18f86c6cc7d411389e54edb6f2f4918a881716ed13972fc2526e23e\nghcr.io/yegamble/vidra-core@sha256:e3e61354e18f86c6cc7d411389e54edb6f2f4918a881716ed13972fc2526e23e\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "run",
+      "--rm",
+      "--platform",
+      "linux/amd64",
+      "--network",
+      "none",
+      "ghcr.io/yegamble/vidra-core@sha256:e3e61354e18f86c6cc7d411389e54edb6f2f4918a881716ed13972fc2526e23e",
+      "migrate",
+      "embedded-max"
+    ],
+    "exit": 0,
+    "captured_utc": "2026-11-12T17:31:56.347195+00:00",
+    "stdout": "189\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "buildx",
+      "imagetools",
+      "inspect",
+      "ghcr.io/yegamble/vidra-user:v0.7.20",
+      "--format",
+      "{{json .Manifest}}"
+    ],
+    "exit": 0,
+    "captured_utc": "2026-11-12T17:32:00.039095+00:00",
+    "stdout": "{\n  \"schemaVersion\": 2,\n  \"mediaType\": \"application/vnd.oci.image.index.v1+json\",\n  \"digest\": \"sha256:f4346ff0c424f21d29e499940eab04fca5962ff93704ddc355c458b069060c34\",\n  \"size\": 856,\n  \"manifests\": [\n    {\n      \"mediaType\": \"application/vnd.oci.image.manifest.v1+json\",\n      \"digest\": \"sha256:ae8be159c579cc90823b969cbf4f2ffc0b9bbb2840af00c653727003cdea6ff4\",\n      \"size\": 1815,\n      \"platform\": {\n        \"architecture\": \"amd64\",\n        \"os\": \"linux\"\n      }\n    },\n    {\n      \"mediaType\": \"application/vnd.oci.image.manifest.v1+json\",\n      \"digest\": \"sha256:f0119be763ff9d274ee031e8504591ef4f658cf82ebf20d6bf52965d0acb3f50\",\n      \"size\": 838,\n      \"annotations\": {\n        \"vnd.docker.reference.digest\": \"sha256:ae8be159c579cc90823b969cbf4f2ffc0b9bbb2840af00c653727003cdea6ff4\",\n        \"vnd.docker.reference.type\": \"attestation-manifest\"\n      },\n      \"platform\": {\n        \"architecture\": \"unknown\",\n        \"os\": \"unknown\"\n      }\n    }\n  ]\n}",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "buildx",
+      "imagetools",
+      "inspect",
+      "ghcr.io/yegamble/vidra-user:v0.7.20"
+    ],
+    "exit": 0,
+    "captured_utc": "2026-11-12T17:32:01.120713+00:00",
+    "stdout": "Name:      ghcr.io/yegamble/vidra-user:v0.7.20\nMediaType: application/vnd.oci.image.index.v1+json\nDigest:    sha256:f4346ff0c424f21d29e499940eab04fca5962ff93704ddc355c458b069060c34\n           \nManifests: \n  Name:        ghcr.io/yegamble/vidra-user:v0.7.20@sha256:ae8be159c579cc90823b969cbf4f2ffc0b9bbb2840af00c653727003cdea6ff4\n  MediaType:   application/vnd.oci.image.manifest.v1+json\n  Platform:    linux/amd64\n               \n  Name:        ghcr.io/yegamble/vidra-user:v0.7.20@sha256:f0119be763ff9d274ee031e8504591ef4f658cf82ebf20d6bf52965d0acb3f50\n  MediaType:   application/vnd.oci.image.manifest.v1+json\n  Platform:    unknown/unknown\n  Annotations: \n    vnd.docker.reference.digest: sha256:ae8be159c579cc90823b969cbf4f2ffc0b9bbb2840af00c653727003cdea6ff4\n    vnd.docker.reference.type:   attestation-manifest\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "buildx",
+      "imagetools",
+      "inspect",
+      "ghcr.io/yegamble/vidra-search:v0.7.20",
+      "--format",
+      "{{json .Manifest}}"
+    ],
+    "exit": 0,
+    "captured_utc": "2026-11-12T17:32:02.395543+00:00",
+    "stdout": "{\n  \"schemaVersion\": 2,\n  \"mediaType\": \"application/vnd.oci.image.index.v1+json\",\n  \"digest\": \"sha256:d806ef5ff782fbf56d70975cae8382fe39bddecf9ae016cd82188736e3894e5d\",\n  \"size\": 856,\n  \"manifests\": [\n    {\n      \"mediaType\": \"application/vnd.oci.image.manifest.v1+json\",\n      \"digest\": \"sha256:8bb7ef75f1033d90b43c6d8a2dd80a6d2b2104b8aa0686d51b59047b6314b356\",\n      \"size\": 1052,\n      \"platform\": {\n        \"architecture\": \"amd64\",\n        \"os\": \"linux\"\n      }\n    },\n    {\n      \"mediaType\": \"application/vnd.oci.image.manifest.v1+json\",\n      \"digest\": \"sha256:e42a22a9ec25f97830ec82bc0b72a81b15a4f76aab019c1decd3355104d005d8\",\n      \"size\": 838,\n      \"annotations\": {\n        \"vnd.docker.reference.digest\": \"sha256:8bb7ef75f1033d90b43c6d8a2dd80a6d2b2104b8aa0686d51b59047b6314b356\",\n        \"vnd.docker.reference.type\": \"attestation-manifest\"\n      },\n      \"platform\": {\n        \"architecture\": \"unknown\",\n        \"os\": \"unknown\"\n      }\n    }\n  ]\n}",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "buildx",
+      "imagetools",
+      "inspect",
+      "ghcr.io/yegamble/vidra-search:v0.7.20"
+    ],
+    "exit": 0,
+    "captured_utc": "2026-11-12T17:32:03.142195+00:00",
+    "stdout": "Name:      ghcr.io/yegamble/vidra-search:v0.7.20\nMediaType: application/vnd.oci.image.index.v1+json\nDigest:    sha256:d806ef5ff782fbf56d70975cae8382fe39bddecf9ae016cd82188736e3894e5d\n           \nManifests: \n  Name:        ghcr.io/yegamble/vidra-search:v0.7.20@sha256:8bb7ef75f1033d90b43c6d8a2dd80a6d2b2104b8aa0686d51b59047b6314b356\n  MediaType:   application/vnd.oci.image.manifest.v1+json\n  Platform:    linux/amd64\n               \n  Name:        ghcr.io/yegamble/vidra-search:v0.7.20@sha256:e42a22a9ec25f97830ec82bc0b72a81b15a4f76aab019c1decd3355104d005d8\n  MediaType:   application/vnd.oci.image.manifest.v1+json\n  Platform:    unknown/unknown\n  Annotations: \n    vnd.docker.reference.digest: sha256:8bb7ef75f1033d90b43c6d8a2dd80a6d2b2104b8aa0686d51b59047b6314b356\n    vnd.docker.reference.type:   attestation-manifest\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "pull",
+      "--platform",
+      "linux/amd64",
+      "ghcr.io/yegamble/vidra-search@sha256:8bb7ef75f1033d90b43c6d8a2dd80a6d2b2104b8aa0686d51b59047b6314b356"
+    ],
+    "exit": 0,
+    "captured_utc": "2026-11-12T17:32:05.323298+00:00",
+    "stdout": "ghcr.io/yegamble/vidra-search@sha256:8bb7ef75f1033d90b43c6d8a2dd80a6d2b2104b8aa0686d51b59047b6314b356: Pulling from yegamble/vidra-search\n2e92d74e1d91: Pulling fs layer\n44e82332fceb: Pulling fs layer\n881fc932939e: Pulling fs layer\n71a81c34b7de: Pulling fs layer\n881fc932939e: Already exists\n71a81c34b7de: Download complete\n44e82332fceb: Download complete\n71a81c34b7de: Pull complete\n44e82332fceb: Pull complete\n2e92d74e1d91: Download complete\n2e92d74e1d91: Pull complete\nDigest: sha256:8bb7ef75f1033d90b43c6d8a2dd80a6d2b2104b8aa0686d51b59047b6314b356\nStatus: Downloaded newer image for ghcr.io/yegamble/vidra-search@sha256:8bb7ef75f1033d90b43c6d8a2dd80a6d2b2104b8aa0686d51b59047b6314b356\nghcr.io/yegamble/vidra-search@sha256:8bb7ef75f1033d90b43c6d8a2dd80a6d2b2104b8aa0686d51b59047b6314b356\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "docker",
+      "run",
+      "--rm",
+      "--platform",
+      "linux/amd64",
+      "--network",
+      "none",
+      "ghcr.io/yegamble/vidra-search@sha256:8bb7ef75f1033d90b43c6d8a2dd80a6d2b2104b8aa0686d51b59047b6314b356",
+      "migrate",
+      "embedded-max"
+    ],
+    "exit": 0,
+    "captured_utc": "2026-11-12T17:32:06.751196+00:00",
+    "stdout": "21\n",
+    "stderr": ""
+  }
+]
