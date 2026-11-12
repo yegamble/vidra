@@ -375,6 +375,18 @@ Executed so far (each with the operator's explicit go-ahead):
   then (not an importer defect; step 2 of the window refreshes it); vidra-search's required vulnerability scan had been
   red since 2026-11-06 on an echo v4 advisory with no v4 fix, cleared by moving it to echo v5 (search #104); the
   restore-drill catalogue was audited only through core schema 188 and now covers 189.
+- 2026-11-12 18:02–19:17 UTC — **v0.7.20 deployed to the beta** (operator's go-ahead), then the load check rerun on a
+  second throwaway droplet (operator's go-ahead; a read-only temporary storage key, chosen by the operator). On the
+  beta, in order: `systemctl start vidra-backup.service` (off-site backup `vidra-20261112T180503Z`, verified and
+  uploaded); as `vidra`, `./deploy/pin-release.sh v0.7.20` (bundle checksum verified, env snapshot); `./deploy/deploy.sh`,
+  61 s, exit 0 (pre-deploy dump `pre-deploy-2026-11-12T180552`; Postgres recreated once for `jit=off`; migration `0189`
+  76 ms; core schema 189, search 21). After it (RUNTIME): `/version` v0.7.20 `5b7c22a`; `/readyz` ok; every container
+  healthy with no restart; 5,541 users and 15,508 videos as before; `sensitive_anonymous_access=open`; terms and
+  privacy URLs empty; registration closed (no signup attempted); `Caddyfile.local` unchanged. The three endpoints'
+  timings and the rerun's table are in the [checklist](sizetube-cutover-checklist.md), sections B and G: the list and
+  the home rail answer a first call within 150 ms, search does not (170–214 ms); the copy held the estimated peak of
+  270 page views a minute for 10 minutes with page p95 0.14 s and no timeout. The scratch droplet (`nyc1`, 52 minutes,
+  about $0.13), its firewall and the temporary key are deleted; the copy could not write to the beta's bucket.
 
 Everything else above is still a change the operator (or a later, separately approved task) makes.
 
