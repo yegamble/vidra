@@ -369,10 +369,14 @@ class MailConfigCatalogueTest(unittest.TestCase):
         self.assertIn('mail_config', rows)
         self.assertIn('public.mail_config', ' '.join(FakeRun().relations(151)))
 
-    def test_a_189_candidate_is_refused_naming_the_migration_to_read(self):
+    def test_a_190_candidate_is_refused_naming_the_migration_to_read(self):
         with self.assertRaises(ValueError) as raised:
-            recovery.catalogue_for(189)
-        self.assertIn('0189', str(raised.exception))
+            recovery.catalogue_for(190)
+        self.assertIn('0190', str(raised.exception))
+
+    def test_user_consents_appear_exactly_from_0189(self):
+        self.assertIn('user_consents', recovery.catalogue_for(189))
+        self.assertNotIn('user_consents', recovery.catalogue_for(188))
 
     def test_a_150_candidate_runs_no_sealed_check(self):
         run = FakeRun()
