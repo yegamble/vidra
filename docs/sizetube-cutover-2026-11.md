@@ -365,6 +365,16 @@ Executed so far (each with the operator's explicit go-ahead):
 - 2026-11-12 — operator decisions after the rehearsal: build both pieces of D15 code ahead of counsel's answers (the
   signup consent record, and the anonymous gate for sensitive videos shipped switched off); plan a fix for the three
   slow read endpoints before any code; leave the rehearsal's test objects in the bucket. Nothing is built yet.
+- 2026-11-12 13:30–17:50 UTC — the D15 code and the read-path fix were built, merged and released as **v0.7.20**
+  (core `5b7c22aa`, user `1e1a3553`, search `d018b07f`, meta `6260d26`; record meta #380, every lane green including
+  the pinned-release boot and end-to-end lanes against the published images). **Not deployed to the beta**; the
+  operator's approval for that, and for a second throwaway droplet to rerun the load ladder, was asked and is open.
+  On the beta this session only read: `EXPLAIN (ANALYZE, BUFFERS)` under `default_transaction_read_only=on`, and the
+  import state. Per-item detail is in the [checklist](sizetube-cutover-checklist.md), sections A and B. Also found:
+  import runs since 2026-11-06 bring nothing new because the source copy on the beta has not been refreshed since
+  then (not an importer defect; step 2 of the window refreshes it); vidra-search's required vulnerability scan had been
+  red since 2026-11-06 on an echo v4 advisory with no v4 fix, cleared by moving it to echo v5 (search #104); the
+  restore-drill catalogue was audited only through core schema 188 and now covers 189.
 
 Everything else above is still a change the operator (or a later, separately approved task) makes.
 
