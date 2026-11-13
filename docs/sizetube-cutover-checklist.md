@@ -30,6 +30,11 @@ read-path load check. Results are in section G and under each step in section C.
 its firewall and its temporary storage key were removed the same day; nothing on prod or the
 beta was changed. `REHEARSAL` = observed in that run.
 
+**Reviewed 2026-11-13, files only.** Two read-only reviews, one for data loss and one for
+legal exposure, read this checklist against the audit and the released source. Nothing was
+run against a host, a database or a bucket, so no status in sections A–H changed. What they
+found is section I.
+
 ---
 
 ## A. Blocker — nothing ships until this clears
@@ -476,3 +481,87 @@ D1–D14 and D16 were answered 2026-11-08 (audit §6 table). **D15 is the only o
   (HLS 687, captions 669, thumbnails 683, one video, and storyboards with a missing source
   image, falling 8,082 → 7,983 → 7,861). The "imported 687" in the 16:33 run's audit line is
   the media-less-video counter, not new content (RUNTIME 2026-11-12).
+
+## I. Gaps recorded by the 2026-11-13 review
+
+Read 2026-11-13 from files only: this checklist, the audit, and the released source at meta
+`6b5aead` and core `5b7c22aa` (v0.7.20), cited below as `CODE`. No host, database or bucket
+was read, so nothing in this section is `RUNTIME`, and each statement about the beta's own
+configuration is marked unverified. The legal items are engineering guidance, not legal
+advice. I1–I6 were recorded nowhere in this file. I7–I10 were notes inside section A's text
+with no checkbox and no owner; they get one here and section A is unchanged. Whether any of
+I6–I10 blocks the window is for counsel and the operator, and is not decided here.
+
+**Data loss**
+
+- [ ] **I1 · A hand-run `backup.sh` can keep its copy on the box and still report success
+  (bears on C3, C7 and F).** The script takes the off-site remote from its own process
+  environment or from the env file (CODE `deploy/backup.sh:91`). With neither it logs
+  `LOCAL COPY ONLY`, writes `last_success` and exits 0 (`backup.sh:365,470-471`). Section B
+  records the beta's remote in `/etc/vidra/backup.env`. A shell does not load that file, and
+  in the repository's unit the line that would is commented out
+  (`deploy/vidra-backup.service:36`). **Unverified:** whether the beta's env file also carries
+  `BACKUP_RCLONE_REMOTE`, and how the installed unit loads the file. The rehearsal could not
+  show this, because its copy had no backup remote (section G). Before the window, read
+  which file holds the remote. Then either take the window's backups through the unit
+  (`systemctl start vidra-backup.service`), or read each run's log for the upload line and
+  treat `LOCAL COPY ONLY` as a failed step. `OPERATOR`.
+- [ ] **I2 · Nothing pins the rollback dumps (C7).** Step 7 says "both snapshots + dumps
+  kept" and names no mechanism, and no rollback-window length is recorded (D14 records the
+  write-loss policy only). On the box, the pre-flip `vidra-<stamp>.dump.gz` leaves the daily
+  keep once 14 later days have a dump (CODE `deploy/backup.sh:66,435`). The pre-deploy dump
+  that step 3's `deploy.sh` writes is pruned after 10 later deploys and is never uploaded
+  (`deploy/deploy.sh:46,620,644`). An off-site copy of the pre-flip pair exists only if I1
+  holds. Either record a window shorter than 14 days, or copy the pre-flip dump, its config
+  archive and the step 3 pre-deploy dump to somewhere the scripts do not prune. `OPERATOR`.
+- [ ] **I3 · The restore re-drill in F can pass with media missing.** By default
+  `restore.sh` warns and continues when referenced media is missing or cannot be verified
+  (CODE `deploy/restore.sh:457-463`); only `--require-media-consistent` refuses
+  (`restore.sh:84,471,489`). F does not name the flag, and whether 10.5 and the rehearsal
+  used it is not recorded here. Run the re-drill on the final dump with the flag, or read
+  the media pass's own result instead of the exit code. `OPERATOR`.
+- [ ] **I4 · The timed lost-object restore named in D12 has no line in the D12 tail.** The
+  audit lists it under D12 and gives it as the second half of the control for media having
+  one copy: replication or Object Lock, "then a timed hide-and-restore drill" (audit §6 D12,
+  §8 Durable). It is neither done nor waived here. It follows the first D12 tail item.
+  `OPERATOR`.
+- [ ] **I5 · How many copies of the backup encryption secret exist is still unverified.**
+  The audit rated it Medium: "the crypt password/salt is a single point of failure (copy
+  count unverified)" (audit §8 Durable). If the off-site copies are encrypted with it, they
+  cannot be read without it (DEDUCED). Confirm a copy is held off the droplet. `OPERATOR`.
+
+**Legal exposure**
+
+- [ ] **I6 · Ads and tracking consent has no question in the D15 intake.** Section B assigns
+  the ad script's consent and Global Privacy Control defaults to D15, but none of the five
+  intake questions asks what consent the HilltopAds and ExoClick display, popunder and VAST
+  formats need (audit §8, questions 1–5). Add it to what counsel is asked. `LAWYER`.
+- [ ] **I7 · A signup through OIDC or ATProto is not asked for the age attestation.** Both
+  provider paths pass the terms acceptance only (CODE core `internal/auth/oauth.go:831`,
+  `internal/auth/atproto.go:459`); the minimum-age check is in the form's handler alone
+  (`internal/httpapi/auth.go:363`). Once D6 sets `registration_minimum_age=18`, a provider
+  signup does not meet it. **Unverified:** whether any provider is enabled on the beta. Fix
+  it in code, or keep providers off until it is fixed. `AGENT`, then `OPERATOR`.
+- [ ] **I8 · The sign-in wall's two uncovered surfaces.** These matter only if `sign_in` is
+  switched on. The IPFS mirror's eligibility test reads privacy and state, not the sensitive
+  flag (CODE core `internal/httpapi/ipfs_assets.go:24`); **unverified:** whether the beta
+  mirrors to IPFS at all. Playlist item cards are built without the card gate
+  (`internal/httpapi/playlists.go:84,265`; the file has no `gateCards` call), so a sensitive
+  card there carries no `sign_in_required` mark. The video's own reads are refused by the
+  wall's design (`internal/httpapi/sensitive_gate.go:9-16`); that was not checked end to end.
+  `AGENT`.
+- [ ] **I9 · Existing accounts are never asked to accept the terms.** The `reaccept` source
+  exists only in the migration's allowed values and a comment (CODE core
+  `migrations/0189_user_consents.up.sql:28`, `internal/account/archive.go:45`); no handler
+  writes it. Whether the 5,541 existing accounts must accept is a question for counsel, and
+  the code follows the answer. `LAWYER`, then `AGENT`.
+- [ ] **I10 · The mail and reporting items rated HIGH in D15 have no owner.** No
+  `List-Unsubscribe` header is set anywhere in core (CODE: a search of `internal/` and
+  `cmd/` finds none). Filing an abuse report needs an account: all three report routes
+  require sign-in (`internal/httpapi/server.go:2177-2179`), so a non-user has no route for
+  a DMCA notice or an intimate-image takedown. The header is `AGENT`; what the non-user
+  route must be is `LAWYER`, then `AGENT`.
+
+Not covered by either review: the beta's live configuration, prod, the private
+`cutover-prep/` files (including the ad script), Canadian law, Cloudflare settings, and
+accessibility.
