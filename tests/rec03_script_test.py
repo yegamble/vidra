@@ -697,5 +697,63 @@ class TableInjection(unittest.TestCase):
             phase('inject', root, **V076, REC03_INJECT='dirty')
             self.assertIn('UPDATE schema_migrations SET dirty = true', su_calls(root))
 
+
+class FunctionInjection(unittest.TestCase):
+    """A first pending migration that only CREATEs a zero-argument function has no column or
+    table to clash on: the clash is a pre-existing function, undone by DROP FUNCTION."""
+
+    PAIR = {'REC03_OLD': 'v0.7.8', 'REC03_NEW': 'v0.7.20'}
+    FUNCTION = {'REC03_INJECT': 'function', 'REC03_INJECT_FUNCTION': 'clear_cross_host_remote_inboxes'}
+
+    def test_the_injection_and_its_undo_come_from_one_identifier(self):
+        r = helpers('require_injection_setup && inject_ddl && echo && inject_undo_ddl', **self.PAIR, **self.FUNCTION)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        add, drop = r.stdout.splitlines()
+        self.assertEqual(add, "CREATE FUNCTION clear_cross_host_remote_inboxes() RETURNS BOOLEAN LANGUAGE sql AS 'SELECT true'")
+        self.assertEqual(drop, 'DROP FUNCTION clear_cross_host_remote_inboxes()')
+        for name in ('instance_url_host', 'x_2_y'):
+            r = helpers('inject_ddl; echo; inject_undo_ddl', **self.PAIR, REC03_INJECT='function',
+                        REC03_INJECT_FUNCTION=name)
+            add, drop = r.stdout.splitlines()
+            self.assertEqual(add.split()[2], name + '()')
+            self.assertEqual(drop.split(), ['DROP', 'FUNCTION', name + '()'])
+
+    def test_the_statement_survives_the_double_quoted_shell_string_psq_wraps_it_in(self):
+        r = helpers('inject_ddl; inject_undo_ddl', **self.PAIR, **self.FUNCTION)
+        for unsafe in '$"`\\\n;':
+            self.assertNotIn(unsafe, r.stdout)
+
+    def test_the_function_is_required_and_validated(self):
+        r = helpers('require_injection_setup', **self.PAIR, REC03_INJECT='function')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('REC03_INJECT_FUNCTION', r.stdout + r.stderr)
+        for bad in HOSTILE + ['f()', 'f(integer)', 'public.f']:
+            with self.subTest(bad=bad):
+                r = helpers('require_injection_setup', **self.PAIR, REC03_INJECT='function', REC03_INJECT_FUNCTION=bad)
+                self.assertNotEqual(r.returncode, 0, bad)
+
+    def test_another_kinds_parameters_do_not_satisfy_it(self):
+        r = helpers('require_injection_setup', **self.PAIR, **dict(INJECTION, REC03_INJECT='function'))
+        self.assertNotEqual(r.returncode, 0)
+        r = helpers('require_injection_setup', **self.PAIR, **dict(self.FUNCTION, REC03_INJECT='table'))
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_a_hostile_function_stops_the_phase_before_any_sql(self):
+        for name in ('inject', 'recover'):
+            with self.subTest(phase=name), tempfile.TemporaryDirectory() as root:
+                done, r = phase(name, root, **self.PAIR, REC03_INJECT='function',
+                                REC03_INJECT_FUNCTION='f(); DROP TABLE users; --')
+                self.assertNotEqual(done.returncode, 0)
+                self.assertEqual(su_calls(root), '')
+
+    def test_the_inject_phase_runs_the_create_and_records_the_undo(self):
+        with tempfile.TemporaryDirectory() as root:
+            done, r = phase('inject', root, **self.PAIR, **self.FUNCTION)
+            self.assertIn("CREATE FUNCTION clear_cross_host_remote_inboxes() RETURNS BOOLEAN LANGUAGE sql AS 'SELECT true'",
+                          su_calls(root), done.stdout + done.stderr)
+            facts = json.loads((r / 'facts' / 'inject.json').read_text())
+            self.assertEqual(facts['undo'], 'DROP FUNCTION clear_cross_host_remote_inboxes()')
+
+
 if __name__ == '__main__':
     unittest.main()
