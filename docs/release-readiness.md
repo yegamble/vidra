@@ -1,15 +1,103 @@
 # Vidra completion campaign — release readiness
 
-Current qualification date: **2026-10-17**. **Production verdict: NO-GO.**
-v0.7.8 is published at core/search schemas **182/18**; source CI and artifact
-preflight are green, while operational and product completion gates remain open.
-No production deployment has been made in this campaign.
+Current qualification date: **2026-11-13**. **Production verdict: NO-GO.**
+v0.7.20 is published at core/search schemas **189/21**; its artifact preflight is
+green and three hosted synthetic drills passed. One planned lane did not run, and
+the operational and product completion gates remain open. Nothing in the v0.7.20
+entry deployed anything; v0.7.20 has run on the SizeTube beta since 2026-11-12, as
+the [cutover checklist](sizetube-cutover-checklist.md) records, and that deployment
+is not qualification evidence here.
 
 This record limits each acceptance claim to its named revisions and evidence.
 The September 5 audit and older implementation-session permissions below are
 historical records. The October 16 campaign authorizes scoped PR merges, release
 publication and disposable synthetic drills; it has used no production database
 or media bucket.
+
+## v0.7.20 release qualification — 2026-11-13
+
+The [release record](../releases/v0.7.20.json) freezes core `5b7c22aa7948c36c30ffe002ed82d9e31aea432d`,
+user `1e1a3553e8e0e00df4615ad595eb2b8ab1120cc7`, search
+`d018b07feca9bbaf99df8668c3c7e524ad768230`, and deployment bundle
+`6260d26c31b24ea9fbbb84ed3947da3a8a64acd6`. The committed
+[preflight manifest](evidence/release-v0.7.20-verification/manifest.json) reports PASS on
+linux/amd64 for all four checks, and the released core and search images report embedded
+maxima **189/21** ([transcript](evidence/release-v0.7.20-verification/embedded-max.txt)).
+This entry read those files. It did not rerun the preflight, and it restates no source CI
+result for the component repositories.
+
+Qualification no longer names a release in code. From tooling main `3baecc13`
+([#383](https://github.com/yegamble/vidra/pull/383)) the REC-03 runner, the verdict
+exporter and the workflows take the pair, every image tag and every schema number from
+`releases/v*.json`, and the injected failure from the first pending migration's own SQL at
+the recorded core commit. That commit passed required CI, with **1027 metadata tests, zero
+skips**, and production Compose validation. The runs below were the first executions of
+the changed workflows. All three used `3baecc13d5e15802749a71411576fce5850d066a` as both
+the immutable record commit and the tool commit.
+
+| Lane | Run | Jobs | Published verdict | Verdict sha256 |
+|---|---|---|---|---|
+| REC-03, v0.7.19 → v0.7.20 (no `previous` given; the run derived it) | [43383886067](https://github.com/yegamble/vidra/actions/runs/43383886067) | `rec03` success, `report` success | [**PASS**](https://github.com/yegamble/vidra/runs/131749775262): thirteen phases and the report | `d6bf78f75e817fd39a75fea978c336d6e02bcd0ba05d6969d4c9aea785ad4efc` |
+| REC-03, v0.7.8 → v0.7.20 (`previous=v0.7.8`) | [43383894704](https://github.com/yegamble/vidra/actions/runs/43383894704) | `rec03` success, `report` success | [**PASS**](https://github.com/yegamble/vidra/runs/131749836166): thirteen phases and the report | `bc7f4357eb9421268403cbe198a81e1a7033209087f308882e54c25cfc5c9605` |
+| Sealed recovery, v0.7.20 | [43383900060](https://github.com/yegamble/vidra/actions/runs/43383900060) | `source`, `replacement`, `report` success | [**PASS**](https://github.com/yegamble/vidra/runs/131749058275): both roles `complete` at 189/21 | source `7d92c37bd274a5d7846abeac0b625afde53e26afcd043261ecee3df1a0d27fc8`, replacement `2f872af5d6eb9b4089ab21a2e83affb79e69487fa39a8c875cb1b4fb15efefdf` |
+| Blank-server launcher, v0.7.20 | none | none | **NOT RUN** | none |
+
+No run reported a failed phase or a failure reason, and no attempt was rerun.
+
+**REC-03, v0.7.19 → v0.7.20.** The first pending migration is `0189_user_consents`, for
+which the runner derives a pre-created `user_consents` table. The published ledgers are
+core/search 188/21 before the upgrade, **189 dirty**/21 at the failed upgrade, and 189/21
+from recovery onward.
+
+**REC-03, v0.7.8 → v0.7.20.** The first pending migration is
+`0183_remote_actors_own_host_inboxes`, which creates no column or table, so the runner
+derives a pre-created `clear_cross_host_remote_inboxes()` function. This was the driver's
+`function` clash kind's first run against a real database. The published ledgers are
+182/18 before the upgrade, **183 dirty**/18 at the failed upgrade, and 189/21 from recovery
+onward. The verdict carries ledgers and booleans only; the derivation of both injections
+is unit-tested against the same migration bytes.
+
+**Sealed recovery.** The source and replacement jobs ran on hosted VMs with different boot
+identities. The replacement verdict records an empty destination, a matching backup hash,
+schema and catalogue equality, MFA accepting the correct code and refusing a wrong one,
+mail and OIDC secrets decrypting, the wrong key refused, and external delivery blocked.
+
+**Blank-server launcher: not run.** `tests/blank-server-smoke.sh` on the v0.7.20 manifest
+was planned on the release owner's workstation. Multipass there serves a TLS certificate
+that expired on 2026-10-30, so every client call fails and no VM was created. The manifest
+passes the launcher's own validation. This lane has no result for v0.7.20: it is not a
+pass, a failure or a waiver, and it stays owed.
+
+Independent checks: job conclusions were read from the API; all four verdict artifacts
+were downloaded and their hashes equal the published ones; and each REC-03 run printed all
+fourteen phase markers in order, with per-phase durations in line with the accepted v0.7.8
+run (4m19s then; 4m53s and 4m59s here).
+
+What these results do not establish:
+
+- **The rollback result is narrow.** The app-only rollback from v0.7.20 to v0.7.8 spans
+  twelve releases and passed. It asserts four HTTP probes at 200, unchanged media, the
+  recorded v0.7.8 image bytes running, and the ledger left at 189/21. It does not show
+  that v0.7.8 is generally compatible with that schema, and such a rollback stays outside
+  the one-release compatibility policy.
+- **One injected failure per pair.** Each drill fails the first pending migration only.
+  A failure in 0184–0189 of the longer span is not exercised.
+- **Two pairs.** Upgrades to v0.7.20 from v0.7.9 … v0.7.18 were not drilled. Adjacent
+  pairs among v0.7.9 … v0.7.19 share core schema 188 and the runner refuses them as
+  carrying no core migration.
+- **Synthetic scope.** Generated fixtures, published linux/amd64 images and GitHub-hosted
+  runners, REC-03 on the documented small resource profile. As for v0.7.8, these results
+  establish neither B2/off-site recovery nor representative migration, public TLS, browser
+  playback or human installation timing.
+- **No blank-server install of v0.7.20** and **no digest security scan of the v0.7.20
+  images** is recorded by this entry.
+
+REC-03 and sealed recovery are the two lanes the v0.7.8 entry counted as G9 evidence, and
+both pass for v0.7.20 within the same synthetic scope. This entry does not declare G9 for
+v0.7.20. It did not re-examine **G2, G10, G11 or G12**: their last recorded state is the
+v0.7.8 entry below, and nothing here closes or updates them.
+
+No `EXIT_SIGNAL: true`, 100% completion or production GO follows from this entry.
 
 ## v0.7.8 release qualification — 2026-10-16
 
