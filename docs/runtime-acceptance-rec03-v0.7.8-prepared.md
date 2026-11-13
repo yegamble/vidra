@@ -1,7 +1,7 @@
 # REC03 v0.7.7 → v0.7.8 — prepared, not executed
 
 After publishing all candidate images and core bundle assets, dispatch
-`rec03.yml` with `record_commit` set to the immutable **meta record PR commit**
+`rec03.yml` with `release=v0.7.8` and `record_commit` set to the immutable **meta record PR commit**
 containing both release records. The workflow itself must already be on main.
 The record PR stays unmerged until the resulting drill evidence is reviewed.
 
@@ -23,7 +23,7 @@ resource settings unless they explicitly select `small`; unknown profiles fail
 before the env file changes. This configuration does not establish the cause of
 any earlier hosted failure or qualify a release.
 
-Only `rec03-v0.7.8-verdict/summary.json` is uploaded: fixed labels, source SHAs,
+Only the `rec03-verdict-<run>-<attempt>` artifact's `summary.json` is uploaded: fixed labels, source SHAs,
 ledgers and booleans. Raw logs, credentials, backups and config stay root-private;
 never expose them to diagnose failures. Fix the driver and run again instead.
 

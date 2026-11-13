@@ -2,12 +2,33 @@ name: release-runtime-qualification
 on:
   pull_request:
     paths:
-      - releases/v0.7.8.json
+      - releases/v*.json
 permissions:
   contents: read
   actions: read
 jobs:
+  # Which release this PR records. Nothing is drilled unless exactly one record is added.
+  release:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      release: ${{ steps.added.outputs.release }}
+    steps:
+      # The default ref is the PR merge commit; its first parent is the base
+      # branch, so the diff below is exactly what the PR adds.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Exactly one added release record names the release
+        id: added
+        run: |
+          set -o pipefail
+          git diff -z --name-only --diff-filter=A HEAD^1 HEAD -- releases \
+            | python3 scripts/ci/release-pair.py added --root "$GITHUB_WORKSPACE" --github-output "$GITHUB_OUTPUT"
   rec03:
+    needs: release
     if: github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/rec03.yml
     permissions:
@@ -15,8 +36,10 @@ jobs:
       actions: read
       checks: write
     with:
+      release: ${{ needs.release.outputs.release }}
       record_commit: ${{ github.event.pull_request.head.sha }}
   sealed:
+    needs: release
     if: github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/sealed-recovery.yml
     permissions:
@@ -24,5 +47,5 @@ jobs:
       actions: read
       checks: write
     with:
-      release: v0.7.8
+      release: ${{ needs.release.outputs.release }}
       record_commit: ${{ github.event.pull_request.head.sha }}

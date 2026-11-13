@@ -2,7 +2,7 @@
 
 `published-sealed-recovery` is a dispatch-only workflow using two separate fresh
 GitHub-hosted Ubuntu 24.04 VMs. Review the immutable tool commit and published
-candidate record before dispatching it with `release=v0.7.8` and a 40-hex
+candidate record before dispatching it with `release=<tag>` and a 40-hex
 `record_commit`. No workflow is dispatched by opening or merging these helpers.
 
 The tool checkout uses the workflow's immutable `github.sha`. A separate checkout

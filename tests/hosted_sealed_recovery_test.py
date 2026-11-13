@@ -17,6 +17,9 @@ TOOL = ROOT / 'tests/hosted-sealed-recovery.py'
 spec = importlib.util.spec_from_file_location('hosted_sealed', TOOL)
 driver = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(driver)
+# The label these tests pass is any recorded release; the newest, so no test names one.
+RELEASE = max((path.stem for path in (ROOT / 'releases').glob('v*.json')), key=driver.support.mapping.semver)
+AT_FLOOR = {'core_schema_version': driver.SEALED_FLOOR, 'search_schema_version': 1}
 
 
 class CrossJobBoundaryTest(unittest.TestCase):
@@ -61,12 +64,12 @@ class CrossJobBoundaryTest(unittest.TestCase):
                 (payload / 'proof.json').write_text(json.dumps({'config_hashes': {}, 'script_hashes': {}}))
                 (payload / 'fixture.json').write_text('{}')
                 (root / 'private').mkdir()
-                args = SimpleNamespace(tool_commit='a' * 40, record_commit='b' * 40, release='v0.7.8',
+                args = SimpleNamespace(tool_commit='a' * 40, record_commit='b' * 40, release=RELEASE,
                     record_root=ROOT, stage=root / 'stage', action='restore', handoff=root / 'handoff', handoff_sha='hash')
                 host = Mock(private=root / 'private', script_hashes={})
                 host.run.return_value = ''
                 getattr(host, operation).side_effect = ValueError('PRIVATE_CANARY')
-                record, result = {'core_schema_version': 182, 'search_schema_version': 18}, {}
+                record, result = dict(AT_FLOOR), {}
                 with patch.object(driver.support, 'head', return_value=args.tool_commit), \
                         patch.object(driver.support, 'published', return_value=(record, {})), \
                         patch.object(driver.support, 'check_vm'), patch.object(driver.runtime, 'host_facts'), \
@@ -84,7 +87,7 @@ class CrossJobBoundaryTest(unittest.TestCase):
         for milestone, method in (('migrations', 'compose'), ('start-services', 'compose'), ('ready', 'ready'),
                                   ('owner-claim', 'sql'), ('api-fixture', 'api_fixture'), ('snapshot', 'snapshot')):
             with self.subTest(milestone=milestone), tempfile.TemporaryDirectory() as temporary:
-                args = SimpleNamespace(tool_commit='a' * 40, record_commit='b' * 40, release='v0.7.8',
+                args = SimpleNamespace(tool_commit='a' * 40, record_commit='b' * 40, release=RELEASE,
                     record_root=ROOT, stage=Path(temporary) / 'stage', action='source')
                 result, hosts = {}, []
                 host = Mock(private=args.stage / 'private')
@@ -99,7 +102,7 @@ class CrossJobBoundaryTest(unittest.TestCase):
                 host.sql.return_value = '0'
                 if method != 'compose':
                     getattr(host, method).side_effect = observe
-                record = {'core_schema_version': 182, 'search_schema_version': 18}
+                record = dict(AT_FLOOR)
                 with patch.object(driver.support, 'head', return_value=args.tool_commit), \
                         patch.object(driver.support, 'published', return_value=(record, {})), \
                         patch.object(driver.support, 'check_vm'), patch.object(driver.runtime, 'host_facts'), \
@@ -109,13 +112,29 @@ class CrossJobBoundaryTest(unittest.TestCase):
                 self.assertEqual(result['phase'], milestone)
                 self.assertEqual(hosts, [host])
 
+    def test_a_record_below_the_drills_own_floor_is_refused_before_any_host_call(self):
+        self.assertEqual(driver.SEALED_FLOOR, 182)  # 0182_oidc_providers; not the release under test
+        for core, refused in ((driver.SEALED_FLOOR - 1, True), (driver.SEALED_FLOOR, False), (driver.SEALED_FLOOR + 7, False)):
+            with self.subTest(core=core), tempfile.TemporaryDirectory() as temporary:
+                args = SimpleNamespace(tool_commit='a' * 40, record_commit='b' * 40, release=RELEASE,
+                    record_root=ROOT, stage=Path(temporary) / 'stage', action='source')
+                reached = ValueError('past the floor')
+                with patch.object(driver.support, 'head', return_value=args.tool_commit), \
+                        patch.object(driver.support, 'published', return_value=({**AT_FLOOR, 'core_schema_version': core}, {})), \
+                        patch.object(driver.support, 'check_vm', side_effect=reached), \
+                        patch.object(driver.runtime, 'host_facts'), patch.object(driver, 'Host') as host:
+                    with self.assertRaises(ValueError) as stopped:
+                        driver.execute(args, {}, [])
+                self.assertEqual(stopped.exception is reached, not refused)
+                host.assert_not_called()
+
     def test_pass_does_not_collect_failure_diagnostics(self):
         host, output = Mock(), io.StringIO()
         def execute(args, result, hosts):
             hosts.append(host)
             result.update(status='PASS', phase='complete')
         with tempfile.TemporaryDirectory() as temporary:
-            argv = [str(TOOL), 'source', '--release', 'v0.7.8', '--record-commit', 'a' * 40,
+            argv = [str(TOOL), 'source', '--release', RELEASE, '--record-commit', 'a' * 40,
                     '--tool-commit', 'b' * 40, '--record-root', str(ROOT), '--stage', temporary]
             with patch.object(sys, 'argv', argv), patch.object(driver, 'execute', side_effect=execute), redirect_stdout(output):
                 self.assertEqual(driver.main(), 0)
@@ -137,7 +156,7 @@ class CrossJobBoundaryTest(unittest.TestCase):
                     result['phase'] = 'ready'
                     raise ValueError('PRIVATE_CANARY')
                 output = io.StringIO()
-                argv = [str(TOOL), 'source', '--release', 'v0.7.8', '--record-commit', 'a' * 40,
+                argv = [str(TOOL), 'source', '--release', RELEASE, '--record-commit', 'a' * 40,
                         '--tool-commit', 'b' * 40, '--record-root', str(ROOT), '--stage', str(stage)]
                 with patch.object(sys, 'argv', argv), patch.object(driver, 'execute', side_effect=execute), redirect_stdout(output):
                     self.assertEqual(driver.main(), 1)
@@ -148,7 +167,7 @@ class CrossJobBoundaryTest(unittest.TestCase):
                 self.assertNotIn('PRIVATE_CANARY', output.getvalue())
 
     def test_same_vm_and_changed_release_or_tool_are_refused(self):
-        record = {'release': 'v0.7.8', 'core_schema_version': 182}
+        record = {'release': RELEASE, **AT_FLOOR}
         proof = dict.fromkeys(driver.PROOF_KEYS, {})
         proof.update(scope=driver.SCOPE, record_commit='a' * 40, tool_commit='b' * 40,
                      record_hash=driver.record_hash(record), source_stopped=True, source_boot='source')
@@ -186,7 +205,7 @@ class CrossJobBoundaryTest(unittest.TestCase):
             (stage / 'private').mkdir()
             verdict = stage / 'verdict.json'
             verdict.write_text('prior-attempt')
-            result = subprocess.run([sys.executable, str(TOOL), 'source', '--release', 'v0.7.8',
+            result = subprocess.run([sys.executable, str(TOOL), 'source', '--release', RELEASE,
                 '--record-commit', 'a' * 40, '--tool-commit', '0' * 40, '--record-root', str(ROOT),
                 '--stage', str(stage)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 1)
