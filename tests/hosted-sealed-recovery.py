@@ -18,6 +18,9 @@ from sealed_recovery_relay import readiness_relay
 import sealed_recovery_support as support
 
 SCOPE = 'published-image synthetic cross-VM sealed-secret subset'
+# The drill's own floor, whatever release it is pointed at: core migration 0182_oidc_providers
+# adds the sealed OIDC secrets it restores under the right and the wrong key.
+SEALED_FLOOR = 182
 PROOF_KEYS = {'scope', 'record_commit', 'tool_commit', 'record_hash', 'source_boot',
               'source_stopped', 'catalogue', 'config_hashes', 'script_hashes'}
 
@@ -64,7 +67,7 @@ def execute(args, result, hosts):
     require(support.head(support.ROOT) == args.tool_commit and re.fullmatch(r'[0-9a-f]{40}', args.tool_commit),
             'tool commit must be immutable and match checkout')
     record, candidate = support.published(args.record_root, args.release, args.record_commit)
-    require(record['core_schema_version'] >= 182, 'candidate must contain sealed OIDC providers')
+    require(record['core_schema_version'] >= SEALED_FLOOR, 'candidate must contain sealed OIDC providers')
     boot = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
     support.check_vm(runtime.host_facts(), boot)
     require(not args.stage.exists() and args.stage.is_absolute() and args.stage.parent.resolve() == args.stage.parent,
