@@ -1,18 +1,29 @@
 #!/usr/bin/env python3
-"""Hosted-runner REC03 v0.7.7 -> v0.7.8; exports no raw log/fact or credential."""
+"""Hosted-runner REC03 for one recorded release pair; exports no raw log/fact or credential."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+from types import SimpleNamespace
 import urllib.request
 
+import rec03_pair
 import rec03_split_proof
+import sealed_recovery_support
 
 ROOT = Path(__file__).resolve().parents[1]
+_spec = importlib.util.spec_from_file_location('release_pair', ROOT / 'scripts/ci/release-pair.py')
+release_pair = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(release_pair)
+# The first pending migration is read at the newer record's core commit: a commit
+# hash names its bytes, and the running image's revision label is held to the same one.
+CORE_SOURCE = 'https://raw.githubusercontent.com/yegamble/vidra-core'
+MIGRATION_LIMIT = 1048576
 PHASES = 'install data fp backup inject upgrade-fail recover backup2 rollback restore-refuse repin restore-ok split report'.split()
 PROBE = 'instance=200 healthz=200 site=200 watch=200'
 IMAGE_PHASES = {'install', 'upgrade-fail', 'recover', 'rollback', 'repin', 'restore-ok', 'split'}
@@ -40,12 +51,18 @@ def fingerprint(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
 
-def injected_migration_conflict(log):
+def drill(old, new, sql):
+    """One pair and what its facts are held against; refuses a pair with nothing to inject."""
+    injection = rec03_pair.injection(sql)
+    return SimpleNamespace(old=old, new=new, injection=injection, conflict=rec03_pair.conflict(injection))
+
+
+def injected_migration_conflict(log, conflict):
     """Decode the published migrator's JSON event without exporting its error.
 
     slog JSON-escapes SQL's quoted identifiers. Searching the raw log misses
     the real conflict; searching arbitrary decoded fields could accept an
-    unrelated event. Require this migrator failure and the injected relation.
+    unrelated event. Require this migrator failure and the injected object.
     """
     for line in log.splitlines():
         try:
@@ -56,12 +73,12 @@ def injected_migration_conflict(log):
                 and event.get('msg') == 'migrate failed'
                 and isinstance(event.get('error'), str)
                 and event['error'].startswith('dbmigrate: apply migrations: ')
-                and re.search(r'column "is_sensitive" of relation "remote_videos" already exists\b', event['error'])):
+                and conflict.search(event['error'])):
             return True
     return False
 
 
-def verify_running_images(phase, records, inspect):
+def verify_running_images(phase, pair, inspect):
     """Check loaded bytes, not just the mutable tag printed by docker ps.
 
     Inspect data stays in memory: container Config.Env contains private keys.
@@ -71,7 +88,7 @@ def verify_running_images(phase, records, inspect):
     """
     if phase not in IMAGE_PHASES:
         return {}
-    record = records['v0.7.7' if phase in OLD_IMAGE_PHASES else 'v0.7.8']
+    record = pair.old if phase in OLD_IMAGE_PHASES else pair.new
     services = {'api': 'core', 'frontend': 'user', 'search': 'search'}
     if phase == 'split':
         services['worker'] = 'core'
@@ -96,7 +113,7 @@ def verify_running_images(phase, records, inspect):
     return seen
 
 
-def verify(phase, facts, previous, log):
+def verify(phase, facts, previous, log, pair):
     """Driver records failures without exiting; its facts must decide the gate."""
     expected = {'install': ('install_exit', 0), 'backup': ('backup_exit', 0),
                 'upgrade-fail': ('deploy_exit', 1), 'recover': ('deploy_exit', 0),
@@ -110,10 +127,8 @@ def verify(phase, facts, previous, log):
     if phase not in ('backup', 'inject', 'backup2', 'report'):
         require('probe' in facts, 'missing HTTP probes')
         require(facts['probe'] == PROBE, 'HTTP probes failed')
-    if phase in ('install', 'data', 'fp', 'backup', 'inject'):
-        ledger = 'core=151:false search=18:false'
-    else:
-        ledger = 'core=152:true search=18:false' if phase == 'upgrade-fail' else 'core=182:false search=18:false'
+    old, new = pair.old, pair.new
+    ledger = rec03_pair.ledger(old, new, phase)
     if phase not in ('backup', 'backup2', 'split', 'report'):
         require(facts.get('ledger') == ledger, 'unexpected migration ledger')
     if phase in ('data', 'split'):
@@ -125,20 +140,22 @@ def verify(phase, facts, previous, log):
             require(digest == fingerprint(previous['data']['fp']), 'media changed across upgrade or restore')
     if phase == 'upgrade-fail':
         require(facts.get('pin_exit') == '0', 'bundle unpack failed')
-        require(injected_migration_conflict(log), 'migration conflict not observed')
+        require(injected_migration_conflict(log, pair.conflict), 'migration conflict not observed')
     if phase == 'backup':
-        require(facts.get('pre_core_version') == '151' and facts.get('pre_search_version') == '18', 'wrong backup ledger')
+        require(facts.get('pre_core_version') == str(old['core_schema_version'])
+                and facts.get('pre_search_version') == str(old['search_schema_version']), 'wrong backup ledger')
     if phase in ('backup', 'backup2'):
         dump = Path(facts.get('dump_pre' if phase == 'backup' else 'dump_post', ''))
         require(dump.is_file() and dump.stat().st_size > 0, 'backup dump missing')
     if phase == 'recover':
-        require(facts.get('force_target') == '151' and facts.get('post_core_version') == '182', 'wrong recovery force target')
+        require(facts.get('force_target') == str(old['core_schema_version'])
+                and facts.get('post_core_version') == str(new['core_schema_version']), 'wrong recovery force target')
     if phase == 'backup2':
         require(facts.get('marker_http') == '200', 'marker write failed')
         require(facts.get('counts') != previous['data']['counts'], 'marker was not recorded')
     if phase == 'restore-refuse':
         require(facts.get('counts_before') == facts.get('counts_after'), 'refused restore changed data')
-        require('dump is at 182' in log and 'carries up to 151' in log and 'Nothing was changed' in log, 'schema refusal not observed')
+        require(all(pattern.search(log) for pattern in rec03_pair.refusal(old, new)), 'schema refusal not observed')
     if phase == 'restore-ok':
         require(facts.get('counts') == previous['data']['counts'], 'forward restore did not remove marker')
     if phase == 'split':
@@ -147,20 +164,18 @@ def verify(phase, facts, previous, log):
         fingerprint(facts['video2_fp'])
     if phase in IMAGE_PHASES:
         require('images' in facts, 'missing running images')
-        old = phase in OLD_IMAGE_PHASES
-        for role in ('core', 'user', 'search'):
-            tag = ('v0.7.3' if role == 'search' else 'v0.7.7') if old else 'v0.7.8'
-            require(f'ghcr.io/yegamble/vidra-{role}:{tag};' in facts['images'], 'wrong running image tag')
+        for image in rec03_pair.images(old if phase in OLD_IMAGE_PHASES else new):
+            require(image in facts['images'], 'wrong running image tag')
     return {'status': 'PASS', 'media_fingerprint_verified': 'fp' in facts,
             **({'ledger': ledger} if 'ledger' in facts else {})}
 
 
-def verify_phase(phase, facts, previous, log, records, inspect):
-    verdict = verify(phase, facts, previous, log)
-    containers = verify_running_images(phase, records, inspect)
+def verify_phase(phase, facts, previous, log, pair, inspect):
+    verdict = verify(phase, facts, previous, log, pair)
+    containers = verify_running_images(phase, pair, inspect)
     if phase == 'split':
         try:
-            rec03_split_proof.verify(facts, containers, records['v0.7.8']['components']['core'],
+            rec03_split_proof.verify(facts, containers, pair.new['components']['core'],
                 lambda sql: inspect(['bash', 'deploy/compose.sh', 'exec', '-T', 'postgres',
                     'psql', '-X', '-U', 'vidra', '-d', 'vidra', '-At', '-v', 'ON_ERROR_STOP=1', '-c', sql]))
         except rec03_split_proof.Invalid:
@@ -204,34 +219,38 @@ def require_small_resource_host():
 def main(out):
     # Build output solely from booleans, validated SHAs and fixed labels. Never
     # serialize raw facts, errors, subprocess stdout, owner.json or backup paths.
-    result = {'status': 'FAIL', 'pair': ['v0.7.7', 'v0.7.8'], 'phases': {}}
+    # `pair` stays empty until the records name one: a verdict never states a pair it did not resolve.
+    result = {'status': 'FAIL', 'pair': [], 'phases': {}}
     phase, facts, created_private = 'preflight', {}, False
     try:
         ref, installer = os.environ.get('REC03_RECORD_REF', ''), os.environ.get('REC03_INSTALLER_REF', '')
         require(all(re.fullmatch('[a-f0-9]{40}', x) for x in (ref, installer)), 'immutable commits required')
         require(os.geteuid() == 0 and os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted', 'disposable hosted runner required')
         require_small_resource_host()
+        root = Path(os.environ.get('REC03_RECORD_ROOT', ''))
+        require(root.is_absolute() and sealed_recovery_support.head(root) == ref, 'record checkout differs')
+        found = release_pair.resolve(root, os.environ.get('REC03_RELEASE', ''), os.environ.get('REC03_PREVIOUS', ''))
+        old, new = found['old'], found['new']
+        result['pair'] = [old['release'], new['release']]
+        _, migration = rec03_pair.first_pending(old, new)
+        with urllib.request.urlopen(f"{CORE_SOURCE}/{new['components']['core']['commit']}/migrations/{migration}", timeout=30) as response:
+            sql = response.read(MIGRATION_LIMIT + 1)
+        require(len(sql) <= MIGRATION_LIMIT, 'first pending migration too large')
+        pair = drill(old, new, sql.decode())
         require(not Path('/opt/vidra').exists(), 'existing deployment refused')
         private = Path('/root/rec03')
         private.mkdir(mode=0o700)
         created_private = True
         os.umask(0o077)
         result.update(record_commit=ref, installer_commit=installer)
-        env = {**os.environ, 'REC03_OLD': 'v0.7.7', 'REC03_NEW': 'v0.7.8',
-               'REC03_ALLOW_DOCKER': '1', 'REC03_RESOURCE_PROFILE': 'small',
-               'REC03_ROOT': str(private), 'REC03_SAME_SCHEMA': '0', 'REC03_INSTALL': 'bundle', 'REC03_INJECT': 'column',
-               'REC03_INJECT_TABLE': 'remote_videos', 'REC03_INJECT_COLUMN': 'is_sensitive', 'REC03_INJECT_TYPE': 'BOOLEAN'}
-        records = {}
+        env = {**os.environ, **rec03_pair.env(old, new, pair.injection), 'REC03_ALLOW_DOCKER': '1',
+               'REC03_RESOURCE_PROFILE': 'small', 'REC03_ROOT': str(private), 'REC03_INSTALL': 'bundle'}
         with (private / 'preflight.log').open('w') as log:
-            for tag, schema in (('v0.7.7', 151), ('v0.7.8', 182)):
-                record = private / 'state/records' / f'{tag}.json'
+            for data in (old, new):
+                # The driver pins each release from this cache, so it reads the bytes resolved above.
+                record = private / 'state/records' / f"{data['release']}.json"
                 record.parent.mkdir(parents=True, exist_ok=True)
-                with urllib.request.urlopen(f'https://raw.githubusercontent.com/yegamble/vidra/{ref}/releases/{tag}.json', timeout=30) as response:
-                    record.write_bytes(response.read())
-                subprocess.run(['python3', str(ROOT / 'deploy/release-mapping.py'), 'resolve', '--release', tag, '--fetched-record', str(record)], check=True, stdout=log, stderr=log)
-                data = json.loads(record.read_text())
-                require(data['core_schema_version'] == schema and data['search_schema_version'] == 18, 'candidate schema mismatch')
-                records[tag] = data
+                shutil.copy(root / 'releases' / record.name, record)
                 for component in data['components'].values():
                     image = component['image']
                     inspected = subprocess.check_output(['docker', 'buildx', 'imagetools', 'inspect', f"{image['repository']}:{component['tag']}", '--format', '{{json .Manifest}}'], stderr=log)
@@ -248,14 +267,15 @@ def main(out):
                 facts = json.loads((private / 'facts' / f'{phase}.json').read_text()) if phase != 'report' else {}
                 log.flush()
                 verdict = verify_phase(phase, facts, previous, (private / f'{phase}.private.log').read_text(),
-                    records, lambda command: subprocess.check_output(
+                    pair, lambda command: subprocess.check_output(
                         command, cwd='/opt/vidra', env=env, stderr=log, text=True, timeout=60))
             result['phases'][phase] = verdict
             previous[phase] = facts
         result['status'] = 'PASS'
     except Exception as error:
         result['failed_phase'] = phase
-        result['failure'] = str(error) if isinstance(error, Failure) else type(error).__name__
+        fixed = isinstance(error, (Failure, release_pair.Refused, rec03_pair.Refused))
+        result['failure'] = str(error) if fixed else type(error).__name__
         result['diagnostics'] = diagnostics(private, facts) if created_private else {}
     out.mkdir(parents=True, exist_ok=True)
     out.chmod(0o755)  # Only this constructed public verdict is readable by the artifact action.
