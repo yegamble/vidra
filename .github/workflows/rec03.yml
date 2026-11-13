@@ -2,20 +2,39 @@ name: rec03-release-drill
 on:
   workflow_dispatch:
     inputs:
+      release:
+        description: "Recorded release to qualify (vX.Y.Z)"
+        required: true
+        type: string
+      previous:
+        description: "Recorded release to upgrade from; empty means the newest record below the release"
+        required: false
+        type: string
+        default: ''
       record_commit:
-        description: "Immutable meta record-PR commit containing v0.7.7 and v0.7.8 records"
+        description: "Immutable meta commit containing both release records"
         required: true
         type: string
   workflow_call:
     inputs:
+      release:
+        description: "Recorded release to qualify (vX.Y.Z)"
+        required: true
+        type: string
+      previous:
+        description: "Recorded release to upgrade from; empty means the newest record below the release"
+        required: false
+        type: string
+        default: ''
       record_commit:
-        description: "Immutable meta record-PR commit containing v0.7.7 and v0.7.8 records"
+        description: "Immutable meta commit containing both release records"
         required: true
         type: string
 permissions:
   contents: read
 concurrency:
-  group: rec03-release-drill-${{ inputs.record_commit }}
+  # The pair is part of the key: two pairs drilled at one record commit must not queue behind each other.
+  group: rec03-release-drill-${{ inputs.release }}-${{ inputs.previous }}-${{ inputs.record_commit }}
   cancel-in-progress: false
 jobs:
   rec03:
@@ -28,14 +47,24 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      # Read as data only: the runner resolves the pair from these records and
+      # refuses a checkout that is not the commit it was given.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.record_commit }}
+          path: record
+          persist-credentials: false
       # Raw driver logs contain generated secrets. They stay under /root, never
       # enter the console, and disappear with this disposable hosted runner.
       - name: Run all thirteen phases and report against published images
         env:
+          RELEASE: ${{ inputs.release }}
+          PREVIOUS: ${{ inputs.previous }}
           RECORD_COMMIT: ${{ inputs.record_commit }}
           INSTALLER_COMMIT: ${{ github.sha }}
         run: |
           sudo env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            REC03_RELEASE="$RELEASE" REC03_PREVIOUS="$PREVIOUS" REC03_RECORD_ROOT="$GITHUB_WORKSPACE/record" \
             REC03_RECORD_REF="$RECORD_COMMIT" REC03_INSTALLER_REF="$INSTALLER_COMMIT" \
             python3 tests/rec03-runner.py --out "$RUNNER_TEMP/rec03-public"
       - name: Preserve only the allowlisted verdict (never logs, env or backups)
@@ -43,7 +72,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: rec03-v0.7.8-verdict-${{ github.run_id }}-${{ github.run_attempt }}
+          name: rec03-verdict-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/rec03-public/summary.json
           if-no-files-found: error
           retention-days: 14
@@ -57,6 +86,8 @@ jobs:
       checks: write
     with:
       kind: rec03
+      release: ${{ inputs.release }}
+      previous: ${{ inputs.previous }}
       record_commit: ${{ inputs.record_commit }}
       source_result: ${{ needs.rec03.result }}
       source_artifact_id: ${{ needs.rec03.outputs.verdict_id }}
