@@ -274,6 +274,16 @@ class StaticGateTest(unittest.TestCase):
         yaml = YAML.replace('Failure `access_denied`.', 'Failure `access_denied` or `new_policy`.')
         self.assertIn('oauth:new_policy', findings(files, yaml))
 
+    def test_oauth_signup_parameter_names_are_not_error_codes(self):
+        # The callback contract names the parameters a first sign-in must carry
+        # and the setting behind them; only the refusal codes need UI copy.
+        yaml = YAML.replace('Failure `access_denied`.',
+                            'Failure `access_denied`, or `age_required` for one started without '
+                            '`age_attestation` while `registration_minimum_age` is above 0, or '
+                            '`terms_required` without `terms_accepted`.')
+        self.assertEqual({f for f in findings(fixture(), yaml) if f.startswith('oauth:')},
+                         {'oauth:age_required', 'oauth:terms_required'})
+
     def test_openapi_unsupported_syntax_is_error_not_silent_empty_pass(self):
         with self.assertRaisesRegex(ValueError, 'unsupported OpenAPI'):
             gate.openapi_operations(YAML.replace('  /api/v1/me/example/{id}:', '  "/api/v1/me/example/{id}":'))
