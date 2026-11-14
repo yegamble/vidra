@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -13,6 +14,14 @@ TOOL = ROOT / 'scripts/ci/release-pair.py'
 spec = importlib.util.spec_from_file_location('release_pair', TOOL)
 pair = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pair)
+
+# The newest real record and a version after it, derived rather than typed: every
+# release adds a record, and a test that names "the next release" by hand starts
+# failing the day that release is cut.
+_VERSIONS = sorted(tuple(map(int, m.groups())) for path in (ROOT / 'releases').glob('v*.json')
+                   if (m := re.fullmatch(r'v(\d+)\.(\d+)\.(\d+)', path.stem)))
+NEWEST = 'v%d.%d.%d' % _VERSIONS[-1]
+NEXT = 'v%d.%d.%d' % (_VERSIONS[-1][0], _VERSIONS[-1][1], _VERSIONS[-1][2] + 1)
 
 
 def tree(temp, *extra):
@@ -54,7 +63,7 @@ class Previous(Refusals, unittest.TestCase):
                 self.assertEqual(pair.previous(ROOT, release), numeric)
         with tempfile.TemporaryDirectory() as temp:
             root = tree(temp, 'v0.7.100', 'v0.10.0')
-            self.assertEqual(pair.previous(root, 'v0.7.100'), 'v0.7.20')
+            self.assertEqual(pair.previous(root, 'v0.7.100'), NEWEST)
             self.assertEqual(pair.previous(root, 'v0.10.0'), 'v0.7.100')
 
     def test_the_oldest_record_has_no_previous(self):
@@ -91,12 +100,13 @@ class Previous(Refusals, unittest.TestCase):
 
     def test_a_newer_record_becomes_the_release_and_moves_no_older_pair(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = tree(temp, 'v0.7.21')
-            found = pair.resolve(root, 'v0.7.21')
-            self.assertEqual((found['old']['release'], found['new']['release']), ('v0.7.20', 'v0.7.21'))
+            root = tree(temp, NEXT)
+            found = pair.resolve(root, NEXT)
+            self.assertEqual((found['old']['release'], found['new']['release']), (NEWEST, NEXT))
+            self.assertEqual(pair.previous(root, NEWEST), pair.previous(ROOT, NEWEST))
             self.assertEqual(pair.previous(root, 'v0.7.20'), 'v0.7.19')
-            self.assertEqual(pair.added(root, ['releases/v0.7.21.json']), 'v0.7.21')
-        self.refused(pair.NOT_RECORDED, pair.resolve, ROOT, 'v0.7.21')
+            self.assertEqual(pair.added(root, [f'releases/{NEXT}.json']), NEXT)
+        self.refused(pair.NOT_RECORDED, pair.resolve, ROOT, NEXT)
 
     def test_one_broken_record_refuses_every_pair(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -135,7 +145,7 @@ class Added(Refusals, unittest.TestCase):
                 self.refused(pair.NOT_ONE_ADDED, pair.added, ROOT, names)
 
     def test_an_added_name_without_a_usable_record_is_refused(self):
-        for name in ('releases/v0.7.21.json', 'releases/v0.7.10.json', 'releases/v0.07.20.json', 'releases/vNEXT.json',
+        for name in (f'releases/{NEXT}.json', 'releases/v0.7.10.json', 'releases/v0.07.20.json', 'releases/vNEXT.json',
                      'releases/v.json'):
             with self.subTest(name=name):
                 self.refused(pair.NOT_RECORDED, pair.added, ROOT, [name])
