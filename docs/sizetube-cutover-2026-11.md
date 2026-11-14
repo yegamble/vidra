@@ -387,6 +387,19 @@ Executed so far (each with the operator's explicit go-ahead):
   the home rail answer a first call within 150 ms, search does not (170–214 ms); the copy held the estimated peak of
   270 page views a minute for 10 minutes with page p95 0.14 s and no timeout. The scratch droplet (`nyc1`, 52 minutes,
   about $0.13), its firewall and the temporary key are deleted; the copy could not write to the beta's bucket.
+- 2026-11-14 17:01–17:04 UTC — **v0.7.21 deployed to the beta** (operator's go-ahead). v0.7.21 = core `0c06a81f`,
+  user `0d8b5105`, search `d018b07f`, meta `6cdc4a8` (record meta #387): the minimum age on every signup path (core
+  #552, user #472; checklist I7) and the visitor age gate, off by default (core #553, user #473); no migration. On the
+  beta, in order: `systemctl start vidra-backup.service` (off-site backup `vidra-20261114T170108Z`, 129 MB, verified
+  and uploaded); as `vidra`, `./deploy/pin-release.sh v0.7.21` (record fetched from main, bundle checksum verified, env
+  snapshot); `./deploy/deploy.sh`, 84 s, exit 0 (pre-deploy dump `pre-deploy-2026-11-14T170207`; migrate `schema
+  already up to date`, core schema 189, search 21). The floating `postgres:18-alpine` tag had moved, so the pull
+  recreated Postgres on 18.7, from 18.6 (same major version, no data conversion). After it (RUNTIME): `/version`
+  v0.7.21 `0c06a81`; `/readyz` ok; edge `/healthz` ok; every container healthy with no restart; in the first 7 minutes
+  the api and search logged no error, and the api one warning, `ipfs_verify_skipped` (the beta runs no `ipfs` service;
+  `/readyz` reports IPFS not configured); 5,541 users and 15,508 videos as before; `age_gate_enabled=false`,
+  `registration_minimum_age=0`, `sensitive_anonymous_access=open`, terms and privacy URLs empty; registration closed
+  (no signup attempted); `Caddyfile.local` byte-identical (sha256 before and after).
 
 Everything else above is still a change the operator (or a later, separately approved task) makes.
 
