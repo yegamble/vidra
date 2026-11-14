@@ -1,0 +1,49 @@
+# Refreshes the PeerTube source snapshot the importer reads. Triggered by
+# vidra-peertube-source-sync.timer, never enabled directly.
+#
+# Only for the migration window: once the source instance is retired there is
+# nothing left to refresh — disable the timer and remove the source-side key.
+#
+# Install on the candidate host:
+#
+#   sudo cp deploy/vidra-peertube-source-sync.{service,timer} /etc/systemd/system/
+#   sudo install -d -m 0755 /etc/vidra
+#   sudo install -m 0600 -o root -g root /dev/null /etc/vidra/peertube-source-sync.env
+#   sudoedit /etc/vidra/peertube-source-sync.env     # put these two lines in it:
+#       PEERTUBE_SYNC_SSH=<user>@<source-host>
+#       PEERTUBE_SYNC_SSH_KEY=/home/vidra/.ssh/peertube_source_sync
+#   sudo systemctl daemon-reload
+#   sudo systemctl start vidra-peertube-source-sync.service    # prove it works NOW
+#   journalctl -u vidra-peertube-source-sync.service -n 50
+#   sudo systemctl enable --now vidra-peertube-source-sync.timer
+#
+# The source host must accept that key for a dump and nothing else — see the
+# forced-command line in the header of deploy/peertube-source-sync.sh. Connect
+# once by hand as the `vidra` user first so the host key is pinned: the unit
+# runs with BatchMode and will not answer a host-key prompt.
+
+[Unit]
+Description=Vidra PeerTube source snapshot refresh
+Documentation=https://github.com/yegamble/vidra/blob/main/docs/peertube-migration.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=vidra
+Group=vidra
+WorkingDirectory=/opt/vidra
+Environment=ENV_FILE=env/production.env
+# Root-owned 0600: it names the source host and the key that can dump it.
+EnvironmentFile=-/etc/vidra/peertube-source-sync.env
+ExecStart=/opt/vidra/deploy/peertube-source-sync.sh
+# A dump + restore of a few GB takes minutes; the bound stops a stalled SSH
+# transfer from holding the next run's slot forever.
+TimeoutStartSec=2h
+# Never compete with a transcode for CPU or disk.
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

@@ -19,6 +19,7 @@ stack plus a production overlay, behind Caddy for TLS.
 | [`provision.sh`](./provision.sh) | Host prep, idempotent, as root: swap, service user, `/opt/vidra`, log cap, unattended-upgrades, backup timer (installed **and verified**). Warns about sshd and the firewall; edits neither. |
 | [`cloud-init.yaml.example`](./cloud-init.yaml.example) | The same, as provider user-data, for a host that does not exist yet. Pure ASCII on purpose. |
 | [`vidra-backup.service`](./vidra-backup.service) / [`.timer`](./vidra-backup.timer) | systemd units for the nightly backup. `provision.sh` installs them. |
+| [`peertube-source-sync.sh`](./peertube-source-sync.sh) | Migration window only: refresh the PeerTube source snapshot the importer reads — restore beside the live copy, verify the read-only grants, swap by rename. Optional daily [`service`](./vidra-peertube-source-sync.service) / [`timer`](./vidra-peertube-source-sync.timer); **not** installed by `provision.sh`. See [peertube-migration.md §3](../docs/peertube-migration.md#refreshing-the-snapshot). |
 
 **The `vidra` CLI wraps these 1:1.** `vidra deploy | rollback | backup | restore |
 release` exec the script of the same name with `ENV_FILE` injected and your terminal

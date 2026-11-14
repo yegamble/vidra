@@ -232,6 +232,39 @@ privileged memberships. Reapply and check these grants after replacing the
 snapshot. Keep database access on a private network, with TLS where appropriate.
 [`pg_restore` options](https://www.postgresql.org/docs/17/app-pgrestore.html)
 
+### Refreshing the snapshot
+
+The importer only ever sees the restored copy, so "import what is new" means
+"new as of the last restore". A stale snapshot is indistinguishable from an
+import that found nothing to do. Once the first snapshot, the reader role and
+`PEERTUBE_SOURCE_DATABASE_URL` exist, every later refresh is one command on a
+host running the bundled PostgreSQL:
+
+```sh
+./deploy/peertube-source-sync.sh --dump-file /secure/migration/peertube.dump
+# or streamed, with nothing written on the source host:
+ssh <source> 'pg_dump --format=custom <source_db>' \
+  | ssh <candidate> /opt/vidra/deploy/peertube-source-sync.sh --dump-file -
+```
+
+Run it as a user that can reach the Docker daemon. The dump is spooled to
+`backups/peertube-source/` on the candidate (mode 0600) for the length of the
+run and removed when it exits, whether it succeeded or not (a run killed
+outright leaves it; the next run removes it). `PEERTUBE_SYNC_KEEP_DUMP=true`
+keeps the dump of a published refresh. It restores beside
+the live snapshot, reapplies and verifies the grants above,
+refuses while an import run is pending or running, refuses a snapshot with
+fewer local videos than the one it replaces (`--allow-shrink` overrides), and
+only then swaps the two by rename in one transaction. The replaced snapshot is
+kept as `<name>_prev_<stamp>` (two by default). The DSN never changes, so the
+api is not restarted.
+
+[`vidra-peertube-source-sync.timer`](../deploy/vidra-peertube-source-sync.timer)
+runs it daily, pulling the dump over SSH with a source-side key restricted to
+a forced `pg_dump` command; the script header documents that key. The refresh
+does **not** start an import run: launching one stays an authenticated admin
+action. Disable the timer and remove the source-side key at cutover.
+
 Place the reader DSN in a private file and use setup's secret-file input, or a
 protected editor for `env/production.env`:
 
