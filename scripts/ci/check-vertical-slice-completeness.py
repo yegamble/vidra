@@ -181,7 +181,12 @@ def oauth_findings(blocks, source):
         for quoted in re.findall(r'`([^`]+)`', blocks[path]):
             if re.fullmatch(r'[a-z]+(?:_[a-z]+)+', quoted):
                 if quoted not in {'return_to', 'id_token', 'vidra_refresh', 'vidra_mfa_pending',
-                                  'vidra_atproto_state', 'link_error', 'oauth_error'}:
+                                  'vidra_atproto_state', 'link_error', 'oauth_error',
+                                  # What a first sign-in must CARRY (begin-request
+                                  # parameters) and the setting that demands it; the
+                                  # refusals themselves are terms_required / age_required.
+                                  'terms_accepted', 'age_attestation',
+                                  'registration_minimum_age'}:
                     codes.add(quoted)
             codes.update(re.findall(r'(?:oauth_error|link_error)=([a-z][a-z_]+)', quoted))
     ts = tokens(source)
