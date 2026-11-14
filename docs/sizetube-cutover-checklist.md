@@ -67,6 +67,7 @@ found is section I.
     two URLs are set**, which is still the case on the beta. Not built: asking the existing
     5,541 accounts to accept on their next sign-in (the `reaccept` source exists for it).
     Also found: a provider signup is not asked for the age attestation the form requires.
+    Fixed on main 2026-11-14 and not released (I7).
   - *Sign-in wall for sensitive videos* (core #550, #551, user #471). Setting
     `sensitive_anonymous_access`: `open` (default, today's behaviour) or `sign_in` (Admin →
     General → Moderation). With `sign_in`, every read of a sensitive video by a visitor
@@ -77,6 +78,19 @@ found is section I.
     with no purge endpoint; with one, the response says to purge the CDN zone. **Shipped
     `open`.** A sign-in wall, not age verification. Not covered: the IPFS mirror (a gated
     video's CIDs stay on a public gateway), and playlist item cards.
+  - *Age gate for visitors* (core #553 `0c06a81f`, user #473 `0d8b5105`; **on main
+    2026-11-14, not released, not deployed**). Setting `age_gate_enabled` (Admin → General →
+    Moderation), off by default and effective only while `registration_minimum_age` is above
+    0; the admin settings refuse it on without an age. With it on, a visitor without an
+    account is asked "I am N or older" instead of any page or embed; sign-in, sign-up and the
+    about page stay open, and a signed-in account passes. The operator's custom script (the
+    ad script), ads and analytics are left out of a page until the visitor confirms. A
+    30-day cookie holds the confirmed age, so raising the age asks again. It is
+    **self-declared and enforced in the browser**: it refuses no API or media request, so it
+    is not the age verification D15(a) asks about. It is one answer to "Anonymous-NSFW
+    policy" in section B, if counsel finds self-declaration enough. On a local dev server
+    against a stub API (2026-11-14), nothing from the custom script was requested before the
+    visitor confirmed; it has not run on the beta.
   The scoping notes of 2026-11-11 that this replaced:
   - *Signup consent record.* The only consent field signup sends is `age_attestation`, which
     the api checks and does not store (CODE core `e6d83aa4`
@@ -536,12 +550,20 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   the ad script's consent and Global Privacy Control defaults to D15, but none of the five
   intake questions asks what consent the HilltopAds and ExoClick display, popunder and VAST
   formats need (audit §8, questions 1–5). Add it to what counsel is asked. `LAWYER`.
-- [ ] **I7 · A signup through OIDC or ATProto is not asked for the age attestation.** Both
+- [~] **I7 · A signup through OIDC or ATProto is not asked for the age attestation.** Both
   provider paths pass the terms acceptance only (CODE core `internal/auth/oauth.go:831`,
   `internal/auth/atproto.go:459`); the minimum-age check is in the form's handler alone
   (`internal/httpapi/auth.go:363`). Once D6 sets `registration_minimum_age=18`, a provider
   signup does not meet it. **Unverified:** whether any provider is enabled on the beta. Fix
   it in code, or keep providers off until it is fixed. `AGENT`, then `OPERATOR`.
+  **Fixed on main 2026-11-14, not released, not deployed.** Core #552 (`c9ab3cb8`): the one
+  check every account-creating path calls now refuses without the attestation while a
+  minimum age is set. That covers the form, the approval queue and a provider's first
+  sign-in, which lands back on the signup page with `oauth_error=age_required` and creates
+  nothing. The age is recorded with the account. User #472 (`712b2a92`) carries the tick
+  from the signup form to both provider buttons. Until a release carrying both is deployed,
+  keep providers off on the beta or leave the minimum age at 0. `OPERATOR`: release and
+  deploy.
 - [ ] **I8 · The sign-in wall's two uncovered surfaces.** These matter only if `sign_in` is
   switched on. The IPFS mirror's eligibility test reads privacy and state, not the sensitive
   flag (CODE core `internal/httpapi/ipfs_assets.go:24`); **unverified:** whether the beta
