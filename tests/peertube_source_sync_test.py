@@ -1,4 +1,5 @@
 """deploy/peertube-source-sync.sh: nothing the importer reads changes until every gate passed."""
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -74,6 +75,18 @@ if 'psql' in args:
 raise SystemExit('unexpected docker invocation: %r' % (args,))
 '''
 
+# util-linux flock is not on every developer machine. This takes the SAME kernel
+# lock on the descriptor the script inherited to us, so the exclusion under test
+# is real, not simulated.
+FAKE_FLOCK = r'''#!/usr/bin/env python3
+import fcntl, sys
+assert sys.argv[1] == '-n', sys.argv
+try:
+    fcntl.flock(int(sys.argv[2]), fcntl.LOCK_EX | fcntl.LOCK_NB)
+except OSError:
+    sys.exit(1)
+'''
+
 
 class PeertubeSourceSyncTest(unittest.TestCase):
     def setUp(self):
@@ -91,6 +104,10 @@ class PeertubeSourceSyncTest(unittest.TestCase):
         docker = self.root / 'bin/docker'
         docker.write_text(FAKE_DOCKER)
         docker.chmod(0o755)
+        flock = self.root / 'bin/flock'
+        flock.write_text(FAKE_FLOCK)
+        flock.chmod(0o755)
+        self.lock = self.root / 'backups/.peertube-source-sync.peertube_source_snapshot.lock'
         self.state_path = self.root / 'state.json'
         self.seed(videos={'vidra': 0, 'peertube_source_snapshot': 100}, incoming_videos=106)
         self.dump = self.root / 'source.dump'
@@ -187,26 +204,28 @@ class PeertubeSourceSyncTest(unittest.TestCase):
         self.assertEqual(kept[0].stat().st_mode & 0o077, 0)
 
     def test_second_run_refuses_while_the_first_holds_the_lock(self):
-        lock = self.spool / '.lock'
-        lock.mkdir(parents=True)
-        (lock / 'pid').write_text('%d\n' % os.getpid())      # a live process: this test
-        result = self.sync('--dump-file', str(self.dump))
+        self.lock.parent.mkdir()
+        with open(self.lock, 'a') as held:
+            fcntl.flock(held, fcntl.LOCK_EX)
+            # A different spool directory must not buy a different lock: the
+            # lock guards the database, which both runs would rebuild.
+            result = self.sync('--dump-file', str(self.dump),
+                               PEERTUBE_SYNC_SPOOL_DIR=str(self.root / 'elsewhere'))
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('another peertube-source-sync is running', result.stderr)
         self.assertEqual(self.kinds(), [])
-        # The loser must not remove the winner's lock on its way out.
-        self.assertTrue((lock / 'pid').exists())
 
-    def test_lock_orphaned_by_a_dead_run_is_taken_over(self):
-        dead = subprocess.Popen(['true'])
-        dead.wait()
-        lock = self.spool / '.lock'
-        lock.mkdir(parents=True)
-        (lock / 'pid').write_text('%d\n' % dead.pid)
+    def test_lock_left_by_a_dead_run_does_not_block_and_its_dump_is_swept(self):
+        self.lock.parent.mkdir()
+        self.lock.write_text('')                       # the file outlives its holder
+        self.spool.mkdir()
+        orphan = self.spool / 'peertube-source-20010101000000.dump.part'
+        orphan.write_bytes(b'PGDMP left by a killed run')
+        kept = self.spool / 'peertube-source-20010101000000.dump'
+        kept.write_bytes(b'PGDMP kept on purpose')
         result = self.sync('--dump-file', str(self.dump))
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('stale lock', result.stderr + result.stdout)
-        self.assertEqual(list(self.spool.iterdir()), [])
+        self.assertEqual(list(self.spool.iterdir()), [kept])
 
     def test_swap_is_one_transaction_in_the_safe_order(self):
         result = self.sync('--dump-file', str(self.dump))

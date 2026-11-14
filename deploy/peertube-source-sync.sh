@@ -18,7 +18,8 @@
 # see changes until the last one:
 #
 #   1. Spool the dump to disk (.part, 0600), record its SHA-256, and parse its
-#      table of contents. A truncated stream is rejected here, not half-restored.
+#      table of contents. An empty, foreign or headless file is rejected here;
+#      a stream cut short later fails the restore in step 3, still unpublished.
 #   2. Refuse while an import run is pending or running. The run holds a
 #      snapshot of the source open for its whole duration; swapping the database
 #      under it would hand one run two different sources.
@@ -187,36 +188,36 @@ hc_ping() {
   curl -fsS -m 10 --retry 3 -o /dev/null "${HC_URL}${1:-}" || true
 }
 # shellcheck disable=SC2154  # rc IS assigned — by the first statement of this very trap body.
-# The trap owns every temporary this run creates. SPOOL_DONE is the finished
-# spool file: a run that dies AFTER verifying the archive (restore failure,
-# shrink guard, lost race with an import) must not leave a plaintext copy of the
+# The trap owns the spooled dump. It keeps its .part name for the WHOLE run and
+# is only renamed once the refresh is published and PEERTUBE_SYNC_KEEP_DUMP
+# asks for it, so a run that dies after verifying the archive (restore failure,
+# shrink guard, lost race with an import) leaves no plaintext copy of the
 # source's accounts behind — on a timer that is one more copy every night.
+# QUIET_FAIL: a run that never started (lost the lock) must not page as a
+# failure of the run that is in progress.
 cleanup() {
   [ -z "${SPOOL_PART:-}" ] || rm -f "$SPOOL_PART"
-  [ -z "${SPOOL_DONE:-}" ] || rm -f "$SPOOL_DONE"
-  [ -z "${LOCK_HELD:-}" ] || rm -rf "$LOCK_DIR"
 }
-trap 'rc=$?; cleanup; if [ "$rc" -ne 0 ]; then hc_ping /fail; fi; exit "$rc"' EXIT
+trap 'rc=$?; cleanup; if [ "$rc" -ne 0 ] && [ -z "${QUIET_FAIL:-}" ]; then hc_ping /fail; fi; exit "$rc"' EXIT
 
 # One refresh at a time. Without this, a manual run overlapping the timer can
 # drop and rebuild <name>_incoming between the other run's verify and its swap,
-# and the first run then publishes a half-restored database. mkdir is the
-# atomic test-and-set; the pid inside lets a lock orphaned by SIGKILL or a
-# reboot be recognised and taken over instead of blocking every later run.
-mkdir -p "$SPOOL_DIR"
-LOCK_DIR="$SPOOL_DIR/.lock"
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  holder="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
-  case "$holder" in ''|*[!0-9]*) holder="" ;; esac
-  if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
-    die "another peertube-source-sync is running (pid $holder). Nothing was changed."
-  fi
-  log "taking over a stale lock (pid ${holder:-unknown} is gone)"
-  rm -rf "$LOCK_DIR"
-  mkdir "$LOCK_DIR" || die "could not take the lock at $LOCK_DIR"
+# and the first run then publishes a half-restored database. flock, not a
+# pidfile: the kernel releases it however the holder dies (SIGKILL, OOM,
+# reboot), so there is no stale lock to take over and no takeover to race. The
+# path is fixed and keyed on the DATABASE — the thing being protected — not on
+# the spool directory, which one of two runs may have overridden.
+command -v flock >/dev/null 2>&1 || die "flock is required (util-linux) — refusing to run unlocked"
+LOCK_FILE="$REPO_ROOT/backups/.peertube-source-sync.${SNAP_DB}.lock"
+mkdir -p "$REPO_ROOT/backups" "$SPOOL_DIR"
+exec 9>>"$LOCK_FILE" || die "cannot open the lock file $LOCK_FILE (created by another user? remove it and re-run)"
+if ! flock -n 9; then
+  QUIET_FAIL=1
+  die "another peertube-source-sync is running on $SNAP_DB. Nothing was changed."
 fi
-LOCK_HELD=1
-echo "$$" > "$LOCK_DIR/pid"
+# Holding the lock, any spool file still here belongs to a run the trap never
+# got to clean up after (SIGKILL, power loss). Kept dumps are *.dump, not .part.
+find "$SPOOL_DIR" -maxdepth 1 -type f -name 'peertube-source-*.dump.part' -exec rm -f {} +
 
 hc_ping /start
 
@@ -287,10 +288,7 @@ if command -v sha256sum >/dev/null 2>&1; then
 else
   SHA="$(shasum -a 256 "$SPOOL_PART" | cut -d' ' -f1)"
 fi
-mv "$SPOOL_PART" "$SPOOL"
-SPOOL_PART=""
-SPOOL_DONE="$SPOOL"
-log "dump $(du -h "$SPOOL" | cut -f1)  sha256=$SHA"
+log "dump $(du -h "$SPOOL_PART" | cut -f1)  sha256=$SHA"
 
 # -------------------------------------------------------------- 3. restore --
 # A leftover incoming database is a previous run that died mid-restore. Nothing
@@ -300,7 +298,7 @@ log "dump $(du -h "$SPOOL" | cut -f1)  sha256=$SHA"
 if db_exists "$INCOMING_DB"; then
   log "dropping leftover $INCOMING_DB from an earlier interrupted run"
   psql_at "$PGDB" "DROP DATABASE $INCOMING_DB" \
-> /dev/null || die "could not drop $INCOMING_DB — something is connected to it"
+> /dev/null || die "could not drop $INCOMING_DB (see the error above; a client connected to it is the usual cause)"
 fi
 
 log "restoring into $INCOMING_DB"
@@ -308,7 +306,7 @@ psql_at "$PGDB" "CREATE DATABASE $INCOMING_DB" > /dev/null
 # --no-owner/--no-acl: the source's roles do not exist here and must not be
 # recreated; the only access this database gets is the grant block below.
 docker exec -i "$PG_CID" pg_restore --exit-on-error --no-owner --no-acl \
-  -U "$PGUSER" -d "$INCOMING_DB" < "$SPOOL" \
+  -U "$PGUSER" -d "$INCOMING_DB" < "$SPOOL_PART" \
   || die "pg_restore failed — $INCOMING_DB is incomplete and will be dropped by the next run; the current snapshot is untouched"
 
 log "applying read-only grants for $READER_ROLE"
@@ -406,7 +404,8 @@ done < <(psql_at "$PGDB" "SELECT datname FROM pg_database WHERE datname LIKE '${
 # By default the trap removes the spooled dump: the restored database IS the
 # copy, and a second plaintext copy of the source's accounts is only exposure.
 if is_true "$KEEP_DUMP"; then
-  SPOOL_DONE=""
+  mv "$SPOOL_PART" "$SPOOL"
+  SPOOL_PART=""
   log "kept the spooled dump at $SPOOL"
 fi
 

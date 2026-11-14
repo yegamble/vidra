@@ -249,7 +249,9 @@ ssh <source> 'pg_dump --format=custom <source_db>' \
 
 Run it as a user that can reach the Docker daemon. The dump is spooled to
 `backups/peertube-source/` on the candidate (mode 0600) for the length of the
-run and removed afterwards, whether the run succeeds or not. It restores beside
+run and removed when it exits, whether it succeeded or not (a run killed
+outright leaves it; the next run removes it). `PEERTUBE_SYNC_KEEP_DUMP=true`
+keeps the dump of a published refresh. It restores beside
 the live snapshot, reapplies and verifies the grants above,
 refuses while an import run is pending or running, refuses a snapshot with
 fewer local videos than the one it replaces (`--allow-shrink` overrides), and
