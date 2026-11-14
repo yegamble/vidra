@@ -7,9 +7,11 @@
 # Install on the candidate host:
 #
 #   sudo cp deploy/vidra-peertube-source-sync.{service,timer} /etc/systemd/system/
+#   sudo install -d -m 0755 /etc/vidra
 #   sudo install -m 0600 -o root -g root /dev/null /etc/vidra/peertube-source-sync.env
-#   #   PEERTUBE_SYNC_SSH=<user>@<source-host>
-#   #   PEERTUBE_SYNC_SSH_KEY=/home/vidra/.ssh/peertube_source_sync
+#   sudoedit /etc/vidra/peertube-source-sync.env     # put these two lines in it:
+#       PEERTUBE_SYNC_SSH=<user>@<source-host>
+#       PEERTUBE_SYNC_SSH_KEY=/home/vidra/.ssh/peertube_source_sync
 #   sudo systemctl daemon-reload
 #   sudo systemctl start vidra-peertube-source-sync.service    # prove it works NOW
 #   journalctl -u vidra-peertube-source-sync.service -n 50

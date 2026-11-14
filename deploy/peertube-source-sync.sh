@@ -143,6 +143,12 @@ dsn_hostpath="${dsn_rest##*@}"
 READER_ROLE="${dsn_userinfo%%:*}"
 dsn_hostport="${dsn_hostpath%%/*}"
 dsn_host="${dsn_hostport%%:*}"
+# Without a `/db` path the `#*/` strip below returns the host unchanged, and
+# "postgres" — the service name — is also the name of the maintenance database.
+case "$dsn_hostpath" in
+  */*) ;;
+  *) die "PEERTUBE_SOURCE_DATABASE_URL names no database (expected …@postgres:5432/<snapshot_db>)" ;;
+esac
 dsn_path="${dsn_hostpath#*/}"
 SNAP_DB="${dsn_path%%\?*}"
 
@@ -157,6 +163,13 @@ ident_ok() { case "$1" in ''|[!a-z_]*|*[!a-z0-9_]*) return 1 ;; *) return 0 ;; e
 ident_ok "$SNAP_DB"     || die "snapshot database name '$SNAP_DB' is not a plain lowercase identifier"
 ident_ok "$READER_ROLE" || die "reader role '$READER_ROLE' is not a plain lowercase identifier"
 ident_ok "$PGDB"        || die "POSTGRES_DB '$PGDB' is not a plain lowercase identifier"
+case "$SNAP_DB" in
+  postgres|template0|template1) die "PEERTUBE_SOURCE_DATABASE_URL names the system database '$SNAP_DB' — refusing to replace it" ;;
+esac
+# Postgres silently truncates identifiers at 63 bytes; `_prev_` + a 14-digit
+# stamp is the longest suffix added here. A truncated name would no longer
+# match what db_exists looks for.
+[ "${#SNAP_DB}" -le 43 ] || die "snapshot database name '$SNAP_DB' is too long (max 43 characters) for the suffixes this script adds"
 [ "$SNAP_DB" != "$PGDB" ] || die "PEERTUBE_SOURCE_DATABASE_URL names the application database '$PGDB' — refusing to replace it"
 [ "$READER_ROLE" != "$PGUSER" ] || die "PEERTUBE_SOURCE_DATABASE_URL connects as the admin role '$PGUSER' — the importer must use a dedicated read-only role (docs/peertube-migration.md §3)"
 
@@ -174,7 +187,37 @@ hc_ping() {
   curl -fsS -m 10 --retry 3 -o /dev/null "${HC_URL}${1:-}" || true
 }
 # shellcheck disable=SC2154  # rc IS assigned — by the first statement of this very trap body.
-trap 'rc=$?; [ -z "${SPOOL_PART:-}" ] || rm -f "$SPOOL_PART"; if [ "$rc" -ne 0 ]; then hc_ping /fail; fi; exit "$rc"' EXIT
+# The trap owns every temporary this run creates. SPOOL_DONE is the finished
+# spool file: a run that dies AFTER verifying the archive (restore failure,
+# shrink guard, lost race with an import) must not leave a plaintext copy of the
+# source's accounts behind — on a timer that is one more copy every night.
+cleanup() {
+  [ -z "${SPOOL_PART:-}" ] || rm -f "$SPOOL_PART"
+  [ -z "${SPOOL_DONE:-}" ] || rm -f "$SPOOL_DONE"
+  [ -z "${LOCK_HELD:-}" ] || rm -rf "$LOCK_DIR"
+}
+trap 'rc=$?; cleanup; if [ "$rc" -ne 0 ]; then hc_ping /fail; fi; exit "$rc"' EXIT
+
+# One refresh at a time. Without this, a manual run overlapping the timer can
+# drop and rebuild <name>_incoming between the other run's verify and its swap,
+# and the first run then publishes a half-restored database. mkdir is the
+# atomic test-and-set; the pid inside lets a lock orphaned by SIGKILL or a
+# reboot be recognised and taken over instead of blocking every later run.
+mkdir -p "$SPOOL_DIR"
+LOCK_DIR="$SPOOL_DIR/.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  holder="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+  case "$holder" in ''|*[!0-9]*) holder="" ;; esac
+  if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
+    die "another peertube-source-sync is running (pid $holder). Nothing was changed."
+  fi
+  log "taking over a stale lock (pid ${holder:-unknown} is gone)"
+  rm -rf "$LOCK_DIR"
+  mkdir "$LOCK_DIR" || die "could not take the lock at $LOCK_DIR"
+fi
+LOCK_HELD=1
+echo "$$" > "$LOCK_DIR/pid"
+
 hc_ping /start
 
 PG_CID="$("${COMPOSE[@]}" ps -q postgres || true)"
@@ -206,7 +249,6 @@ refuse_if_import_active() {
 refuse_if_import_active "Nothing was changed."
 
 # ---------------------------------------------------------------- 1. spool --
-mkdir -p "$SPOOL_DIR"
 SPOOL="$SPOOL_DIR/peertube-source-${STAMP}.dump"
 SPOOL_PART="${SPOOL}.part"
 
@@ -230,12 +272,15 @@ fi
 
 [ -s "$SPOOL_PART" ] || die "the dump is empty — the current snapshot is untouched"
 
-# pg_restore -l parses the archive's table of contents without touching a
-# database. A stream cut short mid-transfer fails here; so does a plain-SQL
-# dump, which this script does not restore.
+# pg_restore -l parses the archive's header and table of contents without
+# touching a database. It rejects an empty or foreign file, a plain-SQL dump,
+# and an archive written by a NEWER pg_dump than this server's pg_restore. It
+# does NOT read the data blocks: a stream cut short after the TOC is caught by
+# `--exit-on-error` during the restore below, which is still before anything
+# is published.
 log "verifying archive"
 docker exec -i "$PG_CID" pg_restore -l < "$SPOOL_PART" > /dev/null \
-  || die "the dump is not a readable pg_dump custom-format archive (truncated transfer, or made without --format=custom) — the current snapshot is untouched"
+  || die "pg_restore cannot read the dump: an incomplete transfer, a dump made without --format=custom, or one from a newer PostgreSQL than this server — the current snapshot is untouched"
 
 if command -v sha256sum >/dev/null 2>&1; then
   SHA="$(sha256sum "$SPOOL_PART" | cut -d' ' -f1)"
@@ -244,21 +289,22 @@ else
 fi
 mv "$SPOOL_PART" "$SPOOL"
 SPOOL_PART=""
+SPOOL_DONE="$SPOOL"
 log "dump $(du -h "$SPOOL" | cut -f1)  sha256=$SHA"
 
 # -------------------------------------------------------------- 3. restore --
 # A leftover incoming database is a previous run that died mid-restore. Nothing
-# references it, so dropping it is safe — and plain DROP (no FORCE) fails if a
-# CONCURRENT run of this script is still restoring into it, which is the one
-# case where it must not go.
+# references it and the lock above means no other run is building it, so
+# dropping it is safe. Plain DROP (no FORCE) on purpose: if something IS
+# connected, stop and let a person look.
 if db_exists "$INCOMING_DB"; then
   log "dropping leftover $INCOMING_DB from an earlier interrupted run"
   psql_at "$PGDB" "DROP DATABASE $INCOMING_DB" \
-    || die "could not drop $INCOMING_DB — is another peertube-source-sync still running?"
+> /dev/null || die "could not drop $INCOMING_DB — something is connected to it"
 fi
 
 log "restoring into $INCOMING_DB"
-psql_at "$PGDB" "CREATE DATABASE $INCOMING_DB"
+psql_at "$PGDB" "CREATE DATABASE $INCOMING_DB" > /dev/null
 # --no-owner/--no-acl: the source's roles do not exist here and must not be
 # recreated; the only access this database gets is the grant block below.
 docker exec -i "$PG_CID" pg_restore --exit-on-error --no-owner --no-acl \
@@ -313,12 +359,13 @@ refuse_if_import_active "$INCOMING_DB is restored and left in place; re-running 
 
 log "publishing: $INCOMING_DB → $SNAP_DB"
 # One transaction, so there is no moment at which the DSN names nothing — a
-# failure anywhere rolls the whole swap back. ALLOW_CONNECTIONS false before the
-# terminate closes the window in which a pooled client reconnects between the
-# two statements and makes the rename fail with "being accessed by other
-# users". The retired copy STAYS closed to new connections: nothing should be
-# reading a superseded source by accident (ALTER DATABASE … ALLOW_CONNECTIONS
-# true to inspect one).
+# failure anywhere rolls the whole swap back. A client that reconnects between
+# the terminate and the rename makes the rename fail ("being accessed by other
+# users"); that is the safe outcome — rollback, the old snapshot stays live,
+# re-run. ALLOW_CONNECTIONS false only takes effect at COMMIT, so it does not
+# close that window: it is there so the RETIRED copy stays closed to new
+# connections and nothing reads a superseded source by accident (ALTER DATABASE
+# … ALLOW_CONNECTIONS true to inspect one).
 if [ "$HAVE_CURRENT" -eq 1 ]; then
   psql_at "$PGDB" "
 BEGIN;
@@ -356,12 +403,11 @@ while IFS= read -r db; do
   fi
 done < <(psql_at "$PGDB" "SELECT datname FROM pg_database WHERE datname LIKE '${SNAP_DB}_prev_%' ORDER BY datname DESC")
 
+# By default the trap removes the spooled dump: the restored database IS the
+# copy, and a second plaintext copy of the source's accounts is only exposure.
 if is_true "$KEEP_DUMP"; then
+  SPOOL_DONE=""
   log "kept the spooled dump at $SPOOL"
-else
-  # The restored database IS the copy; a second plaintext copy of the source's
-  # accounts on disk is only exposure.
-  rm -f "$SPOOL"
 fi
 
 hc_ping

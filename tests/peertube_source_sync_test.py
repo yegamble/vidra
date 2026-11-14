@@ -174,6 +174,50 @@ class PeertubeSourceSyncTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('swap', self.kinds())
         self.assertEqual(self.state()['videos']['peertube_source_snapshot'], 100)
+        # A run that dies after the archive was verified still leaves no
+        # plaintext copy of the source's accounts, and no lock, behind.
+        self.assertEqual(list(self.spool.iterdir()), [])
+
+    def test_kept_dump_survives_only_a_published_refresh(self):
+        result = self.sync('--dump-file', str(self.dump), PEERTUBE_SYNC_KEEP_DUMP='true')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        kept = list(self.spool.iterdir())
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0].read_bytes(), self.dump.read_bytes())
+        self.assertEqual(kept[0].stat().st_mode & 0o077, 0)
+
+    def test_second_run_refuses_while_the_first_holds_the_lock(self):
+        lock = self.spool / '.lock'
+        lock.mkdir(parents=True)
+        (lock / 'pid').write_text('%d\n' % os.getpid())      # a live process: this test
+        result = self.sync('--dump-file', str(self.dump))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('another peertube-source-sync is running', result.stderr)
+        self.assertEqual(self.kinds(), [])
+        # The loser must not remove the winner's lock on its way out.
+        self.assertTrue((lock / 'pid').exists())
+
+    def test_lock_orphaned_by_a_dead_run_is_taken_over(self):
+        dead = subprocess.Popen(['true'])
+        dead.wait()
+        lock = self.spool / '.lock'
+        lock.mkdir(parents=True)
+        (lock / 'pid').write_text('%d\n' % dead.pid)
+        result = self.sync('--dump-file', str(self.dump))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('stale lock', result.stderr + result.stdout)
+        self.assertEqual(list(self.spool.iterdir()), [])
+
+    def test_swap_is_one_transaction_in_the_safe_order(self):
+        result = self.sync('--dump-file', str(self.dump))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        swap = dict(map(tuple, self.state()['calls']))['swap']
+        order = [swap.index(part) for part in (
+            'BEGIN;', 'ALLOW_CONNECTIONS false', 'pg_terminate_backend',
+            'ALTER DATABASE peertube_source_snapshot RENAME TO peertube_source_snapshot_prev_',
+            'ALTER DATABASE peertube_source_snapshot_incoming RENAME TO peertube_source_snapshot;',
+            'COMMIT;')]
+        self.assertEqual(order, sorted(order))
 
     def test_smaller_snapshot_is_refused_unless_allowed(self):
         self.seed(videos={'vidra': 0, 'peertube_source_snapshot': 100}, incoming_videos=3)
@@ -211,14 +255,14 @@ class PeertubeSourceSyncTest(unittest.TestCase):
     def test_retention_drops_only_names_this_script_made(self):
         videos = {'vidra': 0, 'peertube_source_snapshot': 100,
                   'peertube_source_snapshot_20261104': 90,          # hand-made: never touched
-                  'peertube_source_snapshot_prev_20261101000000': 80,
-                  'peertube_source_snapshot_prev_20261102000000': 81,
+                  'peertube_source_snapshot_prev_20010101000000': 80,
+                  'peertube_source_snapshot_prev_20010102000000': 81,
                   'peertube_source_snapshot_prev_notastamp': 82}
         self.seed(videos=videos, incoming_videos=106)
         result = self.sync('--dump-file', str(self.dump), PEERTUBE_SYNC_KEEP_PREVIOUS='2')
         self.assertEqual(result.returncode, 0, result.stderr)
         dropped = [detail for kind, detail in self.state()['calls'] if kind == 'drop']
-        self.assertEqual(dropped, ['peertube_source_snapshot_prev_20261101000000'])
+        self.assertEqual(dropped, ['peertube_source_snapshot_prev_20010101000000'])
         left = self.state()['videos']
         self.assertIn('peertube_source_snapshot_20261104', left)
         self.assertIn('peertube_source_snapshot_prev_notastamp', left)
@@ -233,6 +277,12 @@ class PeertubeSourceSyncTest(unittest.TestCase):
                            'dedicated read-only role'),
             'quoted identifier': ('postgres://pt_import_reader:x@postgres:5432/Snap-Shot',
                                   'not a plain lowercase identifier'),
+            # No /db path: the host is "postgres", which is also the maintenance database.
+            'no database': ('postgres://pt_import_reader:x@postgres:5432', 'names no database'),
+            'system database': ('postgres://pt_import_reader:x@postgres:5432/postgres',
+                                'system database'),
+            'name too long': ('postgres://pt_import_reader:x@postgres:5432/' + 's' * 44,
+                              'too long'),
             'unset': ('', 'nothing to refresh'),
         }
         for name, (dsn, message) in cases.items():
