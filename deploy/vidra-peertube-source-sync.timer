@@ -1,0 +1,20 @@
+# Runs vidra-peertube-source-sync.service once a day. See the service unit for
+# install instructions — enable THIS unit, not the service.
+
+[Unit]
+Description=Daily Vidra PeerTube source snapshot refresh
+Documentation=https://github.com/yegamble/vidra/blob/main/docs/peertube-migration.md
+
+[Timer]
+# 04:30 local time: after the 03:15 database backup has finished, so the two
+# dumps never overlap on the candidate's disk, and at the source's quietest
+# hour. The script itself refuses while an import run is active.
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=10m
+# A missed window (host down) is made up at boot rather than skipped: a stale
+# snapshot is the failure this timer exists to prevent.
+Persistent=true
+AccuracySec=1m
+
+[Install]
+WantedBy=timers.target
