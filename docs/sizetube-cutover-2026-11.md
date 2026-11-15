@@ -400,6 +400,17 @@ Executed so far (each with the operator's explicit go-ahead):
   `/readyz` reports IPFS not configured); 5,541 users and 15,508 videos as before; `age_gate_enabled=false`,
   `registration_minimum_age=0`, `sensitive_anonymous_access=open`, terms and privacy URLs empty; registration closed
   (no signup attempted); `Caddyfile.local` byte-identical (sha256 before and after).
+- 2026-11-15 01:09–01:11 UTC — **v0.7.22 deployed to the beta** (operator's request). v0.7.22 = core `f508753d`,
+  user `fc902e6d`, search `d018b07f` (unchanged source, retagged), meta `e6cb8b0` (record meta #391): the admin setting
+  that chooses whether Google Analytics needs visitor consent, `analytics_google_consent_required`, default on (core
+  #554, user #474); no migration. On the beta, in order: `systemctl start vidra-backup.service` (off-site backup
+  `vidra-20261115T010924Z`); as `vidra`, `./deploy/pin-release.sh v0.7.22` (bundle checksum verified, env snapshot);
+  `./deploy/deploy.sh`, exit 0 (core schema 189, search 21). After it (RUNTIME): `/version` v0.7.22 `f508753`; `/readyz`,
+  frontend and edge `/healthz` ok; every container healthy; no api error line in the first minutes; 5,598 users and
+  15,613 videos (the 2026-11-14 import catch-up, +105 videos, ran between the two deploys); the public instance
+  document answers `analytics: {google_enabled: false, google_measurement_id: "", google_consent_required: true}` —
+  Google Analytics is still OFF on the beta, and the new setting was not changed or exercised in a browser;
+  `Caddyfile.local` byte-identical (sha256 before and after).
 
 Everything else above is still a change the operator (or a later, separately approved task) makes.
 

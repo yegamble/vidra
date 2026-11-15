@@ -1,8 +1,8 @@
 # sizetube.com cutover — tracked checklist (living)
 
 A working checklist for cutting `sizetube.com` over from PeerTube to the Vidra beta
-(`beta.sizetube.com`, v0.7.21 = core `0c06a81f`, user `0d8b5105`, search `d018b07f`, deployed
-2026-11-14 17:03 UTC). It tracks **execution status**; the reasoning, evidence and decisions
+(`beta.sizetube.com`, v0.7.22 = core `f508753d`, user `fc902e6d`, search `d018b07f`, deployed
+2026-11-15 01:11 UTC). It tracks **execution status**; the reasoning, evidence and decisions
 live in the audit ([`sizetube-cutover-2026-11.md`](sizetube-cutover-2026-11.md)) and the run
 record ([`sizetube-beta-migration-2026-11.md`](sizetube-beta-migration-2026-11.md)). When an
 item here and the audit disagree, fix one of them in the same change — do not let them drift.
