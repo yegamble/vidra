@@ -17,6 +17,7 @@ class BackupTest(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         os.environ.pop('BACKUP_OFFSITE_PLAINTEXT', None)
+        os.environ.pop('INVOCATION_ID', None)
         for directory in ('deploy', 'env', 'bin'):
             (self.root / directory).mkdir()
         for name in ('backup.sh', 'lib.sh'):
@@ -126,79 +127,116 @@ with open(os.environ['CALLS'], 'a') as out:
         self.assertEqual(self.offsite_calls('rclone'), [])
         self.assertEqual(self.offsite_calls('curl'), [])
 
-    def host_env(self, text, mode=0o600):
+    def host_env(self, text):
         path = self.root / 'host-backup.env'
         path.write_text(text)
-        path.chmod(mode)
+        self.env['BACKUP_HOST_ENV_FILE'] = str(path)
+        return path
+
+    def unreadable_host_env(self):
+        # A DIRECTORY in place of the file: present, but not a readable regular
+        # file. Used instead of chmod 000 because root reads through chmod 000,
+        # which would make the test pass vacuously when CI runs as root.
+        path = self.root / 'host-backup.env'
+        path.mkdir()
         self.env['BACKUP_HOST_ENV_FILE'] = str(path)
         return path
 
     def hand_run(self, **env):
-        """A hand run: the operator's shell exports none of the backup knobs."""
-        for key in ('BACKUP_RCLONE_REMOTE', 'BACKUP_S3_URI', 'HEALTHCHECKS_URL'):
+        """A hand run: no INVOCATION_ID, and the shell exports no backup knobs."""
+        for key in ('BACKUP_RCLONE_REMOTE', 'BACKUP_S3_URI', 'HEALTHCHECKS_URL', 'INVOCATION_ID'):
             self.env.pop(key, None)
         return self.run_backup(**env)
 
-    def test_hand_run_reads_remote_from_host_env_file_and_never_echoes_secrets(self):
-        self.configure_offsite('')
-        self.host_env('BACKUP_RCLONE_REMOTE=offsite:\n'
-                      'HEALTHCHECKS_URL=https://hc-ping.invalid/s3cr3t-uuid\n'
-                      'AWS_SECRET_ACCESS_KEY=topsecretvalue\n')
-        run = self.hand_run(CRYPT_REMOTES='offsite')
-        self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertEqual(len(self.offsite_calls('rclone')), 2, run.stdout)
-        self.assertNotIn('LOCAL COPY ONLY', run.stdout)
-        self.assertIn('host-backup.env', run.stdout)
-        for secret in ('s3cr3t-uuid', 'topsecretvalue'):
-            self.assertNotIn(secret, run.stdout + run.stderr)
-        self.assertEqual(self.offsite_calls('curl')[0][-1], 'https://hc-ping.invalid/s3cr3t-uuid/start')
-
-    def test_process_env_beats_host_env_file(self):
-        self.configure_offsite('')
-        self.host_env('BACKUP_RCLONE_REMOTE=fromfile:\n')
-        run = self.hand_run(BACKUP_RCLONE_REMOTE='fromprocess:', CRYPT_REMOTES='fromprocess')
-        self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertTrue(all(c[-1].startswith('fromprocess:/') for c in self.offsite_calls('rclone')))
-
-    def test_explicit_empty_remote_still_disables_host_env_file(self):
-        self.configure_offsite('')
-        self.host_env('BACKUP_RCLONE_REMOTE=offsite:\n')
-        run = self.run_backup(BACKUP_RCLONE_REMOTE='')
-        self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertIn('LOCAL COPY ONLY', run.stdout)
+    def assert_local_pair_kept_and_not_successful(self, run):
+        self.assertNotEqual(run.returncode, 0, run.stdout)
+        self.assertTrue(list(self.backups.glob('vidra-*.dump.gz')))
+        self.assertTrue(list(self.backups.glob('vidra-config-*.tar.gz')))
+        self.assertFalse((self.backups / 'last_success').exists())
         self.assertEqual(self.offsite_calls('rclone'), [])
 
-    def test_no_remote_anywhere_is_unchanged_local_only_success(self):
+    SECRETS = ('s3cr3t-remote', 'topsecretvalue', 's3cr3t-uuid')
+
+    def test_hand_run_on_host_configured_for_offsite_fails_after_local_pair(self):
+        self.configure_offsite('')
+        self.host_env('BACKUP_RCLONE_REMOTE=s3cr3t-remote:\n'
+                      'HEALTHCHECKS_URL=https://hc-ping.invalid/s3cr3t-uuid\n'
+                      'AWS_SECRET_ACCESS_KEY=topsecretvalue\n')
+        run = self.hand_run()
+        self.assert_local_pair_kept_and_not_successful(run)
+        self.assertIn('sudo systemctl start vidra-backup.service', run.stderr)
+        self.assertIn('journalctl -u vidra-backup.service', run.stderr)
+        self.assertNotIn('sudo ./deploy/backup.sh', run.stderr)
+        for secret in self.SECRETS:
+            self.assertNotIn(secret, run.stdout + run.stderr)
+        # the host file's HEALTHCHECKS_URL is never loaded either
+        self.assertEqual(self.offsite_calls('curl'), [])
+
+    def test_hand_run_with_unreadable_host_file_fails_after_local_pair(self):
+        self.configure_offsite('')
+        self.unreadable_host_env()
+        run = self.hand_run()
+        self.assert_local_pair_kept_and_not_successful(run)
+        self.assertIn('sudo systemctl start vidra-backup.service', run.stderr)
+
+    def test_hand_run_with_untraversable_host_dir_is_treated_as_unknown(self):
+        # A directory the caller cannot search makes [ -e file ] false for a file
+        # that exists. Root searches every directory, so chmod cannot simulate
+        # that for root; there root reads the file, which names a target, so the
+        # outcome is the same refusal (same assertion either way, never a skip).
+        d = self.root / 'locked'
+        d.mkdir()
+        (d / 'backup.env').write_text('BACKUP_RCLONE_REMOTE=x:\n')
+        d.chmod(0)
+        self.env['BACKUP_HOST_ENV_FILE'] = str(d / 'backup.env')
+        try:
+            run = self.hand_run()
+        finally:
+            d.chmod(0o700)
+        self.assert_local_pair_kept_and_not_successful(run)
+
+    def test_systemd_run_never_consults_the_host_file(self):
+        self.unreadable_host_env()
+        for key in ('BACKUP_RCLONE_REMOTE', 'BACKUP_S3_URI'):
+            self.env.pop(key, None)
+        run = self.run_backup(INVOCATION_ID='abc123')
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn('LOCAL COPY ONLY', run.stdout)
+        self.assertTrue((self.backups / 'last_success').exists())
+
+    def test_hand_run_with_host_file_naming_no_target_is_unchanged(self):
+        self.host_env('HEALTHCHECKS_URL=https://hc-ping.invalid/s3cr3t-uuid\nBACKUP_RCLONE_REMOTE=\n')
         run = self.hand_run()
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn('LOCAL COPY ONLY', run.stdout)
         self.assertTrue((self.backups / 'last_success').exists())
 
-    def test_host_file_without_a_target_is_local_only_success(self):
-        self.host_env('HEALTHCHECKS_URL=\n')
+    def test_hand_run_with_no_host_file_is_unchanged(self):
         run = self.hand_run()
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn('LOCAL COPY ONLY', run.stdout)
+        self.assertTrue((self.backups / 'last_success').exists())
 
-    def test_present_but_unreadable_host_file_is_loud_and_writes_nothing(self):
-        path = self.host_env('BACKUP_RCLONE_REMOTE=offsite:\n', mode=0o000)
-        if os.geteuid() == 0:  # root reads anything; a directory is the same "present, unusable" shape
-            path.unlink()
-            path.mkdir()
-        run = self.hand_run()
-        path.chmod(0o700)
-        self.assertNotEqual(run.returncode, 0)
-        self.assertIn('host-backup.env', run.stderr)
-        self.assertNotIn('LOCAL COPY ONLY', run.stdout)
-        self.assertFalse((self.backups / 'last_success').exists())
+    def test_explicit_empty_target_is_the_local_only_escape(self):
+        self.host_env('BACKUP_RCLONE_REMOTE=s3cr3t-remote:\n')
+        for key in ('INVOCATION_ID', 'HEALTHCHECKS_URL'):
+            self.env.pop(key, None)
+        run = self.run_backup(BACKUP_RCLONE_REMOTE='')
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn('LOCAL COPY ONLY', run.stdout)
+        self.assertTrue((self.backups / 'last_success').exists())
 
-    def test_unreadable_host_file_is_ignored_when_target_already_in_process_env(self):
-        # systemd reads the root-owned 0600 file and injects it; the service user
-        # then cannot read the file itself, and must not be failed for that.
-        self.configure_offsite('')
-        path = self.host_env('BACKUP_RCLONE_REMOTE=offsite:\n', mode=0o000)
-        run = self.run_backup(BACKUP_RCLONE_REMOTE='offsite:', CRYPT_REMOTES='offsite')
-        path.chmod(0o600)
+    def test_dev_null_and_empty_host_file_mean_no_host_file(self):
+        for value in ('/dev/null', ''):
+            self.env['BACKUP_HOST_ENV_FILE'] = value
+            run = self.hand_run()
+            self.assertEqual(run.returncode, 0, (value, run.stderr))
+            self.assertIn('LOCAL COPY ONLY', run.stdout)
+
+    def test_target_in_env_file_uploads_and_host_file_is_not_consulted(self):
+        self.configure_offsite('BACKUP_RCLONE_REMOTE=offsite:\n')
+        self.unreadable_host_env()
+        run = self.hand_run(CRYPT_REMOTES='offsite')
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertEqual(len(self.offsite_calls('rclone')), 2)
 
@@ -207,21 +245,20 @@ with open(os.environ['CALLS'], 'a') as out:
         self.assertNotEqual(run.returncode, 0)
         self.assertIn('BACKUP_REQUIRE_OFFSITE', run.stderr)
         self.assertFalse((self.backups / 'last_success').exists())
-        # the local dump is still kept: the refusal never discards a good backup
         self.assertTrue(list(self.backups.glob('vidra-*.dump.gz')))
 
-    def test_require_offsite_from_host_file_passes_when_a_target_is_configured(self):
-        self.configure_offsite('')
-        self.host_env('BACKUP_RCLONE_REMOTE=offsite:\nBACKUP_REQUIRE_OFFSITE=true\n')
-        run = self.hand_run(CRYPT_REMOTES='offsite')
-        self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertEqual(len(self.offsite_calls('rclone')), 2)
-
-    def test_require_offsite_in_host_file_with_no_target_fails(self):
-        self.host_env('BACKUP_REQUIRE_OFFSITE=true\n')
-        run = self.hand_run()
+    def test_require_offsite_from_env_file_fails_under_systemd_too(self):
+        with (self.root / 'env/production.env').open('a') as out:
+            out.write('BACKUP_REQUIRE_OFFSITE=yes\n')
+        run = self.run_backup(INVOCATION_ID='abc123')
         self.assertNotEqual(run.returncode, 0)
         self.assertIn('BACKUP_REQUIRE_OFFSITE', run.stderr)
+
+    def test_require_offsite_passes_when_a_target_is_configured(self):
+        self.configure_offsite('BACKUP_RCLONE_REMOTE=offsite:\n')
+        run = self.hand_run(CRYPT_REMOTES='offsite', BACKUP_REQUIRE_OFFSITE='true')
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(len(self.offsite_calls('rclone')), 2)
 
     def install_age(self, exit_code=0):
         """A recording `age` stub: writes a recognisable ciphertext to its -o path."""

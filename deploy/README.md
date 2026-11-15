@@ -1445,20 +1445,24 @@ format is a contract; do not "improve" it.
   `EnvironmentFile` setup. Client settings such as `RCLONE_CONFIG` and AWS
   credentials still belong in the client environment or its private
   configuration, not in Vidra's env file.
-- **Hand-run backups read `/etc/vidra/backup.env` too.** The systemd unit loads
-  that root-owned file; your shell does not. When no off-site target
-  (`BACKUP_RCLONE_REMOTE` / `BACKUP_S3_URI`) comes from the environment or
-  `ENV_FILE`, `backup.sh` reads the off-site knobs from that file itself (path
-  override: `BACKUP_HOST_ENV_FILE`; it is parsed, never sourced, and only its
-  path is logged). Precedence is process environment, then `ENV_FILE`, then that
-  file; an exported *empty* `BACKUP_RCLONE_REMOTE=` or `BACKUP_S3_URI=` still
-  means local-only on purpose. A host with no such file behaves exactly as before.
-  If the file exists but you cannot read it, the run **fails before writing
-  anything** rather than guess `LOCAL COPY ONLY` — use `sudo ./deploy/backup.sh`,
-  or `BACKUP_HOST_ENV_FILE=/dev/null` for a deliberate local-only run. To make a
-  missing target fatal on a host that must never be local-only, set
-  `BACKUP_REQUIRE_OFFSITE=true` (in that file or `ENV_FILE`): the local pair is
-  still written, but the run exits non-zero and leaves `last_success` alone.
+- **A hand-run backup on an off-site host fails instead of keeping a silent
+  local copy.** The systemd unit loads `/etc/vidra/backup.env` (where the remote
+  lives); your shell does not. `backup.sh` never loads that file (it also holds
+  `RCLONE_CONFIG`/`AWS_*`, which a hand run cannot reproduce), but a **hand run**
+  (no `INVOCATION_ID`) with no target in the environment or `ENV_FILE` checks
+  whether the file *names* one — a presence check, the value is never used or
+  printed. If it does, or the file exists but cannot be read, the run still
+  writes the local dump and config archive, then **exits non-zero** without
+  advancing `last_success`, and tells you to run
+  `sudo systemctl start vidra-backup.service` (check
+  `journalctl -u vidra-backup.service`) for an off-site copy with the timer's
+  exact environment. It does not upload. To accept local-only for one hand run,
+  export an empty target: `BACKUP_RCLONE_REMOTE= ./deploy/backup.sh`. Under
+  systemd the file is never consulted, and a host with no such file (or one with
+  no target) behaves exactly as before. `BACKUP_HOST_ENV_FILE` overrides the path
+  (empty or `/dev/null` means no file). To make a missing target fatal for every
+  run, set `BACKUP_REQUIRE_OFFSITE=true` in the process environment or `ENV_FILE`
+  (same truthy spellings as the other flags).
 - **Alert on a *missing* backup**, not just a failing one. Set
   `HEALTHCHECKS_URL=https://hc-ping.com/<uuid>`; the script pings `/start`,
   `/fail` on any error, and success at the end, so a droplet that stops running

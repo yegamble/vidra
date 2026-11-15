@@ -521,11 +521,13 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   which file holds the remote. Then either take the window's backups through the unit
   (`systemctl start vidra-backup.service`), or read each run's log for the upload line and
   treat `LOCAL COPY ONLY` as a failed step. `OPERATOR`.
-  *Note 2026-11-15:* `deploy/backup.sh` now reads `/etc/vidra/backup.env` itself when a hand
-  run finds no off-site target, fails loudly if that file exists but is unreadable, and
-  fails on `LOCAL COPY ONLY` when `BACKUP_REQUIRE_OFFSITE=true`. This is CODE only. The host
-  still has to be checked: which file holds the beta's remote, that the installed script is
-  this version, and that a hand run logs the upload line. Not ticked.
+  *Note 2026-11-15:* `deploy/backup.sh` now refuses to call a hand run a success on a host
+  configured for off-site: when a hand run has no target and `/etc/vidra/backup.env` names
+  one (or cannot be read), it writes the local pair, exits non-zero, leaves `last_success`
+  alone and points at `sudo systemctl start vidra-backup.service`. It does not upload, and
+  the nightly unit is unchanged. This is CODE only. The host still has to be checked: which
+  file holds the beta's remote, that the installed script is this version, and how the
+  installed unit loads the file. Not ticked.
 - [ ] **I2 · Nothing pins the rollback dumps (C7).** Step 7 says "both snapshots + dumps
   kept" and names no mechanism, and no rollback-window length is recorded (D14 records the
   write-loss policy only). On the box, the pre-flip `vidra-<stamp>.dump.gz` leaves the daily

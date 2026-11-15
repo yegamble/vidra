@@ -463,7 +463,7 @@ fp)
   facts "fp=$(cat "$R/fp.$2")" "counts=$(counts)" "ledger=$(ledger)" "probe=$(probe)"
   ;;
 backup)
-  log "backup.sh at $OLD (pre-upgrade dump)"; asv ./deploy/backup.sh; rc=$?; find "$DIR/backups" -maxdepth 1 -type f -newer "$R/fixture.sha" | sort
+  log "backup.sh at $OLD (pre-upgrade dump)"; asv BACKUP_RCLONE_REMOTE= ./deploy/backup.sh; rc=$?; find "$DIR/backups" -maxdepth 1 -type f -newer "$R/fixture.sha" | sort
   d=$(find "$DIR/backups" -maxdepth 1 -name "vidra-*.dump.gz" -newer "$R/fixture.sha" | sort | tail -1); echo "$d" > "$R/dump_pre"
   # Capture the clean pre-upgrade ledger HERE: this is the last phase before `inject` mutates the
   # database, and it is what `recover` forces back to. Read off the host rather than typed,
@@ -548,7 +548,7 @@ backup2)
   # checked against reality — ahead of the rollback and restore phases whose shape it decides.
   assert_schema_expectation
   log "backup.sh at $NEW (post-upgrade dump) + a post-backup marker write"
-  asv ./deploy/backup.sh; rc=$?; d=$(find "$DIR/backups" -maxdepth 1 -name "vidra-*.dump.gz" -newer "$(cat "$R/dump_pre")" | sort | tail -1); echo "$d" > "$R/dump_post"; log "dump_post=$d exit=$rc"
+  asv BACKUP_RCLONE_REMOTE= ./deploy/backup.sh; rc=$?; d=$(find "$DIR/backups" -maxdepth 1 -name "vidra-*.dump.gz" -newer "$(cat "$R/dump_pre")" | sort | tail -1); echo "$d" > "$R/dump_post"; log "dump_post=$d exit=$rc"
   t="$(token)"; vid=$(cat "$R/video_id")
   code=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH "$API/videos/$vid" -H "Authorization: Bearer $t" -H 'content-type: application/json' -d "{\"title\":\"REC-03 fixture RENAMED after the schema $(remembered post_core_version) backup\"}"); log "marker PATCH http=$code"; counts
   facts "backup_exit=$rc" "dump_post=$d" "marker_http=$code" "counts=$(counts)"
