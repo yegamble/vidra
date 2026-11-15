@@ -364,6 +364,11 @@ D1–D14 and D16 were answered 2026-11-08 (audit §6 table). **D15 is the only o
 ## F. Standing reminders
 
 - Re-drill the restore on the **final** pre-cutover dump (10.5 passed on the 2026-11-08 dump).
+  Run it with `--require-media-consistent` (I3): without the flag `restore.sh` warns and
+  exits 0 when referenced media is missing or could not be checked, so its exit code says
+  nothing about media. The strict pass hashes every referenced object, so it is slow (the
+  runbook's example allows `RESTORE_MEDIA_TIMEOUT=36h`): run it on a copy ahead of the
+  window, not inside it. `deploy/README.md`, "For a recovery acceptance drill".
 - Keep `MEDIA_GC_ENABLED=false` for the entire rollback window.
 - A fresh off-site backup immediately before T0.
 
@@ -542,6 +547,8 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   (`restore.sh:84,471,489`). F does not name the flag, and whether 10.5 and the rehearsal
   used it is not recorded here. Run the re-drill on the final dump with the flag, or read
   the media pass's own result instead of the exit code. `OPERATOR`.
+  **2026-11-15:** section F now names the flag and where the command is. The box stays open
+  until the re-drill on the final dump has been run that way.
 - [ ] **I4 · The timed lost-object restore named in D12 has no line in the D12 tail.** The
   audit lists it under D12 and gives it as the second half of the control for media having
   one copy: replication or Object Lock, "then a timed hide-and-restore drill" (audit §6 D12,
