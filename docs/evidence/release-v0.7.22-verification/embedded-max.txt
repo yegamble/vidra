@@ -1,0 +1,5 @@
+vidra-core@sha256:3777859102b35a07a8e100d3f2b3753067f426ba27c36ea1d2a31f2c528045df migrate embedded-max
+189
+
+vidra-search@sha256:9f3057e38bd0e77deae7fc2c05ad728cd1452f3fce00f828c52b17648c468c1c migrate embedded-max
+21
