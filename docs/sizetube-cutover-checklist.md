@@ -617,9 +617,16 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   notification email carries `List-Unsubscribe` and `List-Unsubscribe-Post` (RFC 8058) and a
   signed one-click endpoint turns that user's notification email off. Not checked against a
   real mailbox provider. Brevo documents that it adds its own header, so one-click through
-  Brevo is not claimed; a relay must DKIM-sign both headers. The beta has no mail transport
-  configured (RUNTIME 2026-11-15: `SMTP_HOST` empty), so nothing is sent there today. The
-  non-user report route is unchanged. Not ticked.
+  Brevo is not claimed; a relay must DKIM-sign both headers. The non-user report route is
+  unchanged. Not ticked.
+  *Correction, 2026-11-15:* this note first said the beta has no mail transport, from the
+  env file alone (`SMTP_HOST` empty, `MAIL_ENABLED=false`). That was wrong. The admin panel
+  holds a mail configuration (RUNTIME, read-only: one `mail_config` row, transport `resend`,
+  a secret stored, saved 2026-11-09). Not checked: that a mail actually sends, whether
+  `MAIL_ENABLED=false` in the env file overrides the panel configuration, and whether
+  Resend passes the two unsubscribe headers through. A test password-reset from the beta
+  answers the first two; the headers of the first notification email after the next
+  release answer the third.
 
 Not covered by either review: the beta's live configuration, prod, the private
 `cutover-prep/` files (including the ad script), Canadian law, Cloudflare settings, and
