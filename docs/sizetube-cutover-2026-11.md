@@ -411,6 +411,13 @@ Executed so far (each with the operator's explicit go-ahead):
   document answers `analytics: {google_enabled: false, google_measurement_id: "", google_consent_required: true}` —
   Google Analytics is still OFF on the beta, and the new setting was not changed or exercised in a browser;
   `Caddyfile.local` byte-identical (sha256 before and after).
+- 2026-11-15, later the same day — **Google Analytics is ON on the beta** (operator's change in the admin panel;
+  read back from the instance settings, RUNTIME, read-only): `analytics_google_enabled=true`, a measurement id is
+  set, and `analytics_google_consent_required=false`, so the tag loads without a consent prompt. This supersedes
+  "still OFF" in the entry above. In the released source a visitor
+  sending Do Not Track or Global Privacy Control still gets no tag (CODE user `components/GoogleAnalytics.tsx:45`).
+  Not checked in a browser: either of those, or that hits arrive in the Analytics property. Whether running without consent
+  is acceptable for the audience is part of D15 (I6), not decided here.
 
 Everything else above is still a change the operator (or a later, separately approved task) makes.
 
