@@ -622,11 +622,11 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   *Correction, 2026-11-15:* this note first said the beta has no mail transport, from the
   env file alone (`SMTP_HOST` empty, `MAIL_ENABLED=false`). That was wrong. The admin panel
   holds a mail configuration (RUNTIME, read-only: one `mail_config` row, transport `resend`,
-  a secret stored, saved 2026-11-09). Not checked: that a mail actually sends, whether
-  `MAIL_ENABLED=false` in the env file overrides the panel configuration, and whether
-  Resend passes the two unsubscribe headers through. A test password-reset from the beta
-  answers the first two; the headers of the first notification email after the next
-  release answer the third.
+  a secret stored, saved 2026-11-09). The operator sent a password-reset email from the beta
+  by hand the same day and it arrived, so the panel configuration sends with
+  `MAIL_ENABLED=false` in the env file. Not checked: notification email, and whether Resend
+  passes the two unsubscribe headers through; the headers of the first notification email
+  after the next release answer both.
 
 Not covered by either review: the beta's live configuration, prod, the private
 `cutover-prep/` files (including the ad script), Canadian law, Cloudflare settings, and
