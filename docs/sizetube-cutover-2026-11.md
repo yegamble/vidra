@@ -418,6 +418,22 @@ Executed so far (each with the operator's explicit go-ahead):
   sending Do Not Track or Global Privacy Control still gets no tag (CODE user `components/GoogleAnalytics.tsx:45`).
   Not checked in a browser: either of those, or that hits arrive in the Analytics property. Whether running without consent
   is acceptable for the audience is part of D15 (I6), not decided here.
+- 2026-11-15 18:39–18:42 UTC — **v0.7.23 deployed to the beta** (operator's request). v0.7.23 = core `de998f2a`,
+  user `270bc0a0`, search `d018b07f` (unchanged source, retagged), meta `f8bc512` (record meta #399): one-click
+  unsubscribe on notification mail (core #556), playlist item cards behind the sensitive sign-in wall and without
+  blocked or policy-hidden videos (core #555, #557), doctor backup remedies (core #558), regenerated client types
+  (user #475) and, in the bundle, the backup guard for a hand run on an off-site host (meta #393); no migration.
+  On the beta, in order: `systemctl start vidra-backup.service` (off-site backup `vidra-20261115T183953Z`); as
+  `vidra`, `./deploy/pin-release.sh v0.7.23` (bundle checksum verified, env snapshot); `./deploy/deploy.sh`, exit 0.
+  After it (RUNTIME): `/version` v0.7.23 `de998f2`; `/readyz` 200; api, frontend and search healthy on the v0.7.23
+  images; from outside, `/`, `/healthz` and the video list answer 200; no api error line in the first minutes; 5,598
+  users and 15,613 videos, unchanged; the unpacked `deploy/backup.sh` carries the guard. Not exercised: an
+  unsubscribe link from a real notification mail, or the playlist changes in a browser.
+- 2026-11-15 18:42 UTC — **the importer's source snapshot refreshed** from the live database
+  (`peertube-source-sync.sh`, exit 0): 15,614 → 15,622 local videos, dump sha256 `3005edd5…b33c1a5`, previous copy
+  kept as `peertube_source_snapshot_prev_20261115184227`. **No import was started** — that is launched from Admin →
+  Import from PeerTube — so the 8 new videos are not on the beta yet, and anything uploaded to the live site after
+  this refresh needs another refresh and run at the window.
 
 Everything else above is still a change the operator (or a later, separately approved task) makes.
 

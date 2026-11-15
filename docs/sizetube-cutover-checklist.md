@@ -1,8 +1,8 @@
 # sizetube.com cutover — tracked checklist (living)
 
 A working checklist for cutting `sizetube.com` over from PeerTube to the Vidra beta
-(`beta.sizetube.com`, v0.7.22 = core `f508753d`, user `fc902e6d`, search `d018b07f`, deployed
-2026-11-15 01:11 UTC). It tracks **execution status**; the reasoning, evidence and decisions
+(`beta.sizetube.com`, v0.7.23 = core `de998f2a`, user `270bc0a0`, search `d018b07f`, deployed
+2026-11-15 18:42 UTC). It tracks **execution status**; the reasoning, evidence and decisions
 live in the audit ([`sizetube-cutover-2026-11.md`](sizetube-cutover-2026-11.md)) and the run
 record ([`sizetube-beta-migration-2026-11.md`](sizetube-beta-migration-2026-11.md)). When an
 item here and the audit disagree, fix one of them in the same change — do not let them drift.
@@ -225,6 +225,9 @@ found is section I.
   script's SHA-256 equals the prepared `cutover-prep/ads-custom.js` less its final newline;
   the provider path returns JavaScript through Caddy; the enforced page policy carries all
   three allowances. **Open:** real ad fill and a real blocker on the six formats.
+  2026-11-15: the operator reports ads on the beta, in their words: "ads are showing".
+  Not read back by anyone else, and it does not say which of the six formats, or how the
+  page behaves with a blocker on.
   **In-player VAST** (replaces the `vast-ads` plugin). Done: core #537 and vidra-user #466 in
   v0.7.18, the progress-beacon fix vidra-user #467 in v0.7.19; pre-roll, mid-roll and
   post-roll tags are set and enabled on the beta (RUNTIME 2026-11-12). Checked on the beta
