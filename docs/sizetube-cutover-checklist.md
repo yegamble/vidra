@@ -533,6 +533,14 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   the nightly unit is unchanged. This is CODE only. The host still has to be checked: which
   file holds the beta's remote, that the installed script is this version, and how the
   installed unit loads the file. Not ticked.
+  *Read on the beta 2026-11-15 (RUNTIME, read-only):* the remote is in
+  `/etc/vidra/backup.env` only; the installed unit runs as `vidra` and a drop-in loads that
+  file (`EnvironmentFile=/etc/vidra/backup.env`); the 03:17 UTC nightly uploaded the dump and
+  the config archive. So on the beta a hand run has no remote, and
+  `systemctl start vidra-backup.service` is the run that uploads. The script change merged
+  as meta #393 and is NOT on the beta until its next bundle; until then a hand run there
+  still reports success with a local copy only. `HEALTHCHECKS_URL` is not set, so a failed
+  nightly alerts nobody. Not ticked.
 - [ ] **I2 · Nothing pins the rollback dumps (C7).** Step 7 says "both snapshots + dumps
   kept" and names no mechanism, and no rollback-window length is recorded (D14 records the
   write-loss policy only). On the box, the pre-flip `vidra-<stamp>.dump.gz` leaves the daily
@@ -589,6 +597,11 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   card there carries no `sign_in_required` mark. The video's own reads are refused by the
   wall's design (`internal/httpapi/sensitive_gate.go:9-16`); that was not checked end to end.
   `AGENT`.
+  *2026-11-15:* the playlist half is fixed on core main and NOT released: item cards go
+  through the card gate (core #555), and the item list and its counts leave out
+  moderator-blocked videos and, under the `hide` policy, sensitive ones (core #557). The
+  IPFS half is open. Read on the beta the same day (RUNTIME): `IPFS_MANAGED_NODE=false`.
+  Not ticked.
 - [ ] **I9 · Existing accounts are never asked to accept the terms.** The `reaccept` source
   exists only in the migration's allowed values and a comment (CODE core
   `migrations/0189_user_consents.up.sql:28`, `internal/account/archive.go:45`); no handler
@@ -600,6 +613,13 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   require sign-in (`internal/httpapi/server.go:2177-2179`), so a non-user has no route for
   a DMCA notice or an intimate-image takedown. The header is `AGENT`; what the non-user
   route must be is `LAWYER`, then `AGENT`.
+  *2026-11-15:* the header half is merged on core main and NOT released (core #556):
+  notification email carries `List-Unsubscribe` and `List-Unsubscribe-Post` (RFC 8058) and a
+  signed one-click endpoint turns that user's notification email off. Not checked against a
+  real mailbox provider. Brevo documents that it adds its own header, so one-click through
+  Brevo is not claimed; a relay must DKIM-sign both headers. The beta has no mail transport
+  configured (RUNTIME 2026-11-15: `SMTP_HOST` empty), so nothing is sent there today. The
+  non-user report route is unchanged. Not ticked.
 
 Not covered by either review: the beta's live configuration, prod, the private
 `cutover-prep/` files (including the ad script), Canadian law, Cloudflare settings, and
