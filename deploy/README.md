@@ -1445,6 +1445,20 @@ format is a contract; do not "improve" it.
   `EnvironmentFile` setup. Client settings such as `RCLONE_CONFIG` and AWS
   credentials still belong in the client environment or its private
   configuration, not in Vidra's env file.
+- **Hand-run backups read `/etc/vidra/backup.env` too.** The systemd unit loads
+  that root-owned file; your shell does not. When no off-site target
+  (`BACKUP_RCLONE_REMOTE` / `BACKUP_S3_URI`) comes from the environment or
+  `ENV_FILE`, `backup.sh` reads the off-site knobs from that file itself (path
+  override: `BACKUP_HOST_ENV_FILE`; it is parsed, never sourced, and only its
+  path is logged). Precedence is process environment, then `ENV_FILE`, then that
+  file; an exported *empty* `BACKUP_RCLONE_REMOTE=` or `BACKUP_S3_URI=` still
+  means local-only on purpose. A host with no such file behaves exactly as before.
+  If the file exists but you cannot read it, the run **fails before writing
+  anything** rather than guess `LOCAL COPY ONLY` — use `sudo ./deploy/backup.sh`,
+  or `BACKUP_HOST_ENV_FILE=/dev/null` for a deliberate local-only run. To make a
+  missing target fatal on a host that must never be local-only, set
+  `BACKUP_REQUIRE_OFFSITE=true` (in that file or `ENV_FILE`): the local pair is
+  still written, but the run exits non-zero and leaves `last_success` alone.
 - **Alert on a *missing* backup**, not just a failing one. Set
   `HEALTHCHECKS_URL=https://hc-ping.com/<uuid>`; the script pings `/start`,
   `/fail` on any error, and success at the end, so a droplet that stops running

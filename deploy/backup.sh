@@ -88,12 +88,75 @@ vidra_compose_chain
 # while keeping every recovery artifact on the host it was meant to protect.
 # Do not source the secrets file. An explicitly empty process value still
 # disables a file setting for a one-off local-only run.
+# Which knobs did the PROCESS set at all (empty counts)? Recorded before the
+# assignments below make every one of them "set", because the host-file fallback
+# further down must honour an explicit empty as "disabled on purpose".
+PROC_SET=" "
+for _k in BACKUP_RCLONE_REMOTE BACKUP_S3_URI BACKUP_S3_ENDPOINT BACKUP_AGE_RECIPIENTS \
+          BACKUP_OFFSITE_PLAINTEXT HEALTHCHECKS_URL BACKUP_REQUIRE_OFFSITE; do
+  # Captured, not `env | grep -q`: -q can SIGPIPE env, which pipefail reports as failure.
+  if [ -n "$(env | grep "^${_k}=" || true)" ]; then
+    PROC_SET="$PROC_SET$_k "
+  fi
+done
 BACKUP_RCLONE_REMOTE="${BACKUP_RCLONE_REMOTE-$(env_get BACKUP_RCLONE_REMOTE '')}"
 BACKUP_S3_URI="${BACKUP_S3_URI-$(env_get BACKUP_S3_URI '')}"
 BACKUP_S3_ENDPOINT="${BACKUP_S3_ENDPOINT-$(env_get BACKUP_S3_ENDPOINT '')}"
 BACKUP_AGE_RECIPIENTS="${BACKUP_AGE_RECIPIENTS-$(env_get BACKUP_AGE_RECIPIENTS '')}"
 BACKUP_OFFSITE_PLAINTEXT="${BACKUP_OFFSITE_PLAINTEXT-$(env_get BACKUP_OFFSITE_PLAINTEXT '')}"
 HEALTHCHECKS_URL="${HEALTHCHECKS_URL-$(env_get HEALTHCHECKS_URL '')}"
+BACKUP_REQUIRE_OFFSITE="${BACKUP_REQUIRE_OFFSITE-$(env_get BACKUP_REQUIRE_OFFSITE '')}"
+
+# --- host backup settings (/etc/vidra/backup.env) ---------------------------------
+# On a real host the off-site remote lives in a root-owned 0600 file that the
+# systemd unit loads (EnvironmentFile=) and an operator's interactive shell does
+# NOT. A hand-run ./deploy/backup.sh in a maintenance window — the moment the
+# backup matters most — therefore saw no remote, logged LOCAL COPY ONLY, wrote
+# last_success and exited 0, leaving its only copy on the box it was meant to
+# protect. So when nothing above resolved a target, read that same file.
+#
+# Rules, each closing a way for this to go wrong:
+#  * Never sourced, and only the knobs below are extracted (same parser as
+#    env_get): the file also holds client credentials (AWS_*), and executing or
+#    echoing it is how those reach a log. Only the file's PATH is logged.
+#  * Process environment still wins, and an explicitly EMPTY BACKUP_RCLONE_REMOTE
+#    or BACKUP_S3_URI still means "local only, on purpose" — the file is not
+#    consulted at all then.
+#  * Consulted only when no target resolved. Under systemd the values arrive in
+#    the process environment and the service user usually cannot read the 0600
+#    file; that must not fail the nightly run.
+#  * Present but unreadable is an ERROR, not a skip: with no target resolved we
+#    cannot tell "local-only host" from "host whose remote we are not allowed to
+#    read", and guessing wrong is silent data loss. (Run it with sudo, or export
+#    BACKUP_HOST_ENV_FILE=/dev/null to say local-only on purpose.)
+#  * Absent file = unchanged behaviour: local-only installs stay legitimate.
+BACKUP_HOST_ENV_FILE="${BACKUP_HOST_ENV_FILE-/etc/vidra/backup.env}"
+host_env_get() {
+  local val
+  val="$(sed -n "s/^[[:space:]]*${1}[[:space:]]*=[[:space:]]*//p" "$BACKUP_HOST_ENV_FILE" | tail -n1 | tr -d '\r')"
+  case "$val" in
+    \"*\") val="${val%\"}"; val="${val#\"}" ;;
+    \'*\') val="${val%\'}"; val="${val#\'}" ;;
+  esac
+  printf '%s' "$val"
+}
+if [ -z "${BACKUP_RCLONE_REMOTE}${BACKUP_S3_URI}" ] \
+   && case "$PROC_SET" in *" BACKUP_RCLONE_REMOTE "*|*" BACKUP_S3_URI "*) false ;; *) true ;; esac \
+   && [ -n "$BACKUP_HOST_ENV_FILE" ] && [ -e "$BACKUP_HOST_ENV_FILE" ]; then
+  [ -f "$BACKUP_HOST_ENV_FILE" ] && [ -r "$BACKUP_HOST_ENV_FILE" ] \
+    || die "$BACKUP_HOST_ENV_FILE exists but is not a readable file, so whether this host has an off-site remote cannot be determined — refusing to guess LOCAL COPY ONLY. Re-run as a user that can read it (sudo ./deploy/backup.sh), or set BACKUP_HOST_ENV_FILE=/dev/null for a deliberate local-only run. Nothing was written."
+  log "no off-site target in the environment or $ENV_FILE — reading $BACKUP_HOST_ENV_FILE"
+  for _k in BACKUP_RCLONE_REMOTE BACKUP_S3_URI BACKUP_S3_ENDPOINT BACKUP_AGE_RECIPIENTS \
+            BACKUP_OFFSITE_PLAINTEXT HEALTHCHECKS_URL BACKUP_REQUIRE_OFFSITE; do
+    case "$PROC_SET" in *" $_k "*) continue ;; esac
+    _v="$(host_env_get "$_k")"
+    [ -z "$_v" ] || printf -v "$_k" '%s' "$_v"
+  done
+fi
+
+# BACKUP_REQUIRE_OFFSITE=true: a run with no off-site target is a FAILURE, not
+# LOCAL COPY ONLY (see the off-site block). Opt-in, so local-only hosts are
+# unchanged; set it in /etc/vidra/backup.env on a host that must never be so.
 
 # This script dumps by `docker exec`-ing pg_dump inside the BUNDLED postgres
 # container. With VIDRA_EXTERNAL_POSTGRES=true there is no such container, so
@@ -362,6 +425,9 @@ elif [ -n "${BACKUP_S3_URI:-}" ]; then
     die "BACKUP_S3_URI is set but the aws CLI is not installed"
   fi
 else
+  if is_true "$BACKUP_REQUIRE_OFFSITE"; then
+    die "BACKUP_REQUIRE_OFFSITE is set but no off-site target is configured (BACKUP_RCLONE_REMOTE or BACKUP_S3_URI, from the environment, $ENV_FILE or $BACKUP_HOST_ENV_FILE) — the local pair was written but last_success was NOT updated"
+  fi
   log "no off-site target configured (set BACKUP_RCLONE_REMOTE or BACKUP_S3_URI) — LOCAL COPY ONLY"
 fi
 
