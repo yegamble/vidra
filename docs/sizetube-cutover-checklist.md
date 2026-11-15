@@ -92,6 +92,14 @@ found is section I.
     dev server against a stub API (2026-11-14), nothing from the custom script was requested
     before the visitor confirmed. It has not been switched on on the beta: after the deploy
     `age_gate_enabled=false` and `registration_minimum_age=0` (RUNTIME 2026-11-14).
+    **Switched on on the beta 2026-11-15, 14:22 UTC, by the operator** (RUNTIME, read-only
+    the same day): `age_gate_enabled=true`, `registration_minimum_age=18`. The operator's
+    answer to D15(a), in their words: "we already have age assurance, it asks age or
+    blocks". That is the operator's decision to rely on self-declaration; no counsel answer
+    is recorded, and the limits above still hold (browser-enforced, refuses no API or media
+    request). Not checked in a browser on the beta. D15(b) is unchanged: `terms_url` and
+    `privacy_url` are not set, so a signup would record no consent; registration is closed
+    there, so nobody can sign up today. The box stays open.
   The scoping notes of 2026-11-11 that this replaced:
   - *Signup consent record.* The only consent field signup sends is `age_attestation`, which
     the api checks and does not store (CODE core `e6d83aa4`
