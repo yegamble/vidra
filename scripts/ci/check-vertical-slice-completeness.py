@@ -41,6 +41,10 @@ BACKEND_ONLY_PATHS = {
     ('POST', '/api/v1/live/ingest/start'): 'nginx-rtmp publisher authorization',
     ('POST', '/api/v1/live/ingest/stop'): 'nginx-rtmp publisher teardown',
     ('GET', '/api/v1/ipfs/gateway/authorize'): 'Caddy forward-auth subrequest',
+    # RFC 8058: the URL lives in a mail header. The mailbox provider POSTs it; a
+    # person who opens it in a browser GETs it and is redirected to settings.
+    ('POST', '/api/v1/notifications/unsubscribe'): 'mailbox provider one-click unsubscribe (List-Unsubscribe-Post)',
+    ('GET', '/api/v1/notifications/unsubscribe'): 'browser navigation from the List-Unsubscribe mail header',
 }
 # Media streams are fetched by the player/HTML elements after a JSON API request
 # authorizes them; requiring a JSON wrapper for segment bytes would be wrong.
