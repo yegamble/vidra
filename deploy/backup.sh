@@ -88,12 +88,63 @@ vidra_compose_chain
 # while keeping every recovery artifact on the host it was meant to protect.
 # Do not source the secrets file. An explicitly empty process value still
 # disables a file setting for a one-off local-only run.
+# Did the PROCESS set a target at all (empty counts)? Recorded before the
+# assignments below make both "set": an exported EMPTY BACKUP_RCLONE_REMOTE= or
+# BACKUP_S3_URI= is the operator's deliberate "local only, this run" signal, and
+# the host check in the off-site block must honour it.
+TARGET_EXPORTED=""
+for _k in BACKUP_RCLONE_REMOTE BACKUP_S3_URI; do
+  # Captured, not `env | grep -q`: -q can SIGPIPE env, which pipefail reports as failure.
+  if [ -n "$(env | grep "^${_k}=" || true)" ]; then TARGET_EXPORTED=1; fi
+done
 BACKUP_RCLONE_REMOTE="${BACKUP_RCLONE_REMOTE-$(env_get BACKUP_RCLONE_REMOTE '')}"
 BACKUP_S3_URI="${BACKUP_S3_URI-$(env_get BACKUP_S3_URI '')}"
 BACKUP_S3_ENDPOINT="${BACKUP_S3_ENDPOINT-$(env_get BACKUP_S3_ENDPOINT '')}"
 BACKUP_AGE_RECIPIENTS="${BACKUP_AGE_RECIPIENTS-$(env_get BACKUP_AGE_RECIPIENTS '')}"
 BACKUP_OFFSITE_PLAINTEXT="${BACKUP_OFFSITE_PLAINTEXT-$(env_get BACKUP_OFFSITE_PLAINTEXT '')}"
 HEALTHCHECKS_URL="${HEALTHCHECKS_URL-$(env_get HEALTHCHECKS_URL '')}"
+BACKUP_REQUIRE_OFFSITE="${BACKUP_REQUIRE_OFFSITE-$(env_get BACKUP_REQUIRE_OFFSITE '')}"
+
+# --- does THIS host expect an off-site copy? ----------------------------------------
+# On a real host the off-site remote lives in /etc/vidra/backup.env, loaded by
+# a systemd EnvironmentFile (if the unit is wired to it) and NOT by an operator's shell. A hand-run ./deploy/backup.sh
+# in a maintenance window used to see no remote, log LOCAL COPY ONLY, write
+# last_success and exit 0 — the only copy stayed on the box it was meant to
+# protect. This script never LOADS that file (it also carries RCLONE_CONFIG /
+# AWS_* which a hand run cannot reproduce, so using just the remote name would
+# upload with the wrong client config); it only asks whether the file NAMES a
+# target, and if so refuses to call a local-only run a success. Presence check
+# only: the value is never used or printed.
+#
+# Never under systemd (INVOCATION_ID): the nightly run behaves exactly as it
+# always did. Unknown (file unreadable, directory not traversable, not a regular
+# file) counts as yes: guessing "local-only" there is the original silent loss.
+# BACKUP_HOST_ENV_FILE is the test override; empty or /dev/null means no file.
+BACKUP_HOST_ENV_FILE="${BACKUP_HOST_ENV_FILE-/etc/vidra/backup.env}"
+host_file_names_target() {
+  local f="$BACKUP_HOST_ENV_FILE" k val
+  case "$f" in ''|/dev/null) return 1 ;; esac
+  if [ ! -e "$f" ]; then
+    # Absent is only knowable when the directory can be searched; otherwise
+    # [ -e ] is false for a file we simply cannot see.
+    if [ -d "$(dirname "$f")" ] && [ ! -x "$(dirname "$f")" ]; then return 0; fi
+    return 1
+  fi
+  { [ -f "$f" ] && [ -r "$f" ]; } || return 0
+  for k in BACKUP_RCLONE_REMOTE BACKUP_S3_URI; do
+    val="$(sed -n "s/^[[:space:]]*${k}[[:space:]]*=[[:space:]]*//p" "$f" | tail -n1 | tr -d '\r')"
+    case "$val" in
+      \"*\") val="${val%\"}"; val="${val#\"}" ;;
+      \'*\') val="${val%\'}"; val="${val#\'}" ;;
+    esac
+    [ -z "$val" ] || return 0
+  done
+  return 1
+}
+
+# BACKUP_REQUIRE_OFFSITE=true: a run with no off-site target is a FAILURE, not
+# LOCAL COPY ONLY (see the off-site block). Opt-in, so local-only hosts are
+# unchanged; set it in /etc/vidra/backup.env on a host that must never be so.
 
 # This script dumps by `docker exec`-ing pg_dump inside the BUNDLED postgres
 # container. With VIDRA_EXTERNAL_POSTGRES=true there is no such container, so
@@ -290,6 +341,7 @@ rclone_remote_is_crypt() {
 
 AGE_ARGS=()
 OFFSITE_REFUSED=""
+NO_OFFSITE_FAIL=""
 if [ -n "${BACKUP_RCLONE_REMOTE:-}${BACKUP_S3_URI:-}" ]; then
   if [ -n "$BACKUP_AGE_RECIPIENTS" ]; then
     command -v age >/dev/null 2>&1 \
@@ -362,7 +414,18 @@ elif [ -n "${BACKUP_S3_URI:-}" ]; then
     die "BACKUP_S3_URI is set but the aws CLI is not installed"
   fi
 else
-  log "no off-site target configured (set BACKUP_RCLONE_REMOTE or BACKUP_S3_URI) — LOCAL COPY ONLY"
+  # Failures here are RECORDED and raised after the retention pass (below), the
+  # same way OFFSITE_REFUSED is: dying here skipped pruning, so a nightly run with
+  # a lost remote wrote a full pair every night and never freed one, filling the
+  # database host's disk. The pair just written is in the newest day, which the
+  # retention policy always keeps.
+  if is_true "$BACKUP_REQUIRE_OFFSITE"; then
+    NO_OFFSITE_FAIL="BACKUP_REQUIRE_OFFSITE is set but no off-site target is configured (BACKUP_RCLONE_REMOTE or BACKUP_S3_URI, from the environment or $ENV_FILE). Local copy: $OUT. last_success NOT updated."
+  elif [ -z "${INVOCATION_ID:-}" ] && [ -z "$TARGET_EXPORTED" ] && host_file_names_target; then
+    NO_OFFSITE_FAIL="this host looks set up for off-site copies ($BACKUP_HOST_ENV_FILE names a target or cannot be read) but this run has no target: NOTHING went off-site. Local copy: $OUT. last_success NOT updated. Durable fix: put BACKUP_RCLONE_REMOTE (or BACKUP_S3_URI) in $ENV_FILE so hand, make and cron runs upload (RCLONE_CONFIG / AWS_* must still come from the caller's environment). If this host uses the vidra-backup systemd unit and 'systemctl cat vidra-backup.service' shows an EnvironmentFile line, 'sudo systemctl start vidra-backup.service' runs with that environment; confirm the upload line in 'journalctl -u vidra-backup.service'. Local-only on purpose: BACKUP_RCLONE_REMOTE= ./deploy/backup.sh"
+  else
+    log "no off-site target configured (set BACKUP_RCLONE_REMOTE or BACKUP_S3_URI) — LOCAL COPY ONLY"
+  fi
 fi
 
 # --- retention -----------------------------------------------------------------
@@ -443,6 +506,9 @@ prune_generation "config archives" 14  "$BACKUP_DIR"/vidra-config-*.tar.gz
 # backup. Not advancing it also gives doctor's 26-hour age check a second,
 # independent alarm, in case the unit's red state and the /fail ping are both
 # missed.
+if [ -n "$NO_OFFSITE_FAIL" ]; then
+  die "$NO_OFFSITE_FAIL"
+fi
 if [ -n "$OFFSITE_REFUSED" ]; then
   die "local backup written ($(basename "$OUT"), $(basename "$CONFIG_OUT")); off-site got the dump but NOT the config archive (plaintext refused, see above) — last_success not updated"
 fi

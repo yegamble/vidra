@@ -33,6 +33,12 @@ WorkingDirectory=/opt/vidra
 # HEALTHCHECKS_URL turns a MISSING backup into an alert. Put the secrets in a
 # root-owned 0600 file rather than inline here — this unit is world-readable.
 Environment=ENV_FILE=env/production.env
+# Optional (the leading "-" tolerates a missing file) and left commented so a
+# fresh install does not depend on a file only the operator can create. Enable it
+# once /etc/vidra/backup.env exists. A HAND run of backup.sh does not load this
+# file; if the file names an off-site target, the hand run writes the local copy
+# and then fails, suggesting a durable fix (target in ENV_FILE) or this unit. See
+# "A hand-run backup on an off-site host" in deploy/README.md.
 # EnvironmentFile=-/etc/vidra/backup.env
 ExecStart=/opt/vidra/deploy/backup.sh
 # A dump of a large database can legitimately take a while; the default
