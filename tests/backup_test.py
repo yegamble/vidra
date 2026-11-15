@@ -164,8 +164,9 @@ with open(os.environ['CALLS'], 'a') as out:
                       'AWS_SECRET_ACCESS_KEY=topsecretvalue\n')
         run = self.hand_run()
         self.assert_local_pair_kept_and_not_successful(run)
-        self.assertIn('sudo systemctl start vidra-backup.service', run.stderr)
+        self.assertIn('systemctl cat vidra-backup.service', run.stderr)
         self.assertIn('journalctl -u vidra-backup.service', run.stderr)
+        self.assertIn('in env/production.env', run.stderr)
         self.assertNotIn('sudo ./deploy/backup.sh', run.stderr)
         for secret in self.SECRETS:
             self.assertNotIn(secret, run.stdout + run.stderr)
@@ -177,7 +178,7 @@ with open(os.environ['CALLS'], 'a') as out:
         self.unreadable_host_env()
         run = self.hand_run()
         self.assert_local_pair_kept_and_not_successful(run)
-        self.assertIn('sudo systemctl start vidra-backup.service', run.stderr)
+        self.assertIn('vidra-backup.service', run.stderr)
 
     def test_hand_run_with_untraversable_host_dir_is_treated_as_unknown(self):
         # A directory the caller cannot search makes [ -e file ] false for a file
@@ -194,6 +195,52 @@ with open(os.environ['CALLS'], 'a') as out:
         finally:
             d.chmod(0o700)
         self.assert_local_pair_kept_and_not_successful(run)
+
+    def seed_old_pairs(self, n=40):
+        """n old daily pairs (one per day, well in the past) so retention has work."""
+        import datetime
+        self.backups.mkdir(exist_ok=True)
+        base = datetime.date(2026, 1, 1)
+        for i in range(n):
+            stamp = (base + datetime.timedelta(days=i)).strftime('%Y%m%dT030000Z')
+            (self.backups / f'vidra-{stamp}.dump.gz').write_text('old')
+            (self.backups / f'vidra-config-{stamp}.tar.gz').write_text('old')
+
+    def assert_pruned_new_pair_kept_and_failed(self, run):
+        self.assertNotEqual(run.returncode, 0, run.stdout)
+        dumps = sorted(self.backups.glob('vidra-2*.dump.gz'))
+        # 40 seeded + 1 new would be 41 if pruning were skipped; policy keeps far fewer.
+        self.assertLess(len(dumps), 25, [d.name for d in dumps])
+        self.assertIn('pruning', run.stdout)
+        newest = dumps[-1].name
+        self.assertGreater(newest, 'vidra-20260301')  # today's pair, not a seeded one
+        self.assertTrue((self.backups / newest.replace('vidra-', 'vidra-config-').replace('.dump.gz', '.tar.gz')).exists())
+        self.assertFalse((self.backups / 'last_success').exists())
+
+    def test_require_offsite_failure_still_prunes_and_keeps_new_pair(self):
+        self.seed_old_pairs()
+        run = self.hand_run(BACKUP_REQUIRE_OFFSITE='1')
+        self.assert_pruned_new_pair_kept_and_failed(run)
+
+    def test_hand_run_guard_failure_still_prunes_and_keeps_new_pair(self):
+        self.seed_old_pairs()
+        self.host_env('BACKUP_RCLONE_REMOTE=s3cr3t-remote:\n')
+        run = self.hand_run()
+        self.assert_pruned_new_pair_kept_and_failed(run)
+
+    def test_empty_s3_target_alone_is_also_the_local_only_escape(self):
+        self.host_env('BACKUP_RCLONE_REMOTE=s3cr3t-remote:\n')
+        self.env.pop('INVOCATION_ID', None)
+        run = self.run_backup(BACKUP_S3_URI='', BACKUP_RCLONE_REMOTE='')
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.env.pop('BACKUP_RCLONE_REMOTE', None)
+        run = self.run_backup(BACKUP_S3_URI='')
+        self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_empty_invocation_id_is_still_a_hand_run(self):
+        self.host_env('BACKUP_RCLONE_REMOTE=s3cr3t-remote:\n')
+        run = self.hand_run(INVOCATION_ID='')
+        self.assertNotEqual(run.returncode, 0)
 
     def test_systemd_run_never_consults_the_host_file(self):
         self.unreadable_host_env()

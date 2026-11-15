@@ -524,7 +524,7 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   *Note 2026-11-15:* `deploy/backup.sh` now refuses to call a hand run a success on a host
   configured for off-site: when a hand run has no target and `/etc/vidra/backup.env` names
   one (or cannot be read), it writes the local pair, exits non-zero, leaves `last_success`
-  alone and points at `sudo systemctl start vidra-backup.service`. It does not upload, and
+  alone and points at putting the target in the env file or running the unit. It does not upload, and
   the nightly unit is unchanged. This is CODE only. The host still has to be checked: which
   file holds the beta's remote, that the installed script is this version, and how the
   installed unit loads the file. Not ticked.

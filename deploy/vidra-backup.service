@@ -37,7 +37,7 @@ Environment=ENV_FILE=env/production.env
 # fresh install does not depend on a file only the operator can create. Enable it
 # once /etc/vidra/backup.env exists. A HAND run of backup.sh does not load this
 # file; if the file names an off-site target, the hand run writes the local copy
-# and then fails, pointing back here (systemctl start vidra-backup.service). See
+# and then fails, suggesting a durable fix (target in ENV_FILE) or this unit. See
 # "A hand-run backup on an off-site host" in deploy/README.md.
 # EnvironmentFile=-/etc/vidra/backup.env
 ExecStart=/opt/vidra/deploy/backup.sh

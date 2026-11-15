@@ -107,7 +107,7 @@ BACKUP_REQUIRE_OFFSITE="${BACKUP_REQUIRE_OFFSITE-$(env_get BACKUP_REQUIRE_OFFSIT
 
 # --- does THIS host expect an off-site copy? ----------------------------------------
 # On a real host the off-site remote lives in /etc/vidra/backup.env, loaded by
-# the systemd unit and NOT by an operator's shell. A hand-run ./deploy/backup.sh
+# a systemd EnvironmentFile (if the unit is wired to it) and NOT by an operator's shell. A hand-run ./deploy/backup.sh
 # in a maintenance window used to see no remote, log LOCAL COPY ONLY, write
 # last_success and exit 0 — the only copy stayed on the box it was meant to
 # protect. This script never LOADS that file (it also carries RCLONE_CONFIG /
@@ -341,6 +341,7 @@ rclone_remote_is_crypt() {
 
 AGE_ARGS=()
 OFFSITE_REFUSED=""
+NO_OFFSITE_FAIL=""
 if [ -n "${BACKUP_RCLONE_REMOTE:-}${BACKUP_S3_URI:-}" ]; then
   if [ -n "$BACKUP_AGE_RECIPIENTS" ]; then
     command -v age >/dev/null 2>&1 \
@@ -413,13 +414,18 @@ elif [ -n "${BACKUP_S3_URI:-}" ]; then
     die "BACKUP_S3_URI is set but the aws CLI is not installed"
   fi
 else
+  # Failures here are RECORDED and raised after the retention pass (below), the
+  # same way OFFSITE_REFUSED is: dying here skipped pruning, so a nightly run with
+  # a lost remote wrote a full pair every night and never freed one, filling the
+  # database host's disk. The pair just written is in the newest day, which the
+  # retention policy always keeps.
   if is_true "$BACKUP_REQUIRE_OFFSITE"; then
-    die "BACKUP_REQUIRE_OFFSITE is set but no off-site target is configured (BACKUP_RCLONE_REMOTE or BACKUP_S3_URI, from the environment or $ENV_FILE) — the local copy is at $OUT; last_success was NOT updated"
+    NO_OFFSITE_FAIL="BACKUP_REQUIRE_OFFSITE is set but no off-site target is configured (BACKUP_RCLONE_REMOTE or BACKUP_S3_URI, from the environment or $ENV_FILE). Local copy: $OUT. last_success NOT updated."
+  elif [ -z "${INVOCATION_ID:-}" ] && [ -z "$TARGET_EXPORTED" ] && host_file_names_target; then
+    NO_OFFSITE_FAIL="this host looks set up for off-site copies ($BACKUP_HOST_ENV_FILE names a target or cannot be read) but this run has no target: NOTHING went off-site. Local copy: $OUT. last_success NOT updated. Durable fix: put BACKUP_RCLONE_REMOTE (or BACKUP_S3_URI) in $ENV_FILE so hand, make and cron runs upload (RCLONE_CONFIG / AWS_* must still come from the caller's environment). If this host uses the vidra-backup systemd unit and 'systemctl cat vidra-backup.service' shows an EnvironmentFile line, 'sudo systemctl start vidra-backup.service' runs with that environment; confirm the upload line in 'journalctl -u vidra-backup.service'. Local-only on purpose: BACKUP_RCLONE_REMOTE= ./deploy/backup.sh"
+  else
+    log "no off-site target configured (set BACKUP_RCLONE_REMOTE or BACKUP_S3_URI) — LOCAL COPY ONLY"
   fi
-  if [ -z "${INVOCATION_ID:-}" ] && [ -z "$TARGET_EXPORTED" ] && host_file_names_target; then
-    die "this host looks configured for an off-site copy ($BACKUP_HOST_ENV_FILE names a target, or cannot be read to tell), but this hand run has none. The local copy is at $OUT${CONFIG_OUT:+ (config: $CONFIG_OUT)}; NOTHING went off-site and last_success was NOT updated. The timer uploads using $BACKUP_HOST_ENV_FILE: for an off-site copy with the timer's exact environment run 'sudo systemctl start vidra-backup.service' and check 'journalctl -u vidra-backup.service'. To accept local-only for this run, export an empty target: BACKUP_RCLONE_REMOTE= ./deploy/backup.sh"
-  fi
-  log "no off-site target configured (set BACKUP_RCLONE_REMOTE or BACKUP_S3_URI) — LOCAL COPY ONLY"
 fi
 
 # --- retention -----------------------------------------------------------------
@@ -500,6 +506,9 @@ prune_generation "config archives" 14  "$BACKUP_DIR"/vidra-config-*.tar.gz
 # backup. Not advancing it also gives doctor's 26-hour age check a second,
 # independent alarm, in case the unit's red state and the /fail ping are both
 # missed.
+if [ -n "$NO_OFFSITE_FAIL" ]; then
+  die "$NO_OFFSITE_FAIL"
+fi
 if [ -n "$OFFSITE_REFUSED" ]; then
   die "local backup written ($(basename "$OUT"), $(basename "$CONFIG_OUT")); off-site got the dump but NOT the config archive (plaintext refused, see above) — last_success not updated"
 fi
