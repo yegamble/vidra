@@ -1,0 +1,44 @@
+# Lab overlay for vidra. NOT a standalone file: it is the second -f after this
+# repo's root docker-compose.yml (run.sh passes both), so the vidra under test
+# is the one the root file builds from the nested checkouts.
+#
+# It does three things and nothing else.
+#
+#   1. CLOSES EVERY PUBLISHED PORT. The base files publish postgres, redis, the
+#      api and search on 0.0.0.0 for local development. The lab's rule is that
+#      only the edge is reachable, on 127.0.0.1. `!reset` is REQUIRED: Compose
+#      MERGES sequences across a -f chain, so `ports: []` would close nothing
+#      (same reason, same Compose >= 2.24 floor, as docker-compose.prod.yml).
+#   2. Joins the api to the lab network, so PeerTube can reach it through the
+#      edge and it can reach PeerTube.
+#   3. Makes the api trust the lab CA. Go reads SSL_CERT_FILE; without it every
+#      actor fetch dies on "certificate signed by unknown authority" and the
+#      lab would report a TLS setup error as eight federation failures.
+#
+# The frontend is deliberately not started, and search is not wired: neither is
+# on the ActivityPub path. See README.md for what that leaves unproven.
+services:
+  postgres:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  search:
+    ports: !reset []
+  frontend:
+    ports: !reset []
+  api:
+    ports: !reset []
+    environment:
+      # REPLACES the system bundle, which is fine here: the lab api has no
+      # reason to complete a TLS handshake with anything outside the lab.
+      SSL_CERT_FILE: /lab-ca/root.crt
+    volumes:
+      - ${LAB_OUT:?LAB_OUT must be the lab output directory (run.sh sets it)}/ca/root.crt:/lab-ca/root.crt:ro
+    networks:
+      default: {}
+      interop: {}
+
+networks:
+  interop:
+    external: true
+    name: ptinterop

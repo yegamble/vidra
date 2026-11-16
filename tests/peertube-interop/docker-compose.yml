@@ -1,0 +1,166 @@
+# tests/peertube-interop — the PeerTube half of the federation interop lab.
+#
+# Two real PeerTube v8.3.2 instances (`pt`, the one vidra is tested against, and
+# `ctl`, the control) behind one Caddy edge on an internal CA. vidra itself is
+# NOT declared here: run.sh starts it from this repo's own root
+# docker-compose.yml plus docker-compose.vidra.yml, as a second Compose project
+# joined to this file's network. Two projects, because the root file `include:`s
+# vidra-core's compose file and an including file cannot also redeclare the
+# included services; and because `run.sh --control-only` must be able to prove
+# the harness with no vidra container in existence.
+#
+# NOTHING HERE IS PUBLISHED EXCEPT THE EDGE, ON 127.0.0.1. The lab's hostnames
+# are *.interop.test (RFC 6761 reserves .test; it can never resolve publicly),
+# and they resolve only on this file's network, to the edge.
+#
+# Every secret below is a fixed throwaway literal with a `:-` default, not a
+# `:?` assert: the stack holds no data, is destroyed with `down -v` on every
+# run, and a bare `docker compose -f <this file> config -q` has to stay a usable
+# gate with no env file.
+name: ptinterop
+
+x-peertube: &peertube
+  # Pinned to the release the plan's gap analysis (G1-G18) was read against. A
+  # floating tag would let the lab quietly start measuring a different validator.
+  image: chocobozzz/peertube:v8.3.2-trixie
+  restart: "no"
+  networks: [interop]
+
+x-peertube-env: &peertube-env
+  PEERTUBE_DB_USERNAME: peertube
+  PEERTUBE_DB_PASSWORD: ${PT_DB_PASSWORD:-lab-only-peertube-db}
+  PEERTUBE_DB_NAME: peertube
+  PEERTUBE_DB_SSL: "false"
+  PEERTUBE_REDIS_HOSTNAME: pt-redis
+  PEERTUBE_SECRET: ${PT_SECRET:-lab-only-peertube-secret-0123456789abcdef}
+  PT_INITIAL_ROOT_PASSWORD: ${PT_ROOT_PASSWORD:-lab-only-root-password}
+  # THE WHOLE POINT OF THE LAB. PeerTube drops an ActivityPub object it does not
+  # like with a debug-level line and nothing else — at `info` a rejected vidra
+  # video is indistinguishable from one that was never sent.
+  PEERTUBE_LOG_LEVEL: debug
+  # Docker addresses are private, and PeerTube's SSRF guard refuses to fetch an
+  # actor from one. LAB ONLY; it is the mirror of vidra's
+  # HTTP_IMPORT_ALLOW_PRIVATE_URLS and it means the lab proves nothing about
+  # either side's SSRF behaviour.
+  PEERTUBE_FEDERATION_PREVENT_SSRF: "false"
+  # Node does not read the system trust store additions, only this.
+  NODE_EXTRA_CA_CERTS: /lab-ca/root.crt
+  # No mail server exists; PeerTube only warns about that.
+  PEERTUBE_SMTP_HOSTNAME: ""
+  # The driver logs in, uploads and polls. PeerTube's default 50 requests per
+  # 10 s is a limit on a browser, and a harness that retried around a 429 would
+  # be measuring its own backoff.
+  PEERTUBE_RATES_LIMIT_API_MAX: "5000"
+
+services:
+  edge:
+    image: caddy:2.11.9-alpine   # the same pin docker-compose.prod.yml ships
+    restart: "no"
+    ports:
+      # The ONLY published port in the lab, loopback only. The driver speaks to
+      # every app through it with the right SNI and Host.
+      - "127.0.0.1:${EDGE_PORT:-8443}:443"
+    volumes:
+      - ./Caddyfile.edge:/etc/caddy/Caddyfile:ro
+      - ${LAB_OUT:-./out}/ca:/lab-ca:ro
+    networks:
+      interop:
+        # What makes https://pt.interop.test mean "the edge" from inside every
+        # container, vidra's included.
+        aliases:
+          - pt.interop.test
+          - ctl.interop.test
+          - vidra.interop.test
+          - redir.interop.test
+
+  pt:
+    <<: *peertube
+    depends_on:
+      pt-db: { condition: service_healthy }
+      pt-redis: { condition: service_healthy }
+    environment:
+      <<: *peertube-env
+      PEERTUBE_DB_HOSTNAME: pt-db
+      PEERTUBE_REDIS_DB: "0"
+      PEERTUBE_WEBSERVER_HOSTNAME: pt.interop.test
+      PEERTUBE_ADMIN_EMAIL: root@pt.interop.test
+    volumes:
+      - ${LAB_OUT:-./out}/ca/root.crt:/lab-ca/root.crt:ro
+      - pt_data:/data
+      - pt_config:/config
+
+  ctl:
+    <<: *peertube
+    depends_on:
+      ctl-db: { condition: service_healthy }
+      pt-redis: { condition: service_healthy }
+    environment:
+      <<: *peertube-env
+      PEERTUBE_DB_HOSTNAME: ctl-db
+      # One Redis for both: PeerTube namespaces its keys by hostname, and the
+      # separate db index is belt and braces.
+      PEERTUBE_REDIS_DB: "1"
+      PEERTUBE_WEBSERVER_HOSTNAME: ctl.interop.test
+      PEERTUBE_ADMIN_EMAIL: root@ctl.interop.test
+    volumes:
+      - ${LAB_OUT:-./out}/ca/root.crt:/lab-ca/root.crt:ro
+      - ctl_data:/data
+      - ctl_config:/config
+
+  pt-db: &peertube-db
+    image: postgres:17-alpine   # what PeerTube v8.3.2's own compose file uses
+    restart: "no"
+    environment:
+      POSTGRES_USER: peertube
+      POSTGRES_PASSWORD: ${PT_DB_PASSWORD:-lab-only-peertube-db}
+      POSTGRES_DB: peertube
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U peertube -d peertube"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - pt_db:/var/lib/postgresql/data
+    networks: [interop]
+
+  ctl-db:
+    <<: *peertube-db
+    volumes:
+      - ctl_db:/var/lib/postgresql/data
+
+  pt-redis:
+    image: redis:8-alpine
+    restart: "no"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    networks: [interop]
+
+  # The shipped deploy/Caddyfile, routing to vidra's `api` (and `frontend`, which
+  # the lab does not start — see README). Behind a profile so --control-only
+  # never starts a proxy whose upstreams do not exist.
+  vidra-caddy:
+    profiles: ["vidra"]
+    image: caddy:2.11.9-alpine
+    restart: "no"
+    volumes:
+      - ${LAB_OUT:-./out}/Caddyfile.vidra:/etc/caddy/Caddyfile:ro
+    networks: [interop]
+
+networks:
+  interop:
+    # A FIXED name: docker-compose.vidra.yml joins vidra's api to it as an
+    # external network, and a project-prefixed name would tie the two files to
+    # one project name.
+    name: ptinterop
+
+volumes:
+  pt_data:
+  pt_config:
+  pt_db:
+  ctl_data:
+  ctl_config:
+  ctl_db:
