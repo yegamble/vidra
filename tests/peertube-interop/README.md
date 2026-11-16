@@ -17,9 +17,11 @@ tests/peertube-interop/run.sh --keep           # leave the stack up afterwards
 tests/peertube-interop/run.sh down             # destroy everything
 ```
 
-Needs Docker with Compose ≥ 2.24, Node ≥ 18, `openssl` and `curl`. Docker needs
-about 3 GiB of memory for the control and 5 GiB for the full run (the script
-refuses below that rather than let an OOM kill read as a federation failure).
+Needs Docker with Compose ≥ 2.24, Node ≥ 18, `openssl` and `curl`. The script
+refuses to start with less than 3 GiB of Docker memory for the control or 5 GiB
+for the full run. That is headroom for the image build and transcodes (the
+running lab held about 1.1 GiB when sampled), chosen so an OOM kill cannot be
+read as a federation failure.
 The first full run also builds the vidra-core image from the nested checkout.
 
 Exit codes: `0` everything that ran passed · `1` at least one vidra scenario
@@ -48,9 +50,12 @@ measured.**
 - **PeerTube logs at `debug`.** PeerTube drops an ActivityPub object it does
   not like with a debug line and nothing else; at `info` a rejected vidra video
   is indistinguishable from one never sent.
-- **vidra runs as `VIDRA_ENV=staging`** with a throwaway `FEDERATION_KEY_KEK`,
+- **vidra runs as `VIDRA_ENV=test`** with a throwaway `FEDERATION_KEY_KEK`,
   because production boot refuses `HTTP_IMPORT_ALLOW_PRIVATE_URLS`, which the
-  lab cannot do without (every address is a Docker one).
+  lab cannot do without (every address is a Docker one). The plan said
+  `staging`; vidra-core accepts only `development|test|production` and exits
+  on anything else. Every production-only check in `internal/config` is
+  therefore **not** exercised here.
 - **Every run starts from nothing** (`down -v` first). Follows, actors and
   cached keys are durable on both sides; a second run on old volumes would
   "pass" a follow that sent nothing.
@@ -70,14 +75,26 @@ is attempted.** A harness bug must never be read as a vidra bug.
 |---|---|
 | C1 | control: `ctl` follows the `pt` instance; accepted on both sides |
 | C2 | control: a video uploaded to `pt` appears on `ctl` as a remote video |
+| C3 | control: a video made private on `pt` disappears from `ctl` (the reference for S7) |
 | S1 | PeerTube admin follows the vidra instance |
 | S2 | vidra publishes; PeerTube lists it as remote; playlist and first segment fetch |
 | S3 | PeerTube user follows a vidra channel; backfill |
 | S4 | vidra user follows a PeerTube channel |
 | S5 | PeerTube uploads; appears on vidra under the channel's name |
 | S6 | vidra admin follows the PeerTube instance; a new upload arrives by `Announce` |
-| S7 | edit, privacy flip, delete, moderator block — both directions |
+| S7a | vidra → PeerTube: edit, privacy flip, delete, moderator block |
+| S7b | PeerTube → vidra with **only a channel follow** (runs before S6): edit, delete |
+| S7c | PeerTube → vidra with an instance follow (runs after S6): edit, privacy flip (once, then 5× to expose a race), moderator block |
 | S8 | negatives: tampered body, stale `Date`, unsigned, oversized, blocked domain, cross-host redirect |
+
+S3 runs against `ctl`, not `pt`: `ctl` has no instance follow with vidra, so a
+channel subscription is its only link and whatever arrives arrived because of
+it. Execution order is S1 S2 S3 S4 S5 S7b S6 S7c S7a S8 — S7b must see the
+channel-only state before S6 adds the instance follow.
+
+Besides pass/fail checks the driver records **observations** (`observed` in the
+results file): measurements the plan asks for that are not part of a scenario's
+own claim, such as whether PeerTube's older videos arrive after a follow.
 
 A failing scenario does not stop the run; the driver records each check and the
 UTC window it ran in to `out/results-vidra.json`, and `run.sh` saves the full

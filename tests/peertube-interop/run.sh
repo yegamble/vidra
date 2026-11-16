@@ -93,9 +93,9 @@ if [ "$compose_major" -lt 2 ] || { [ "$compose_major" -eq 2 ] && [ "$compose_min
   die "Docker Compose >= 2.24 is required for the !reset merge tag (found $compose_version)"
 fi
 
-# Measured on the run this harness was written against: two PeerTubes, their
-# databases and the vidra api settle near 3 GiB, and the vidra image build
-# peaks above that. Refusing here names the cause; an OOM-killed PeerTube
+# Headroom, not a measurement of need: sampled mid-run the whole lab held about
+# 1.1 GiB resident, but the vidra image build and PeerTube's ffmpeg jobs spike
+# well above that. Refusing here names the cause; an OOM-killed PeerTube
 # mid-scenario would read as a federation failure.
 mem_bytes="$(docker info --format '{{.MemTotal}}')"
 need_bytes=$((3 * 1024 * 1024 * 1024))
@@ -251,10 +251,12 @@ step "writing the lab vidra env file"
 OWNER_CLAIM_TOKEN="$(openssl rand -hex 24)"
 export OWNER_CLAIM_TOKEN
 cat > "$LAB_OUT/vidra.env" <<ENV
-# STAGING, not production: production boot REFUSES
-# HTTP_IMPORT_ALLOW_PRIVATE_URLS and OWNER_CLAIM_TOKEN (internal/config), and
-# the lab cannot run without the first — every address here is a Docker one.
-VIDRA_ENV=staging
+# NOT production: production boot REFUSES HTTP_IMPORT_ALLOW_PRIVATE_URLS and
+# OWNER_CLAIM_TOKEN (internal/config), and the lab cannot run without the
+# first — every address here is a Docker one. The plan asked for "staging";
+# vidra-core accepts only development|test|production and exits on anything
+# else, and "test" differs from production in nothing but those refusals.
+VIDRA_ENV=test
 PUBLIC_BASE_URL=https://vidra.interop.test
 CORS_ALLOWED_ORIGINS=https://vidra.interop.test
 JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')

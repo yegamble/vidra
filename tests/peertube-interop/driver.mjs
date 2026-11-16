@@ -210,9 +210,9 @@ const peertube = async host => {
     // waitTranscoding=false: the video is published (and federated) from its
     // source file at once, so a slow transcode cannot masquerade as a
     // federation delay.
-    upload: async name => {
+    upload: async (name, channelId = channel.id) => {
       const form = multipart({
-        channelId: channel.id, name, privacy: 1, waitTranscoding: 'false',
+        channelId, name, privacy: 1, waitTranscoding: 'false',
         videofile: { filename: 'interop-fixture.mp4', type: 'video/mp4', bytes: fixture },
       });
       const result = expectStatus(
@@ -255,8 +255,19 @@ const scenario = async (id, title, body) => {
       return false;
     }
   };
+  // An OBSERVATION is a measurement the plan asks for (a G-row) that is not
+  // part of the scenario's own pass/fail claim. It is recorded with what was
+  // seen and never changes a verdict: "PeerTube's older videos did not arrive"
+  // is a fact about G11, not a failure of "the follow was accepted".
+  const observe = async (name, fn) => {
+    let detail;
+    try { detail = await fn(); } catch (error) { detail = { error: error.message }; }
+    record.checks.push({ name, verdict: 'observed', detail });
+    log(`  OBSERVED  ${name}: ${JSON.stringify(detail)}`);
+    return detail;
+  };
   try {
-    await body(check);
+    await body(check, observe);
   } catch (error) {
     record.verdict = error instanceof Blocked ? (record.verdict === 'fail' ? 'fail' : 'blocked') : 'fail';
     record.error = error.message;
@@ -318,11 +329,553 @@ const runControl = async () => {
       return seen;
     });
   });
+
+  // The reference for S7: what a STOCK PeerTube does when the origin makes a
+  // video private. Whatever vidra does with the same two activities (PeerTube
+  // sends a Delete and then an Update) is compared against this.
+  await scenario('C3', 'a video made private on pt disappears from ctl', async check => {
+    blockedUnless(uploaded, 'C2 uploaded nothing');
+    await check('ctl answers 404 for it after the privacy flip', async () => {
+      expectStatus(await pt.put(`/api/v1/videos/${uploaded.uuid}`, { privacy: 3 }), 204, 'pt makes the video private');
+      return until('video gone from ctl', { deadlineMs: 60000 }, async () => {
+        const got = await ctl.video(uploaded.uuid);
+        return { done: got.status === 404, status: got.status };
+      });
+    });
+    // Put it back: the vidra run's G11 observation counts pt's public videos.
+    await check('made public again, it returns to ctl', async () => {
+      expectStatus(await pt.put(`/api/v1/videos/${uploaded.uuid}`, { privacy: 1 }), 204, 'pt makes the video public again');
+      return until('video back on ctl', { deadlineMs: 60000 }, async () => {
+        const got = await ctl.video(uploaded.uuid);
+        return { done: got.status === 200, status: got.status };
+      });
+    });
+  });
 };
 
 // ====================================================================== vidra
+const vidraProject = () => need('LAB_VIDRA_PROJECT');
+const vidraPsql = sql =>
+  docker(['compose', '-p', vidraProject(), 'exec', '-T', 'postgres', 'psql', '-U', 'vidra', '-d', 'vidra', '-At', '-c', sql]).trim();
+const sqlText = value => `'${String(value).replace(/'/g, "''")}'`;
+
+const vidraClient = async () => {
+  const password = `${randomBytes(18).toString('base64url')}A1!`;
+  const owner = { username: `lab${nonce}`, email: `lab${nonce}@example.invalid`, password };
+  const claimed = expectStatus(
+    await call(VIDRA, '/api/v1/setup/claim-owner', { method: 'POST', body: { token: need('OWNER_CLAIM_TOKEN'), ...owner } }),
+    201, 'vidra owner claim',
+  ).json;
+  const token = claimed.token;
+  assert.ok(token, `owner claim returned no token: ${JSON.stringify(claimed)}`);
+  const api = (path, options = {}) => call(VIDRA, path, { token, ...options });
+  const self = {
+    owner, token, api,
+    createChannel: async handle => expectStatus(
+      await api('/api/v1/channels', { method: 'POST', body: { handle, display_name: `Interop ${handle}` } }), 201, `create channel ${handle}`,
+    ).json,
+    // The same resumable flow tests/stack-e2e.mjs proves, minus its assertions:
+    // here it is a means, and a failure in it is a harness-level Blocked.
+    publish: async (handle, title) => {
+      const draft = expectStatus(
+        await api(`/api/v1/channels/${encodeURIComponent(handle)}/videos`, { method: 'POST', body: { title, description: `Interop lab ${nonce}`, privacy: 'public' } }),
+        201, `create draft "${title}"`,
+      ).json;
+      const session = expectStatus(
+        await api(`/api/v1/videos/${draft.id}/upload-session`, { method: 'POST', body: { size: fixture.length, filename: 'interop-fixture.mp4' } }),
+        201, 'open upload session',
+      ).json;
+      for (let n = 0; n < session.total_chunks; n += 1) {
+        const slice = fixture.subarray(n * session.chunk_size, Math.min((n + 1) * session.chunk_size, fixture.length));
+        expectStatus(await api(`/api/v1/uploads/${session.upload_id}/chunks/${n}`, { method: 'PUT', body: slice }), 200, `PUT chunk ${n}`);
+      }
+      expectStatus(await api(`/api/v1/uploads/${session.upload_id}/complete`, { method: 'POST' }), [200, 202], 'complete upload');
+      const video = await until(`vidra transcode + publish "${title}"`, { deadlineMs: 300000, intervalMs: 3000 }, async () => {
+        const detail = expectStatus(await api(`/api/v1/videos/${draft.id}`), 200, 'poll video').json;
+        assert.notEqual(detail.state, 'failed', `vidra video reached state=failed: ${JSON.stringify(detail)}`);
+        return { done: detail.state === 'published' && Boolean(detail.hls_url), state: detail.state, hls_url: detail.hls_url ?? null };
+      });
+      return { id: draft.id, title, hls_url: video.hls_url, object_url: `https://${VIDRA}/videos/${draft.id}` };
+    },
+    // vidra has no "list remote videos" REST route to poll, so the store is
+    // read directly: a row here is what "vidra received it" means.
+    remoteVideo: objectURL => {
+      const row = vidraPsql(
+        `select id || '|' || title || '|' || remote_actor_url from remote_videos where object_url = ${sqlText(objectURL)}`,
+      );
+      if (!row) return null;
+      const [id, title, actor] = row.split('|');
+      return { id, title, remote_actor_url: actor };
+    },
+  };
+  return self;
+};
+
+// PeerTube's own row for a remote object, by its ActivityPub id — the second
+// opinion when the REST API says 404 (it also says 404 for a blacklisted or
+// private row, which is a different fact from "never stored").
+const ptVideoRow = (dbService, objectURL) =>
+  labPsql(dbService, `select uuid || '|' || name || '|' || privacy from video where url = ${sqlText(objectURL)}`) || null;
+
+const ptFollowState = (dbService, targetActorURL) =>
+  labPsql(dbService,
+    `select af.state from "actorFollow" af join actor t on t.id = af."targetActorId" where t.url = ${sqlText(targetActorURL)}`) || null;
+
+// A cavage rsa-sha256 signature over `(request-target) host date digest` — the
+// exact profile PeerTube sends and vidra's httpsig verifies. The private key
+// is a REAL PeerTube actor's, read out of the lab PeerTube's own database, so
+// the baseline request is indistinguishable from PeerTube's and each negative
+// differs from it in exactly one property.
+const signedPost = async (path, bodyBuffer, { keyId, privateKey, date = new Date(), sentBody = bodyBuffer, omitSignature = false }) => {
+  const digest = `SHA-256=${createHash('sha256').update(bodyBuffer).digest('base64')}`;
+  const dateHeader = date.toUTCString();
+  const signingString = [`(request-target): post ${path}`, `host: ${VIDRA}`, `date: ${dateHeader}`, `digest: ${digest}`].join('\n');
+  const signature = createSign('RSA-SHA256').update(signingString).sign(privateKey, 'base64');
+  const headers = { 'Content-Type': 'application/activity+json', Date: dateHeader, Digest: digest };
+  if (!omitSignature) {
+    headers.Signature = `keyId="${keyId}",algorithm="rsa-sha256",headers="(request-target) host date digest",signature="${signature}"`;
+  }
+  return call(VIDRA, path, { method: 'POST', body: sentBody, headers });
+};
+
 const runVidra = async () => {
-  throw new Error('S1-S8 are not implemented yet');
+  const pt = await peertube(PT);
+  const ctl = await peertube(CTL);
+  const vidra = await vidraClient();
+  log(`vidra owner claimed (${vidra.owner.username}); logged in to pt and ctl as root`);
+  const handle = `chan${nonce}`;
+  await vidra.createChannel(handle);
+  const channelActor = `https://${VIDRA}/video-channels/${handle}`;
+  const instanceActor = `https://${VIDRA}/accounts/peertube`;
+  const ptChannelHandle = `${pt.channel.name}@${PT}`;
+  const ptObjectURL = uuid => `https://${PT}/videos/watch/${uuid}`;
+
+  // What later scenarios depend on. null = the step never happened.
+  const state = { s1: false, s2Video: null, s4: false, s5Video: null, s6: false };
+
+  const arrivesOnPeerTube = (instance, label, video, deadlineMs = 90000) =>
+    until(`${label} on ${instance.host}`, { deadlineMs }, async () => {
+      const got = await instance.video(video.id);
+      return { done: got.status === 200, status: got.status, name: got.json?.name ?? null };
+    });
+  const arrivesOnVidra = (label, objectURL, deadlineMs = 90000) =>
+    until(`${label} on vidra`, { deadlineMs }, async () => {
+      const row = vidra.remoteVideo(objectURL);
+      return { done: Boolean(row), row };
+    });
+  const goneFromPeerTube = (instance, label, video, deadlineMs = 60000) =>
+    until(`${label} removed from ${instance.host}`, { deadlineMs }, async () => {
+      const got = await instance.video(video.id);
+      return { done: got.status === 404, status: got.status, name: got.json?.name ?? null };
+    });
+  const goneFromVidra = (label, objectURL, deadlineMs = 60000) =>
+    until(`${label} removed from vidra`, { deadlineMs }, async () => {
+      const row = vidra.remoteVideo(objectURL);
+      return { done: !row, row };
+    });
+
+  // ------------------------------------------------------------------- S1
+  await scenario('S1', 'PeerTube admin follows the vidra instance', async check => {
+    await check('PeerTube accepts the follow request for vidra.interop.test', async () => {
+      await pt.followInstance(VIDRA);
+    });
+    const accepted = await check('PeerTube lists vidra as following, state accepted', async () =>
+      until('pt following vidra', { deadlineMs: 90000 }, async () => {
+        const row = (await pt.following()).find(f => f.following?.host === VIDRA);
+        return { done: row?.state === 'accepted', state: row?.state ?? null, following: row?.following?.name ?? null };
+      }));
+    await check('vidra has an accepted instance_followers row for pt', async () => {
+      const list = expectStatus(await vidra.api('/api/v1/admin/federation/instance-followers'), 200, 'list instance followers').json;
+      const row = (list.follows ?? []).find(f => f.host === PT);
+      assert.equal(row?.state, 'accepted', `vidra instance followers: ${JSON.stringify(list.follows ?? null)}`);
+      const stored = vidraPsql(`select state from instance_followers where remote_actor_url like ${sqlText(`https://${PT}/%`)}`);
+      assert.equal(stored, 'accepted', `instance_followers row state is ${JSON.stringify(stored)}`);
+      return { rest: row, table: stored };
+    });
+    state.s1 = accepted;
+  });
+
+  // ------------------------------------------------------------------- S2
+  await scenario('S2', 'vidra publishes; PeerTube lists it as remote and its media is fetchable', async (check, observe) => {
+    blockedUnless(state.s1, 'S1 did not establish the instance follow, so PeerTube has no reason to receive anything');
+    const video = await vidra.publish(handle, `Vidra to PeerTube ${nonce}`);
+    log(`  vidra published ${video.id}`);
+    let onPT = null;
+    const arrived = await check('PeerTube serves the vidra video by uuid', async () => {
+      await arrivesOnPeerTube(pt, 'S2 video', video);
+      onPT = (await pt.video(video.id)).json;
+      return { uuid: onPT.uuid, url: onPT.url };
+    });
+    if (!arrived) {
+      // Not found by uuid: say whether PeerTube stored it under another uuid or
+      // never stored it — the difference between an id mismatch and a rejection.
+      log(`  pt's own row for ${video.object_url}: ${JSON.stringify(ptVideoRow('pt-db', video.object_url))}`);
+      throw new Blocked('the video never arrived on PeerTube, so its fields and media could not be checked');
+    }
+    state.s2Video = video;
+    await check('fields match: name, isLocal=false, duration, channel and account on vidra', async () => {
+      assert.equal(onPT.name, video.title);
+      assert.equal(onPT.isLocal, false);
+      assert.equal(onPT.channel?.host, VIDRA, `channel: ${JSON.stringify(onPT.channel)}`);
+      assert.equal(onPT.channel?.name, handle);
+      assert.equal(onPT.account?.host, VIDRA, `account: ${JSON.stringify(onPT.account)}`);
+      assert.ok(onPT.duration >= 3 && onPT.duration <= 5, `duration ${onPT.duration}s for a 4 s fixture`);
+      return { name: onPT.name, duration: onPT.duration, channel: `${onPT.channel.name}@${onPT.channel.host}`, account: `${onPT.account.name}@${onPT.account.host}` };
+    });
+    // PeerTube 8.3.2's REST shape: `thumbnails[].fileUrl` on /lazy-static, which
+    // PeerTube fills by fetching vidra's `icon` on first request. (thumbnailPath,
+    // the pre-8 field, is null for local videos too — reading it failed this
+    // check on the first run for a reason that had nothing to do with vidra.)
+    await check('PeerTube holds a thumbnail for it and can fetch the image from vidra', async () => {
+      const thumbnail = onPT.thumbnails?.[0];
+      assert.ok(thumbnail?.fileUrl, `no thumbnails[].fileUrl: ${JSON.stringify(onPT.thumbnails ?? null)}`);
+      const image = expectStatus(await callURL(thumbnail.fileUrl, { binary: true }), 200, 'GET the thumbnail from PeerTube');
+      assert.ok(image.bytes.length > 1000, `thumbnail is ${image.bytes.length} bytes`);
+      return { fileUrl: thumbnail.fileUrl, width: thumbnail.width, height: thumbnail.height, bytes: image.bytes.length };
+    });
+    await check('the HLS playlist PeerTube stored is fetchable: master, variant, first segment', async () => {
+      const playlist = onPT.streamingPlaylists?.[0];
+      assert.ok(playlist?.playlistUrl, `PeerTube stored no streaming playlist: ${JSON.stringify(onPT.streamingPlaylists)} files=${JSON.stringify(onPT.files)}`);
+      const master = expectStatus(await callURL(playlist.playlistUrl), 200, 'GET master playlist');
+      assert.ok(master.text.startsWith('#EXTM3U'), `not a playlist: ${master.text.slice(0, 120)}`);
+      const lines = master.text.split('\n').map(l => l.trim());
+      const variants = lines.filter((l, i) => l && !l.startsWith('#') && (lines[i - 1] ?? '').startsWith('#EXT-X-STREAM-INF'));
+      assert.ok(variants.length >= 1, `no variant in the master playlist:\n${master.text}`);
+      const variantURL = new URL(variants[0], playlist.playlistUrl);
+      const variant = expectStatus(await callURL(variantURL.href), 200, 'GET variant playlist');
+      const vlines = variant.text.split('\n').map(l => l.trim());
+      const segments = vlines.filter((l, i) => l && !l.startsWith('#') && (vlines[i - 1] ?? '').startsWith('#EXTINF'));
+      assert.ok(segments.length >= 1, `no segment in the variant playlist:\n${variant.text}`);
+      const segment = expectStatus(await callURL(new URL(segments[0], variantURL).href, { binary: true }), 200, 'GET first segment');
+      assert.ok(segment.bytes.length >= 1024, `first segment is only ${segment.bytes.length} bytes`);
+      return {
+        playlistUrl: playlist.playlistUrl, variants: variants.length, first_segment_bytes: segment.bytes.length,
+        // G7: what PeerTube built from an HLS link whose `tag` is empty.
+        peertube_playlist: { files: playlist.files?.length ?? 0, segmentsSha256Url: playlist.segmentsSha256Url ?? null },
+        web_video_files: onPT.files?.length ?? 0,
+      };
+    });
+    // G5: PeerTube's VIDEOS.NAME minimum is 3 characters and vidra has no floor.
+    await observe('G5: a vidra video with a 2-character title, 45 s after publish', async () => {
+      const short = await vidra.publish(handle, 'ab');
+      let status = null;
+      try {
+        await arrivesOnPeerTube(pt, 'short-title video', short, 45000);
+        status = 200;
+      } catch { status = (await pt.video(short.id)).status; }
+      return { vidra_video: short.id, peertube_status: status, peertube_row: ptVideoRow('pt-db', short.object_url) };
+    });
+  });
+
+  // ------------------------------------------------------------------- S3
+  // On `ctl`, not `pt`: ctl has no instance follow with vidra, so the channel
+  // subscription is its ONLY link and whatever arrives arrived because of it.
+  // On pt the S1 instance follow already delivers every public video.
+  await scenario('S3', 'a PeerTube user follows a vidra channel; backfill arrives', async check => {
+    const subscribed = await check('PeerTube (ctl) accepts the subscription request', async () => {
+      expectStatus(await ctl.post('/api/v1/users/me/subscriptions', { uri: `${handle}@${VIDRA}` }), 204, 'ctl subscribes');
+    });
+    blockedUnless(subscribed, 'ctl refused the subscription request');
+    const accepted = await check('the follow reaches state accepted in ctl', async () =>
+      until('ctl -> vidra channel follow', { deadlineMs: 90000 }, async () => {
+        const followState = ptFollowState('ctl-db', channelActor);
+        return { done: followState === 'accepted', state: followState };
+      }));
+    await check('vidra records the remote follower', async () => {
+      const n = vidraPsql(`select count(*) from remote_follows where remote_actor_url like ${sqlText(`https://${CTL}/%`)}`);
+      assert.ok(Number(n) >= 1, `remote_follows rows for ctl: ${n}`);
+      return { remote_follows_rows: Number(n) };
+    });
+    blockedUnless(accepted, 'the follow was never accepted, so neither backfill nor delivery can be measured');
+    await check('backfill: the video published BEFORE the follow arrives on ctl', async () => {
+      blockedUnless(state.s2Video, 'S2 published no video, so there is nothing to backfill');
+      return arrivesOnPeerTube(ctl, 'pre-follow video', state.s2Video);
+    });
+    await check('a video published AFTER the follow arrives on ctl', async () => {
+      const video = await vidra.publish(handle, `Vidra after channel follow ${nonce}`);
+      return arrivesOnPeerTube(ctl, 'post-follow video', video);
+    });
+  });
+
+  // ------------------------------------------------------------------- S4
+  await scenario('S4', 'a vidra user follows a PeerTube channel', async (check, observe) => {
+    const created = await check('vidra accepts the follow request and resolves the channel', async () => {
+      const follow = expectStatus(
+        await vidra.api('/api/v1/me/remote-follows', { method: 'POST', body: { handle: ptChannelHandle } }), 201, 'vidra follows the pt channel',
+      ).json;
+      return follow;
+    });
+    blockedUnless(created, 'vidra could not create the remote follow');
+    state.s4 = await check('the follow reaches state accepted on vidra', async () =>
+      until('vidra -> pt channel follow', { deadlineMs: 90000 }, async () => {
+        const list = expectStatus(await vidra.api('/api/v1/me/remote-follows'), 200, 'list remote follows').json;
+        const row = (list.follows ?? []).find(f => f.domain === PT);
+        return { done: row?.state === 'accepted', state: row?.state ?? null, handle: row?.handle ?? null };
+      }));
+    await check('PeerTube lists vidra as a follower of the channel', async () => {
+      const followState = labPsql('pt-db',
+        `select af.state from "actorFollow" af join actor f on f.id = af."actorId" where f.url like ${sqlText(`https://${VIDRA}/%`)} and af.state = 'accepted' limit 1`);
+      assert.equal(followState, 'accepted', `no accepted actorFollow from a vidra actor in pt: ${JSON.stringify(followState)}`);
+    });
+    // G11: PeerTube pushes only NEW activity. pt already holds the control
+    // video, uploaded to this very channel before the follow.
+    await observe('G11: videos pt uploaded BEFORE the follow, present on vidra 30 s after Accept', async () => {
+      await sleep(30000);
+      const before = labPsql('pt-db', 'select count(*) from video where remote = false and privacy = 1');
+      const have = vidraPsql(`select count(*) from remote_videos where object_url like ${sqlText(`https://${PT}/%`)}`);
+      return { pt_public_local_videos: Number(before), on_vidra: Number(have) };
+    });
+  });
+
+  // ------------------------------------------------------------------- S5
+  await scenario('S5', 'PeerTube uploads; the video appears on vidra under the channel name', async check => {
+    blockedUnless(state.s4, 'S4 did not establish the channel follow, so vidra would refuse the Create');
+    const uploaded = await pt.upload(`PeerTube to vidra ${nonce}`);
+    const objectURL = ptObjectURL(uploaded.uuid);
+    let row = null;
+    const arrived = await check('vidra stores the remote video', async () => {
+      row = (await arrivesOnVidra('S5 video', objectURL)).row;
+      return row;
+    });
+    blockedUnless(arrived, 'the video never arrived on vidra, so how it is shown could not be checked');
+    state.s5Video = { uuid: uploaded.uuid, id: uploaded.id, objectURL };
+    let view = null;
+    await check('vidra serves it: title, domain and a stream URL', async () => {
+      view = expectStatus(await call(VIDRA, `/api/v1/remote-videos/${row.id}`), 200, 'GET remote video').json;
+      assert.equal(view.title, `PeerTube to vidra ${nonce}`);
+      assert.equal(view.domain, PT);
+      assert.ok(view.stream_url || view.watch_url, `no stream or watch URL: ${JSON.stringify(view)}`);
+      return { title: view.title, domain: view.domain, stream_url: view.stream_url ?? null, has_thumbnail: view.has_thumbnail };
+    });
+    // G9: PeerTube's attributedTo is [Person, Group]. The video belongs to the
+    // CHANNEL (Group) root_channel, uploaded by the ACCOUNT (Person) root.
+    await check('it is shown under the channel (root_channel), not the uploading account (root)', async () => {
+      blockedUnless(view, 'the remote video view could not be read');
+      assert.equal(
+        view.channel_handle, ptChannelHandle,
+        `channel_handle=${JSON.stringify(view.channel_handle)} actor_url=${JSON.stringify(view.actor_url)} ` +
+        `account_actor_url=${JSON.stringify(view.account_actor_url)} stored remote_actor_url=${JSON.stringify(row.remote_actor_url)}`,
+      );
+      return { channel_handle: view.channel_handle, actor_url: view.actor_url };
+    });
+  });
+
+  // ------------------------------------------------- S7, PeerTube -> vidra (1)
+  // BEFORE S6 on purpose: at this point vidra's only edge to pt is the S4
+  // CHANNEL follow, which is the state plan gap G10 is about. After S6 the
+  // instance follow would accept the same Update for a different reason.
+  await scenario('S7b', 'PeerTube -> vidra with only a channel follow: edit, delete', async check => {
+    blockedUnless(state.s5Video, 'S5 put no PeerTube video on vidra, so there is nothing to edit or delete');
+    await check('an edit on PeerTube reaches vidra', async () => {
+      const newName = `PeerTube edited ${nonce}`;
+      expectStatus(await pt.put(`/api/v1/videos/${state.s5Video.uuid}`, { name: newName }), 204, 'pt edits the video');
+      return until('edited title on vidra', { deadlineMs: 60000 }, async () => {
+        const row = vidra.remoteVideo(state.s5Video.objectURL);
+        return { done: row?.title === newName, title: row?.title ?? null, wanted: newName };
+      });
+    });
+    await check('a delete on PeerTube removes the copy from vidra', async () => {
+      const doomed = await pt.upload(`PeerTube delete me ${nonce}`);
+      const objectURL = ptObjectURL(doomed.uuid);
+      try { await arrivesOnVidra('delete-me video', objectURL); } catch (error) { throw new Blocked(`the video never arrived on vidra: ${error.message}`); }
+      expectStatus(await pt.del(`/api/v1/videos/${doomed.uuid}`), 204, 'pt deletes the video');
+      return goneFromVidra('deleted video', objectURL);
+    });
+  });
+
+  // ------------------------------------------------------------------- S6
+  let ptSecondChannel = null;
+  await scenario('S6', 'vidra admin follows the PeerTube instance; a new upload arrives by Announce', async check => {
+    const created = await check('vidra accepts the instance follow request', async () =>
+      expectStatus(
+        await vidra.api('/api/v1/admin/federation/instance-following', { method: 'POST', body: { host: PT } }), 201, 'vidra follows the pt instance',
+      ).json);
+    blockedUnless(created, 'vidra could not create the instance follow');
+    state.s6 = await check('the follow reaches state accepted on vidra', async () =>
+      until('vidra -> pt instance follow', { deadlineMs: 90000 }, async () => {
+        const list = expectStatus(await vidra.api('/api/v1/admin/federation/instance-following'), 200, 'list instance following').json;
+        const row = (list.follows ?? []).find(f => f.host === PT);
+        return { done: row?.state === 'accepted', state: row?.state ?? null };
+      }));
+    await check('PeerTube lists vidra as an instance follower, state accepted', async () => {
+      const row = (await pt.followers()).find(f => f.follower?.host === VIDRA && f.following?.name === 'peertube');
+      assert.equal(row?.state, 'accepted', `pt followers from vidra: ${JSON.stringify((await pt.followers()).filter(f => f.follower?.host === VIDRA))}`);
+      return { follower: `${row.follower.name}@${row.follower.host}` };
+    });
+    blockedUnless(state.s6, 'the instance follow was never accepted');
+    // A channel vidra does NOT follow: whatever arrives from it arrived through
+    // the instance follow (PeerTube's instance-actor Announce), not through S4.
+    await check('an upload to a pt channel vidra does not follow arrives on vidra', async () => {
+      const made = expectStatus(
+        await pt.post('/api/v1/video-channels', { name: `second_${nonce}`, displayName: `Second ${nonce}` }), 200, 'pt creates a second channel',
+      ).json;
+      ptSecondChannel = { id: made.videoChannel.id, name: `second_${nonce}` };
+      const uploaded = await pt.upload(`PeerTube via instance follow ${nonce}`, ptSecondChannel.id);
+      const seen = await arrivesOnVidra('instance-follow video', ptObjectURL(uploaded.uuid));
+      return seen.row;
+    });
+  });
+
+  // ------------------------------------------------- S7, PeerTube -> vidra (2)
+  await scenario('S7c', 'PeerTube -> vidra with an instance follow: edit, privacy flip, moderator block', async check => {
+    blockedUnless(state.s6, 'S6 did not establish the instance follow');
+    const fresh = async label => {
+      const uploaded = await pt.upload(`PeerTube ${label} ${nonce}`);
+      const objectURL = ptObjectURL(uploaded.uuid);
+      try { await arrivesOnVidra(`${label} video`, objectURL); } catch (error) { throw new Blocked(`the video never arrived on vidra: ${error.message}`); }
+      return { uuid: uploaded.uuid, objectURL };
+    };
+    await check('an edit on PeerTube reaches vidra', async () => {
+      const video = await fresh('edit-2');
+      const newName = `PeerTube edited twice ${nonce}`;
+      expectStatus(await pt.put(`/api/v1/videos/${video.uuid}`, { name: newName }), 204, 'pt edits the video');
+      return until('edited title on vidra', { deadlineMs: 60000 }, async () => {
+        const row = vidra.remoteVideo(video.objectURL);
+        return { done: row?.title === newName, title: row?.title ?? null, wanted: newName };
+      });
+    });
+    await check('a flip to private on PeerTube removes the copy from vidra', async () => {
+      const video = await fresh('privacy');
+      expectStatus(await pt.put(`/api/v1/videos/${video.uuid}`, { privacy: 3 }), 204, 'pt makes the video private');
+      return goneFromVidra('now-private video', video.objectURL);
+    });
+    // The privacy flip above is a RACE, not a constant: it failed on one full
+    // run and passed on the next. When the flip lands while PeerTube is still
+    // transcoding, PeerTube sends its Delete and then an Update for the same
+    // video. So the flip is repeated, as fast as the video arrives, and each
+    // repetition records what vidra and the stock PeerTube (ctl, which follows
+    // pt and gets the same two activities) are left holding.
+    await check('privacy flip repeated 5 times: no copy is left on vidra (the stock PeerTube keeps none)', async () => {
+      const rounds = [];
+      for (let n = 1; n <= 5; n += 1) {
+        const video = await fresh(`privacy-${n}`);
+        expectStatus(await pt.put(`/api/v1/videos/${video.uuid}`, { privacy: 3 }), 204, 'pt makes the video private');
+        await sleep(12000);
+        rounds.push({ uuid: video.uuid, on_vidra: Boolean(vidra.remoteVideo(video.objectURL)), ctl_status: (await ctl.video(video.uuid)).status });
+      }
+      const summary = { left_on_vidra: rounds.filter(r => r.on_vidra).length, left_on_ctl: rounds.filter(r => r.ctl_status === 200).length, rounds };
+      // Asserted, not merely observed: a video its owner made PRIVATE that stays
+      // listed on vidra is a failure of S7 whichever way the single flip above
+      // happened to land.
+      assert.equal(summary.left_on_vidra, 0, JSON.stringify(summary));
+      return summary;
+    });
+    await check('a moderator block (unfederate) on PeerTube removes the copy from vidra', async () => {
+      const video = await fresh('blacklist');
+      expectStatus(
+        await pt.post(`/api/v1/videos/${video.uuid}/blacklist`, { reason: 'interop lab', unfederate: true }), 204, 'pt blacklists the video',
+      );
+      return goneFromVidra('blacklisted video', video.objectURL);
+    });
+  });
+
+  // ---------------------------------------------------- S7, vidra -> PeerTube
+  await scenario('S7a', 'vidra -> PeerTube: edit, privacy flip, delete, moderator block', async check => {
+    blockedUnless(state.s1, 'S1 did not establish the instance follow');
+    const fresh = async label => {
+      const video = await vidra.publish(handle, `Vidra ${label} ${nonce}`);
+      try { await arrivesOnPeerTube(pt, `${label} video`, video); } catch (error) { throw new Blocked(`the video never arrived on PeerTube: ${error.message}`); }
+      return video;
+    };
+    await check('an edit on vidra reaches PeerTube', async () => {
+      const video = await fresh('edit');
+      const newTitle = `Vidra edited ${nonce}`;
+      expectStatus(await vidra.api(`/api/v1/videos/${video.id}`, { method: 'PATCH', body: { title: newTitle } }), 200, 'vidra edits the video');
+      return until('edited name on pt', { deadlineMs: 60000 }, async () => {
+        const got = await pt.video(video.id);
+        return { done: got.json?.name === newTitle, status: got.status, name: got.json?.name ?? null, wanted: newTitle };
+      });
+    });
+    await check('a flip to private on vidra removes the copy from PeerTube', async () => {
+      const video = await fresh('privacy');
+      expectStatus(await vidra.api(`/api/v1/videos/${video.id}`, { method: 'PATCH', body: { privacy: 'private' } }), 200, 'vidra makes the video private');
+      return goneFromPeerTube(pt, 'now-private video', video);
+    });
+    await check('a delete on vidra removes the copy from PeerTube', async () => {
+      const video = await fresh('delete');
+      expectStatus(await vidra.api(`/api/v1/videos/${video.id}`, { method: 'DELETE' }), [200, 204], 'vidra deletes the video');
+      return goneFromPeerTube(pt, 'deleted video', video);
+    });
+    await check('a moderator block on vidra removes the copy from PeerTube', async () => {
+      const video = await fresh('block');
+      expectStatus(
+        await vidra.api(`/api/v1/admin/videos/${video.id}/block`, { method: 'POST', body: { reason: 'interop lab' } }), [200, 201, 204], 'vidra blocks the video',
+      );
+      return goneFromPeerTube(pt, 'blocked video', video);
+    });
+  });
+
+  // ------------------------------------------------------------------- S8
+  await scenario('S8', 'negatives: vidra refuses what it must', async check => {
+    const privateKey = labPsql('pt-db', `select "privateKey" from actor where "preferredUsername" = 'peertube' and "serverId" is null`);
+    blockedUnless(privateKey.includes('PRIVATE KEY'), 'could not read the pt instance actor key from the lab PeerTube database');
+    const ptActor = `https://${PT}/accounts/peertube`;
+    const keyId = `${ptActor}#main-key`;
+    // An activity type vidra accepts and ignores: a valid one changes nothing.
+    const activity = (tag, extra = {}) => Buffer.from(JSON.stringify({
+      '@context': 'https://www.w3.org/ns/activitystreams',
+      id: `https://${PT}/lab/${nonce}/${tag}`, type: 'Listen', actor: ptActor, object: instanceActor, ...extra,
+    }));
+    // THE BASELINE. Every negative below is only meaningful if the same request
+    // WITHOUT the defect is accepted; otherwise a 401 proves the driver cannot
+    // sign, not that vidra caught anything.
+    const baseline = await check('baseline: a correctly signed activity from the pt actor is accepted (202)', async () => {
+      const result = await signedPost('/inbox', activity('baseline'), { keyId, privateKey });
+      assert.equal(result.status, 202, `body: ${result.text.slice(0, 300)}`);
+      return { status: result.status };
+    });
+    const refused = async (name, send, wanted) => check(name, async () => {
+      blockedUnless(baseline, 'the baseline signed request was not accepted, so this negative would prove nothing');
+      const result = await send();
+      assert.ok(wanted.includes(result.status), `expected HTTP ${wanted.join('/')}, got ${result.status}. Body: ${result.text.slice(0, 300)}`);
+      return { status: result.status };
+    });
+    await refused('tampered body (signed digest no longer matches) is refused',
+      () => signedPost('/inbox', activity('tamper'), { keyId, privateKey, sentBody: activity('tamper', { object: channelActor }) }), [400, 401]);
+    await refused('stale Date (one hour old, otherwise valid) is refused',
+      () => signedPost('/inbox', activity('stale'), { keyId, privateKey, date: new Date(Date.now() - 3600 * 1000) }), [400, 401]);
+    await refused('unsigned POST is refused',
+      () => signedPost('/inbox', activity('unsigned'), { keyId, privateKey, omitSignature: true }), [400, 401]);
+    await refused('oversized body (1.5 MiB, correctly signed) is refused',
+      () => signedPost('/inbox', activity('big', { summary: 'x'.repeat(1536 * 1024) }), { keyId, privateKey }), [400, 401, 413]);
+    // The key id names an actor on redir.interop.test, which 302s to the real
+    // pt actor. Signed with pt's real key: if vidra followed the hop and took
+    // the key it found, the signature would VERIFY and a host would have
+    // borrowed another host's identity.
+    await refused('an actor URL that redirects to another host is refused',
+      () => {
+        const redirActor = `https://${REDIR}/accounts/peertube`;
+        const body = Buffer.from(JSON.stringify({
+          '@context': 'https://www.w3.org/ns/activitystreams',
+          id: `https://${REDIR}/lab/${nonce}/redirect`, type: 'Listen', actor: redirActor, object: instanceActor,
+        }));
+        return signedPost('/inbox', body, { keyId: `${redirActor}#main-key`, privateKey });
+      }, [400, 401]);
+    // A blocked domain is answered 202 on the wire BY DESIGN (a distinguishable
+    // refusal is a probe target), so the assertion is behavioural: a real
+    // PeerTube on a blocked domain asks to follow and must not become a follower.
+    await check('a follow from a blocked domain (ctl) is not accepted', async () => {
+      expectStatus(
+        await vidra.api('/api/v1/admin/instances/blocked', { method: 'POST', body: { domain: CTL, reason: 'interop lab S8' } }), [200, 201, 204], 'vidra blocks ctl',
+      );
+      await ctl.followInstance(VIDRA);
+      const held = await holdsFor('ctl is not an accepted instance follower', { windowMs: 30000 }, async () => {
+        const stored = vidraPsql(`select state from instance_followers where remote_actor_url like ${sqlText(`https://${CTL}/%`)}`);
+        const row = (await ctl.following()).find(f => f.following?.host === VIDRA);
+        return { changed: stored === 'accepted' || row?.state === 'accepted', vidra_row: stored || null, ctl_state: row?.state ?? null };
+      });
+      assert.ok(held.held, `a blocked domain became a follower: ${JSON.stringify(held)}`);
+      return held;
+    });
+    // The lab runs with the SSRF relax ON, so the only SSRF claim it may make
+    // is that the shipped production template still has it OFF.
+    await check('env/production.env.example still ships HTTP_IMPORT_ALLOW_PRIVATE_URLS=false', async () => {
+      const template = readFileSync(new URL('../../env/production.env.example', import.meta.url), 'utf8');
+      const lines = template.split('\n').filter(l => /^HTTP_IMPORT_ALLOW_PRIVATE_URLS=/.test(l));
+      assert.deepEqual(lines, ['HTTP_IMPORT_ALLOW_PRIVATE_URLS=false']);
+      return { line: lines[0] };
+    });
+  });
 };
 
 try {
