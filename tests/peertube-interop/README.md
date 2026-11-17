@@ -119,9 +119,14 @@ The gap checks, named after the rows of the plan's gap table:
 | G12 | a third server's comment on a `pt` video, forwarded by `pt` to vidra, is answered 2xx | scenario G12 |
 
 G4, G6 and G12 each **produce** their case and then prove it was produced
-before reading PeerTube's answer: the video object vidra serves is fetched and
-must lack the icon, the icon's size or the duration, and `pt` must log the
-forwarding jobs. A case that could not be produced is `blocked`, never a pass.
+before reading PeerTube's answer. The proof is taken from vidra's own state
+where vidra has one to read, so it does not depend on what vidra puts in the
+video object: the audio-only upload must have no poster on file (its thumbnail
+route answers 404) and the WebM must have no duration probed (the video detail
+states none). vidra keeps no record of failing to size a poster, so for that
+one the proof is the object: the poster's icon carries no width or height. And
+`pt` must log the forwarding jobs. A case that could not be produced is
+`blocked`, never a pass.
 Nothing is edited in vidra's database or storage: the no-poster video is an
 audio-only upload, the unsized poster is a valid JPEG uploaded through vidra's
 own API whose frame header lies past the 256 KiB vidra reads, and the

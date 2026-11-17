@@ -721,15 +721,17 @@ const runVidra = async () => {
       return { done: !row, row };
     });
 
-  // The gap checks G4 and G6 ask "does PeerTube store it?" of a video whose
-  // object lacks something PeerTube's validator wants. First the proof that
-  // vidra really served such an object (otherwise the check measured an
-  // ordinary video and is BLOCKED, not passed); then PeerTube's answer, and
-  // when the answer is no, PeerTube's own row and its own log line.
-  const vidraObject = async (video, isTheCase, describe) => {
+  // The gap checks G4 and G6 ask "does PeerTube store it?" of a vidra video
+  // with no poster, a poster vidra cannot size, or no known duration. First
+  // the proof that the lab really produced that video (otherwise the check
+  // measured an ordinary one and is BLOCKED, not passed). The proof is taken
+  // from vidra's own state wherever vidra has one to read — no poster on
+  // file, no duration probed — and not from the object it serves, so it holds
+  // whatever vidra puts in the object for such a video. Then PeerTube's
+  // answer, and when the answer is no, PeerTube's own row and its own log line.
+  const vidraObject = async video => {
     const got = await vidra.object(video.id);
-    blockedUnless(got.status === 200 && got.json, `vidra does not serve the object for ${video.id} (HTTP ${got.status}), so the case was not produced`);
-    blockedUnless(isTheCase(got.json), `vidra's object is not the case this check is about: ${describe(got.json)}`);
+    blockedUnless(got.status === 200 && got.json, `vidra does not serve the object for ${video.id} (HTTP ${got.status}), so nothing was federated`);
     return got.json;
   };
   const storedByPeerTube = async (video, since, served, deadlineMs = 60000) => {
@@ -1243,7 +1245,9 @@ const runVidra = async () => {
       try {
         video = await vidra.publish(handle, `Vidra audio only ${nonce}`, { source: { bytes: audioFixture, filename: 'interop-audio.m4a' }, needHls: false });
       } catch (error) { throw new Blocked(`vidra did not publish the audio-only upload: ${error.message}`); }
-      const object = await vidraObject(video, o => o.icon === undefined, o => `it carries an icon: ${JSON.stringify(o.icon)}`);
+      const poster = await vidra.api(`/api/v1/videos/${video.id}/thumbnail`, { binary: true });
+      blockedUnless(poster.status === 404, `vidra holds a poster for the audio-only upload (its thumbnail route answers ${poster.status}), so the no-poster case was not produced`);
+      const object = await vidraObject(video);
       return storedByPeerTube(video, since, { icon: object.icon ?? null, duration: object.duration ?? null });
     });
     // Private until the poster is in place, so the first thing PeerTube ever
@@ -1268,10 +1272,13 @@ const runVidra = async () => {
       const since = new Date().toISOString();
       const flipped = await vidra.patch(video.id, { privacy: 'public' });
       blockedUnless(flipped.status === 200, `vidra refused to make the video public: HTTP ${flipped.status} ${(flipped.text ?? '').slice(0, 200)}`);
-      const object = await vidraObject(video,
-        o => Boolean(o.icon?.[0]?.url) && o.icon[0].width === undefined && o.icon[0].height === undefined,
-        o => `its icon is ${JSON.stringify(o.icon ?? null)}`);
-      return storedByPeerTube(video, since, { icon: object.icon[0], poster_bytes: poster.length });
+      // vidra keeps no record of whether it could size a poster, so here the
+      // proof IS the object: the icon for the poster carries no width or height.
+      const object = await vidraObject(video);
+      const posterIcon = object.icon?.[0];
+      blockedUnless(Boolean(posterIcon?.url) && posterIcon.width === undefined && posterIcon.height === undefined,
+        `vidra sized the poster, so the case was not produced: its icon is ${JSON.stringify(object.icon ?? null)}`);
+      return storedByPeerTube(video, since, { icon: object.icon, poster_bytes: poster.length });
     });
   });
 
@@ -1279,16 +1286,36 @@ const runVidra = async () => {
   // PeerTube requires `duration` (videos.js "duration format"); vidra leaves it
   // out when its probe read none. The fixture is a WebM written to a pipe,
   // which states no duration — the shape a browser's MediaRecorder produces.
-  await scenario('G6', 'a vidra video of unknown duration: does PeerTube store it', async check => {
+  await scenario('G6', 'a vidra video of unknown duration: does PeerTube store it', async (check, observe) => {
     blockedUnless(state.s1, 'S1 did not establish the instance follow, so PeerTube has no reason to receive anything');
+    let stored = null;
     await check('G6: an upload whose container states no duration is stored by PeerTube', async () => {
       const since = new Date().toISOString();
       let video = null;
       try {
         video = await vidra.publish(handle, `Vidra no duration ${nonce}`, { source: { bytes: noDurationFixture, filename: 'interop-noduration.webm' }, needHls: false });
       } catch (error) { throw new Blocked(`vidra did not publish the upload with no duration: ${error.message}`); }
-      const object = await vidraObject(video, o => o.duration === undefined, o => `it carries duration ${JSON.stringify(o.duration)}`);
-      return storedByPeerTube(video, since, { duration: object.duration ?? null, icon: object.icon ?? null });
+      const detail = await vidra.api(`/api/v1/videos/${video.id}`);
+      blockedUnless(detail.status === 200 && detail.json.duration_seconds == null,
+        `vidra knows a duration for it (${detail.json?.duration_seconds} s), so the case was not produced`);
+      const object = await vidraObject(video);
+      const result = await storedByPeerTube(video, since, { duration: object.duration ?? null, icon: object.icon ?? null });
+      stored = video;
+      return result;
+    });
+    // Stored is not played. Whatever vidra states for a length it does not
+    // know, this is what PeerTube's own page then does with the video.
+    await observe('G6: PeerTube\'s watch page for the video of unknown duration', async () => {
+      if (!stored) return { error: 'PeerTube did not store it' };
+      let copy = null;
+      const waitFrom = Date.now();
+      do {
+        copy = (await pt.video(stored.id)).json;
+        if (!copy?.streamingPlaylists?.[0]?.playlistUrl) await sleep(2000);
+      } while (!copy?.streamingPlaylists?.[0]?.playlistUrl && Date.now() - waitFrom < 60000);
+      if (!copy?.streamingPlaylists?.[0]?.playlistUrl) return { peertube_duration: copy?.duration ?? null, error: 'PeerTube\'s copy carried no playlist after 60 s' };
+      const report = await watchOnPeerTube(PT, stored.id, { play: true });
+      return { peertube_duration: copy.duration, playback: report.playback, page_errors: report.page_errors };
     });
   });
 
