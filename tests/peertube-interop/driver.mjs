@@ -594,7 +594,7 @@ const watchOnPeerTube = async (host, uuid, { play }) => {
       } else if (method === 'Network.responseReceived') {
         const target = new URL(params.response.url);
         if (target.hostname === VIDRA) {
-          const key = `${params.response.status} ${target.pathname.replace(/[0-9a-f-]{36}/, '<id>').replace(/\d+/g, 'N')}`;
+          const key = `${params.response.status} ${target.pathname.replace(/[0-9a-f-]{36}/, '<id>').replace(/(?<=[-_/])\d+(?=[-._/]|$)/g, 'N')}`;
           seen.fromVidra[key] = (seen.fromVidra[key] ?? 0) + 1;
         }
       } else if (method === 'Network.loadingFailed') {
