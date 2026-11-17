@@ -12,7 +12,7 @@ It is **not** a CI lane. Nothing in `.github/workflows` or
 
 ```
 tests/peertube-interop/run.sh --control-only   # PeerTube ⇄ PeerTube only
-tests/peertube-interop/run.sh                  # the control, then S1-S8 against vidra
+tests/peertube-interop/run.sh                  # the control, then every scenario against vidra
 tests/peertube-interop/run.sh --keep           # leave the stack up afterwards
 tests/peertube-interop/run.sh down             # destroy everything
 ```
@@ -30,6 +30,11 @@ Only the api **image** is built from that tree; the compose service definition
 still comes from the nested checkout, so `run.sh` refuses a tree whose
 `docker-compose.yml` differs. The lab tags its image
 `vidra-core-api:ptinterop-lab` and never touches `vidra-core-api:local`.
+
+One check (G7) plays a video in a real browser. It uses Google Chrome or
+Chromium if one is installed (`LAB_CHROME=<binary>` to name it) and installs
+nothing; without a browser that check is reported `blocked` and every other
+check still runs.
 
 Needs Docker with Compose ≥ 2.24, Node ≥ 18, `openssl` and `curl`. The script
 refuses to start with less than 3 GiB of Docker memory for the control or 5 GiB
@@ -101,14 +106,43 @@ is attempted.** A harness bug must never be read as a vidra bug.
 | S7c | PeerTube → vidra with an instance follow (runs after S6): edit, privacy flip (once, then 5× to expose a race), moderator block |
 | S8 | negatives: tampered body, stale `Date`, unsigned, oversized, blocked domain, cross-host redirect |
 
+The gap checks, named after the rows of the plan's gap table:
+
+| | Check | Where |
+|---|---|---|
+| G4a | an audio-only upload, which vidra publishes with no poster: does PeerTube store it | scenario G4 |
+| G4b | a video whose poster size vidra cannot read: does PeerTube store it | scenario G4 |
+| G5 | a vidra video with a 2-character title appears on PeerTube | in S2 |
+| G6 | an upload whose container states no duration: does PeerTube store it | scenario G6 |
+| G7 | PeerTube's own watch page plays the vidra video in headless Chrome | scenario G7 |
+| G11 | a video PeerTube published **before** vidra's follow arrives on vidra | in S4 (channel follow) and S6 (instance follow) |
+| G12 | a third server's comment on a `pt` video, forwarded by `pt` to vidra, is answered 2xx | scenario G12 |
+
+G4, G6 and G12 each **produce** their case and then prove it was produced
+before reading PeerTube's answer. The proof is taken from vidra's own state
+where vidra has one to read, so it does not depend on what vidra puts in the
+video object: the audio-only upload must have no poster on file (its thumbnail
+route answers 404) and the WebM must have no duration probed (the video detail
+states none). vidra keeps no record of failing to size a poster, so for that
+one the proof is the object: the poster's icon carries no width or height. And
+`pt` must log the forwarding jobs. A case that could not be produced is
+`blocked`, never a pass.
+Nothing is edited in vidra's database or storage: the no-poster video is an
+audio-only upload, the unsized poster is a valid JPEG uploaded through vidra's
+own API whose frame header lies past the 256 KiB vidra reads, and the
+no-duration video is a WebM written to a pipe, as a browser recording is.
+
 S3 runs against `ctl`, not `pt`: `ctl` has no instance follow with vidra, so a
 channel subscription is its only link and whatever arrives arrived because of
-it. Execution order is S1 S2 S3 S4 S5 S7b S6 S7c S7a S8 — S7b must see the
-channel-only state before S6 adds the instance follow.
+it. Execution order is S1 S2 S3 S4 S5 S7b G12 S6 S7c S7a G4 G6 G7 S8. S7b and
+G12 must see the channel-only state before S6 adds the instance follow, and
+G4 and G6 run after S1–S7 so the objects they leave in vidra's outbox cannot
+change what the scenarios before them measured.
 
+A red check carries PeerTube's own log line for the refusal in its detail.
 Besides pass/fail checks the driver records **observations** (`observed` in the
-results file): measurements the plan asks for that are not part of a scenario's
-own claim, such as whether PeerTube's older videos arrive after a follow.
+results file): measurements that are not part of a scenario's own claim, such
+as what PeerTube's player does about P2P, or PeerTube's follow score for vidra.
 
 A failing scenario does not stop the run; the driver records each check and the
 UTC window it ran in to `out/results-vidra.json`, and `run.sh` saves the full
@@ -125,8 +159,13 @@ nothing.
   caching of ActivityPub responses), no public DNS, no ACME. The shipped
   Caddyfile's *routing* is real here; its TLS and everything in front of it in
   production are not.
-- **No browser and no decoder.** Playback claims are playlist text plus segment
-  bytes.
+- **One browser, one clip.** G7 plays a single 4 s video in headless Chrome on
+  the machine running the lab, with every name outside the lab unresolvable.
+  It is not Firefox, Safari, a phone, or PeerTube's embed player. Every other
+  playback claim is playlist text plus segment bytes.
+- **PeerTube's follow score cannot move in a run.** PeerTube applies failed
+  deliveries to a follow's score every 20 hours. G12 measures what feeds that
+  (PeerTube marking the vidra inbox bad), not the score.
 - **No frontend, no vidra-search, no worker split.** None is on the ActivityPub
   path; anything the shipped Caddyfile routes to `frontend:3000` answers 502.
 - **Rate limiting and malware scanning are off** on vidra, as in the

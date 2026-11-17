@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 # tests/peertube-interop/run.sh — bring up the PeerTube federation interop lab,
-# prove the harness with the CONTROL, then run S1-S8 against vidra.
+# prove the harness with the CONTROL, then run S1-S8 and the gap checks
+# (G4-G7, G11, G12) against vidra.
 #
 #   run.sh --control-only   PeerTube <-> PeerTube only; no vidra container exists
-#   run.sh                  the control, then S1-S8 against vidra
+#   run.sh                  the control, then every scenario against vidra
 #   run.sh --keep ...       leave the stack up afterwards for poking at
 #   run.sh down             destroy both Compose projects and their volumes
 #
 #   LAB_VIDRA_CORE_DIR=<path> run.sh
 #       build vidra's api from ANOTHER vidra-core tree (a git worktree holding
 #       a fix) instead of the nested checkout, which stays untouched
+#   LAB_CHROME=<path> run.sh
+#       the Chrome or Chromium binary the one browser check (G7) plays a video
+#       in. Found by itself in the usual places; without one that check is
+#       BLOCKED, and says so, and every other check still runs
 #
 # THE CONTROL IS NOT OPTIONAL AND IS NEVER SKIPPED. Everything vidra-specific in
 # this lab sits on top of a private CA, DNS aliases on a Docker network, a TLS
@@ -245,7 +250,38 @@ step "generating the video fixture"
 [ -s "$LAB_OUT/fixture.mp4" ] || die "the fixture is empty"
 log "fixture: $(wc -c < "$LAB_OUT/fixture.mp4" | tr -d ' ') bytes"
 
+# Two more, for the gap checks, each an upload vidra treats differently:
+#   audio only   vidra has no frame to grab, so it publishes with NO poster (G4)
+#   no duration  vidra's probe reads none, so its object carries none (G6)
+"${LAB[@]}" exec -T pt ffmpeg -nostdin -loglevel error -y \
+  -f lavfi -i sine=frequency=440:sample_rate=48000 \
+  -t 4 -c:a aac -b:a 96k /tmp/interop-audio.m4a \
+  || die "ffmpeg inside the pt container could not produce the audio-only fixture"
+# A WebM written to a PIPE, which is what a browser's MediaRecorder produces:
+# the muxer cannot seek back to fill the duration in. No `-t` on purpose: with
+# it ffmpeg knows the length before it starts and writes the duration up front.
+# The inputs end themselves instead.
+"${LAB[@]}" exec -T pt sh -c 'ffmpeg -nostdin -loglevel error -y \
+  -f lavfi -i testsrc2=size=320x240:rate=30:duration=4 \
+  -f lavfi -i sine=frequency=440:sample_rate=48000:duration=4 \
+  -c:v libvpx -b:v 300k -c:a libopus -b:a 64k -f webm pipe:1 > /tmp/interop-noduration.webm' \
+  || die "ffmpeg inside the pt container could not produce the no-duration fixture"
+# Asserted, not assumed: a fixture that does state a duration would make the G6
+# check measure an ordinary video.
+stated="$("${LAB[@]}" exec -T pt ffprobe -v error -show_entries format=duration -of csv=p=0 /tmp/interop-noduration.webm | tr -d '[:space:]')" \
+  || die "ffprobe inside the pt container could not read the no-duration fixture"
+case "$stated" in
+  ''|N/A) ;;
+  *) die "the no-duration fixture states a duration ($stated s) — ffmpeg in this PeerTube image no longer writes it the way the lab relies on" ;;
+esac
+"${LAB[@]}" cp pt:/tmp/interop-audio.m4a "$LAB_OUT/fixture-audio.m4a" >/dev/null
+"${LAB[@]}" cp pt:/tmp/interop-noduration.webm "$LAB_OUT/fixture-noduration.webm" >/dev/null
+[ -s "$LAB_OUT/fixture-audio.m4a" ] && [ -s "$LAB_OUT/fixture-noduration.webm" ] || die "a gap-check fixture is empty"
+log "gap-check fixtures: audio only $(wc -c < "$LAB_OUT/fixture-audio.m4a" | tr -d ' ') bytes, no duration $(wc -c < "$LAB_OUT/fixture-noduration.webm" | tr -d ' ') bytes"
+
 export LAB_FIXTURE="$LAB_OUT/fixture.mp4"
+export LAB_FIXTURE_AUDIO="$LAB_OUT/fixture-audio.m4a"
+export LAB_FIXTURE_NODURATION="$LAB_OUT/fixture-noduration.webm"
 export LAB_CA_FILE="$LAB_OUT/ca/root.crt"
 export LAB_COMPOSE_FILE="$HERE/docker-compose.yml"
 
@@ -344,7 +380,7 @@ wait_for "vidra (through the shipped Caddyfile)" vidra.interop.test /readyz 40 \
   || die "vidra's api cannot reach https://pt.interop.test with the lab CA trusted"
 log "vidra and pt reach each other over https in both directions"
 
-step "S1-S8 against vidra"
+step "S1-S8 and the gap checks against vidra"
 export LAB_VIDRA_PROJECT=ptinterop-vidra
 set +e
 node "$HERE/driver.mjs" vidra
