@@ -1,0 +1,57 @@
+# The lab's TLS edge. PeerTube refuses to federate over plain http, and both
+# PeerTube and vidra dereference each other's actor ids, so every app in the lab
+# has to be reachable at a real https origin that the OTHER apps trust.
+#
+# The root certificate is NOT minted by Caddy at first boot: run.sh generates it
+# before anything starts and mounts it here, because the apps need the root in
+# their trust store before their first outbound request, and "wait for Caddy to
+# write /data/caddy/pki, then copy it out, then start the apps" is an ordering
+# bug waiting to happen. Caddy still issues the intermediate and the leaves
+# itself (`tls internal`), so this is its internal CA, on a root we chose.
+{
+	# Nothing in the lab needs the admin API, and nothing should reach it.
+	admin off
+	# The container has no trust store worth installing into; without this
+	# Caddy logs a failed `sudo`-less install attempt on every boot.
+	skip_install_trust
+	pki {
+		ca local {
+			root {
+				cert /lab-ca/root.crt
+				key /lab-ca/root.key
+			}
+		}
+	}
+}
+
+# The PeerTube under test.
+pt.interop.test {
+	tls internal
+	reverse_proxy pt:9000
+}
+
+# The CONTROL PeerTube. pt <-> ctl must federate before any vidra scenario is
+# believed: it is the proof that the CA, the DNS aliases and this edge work.
+ctl.interop.test {
+	tls internal
+	reverse_proxy ctl:9000
+}
+
+# vidra, through the REAL deploy/Caddyfile. This edge only terminates TLS; the
+# path/Accept routing that decides whether an ActivityPub request reaches the
+# api is done by `vidra-caddy`, which runs the shipped file with nothing changed
+# but its site address (see run.sh). Folding the routes in here would test a
+# copy of the routing, not the routing.
+vidra.interop.test {
+	tls internal
+	reverse_proxy vidra-caddy:80
+}
+
+# S8 "redirect to another host": an actor URL on THIS host that 302s to the real
+# PeerTube actor on another one. A key fetch that follows it would let any host
+# borrow another host's identity.
+redir.interop.test {
+	tls internal
+	redir /accounts/peertube https://pt.interop.test/accounts/peertube 302
+	respond 404
+}

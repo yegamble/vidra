@@ -1,0 +1,5 @@
+# Everything a run produces: the throwaway CA (with its PRIVATE key), the
+# generated vidra env file (throwaway secrets), the rendered Caddyfile, the
+# fixture and the full PeerTube/vidra logs. None of it is committable; the
+# committed record of a run is docs/evidence/peertube-interop-<date>.md.
+/out/
