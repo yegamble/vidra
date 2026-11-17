@@ -21,6 +21,7 @@ found today and is **not** fixed here; see
 | | |
 |---|---|
 | vidra-core | `23cd351b`, a local merge of the heads of four pull requests on top of `main` @ `4e937189`; built from a separate git worktree, no tracked file modified. The nested `vidra-core/` checkout was not touched |
+| On `main` since | All four were merged after the run. vidra-core `main` @ `9e95f1cc` has the same tree as `23cd351b` (`fb9884bd641f…`), so the table below is a statement about `main` |
 | The four fixes | [vidra-core#566](https://github.com/yegamble/vidra-core/pull/566) `8c1aa451` (G8) · [#567](https://github.com/yegamble/vidra-core/pull/567) `57b2c2ba` (G9) · [#568](https://github.com/yegamble/vidra-core/pull/568) `881ee9ea` (G10) · [#569](https://github.com/yegamble/vidra-core/pull/569) `4d81533d` (the finding that was not in the plan) |
 | PeerTube | `chocobozzz/peertube:v8.3.2-trixie` (`sha256:3fc4a73e…16006ef`), unchanged: `pt` and the control `ctl` |
 | Lab | as on 2026-11-16, plus `LAB_VIDRA_CORE_DIR`, which builds vidra's api from another vidra-core tree, and the lab's own image tag (`vidra-core-api:ptinterop-lab`) |
@@ -269,9 +270,9 @@ Everything in the 2026-11-16 note's list still applies: nothing about SSRF,
 Cloudflare, public DNS or browser playback; `VIDRA_ENV=test`; rate limiting and
 scanning off; small numbers. In addition:
 
-- **The combined branch is a local merge**, made only for this run. It becomes
-  a statement about vidra-core `main` once the four pull requests land and
-  `main` is checked to hold the same tree.
+- **`main` itself was not run.** The run was on a local merge of the four
+  branches. `main` holds the same tree (see the table at the top), so the code
+  is the same, but the commit `9e95f1cc` was never booted in the lab.
 - **The stale Update is PeerTube's to send or not.** It appeared in 2 of 5
   rounds here and 4 of 5 in the run before. A run in which PeerTube sends none
   would pass the five-flip check without exercising #569 at all; the excerpts
