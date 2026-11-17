@@ -7,6 +7,10 @@
 #   run.sh --keep ...       leave the stack up afterwards for poking at
 #   run.sh down             destroy both Compose projects and their volumes
 #
+#   LAB_VIDRA_CORE_DIR=<path> run.sh
+#       build vidra's api from ANOTHER vidra-core tree (a git worktree holding
+#       a fix) instead of the nested checkout, which stays untouched
+#
 # THE CONTROL IS NOT OPTIONAL AND IS NEVER SKIPPED. Everything vidra-specific in
 # this lab sits on top of a private CA, DNS aliases on a Docker network, a TLS
 # edge and PeerTube's SSRF guard being switched off. If any of those is wrong,
@@ -32,6 +36,9 @@ export EDGE_PORT="${EDGE_PORT:-8443}"
 # Fixed literals, matching the `:-` defaults in docker-compose.yml. The stack
 # holds no data and is destroyed on every run; see that file's header.
 export PT_ROOT_PASSWORD="${PT_ROOT_PASSWORD:-lab-only-root-password}"
+# The vidra-core tree the api image is built from. Exported here, before any
+# compose call, because docker-compose.vidra.yml interpolates it on `down` too.
+export LAB_VIDRA_CORE_DIR="${LAB_VIDRA_CORE_DIR:-$ROOT/vidra-core}"
 
 CONTROL_ONLY=0
 KEEP=0
@@ -108,11 +115,22 @@ log "docker ok: compose $compose_version, $((mem_bytes / 1024 / 1024)) MiB"
 if [ "$CONTROL_ONLY" -eq 0 ]; then
   [ -f "$ROOT/vidra-core/docker-compose.yml" ] \
     || die "no nested vidra-core checkout at $ROOT/vidra-core — run ./bootstrap.sh first"
+  [ -f "$LAB_VIDRA_CORE_DIR/Dockerfile" ] && [ -f "$LAB_VIDRA_CORE_DIR/go.mod" ] \
+    || die "LAB_VIDRA_CORE_DIR=$LAB_VIDRA_CORE_DIR is not a vidra-core tree (no Dockerfile + go.mod)"
+  LAB_VIDRA_CORE_DIR="$(cd "$LAB_VIDRA_CORE_DIR" && pwd)"
+  # Only the IMAGE comes from that tree; the compose service definition (the
+  # env allow-list above all) is still the nested checkout's. A tree that
+  # changed its compose file would run its new binary under the old definition
+  # — a new key silently dead — and the lab would report the result as that
+  # tree's behaviour.
+  cmp -s "$LAB_VIDRA_CORE_DIR/docker-compose.yml" "$ROOT/vidra-core/docker-compose.yml" \
+    || die "$LAB_VIDRA_CORE_DIR/docker-compose.yml differs from the nested checkout's; the lab can only build another tree's image, not run its compose file"
   # The evidence note names the commit it measured. A dirty checkout has no
   # name, so say so loudly rather than attribute its behaviour to a SHA.
-  core_sha="$(git -C "$ROOT/vidra-core" rev-parse HEAD)"
-  core_dirty="$(git -C "$ROOT/vidra-core" status --porcelain --untracked-files=no | wc -l | tr -d ' ')"
-  log "vidra-core under test: $core_sha (tracked files modified: $core_dirty)"
+  core_sha="$(git -C "$LAB_VIDRA_CORE_DIR" rev-parse HEAD)"
+  core_branch="$(git -C "$LAB_VIDRA_CORE_DIR" rev-parse --abbrev-ref HEAD)"
+  core_dirty="$(git -C "$LAB_VIDRA_CORE_DIR" status --porcelain --untracked-files=no | wc -l | tr -d ' ')"
+  log "vidra-core under test: $core_sha ($core_branch) from $LAB_VIDRA_CORE_DIR (tracked files modified: $core_dirty)"
 fi
 
 # ------------------------------------------------------------------ clean slate

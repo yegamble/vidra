@@ -17,6 +17,20 @@ tests/peertube-interop/run.sh --keep           # leave the stack up afterwards
 tests/peertube-interop/run.sh down             # destroy everything
 ```
 
+To test a vidra-core change, point the lab at a **separate git worktree** that
+holds it. The nested `vidra-core/` checkout is left alone (`deploy.sh` reads it
+for the migration ledger assertion, so it must stay clean and on its commit):
+
+```
+git -C vidra-core worktree add ../../vidra-core-worktrees/fix -b my-fix origin/main
+LAB_VIDRA_CORE_DIR=../vidra-core-worktrees/fix tests/peertube-interop/run.sh
+```
+
+Only the api **image** is built from that tree; the compose service definition
+still comes from the nested checkout, so `run.sh` refuses a tree whose
+`docker-compose.yml` differs. The lab tags its image
+`vidra-core-api:ptinterop-lab` and never touches `vidra-core-api:local`.
+
 Needs Docker with Compose ≥ 2.24, Node ≥ 18, `openssl` and `curl`. The script
 refuses to start with less than 3 GiB of Docker memory for the control or 5 GiB
 for the full run. That is headroom for the image build and transcodes (the
@@ -117,5 +131,6 @@ nothing.
   path; anything the shipped Caddyfile routes to `frontend:3000` answers 502.
 - **Rate limiting and malware scanning are off** on vidra, as in the
   `stack-e2e` lane and for the same reasons.
-- **A source build of whatever the nested `vidra-core` checkout holds**, not a
-  published image. `run.sh` prints the commit; the evidence note must name it.
+- **A source build of whatever the nested `vidra-core` checkout (or
+  `LAB_VIDRA_CORE_DIR`) holds**, not a published image. `run.sh` prints the
+  commit and the tree; the evidence note must name it.

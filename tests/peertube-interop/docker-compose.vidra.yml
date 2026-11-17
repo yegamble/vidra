@@ -2,7 +2,7 @@
 # repo's root docker-compose.yml (run.sh passes both), so the vidra under test
 # is the one the root file builds from the nested checkouts.
 #
-# It does three things and nothing else.
+# It does four things and nothing else.
 #
 #   1. CLOSES EVERY PUBLISHED PORT. The base files publish postgres, redis, the
 #      api and search on 0.0.0.0 for local development. The lab's rule is that
@@ -15,6 +15,14 @@
 #      actor fetch dies on "certificate signed by unknown authority" and the
 #      lab would report a TLS setup error as eight federation failures.
 #
+#   4. Chooses WHICH vidra-core tree the api image is built from, and gives
+#      that image the lab's own tag. The default is the nested checkout; a fix
+#      under test lives in a separate git worktree (LAB_VIDRA_CORE_DIR), because
+#      the nested checkout must stay clean and on its pinned commit — deploy.sh
+#      reads it for the migration ledger assertion. The tag is not
+#      `vidra-core-api:local`: that one is the developer's own `make up` image,
+#      and a lab run of a fix branch must not silently replace it.
+#
 # The frontend is deliberately not started, and search is not wired: neither is
 # on the ActivityPub path. See README.md for what that leaves unproven.
 services:
@@ -26,7 +34,19 @@ services:
     ports: !reset []
   frontend:
     ports: !reset []
+  # Same image as the api, by construction: migrations are compiled into the
+  # binary, so the migrator and the api must be one build or the schema and
+  # the code can disagree.
+  migrate:
+    image: vidra-core-api:ptinterop-lab
   api:
+    image: vidra-core-api:ptinterop-lab
+    build:
+      # ONLY the build context moves. The service definition itself (the env
+      # allow-list, the volumes) still comes from the nested checkout's compose
+      # file, which is why run.sh refuses a tree whose docker-compose.yml
+      # differs from the nested one.
+      context: ${LAB_VIDRA_CORE_DIR:-./vidra-core}
     ports: !reset []
     environment:
       # REPLACES the system bundle, which is fine here: the lab api has no
