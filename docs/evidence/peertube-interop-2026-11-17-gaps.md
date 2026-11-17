@@ -27,6 +27,12 @@ failures, where before they were readings of source. G7 is **measured and
 refuted**: the plan suspected PeerTube's player might not play a playlist
 that has no files; it plays.
 
+**Update, the same day: all seven are closed.** Six vidra-core pull requests,
+one per gap, turn every red check green. They are merged, and on vidra-core
+`main` @ `1ab2ab46` the control and all fourteen scenarios pass, 50 checks out
+of 50, with the lab unchanged. The before and after table, and what each fix
+changed on the wire, are in [After the fixes](#after-the-fixes).
+
 ## What was run
 
 | | |
@@ -287,6 +293,187 @@ space from vidra should be stored as sent. That has not been measured yet,
 because no PeerTube can send one. It is the first thing the run on the fix
 has to show.
 
+## After the fixes
+
+One pull request per gap, each with its failing test first. G7 passed on
+`main`, so nothing was changed for it.
+
+| Gap | Pull request | What changed in vidra-core |
+|---|---|---|
+| G5 | [vidra-core#570](https://github.com/yegamble/vidra-core/pull/570) | the name on the wire has a 3-character floor: a shorter title is padded with trailing spaces. The stored title is untouched |
+| G4a, G4b | [#572](https://github.com/yegamble/vidra-core/pull/572) | a video with no poster, or with one vidra cannot size, also names a fallback poster: a real 640×360 PNG served by the instance |
+| G6 | [#573](https://github.com/yegamble/vidra-core/pull/573) | an unknown duration is stated as `PT0S` instead of being left out |
+| G11 | [#574](https://github.com/yegamble/vidra-core/pull/574), [#575](https://github.com/yegamble/vidra-core/pull/575) | a bounded reader for a followed actor's outbox, and an accepted Follow that queues one read of it |
+| G12 | [#571](https://github.com/yegamble/vidra-core/pull/571) | a forwarded activity is answered 202 and ignored, not refused |
+
+### What was run
+
+| | |
+|---|---|
+| vidra-core | `bd0fcb20`, a local merge of the heads of the six pull requests on top of `main` @ `67f0897d` (tree `9a0186a0…`), built from a separate git worktree with no tracked file modified |
+| On `main` since | All six were merged after that run. vidra-core `main` @ `1ab2ab46` has the same tree (`9a0186a0…`), and was then booted in the lab itself |
+| Lab | this repository at `187afe8`: the driver, `run.sh`, compose files and README byte-identical to the last run on the old `main` above |
+| Everything else | as above: PeerTube `v8.3.2-trixie`, Chrome 157, the same host |
+| Runs | two full runs, control included each time: the local merge `bd0fcb20`, 18:04–18:12 UTC, and `main` @ `1ab2ab46`, 18:42–18:50 UTC. `run.sh` exited 0 both times, with the same verdict on every check. The excerpts below are from the first |
+
+### Before and after
+
+| | Check | `main` @ `67f0897d` | With the six fixes |
+|---|---|---|---|
+| C1–C3 | the control | PASS | PASS |
+| S1–S8 | the 40 checks they had before today | 40 of 40 pass | 40 of 40 pass |
+| G4a | a vidra video with no poster is stored by PeerTube | FAIL | **PASS** |
+| G4b | a vidra video whose poster size cannot be read is stored by PeerTube | FAIL | **PASS** |
+| G5 | a vidra video with a 2-character title appears on PeerTube | FAIL | **PASS** |
+| G6 | a vidra video of unknown duration is stored by PeerTube | FAIL | **PASS** |
+| G7 | PeerTube's watch page plays a vidra video in a real browser | PASS | PASS |
+| G11 | a video published before a channel follow arrives on vidra | FAIL | **PASS** |
+| G11 | a video published before an instance follow arrives on vidra | FAIL | **PASS** |
+| G12 | a forwarded third-party activity is answered 2xx | FAIL | **PASS** |
+| | checks passed / failed / blocked | 43 / 7 / 0 | **50 / 0 / 0** |
+| | scenarios passed, of 14 | 8 | **14** |
+
+In each of the two runs PeerTube logged `Video field is not valid to PeerTube`
+zero times (7 in each run on the old `main`) and marked no inbox bad (5 in
+each). vidra answered 79 and 81 inbox POSTs with 202 and 5 with 401; the 401s
+are S8's negatives, which are meant to be refused.
+
+Two things differed between the two runs, neither in a check. S2's wait for
+PeerTube's copy to carry a playlist was 10.1 s in the first and 7 ms in the
+second. And in the second, PeerTube's player logged one non-fatal warning
+while playing the video of unknown duration (`HLS.js error: mediaError -
+fatal: false - bufferStalledError`) and dropped one frame of 71; in the first
+it logged nothing and dropped none. Playback advanced in both.
+
+### G5 — which padding PeerTube takes, and how it shows it
+
+The fix pads with trailing spaces. This is the measurement the groundwork
+above was waiting for.
+
+```
+vidra title               "ab"
+vidra serves              "name": "ab "
+[pt] 18:06:16.386 info:   Fetching remote video https://vidra.interop.test/videos/70ced5bf-7d2a-478f-a957-233eaf3c001a.
+[pt] 18:06:16.415 info:   Remote video with uuid 70ced5bf-7d2a-478f-a957-233eaf3c001a inserted.
+PeerTube's API            "name": "ab "      U+0061 U+0062 U+0020
+PeerTube's watch page     heading text "ab ", drawn as "ab"; page title "ab - PeerTube"
+```
+
+So PeerTube **accepts** the trailing space, **stores** the name as sent, and
+**shows** the title alone: the layout drops the space, and the page title has
+no gap before the separator. Set beside the candidates trialled earlier:
+
+| Padding | Accepted | In the stored name | On PeerTube's page |
+|---|---|---|---|
+| **trailing space** (chosen) | yes | a space, which any trim removes | `ab` |
+| zero-width space, U+200B | yes | an invisible character no trim removes | `ab`, with the character still in the heading and the page title |
+| braille blank, U+2800 | yes | a visible-width blank | `ab` and a gap |
+| U+FE0F | no: PeerTube does not count it | | |
+
+### G4 — a video with no poster it can size
+
+vidra now adds a fallback icon, and PeerTube takes it. The audio-only upload:
+
+```
+vidra serves   "icon": [{"type": "Image", "mediaType": "image/png", "width": 640, "height": 360,
+                         "url": "https://vidra.interop.test/api/v1/federation/poster.png"}]
+[pt] 18:10:36.404 info: Fetching remote video https://vidra.interop.test/videos/2fe78bd5-29be-4bfc-8783-143ae7a09d56.
+[pt] 18:10:36.431 info: Remote video with uuid 2fe78bd5-29be-4bfc-8783-143ae7a09d56 inserted.
+PeerTube holds one thumbnail for it, 640x360
+```
+
+The video whose poster vidra cannot size keeps that poster first, without a
+size, and gains the fallback second. PeerTube drops the first and keeps the
+second. This is also the first time the lab saw a vidra video go from private
+to public: vidra sends an `Update`, and PeerTube creates the video from it.
+
+```
+vidra serves   "icon": [{"type": "Image", "mediaType": "image/jpeg", "url": "…/api/v1/videos/dede0f26-…/thumbnail"},
+                        {"type": "Image", "mediaType": "image/png", "width": 640, "height": 360, "url": "…/api/v1/federation/poster.png"}]
+[pt] 18:10:56.427 debug: We keep 1 activities.
+[pt] 18:10:56.430 info: Fetching remote video https://vidra.interop.test/videos/dede0f26-c68c-4e23-8c0a-e3e3803111ec.
+[pt] 18:10:56.467 info: Remote video with uuid dede0f26-c68c-4e23-8c0a-e3e3803111ec inserted.
+PeerTube holds one thumbnail for it, 640x360
+```
+
+### G6 — a video of unknown duration
+
+```
+vidra serves   "duration": "PT0S"
+[pt] 18:11:06.401 info: Fetching remote video https://vidra.interop.test/videos/4e8091b8-0c2b-4ea8-9264-bd726f477b08.
+[pt] 18:11:06.423 info: Remote video with uuid 4e8091b8-0c2b-4ea8-9264-bd726f477b08 inserted.
+PeerTube's API  "duration": 0
+```
+
+Stored is not played, so the lab also loaded PeerTube's watch page for it:
+`readyState` 4, `currentTime` 0 → 2.07 s, 66 frames decoded, none dropped, no
+`MediaError`, no page error. PeerTube shows a video with a duration of 0 and
+plays all of it.
+
+### G11 — what PeerTube published before the follow
+
+PeerTube now logs vidra reading the outbox it follows, 3.4 s after each
+Accept reached vidra (18:06:46.5 and 18:07:26.4), and vidra's worker logs what
+the read stored:
+
+```
+[pt]    18:06:49.895 info: Receiving outbox request for https://pt.interop.test/video-channels/root_channel/outbox.
+[pt]    18:06:49.908 info: Receiving outbox request for https://pt.interop.test/video-channels/root_channel/outbox.
+[vidra] 18:06:49.941 INFO federation: read a followed actor's outbox  actor=…/video-channels/root_channel stored=2 state=done
+[pt]    18:07:29.880 info: Receiving outbox request for https://pt.interop.test/accounts/peertube/outbox.
+[pt]    18:07:29.895 info: Receiving outbox request for https://pt.interop.test/accounts/peertube/outbox.
+[vidra] 18:07:29.921 INFO federation: read a followed actor's outbox  actor=…/accounts/peertube stored=1 state=done
+```
+
+| | Reads of the followed outbox by vidra | Stored | The staged video on vidra |
+|---|---|---|---|
+| channel follow (S4) | 2 (the outbox, then its page) | 2: the staged video and the control's | yes, filed under `root_channel` |
+| instance follow (S6) | 2 | 1: the staged video; the others were already held and not fetched again | yes, filed under its own channel `early_…`, which vidra does not follow |
+
+### G12 — a forwarded activity
+
+Same five comments, same five forwards. vidra now answers each 202 and applies
+none, and PeerTube records a good delivery where it recorded a bad one:
+
+```
+[pt]    18:06:57.950 info: Forwarding activity https://ctl.interop.test/videos/watch/6e766ef4-…/comments/1/activity.
+[vidra] 18:06:57.966 DEBUG federation: forwarded activity accepted and ignored  activity_type=Create activity_host=ctl.interop.test forwarded_by=pt.interop.test
+[vidra] 18:06:57.966 INFO request POST /accounts/:handle/inbox 202
+[pt]    18:06:57.967 info: Updating 1 good actor follows and 0 bad actor follows.
+```
+
+| | `main` | With the fix |
+|---|---|---|
+| forwarding jobs `pt` created naming a vidra inbox | 5 | 5 |
+| vidra's answers | `400` × 5 | `202` × 5 |
+| failed broadcasts PeerTube logged | 5 | 0 |
+| times PeerTube marked the vidra inbox bad | 5 | 0 |
+
+## Still open after the fixes
+
+Nothing in the lab fails. These are known and were not in scope, or are what a
+fix leaves behind:
+
+- **A forwarded comment is ignored, not shown.** vidra cannot attribute it
+  without verifying its LD signature, so a third server's comment on a followed
+  PeerTube video still does not appear on vidra.
+- **vidra still does not know the duration** of a video whose container states
+  none; it now says so in a form PeerTube accepts. PeerTube lists such a video
+  with a duration of 0.
+- **The fallback poster is one flat colour.** And vidra still reads only the
+  first 256 KiB of a poster for its size.
+- **The backfill is bounded**: the outbox and ten pages, about the newest
+  hundred videos. A follow accepted before the fix is not read.
+- **PeerTube lists tracker URLs on vidra's hostname** for every vidra video.
+  vidra has no tracker. The web player does not use them.
+- **For up to about ten seconds after a vidra video is published**, a PeerTube
+  that follows it lists a video with nothing to play (the wait in S2 was
+  10.1 s in this run). Unchanged.
+- From the plan's gap table, untouched here: G2 (the real edge, Cloudflare),
+  G13 (no rate limit on the inbox), G14 (one switch relaxes SSRF for the
+  importer and for federation), G15 (PeerTube delivers once per vidra inbox
+  that follows, not once per instance), G16–G18.
+
 ## What this does not prove
 
 Everything in the two earlier notes' lists still applies: nothing about SSRF,
@@ -308,6 +495,9 @@ small numbers. In addition:
   (`forwardVideoRelatedActivity`); none of those was produced.
 - **Logs are not kept.** They live in an untracked output directory; this note
   holds the excerpts.
+- **The fixes were run twice, together.** Once as a local merge and once as
+  `main`. No run isolates one fix from the other five; each check is specific
+  to one fix, and the excerpts show each fix doing its work.
 
 ## Reproduce
 
@@ -315,3 +505,5 @@ small numbers. In addition:
 git -C vidra-core worktree add ../../vidra-core-worktrees/main --detach 67f0897d
 LAB_VIDRA_CORE_DIR=../vidra-core-worktrees/main tests/peertube-interop/run.sh
 ```
+
+For the run on the fixes, the same with the worktree at `1ab2ab46`.
