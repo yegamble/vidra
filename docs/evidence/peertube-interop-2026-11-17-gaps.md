@@ -33,10 +33,10 @@ that has no files; it plays.
 |---|---|
 | vidra-core | `main` @ `67f0897d` (`9e95f1cc`, which the last note measured as a tree but never booted, plus four dependency bumps). Built from a separate git worktree, no tracked file modified; the nested `vidra-core/` checkout was not touched |
 | PeerTube | `chocobozzz/peertube:v8.3.2-trixie` (`sha256:3fc4a73e…16006ef`), unchanged: `pt` and the control `ctl` |
-| Lab | this repository at `2f8df29`: the driver, `run.sh` and README changes described below |
+| Lab | this repository at `2f8df29` for the run the tables are from, and at `30714c8` for the last run: the driver, `run.sh` and README changes described below |
 | Browser | Google Chrome 157.0.8103.79, headless, on the host. Every `*.interop.test` name mapped to the lab edge on `127.0.0.1`; every other name made unresolvable |
 | Host | Docker Desktop on macOS arm64, 7.9 GiB |
-| Runs | Two full runs, control included each time: 16:27–16:42 UTC and 16:47–17:00 UTC. The second used the final driver, and every table and excerpt here is from it. The first gave the same verdict on every check |
+| Runs | Three full runs, control included each time: 16:27–16:42, 16:47–17:00 and 17:27–17:40 UTC. Every table and excerpt here is from the second. The first and the third gave the same verdict on every check. The third used the final driver, which proves the G4a and G6 cases from vidra's own state instead of from the object it serves (see below) |
 | Not touched | sizetube.com, beta.sizetube.com, any workflow, `required-checks.txt`, federation settings anywhere outside the lab |
 
 43 checks passed, 7 failed, none was blocked, 3 observations were recorded.
@@ -68,9 +68,15 @@ vidra check is red".
     none;
   - *forwarded activity*: a user of the control PeerTube comments on a `pt`
     video that vidra follows the channel of.
-- Each of those checks first **proves the case was produced** (the object
-  vidra serves is fetched and must lack the icon, the icon's size or the
-  duration) and is `blocked`, not passed, if it was not.
+- Each of those checks first **proves the case was produced** and is
+  `blocked`, not passed, if it was not. In the first two runs the proof was the
+  object vidra serves: no icon, no icon size, no duration. That ties the proof
+  to how vidra renders such a video, so for the third run it was moved to
+  vidra's own state where vidra has one: the audio-only upload has no poster on
+  file (its thumbnail route answers 404) and the WebM has no duration probed
+  (the video detail states none). vidra keeps no record of failing to size a
+  poster, so that one is still read from the object. What is asserted did not
+  change, and neither did any verdict.
 - **G7 plays a video.** Chrome is driven over its DevTools pipe; nothing is
   installed.
 - A red check now carries **PeerTube's own log line** in its detail.
