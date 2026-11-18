@@ -2305,6 +2305,32 @@ Retain the crypt recovery config separately from the encrypted bucket. These
 helpers do not configure production durability, replace a restore drill, or
 select retention policy for an operator.
 
+# Edge ActivityPub probe
+
+Before enabling federation behind a CDN, WAF or other reverse proxy, run
+`tests/edge-ap-probe.sh` against your own instance:
+
+```sh
+bash tests/edge-ap-probe.sh --base-url https://example.test \
+  --account <local-account> [--video <video-uuid>] [--pre-503]
+```
+
+It sends only GETs plus one unsigned `{}` POST to `/inbox`, and prints PASS,
+FAIL or WARN per check with the observed status and headers. It FAILs when the
+edge answers a federation client with an HTML page (a challenge or the frontend
+fallback) on webfinger, nodeinfo, an actor, a video (`/videos/<uuid>`, and the
+legacy `/videos/watch/<uuid>`) or the inbox; when an actor or video answers
+without `Vary: Accept` (a `Vary: Accept-Encoding` alone does not count); when
+an `Accept: text/html` request is served the cached ActivityPub JSON; or when
+the inbox answers with a redirect. A 404 on an actor, video or inbox that does
+not carry the `federation_disabled` body is also a FAIL, because it may be an
+unknown account or an edge rule. On vidra-core up to v0.7.25 a 404 is also what
+federation-off looks like, so pass `--pre-503` there to make that 404 a WARN.
+The `federation_disabled` 503 is a WARN ("federation off"): the probe tells the
+edge's answers apart from the app's, so re-run it after federation is on. Exit 1
+on any FAIL. Its unit test (`tests/edge_ap_probe_test.py`) stubs curl and needs
+no network.
+
 ## Optional managed IPFS node
 
 See [IPFS-MANAGER.md](IPFS-MANAGER.md) for the host manager, admin control boundary,
