@@ -1425,6 +1425,28 @@ object id, or a `POST` to an inbox) is answered:
   instance with federation off shows them there. Webfinger and nodeinfo are
   unchanged.
 
+**Operating a federated instance (vidra-core `main`; merged, not part of any
+release this README names).** Four things the app does not do for you:
+
+- **Rate-limit `POST /inbox` and the per-actor inboxes per client IP at the
+  edge.** The in-app budgets on inbound-path actor fetches are in memory and
+  per process (`internal/federation/actor_fetch_gate.go`): with several api
+  replicas each holds its own, and a restart empties them. They bound what one
+  process spends fetching actors; they are not a per-IP limit, and this repo
+  ships none.
+- **Actor fetches are https-only in production.** A peer reachable only over
+  plain `http` cannot be resolved, so its signed requests are refused. Cloud
+  metadata addresses are blocked in every mode.
+- **Peers whose signing keys fall below the key policy are refused.** The
+  policy (`internal/httpsig`, `CheckKeyPolicy`) accepts RSA keys of 2048 to 8192
+  bits with an odd exponent of at least 3; a smaller key, such as a 1024-bit
+  one from an old server, fails signature verification like any bad signature.
+- **A refused actor fetch shows up only in a metric.** The counter
+  `vidra_federation_inbound_actor_fetch_refused_total{reason}` is incremented
+  when the budget refuses a fetch before the network. **No alert ships for
+  it**: add your own rule if you want to hear about a peer being starved, or
+  about a flood.
+
 ### Email
 
 - **DigitalOcean blocks outbound ports 25, 465 AND 587** on every Droplet,
