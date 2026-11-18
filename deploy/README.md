@@ -2305,6 +2305,26 @@ Retain the crypt recovery config separately from the encrypted bucket. These
 helpers do not configure production durability, replace a restore drill, or
 select retention policy for an operator.
 
+# Edge ActivityPub probe
+
+Before enabling federation behind a CDN, WAF or other reverse proxy, run
+`tests/edge-ap-probe.sh` against your own instance:
+
+```sh
+bash tests/edge-ap-probe.sh --base-url https://example.test \
+  --account <local-account> [--video <video-uuid>]
+```
+
+It sends only GETs plus one unsigned, empty `POST /inbox`, and prints PASS, FAIL
+or WARN per check with the observed status and headers. It FAILs when the edge
+serves a challenge page to a federation client (webfinger, nodeinfo, actor,
+inbox), when an actor or video answers without `Vary: Accept`, or when an
+`Accept: text/html` request is served the cached ActivityPub JSON. An app
+answer of 404/503 while federation is off is a WARN, not a FAIL: the probe
+tells the edge's answers apart from the app's, so re-run it after federation is
+on. Exit 1 on any FAIL. Its unit test (`tests/edge_ap_probe_test.py`) stubs curl
+and needs no network.
+
 ## Optional managed IPFS node
 
 See [IPFS-MANAGER.md](IPFS-MANAGER.md) for the host manager, admin control boundary,
