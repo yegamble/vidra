@@ -1436,7 +1436,10 @@ release this README names).** Four things the app does not do for you:
   ships none.
 - **Actor fetches are https-only in production.** A peer reachable only over
   plain `http` cannot be resolved, so its signed requests are refused. Cloud
-  metadata addresses are blocked in every mode.
+  metadata addresses are blocked in every mode. The rule also applies to actors
+  already cached with an `http://` URL; vidra-core `docs/operations.md` has the
+  read-only query that counts them (search it for `remote_actors`), and it is
+  worth running before federation is enabled.
 - **Peers whose signing keys fall below the key policy are refused.** The
   policy (`internal/httpsig`, `CheckKeyPolicy`) accepts RSA keys of 2048 to 8192
   bits with an odd exponent of at least 3; a smaller key, such as a 1024-bit
