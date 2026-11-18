@@ -54,10 +54,14 @@ for r in json.load(open(os.environ['STUB_RULES'])):
     if r['method'] == method and r['path'] == path and r.get('accept', kind) == kind:
         rule = r
         break
+if rule.get('curl_exit'):
+    sys.stderr.write('curl: (28) Operation timed out\\n')
+    sys.exit(rule['curl_exit'])
 with open(opts['-D'], 'w') as f:
     f.write('HTTP/1.1 %%d X\\r\\n' %% rule['status'])
     for k, v in rule['headers'].items():
-        f.write('%%s: %%s\\r\\n' %% (k, v))
+        for one in (v if isinstance(v, list) else [v]):
+            f.write('%%s: %%s\\r\\n' %% (k, one))
     f.write('\\r\\n')
 with open(opts['-o'], 'w') as f:
     f.write(rule['body'])
@@ -82,7 +86,7 @@ def clean():
         rule('GET', '/.well-known/nodeinfo', 200, {'Content-Type': 'application/json'}, '{"links":[]}'),
         rule('POST', '/inbox', 401, {'Content-Type': 'application/json'}, '{"error":{"code":"unauthorized"}}'),
     ]
-    for p in ('/accounts/alice', '/videos/watch/' + UUID):
+    for p in ('/accounts/alice', '/videos/' + UUID, '/videos/watch/' + UUID):
         rules.append(rule('GET', p, 200, AP, ACTOR, 'ap'))
         rules.append(rule('GET', p, 200, HTML, '<!doctype html><html></html>', 'html'))
     return rules
@@ -150,6 +154,7 @@ class EdgeApProbeTests(unittest.TestCase):
         body = '{"error":{"code":"federation_disabled","message":"federation is switched off on this instance"}}'
         rules = [
             rule('GET', '/accounts/alice', 503, off, body, 'ap'),
+            rule('GET', '/videos/' + UUID, 503, off, body, 'ap'),
             rule('GET', '/videos/watch/' + UUID, 503, off, body, 'ap'),
             rule('POST', '/inbox', 503, off, body),
             rule('GET', '/.well-known/webfinger', 404, {'Content-Type': 'application/json'}, '{}'),
@@ -160,6 +165,100 @@ class EdgeApProbeTests(unittest.TestCase):
         self.assertNotRegex(out, r'(?m)^FAIL')
         self.assertIn('WARN', out)
         self.assertIn('federation is off on this instance', out)
+
+    def test_video_probes_the_federated_id_and_the_legacy_path(self):
+        _, _, log = self.full(clean())
+        self.assertIn('GET /videos/%s ap' % UUID, log)
+        self.assertIn('GET /videos/watch/%s ap' % UUID, log)
+
+    def vary(self, *values):
+        h = dict(AP)
+        h['Vary'] = list(values)
+        return [rule('GET', '/accounts/alice', 200, h, ACTOR, 'ap')] + clean()
+
+    def test_vary_accept_encoding_alone_fails(self):
+        code, out, _ = self.full(self.vary('Accept-Encoding'))
+        self.assertEqual(code, 1, out)
+        self.assertRegex(out, r'(?m)^FAIL.*Vary')
+
+    def test_vary_lists_and_repeated_lines_pass(self):
+        for values in (('Accept-Encoding, Accept',), ('Accept-Encoding', 'Accept'), ('Accept', 'Accept-Encoding'), ('*',)):
+            code, out, _ = self.full(self.vary(*values))
+            self.assertEqual(code, 0, (values, out))
+
+    def test_ld_json_with_profile_is_an_ap_content_type(self):
+        h = {'Content-Type': 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"', 'Vary': 'Accept'}
+        code, out, _ = self.full([rule('GET', '/accounts/alice', 200, h, ACTOR, 'ap')] + clean())
+        self.assertEqual(code, 0, out)
+
+    def test_actor_404_without_the_disabled_body_fails_and_names_the_causes(self):
+        rules = [rule('GET', '/accounts/alice', 404, {'Content-Type': 'application/json'}, '{"error":"not found"}', 'ap')] + clean()
+        code, out, _ = self.full(rules)
+        self.assertEqual(code, 1, out)
+        self.assertRegex(out, r'(?m)^FAIL.*actor.*404.*unknown account.*edge interference.*v0\.7\.25')
+
+    def test_pre_503_downgrades_the_404_to_a_warning(self):
+        rules = [
+            rule('GET', '/accounts/alice', 404, {'Content-Type': 'application/json'}, '{}', 'ap'),
+            rule('POST', '/inbox', 404, {'Content-Type': 'application/json'}, '{}'),
+        ] + clean()
+        code, out, _ = self.run_probe(rules, '--account', 'alice', '--pre-503')
+        self.assertEqual(code, 0, out)
+        self.assertRegex(out, r'(?m)^WARN.*actor.*--pre-503')
+        self.assertRegex(out, r'(?m)^WARN.*inbox')
+        code, out, _ = self.run_probe(rules, '--account', 'alice')
+        self.assertEqual(code, 1, out)
+
+    def test_inbox_redirect_fails(self):
+        rules = [rule('POST', '/inbox', 301, {'Location': 'https://example.test/other'}, '')] + clean()
+        code, out, _ = self.full(rules)
+        self.assertEqual(code, 1, out)
+        self.assertRegex(out, r'(?m)^FAIL.*edge redirects the inbox')
+
+    def test_actor_401_json_is_a_signed_fetch_warning(self):
+        rules = [rule('GET', '/accounts/alice', 401, {'Content-Type': 'application/json'}, '{"error":"signature required"}', 'ap')] + clean()
+        code, out, _ = self.full(rules)
+        self.assertEqual(code, 0, out)
+        self.assertRegex(out, r'(?m)^WARN.*signed fetch')
+
+    def test_cf_mitigated_header_alone_is_a_challenge(self):
+        rules = [rule('GET', '/.well-known/webfinger', 200, {'Content-Type': 'application/json', 'cf-mitigated': 'challenge'}, '{}')] + clean()
+        code, out, _ = self.full(rules)
+        self.assertEqual(code, 1, out)
+        self.assertRegex(out, r'(?m)^FAIL.*webfinger.*challenges')
+
+    def test_challenge_on_nodeinfo_and_on_actor_fail(self):
+        for r, pat in (
+            (rule('GET', '/.well-known/nodeinfo', 200, HTML, '<html></html>'), r'(?m)^FAIL.*nodeinfo.*challenges'),
+            (rule('GET', '/accounts/alice', 200, HTML, '<html></html>', 'ap'), r'(?m)^FAIL.*actor.*challenges'),
+        ):
+            code, out, _ = self.full([r] + clean())
+            self.assertEqual(code, 1, out)
+            self.assertRegex(out, pat)
+
+    def test_inbox_html_answer_fails_even_with_a_non_403_status(self):
+        rules = [rule('POST', '/inbox', 200, HTML, '<html>Checking your browser</html>')] + clean()
+        code, out, _ = self.full(rules)
+        self.assertEqual(code, 1, out)
+        self.assertRegex(out, r'(?m)^FAIL.*inbox.*challenges')
+
+    def test_curl_failure_is_a_failure(self):
+        rules = [{'method': 'GET', 'path': '/.well-known/nodeinfo', 'status': 0, 'headers': {}, 'body': '', 'curl_exit': 28}] + clean()
+        code, out, _ = self.full(rules)
+        self.assertEqual(code, 1, out)
+        self.assertRegex(out, r'(?m)^FAIL.*nodeinfo.*no response')
+
+    def test_without_account_the_actor_checks_are_skipped_with_a_warning(self):
+        code, out, log = self.run_probe(clean())
+        self.assertEqual(code, 0, out)
+        self.assertRegex(out, r'(?m)^WARN.*actor checks skipped')
+        self.assertNotIn('GET /accounts/alice ap', log)
+
+    def test_help_does_not_print_shell_options(self):
+        code, out, _ = self.run_probe(clean(), '--help')
+        self.assertEqual(code, 0, out)
+        self.assertIn('--pre-503', out)
+        self.assertNotIn('set -euo', out)
 
     def test_base_url_is_required(self):
         code, out, log = self.run_probe(clean(), base=False)
