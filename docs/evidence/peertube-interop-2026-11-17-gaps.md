@@ -407,8 +407,19 @@ PeerTube's API  "duration": 0
 
 Stored is not played, so the lab also loaded PeerTube's watch page for it:
 `readyState` 4, `currentTime` 0 → 2.07 s, 66 frames decoded, none dropped, no
-`MediaError`, no page error. PeerTube shows a video with a duration of 0 and
-plays all of it.
+`MediaError`, no page error. The clip is 4 s long (`tests/peertube-interop/run.sh`
+generates it with `duration=4`), and the driver stops watching as soon as
+playback has advanced 2 s, so what was observed is playback moving to about 2 s
+of 4 on a video PeerTube lists with a duration of 0. The lab did not watch it
+to the end, so this does not show that PeerTube plays all of it, and the
+`bufferStalledError` logged in one of the two green runs (see above) was not
+followed further.
+
+2026-11-18: vidra-core
+[#576](https://github.com/yegamble/vidra-core/pull/576) (merged, unreleased)
+now fills a video's duration in from the transcode, so vidra no longer has to
+serve `PT0S` for a video like this one. That has **not** been re-measured
+against PeerTube: everything above is from before it.
 
 ### G11 — what PeerTube published before the follow
 
