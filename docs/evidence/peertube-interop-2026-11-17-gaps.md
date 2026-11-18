@@ -55,7 +55,7 @@ measures the inbound fetch limits under load.
 | Browser | Google Chrome 157.0.8103.79, headless, on the host. Every `*.interop.test` name mapped to the lab edge on `127.0.0.1`; every other name made unresolvable |
 | Host | Docker Desktop on macOS arm64, 7.9 GiB |
 | Runs | Three full runs, control included each time: 16:27–16:42, 16:47–17:00 and 17:27–17:40 UTC. Every table and excerpt here is from the second. The first and the third gave the same verdict on every check. The third used the final driver, which proves the G4a and G6 cases from vidra's own state instead of from the object it serves (see below) |
-| Not touched | sizetube.com, beta.sizetube.com, any workflow, `required-checks.txt`, federation settings anywhere outside the lab |
+| Not touched | any live host (production or beta), any workflow, `required-checks.txt`, federation settings anywhere outside the lab |
 
 43 checks passed, 7 failed, none was blocked, 3 observations were recorded.
 `run.sh` exited 1, which is its code for "the control passed and at least one
