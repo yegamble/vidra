@@ -1410,11 +1410,21 @@ precondition of the next.
 6. **Set `FEDERATION_ENABLED=true` last**, redeploy, and re-run the probe: it
    now exercises the real routes.
 
-While federation is off, the ActivityPub routes are not mounted, so an
-ActivityPub fetch of an actor or video answers `404`. A vidra-core change that
-answers `503` instead (so a PeerTube peer keeps its copy rather than treating
-the `404` as a deletion) is open as vidra-core#584 and is **not on `main` at
-the time of writing**: do not rely on it until a release notes it.
+While federation is off, an ActivityPub request (a `GET` with an
+`application/activity+json` or `ld+json` `Accept` on an actor, collection or
+object id, or a `POST` to an inbox) is answered:
+
+- **Releases up to and including v0.7.25: `404`**, because the routes are not
+  mounted. A PeerTube peer that refreshes an actor or video and gets `404`
+  **deletes its copy** (the actor, its videos and the follows on it). Do not
+  leave an instance that federated before, such as one migrated from PeerTube,
+  on these releases with federation off longer than needed.
+- **The release after v0.7.25: `503`** with `Retry-After` and `Cache-Control:
+  no-store`, which a peer treats as "not now" and keeps its copy. These
+  refusals are logged at `WARN`, not `ERROR`, but they still count in the `5xx`
+  status class of the request metrics (vidra-core `docs/operations.md`), so an
+  instance with federation off shows them there. Webfinger and nodeinfo are
+  unchanged.
 
 ### Email
 
