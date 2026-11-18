@@ -30,7 +30,10 @@ that has no files; it plays.
 **Update, the same day: all seven are closed.** Six vidra-core pull requests,
 one per gap, turn every red check green. They are merged, and on vidra-core
 `main` @ `1ab2ab46` the control and all fourteen scenarios pass, 50 checks out
-of 50, with the lab unchanged. The before and after table, and what each fix
+of 50, with the lab unchanged. That commit is the only one measured: the 14
+vidra-core commits merged after it (through `5f2ea490`, among them the
+poster-read, duration, sharedInbox, SSRF-guard and inbound-fetch-budget
+changes) were **not run in the lab**. The before and after table, and what each fix
 changed on the wire, are in [After the fixes](#after-the-fixes).
 
 ## What was run
@@ -67,8 +70,11 @@ vidra check is red".
     publishes it with no poster;
   - *poster of unreadable size*: a private video is given a custom poster
     through `POST /api/v1/videos/{id}/thumbnail` and then made public. The
-    poster is a valid JPEG whose frame header sits 320 KiB in, behind comment
-    segments; vidra reads the first 256 KiB;
+    poster is a valid JPEG whose frame header sat 320 KiB in, behind comment
+    segments, when vidra read the first 256 KiB. vidra-core `main` now reads up
+    to `maxPosterHeaderBytes` (2 MiB), so that 320 KiB fixture would be sized
+    and the check would report BLOCKED; the driver now places the header past
+    2 MiB. **That fixture change has not been run**;
   - *unknown duration*: a WebM written to a pipe, which states no duration, as
     a browser recording does. `run.sh` asserts with `ffprobe` that it states
     none;
@@ -424,6 +430,10 @@ transcoded. Whether this lab's G6 upload (`needHls: false` in
 `tests/peertube-interop/driver.mjs`) takes that path was not checked, and none of
 this has been re-measured against PeerTube: everything above is from before it.
 
+**Stated limit of the lab:** the G6 upload uses `needHls: false`, so the video
+is never transcoded and the lab cannot show the duration #576 measures. Showing
+it would need a different scenario, which is not changed here.
+
 ### G11 — what PeerTube published before the follow
 
 PeerTube now logs vidra reading the outbox it follows, 3.4 s after each
@@ -475,8 +485,9 @@ fix leaves behind:
   none; it now says so in a form PeerTube accepts. PeerTube lists such a video
   with a duration of 0. (As measured here; vidra-core #576 since changes this
   for transcoded videos, not re-measured: see the 2026-11-18 note under G6.)
-- **The fallback poster is one flat colour.** And vidra still reads only the
-  first 256 KiB of a poster for its size.
+- **The fallback poster is one flat colour.** As measured here,
+  vidra read only the first 256 KiB of a poster for its size; vidra-core `main`
+  now reads up to `maxPosterHeaderBytes` (2 MiB), merged and not re-measured.
 - **The backfill is bounded**: the outbox and ten pages, about the newest
   hundred videos. A follow accepted before the fix is not read.
 - **PeerTube lists tracker URLs on vidra's hostname** for every vidra video.
@@ -484,10 +495,19 @@ fix leaves behind:
 - **For up to about ten seconds after a vidra video is published**, a PeerTube
   that follows it lists a video with nothing to play (the wait in S2 was
   10.1 s in this run). Unchanged.
-- From the plan's gap table, untouched here: G2 (the real edge, Cloudflare),
-  G13 (no rate limit on the inbox), G14 (one switch relaxes SSRF for the
-  importer and for federation), G15 (PeerTube delivers once per vidra inbox
-  that follows, not once per instance), G16–G18.
+- From the plan's gap table, untouched by the fixes measured here: G2 (the
+  real edge, Cloudflare), G16–G18. G13, G14 and G15 have since been **partly**
+  addressed in vidra-core `main`: **merged, not released, not deployed, and not
+  run in this lab**.
+  - G13 (no rate limit on the inbox): inbound-path actor fetches are now bounded
+    and budgeted per host, with refusals counted by reason. The edge per-IP
+    limit is still open.
+  - G14 (one switch relaxes SSRF for the importer and for federation): the
+    cloud-metadata range is always blocked, and actor fetches require https in
+    production. The shared relaxing switch is not claimed closed beyond that.
+  - G15 (PeerTube delivers once per vidra inbox that follows): every actor now
+    advertises the instance `/inbox` as its `sharedInbox`. Whether PeerTube then
+    delivers once per instance was not measured.
 
 ## What this does not prove
 
@@ -497,8 +517,8 @@ small numbers. In addition:
 
 - **The cases are produced, not found.** G4a, G4b and G6 show what PeerTube
   does with such a video. They say nothing about how often a real vidra has
-  one. The unsized poster in particular is built to defeat vidra's 256 KiB
-  read; a poster vidra cannot size for another reason (a storage error, an
+  one. The unsized poster in particular is built to defeat vidra's poster read
+  (256 KiB when measured, 2 MiB on main now); a poster vidra cannot size for another reason (a storage error, an
   unreadable file) gives the same object but was not produced.
 - **G7 is one browser and one 4-second clip**: desktop Chrome, H.264 and AAC,
   one rendition. Not Firefox, Safari, a phone, or PeerTube's embed player.
