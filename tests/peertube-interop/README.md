@@ -129,7 +129,7 @@ one the proof is the object: the poster's icon carries no width or height. And
 `blocked`, never a pass.
 Nothing is edited in vidra's database or storage: the no-poster video is an
 audio-only upload, the unsized poster is a valid JPEG uploaded through vidra's
-own API whose frame header lies past the 256 KiB vidra reads, and the
+own API whose frame header lies past the 2 MiB vidra reads (`maxPosterHeaderBytes`; it was 256 KiB when the lab last ran), and the
 no-duration video is a WebM written to a pipe, as a browser recording is.
 
 S3 runs against `ctl`, not `pt`: `ctl` has no instance follow with vidra, so a

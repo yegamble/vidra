@@ -1259,14 +1259,22 @@ const runVidra = async () => {
       } catch (error) { throw new Blocked(`vidra did not publish the private upload: ${error.message}`); }
       const own = await vidra.api(`/api/v1/videos/${video.id}/thumbnail`, { binary: true });
       blockedUnless(own.status === 200 && own.bytes[0] === 0xff && own.bytes[1] === 0xd8, `vidra served no JPEG poster for it (HTTP ${own.status})`);
-      // A VALID JPEG that vidra cannot size. vidra reads the first 256 KiB of a
-      // poster to find its frame header (video_object.go maxPosterHeaderBytes);
-      // five maximum-length comment segments, placed after the leading APPn
-      // segments, put that header 320 KiB in.
+      // A VALID JPEG that vidra cannot size. vidra reads at most
+      // maxPosterHeaderBytes (2 MiB now; it was
+      // 256 KiB when this lab last ran) of a poster to find its frame header
+      // (internal/federation/video_object.go). Maximum-length comment segments
+      // (65537 bytes each), placed after the leading APPn segments, push that
+      // header past the read: one segment more than fits in the limit, plus one
+      // spare. The result stays under the 8 MiB poster upload cap
+      // (maxIdentityImageBytes). If core raises the read again, raise this.
+      const readLimit = 2 * 1024 * 1024;
+      const commentLength = 65537;
+      const comments = Math.ceil(readLimit / commentLength) + 1;
       let at = 2;
       while (own.bytes[at] === 0xff && own.bytes[at + 1] >= 0xe0 && own.bytes[at + 1] <= 0xef) at += 2 + own.bytes.readUInt16BE(at + 2);
       const comment = Buffer.concat([Buffer.from([0xff, 0xfe, 0xff, 0xff]), Buffer.alloc(65533, 0x20)]);
-      const poster = Buffer.concat([own.bytes.subarray(0, at), ...Array(5).fill(comment), own.bytes.subarray(at)]);
+      const poster = Buffer.concat([own.bytes.subarray(0, at), ...Array(comments).fill(comment), own.bytes.subarray(at)]);
+      blockedUnless(at + comments * commentLength > readLimit, 'the fixture does not push the frame header past the 2 MiB read');
       const set = await vidra.setPoster(video.id, poster, 'poster.jpg');
       blockedUnless(set.status === 201, `vidra refused the poster: HTTP ${set.status} ${(set.text ?? '').slice(0, 200)}`);
       const since = new Date().toISOString();
