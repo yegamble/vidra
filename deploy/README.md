@@ -1400,13 +1400,12 @@ precondition of the next.
    rows afterwards, and sealing them later means regenerating the actor keys.
    Import after the KEK, not before.
 5. **Probe the edge.** Behind a CDN, WAF or reverse proxy, check that
-   ActivityPub gets through before peers find out the hard way: run the edge
-   probe, `tests/edge-ap-probe.sh --base-url https://<your-host> --account
-   <local-account>`, if your checkout has it, or do the same by hand (a
-   `curl` of an actor with `Accept: application/activity+json` must return
-   activity JSON with `Vary: Accept`, not a challenge page, and the same URL
-   with `Accept: text/html` must not return that JSON). While federation is
-   still off the probe can only show that the edge lets requests reach the app.
+   ActivityPub gets through before peers find out the hard way. Run
+   `bash tests/edge-ap-probe.sh --base-url https://<your-host> --account
+   <local-account> [--pre-503]`; see [Edge ActivityPub probe](#edge-activitypub-probe).
+   On v0.7.25 or older add `--pre-503`, because this step runs with federation
+   still off and those releases answer 404 to ActivityPub then. While federation
+   is off the probe can only show that the edge lets requests reach the app.
 6. **Set `FEDERATION_ENABLED=true` last**, redeploy, and re-run the probe: it
    now exercises the real routes.
 
