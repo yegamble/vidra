@@ -1358,6 +1358,64 @@ KEK, accept that the old ciphertext is dead, and force the affected users throug
 re-enrolment (disable + re-enroll TOTP, re-link ATProto, regenerate federation
 actor keys). Plan it as a user-visible event, not as an ops task.
 
+### Enabling federation
+
+Federation is off by default (`FEDERATION_ENABLED=false`). Turning it on
+publishes your channels to the fediverse under identities that **cannot be
+renamed or regenerated later**, so do the steps in this order; each one is a
+precondition of the next.
+
+1. **Final public hostname first.** DNS and TLS must already serve the hostname
+   the instance will keep for good. Actor ids, keys and every follower edge on
+   a peer embed that base URL, and PeerTube does not support a host change.
+   Never enable federation on a temporary, staging or beta hostname: its
+   identities would be orphaned the day the real hostname takes over, and would
+   duplicate the real instance's channels under another host. If you need a
+   public test, use a separate throwaway host.
+2. **Set `PUBLIC_BASE_URL` to that hostname.** It must be an `https` origin with
+   no path; with federation on the api refuses to boot otherwise
+   (`config.go`, the `FederationEnabled` block of `validate`). Redeploy and
+   confirm the site answers on it.
+3. **Generate `FEDERATION_KEY_KEK` once, and store it off the server.** It is
+   generated the same way as `MFA_KEY_KEK` (base64 of exactly 32 bytes):
+
+   ```sh
+   openssl rand -base64 32
+   ```
+
+   Put the value in `env/production.env` and also in a secrets store separate
+   from the server, exactly as you keep `MFA_KEY_KEK` (see the backup notes
+   below): a restored database without it cannot open any actor key. **Do not
+   rotate it afterwards** - there is no re-wrap job, and `MFA_KEY_KEK` and
+   `ATPROTO_KEY_KEK` fall back to it; see the [secret rotation
+   table](#secret-rotation), where it is marked destructive. Deploy with
+   `FEDERATION_ENABLED` still `false`: the api reads the KEK whether or not
+   federation is on.
+4. **Re-run any PeerTube import only after the KEK is deployed.** The importer
+   (`peertube-import`) reads the same `FEDERATION_KEY_KEK` and seals the actor
+   private keys it stores; with the KEK unset it stores them as raw PEM
+   (`internal/peertubeimport/importer.go`, `sealPrivateKey`, and the "stored
+   UNENCRYPTED" warning in `cmd/api/main.go`). The api opens either form, so a
+   raw row still works, but it stays raw: nothing in vidra-core seals existing
+   rows afterwards, and sealing them later means regenerating the actor keys.
+   Import after the KEK, not before.
+5. **Probe the edge.** Behind a CDN, WAF or reverse proxy, check that
+   ActivityPub gets through before peers find out the hard way: run the edge
+   probe, `tests/edge-ap-probe.sh --base-url https://<your-host> --account
+   <local-account>`, if your checkout has it, or do the same by hand (a
+   `curl` of an actor with `Accept: application/activity+json` must return
+   activity JSON with `Vary: Accept`, not a challenge page, and the same URL
+   with `Accept: text/html` must not return that JSON). While federation is
+   still off the probe can only show that the edge lets requests reach the app.
+6. **Set `FEDERATION_ENABLED=true` last**, redeploy, and re-run the probe: it
+   now exercises the real routes.
+
+While federation is off, the ActivityPub routes are not mounted, so an
+ActivityPub fetch of an actor or video answers `404`. A vidra-core change that
+answers `503` instead (so a PeerTube peer keeps its copy rather than treating
+the `404` as a deletion) is open as vidra-core#584 and is **not on `main` at
+the time of writing**: do not rely on it until a release notes it.
+
 ### Email
 
 - **DigitalOcean blocks outbound ports 25, 465 AND 587** on every Droplet,
