@@ -30,11 +30,24 @@ that has no files; it plays.
 **Update, the same day: all seven are closed.** Six vidra-core pull requests,
 one per gap, turn every red check green. They are merged, and on vidra-core
 `main` @ `1ab2ab46` the control and all fourteen scenarios pass, 50 checks out
-of 50, with the lab unchanged. That commit is the only one measured: the 14
-vidra-core commits merged after it (through `5f2ea490`, among them the
-poster-read, duration, sharedInbox, SSRF-guard and inbound-fetch-budget
-changes) were **not run in the lab**. The before and after table, and what each fix
+of 50, with the lab unchanged. The before and after table, and what each fix
 changed on the wire, are in [After the fixes](#after-the-fixes).
+
+**Update, 2026-11-18: run again on vidra-core `main` @ `bb081e9d`.** The 17
+vidra-core commits merged after `1ab2ab46` (among them the poster-read,
+duration, sharedInbox, SSRF-guard and inbound-fetch-budget changes) had not
+been in the lab. One full run on `bb081e9d`, control included, with the
+rebuilt G4b fixture: `run.sh` exited 0, the control's 5 checks and the 50
+vidra checks pass, none failed or blocked. Two things it adds: the G4b poster
+whose frame header sits past 2 MiB is still unsized by vidra and still stored
+by PeerTube, and PeerTube now lists the video of unknown duration with
+`duration: 4` where it listed 0, although vidra still served `PT0S` for it (an
+observation, not a check, and not evidence for the duration change: see G6).
+It is one run, one desktop Chrome, source-built, not the released images. The
+lab runs with `VIDRA_ENV=test`, private fetch addresses allowed and rate
+limiting off, so it shows only that those 17 commits did not break federation:
+it exercises neither the production https-only rule, nor the private-address
+block, nor any inbound fetch limit or its 429.
 
 ## What was run
 
@@ -46,7 +59,7 @@ changed on the wire, are in [After the fixes](#after-the-fixes).
 | Browser | Google Chrome 157.0.8103.79, headless, on the host. Every `*.interop.test` name mapped to the lab edge on `127.0.0.1`; every other name made unresolvable |
 | Host | Docker Desktop on macOS arm64, 7.9 GiB |
 | Runs | Three full runs, control included each time: 16:27–16:42, 16:47–17:00 and 17:27–17:40 UTC. Every table and excerpt here is from the second. The first and the third gave the same verdict on every check. The third used the final driver, which proves the G4a and G6 cases from vidra's own state instead of from the object it serves (see below) |
-| Not touched | sizetube.com, beta.sizetube.com, any workflow, `required-checks.txt`, federation settings anywhere outside the lab |
+| Not touched | any live host (production or beta), any workflow, `required-checks.txt`, federation settings anywhere outside the lab |
 
 43 checks passed, 7 failed, none was blocked, 3 observations were recorded.
 `run.sh` exited 1, which is its code for "the control passed and at least one
@@ -74,7 +87,7 @@ vidra check is red".
     segments, when vidra read the first 256 KiB. vidra-core `main` now reads up
     to `maxPosterHeaderBytes` (2 MiB), so that 320 KiB fixture would be sized
     and the check would report BLOCKED; the driver now places the header past
-    2 MiB. **That fixture change has not been run**;
+    2 MiB. That fixture ran once, on `bb081e9d` (2026-11-18), and passed;
   - *unknown duration*: a WebM written to a pipe, which states no duration, as
     a browser recording does. `run.sh` asserts with `ffprobe` that it states
     none;
@@ -430,9 +443,15 @@ transcoded. Whether this lab's G6 upload (`needHls: false` in
 `tests/peertube-interop/driver.mjs`) takes that path was not checked, and none of
 this has been re-measured against PeerTube: everything above is from before it.
 
-**Stated limit of the lab:** the G6 upload uses `needHls: false`, so the video
-is never transcoded and the lab cannot show the duration #576 measures. Showing
-it would need a different scenario, which is not changed here.
+Run on `bb081e9d` (2026-11-18): for the same G6 upload the object the driver
+read from vidra still said `"duration": "PT0S"`, so #576 is **not shown by the
+lab**. PeerTube nonetheless stored and listed the video with `duration: 4`,
+where it listed 0 before, with playback again advancing to about 2 s and no
+page error. Where PeerTube's 4 came from was not traced (a later Update from
+vidra, or PeerTube's own reading of the file). The value is an OBSERVED line,
+not a check, and it is one run. Showing #576 would
+need a scenario that fetches the object after the transcode has measured the
+duration and asserts it is not `PT0S`; that is not changed here.
 
 ### G11 — what PeerTube published before the follow
 
@@ -484,10 +503,12 @@ fix leaves behind:
 - **vidra still does not know the duration** of a video whose container states
   none; it now says so in a form PeerTube accepts. PeerTube lists such a video
   with a duration of 0. (As measured here; vidra-core #576 since changes this
-  for transcoded videos, not re-measured: see the 2026-11-18 note under G6.)
+  for transcoded videos; the lab does not show it: see the 2026-11-18 note
+  under G6.)
 - **The fallback poster is one flat colour.** As measured here,
   vidra read only the first 256 KiB of a poster for its size; vidra-core `main`
-  now reads up to `maxPosterHeaderBytes` (2 MiB), merged and not re-measured.
+  now reads up to `maxPosterHeaderBytes` (2 MiB); a poster whose header sits
+  past that ran once on `bb081e9d` and is still unsized and still stored.
 - **The backfill is bounded**: the outbox and ten pages, about the newest
   hundred videos. A follow accepted before the fix is not read.
 - **PeerTube lists tracker URLs on vidra's hostname** for every vidra video.
