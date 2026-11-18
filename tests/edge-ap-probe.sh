@@ -85,9 +85,11 @@ hdr() { grep -i "^$1:" "$F_HDRS" | tail -1 | sed 's/^[^:]*:[[:space:]]*//' || tr
 # all_hdr NAME: every value of a header joined with ", " (a header may repeat).
 all_hdr() { grep -i "^$1:" "$F_HDRS" | sed 's/^[^:]*:[[:space:]]*//' | paste -sd, - | sed 's/,/, /g' || true; }
 # vary_has_accept: a Vary TOKEN equal to accept or *. A substring match would
-# take Accept-Encoding for Accept, a header every CDN already sends.
+# take Accept-Encoding for Accept, a header every CDN already sends. No `grep -q`:
+# under pipefail it can exit early on a match and SIGPIPE the writer, which reads
+# as "no match" on a fast Linux runner.
 vary_has_accept() {
-  printf '%s' "$F_VARY" | tr ',' '\n' | tr -d ' \t' | tr '[:upper:]' '[:lower:]' | grep -qx -e accept -e '\*'
+  printf '%s' "$F_VARY" | tr ',' '\n' | tr -d ' \t' | tr '[:upper:]' '[:lower:]' | grep -x -e accept -e '\*' >/dev/null
 }
 is_json() { case $(lc "$F_CTYPE") in *json*) return 0 ;; esac; return 1; }
 lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
