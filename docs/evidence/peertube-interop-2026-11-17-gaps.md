@@ -405,21 +405,24 @@ vidra serves   "duration": "PT0S"
 PeerTube's API  "duration": 0
 ```
 
-Stored is not played, so the lab also loaded PeerTube's watch page for it:
-`readyState` 4, `currentTime` 0 → 2.07 s, 66 frames decoded, none dropped, no
-`MediaError`, no page error. The clip is 4 s long (`tests/peertube-interop/run.sh`
-generates it with `duration=4`), and the driver stops watching as soon as
-playback has advanced 2 s, so what was observed is playback moving to about 2 s
-of 4 on a video PeerTube lists with a duration of 0. The lab did not watch it
-to the end, so this does not show that PeerTube plays all of it, and the
-`bufferStalledError` logged in one of the two green runs (see above) was not
-followed further.
+Stored is not played, so the lab also loaded PeerTube's watch page for it. In
+the first run (the excerpt above): `readyState` 4, `currentTime` 0 → 2.07 s, 66
+frames decoded, none dropped, no `MediaError`, no page error. In the second run
+PeerTube's player logged one non-fatal `bufferStalledError` and dropped one
+frame of 71 (see "Two things differed" above); playback advanced in both runs.
+The input fixture is 4 s long (`tests/peertube-interop/run.sh` generates it with
+`duration=4`); the length of the media vidra served was not measured. The driver
+stops watching as soon as playback has advanced 2 s, so what was observed is
+playback moving to about 2 s on a video PeerTube lists with a duration of 0. The
+lab did not watch it to the end, so this does not show that PeerTube plays all
+of it, and the stall was not followed further.
 
 2026-11-18: vidra-core
 [#576](https://github.com/yegamble/vidra-core/pull/576) (merged, unreleased)
-now fills a video's duration in from the transcode, so vidra no longer has to
-serve `PT0S` for a video like this one. That has **not** been re-measured
-against PeerTube: everything above is from before it.
+now fills in the duration its transcode measures, once the video has been
+transcoded. Whether this lab's G6 upload (`needHls: false` in
+`tests/peertube-interop/driver.mjs`) takes that path was not checked, and none of
+this has been re-measured against PeerTube: everything above is from before it.
 
 ### G11 — what PeerTube published before the follow
 
@@ -470,7 +473,8 @@ fix leaves behind:
   PeerTube video still does not appear on vidra.
 - **vidra still does not know the duration** of a video whose container states
   none; it now says so in a form PeerTube accepts. PeerTube lists such a video
-  with a duration of 0.
+  with a duration of 0. (As measured here; vidra-core #576 since changes this
+  for transcoded videos, not re-measured: see the 2026-11-18 note under G6.)
 - **The fallback poster is one flat colour.** And vidra still reads only the
   first 256 KiB of a poster for its size.
 - **The backfill is bounded**: the outbox and ten pages, about the newest
