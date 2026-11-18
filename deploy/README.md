@@ -2393,7 +2393,9 @@ the inbox answers with a redirect. A 404 on an actor, video or inbox that does
 not carry the `federation_disabled` body is also a FAIL, because it may be an
 unknown account or an edge rule. On vidra-core up to v0.7.25 a 404 is also what
 federation-off looks like, so pass `--pre-503` there to make that 404 a WARN.
-The `federation_disabled` 503 is a WARN ("federation off"): the probe tells the
+On v0.7.25 or older, `--video` reports "Vary missing" on `/videos/<uuid>`:
+that header arrived after v0.7.25, so it is an app-version cause, not an edge
+fault. The `federation_disabled` 503 is a WARN ("federation off"): the probe tells the
 edge's answers apart from the app's, so re-run it after federation is on. Exit 1
 on any FAIL. Its unit test (`tests/edge_ap_probe_test.py`) stubs curl and needs
 no network.

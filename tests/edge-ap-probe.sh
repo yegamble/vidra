@@ -23,6 +23,8 @@
 #   (not 503 federation_disabled) to ActivityPub while federation is off. Without
 #   it a 404 on an actor, video or inbox is a FAIL, because a 404 can equally be
 #   an unknown account or an edge rule; with it that 404 is only a WARN.
+# --video on v0.7.25 or older reports "Vary missing" on /videos/UUID: that header
+#   arrived after v0.7.25, so it is an app-version cause, not an edge fault.
 # CURL=/path/to/curl overrides the binary (the unit test stubs it).
 #USAGE_END
 set -euo pipefail
@@ -179,6 +181,10 @@ fi
 # not by the edge. The app is expected to reject it; reaching it is the point.
 fetch POST /inbox 'application/activity+json' 'application/activity+json' '{}'
 if [ "$F_STATUS" = 000 ]; then fail "inbox POST: $F_SEEN"
+# A redirect first: a 301 carrying an HTML body would otherwise read as a
+# challenge, and the fix for the two is different.
+elif case $F_STATUS in 301|302|303|307|308) true ;; *) false ;; esac; then
+  fail "inbox POST: edge redirects the inbox ($F_SEEN)"
 elif is_challenge; then fail "inbox POST: edge challenges federation clients: HTML answer (challenge or frontend fallback) ($F_SEEN)"
 else
   case $F_STATUS in
@@ -187,7 +193,6 @@ else
       if says_fed_off; then FED_OFF=1; warn "inbox POST: federation is off on this instance ($F_SEEN)"
       else pass "inbox POST reached the origin ($F_SEEN)"; fi ;;
     404) unexplained_404 'inbox POST' ;;
-    301|302|303|307|308) fail "inbox POST: edge redirects the inbox ($F_SEEN)" ;;
     403) fail "inbox POST: 403 - blocked by the edge or a WAF rule ($F_SEEN)" ;;
     *) fail "inbox POST: unexpected answer ($F_SEEN)" ;;
   esac

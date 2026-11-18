@@ -215,6 +215,16 @@ class EdgeApProbeTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertRegex(out, r'(?m)^FAIL.*edge redirects the inbox')
 
+    def test_inbox_redirect_with_an_html_body_is_still_a_redirect(self):
+        rules = [rule('POST', '/inbox', 301, dict(HTML, Location='https://example.test/other'), '<html>Moved</html>')] + clean()
+        code, out, _ = self.full(rules)
+        self.assertEqual(code, 1, out)
+        self.assertRegex(out, r'(?m)^FAIL.*edge redirects the inbox')
+
+    def test_help_names_the_old_release_vary_caveat(self):
+        code, out, _ = self.run_probe(clean(), '--help')
+        self.assertIn('Vary missing', out)
+
     def test_actor_401_json_is_a_signed_fetch_warning(self):
         rules = [rule('GET', '/accounts/alice', 401, {'Content-Type': 'application/json'}, '{"error":"signature required"}', 'ap')] + clean()
         code, out, _ = self.full(rules)
