@@ -30,11 +30,20 @@ that has no files; it plays.
 **Update, the same day: all seven are closed.** Six vidra-core pull requests,
 one per gap, turn every red check green. They are merged, and on vidra-core
 `main` @ `1ab2ab46` the control and all fourteen scenarios pass, 50 checks out
-of 50, with the lab unchanged. That commit is the only one measured: the 14
-vidra-core commits merged after it (through `5f2ea490`, among them the
-poster-read, duration, sharedInbox, SSRF-guard and inbound-fetch-budget
-changes) were **not run in the lab**. The before and after table, and what each fix
+of 50, with the lab unchanged. The before and after table, and what each fix
 changed on the wire, are in [After the fixes](#after-the-fixes).
+
+**Update, 2026-11-18: run again on vidra-core `main` @ `bb081e9d`.** The 17
+vidra-core commits merged after `1ab2ab46` (among them the poster-read,
+duration, sharedInbox, SSRF-guard and inbound-fetch-budget changes) had not
+been in the lab. One full run on `bb081e9d`, control included, with the
+rebuilt G4b fixture: `run.sh` exited 0, the control's 5 checks and the 50
+vidra checks pass, none failed or blocked. Two things it adds: the G4b poster
+whose frame header sits past 2 MiB is still unsized by vidra and still stored
+by PeerTube, and PeerTube now lists the video of unknown duration with
+`duration: 4` where it listed 0 (an observation, not a check). It is one
+run, one desktop Chrome, source-built, not the released images; nothing in it
+measures the inbound fetch limits under load.
 
 ## What was run
 
@@ -74,7 +83,7 @@ vidra check is red".
     segments, when vidra read the first 256 KiB. vidra-core `main` now reads up
     to `maxPosterHeaderBytes` (2 MiB), so that 320 KiB fixture would be sized
     and the check would report BLOCKED; the driver now places the header past
-    2 MiB. **That fixture change has not been run**;
+    2 MiB. That fixture ran once, on `bb081e9d` (2026-11-18), and passed;
   - *unknown duration*: a WebM written to a pipe, which states no duration, as
     a browser recording does. `run.sh` asserts with `ffprobe` that it states
     none;
@@ -430,9 +439,13 @@ transcoded. Whether this lab's G6 upload (`needHls: false` in
 `tests/peertube-interop/driver.mjs`) takes that path was not checked, and none of
 this has been re-measured against PeerTube: everything above is from before it.
 
-**Stated limit of the lab:** the G6 upload uses `needHls: false`, so the video
-is never transcoded and the lab cannot show the duration #576 measures. Showing
-it would need a different scenario, which is not changed here.
+That was written before any run on the merged code, and the run on `bb081e9d`
+(2026-11-18) does not bear it out: for the same G6 upload the lab logged
+PeerTube listing `peertube_duration: 4`, where it logged 0 before, with playback
+again advancing to about 2 s and no page error. So a measured duration did reach
+PeerTube for this upload. Which code path filled it in was not traced, the lab
+asserts nothing about the value (it is an OBSERVED line, not a check), and it
+is one run.
 
 ### G11 — what PeerTube published before the follow
 
