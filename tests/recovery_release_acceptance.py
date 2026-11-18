@@ -232,6 +232,16 @@ CATALOGUE = {
     # refuses UPDATE — so nothing rewrites a row between backup and restore:
     # whole rows. Losing them loses the record of consent itself.
     'user_consents': (189, ()),
+    # 0190. The queue of remote outboxes to read after an accepted Follow. NOT a
+    # rebuildable queue: a remote server pushes only what it publishes AFTER the
+    # follow, so a lost pending row is a followed actor's back catalogue never
+    # fetched, and the row's updated_at is also the re-queue cooldown
+    # (EnqueueOutboxCrawl). The federation worker rewrites state, attempts,
+    # next_attempt_at (the lease), last_error and updated_at on every claim and
+    # settle, so those are volatile, as for peertube_follow_import_targets;
+    # actor_url and queued_at are what a restore must reproduce.
+    'federation_outbox_crawls': (190, ('state', 'attempts', 'next_attempt_at',
+                                       'last_error', 'updated_at')),
 }
 
 # BYTEA is hex-encoded by to_jsonb. Aggregating a 512MiB frozen snapshot can
@@ -330,6 +340,9 @@ TABLES_ADDED = {
     # function) and adds nullable consent_* columns to registration_requests.
     # This records SQL review, not a recovery drill.
     189: ('user_consents',),
+    # 0190 creates federation_outbox_crawls (plus a partial index on pending
+    # rows). This records SQL and core-query review, not a recovery drill.
+    190: ('federation_outbox_crawls',),
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 # Receiver authority is not disposable inbox/cache state. Compare whole rows:

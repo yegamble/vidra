@@ -369,10 +369,20 @@ class MailConfigCatalogueTest(unittest.TestCase):
         self.assertIn('mail_config', rows)
         self.assertIn('public.mail_config', ' '.join(FakeRun().relations(151)))
 
-    def test_a_190_candidate_is_refused_naming_the_migration_to_read(self):
+    def test_a_191_candidate_is_refused_naming_the_migration_to_read(self):
         with self.assertRaises(ValueError) as raised:
-            recovery.catalogue_for(190)
-        self.assertIn('0190', str(raised.exception))
+            recovery.catalogue_for(191)
+        self.assertIn('0191', str(raised.exception))
+
+    def test_outbox_crawls_appear_exactly_from_0190_without_worker_columns(self):
+        self.assertIn('federation_outbox_crawls', recovery.catalogue_for(190))
+        self.assertNotIn('federation_outbox_crawls', recovery.catalogue_for(189))
+        # The drain rewrites these on every claim and settle; hashing them would
+        # fail a drill for a reason that predicts nothing. queued_at stays hashed.
+        self.assertEqual(
+            {'state', 'attempts', 'next_attempt_at', 'last_error', 'updated_at'},
+            set(recovery.catalogue_for(190)['federation_outbox_crawls']))
+        self.assertEqual([], recovery.unclassified_tables())
 
     def test_user_consents_appear_exactly_from_0189(self):
         self.assertIn('user_consents', recovery.catalogue_for(189))
