@@ -1,8 +1,9 @@
 # sizetube.com cutover — tracked checklist (living)
 
 A working checklist for cutting `sizetube.com` over from PeerTube to the Vidra beta
-(`beta.sizetube.com`, v0.7.23 = core `de998f2a`, user `270bc0a0`, search `d018b07f`, deployed
-2026-11-15 18:42 UTC). It tracks **execution status**; the reasoning, evidence and decisions
+(`beta.sizetube.com`; last recorded deploy v0.7.23 = core `de998f2a`, user `270bc0a0`, search
+`d018b07f`, 2026-11-15 18:42 UTC; **not confirmed on 2026-11-19**, see the partial re-read
+below). It tracks **execution status**; the reasoning, evidence and decisions
 live in the audit ([`sizetube-cutover-2026-11.md`](sizetube-cutover-2026-11.md)) and the run
 record ([`sizetube-beta-migration-2026-11.md`](sizetube-beta-migration-2026-11.md)). When an
 item here and the audit disagree, fix one of them in the same change — do not let them drift.
@@ -35,6 +36,29 @@ legal exposure, read this checklist against the audit and the released source. N
 run against a host, a database or a bucket, so no status in sections A–H changed. What they
 found is section I.
 
+**Partial re-read 2026-11-19 19:21–19:30 UTC, read-only.** Every open item in sections A, B
+and I was taken up again and nothing was changed anywhere. **Reached:** DNS; the Backblaze
+bucket, key, unfinished-upload and backup-bucket listings; prod's public API; the beta's edge
+from outside (its health check and the certificates it serves). **Not reached:** the beta's
+own API, its env file, its database and the Caddy certificate directory. The reading machine
+was not on the address the beta admits: every path but `/healthz` answered 403 behind the
+gate, and SSH did not answer. So this pass observed nothing that lives on the beta itself. A
+statement from it carries its date (`RUNTIME 2026-11-19`); an undated `RUNTIME` still means
+the 2026-11-12 re-read. An item marked **unverified 2026-11-19** could not be read: it keeps
+the date it was last observed and nothing was assumed for it. Items already ticked were not
+re-read either, `MEDIA_GC_ENABLED=false` (D12) among them: that gate was last read
+2026-11-12.
+
+**The deployed release is unverified too.** `/version` is behind the gate. v0.7.24 (core
+`96dcae14`, user `7c1ca962`; record merged 2026-11-16 08:25 UTC) and v0.7.25 (core
+`4e937189`, user `e1dc71ab`; 2026-11-16 18:40 UTC) were released after v0.7.23, search
+unchanged, and neither this file nor the audit records a deploy of either. The backup bucket
+holds one off-site pair uploaded outside the nightly slot since v0.7.23, at 2026-11-16 08:25
+UTC, the minute the v0.7.24 record merged (RUNTIME 2026-11-19, bucket listing); each of the
+last four recorded deploys was preceded by such a backup. So the beta probably runs v0.7.24
+or later (DEDUCED, not observed). Read `/version` from the admitted address before relying
+on the header.
+
 ---
 
 ## A. Blocker — nothing ships until this clears
@@ -48,6 +72,18 @@ found is section I.
   **Still open 2026-11-12.** No answer is recorded. On the beta `terms_url` and `privacy_url`
   are empty, `sensitive_content_policy=display`, `registration_minimum_age=0`; the counts are
   unchanged at 12,401 of 15,508 (RUNTIME).
+  **Still open 2026-11-19, and unverified on the beta:** none of the settings below could be
+  re-read (the beta's API and database were not reachable). No counsel answer is recorded in
+  either file. Last observed 2026-11-15 (RUNTIME that day, below): the age gate on at 18,
+  `terms_url` and `privacy_url` empty, registration closed. The counts above are from
+  2026-11-12; the catalogue has grown since (15,613 videos on 2026-11-15, audit §6) and the
+  sensitive share was not re-counted. Prod, where that catalogue is public today, still has
+  signup open, minimum age 18, no e-mail verification, `isNSFW=true` and default policy
+  `display` (RUNTIME 2026-11-19, public API). Of the five intake questions only the first,
+  how the catalogue is classified, is counsel's; the other four ask the operator for facts
+  and choices (audit §8: the entity and contact, EU and UK traffic, notice and mail to
+  imported users, the anonymous policy). No answer to those is recorded either, beyond the
+  contact e-mail and the age-gate answer below.
   Code needed whichever way counsel answers — **built, released in v0.7.20 and deployed to
   the beta 2026-11-12 18:06 UTC; both pieces are switched off there.** On the beta (RUNTIME):
   migration `0189` applied in 76 ms, `user_consents` exists and is empty, `terms_url`,
@@ -135,27 +171,55 @@ found is section I.
   set, and the instance reports `features.mail=true` (RUNTIME). **Open:** a password-reset
   mail to an imported account. None has been requested on the beta: `password_reset_tokens`
   has no rows (RUNTIME; whether used rows are purged was not checked). `OPERATOR`.
+  **2026-11-19:** the DKIM record (the same key as on 2026-11-12), both Resend CNAMEs and the
+  `send.` MX and SPF still resolve (RUNTIME 2026-11-19, DNS). The saved transport and the
+  reset-token table are **unverified 2026-11-19** (database not reachable). The operator sent
+  a password-reset mail from the beta by hand on 2026-11-15 and it arrived (RECORD, I10).
+  Whether that account was an imported one is not recorded, so the open point stands.
 - [~] **Finding 10 · White-label on.** `branding_hide_software_name=true` since 2026-11-11
   14:28 UTC (RUNTIME). **Open:** the imagery — avatar, banner, favicon, both header logos and
   OpenGraph are all still the fallback, and no instance image is stored (RUNTIME). Set them in
   Admin → General → Branding. Survives deploys and the flip. `OPERATOR`.
+  **Unverified 2026-11-19** (the instance document is behind the gate and the database was
+  not reachable); last observed 2026-11-12.
 - [~] **D5 · `profile_public` for imported accounts.** Audited one-off `UPDATE` prepared with
   dry-run counts in the private `cutover-prep/`; **not applied** — the dry-run still counts
   5,538 imported accounts, none public (RUNTIME 2026-11-12). Needs backup + approval.
   `OPERATOR`. (Alt: importer fix + release — see audit D5.)
+  **Unverified 2026-11-19** (database not reachable). The 2026-11-14 catch-up run added
+  accounts (5,598 users on 2026-11-15, against 5,541 the day before; audit §6), so 5,538 is
+  no longer the number to expect (DEDUCED): run the dry run again before approving the
+  `UPDATE`.
 - [~] **D7 · Block the remaining 289 media-less published videos** via `video_blocks` (394 of
   683 already blocked; all one inactive owner, all private). SQL prepared, **not applied** —
   the dry-run still counts 289 of 683 (RUNTIME 2026-11-12). `OPERATOR`.
-- [ ] **D6 · New-signup policy applied:** registration open with e-mail verification,
+  **Unverified 2026-11-19** (database not reachable). The 2026-11-14 catch-up run added 105
+  videos (audit §6), so run the dry run again, and confirm the rows are still that one
+  owner's, before applying.
+- [~] **D6 · New-signup policy applied:** registration open with e-mail verification,
   `registration_minimum_age=18`, terms/privacy acceptance first, `INSTANCE_DEFAULT_QUOTA_BYTES=0`.
   **Nothing applied** (RUNTIME 2026-11-12): registration off, e-mail verification off,
   minimum age 0, quota `5368709120`. The acceptance step needs code — the consent record under
   D15. `OPERATOR` + `AGENT`.
-- [ ] **Anonymous-NSFW policy decided + applied** (`display` vs `hide`/`warn`/`blur` + login)
+  **2026-11-19: one of the four is applied.** `registration_minimum_age` has been 18 since the
+  operator turned the age gate on, 2026-11-15 14:22 UTC (RUNTIME that day, section A). The
+  acceptance step's code is deployed (v0.7.20, section A) and does nothing until the terms and
+  privacy URLs are set. Registration, e-mail verification and the quota are **unverified
+  2026-11-19** (env file and settings not reachable); last observed 2026-11-12, as above.
+  D6 opens registration at cutover and D14 keeps it closed during the rollback window (audit
+  §6); which holds on the day is not recorded.
+- [~] **Anonymous-NSFW policy decided + applied** (`display` vs `hide`/`warn`/`blur` + login)
   pending D15. Still `display`, last set 2026-11-06 (RUNTIME 2026-11-12). `OPERATOR`.
+  **2026-11-19:** the operator's own answer is applied on the beta: the visitor age gate, on
+  at 18 since 2026-11-15 14:22 UTC (RUNTIME that day, section A). It is self-declared and
+  refuses no API or media request, it has not been checked in a browser, and whether it is
+  enough is D15(a), which has no counsel answer. The policy itself was last read, as
+  `display`, on 2026-11-12. **Unverified 2026-11-19** (settings not reachable).
 - [~] **Instance metadata set.** Contact e-mail set in Admin → General on 2026-11-09 and
   served by the instance (RUNTIME). **Open:** terms and privacy URLs, both empty (RUNTIME
   2026-11-12); they wait for counsel's texts. `OPERATOR`.
+  **Unverified 2026-11-19**; both URLs were still empty on 2026-11-15 (RUNTIME that day,
+  section A).
 - [x] **D13 · Record the proven imported-account login** (account + date) in the private log.
   Done 2026-11-12 12:17 UTC: the operator named an imported moderator account and signed in
   with its existing PeerTube password on the first attempt, typing it into a browser pointed
@@ -168,6 +232,12 @@ found is section I.
   (RUNTIME 2026-11-12): the certificate directory holds only the `cdn-beta` pair, the key is
   absent from the env file, and the origin refuses a TLS handshake for `sizetube.com`.
   `OPERATOR`.
+  **2026-11-19:** from outside, the origin still serves no certificate for `sizetube.com` or
+  `www.sizetube.com` (TLS alert on the handshake). It serves the Let's Encrypt certificate
+  for `beta.` (that name only, to 2027-02-02) and the Origin CA certificate for `cdn-beta.`
+  (that name only), and `sizetube.com` still resolves to Cloudflare (RUNTIME 2026-11-19). The
+  certificate directory and the env key are **unverified 2026-11-19** (not reachable): a
+  certificate placed there but not yet named in the Caddy file would not show from outside.
   **When issuing it, name `sizetube.com` only** (REHEARSAL 2026-11-12). Cloudflare's form
   pre-fills `*.sizetube.com` as well. With a wildcard certificate loaded, Caddy logged
   "skipping automatic certificate management because one or more matching certificates are
@@ -237,15 +307,26 @@ found is section I.
   dashboard showing the impressions.
   The script's consent and Global Privacy Control defaults are the cautious ones and belong
   to D15. `OPERATOR` (admin).
+  **2026-11-19:** prod still registers the `vast-ads` plugin (RUNTIME 2026-11-19, public
+  config). Everything on the beta's side is **unverified 2026-11-19**: the installed script,
+  the provider path, the page policy and the VAST settings are behind the gate or in the
+  database. The open points are as they were: no read-back of real fill by format or with a
+  blocker on, the mid-roll and post-roll beacons, and the ExoClick dashboard.
 
 ### D12 media-DR tail (open, not all window-blocking)
 
-All four re-read 2026-11-12 and all four still open.
+All four re-read 2026-11-12 and all four still open. Read again 2026-11-19 from the Backblaze
+listings, which cover three of them; all four are still open.
 
 - [ ] B2 replication **or** Object Lock to a separate account. Neither bucket replicates and
   file lock is off on both (RUNTIME). `OPERATOR`.
+  Unchanged 2026-11-19: no replication, file lock off and no lifecycle rule on either
+  bucket, and both are at the bucket revision they had on 2026-11-12 (RUNTIME 2026-11-19).
 - [ ] A media key **without** `deleteFiles`. The key the beta runs with still carries it
   (RUNTIME). `OPERATOR`.
+  Unchanged 2026-11-19: the account has the same 16 keys, the one key scoped to the media
+  bucket still carries `deleteFiles`, and no other key for that bucket has been made
+  (RUNTIME 2026-11-19, key listing). Which key the env file names was not re-read.
   Such a key protects less than its name suggests (REHEARSAL 2026-11-12): the api's own
   storage probe hid its test object with a key that had no `deleteFiles`, because hiding and
   overwriting need only `writeFiles`. Nothing is destroyed, but a hidden or overwritten
@@ -254,8 +335,15 @@ All four re-read 2026-11-12 and all four still open.
 - [ ] `HEALTHCHECKS_URL` in `/etc/vidra/backup.env` (silent on failure today). Absent: the
   file sets only the rclone remote and config path. The nightly backup itself last succeeded
   2026-11-12 03:26 UTC (RUNTIME). `OPERATOR`.
+  **Unverified 2026-11-19** (`backup.env` not reachable); still unset on 2026-11-15 (RUNTIME
+  that day, I1). From the backup bucket (RUNTIME 2026-11-19): a dump and its config archive
+  arrived every night from 2026-11-05 to 2026-11-19. **The 2026-11-19 pair arrived late and
+  split:** the dump at 03:43 UTC and the archive at 03:56, where each night from 2026-11-07
+  to 2026-11-18 had both within 17 seconds, between 03:16 and 03:29. The cause was not read
+  (the journal is on the box). With no check URL, a nightly that fails outright tells nobody.
 - [ ] Clear the 11 stranded B2 unfinished large files (427.6 MB, 2026-11-05). Still 11
   (RUNTIME). `OPERATOR`.
+  Still the same 11 on 2026-11-19, and none in the backup bucket (RUNTIME 2026-11-19).
 
 ## C. The cutover window (§5 steps 1–7)
 
@@ -316,6 +404,12 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
   the admin import page show the newest video date in the source (core #541, user #469).
   Prod has moved on since the 2026-11-06 snapshot: its public stats show 5,577
   accounts against 5,539 on the beta.
+  **2026-11-19:** the two paragraphs above describe the 2026-11-06 copy, which has been
+  replaced since: a catch-up run on 2026-11-14 brought the beta to 15,613 videos, and the
+  copy was refreshed on 2026-11-15 at 18:42 UTC (15,614 → 15,622 local videos) with no run
+  started after it, as of that entry (audit §6). Whether it has been refreshed or run since
+  is **unverified 2026-11-19**. Prod's public API shows 25 public videos created after that
+  refresh, and 5,634 accounts (RUNTIME 2026-11-19).
   Rehearsed 2026-11-12 on the copy, against the 2026-11-06 snapshot. Dry run with
   `source_authoritative=true`: 79 s. It lists planned totals per kind and **does not say what
   a real run will change**. Real run with `source_authoritative=true` and `media_mode=none`:
@@ -350,8 +444,9 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
   cookies/CORS, playback, search, old URLs publicly; watch api logs for 429/5xx; then enable
   registration / mail / federation per decisions, each with its own check. `OPERATOR`.
 - [ ] **7 · Rollback window (length per D14):** PeerTube frozen-but-running, env pinned at
-  the release deployed on the day (v0.7.20 today), both snapshots + dumps kept, source bucket
-  untouched, GC still off. Rollback = DNS back + unfreeze + a final `backup.sh`. `OPERATOR`.
+  the release deployed on the day (v0.7.20 when this was written; see the header), both
+  snapshots + dumps kept, source bucket untouched, GC still off. Rollback = DNS back +
+  unfreeze + a final `backup.sh`. `OPERATOR`.
   The beta's side of a rollback was rehearsed 2026-11-12 on the copy: `restore.sh` with the
   pre-flip backup 340 s including its media existence pass (every referenced object
   present), the saved env and `Caddyfile.local` back, `deploy.sh` 91 s: about 7 minutes.
@@ -490,6 +585,10 @@ D1–D14 and D16 were answered 2026-11-08 (audit §6 table). **D15 is the only o
 
 ## H. What is still not checked (after the 2026-11-12 re-read and rehearsal)
 
+- **Anything on the beta itself, as of 2026-11-19.** That day's partial re-read reached no
+  source on the box (see the top of this file): the deployed release, the env file, the
+  database and the certificate directory. The items it left unverified say so in sections A,
+  B and I, each with the date it was last observed.
 - **Prod's transcoding queue now, and prod's real request rate.** Both need read-only SSH to
   prod, which the operator declined on 2026-11-12. D16 therefore rests on the 2026-11-09
   reading, and the load check's "1×" is an estimate (section G).
@@ -501,9 +600,9 @@ D1–D14 and D16 were answered 2026-11-08 (audit §6 table). **D15 is the only o
 - **The admin infrastructure page on the beta.** Read on the rehearsal copy only; on the beta
   `public_base_url` was read from the running api container's environment.
 - **Whether counsel has answered D15.** The operator's to supply.
-- **What `www.sizetube.com` should do.** It answers 526 today (public GET 2026-11-12) and the
-  prepared Caddy file has no `www` block, so it stays broken after the cutover unless one is
-  added. No decision covers it.
+- **What `www.sizetube.com` should do.** It answers 526 (public GET 2026-11-12, and again
+  2026-11-19) and the prepared Caddy file has no `www` block, so it stays broken after the
+  cutover unless one is added. No decision covers it.
 - **Ads:** real fill and a real blocker on the six display formats; mid-roll and post-roll
   beacons; the ExoClick dashboard.
 - **Why three more import runs happened on 2026-11-10** (14:13, 16:33 and 19:24 UTC, started
@@ -525,7 +624,7 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
 
 **Data loss**
 
-- [ ] **I1 · A hand-run `backup.sh` can keep its copy on the box and still report success
+- [~] **I1 · A hand-run `backup.sh` can keep its copy on the box and still report success
   (bears on C3, C7 and F).** The script takes the off-site remote from its own process
   environment or from the env file (CODE `deploy/backup.sh:91`). With neither it logs
   `LOCAL COPY ONLY`, writes `last_success` and exits 0 (`backup.sh:365,470-471`). Section B
@@ -552,6 +651,15 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   as meta #393 and is NOT on the beta until its next bundle; until then a hand run there
   still reports success with a local copy only. `HEALTHCHECKS_URL` is not set, so a failed
   nightly alerts nobody. Not ticked.
+  *2026-11-19:* the sentence about the next bundle was overtaken the same evening. v0.7.23,
+  deployed 2026-11-15 18:42 UTC, has meta #393 in its bundle, and the unpacked
+  `deploy/backup.sh` was read with the guard then (RUNTIME 2026-11-15, audit §6). So on the
+  beta a hand run now writes its local pair and fails instead of reporting success; that
+  refusal has not been exercised there. Nothing on the box was re-read today (**unverified
+  2026-11-19**: the installed script, the unit and its drop-in). From the bucket (RUNTIME
+  2026-11-19): the unit's nightly pair arrived every night from 2026-11-05 to 2026-11-19.
+  Still open: steps 3 and 7 in section C say `backup.sh`, and on the beta the run that
+  uploads is `systemctl start vidra-backup.service`. In progress, not ticked.
 - [ ] **I2 · Nothing pins the rollback dumps (C7).** Step 7 says "both snapshots + dumps
   kept" and names no mechanism, and no rollback-window length is recorded (D14 records the
   write-loss policy only). On the box, the pre-flip `vidra-<stamp>.dump.gz` leaves the daily
@@ -560,6 +668,11 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   (`deploy/deploy.sh:46,620,644`). An off-site copy of the pre-flip pair exists only if I1
   holds. Either record a window shorter than 14 days, or copy the pre-flip dump, its config
   archive and the step 3 pre-deploy dump to somewhere the scripts do not prune. `OPERATOR`.
+  *2026-11-19:* unchanged. No window length is recorded in either file, and the pruning cited
+  is the same on meta main (CODE `48144d8`). The backup bucket has no lifecycle rule and
+  still holds every pair uploaded since 2026-11-04, 60 objects (RUNTIME 2026-11-19), so a
+  pre-flip pair taken through the unit stays off-site; the step 3 pre-deploy dump is never
+  uploaded.
 - [ ] **I3 · The restore re-drill in F can pass with media missing.** By default
   `restore.sh` warns and continues when referenced media is missing or cannot be verified
   (CODE `deploy/restore.sh:457-463`); only `--require-media-consistent` refuses
@@ -568,15 +681,23 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   the media pass's own result instead of the exit code. `OPERATOR`.
   **2026-11-15:** section F now names the flag and where the command is. The box stays open
   until the re-drill on the final dump has been run that way.
+  *2026-11-19:* unchanged; the final dump does not exist yet.
 - [ ] **I4 · The timed lost-object restore named in D12 has no line in the D12 tail.** The
   audit lists it under D12 and gives it as the second half of the control for media having
   one copy: replication or Object Lock, "then a timed hide-and-restore drill" (audit §6 D12,
   §8 Durable). It is neither done nor waived here. It follows the first D12 tail item.
   `OPERATOR`.
+  *2026-11-19:* unchanged. Neither replication nor Object Lock exists yet (RUNTIME
+  2026-11-19, D12 tail), so there is nothing to drill against; still neither done nor waived.
 - [ ] **I5 · How many copies of the backup encryption secret exist is still unverified.**
   The audit rated it Medium: "the crypt password/salt is a single point of failure (copy
   count unverified)" (audit §8 Durable). If the off-site copies are encrypted with it, they
   cannot be read without it (DEDUCED). Confirm a copy is held off the droplet. `OPERATOR`.
+  *2026-11-19:* not established. A file that appears to hold the secret was seen in the
+  operator's private files, off the droplet, by name, size and date only (2026-11-04). It
+  was not opened and not compared with what the droplet uses, so whether it is the current
+  password and salt is **unverified**. Decrypting one off-site backup with it on a machine
+  other than the droplet would settle it.
 
 **Legal exposure**
 
@@ -584,6 +705,11 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   the ad script's consent and Global Privacy Control defaults to D15, but none of the five
   intake questions asks what consent the HilltopAds and ExoClick display, popunder and VAST
   formats need (audit §8, questions 1–5). Add it to what counsel is asked. `LAWYER`.
+  *2026-11-19:* unchanged: the intake in audit §8 still has five questions and none covers
+  ads or tracking. It now has to cover Google Analytics too, on without a consent prompt on
+  the beta since 2026-11-15 (audit §6; not re-read today). The audit rated analytics MEDIUM
+  while it was consent-gated with no measurement id (audit §8); that premise no longer holds
+  and the rating has not been revisited.
 - [x] **I7 · A signup through OIDC or ATProto is not asked for the age attestation.** Both
   provider paths pass the terms acceptance only (CODE core `internal/auth/oauth.go:831`,
   `internal/auth/atproto.go:459`); the minimum-age check is in the form's handler alone
@@ -600,7 +726,7 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   beta:** registration is closed and `registration_minimum_age` is 0 there, so no refusal can
   fire yet; it rests on the two PRs' tests (CODE). Whether any provider is enabled is still
   unverified.
-- [ ] **I8 · The sign-in wall's two uncovered surfaces.** These matter only if `sign_in` is
+- [~] **I8 · The sign-in wall's two uncovered surfaces.** These matter only if `sign_in` is
   switched on. The IPFS mirror's eligibility test reads privacy and state, not the sensitive
   flag (CODE core `internal/httpapi/ipfs_assets.go:24`); **unverified:** whether the beta
   mirrors to IPFS at all. Playlist item cards are built without the card gate
@@ -613,12 +739,21 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   moderator-blocked videos and, under the `hide` policy, sensitive ones (core #557). The
   IPFS half is open. Read on the beta the same day (RUNTIME): `IPFS_MANAGED_NODE=false`.
   Not ticked.
+  *2026-11-19:* the playlist half was released and deployed the evening of that note: core
+  #555 and #557 are in v0.7.23 (CODE: the card gate is in `internal/httpapi/playlists.go`
+  from tag `v0.7.23`), deployed 2026-11-15 18:42 UTC (audit §6). Not exercised in a browser.
+  The IPFS half is unchanged through v0.7.25 and core main `21b37034` (CODE: `ipfs_assets.go`
+  and `sensitive_gate.go` are as they were at v0.7.20). `IPFS_MANAGED_NODE` is **unverified
+  2026-11-19**. In progress, not ticked.
 - [ ] **I9 · Existing accounts are never asked to accept the terms.** The `reaccept` source
   exists only in the migration's allowed values and a comment (CODE core
   `migrations/0189_user_consents.up.sql:28`, `internal/account/archive.go:45`); no handler
   writes it. Whether the 5,541 existing accounts must accept is a question for counsel, and
   the code follows the answer. `LAWYER`, then `AGENT`.
-- [ ] **I10 · The mail and reporting items rated HIGH in D15 have no owner.** No
+  *2026-11-19:* unchanged through v0.7.25 and core main `21b37034` (CODE): `reaccept` appears
+  in the migration, the API schema, a comment and tests, and no handler writes it. No counsel
+  answer is recorded.
+- [~] **I10 · The mail and reporting items rated HIGH in D15 have no owner.** No
   `List-Unsubscribe` header is set anywhere in core (CODE: a search of `internal/` and
   `cmd/` finds none). Filing an abuse report needs an account: all three report routes
   require sign-in (`internal/httpapi/server.go:2177-2179`), so a non-user has no route for
@@ -638,6 +773,13 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   `MAIL_ENABLED=false` in the env file. Not checked: notification email, and whether Resend
   passes the two unsubscribe headers through; the headers of the first notification email
   after the next release answer both.
+  *2026-11-19:* the header half was released and deployed the evening of that note: core
+  #556 is in v0.7.23 (CODE: `List-Unsubscribe` is in the source from tag `v0.7.23`), deployed
+  2026-11-15 18:42 UTC (audit §6). Still not checked against a real mailbox or through
+  Resend, and whether any notification mail has gone out since is **unverified 2026-11-19**.
+  The non-user report route is unchanged on core main `21b37034` (CODE): the three report
+  routes still require sign-in (`internal/httpapi/server.go:2204-2206`). In progress, not
+  ticked.
 
 Not covered by either review: the beta's live configuration, prod, the private
 `cutover-prep/` files (including the ad script), Canadian law, Cloudflare settings, and

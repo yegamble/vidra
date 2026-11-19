@@ -434,6 +434,24 @@ Executed so far (each with the operator's explicit go-ahead):
   kept as `peertube_source_snapshot_prev_20261115184227`. **No import was started** — that is launched from Admin →
   Import from PeerTube — so the 8 new videos are not on the beta yet, and anything uploaded to the live site after
   this refresh needs another refresh and run at the window.
+- 2026-11-19 19:21–19:30 UTC — partial read-only status re-read; the per-item results are in the
+  [checklist](sizetube-cutover-checklist.md). Reached: DNS, the Backblaze listings, prod's public API and the beta's
+  edge from outside. **Not reached: anything on the beta itself.** Its API answered 403 behind the gate and SSH did not
+  answer from the reading machine's network, so its env file, database, certificate directory and deployed release
+  are unverified as of this date, and so is everything this list says is set there. Observed (RUNTIME): both buckets,
+  the 16 keys and the 11 unfinished large files are exactly as on 2026-11-12 — no replication, no Object Lock, no
+  lifecycle rule, no key for the media bucket without `deleteFiles`; the nightly backup pair reached the backup bucket
+  every night from 2026-11-05 to 2026-11-19, the last one late and split (dump 03:43 UTC, config archive 03:56, cause
+  not read); the origin still serves no certificate for `sizetube.com`; the A, MX and Resend records are as on
+  2026-11-12, and the zone answers no CAA record today where that read showed a set (not looked into; no item depends
+  on it); prod's configuration is unchanged (signup open, minimum age 18, `isNSFW=true`, `vast-ads` registered) and it
+  has 5,634 accounts and 25 public videos newer than the 2026-11-15 snapshot refresh. v0.7.24 and v0.7.25 were
+  released on 2026-11-16 and no deploy of either is recorded here; an off-site backup outside the nightly slot at
+  2026-11-16 08:25 UTC, the minute the v0.7.24 record merged, suggests v0.7.24 was deployed then (DEDUCED). **Still
+  not applied, as far as could be read:** the D12 tail (replication or Object Lock, a non-deleting media key, the 11
+  unfinished large files) and the D3 certificate. **Not re-read:** D5, D7, D6, the anonymous-NSFW policy, the terms
+  and privacy URLs, the instance imagery, `HEALTHCHECKS_URL`, `VIDRA_SKIP_DNS_PREFLIGHT`, `MEDIA_GC_ENABLED`. Nothing
+  was changed anywhere.
 
 Everything else above is still a change the operator (or a later, separately approved task) makes.
 
