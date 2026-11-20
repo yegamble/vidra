@@ -17,7 +17,7 @@ read-only monitor (none is running today: the queue watcher stopped 2026-11-08 0
 
 **Status:** `[ ]` open · `[~]` in progress / prepared-but-not-applied · `[x]` done (dated).
 
-**Last status re-read: 2026-11-12 10:20–10:31 UTC, read-only.** Sources: the beta's public
+**Last full status re-read: 2026-11-12 10:20–10:31 UTC, read-only.** Sources: the beta's public
 API; its env file with secrets shown only as set or empty; its database in a read-only
 session; the Caddy certificate directory; DNS; Backblaze bucket and key listings; prod's
 public API. Nothing was changed anywhere. Evidence tags: `RUNTIME` = observed in that re-read
@@ -36,28 +36,19 @@ legal exposure, read this checklist against the audit and the released source. N
 run against a host, a database or a bucket, so no status in sections A–H changed. What they
 found is section I.
 
-**Partial re-read 2026-11-19 19:21–19:30 UTC, read-only.** Every open item in sections A, B
-and I was taken up again and nothing was changed anywhere. **Reached:** DNS; the Backblaze
-bucket, key, unfinished-upload and backup-bucket listings; prod's public API; the beta's edge
-from outside (its health check and the certificates it serves). **Not reached:** the beta's
-own API, its env file, its database and the Caddy certificate directory. The reading machine
-was not on the address the beta admits: every path but `/healthz` answered 403 behind the
-gate, and SSH did not answer. So this pass observed nothing that lives on the beta itself. A
-statement from it carries its date (`RUNTIME 2026-11-19`); an undated `RUNTIME` still means
-the 2026-11-12 re-read. An item marked **unverified 2026-11-19** could not be read: it keeps
-the date it was last observed and nothing was assumed for it. Items already ticked were not
-re-read either, `MEDIA_GC_ENABLED=false` (D12) among them: that gate was last read
-2026-11-12.
+**Latest re-read — RUNTIME 2026-11-19 19:21–19:30 UTC (partial).** Public prod reported
+PeerTube 8.3.1. DNS, B2 listings and the beta edge were readable. `/healthz` returned 200;
+`/version`, `/readyz` and `/api/v1/instance` returned 403. SSH timed out: no env, database
+or Caddy certificate-directory read ran. The gate and all infrastructure were left as found.
 
-**The deployed release is unverified too.** `/version` is behind the gate. v0.7.24 (core
-`96dcae14`, user `7c1ca962`; record merged 2026-11-16 08:25 UTC) and v0.7.25 (core
-`4e937189`, user `e1dc71ab`; 2026-11-16 18:40 UTC) were released after v0.7.23, search
-unchanged, and neither this file nor the audit records a deploy of either. The backup bucket
-holds one off-site pair uploaded outside the nightly slot since v0.7.23, at 2026-11-16 08:25
-UTC, the minute the v0.7.24 record merged (RUNTIME 2026-11-19, bucket listing); each of the
-last four recorded deploys was preceded by such a backup. So the beta probably runs v0.7.24
-or later (DEDUCED, not observed). Read `/version` from the admitted address before relying
-on the header.
+**Current beta versions and header match: unverified.** v0.7.23 is the last recorded deploy,
+not a live reading. Neither release records (including v0.7.24 and v0.7.25) nor B2 upload
+times identify running images. From an admitted address, compare `/version` and the running
+core, user and search image digests with the release record.
+
+Dated `RUNTIME` notes in A, B and I distinguish observations from unavailable evidence.
+**Unverified** is not a pass or evidence of absence. Already checked items were outside this
+pass; recheck the D12 GC setting before the window.
 
 ---
 
@@ -72,7 +63,7 @@ on the header.
   **Still open 2026-11-12.** No answer is recorded. On the beta `terms_url` and `privacy_url`
   are empty, `sensitive_content_policy=display`, `registration_minimum_age=0`; the counts are
   unchanged at 12,401 of 15,508 (RUNTIME).
-  **Still open 2026-11-19, and unverified on the beta:** none of the settings below could be
+  **RUNTIME 2026-11-19 — open; unverified on the beta:** none of the settings below could be
   re-read (the beta's API and database were not reachable). No counsel answer is recorded in
   either file. Last observed 2026-11-15 (RUNTIME that day, below): the age gate on at 18,
   `terms_url` and `privacy_url` empty, registration closed. The counts above are from
@@ -174,26 +165,25 @@ on the header.
   **2026-11-19:** the DKIM record (the same key as on 2026-11-12), both Resend CNAMEs and the
   `send.` MX and SPF still resolve (RUNTIME 2026-11-19, DNS). The saved transport and the
   reset-token table are **unverified 2026-11-19** (database not reachable). The operator sent
-  a password-reset mail from the beta by hand on 2026-11-15 and it arrived (RECORD, I10).
+  a password-reset mail from the beta and it arrived (RECORD, reported in I10 on 2026-11-15).
   Whether that account was an imported one is not recorded, so the open point stands.
 - [~] **Finding 10 · White-label on.** `branding_hide_software_name=true` since 2026-11-11
   14:28 UTC (RUNTIME). **Open:** the imagery — avatar, banner, favicon, both header logos and
   OpenGraph are all still the fallback, and no instance image is stored (RUNTIME). Set them in
   Admin → General → Branding. Survives deploys and the flip. `OPERATOR`.
-  **Unverified 2026-11-19** (the instance document is behind the gate and the database was
+  **RUNTIME 2026-11-19 — unverified** (the instance document is behind the gate and the database was
   not reachable); last observed 2026-11-12.
 - [~] **D5 · `profile_public` for imported accounts.** Audited one-off `UPDATE` prepared with
   dry-run counts in the private `cutover-prep/`; **not applied** — the dry-run still counts
   5,538 imported accounts, none public (RUNTIME 2026-11-12). Needs backup + approval.
   `OPERATOR`. (Alt: importer fix + release — see audit D5.)
-  **Unverified 2026-11-19** (database not reachable). The 2026-11-14 catch-up run added
-  accounts (5,598 users on 2026-11-15, against 5,541 the day before; audit §6), so 5,538 is
-  no longer the number to expect (DEDUCED): run the dry run again before approving the
-  `UPDATE`.
+  **RUNTIME 2026-11-19 — unverified** (DB unreachable). The catalogue changed after the
+  previous count. Repeat the ledger-scoped dry run before approving the update; 5,538 is
+  historical, not a current expected row count.
 - [~] **D7 · Block the remaining 289 media-less published videos** via `video_blocks` (394 of
   683 already blocked; all one inactive owner, all private). SQL prepared, **not applied** —
   the dry-run still counts 289 of 683 (RUNTIME 2026-11-12). `OPERATOR`.
-  **Unverified 2026-11-19** (database not reachable). The 2026-11-14 catch-up run added 105
+  **RUNTIME 2026-11-19 — unverified** (DB unreachable). The 2026-11-14 catch-up run added 105
   videos (audit §6), so run the dry run again, and confirm the rows are still that one
   owner's, before applying.
 - [~] **D6 · New-signup policy applied:** registration open with e-mail verification,
@@ -201,24 +191,20 @@ on the header.
   **Nothing applied** (RUNTIME 2026-11-12): registration off, e-mail verification off,
   minimum age 0, quota `5368709120`. The acceptance step needs code — the consent record under
   D15. `OPERATOR` + `AGENT`.
-  **2026-11-19: one of the four is applied.** `registration_minimum_age` has been 18 since the
-  operator turned the age gate on, 2026-11-15 14:22 UTC (RUNTIME that day, section A). The
-  acceptance step's code is deployed (v0.7.20, section A) and does nothing until the terms and
-  privacy URLs are set. Registration, e-mail verification and the quota are **unverified
-  2026-11-19** (env file and settings not reachable); last observed 2026-11-12, as above.
+  **RUNTIME 2026-11-19 — unverified** (env and DB unreachable). On 2026-11-15 the minimum
+  age was 18, registration was closed and both policy URLs were empty (section A); consent
+  code shipped in v0.7.20. Verification and quota were last read on 2026-11-12.
   D6 opens registration at cutover and D14 keeps it closed during the rollback window (audit
   §6); which holds on the day is not recorded.
 - [~] **Anonymous-NSFW policy decided + applied** (`display` vs `hide`/`warn`/`blur` + login)
   pending D15. Still `display`, last set 2026-11-06 (RUNTIME 2026-11-12). `OPERATOR`.
-  **2026-11-19:** the operator's own answer is applied on the beta: the visitor age gate, on
-  at 18 since 2026-11-15 14:22 UTC (RUNTIME that day, section A). It is self-declared and
-  refuses no API or media request, it has not been checked in a browser, and whether it is
-  enough is D15(a), which has no counsel answer. The policy itself was last read, as
-  `display`, on 2026-11-12. **Unverified 2026-11-19** (settings not reachable).
+  **RUNTIME 2026-11-19 — unverified** (settings unreachable). On 2026-11-15 the browser
+  gate was set to 18. That was the operator’s answer, not verification of age on API or
+  media requests, a browser acceptance test, or counsel’s answer to D15(a).
 - [~] **Instance metadata set.** Contact e-mail set in Admin → General on 2026-11-09 and
   served by the instance (RUNTIME). **Open:** terms and privacy URLs, both empty (RUNTIME
   2026-11-12); they wait for counsel's texts. `OPERATOR`.
-  **Unverified 2026-11-19**; both URLs were still empty on 2026-11-15 (RUNTIME that day,
+  **RUNTIME 2026-11-19 — unverified** (instance API and DB unreachable); both URLs were still empty on 2026-11-15 (RUNTIME that day,
   section A).
 - [x] **D13 · Record the proven imported-account login** (account + date) in the private log.
   Done 2026-11-12 12:17 UTC: the operator named an imported moderator account and signed in
@@ -326,7 +312,7 @@ listings, which cover three of them; all four are still open.
   (RUNTIME). `OPERATOR`.
   Unchanged 2026-11-19: the account has the same 16 keys, the one key scoped to the media
   bucket still carries `deleteFiles`, and no other key for that bucket has been made
-  (RUNTIME 2026-11-19, key listing). Which key the env file names was not re-read.
+  (RUNTIME 2026-11-19, key listing). The key actually in the beta env is unverified.
   Such a key protects less than its name suggests (REHEARSAL 2026-11-12): the api's own
   storage probe hid its test object with a key that had no `deleteFiles`, because hiding and
   overwriting need only `writeFiles`. Nothing is destroyed, but a hidden or overwritten
@@ -336,11 +322,9 @@ listings, which cover three of them; all four are still open.
   file sets only the rclone remote and config path. The nightly backup itself last succeeded
   2026-11-12 03:26 UTC (RUNTIME). `OPERATOR`.
   **Unverified 2026-11-19** (`backup.env` not reachable); still unset on 2026-11-15 (RUNTIME
-  that day, I1). From the backup bucket (RUNTIME 2026-11-19): a dump and its config archive
-  arrived every night from 2026-11-05 to 2026-11-19. **The 2026-11-19 pair arrived late and
-  split:** the dump at 03:43 UTC and the archive at 03:56, where each night from 2026-11-07
-  to 2026-11-18 had both within 17 seconds, between 03:16 and 03:29. The cause was not read
-  (the journal is on the box). With no check URL, a nightly that fails outright tells nobody.
+  that day, I1). The backup bucket showed uploads in the nightly slot every night from
+  2026-11-05 through 2026-11-19, most recently at 03:43 and 03:56 UTC (RUNTIME 2026-11-19).
+  A listing does not verify the unit result, alert delivery, backup contents or a restore.
 - [ ] Clear the 11 stranded B2 unfinished large files (427.6 MB, 2026-11-05). Still 11
   (RUNTIME). `OPERATOR`.
   Still the same 11 on 2026-11-19, and none in the backup bucket (RUNTIME 2026-11-19).
@@ -616,8 +600,8 @@ D1–D14 and D16 were answered 2026-11-08 (audit §6 table). **D15 is the only o
 
 Read 2026-11-13 from files only: this checklist, the audit, and the released source at meta
 `6b5aead` and core `5b7c22aa` (v0.7.20), cited below as `CODE`. No host, database or bucket
-was read, so nothing in this section is `RUNTIME`, and each statement about the beta's own
-configuration is marked unverified. The legal items are engineering guidance, not legal
+was read, so the original findings are not runtime observations. Subsequent dated notes distinguish live
+reads from source review and unavailable evidence. The legal items are engineering guidance, not legal
 advice. I1–I6 were recorded nowhere in this file. I7–I10 were notes inside section A's text
 with no checkbox and no owner; they get one here and section A is unchanged. Whether any of
 I6–I10 blocks the window is for counsel and the operator, and is not decided here.
@@ -651,15 +635,10 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   as meta #393 and is NOT on the beta until its next bundle; until then a hand run there
   still reports success with a local copy only. `HEALTHCHECKS_URL` is not set, so a failed
   nightly alerts nobody. Not ticked.
-  *2026-11-19:* the sentence about the next bundle was overtaken the same evening. v0.7.23,
-  deployed 2026-11-15 18:42 UTC, has meta #393 in its bundle, and the unpacked
-  `deploy/backup.sh` was read with the guard then (RUNTIME 2026-11-15, audit §6). So on the
-  beta a hand run now writes its local pair and fails instead of reporting success; that
-  refusal has not been exercised there. Nothing on the box was re-read today (**unverified
-  2026-11-19**: the installed script, the unit and its drop-in). From the bucket (RUNTIME
-  2026-11-19): the unit's nightly pair arrived every night from 2026-11-05 to 2026-11-19.
-  Still open: steps 3 and 7 in section C say `backup.sh`, and on the beta the run that
-  uploads is `systemctl start vidra-backup.service`. In progress, not ticked.
+  **RUNTIME 2026-11-19 — partial:** B2 shows nightly uploads; the installed guard, unit and
+  logs are unverified. The v0.7.23 guard was read on 2026-11-15, not exercised by hand.
+  For window backups use the configured unit and verify its off-site upload, not a local
+  exit code. A fresh pre-flip run is still required.
 - [ ] **I2 · Nothing pins the rollback dumps (C7).** Step 7 says "both snapshots + dumps
   kept" and names no mechanism, and no rollback-window length is recorded (D14 records the
   write-loss policy only). On the box, the pre-flip `vidra-<stamp>.dump.gz` leaves the daily
@@ -668,11 +647,9 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   (`deploy/deploy.sh:46,620,644`). An off-site copy of the pre-flip pair exists only if I1
   holds. Either record a window shorter than 14 days, or copy the pre-flip dump, its config
   archive and the step 3 pre-deploy dump to somewhere the scripts do not prune. `OPERATOR`.
-  *2026-11-19:* unchanged. No window length is recorded in either file, and the pruning cited
-  is the same on meta main (CODE `48144d8`). The backup bucket has no lifecycle rule and
-  still holds every pair uploaded since 2026-11-04, 60 objects (RUNTIME 2026-11-19), so a
-  pre-flip pair taken through the unit stays off-site; the step 3 pre-deploy dump is never
-  uploaded.
+  **RUNTIME 2026-11-19 — partial:** the backup bucket listed 60 objects and no lifecycle
+  rule. That does not pin a dump. No rollback length or pinned pair is documented; on-host
+  copies are unverified. Set the window length and retain both dumps outside local pruning.
 - [ ] **I3 · The restore re-drill in F can pass with media missing.** By default
   `restore.sh` warns and continues when referenced media is missing or cannot be verified
   (CODE `deploy/restore.sh:457-463`); only `--require-media-consistent` refuses
@@ -681,23 +658,22 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   the media pass's own result instead of the exit code. `OPERATOR`.
   **2026-11-15:** section F now names the flag and where the command is. The box stays open
   until the re-drill on the final dump has been run that way.
-  *2026-11-19:* unchanged; the final dump does not exist yet.
+  **RUNTIME 2026-11-19 — unverified:** no final strict restore is recorded; the host was
+  unreachable. B2 listings cannot demonstrate a restore.
 - [ ] **I4 · The timed lost-object restore named in D12 has no line in the D12 tail.** The
   audit lists it under D12 and gives it as the second half of the control for media having
   one copy: replication or Object Lock, "then a timed hide-and-restore drill" (audit §6 D12,
   §8 Durable). It is neither done nor waived here. It follows the first D12 tail item.
   `OPERATOR`.
-  *2026-11-19:* unchanged. Neither replication nor Object Lock exists yet (RUNTIME
-  2026-11-19, D12 tail), so there is nothing to drill against; still neither done nor waived.
+  **RUNTIME 2026-11-19:** neither replication nor Object Lock was configured (B2, D12 tail).
+  No timed restore or waiver is recorded; neither was verified.
 - [ ] **I5 · How many copies of the backup encryption secret exist is still unverified.**
   The audit rated it Medium: "the crypt password/salt is a single point of failure (copy
   count unverified)" (audit §8 Durable). If the off-site copies are encrypted with it, they
   cannot be read without it (DEDUCED). Confirm a copy is held off the droplet. `OPERATOR`.
-  *2026-11-19:* not established. A file that appears to hold the secret was seen in the
-  operator's private files, off the droplet, by name, size and date only (2026-11-04). It
-  was not opened and not compared with what the droplet uses, so whether it is the current
-  password and salt is **unverified**. Decrypting one off-site backup with it on a machine
-  other than the droplet would settle it.
+  **RUNTIME 2026-11-19 — unverified:** the B2 listing cannot establish custody of a working
+  off-droplet crypt password and salt. No secrets were opened and no decryption was run.
+  Verify recovery on a separate machine.
 
 **Legal exposure**
 
@@ -705,11 +681,10 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   the ad script's consent and Global Privacy Control defaults to D15, but none of the five
   intake questions asks what consent the HilltopAds and ExoClick display, popunder and VAST
   formats need (audit §8, questions 1–5). Add it to what counsel is asked. `LAWYER`.
-  *2026-11-19:* unchanged: the intake in audit §8 still has five questions and none covers
-  ads or tracking. It now has to cover Google Analytics too, on without a consent prompt on
-  the beta since 2026-11-15 (audit §6; not re-read today). The audit rated analytics MEDIUM
-  while it was consent-gated with no measurement id (audit §8); that premise no longer holds
-  and the rating has not been revisited.
+  **RUNTIME 2026-11-19 — partial:** prod lists the Analytics and VAST plugins. Beta consent
+  and tag behaviour are unverified. The last beta read showed Analytics enabled without a
+  consent prompt (2026-11-15, audit §6). The five-question intake in §8 still has no ad or
+  tracking question; no answer is documented.
 - [x] **I7 · A signup through OIDC or ATProto is not asked for the age attestation.** Both
   provider paths pass the terms acceptance only (CODE core `internal/auth/oauth.go:831`,
   `internal/auth/atproto.go:459`); the minimum-age check is in the form's handler alone
@@ -739,20 +714,18 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   moderator-blocked videos and, under the `hide` policy, sensitive ones (core #557). The
   IPFS half is open. Read on the beta the same day (RUNTIME): `IPFS_MANAGED_NODE=false`.
   Not ticked.
-  *2026-11-19:* the playlist half was released and deployed the evening of that note: core
-  #555 and #557 are in v0.7.23 (CODE: the card gate is in `internal/httpapi/playlists.go`
-  from tag `v0.7.23`), deployed 2026-11-15 18:42 UTC (audit §6). Not exercised in a browser.
-  The IPFS half is unchanged through v0.7.25 and core main `21b37034` (CODE: `ipfs_assets.go`
-  and `sensitive_gate.go` are as they were at v0.7.20). `IPFS_MANAGED_NODE` is **unverified
-  2026-11-19**. In progress, not ticked.
+  **RUNTIME 2026-11-19 — unverified:** the beta settings, including IPFS, were unreachable;
+  neither anonymous playlist delivery nor the mirror was exercised. RECORD: v0.7.23 carried
+  the playlist fix on 2026-11-15. CODE: IPFS eligibility is unchanged through v0.7.25 and
+  core main `21b37034`. The mirror half remains open if `sign_in` is chosen.
 - [ ] **I9 · Existing accounts are never asked to accept the terms.** The `reaccept` source
   exists only in the migration's allowed values and a comment (CODE core
   `migrations/0189_user_consents.up.sql:28`, `internal/account/archive.go:45`); no handler
   writes it. Whether the 5,541 existing accounts must accept is a question for counsel, and
   the code follows the answer. `LAWYER`, then `AGENT`.
-  *2026-11-19:* unchanged through v0.7.25 and core main `21b37034` (CODE): `reaccept` appears
-  in the migration, the API schema, a comment and tests, and no handler writes it. No counsel
-  answer is recorded.
+  **RUNTIME 2026-11-19 — unverified:** no beta login or DB session. Counsel has not given
+  a recorded decision. CODE: through v0.7.25 and main `21b37034`, no handler writes
+  `reaccept` (schema, comments and tests mention it).
 - [~] **I10 · The mail and reporting items rated HIGH in D15 have no owner.** No
   `List-Unsubscribe` header is set anywhere in core (CODE: a search of `internal/` and
   `cmd/` finds none). Filing an abuse report needs an account: all three report routes
@@ -773,13 +746,10 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   `MAIL_ENABLED=false` in the env file. Not checked: notification email, and whether Resend
   passes the two unsubscribe headers through; the headers of the first notification email
   after the next release answer both.
-  *2026-11-19:* the header half was released and deployed the evening of that note: core
-  #556 is in v0.7.23 (CODE: `List-Unsubscribe` is in the source from tag `v0.7.23`), deployed
-  2026-11-15 18:42 UTC (audit §6). Still not checked against a real mailbox or through
-  Resend, and whether any notification mail has gone out since is **unverified 2026-11-19**.
-  The non-user report route is unchanged on core main `21b37034` (CODE): the three report
-  routes still require sign-in (`internal/httpapi/server.go:2204-2206`). In progress, not
-  ticked.
+  **RUNTIME 2026-11-19 — unverified:** no mailbox, beta DB or notification test. RECORD:
+  v0.7.23 deployed the header on 2026-11-15; that does not prove Resend delivers it. CODE:
+  report routes still require sign-in on core main (`21b37034`, `server.go:2204-2206`).
+  Assign an owner for a public takedown route; neither half is accepted end to end.
 
 Not covered by either review: the beta's live configuration, prod, the private
 `cutover-prep/` files (including the ad script), Canadian law, Cloudflare settings, and

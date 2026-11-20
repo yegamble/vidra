@@ -434,24 +434,28 @@ Executed so far (each with the operator's explicit go-ahead):
   kept as `peertube_source_snapshot_prev_20261115184227`. **No import was started** — that is launched from Admin →
   Import from PeerTube — so the 8 new videos are not on the beta yet, and anything uploaded to the live site after
   this refresh needs another refresh and run at the window.
-- 2026-11-19 19:21–19:30 UTC — partial read-only status re-read; the per-item results are in the
-  [checklist](sizetube-cutover-checklist.md). Reached: DNS, the Backblaze listings, prod's public API and the beta's
-  edge from outside. **Not reached: anything on the beta itself.** Its API answered 403 behind the gate and SSH did not
-  answer from the reading machine's network, so its env file, database, certificate directory and deployed release
-  are unverified as of this date, and so is everything this list says is set there. Observed (RUNTIME): both buckets,
-  the 16 keys and the 11 unfinished large files are exactly as on 2026-11-12 — no replication, no Object Lock, no
-  lifecycle rule, no key for the media bucket without `deleteFiles`; the nightly backup pair reached the backup bucket
-  every night from 2026-11-05 to 2026-11-19, the last one late and split (dump 03:43 UTC, config archive 03:56, cause
-  not read); the origin still serves no certificate for `sizetube.com`; the A, MX and Resend records are as on
-  2026-11-12, and the zone answers no CAA record today where that read showed a set (not looked into; no item depends
-  on it); prod's configuration is unchanged (signup open, minimum age 18, `isNSFW=true`, `vast-ads` registered) and it
-  has 5,634 accounts and 25 public videos newer than the 2026-11-15 snapshot refresh. v0.7.24 and v0.7.25 were
-  released on 2026-11-16 and no deploy of either is recorded here; an off-site backup outside the nightly slot at
-  2026-11-16 08:25 UTC, the minute the v0.7.24 record merged, suggests v0.7.24 was deployed then (DEDUCED). **Still
-  not applied, as far as could be read:** the D12 tail (replication or Object Lock, a non-deleting media key, the 11
-  unfinished large files) and the D3 certificate. **Not re-read:** D5, D7, D6, the anonymous-NSFW policy, the terms
-  and privacy URLs, the instance imagery, `HEALTHCHECKS_URL`, `VIDRA_SKIP_DNS_PREFLIGHT`, `MEDIA_GC_ENABLED`. Nothing
-  was changed anywhere.
+- **RUNTIME 2026-11-19 19:21–19:30 UTC — partial read-only refresh.** Results by item are in the
+  [cutover checklist](sizetube-cutover-checklist.md). Beta `/healthz` returned 200; `/version`, `/readyz` and
+  `/api/v1/instance` returned 403. SSH timed out: no env, DB or Caddy cert-directory read ran. **Current core,
+  user and search versions and the header match are unverified.** v0.7.23 on 2026-11-15 remains the last
+  recorded deploy; neither a later release record nor a backup timestamp establishes a deploy.
+- **RUNTIME 2026-11-19 — D3/D4/D12.** At the beta origin TLS served no certificate for `sizetube.com`; whether
+  one is staged on disk is unverified. A, MX and Resend records resolved as on 2026-11-12. Both beta buckets
+  had no replication, Object Lock or lifecycle rule. The same 16 keys were listed; the dedicated media and
+  backup keys still have `deleteFiles`. Media had the same 11 unfinished large files; backup had none. The
+  backup bucket showed uploads every night through 2026-11-19 (latest 03:43 and 03:56 UTC). This is not
+  proof of backup contents, recoverability, an alert, or which key the beta is using.
+- **RUNTIME 2026-11-19 — public prod.** PeerTube 8.3.1; signup open, minimum age 18, e-mail verification off,
+  `isNSFW=true`, `display`; Analytics and VAST plugins registered. 5,634 users and 25 public videos created
+  after the last **recorded** source refresh (2026-11-15 18:42 UTC). The current snapshot, beta counts and
+  prod's private queue were not read. No import, freeze, mail, restore, DNS or other live change was made.
+- **Window: NO-GO on this evidence.** First the operator supplies an admitted read-only path and the D15
+  facts for counsel: audience/age controls, signup texts, imported-user notice, ads/Analytics consent and
+  non-user reporting. Resolve D6 vs D14 (when registration opens), rollback length and the D12 media risk.
+  In parallel the agent can prepare the read-only recheck, D5/D7 count checks and acceptance tests.
+  Then the operator verifies origin TLS, settings/GC, scoped counts, imported-account reset and off-site
+  recovery (including the strict restore on a copy), before approving a window. Only in that window: freeze,
+  refresh from the frozen source, dry-run/reconcile and test on the real hostname **before** moving DNS.
 
 Everything else above is still a change the operator (or a later, separately approved task) makes.
 
