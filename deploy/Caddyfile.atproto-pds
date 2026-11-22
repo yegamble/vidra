@@ -1,0 +1,5 @@
+import /etc/caddy/vidra-site
+
+{$VIDRA_LOCAL_PDS_HOST} {
+	reverse_proxy pds:2583
+}
