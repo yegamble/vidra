@@ -457,7 +457,13 @@ Executed so far (each with the operator's explicit go-ahead):
   recovery (including the strict restore on a copy), before approving a window. Only in that window: freeze,
   refresh from the frozen source, dry-run/reconcile and test on the real hostname **before** moving DNS.
 
-Everything else above is still a change the operator (or a later, separately approved task) makes.
+- **RUNTIME 2026-11-22 — hold the cutover.** The operator regained private rehearsal access.
+  All three running image digests matched v0.7.24, and the Nov 17 copy run had brought beta to
+  15,622 videos. Production had 90 public local videos created after the Nov 15 snapshot refresh
+  whose UUIDs were absent from beta.
+  The apex TLS handshake still failed at the beta origin. The Nov 22 encrypted off-site backup
+  succeeded. The browser age prompt, policy settings, scoped counts and recovery gaps are in
+  the [November 22 go-live decision](sizetube-cutover-checklist.md#november-22-go-live-decision).
 
 ## 7. What this audit does NOT establish
 
