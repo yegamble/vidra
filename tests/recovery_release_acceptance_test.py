@@ -369,10 +369,15 @@ class MailConfigCatalogueTest(unittest.TestCase):
         self.assertIn('mail_config', rows)
         self.assertIn('public.mail_config', ' '.join(FakeRun().relations(151)))
 
-    def test_a_191_candidate_is_refused_naming_the_migration_to_read(self):
+    def test_a_192_candidate_is_refused_naming_the_migration_to_read(self):
         with self.assertRaises(ValueError) as raised:
-            recovery.catalogue_for(191)
-        self.assertIn('0191', str(raised.exception))
+            recovery.catalogue_for(192)
+        self.assertIn('0192', str(raised.exception))
+
+    def test_site_pages_are_fingerprinted_whole_from_0191(self):
+        self.assertNotIn('site_pages', recovery.catalogue_for(190))
+        self.assertEqual((), recovery.catalogue_for(191)['site_pages'])
+        self.assertEqual([], recovery.unclassified_tables())
 
     def test_outbox_crawls_appear_exactly_from_0190_without_worker_columns(self):
         self.assertIn('federation_outbox_crawls', recovery.catalogue_for(190))

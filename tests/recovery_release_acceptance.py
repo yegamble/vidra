@@ -242,6 +242,8 @@ CATALOGUE = {
     # actor_url and queued_at are what a restore must reproduce.
     'federation_outbox_crawls': (190, ('state', 'attempts', 'next_attempt_at',
                                        'last_error', 'updated_at')),
+    # A restore must preserve the legal text, its public address, menu and edit revision.
+    'site_pages': (191, ()),
 }
 
 # BYTEA is hex-encoded by to_jsonb. Aggregating a 512MiB frozen snapshot can
@@ -343,6 +345,7 @@ TABLES_ADDED = {
     # 0190 creates federation_outbox_crawls (plus a partial index on pending
     # rows). This records SQL and core-query review, not a recovery drill.
     190: ('federation_outbox_crawls',),
+    191: ('site_pages',),
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 # Receiver authority is not disposable inbox/cache state. Compare whole rows:
