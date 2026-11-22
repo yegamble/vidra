@@ -1,9 +1,9 @@
 # sizetube.com cutover — tracked checklist (living)
 
 A working checklist for cutting `sizetube.com` over from PeerTube to the Vidra beta
-(`beta.sizetube.com`; last recorded deploy v0.7.23 = core `de998f2a`, user `270bc0a0`, search
-`d018b07f`, 2026-11-15 18:42 UTC; **not confirmed on 2026-11-19**, see the partial re-read
-below). It tracks **execution status**; the reasoning, evidence and decisions
+(`beta.sizetube.com`). On 2026-11-22 the running core, user and search image digests
+matched v0.7.24 (core `96dcae14`, user `7c1ca962`, search `d018b07f`).
+It tracks **execution status**. The reasoning, evidence and decisions
 live in the audit ([`sizetube-cutover-2026-11.md`](sizetube-cutover-2026-11.md)) and the run
 record ([`sizetube-beta-migration-2026-11.md`](sizetube-beta-migration-2026-11.md)). When an
 item here and the audit disagree, fix one of them in the same change — do not let them drift.
@@ -36,19 +36,29 @@ legal exposure, read this checklist against the audit and the released source. N
 run against a host, a database or a bucket, so no status in sections A–H changed. What they
 found is section I.
 
-**Latest re-read — RUNTIME 2026-11-19 19:21–19:30 UTC (partial).** Public prod reported
+**RUNTIME 2026-11-19 19:21–19:30 UTC (partial).** Public prod reported
 PeerTube 8.3.1. DNS, B2 listings and the beta edge were readable. `/healthz` returned 200;
 `/version`, `/readyz` and `/api/v1/instance` returned 403. SSH timed out: no env, database
 or Caddy certificate-directory read ran. The gate and all infrastructure were left as found.
 
-**Current beta versions and header match: unverified.** v0.7.23 is the last recorded deploy,
-not a live reading. Neither release records (including v0.7.24 and v0.7.25) nor B2 upload
-times identify running images. From an admitted address, compare `/version` and the running
-core, user and search image digests with the release record.
+### November 22 go-live decision
 
-Dated `RUNTIME` notes in A, B and I distinguish observations from unavailable evidence.
-**Unverified** is not a pass or evidence of absence. Already checked items were outside this
-pass; recheck the D12 GC setting before the window.
+**Hold production DNS.** The operator's browser reached SizeTube's 18+ prompt on beta.
+The homepage returned 200 with `noindex`, an unlisted source received 403, and `/readyz`
+reported healthy. The three running image digests match the [v0.7.24 release record](../releases/v0.7.24.json).
+
+| Gate | Evidence on November 22 | Remaining action |
+|---|---|---|
+| D3 · Production hostname | A direct TLS connection to the beta origin with SNI `sizetube.com` failed. Caddy's Origin CA directory contains only the CDN certificate pair. Public URL, frontend API URL and CORS still use beta. | Stage the apex-only certificate and key. Verify the real hostname at the beta origin before switching Cloudflare. |
+| C2/C4 · Final import | Beta has 5,603 users and 15,622 videos. The snapshot has 15,622 local videos. The last copy run finished Nov 17 at 16:13 UTC. All 17 runs used `source_authoritative=false`. Production reported 5,655 users. Its newest-first public local listing crossed the Nov 15 refresh cutoff and contained 90 videos created since. A UUID lookup found zero of those 90 on beta. | At the window, drain the production queue, verify the write freeze, take a fresh snapshot, switch the target hostname and run the authoritative dry run and copy. Reconcile moderation, privacy, deletes, followers and media failures against the frozen source. |
+| D5/D7 · Profiles and media | Read-only counts found 5,600 import-owned, non-deleted private profiles and 289 unblocked, private, published imports without a ready HLS playlist or original. The ledger has 685 failed HLS entries and two failed video entries. | Recount after the final import and approve the exact affected rows. For each remaining media failure, confirm a source exception or recover it. |
+| D15/D6 · Visitor and signup policy | The browser asks visitors to declare they are 18. Anonymous sensitive access is `open`, terms and privacy URLs are empty, and the consent table has zero rows. Registration is closed and email verification is off. | Resolve the D15 intake with counsel, publish the policies, and settle the imported-user notice, non-user reporting, ad consent, and signup timing during rollback. |
+| D4/C5 · Account and link acceptance | Resend is configured. One imported account has a redeemed reset token. The token row does not identify the delivery channel. A sampled legacy watch URL redirected to HTTP 200. The corresponding legacy channel and account URLs returned 404. | Test reset delivery and redemption together on a controlled imported account. Verify redirects, playback, upload, search, and cookie/CORS behavior on the real hostname. |
+| D12/D14 · Recovery | The Nov 22 backup job uploaded the database and configuration through the encrypted off-site remote and exited successfully at 03:25 UTC. Media GC is off. The backup heartbeat is unset. Both beta B2 buckets have Object Lock off and no replication. | Run the strict restore on a copy, retain the rollback dumps outside pruning, confirm recovery-key custody and decide the rollback duration and acceptable write loss. Record independent media recovery or the operator's acceptance of that risk. |
+
+The latest production queue depth, real-mail delivery, ad-provider reporting, and a restore
+of the current backup still need independent evidence. The rehearsal results in section G
+remain the baseline for the window.
 
 ---
 
