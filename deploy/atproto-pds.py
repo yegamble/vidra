@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import subprocess
 import tempfile
 from urllib.parse import urlsplit
 
@@ -20,6 +21,25 @@ def hostname(site):
     return "pds." + host
 
 
+def rotation_key():
+    # The PDS consumes the raw secp256k1 scalar. Let OpenSSL generate a
+    # valid key on this curve and extract only its private component.
+    pem = subprocess.run(["openssl", "ecparam", "-name", "secp256k1", "-genkey", "-noout"],
+                         check=True, capture_output=True).stdout
+    key = subprocess.run(["openssl", "ec", "-noout", "-text"], input=pem,
+                         check=True, capture_output=True).stdout.decode("ascii")
+    scalar = re.search(r"(?ms)^priv:\s*([0-9a-f:\s]+?)^pub:", key)
+    if scalar is None:
+        raise ValueError("OpenSSL returned an unrecognized PDS rotation key")
+    scalar = re.sub(r"[:\s]", "", scalar[1])
+    # LibreSSL may print a leading ASN.1 sign byte. The PDS uses 32 bytes.
+    if len(scalar) == 66 and scalar.startswith("00"):
+        scalar = scalar[2:]
+    if len(scalar) != 64:
+        raise ValueError("OpenSSL returned an invalid PDS rotation key length")
+    return scalar
+
+
 def prepare(path, data_dir):
     if path.is_symlink() or data_dir.is_symlink():
         raise ValueError("PDS data and secrets must use their original paths")
@@ -31,12 +51,10 @@ def prepare(path, data_dir):
         return
     if any(data_dir.iterdir()):
         raise ValueError("PDS data already exists; restore its original secret file")
-    # A randomly sampled secp256k1 private scalar, in the format the PDS accepts.
-    order = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
     values = {"PDS_BLOBSTORE_DISK_LOCATION": "/pds/blocks",
               "PDS_JWT_SECRET": secrets.token_hex(32),
               "PDS_ADMIN_PASSWORD": secrets.token_hex(32),
-              "PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX": f"{secrets.randbelow(order-1)+1:064x}"}
+              "PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX": rotation_key()}
     # Publish an already-complete 0600 file. Concurrent deploys can never
     # overwrite a winner's PLC rotation key or observe a partial first write.
     with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, prefix=".atproto-pds-") as temp:
