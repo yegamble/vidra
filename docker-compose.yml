@@ -115,6 +115,7 @@ services:
       # on ONE origin and deliberately relies on the env file leaving
       # NEXT_PUBLIC_API_BASE_URL pointed at that same origin.
       PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+      AGE_GATE_PUBLIC_PAGE_SLUGS: ${AGE_GATE_PUBLIC_PAGE_SLUGS:-}
       # THE SITE origin — a DIFFERENT concept from the two API origins above and
       # easy to conflate with them. It is the same PUBLIC_BASE_URL the api reads,
       # and the frontend needs it for exactly one decision: whether to emit
