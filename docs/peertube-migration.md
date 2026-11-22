@@ -259,6 +259,13 @@ only then swaps the two by rename in one transaction. The replaced snapshot is
 kept as `<name>_prev_<stamp>` (two by default). The DSN never changes, so the
 api is not restarted.
 
+Set `PEERTUBE_SYNC_EXCLUDE_SUSPENDED_VIDEOS=true` to exclude local videos owned
+by suspended users or accounts blocked by the PeerTube instance from each new
+import snapshot. Personal account mutes have no effect. The refresh checks
+every local video has an identifiable owner, compares eligible video counts
+for its shrink guard, and filters only the incoming restored copy before the
+swap. Existing destination videos need separate moderation.
+
 [`vidra-peertube-source-sync.timer`](../deploy/vidra-peertube-source-sync.timer)
 runs it daily, pulling the dump over SSH with a source-side key restricted to
 a forced `pg_dump` command; the script header documents that key. The refresh

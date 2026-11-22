@@ -54,8 +54,17 @@ if 'psql' in args:
         record('grants', sql); sys.exit(0)
     if 'has_table_privilege' in sql:
         print('t' if "'SELECT'" in sql else state.get('reader_can_write', 'f')); sys.exit(0)
+    if 'DELETE FROM video v' in sql:
+        record('exclude-suspended', db)
+        if state.get('filter_fails'): sys.exit(1)
+        excluded = state.get('suspended', {}).get(db, 0)
+        state['videos'][db] -= excluded
+        save(); print(excluded); sys.exit(0)
+    if 'unresolved_owner' in sql:
+        print(state.get('unresolved', 0)); sys.exit(0)
     if 'FROM video WHERE remote = false' in sql:
-        print(state['videos'][db]); sys.exit(0)
+        excluded = state.get('suspended', {}).get(db, 0) if 'NOT IN' in sql else 0
+        print(state['videos'][db] - excluded); sys.exit(0)
     if 'migrationVersion' in sql:
         print(800); sys.exit(0)
     if 'RENAME TO' in sql:
@@ -154,6 +163,36 @@ class PeertubeSourceSyncTest(unittest.TestCase):
         self.assertNotIn('peertube_source_snapshot_incoming', videos)
         # The spooled plaintext copy of the source does not outlive a good restore.
         self.assertEqual(list(self.spool.iterdir()), [])
+
+    def test_suspended_owner_filter_runs_only_on_incoming_before_publish(self):
+        snapshot = 'peertube_source_snapshot'
+        self.seed(videos={'vidra': 0, snapshot: 110}, incoming_videos=112,
+                  suspended={snapshot: 12, snapshot + '_incoming': 14})
+        result = self.sync('--dump-file', str(self.dump), PEERTUBE_SYNC_EXCLUDE_SUSPENDED_VIDEOS='true')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.state()['calls']
+        self.assertIn(['exclude-suspended', 'peertube_source_snapshot_incoming'], calls)
+        self.assertLess(self.kinds().index('exclude-suspended'), self.kinds().index('swap'))
+        self.assertEqual(self.state()['videos'][snapshot], 98)
+        retired = next(name for name in self.state()['videos'] if '_prev_' in name)
+        self.assertEqual(self.state()['videos'][retired], 110)
+
+    def test_unresolved_owner_prevents_snapshot_publication(self):
+        self.seed(videos={'vidra': 0, 'peertube_source_snapshot': 100}, incoming_videos=106,
+                  unresolved=1)
+        result = self.sync('--dump-file', str(self.dump), PEERTUBE_SYNC_EXCLUDE_SUSPENDED_VIDEOS='true')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('unresolved owners', result.stderr)
+        self.assertNotIn('exclude-suspended', self.kinds())
+        self.assertNotIn('swap', self.kinds())
+
+    def test_suspended_owner_filter_failure_keeps_the_old_snapshot_live(self):
+        self.seed(videos={'vidra': 0, 'peertube_source_snapshot': 100}, incoming_videos=106,
+                  filter_fails=True)
+        result = self.sync('--dump-file', str(self.dump), PEERTUBE_SYNC_EXCLUDE_SUSPENDED_VIDEOS='true')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('swap', self.kinds())
+        self.assertEqual(100, self.state()['videos']['peertube_source_snapshot'])
 
     def test_dump_on_stdin_reaches_the_restore_whole(self):
         payload = b'PGDMP' + os.urandom(4096)

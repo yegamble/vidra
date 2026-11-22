@@ -83,6 +83,7 @@ Environment (process value wins, else ENV_FILE):
   PEERTUBE_SYNC_SSH            user@host to pull the dump from
   PEERTUBE_SYNC_SSH_KEY        identity file for that connection (optional)
   PEERTUBE_SYNC_SPOOL_DIR      where the dump is spooled (default backups/peertube-source)
+  PEERTUBE_SYNC_EXCLUDE_SUSPENDED_VIDEOS  omit local videos owned by suspended source users
   PEERTUBE_SYNC_KEEP_DUMP      true keeps the spooled dump after a good restore
   PEERTUBE_SYNC_KEEP_PREVIOUS  retired snapshots to keep (default 2)
   PEERTUBE_SYNC_HEALTHCHECKS_URL  dead-man's-switch ping (/start, /fail)
@@ -119,6 +120,12 @@ SPOOL_DIR="${SPOOL_DIR:-$REPO_ROOT/backups/peertube-source}"
 KEEP_DUMP="${PEERTUBE_SYNC_KEEP_DUMP-$(env_get PEERTUBE_SYNC_KEEP_DUMP false)}"
 KEEP_PREVIOUS="${PEERTUBE_SYNC_KEEP_PREVIOUS-$(env_get PEERTUBE_SYNC_KEEP_PREVIOUS 2)}"
 HC_URL="${PEERTUBE_SYNC_HEALTHCHECKS_URL-$(env_get PEERTUBE_SYNC_HEALTHCHECKS_URL '')}"
+
+EXCLUDE_SUSPENDED="${PEERTUBE_SYNC_EXCLUDE_SUSPENDED_VIDEOS-$(env_get PEERTUBE_SYNC_EXCLUDE_SUSPENDED_VIDEOS false)}"
+case "$EXCLUDE_SUSPENDED" in
+  true|false) ;;
+  *) die "PEERTUBE_SYNC_EXCLUDE_SUSPENDED_VIDEOS must be true or false" ;;
+esac
 
 case "$KEEP_PREVIOUS" in
   ''|*[!0-9]*) die "PEERTUBE_SYNC_KEEP_PREVIOUS must be a non-negative integer, got '$KEEP_PREVIOUS'" ;;
@@ -187,7 +194,6 @@ hc_ping() {
   [ -n "$HC_URL" ] || return 0
   curl -fsS -m 10 --retry 3 -o /dev/null "${HC_URL}${1:-}" || true
 }
-# shellcheck disable=SC2154  # rc IS assigned — by the first statement of this very trap body.
 # The trap owns the spooled dump. It keeps its .part name for the WHOLE run and
 # is only renamed once the refresh is published and PEERTUBE_SYNC_KEEP_DUMP
 # asks for it, so a run that dies after verifying the archive (restore failure,
@@ -195,10 +201,13 @@ hc_ping() {
 # source's accounts behind — on a timer that is one more copy every night.
 # QUIET_FAIL: a run that never started (lost the lock) must not page as a
 # failure of the run that is in progress.
-cleanup() {
+on_exit() {
+  local rc="$1"
   [ -z "${SPOOL_PART:-}" ] || rm -f "$SPOOL_PART"
+  if [ "$rc" -ne 0 ] && [ -z "${QUIET_FAIL:-}" ]; then hc_ping /fail; fi
+  exit "$rc"
 }
-trap 'rc=$?; cleanup; if [ "$rc" -ne 0 ] && [ -z "${QUIET_FAIL:-}" ]; then hc_ping /fail; fi; exit "$rc"' EXIT
+trap 'on_exit "$?"' EXIT
 
 # One refresh at a time. Without this, a manual run overlapping the timer can
 # drop and rebuild <name>_incoming between the other run's verify and its swap,
@@ -328,6 +337,23 @@ can_read="$(psql_at "$INCOMING_DB" "SELECT has_table_privilege('$READER_ROLE', '
 [ "$can_read" = "t" ] || die "$READER_ROLE cannot read $INCOMING_DB.public.video — the importer would fail on its first query"
 
 local_videos_sql='SELECT count(*) FROM video WHERE remote = false'
+if [ "$EXCLUDE_SUSPENDED" = true ]; then
+  # Only the disposable restored copy is curated. Its foreign keys remove the
+  # dependent renditions, artwork and comments, so later media retries cannot
+  # rediscover the excluded videos through a child table.
+  owner_join='FROM "videoChannel" c JOIN account a ON a.id=c."accountId" JOIN "user" u ON u.id=a."userId"'
+  unresolved="$(psql_at "$INCOMING_DB" "SELECT count(*) AS unresolved_owner FROM video v WHERE NOT v.remote
+    AND NOT EXISTS (SELECT 1 $owner_join WHERE c.id=v.\"channelId\" AND u.blocked IS NOT NULL)")"
+  [ "$unresolved" = "0" ] || die "$unresolved local videos have unresolved owners; refusing to publish the incoming snapshot"
+  # Compare eligible populations on both sides, including the first transition
+  # from an unfiltered snapshot. The shrink guard still applies to that set.
+  # PeerTube also lets the instance actor block an account. Personal mutes
+  # belong to the individual viewer and must not exclude a creator's library.
+  instance_block='SELECT 1 FROM "accountBlocklist" b JOIN account i ON i.id=b."accountId"
+    WHERE i."applicationId" IS NOT NULL AND b."targetAccountId"=a.id'
+  suspended="SELECT c.id $owner_join WHERE u.blocked IS TRUE OR EXISTS ($instance_block)"
+  local_videos_sql="$local_videos_sql AND \"channelId\" NOT IN ($suspended)"
+fi
 new_videos="$(psql_at "$INCOMING_DB" "$local_videos_sql")"
 new_schema="$(psql_at "$INCOMING_DB" 'SELECT "migrationVersion" FROM application')"
 log "new snapshot: $new_videos local videos, PeerTube schema $new_schema"
@@ -348,6 +374,15 @@ if db_exists "$SNAP_DB"; then
   if [ "$new_schema" != "$old_schema" ]; then
     log "WARNING: the source's PeerTube schema changed ($old_schema → $new_schema). The importer pins the schema it was acknowledged against; expect the next run to ask for a new acknowledgement."
   fi
+fi
+
+if [ "$EXCLUDE_SUSPENDED" = true ]; then
+  excluded="$(psql_at "$INCOMING_DB" "WITH excluded AS (
+    DELETE FROM video v WHERE NOT v.remote AND v.\"channelId\" IN ($suspended) RETURNING v.id)
+    SELECT count(*) FROM excluded")" || die "failed to filter suspended owners from the incoming snapshot"
+  remaining="$(psql_at "$INCOMING_DB" 'SELECT count(*) FROM video WHERE remote = false')"
+  [ "$remaining" = "$new_videos" ] || die "eligible count changed during suspended-owner filtering"
+  log "excluded $excluded suspended-owner videos from the incoming copy; $remaining eligible local videos"
 fi
 
 # ----------------------------------------------------------------- 5. swap --
