@@ -591,6 +591,9 @@ fi
 # three VIDRA_*_TAG image tags. `:?` fails on an EMPTY value as well as an unset one,
 # which is what makes it catch the shipped `JWT_SECRET=` blank in an env file
 # that was copied but never edited.
+if [ "$LOCAL_ATPROTO_PDS" = 1 ]; then
+  python3 "$REPO_ROOT/deploy/atproto-pds.py" --prepare "$REPO_ROOT/env/atproto-pds.env"
+fi
 "${COMPOSE[@]}" config -q || die "compose config is invalid — fix $ENV_FILE and retry"
 log "tags: core=$(env_get VIDRA_CORE_TAG '?') user=$(env_get VIDRA_USER_TAG '?') search=$(env_get VIDRA_SEARCH_TAG '?')"
 
@@ -757,14 +760,21 @@ step "5/6 reload Caddy"
 # prevent, and neither is visible in the loopback probes below — they connect
 # to api and frontend directly, behind Caddy.
 reload_caddy() {
-  local attempt mounted
+  local attempt mounted host_site=/etc/caddy/Caddyfile wrapper stale
+  if [ "${LOCAL_ATPROTO_PDS:-0}" = 1 ]; then host_site=/etc/caddy/vidra-site; fi
   for attempt in 1 2 3 4 5; do
     # Setup promotes files with an atomic rename. A file bind mount retains
     # the old inode, so reload can succeed while serving the previous domain
     # or TLS mode. Refresh only Caddy's mount when its bytes actually differ;
     # unchanged deployments keep the graceful reload path.
-    if mounted="$("${COMPOSE[@]}" exec -T caddy cat /etc/caddy/Caddyfile 2>/dev/null)"; then
-      if [ "$mounted" != "$(cat "$REPO_ROOT/deploy/Caddyfile.local")" ]; then
+    if mounted="$("${COMPOSE[@]}" exec -T caddy cat "$host_site" 2>/dev/null)"; then
+      stale=0
+      if [ "$mounted" != "$(cat "$REPO_ROOT/deploy/Caddyfile.local")" ]; then stale=1; fi
+      if [ "${LOCAL_ATPROTO_PDS:-0}" = 1 ]; then
+        wrapper="$("${COMPOSE[@]}" exec -T caddy cat /etc/caddy/Caddyfile)" || return 1
+        if [ "$wrapper" != "$(cat "$REPO_ROOT/deploy/Caddyfile.atproto-pds")" ]; then stale=1; fi
+      fi
+      if [ "$stale" = 1 ]; then
         log "Caddyfile mount is stale; recreating Caddy before reload"
         "${COMPOSE[@]}" up -d --no-build --no-deps --force-recreate caddy || return 1
       fi

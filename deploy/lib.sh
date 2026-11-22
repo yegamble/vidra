@@ -118,6 +118,16 @@ vidra_compose_chain() {
     COMPOSE+=(-f docker-compose.ipfs-managed.yml)
   fi
 
+  LOCAL_ATPROTO_PDS=0
+  if is_true "$(env_get ATPROTO_ENABLED false)" && [ -z "$(env_get ATPROTO_PDS_URL '')" ]; then
+    # Read by deploy.sh before its first Compose render.
+    # shellcheck disable=SC2034
+    LOCAL_ATPROTO_PDS=1
+    VIDRA_LOCAL_PDS_HOST="$(python3 "$REPO_ROOT/deploy/atproto-pds.py" --hostname "$(env_get PUBLIC_BASE_URL '')")" || die "invalid hostname for the local PDS"
+    export VIDRA_LOCAL_PDS_HOST
+    COMPOSE+=(-f docker-compose.atproto-pds.yml)
+  fi
+
   # External/managed datastores. Each overlay parks the bundled service on a
   # profile nothing enables and deletes every depends_on edge that named it —
   # leaving one in place makes the whole project INVALID, not merely wasteful

@@ -263,6 +263,10 @@ else
   CONFIG_MISSING+=("$ENV_FILE (outside $REPO_ROOT — cannot be stored repo-relative)")
 fi
 
+if [ -f "$REPO_ROOT/env/atproto-pds.env" ]; then
+  CONFIG_MEMBERS+=(env/atproto-pds.env)
+fi
+
 if [ -f "$REPO_ROOT/deploy/Caddyfile.local" ]; then
   CONFIG_MEMBERS+=(deploy/Caddyfile.local)
 else

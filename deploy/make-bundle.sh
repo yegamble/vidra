@@ -115,6 +115,7 @@ log "meta tree from $REPO_ROOT"
 copy_in docker-compose.yml
 copy_in docker-compose.prod.yml
 copy_in docker-compose.ipfs-managed.yml
+copy_in docker-compose.atproto-pds.yml
 copy_in docker-compose.external-postgres.yml
 copy_in docker-compose.external-redis.yml
 copy_in LICENSE
