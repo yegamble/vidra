@@ -123,3 +123,6 @@ Thumbs.db
 # Evidence records keep their console logs (the repo-wide *.log rule above dropped fourteen of them from meta#194 silently).
 !docs/evidence/**/*.log
 deploy/rtmps-certs/
+
+# Local PDS databases, rotation material and blobs.
+/data/atproto-pds/
