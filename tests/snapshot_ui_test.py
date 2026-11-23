@@ -155,6 +155,14 @@ class ConsoleTest(unittest.TestCase):
         with mock.patch.object(ui.subprocess, "check_output", return_value=b"private metadata  6 archive parts\n"):
             self.assertEqual(ui.run_check(["retire", ID]), "This recovery point includes 6 archive parts.")
 
+    def test_staging_estimate_and_schema_ledgers_are_optional_numeric_fields(self):
+        row = ui.public_snapshot(sample(staging_bytes=123456, schemas={"core": 191, "search": 21, "private": "hidden"}))
+        self.assertEqual(row["staging_bytes"], 123456)
+        self.assertEqual(row["schemas"], {"core": 191, "search": 21})
+        old = ui.public_snapshot(sample(staging_bytes="unknown", schemas={"core": True}))
+        self.assertNotIn("staging_bytes", old)
+        self.assertEqual(old["schemas"], {})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -22,6 +22,13 @@ const triggerNames = { "manual": "Manual", "pre-upgrade": "Before upgrade", "bef
 const label = (reason) => triggerNames[reason] || reason;
 const selected = () => entries.find((entry) => entry.id === selection);
 
+function storageSize(bytes) {
+  const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+  let index = 0;
+  while (bytes >= 1024 && index < units.length - 1) { bytes /= 1024; index += 1; }
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(bytes) + " " + units[index];
+}
+
 async function api(path, data) {
   const headers = { "X-Vidra-Key": key || "" };
   const options = { headers, cache: "no-store" };
@@ -70,6 +77,7 @@ function renderDetail() {
   if (install) {
     fact(facts, "Media store", entry.storage === "s3" ? "S3" : "Local volume");
     if (entry.bucket) fact(facts, "Source bucket", entry.bucket, true);
+    if (Number.isFinite(entry.staging_bytes)) fact(facts, "Restore staging estimate", storageSize(entry.staging_bytes));
     fact(facts, "Snapshot ID", entry.id.slice(0, 12), true);
   } else {
     fact(facts, "Archive", entry.id, true);
@@ -77,6 +85,7 @@ function renderDetail() {
   byId("pins").replaceChildren();
   const componentNames = { core: "Core", user: "Frontend", search: "Search" };
   Object.entries(entry.components || {}).forEach(([name, version]) => fact(byId("pins"), componentNames[name], version, true));
+  Object.entries(entry.schemas || {}).forEach(([name, version]) => fact(byId("pins"), componentNames[name] + " schema", String(version), true));
   byId("components").hidden = !byId("pins").childNodes.length;
   byId("legacy-note").hidden = install;
   byId("review").hidden = !install;

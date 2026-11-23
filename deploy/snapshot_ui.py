@@ -69,7 +69,7 @@ def public_snapshot(entry):
     components = entry.get("components", {})
     if not isinstance(components, dict):
         raise ValueError("invalid component pins")
-    return {
+    public = {
         "kind": kind,
         "id": field("id", SNAPSHOT_ID if kind == "install" else DATABASE),
         "time": field("time", STAMP),
@@ -80,6 +80,14 @@ def public_snapshot(entry):
         "components": {key: value for key, value in components.items()
                        if key in ("core", "user", "search") and isinstance(value, str) and RELEASE.fullmatch(value)},
     }
+    size = entry.get("staging_bytes")
+    if kind == "install" and type(size) is int and size >= 0:
+        public["staging_bytes"] = size
+    schemas = entry.get("schemas", {})
+    if isinstance(schemas, dict):
+        public["schemas"] = {k: v for k, v in schemas.items()
+                             if k in ("core", "search") and type(v) is int and v >= 0}
+    return public
 
 
 def options(data, entry):
@@ -111,7 +119,9 @@ def run_check(args):
     # Expose counts from the host's actual plan, without forwarding its output.
     counts = re.search(rb"^Restore (\d+) volumes and (\d+) exact service images\.", output, re.M)
     if args[0] == "restore" and counts:
-        return f"This recovery restores {int(counts[1])} volumes and {int(counts[2])} service images."
+        volumes, images = int(counts[1]), int(counts[2])
+        return (f"This recovery restores {volumes} volume{'s' if volumes != 1 else ''} "
+                f"and {images} service image{'s' if images != 1 else ''}.")
     parts = re.search(rb" (\d+) archive parts\s*$", output)
     if args[0] == "retire" and parts:
         return f"This recovery point includes {int(parts[1])} archive parts."
