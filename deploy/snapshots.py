@@ -16,8 +16,8 @@ import snapshot_s3
 from snapshot_lock import maintenance_lock
 from snapshot_repo import Capture, Repository, output, private_dir, run
 from snapshot_stack import (IMAGE_ID, SAFE_NAME, archive_volume, assert_volumes,
-                            compose, config, inspect, inventory, owned_containers,
-                            restart_original, stop)
+                            check_binds, check_datastores, compose, config, environment_digest, inspect, inventory, owned_containers,
+                            restart_original, schema_versions, stop)
 
 ROOT = Path(__file__).resolve().parent.parent
 FIELDS = ("time", "reason", "release", "components", "storage", "bucket")
@@ -48,6 +48,9 @@ def write_json(path, doc):
 def current(root, repo):
     repo.ready()
     env_file(root)
+    for gitdir in [root / ".git", *(root.glob("vidra-*/.git"))]:
+        if gitdir.is_file() or gitdir.is_symlink():
+            raise ValueError("Linked Git worktrees require a separate backup of their external metadata")
     manifest, api = inventory(root)
     if manifest["storage"] == "s3":
         snapshot_s3.preflight(api)
@@ -180,6 +183,10 @@ def prepare(repo, doc, stage, bucket, live):
     tree = stage / "tree"
     repo.restore_tree(doc["tree"], tree)
     model = staged_config(tree, doc)
+    check_datastores(model)
+    if environment_digest(model) != doc["environment_digest"]:
+        raise ValueError("Archived service environments differ from those captured on the running install")
+    check_binds(repo.root, doc["project"], doc["binds"])
     for image in set(doc["images"].values()):
         if not IMAGE_ID.fullmatch(image):
             raise ValueError("Invalid archived image ID")
@@ -226,6 +233,7 @@ def recover(repo, doc, stage):
         run("docker", "stop", "--time", "120", *ids, stdout=subprocess.DEVNULL)
         run("docker", "rm", *ids, stdout=subprocess.DEVNULL)
     assert_volumes(project, doc["volumes"], allow_missing=True)
+    check_binds(root, project, doc["binds"])
     step("Restore step: restoring owned volumes")
     for name, key in doc["volumes"].items():
         run("docker", "volume", "create", "--label", "com.docker.compose.project=" + project,
@@ -250,6 +258,9 @@ def recover(repo, doc, stage):
                 "cd /volume && find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && tar -xpf -", stdin=f)
     env = dict(os.environ, ENV_FILE=doc["env_file"], COMPOSE_PROJECT_NAME=project)
     model = config(root)
+    check_datastores(model)
+    if environment_digest(model, doc["bucket"] if doc["storage"] == "s3" else None) != doc["environment_digest"]:
+        raise ValueError("The restored service environments differ from the archived configuration")
     overrides = {}
     for svc, image in doc["images"].items():
         alias = "vidra-recovery/" + project + ":" + image.split(":")[1]
@@ -267,6 +278,8 @@ def recover(repo, doc, stage):
     args = ["-f", str(overlay)]
     step("Restore step: checking restored media")
     compose(root, *args, "up", "-d", "--no-build", "--pull", "never", "--no-deps", "--wait", "postgres", "redis", env=env)
+    if schema_versions(root, model, options=args, environ=env) != doc["schemas"]:
+        raise ValueError("Restored database migration ledgers differ from the captured versions")
     report = json.loads(compose(root, *args, "run", "--rm", "--no-deps", "api",
                                 "verify-blobs", "--hash", "--deep", "--json", "--timeout=4h", env=env))
     if type(report.get("deep_verification_version")) is not int or report["deep_verification_version"] != 1:
@@ -285,6 +298,8 @@ def restore(repo, args):
           f"Restore {len(doc['volumes'])} volumes and {len(doc['images'])} exact service images. "
           + ("Current state will be replaced without a safety snapshot." if args.discard_current
              else "Current state will be saved as a separate recovery point."), flush=True)
+    if "schemas" in doc:
+        print("Database schemas: core {core}, search {search}.".format(**doc["schemas"]))
     if not args.apply:
         if doc["storage"] == "s3":
             print("Applying this snapshot requires a separately provisioned, empty destination bucket.")
@@ -364,27 +379,38 @@ def restore(repo, args):
 
 def retire(repo, ident, apply):
     repo.ready()
-    doc = repo.read(ident)
-    if (private_dir(repo.root) / JOURNAL).exists():
+    folder = private_dir(repo.root)
+    if (folder / JOURNAL).exists():
         raise ValueError("Finish the active recovery before retiring a snapshot")
-    group = doc["group"]
-    if not re.fullmatch(r"vidra-capture-[a-f0-9]{32}", group):
-        raise ValueError("Invalid capture group")
-    rows = json.loads(output("restic", "snapshots", "--json", "--tag", group))
-    catalog = [row["id"] for row in rows if repo.tag in row["tags"]]
-    if catalog != [ident]:
-        raise ValueError("Recovery point does not uniquely own its capture group")
-    print(f"{doc['time']}  {doc['release']}  {doc['reason']}  {len(rows)} archive parts")
-    if apply:
-        # Remove the catalog entry first so interrupted retirement cannot
-        # advertise a restore point whose data has already been forgotten.
-        run("restic", "forget", ident)
-        parts = [r["id"] for r in rows if r["id"] != ident]
-        if parts:
-            run("restic", "forget", *parts)
-        print("Recovery point retired. Restic prune can reclaim unreferenced storage.")
+    journal = folder / ".snapshot-retirement.json"
+    if journal.exists():
+        receipt = json.loads(journal.read_text())
+        if receipt["id"] != ident:
+            raise ValueError("Finish retiring the recovery point " + receipt["id"])
     else:
+        doc = repo.read(ident)
+        group = doc["group"]
+        if not re.fullmatch(r"vidra-capture-[a-f0-9]{32}", group):
+            raise ValueError("Invalid capture group")
+        receipt = dict(id=ident, group=group, time=doc["time"], release=doc["release"], reason=doc["reason"])
+    rows = json.loads(output("restic", "snapshots", "--json", "--tag", receipt["group"])) or []
+    catalog = [row["id"] for row in rows if repo.tag in row["tags"]]
+    if catalog != [ident] and not (journal.exists() and not catalog):
+        raise ValueError("Recovery point does not uniquely own its capture group")
+    print(f"{receipt['time']}  {receipt['release']}  {receipt['reason']}  {len(rows)} archive parts")
+    if not apply:
         print("Preview only. Use --apply to retire this entire recovery point.")
+        return
+    # Retain the group name across interruptions. Removing the catalog first
+    # prevents advertising a restore point with missing data.
+    write_json(journal, receipt)
+    if catalog:
+        run("restic", "forget", ident)
+    parts = [r["id"] for r in rows if r["id"] != ident]
+    if parts:
+        run("restic", "forget", *parts)
+    journal.unlink()
+    print("Recovery point retired. Restic prune can reclaim unreferenced storage.")
 
 
 def main():

@@ -38,12 +38,14 @@ services:
     image: alpine:3.24
     command: ["true"]
   api:
-    image: postgres:18-alpine
+    image: ${FIXTURE_CORE_IMAGE:?}:${VIDRA_CORE_TAG:?}
     entrypoint: [sh, /fixture/api]
     command: [serve]
     environment:
       STORAGE_BACKEND: local
       STORAGE_LOCAL_ROOT: /app/data/media
+      DATABASE_URL: postgresql://fixture@postgres:5432/fixture
+      REDIS_URL: redis://redis:6379/0
       SMOKE_VERSION: ${VIDRA_CORE_TAG:?}
       PGHOST: postgres
       PGDATABASE: fixture
@@ -65,7 +67,16 @@ services:
     command: [serve]
     environment:
       SMOKE_VERSION: ${VIDRA_SEARCH_TAG:?}
+      DATABASE_URL: postgresql://fixture@postgres:5432/fixture
+      REDIS_URL: redis://redis:6379/0
     volumes: [./deploy/probe:/fixture/api:ro]
+  pds:
+    image: alpine:3.24
+    entrypoint: [sh, /fixture/api]
+    command: [serve]
+    volumes:
+      - ./deploy/probe:/fixture/api:ro
+      - ./data/atproto-pds:/pds
 volumes:
   pg: {}
   media: {}
@@ -111,8 +122,16 @@ def exercise(folder):
     (install / 'docker-compose.yml').write_text(MODEL)
     (install / 'docker-compose.prod.yml').write_text('services: {}\n')
     (install / 'env').mkdir()
+    (install / 'data/atproto-pds').mkdir(parents=True)
     settings = install / 'env/production.env'
     project = 'vidra-snapshot-lab-' + secrets.token_hex(6)
+    core_image = 'vidra-snapshot-fixture/' + project
+    build = folder / 'build'
+    build.mkdir()
+    (build / 'Dockerfile').write_text(
+        'FROM postgres:18-alpine\nARG RELEASE\nARG PROJECT\n'
+        'ENV FIXTURE_IMAGE_VERSION=$RELEASE\nLABEL io.vidra.smoke.project=$PROJECT\n'
+    )
     secretfile = folder / 'password'
     secretfile.write_text(secrets.token_hex(32))
     secretfile.chmod(0o600)
@@ -152,7 +171,7 @@ def exercise(folder):
 
     def version(tag):
         settings.write_text(
-            'VIDRA_TLS_MODE=external\n'
+            f'VIDRA_TLS_MODE=external\nFIXTURE_CORE_IMAGE={core_image}\n'
             + ''.join(f'VIDRA_{component}_TAG={tag}\n' for component in ('CORE', 'USER', 'SEARCH'))
         )
 
@@ -189,26 +208,69 @@ def exercise(folder):
             f"INSERT INTO photos VALUES ('{label}.jpg',md5('{label}')); "
             f"INSERT INTO messages VALUES ('{label} message')"
         )
+        stack(
+            'exec',
+            '-T',
+            'pds',
+            'sh',
+            '-ec',
+            'printf %s "$1" > "/pds/$1" && chmod 0640 "/pds/$1" && chown 11001:11002 "/pds/$1"',
+            'sh',
+            label,
+        )
 
     def check_state(tag, labels):
+        ledgers = sql(
+            "SELECT version::text || ':' || dirty::text FROM public.schema_migrations "
+            "UNION ALL SELECT version::text || ':' || dirty::text FROM public.vidra_search_migrations"
+        )
+        assert ledgers.splitlines() == (
+            ['1:false', '10:false'] if tag == 'v1.0.0' else ['2:false', '11:false']
+        )
         current = sql("SELECT string_agg(body,',' ORDER BY body) FROM messages")
         assert current == ','.join(f'{v} message' for v in labels), current
         files = stack('exec', '-T', 'api', 'ls', '-1', '/app/data/media', capture=True).splitlines()
         assert sorted(files) == [v + '.jpg' for v in labels], files
         assert stack('exec', '-T', 'api', 'printenv', 'SMOKE_VERSION', capture=True) == tag
+        assert stack('exec', '-T', 'api', 'printenv', 'FIXTURE_IMAGE_VERSION', capture=True) == tag
         assert f'VIDRA_CORE_TAG={tag}\n' in settings.read_text()
+        assert stack('exec', '-T', 'pds', 'ls', '-1', '/pds', capture=True).splitlines() == labels
         for label in labels:
             assert (
                 stack('exec', '-T', 'api', 'cat', f'/app/data/media/{label}.jpg', capture=True) == label
+            )
+            assert stack('exec', '-T', 'pds', 'cat', '/pds/' + label, capture=True) == label
+            assert (
+                stack('exec', '-T', 'pds', 'stat', '-c', '%u:%g:%a', '/pds/' + label, capture=True)
+                == '11001:11002:640'
             )
 
     version('v1.0.0')
     cmd('restic', 'init')
     try:
-        stack('up', '-d', '--wait', 'postgres', 'redis', 'api', 'frontend', 'search')
+        stack('pull', '--policy', 'missing', 'postgres')
+        for tag in ('v1.0.0', 'v1.1.0'):
+            cmd(
+                'docker',
+                'build',
+                '--pull=false',
+                '--network=none',
+                '--build-arg',
+                'RELEASE=' + tag,
+                '--build-arg',
+                'PROJECT=' + project,
+                '-t',
+                core_image + ':' + tag,
+                str(build),
+            )
+        stack('up', '-d', '--wait', 'postgres', 'redis', 'api', 'frontend', 'search', 'pds')
         sql(
             'CREATE TABLE photos(filename text PRIMARY KEY,digest text NOT NULL);'
-            'CREATE TABLE messages(body text PRIMARY KEY)'
+            'CREATE TABLE messages(body text PRIMARY KEY);'
+            'CREATE TABLE public.schema_migrations(version bigint, dirty boolean);'
+            'CREATE TABLE public.vidra_search_migrations(version bigint, dirty boolean);'
+            'INSERT INTO public.schema_migrations VALUES (1,false);'
+            'INSERT INTO public.vidra_search_migrations VALUES (10,false);'
         )
         upload('first')
         snapshots('create', '--reason', 'manual')
@@ -216,6 +278,10 @@ def exercise(folder):
         assert first['release'] == 'v1.0.0' and first['kind'] == 'install'
         version('v1.1.0')
         stack('up', '-d', '--wait', 'api', 'search', 'frontend')
+        sql(
+            'UPDATE public.schema_migrations SET version=2; '
+            'UPDATE public.vidra_search_migrations SET version=11'
+        )
         upload('later')
         check_state('v1.1.0', ['first', 'later'])
 
@@ -226,27 +292,56 @@ def exercise(folder):
         check_state('v1.0.0', ['first'])
         (safety,) = [row for row in history() if row['reason'] == 'before-restore']
         assert safety['release'] == 'v1.1.0'
+        version('v9.9.9')  # A failed deploy wrote new pins without replacing its containers.
+        failed = subprocess.run(
+            [sys.executable, deploy / 'snapshots.py', 'create'],
+            cwd=install,
+            env=env,
+            text=True,
+            capture_output=True,
+        )
+        assert failed.returncode and 'Release pins have changed' in failed.stderr, failed.stderr
+        assert {r['id'] for r in history()} == {first['id'], safety['id']}
+        stack('stop', 'api')
+        lost = cmd(
+            'docker', 'image', 'inspect', '--format', '{{.Id}}', core_image + ':v1.1.0', capture=True
+        )
+        cmd('docker', 'image', 'rm', core_image + ':v1.1.0')
+        missing = subprocess.run(
+            ['docker', 'image', 'inspect', lost],
+            cwd=install,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        assert missing.returncode, 'recovery fixture image must be absent from the local image store'
+
+        first_doc = json.loads(cmd('restic', 'dump', first['id'], '/vidra-install.json', capture=True))
+        snapshots('retire', first['id'])
+        assert {r['id'] for r in history()} == {first['id'], safety['id']}
+        snapshots('retire', first['id'], '--apply')
+        assert json.loads(
+            cmd('restic', 'snapshots', '--json', '--tag', first_doc['group'], capture=True)
+        ) in (None, [])
+        cmd('restic', 'prune')
+        cmd('restic', 'check', '--read-data')
         snapshots('restore', safety['id'], '--apply', '--discard-current')
         check_state('v1.1.0', ['first', 'later'])
-        assert len(history()) == 2
+        assert [r['id'] for r in history()] == [safety['id']]
         print(
-            'PASS: dated snapshots, preview, release rollback and recovery of newer messages and media',
+            'PASS: rollback preserved newer messages, media and bind ownership; a retained snapshot '
+            'recovered the mixed-pin install after retirement and repository pruning',
             flush=True,
         )
     finally:
         stack('down', '--volumes', '--remove-orphans')
         # Recovery image aliases are local to this randomly named fixture.
-        refs = cmd(
-            'docker',
-            'image',
-            'ls',
-            '--format',
-            '{{.Repository}}:{{.Tag}}',
-            'vidra-recovery/' + project,
-            capture=True,
-        ).splitlines()
-        if refs:
-            cmd('docker', 'image', 'rm', *refs)
+        for repository in ('vidra-recovery/' + project, core_image):
+            refs = cmd(
+                'docker', 'image', 'ls', '--format', '{{.Repository}}:{{.Tag}}', repository, capture=True
+            ).splitlines()
+            if refs:
+                cmd('docker', 'image', 'rm', *refs)
 
 
 if __name__ == '__main__':

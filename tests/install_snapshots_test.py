@@ -3,7 +3,6 @@ import contextlib
 import io
 import json
 import os
-import subprocess
 import sys
 import tarfile
 import tempfile
@@ -16,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy"))
 import snapshots
 from snapshot_lock import maintenance_lock
 from snapshot_repo import Repository
+from snapshot_stack import check_datastores, environment_digest
 
 
 class SnapshotsTest(unittest.TestCase):
@@ -95,6 +95,30 @@ class SnapshotsTest(unittest.TestCase):
             repo.read("a" * 64)
         with patch.dict(os.environ, {"RESTIC_REPOSITORY": str(self.root / "backups/restic")}), self.assertRaisesRegex(ValueError, "outside"):
             repo.ready()
+
+    def test_external_datastore_overrides_prevent_capture_and_restore(self):
+        env = {"DATABASE_URL": "postgresql://u:p@postgres:5432/app", "REDIS_URL": "redis://redis:6379/0"}
+        model = {"services": {"postgres": {"environment": {"POSTGRES_DB": "app"}}, "redis": {},
+                              "api": {"environment": env}}}
+        check_datastores(model)
+        old = environment_digest(model)
+        for endpoint in ("postgresql://u:p@elsewhere/app", "postgresql://u:p@postgres/wrong",
+                         "postgresql://u:p@postgres/app?hostaddr=192.0.2.1"):
+            with patch.dict(env, {"DATABASE_URL": endpoint}):
+                with self.assertRaisesRegex(ValueError, "captured datastore"):
+                    check_datastores(model)
+                self.assertNotEqual(environment_digest(model), old)
+        with patch.dict(env, {"REDIS_URL": "redis://remote:6379/0"}), self.assertRaises(ValueError):
+            check_datastores(model)
+
+    def test_explicit_replacement_recovers_without_healthy_current_pins(self):
+        self.args.discard_current = True
+        model = {"name": "lab", "services": {"api": {"environment": {}}}}
+        with patch.object(snapshots, "config", return_value=model), patch.object(snapshots, "owned_containers", return_value=[]), \
+                patch.object(snapshots, "current", side_effect=AssertionError), patch.object(snapshots, "prepare"), \
+                patch.object(snapshots, "capture", side_effect=AssertionError), patch.object(snapshots, "recover") as recover:
+            snapshots.restore(self.repo, self.args)
+            recover.assert_called_once()
 
     def test_restore_bucket_replaces_every_local_assignment(self):
         path = self.root / "env/production.env"

@@ -1,9 +1,10 @@
 """Identify the actual Compose project, its writers, image IDs and owned volumes."""
+import hashlib
 import json
-import os
 import re
 import sys
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from snapshot_repo import output, run
 
@@ -59,8 +60,78 @@ def assert_volumes(project, names, allow_missing=False):
                 raise ValueError("Another Docker project has mounted " + name)
 
 
+def check_datastores(model):
+    services = model["services"]
+    if "postgres" not in services or "redis" not in services:
+        raise ValueError("Install snapshots require project-local PostgreSQL and Redis")
+    db = services["postgres"].get("environment", {}).get("POSTGRES_DB")
+    for name, spec in services.items():
+        env = spec.get("environment", {})
+        for key in ("DATABASE_URL", "SEARCH_DATABASE_URL", "REDIS_URL"):
+            required = ((key == "DATABASE_URL" and name in ("api", "worker", "search", "migrate", "search-migrate"))
+                        or (key == "REDIS_URL" and name in ("api", "search", "worker")))
+            if not env.get(key) and not required:
+                continue
+            uri = urlsplit(env.get(key) or "")
+            if key == "REDIS_URL":
+                valid = uri.scheme in ("redis", "rediss") and uri.hostname == "redis" and uri.port in (None, 6379)
+            else:
+                valid = (uri.scheme in ("postgres", "postgresql") and uri.hostname == "postgres"
+                         and uri.port in (None, 5432) and db and unquote(uri.path) == "/" + db
+                         and set(parse_qs(uri.query, keep_blank_values=True)) <= {
+                             "sslmode", "connect_timeout", "application_name", "search_path"})
+            if not valid:
+                raise ValueError(name + " " + key + " does not select the captured datastore")
+
+
+def environment_digest(model, bucket=None):
+    settings = {k: dict(v.get("environment", {})) for k, v in model["services"].items()}
+    if bucket is not None:
+        for env in settings.values():
+            if "STORAGE_S3_BUCKET" in env:
+                env["STORAGE_S3_BUCKET"] = bucket
+    return hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()
+
+
+def check_binds(root, project, relpaths):
+    if not relpaths:
+        return
+    paths = [root / r for r in relpaths]
+    ids = output("docker", "ps", "-aq").decode().split()
+    for client in inspect("container", ids):
+        if client["Config"]["Labels"].get("com.docker.compose.project") == project:
+            continue
+        for mount in client["Mounts"]:
+            if mount["Type"] != "bind":
+                continue
+            value = mount["Source"]
+            if sys.platform == "darwin" and value.startswith("/host_mnt/"):
+                value = value[len("/host_mnt"):]
+            src = Path(value).resolve()
+            if any(src == path or src in path.parents or path in src.parents for path in paths):
+                raise ValueError("A container outside the project shares a writable snapshot directory")
+
+
+def schema_versions(root, model, *, options=(), environ=None):
+    pg = model["services"]["postgres"]["environment"]
+    rows = compose(root, *options, "exec", "-T", "postgres", "psql", "-XAt", "-v", "ON_ERROR_STOP=1",
+                   "-U", pg.get("POSTGRES_USER", "vidra"), "-d", pg["POSTGRES_DB"], "-c",
+                   "SELECT 'core',version,dirty FROM public.schema_migrations UNION ALL "
+                   "SELECT 'search',version,dirty FROM public.vidra_search_migrations", env=environ)
+    versions = {}
+    for line in rows.decode().splitlines():
+        match = re.fullmatch(r"(core|search)\|([0-9]+)\|f", line)
+        if not match or match[1] in versions:
+            raise ValueError("Dirty or ambiguous migration ledger")
+        versions[match[1]] = int(match[2])
+    if set(versions) != {"core", "search"}:
+        raise ValueError("Missing Vidra migration ledger")
+    return versions
+
+
 def inventory(root):
     model = config(root)
+    check_datastores(model)
     project = model["name"]
     services = model["services"]
     api = services["api"]["environment"]
@@ -79,6 +150,10 @@ def inventory(root):
         if (service not in services or labels.get("com.docker.compose.oneoff", "").lower() == "true"
                 or service in images):
             raise ValueError("Unexpected container, replica or one-off job in project: " + service)
+        actual_env = dict(line.split("=", 1) for line in container["Config"].get("Env", []) if "=" in line)
+        for key, value in services[service].get("environment", {}).items():
+            if actual_env.get(key) != value:
+                raise ValueError(service + " differs from the saved configuration for " + key)
         expected = services[service]["image"]
         if container["Config"]["Image"] != expected:
             # A previous restore recreates containers using immutable local aliases.
@@ -117,7 +192,7 @@ def inventory(root):
                 mounted.add((service, mount["Destination"]))
             elif mount["Type"] != "tmpfs":
                 raise ValueError("Unsupported mount type: " + mount["Type"])
-    if not set(COMPONENTS.values()) | {"postgres"} <= set(images):
+    if not (set(COMPONENTS.values()) | {"postgres"}) <= set(images):
         raise ValueError("Install the core, frontend, search and PostgreSQL services first")
     if "postgres" not in active:
         raise ValueError("PostgreSQL must be running to establish a recovery point")
@@ -134,12 +209,14 @@ def inventory(root):
             images[name] = inspect("image", [spec["image"]])[0]["Id"]
     helper = images["prep-volumes"]
     assert_volumes(project, volumes)
+    check_binds(root, project, binds)
     variables = dict(line.split("=", 1) for line in compose(root, "config", "--environment").decode().splitlines()
                      if "=" in line)
     tags = {key: variables.get("VIDRA_" + key.upper() + "_TAG", "") for key in COMPONENTS}
     if not all(re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:@sha256:[0-9a-f]{64})?", tag) for tag in tags.values()):
         raise ValueError("Configure released Vidra component tags before taking an install snapshot")
-    return {"project": project, "images": images, "helper": helper, "volumes": volumes,
+    return {"project": project, "schemas": schema_versions(root, model),
+            "environment_digest": environment_digest(model), "images": images, "helper": helper, "volumes": volumes,
             "binds": sorted(binds), "running": sorted(active), "components": tags, "storage": backend,
             "bucket": api.get("STORAGE_S3_BUCKET", "") if backend == "s3" else ""}, api
 
