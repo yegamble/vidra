@@ -595,6 +595,9 @@ if [ "$LOCAL_ATPROTO_PDS" = 1 ]; then
   python3 "$REPO_ROOT/deploy/atproto-pds.py" --prepare "$REPO_ROOT/env/atproto-pds.env"
 fi
 "${COMPOSE[@]}" config -q || die "compose config is invalid — fix $ENV_FILE and retry"
+if is_true "$(env_get VIDRA_SOURCE_BUILD false)"; then
+  python3 "$REPO_ROOT/deploy/source-update.py" verify || die "source image verification failed before the database dump"
+fi
 log "tags: core=$(env_get VIDRA_CORE_TAG '?') user=$(env_get VIDRA_USER_TAG '?') search=$(env_get VIDRA_SEARCH_TAG '?')"
 
 step "1/6 pre-deploy database dump"
