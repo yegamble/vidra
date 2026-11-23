@@ -52,7 +52,11 @@ def fingerprint(value):
 
 
 def drill(old, new, sql):
-    """One pair and what its facts are held against; refuses a pair with nothing to inject."""
+    """Use the actual migration conflict or the migrator's exact dirty-version refusal."""
+    if rec03_pair.same_schema(old, new):
+        version = old['core_schema_version']
+        conflict = re.compile(rf'Dirty database version {version}\. Fix and force version\.\Z')
+        return SimpleNamespace(old=old, new=new, injection={'REC03_INJECT': 'dirty'}, conflict=conflict)
     injection = rec03_pair.injection(sql)
     return SimpleNamespace(old=old, new=new, injection=injection, conflict=rec03_pair.conflict(injection))
 
@@ -115,6 +119,13 @@ def verify_running_images(phase, pair, inspect):
 
 def verify(phase, facts, previous, log, pair):
     """Driver records failures without exiting; its facts must decide the gate."""
+    old, new = pair.old, pair.new
+    if phase == 'restore-refuse' and rec03_pair.same_schema(old, new):
+        require(facts == {'not_applicable': 'same_schema',
+                          'pre_core_version': str(old['core_schema_version']), 'post_core_version': str(new['core_schema_version']),
+                          'pre_search_version': str(old['search_schema_version']), 'post_search_version': str(new['search_schema_version'])},
+                'same-schema restore comparison not proven')
+        return {'status': 'NOT_APPLICABLE', 'reason': 'same_schema'}
     expected = {'install': ('install_exit', 0), 'backup': ('backup_exit', 0),
                 'upgrade-fail': ('deploy_exit', 1), 'recover': ('deploy_exit', 0),
                 'backup2': ('backup_exit', 0), 'rollback': ('rollback_exit', 0),
@@ -127,7 +138,6 @@ def verify(phase, facts, previous, log, pair):
     if phase not in ('backup', 'inject', 'backup2', 'report'):
         require('probe' in facts, 'missing HTTP probes')
         require(facts['probe'] == PROBE, 'HTTP probes failed')
-    old, new = pair.old, pair.new
     ledger = rec03_pair.ledger(old, new, phase)
     if phase not in ('backup', 'backup2', 'split', 'report'):
         require(facts.get('ledger') == ledger, 'unexpected migration ledger')
@@ -232,10 +242,12 @@ def main(out):
         found = release_pair.resolve(root, os.environ.get('REC03_RELEASE', ''), os.environ.get('REC03_PREVIOUS', ''))
         old, new = found['old'], found['new']
         result['pair'] = [old['release'], new['release']]
-        _, migration = rec03_pair.first_pending(old, new)
-        with urllib.request.urlopen(f"{CORE_SOURCE}/{new['components']['core']['commit']}/migrations/{migration}", timeout=30) as response:
-            sql = response.read(MIGRATION_LIMIT + 1)
-        require(len(sql) <= MIGRATION_LIMIT, 'first pending migration too large')
+        sql = b''
+        if not rec03_pair.same_schema(old, new):
+            _, migration = rec03_pair.first_pending(old, new)
+            with urllib.request.urlopen(f"{CORE_SOURCE}/{new['components']['core']['commit']}/migrations/{migration}", timeout=30) as response:
+                sql = response.read(MIGRATION_LIMIT + 1)
+            require(len(sql) <= MIGRATION_LIMIT, 'first pending migration too large')
         pair = drill(old, new, sql.decode())
         require(not Path('/opt/vidra').exists(), 'existing deployment refused')
         private = Path('/root/rec03')

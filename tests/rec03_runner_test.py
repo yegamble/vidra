@@ -45,6 +45,26 @@ class Verdict(PerPair):
         log = json.dumps(event(case)) if log is None else log
         return runner.verify('upgrade-fail', self.upgrade(case, **changes), {'data': DATA}, log, pair)
 
+    def test_same_schema_proves_dirty_refusal_and_two_unchanged_ledgers(self):
+        old, new = [json.loads((ROOT / 'releases' / (v + '.json')).read_text()) for v in ('v0.7.18', 'v0.7.19')]
+        pair = runner.drill(old, new, '')
+        self.assertEqual(pair.injection, {'REC03_INJECT': 'dirty'})
+        dirty = 'core=188:true search=21:false'
+        self.assertEqual(runner.verify('inject', {'ledger': dirty}, {}, '', pair)['ledger'], dirty)
+        facts = {'deploy_exit': '1', 'pin_exit': '0', 'ledger': dirty, 'probe': runner.PROBE,
+                 'images': ''.join(runner.rec03_pair.images(old)), 'fp': FP}
+        log = json.dumps({'level': 'ERROR', 'msg': 'migrate failed',
+                          'error': 'dbmigrate: apply migrations: Dirty database version 188. Fix and force version.'})
+        self.assertEqual(runner.verify('upgrade-fail', facts, {'data': DATA}, log, pair)['status'], 'PASS')
+        with self.assertRaisesRegex(runner.Failure, 'conflict not observed'):
+            runner.verify('upgrade-fail', facts, {'data': DATA}, log.replace('188', '189'), pair)
+        compared = dict(not_applicable='same_schema', pre_core_version='188', post_core_version='188',
+                        pre_search_version='21', post_search_version='21')
+        self.assertEqual(runner.verify('restore-refuse', compared, {}, '', pair),
+                         {'status': 'NOT_APPLICABLE', 'reason': 'same_schema'})
+        with self.assertRaisesRegex(runner.Failure, 'comparison not proven'):
+            runner.verify('restore-refuse', {**compared, 'post_search_version': '22'}, {}, '', pair)
+
     def test_actual_first_migration_failure_is_required(self):
         for case, pair in self.each():
             self.assertEqual(self.check_upgrade(case, pair), {'status': 'PASS', 'media_fingerprint_verified': True,
@@ -284,10 +304,16 @@ class Preflight(unittest.TestCase):
             with self.subTest(env=env):
                 self.refused(reason, [], **env)
 
-    def test_a_pair_with_no_core_migration_is_a_fail_naming_the_pair(self):
-        self.refused('pair carries no core migration', ['v0.7.9', 'v0.7.11'], REC03_RELEASE='v0.7.11')
-        self.refused('pair carries no core migration', ['v0.7.18', 'v0.7.19'], REC03_RELEASE='v0.7.19')
-        self.refused('pair carries no core migration', ['v0.7.9', 'v0.7.19'], REC03_RELEASE='v0.7.19', REC03_PREVIOUS='v0.7.9')
+    def test_equal_ledgers_use_dirty_injection_without_fetching_sql(self):
+        verdict, _, fetch = self.run_main(REC03_RELEASE='v0.7.19')
+        self.assertEqual((verdict['failure'], verdict['pair']), ('existing deployment refused', ['v0.7.18', 'v0.7.19']))
+        fetch.assert_not_called()
+        old, new = cases.records(cases.CASES[-1])
+        new = {**new, 'core_schema_version': old['core_schema_version']}
+        self.assertFalse(runner.rec03_pair.same_schema(old, new))  # Search alone changed.
+        with self.assertRaisesRegex(runner.rec03_pair.Refused, 'no core migration'):
+            runner.rec03_pair.first_pending(old, new)
+
 
     def test_a_record_that_does_not_list_its_migrations_is_a_fail_naming_the_pair(self):
         self.refused('release record does not list the first pending migration', ['v0.7.5', 'v0.7.7'], REC03_RELEASE='v0.7.7')
