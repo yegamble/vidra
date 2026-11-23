@@ -1498,6 +1498,8 @@ is the site origin anyway.
 
 ## Backups & restore
 
+For a versioned snapshot of the complete single-host install, including media and a recoverable copy of newer data before rollback, see the [install snapshot guide](./SNAPSHOTS.md).
+
 `./deploy/backup.sh` (and the systemd timer) writes **two** files per run, both
 stamped with the same UTC timestamp:
 
