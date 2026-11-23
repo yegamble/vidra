@@ -5,7 +5,7 @@ import io
 import unittest
 from pathlib import Path
 from unittest import mock
-from urllib.parse import quote_plus
+from urllib.parse import parse_qsl, quote_plus
 
 spec = importlib.util.spec_from_file_location(
     'snapshot_s3', Path(__file__).resolve().parents[1] / 'deploy/snapshot_s3.py'
@@ -53,6 +53,10 @@ class S3:
         data, etag, headers = self.data[Bucket][Key]
         assert IfMatch == etag
         return dict(headers, ContentLength=len(data), ETag=etag, Body=io.BytesIO(data))
+
+    def get_object_tagging(self, Bucket, Key):
+        tags = self.data[Bucket][Key][2].get('Tagging', '')
+        return {'TagSet': [{'Key': k, 'Value': v} for k, v in parse_qsl(tags, keep_blank_values=True)]}
 
     def put_object(self, Bucket, Key, Body, IfNoneMatch, **headers):
         assert IfNoneMatch == '*' and Key not in self.data[Bucket]
@@ -154,6 +158,41 @@ class SnapshotS3Test(unittest.TestCase):
         self.s3.paginate = changed
         with self.assertRaisesRegex(ValueError, 'inventory changed'):
             self.archive()
+
+    def test_tag_read_requires_permission_even_without_tagcount(self):
+        self.s3.add('live', 'photo', b'saved', Tagging='permit=private')
+        with mock.patch.object(self.s3, 'get_object_tagging', side_effect=PermissionError('denied')):
+            with self.assertRaises(PermissionError):
+                self.archive()
+            with self.assertRaises(PermissionError):
+                snapshots.preflight(self.env)
+        self.recover(self.archive())
+        self.assertEqual(self.s3.data['recovery']['photo'][2]['Tagging'], 'permit=private')
+
+    def test_explicitly_unsupported_tagging_can_archive_untagged_objects(self):
+        class Unsupported(Exception):
+            response = {'Error': {'Code': 'NotImplemented'}}
+
+        self.s3.add('live', 'photo', b'saved', ContentType='image/jpeg')
+        with mock.patch.object(self.s3, 'get_object_tagging', side_effect=Unsupported):
+            self.recover(self.archive())
+            self.s3.add('live', 'tagged', b'saved', TagCount=1)
+            with self.assertRaises(Unsupported):
+                self.archive()
+
+    def test_silently_lost_playback_headers_refuse_activation(self):
+        self.s3.add('live', 'photo', b'saved', ContentEncoding='gzip')
+        archive = self.archive()
+        original = self.s3.get_object
+
+        def stripped(**kwargs):
+            result = original(**kwargs)
+            result.pop('ContentEncoding', None)
+            return result
+
+        self.s3.get_object = stripped
+        with self.assertRaisesRegex(ValueError, 'headers or tagging'):
+            self.recover(archive)
 
     def test_restored_bytes_are_read_back_before_success(self):
         self.s3.add('live', 'photo', b'saved')

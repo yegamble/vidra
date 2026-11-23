@@ -120,6 +120,20 @@ class SnapshotsTest(unittest.TestCase):
             snapshots.restore(self.repo, self.args)
             recover.assert_called_once()
 
+    def test_stage_refuses_to_fill_the_live_filesystem(self):
+        with patch.dict(os.environ, {"VIDRA_RESTORE_RESERVE_BYTES": "200"}), \
+                patch("shutil.disk_usage", return_value=SimpleNamespace(free=1000)):
+            snapshots.check_space(self.root, 800)
+            with self.assertRaisesRegex(ValueError, "staging needs"):
+                snapshots.check_space(self.root, 801)
+
+    def test_s3_backup_repository_cannot_capture_itself(self):
+        repo = Repository(self.root)
+        with patch.dict(os.environ, {"RESTIC_REPOSITORY": "s3:https://s3.example.org/media/backups"}):
+            with self.assertRaisesRegex(ValueError, "separate"):
+                repo.separate_from_media({"STORAGE_BACKEND": "s3", "STORAGE_S3_BUCKET": "media"})
+            repo.separate_from_media({"STORAGE_BACKEND": "s3", "STORAGE_S3_BUCKET": "video-library"})
+
     def test_restore_bucket_replaces_every_local_assignment(self):
         path = self.root / "env/production.env"
         path.write_text("STORAGE_S3_BUCKET=old\nexport STORAGE_S3_BUCKET=older\nOTHER=a")

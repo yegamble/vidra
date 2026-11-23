@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly Vidra install snapshot during the configured maintenance window
+
+[Timer]
+OnCalendar=Sun *-*-* 03:00:00
+# A missed maintenance window must not take the site offline immediately at boot.
+Persistent=false
+Unit=vidra-snapshot.service
+
+[Install]
+WantedBy=timers.target

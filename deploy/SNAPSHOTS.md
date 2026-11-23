@@ -1,6 +1,6 @@
 # Install snapshots
 
-A full install snapshot lets a single-host Vidra operator recover the database, media, configuration and running software together. It records both clean database migration ledgers and saves the exact Docker image IDs for the API, frontend, search and their dependencies. It also saves the installation tree, project-owned Docker volumes (including PostgreSQL), dedicated writable directories under `data/`, and every current object in the configured S3 bucket. Restic encrypts and deduplicates these backups. Use storage independent of the Vidra host and media bucket.
+A full install snapshot lets a single-host Vidra operator recover the database, media, configuration and running software together. It records both clean database migration ledgers and saves the exact Docker image IDs for the API, frontend, search and their dependencies. It also saves the installation tree, project-owned Docker volumes (including PostgreSQL), dedicated writable directories under `data/`, and every current object in the configured S3 bucket. Restic encrypts and deduplicates these backups. Use storage independent of the Vidra host and media bucket. When using an rclone or other indirect backend, verify that its destination is a different bucket from the live media.
 
 ## Set up a recovery repository
 
@@ -19,6 +19,21 @@ python3 deploy/snapshots.py list
 
 Use a maintenance window. Snapshot creation stops the active Compose services, including the public edge, while it saves the data. On S3 the first capture reads the entire bucket across the network, including pre-existing unreferenced objects. Allow for that downtime, storage and retrieval cost. Quiesce any independent S3 writers, host synchronizers and additional machines writing to the same installation. Avoid concurrent manual deploys, restores or direct Docker commands during a snapshot or recovery. Schedule full snapshots using the same environment with `python3 deploy/snapshots.py create --reason scheduled`. The existing online nightly database backup can continue on its own schedule outside this window.
 
+## Schedule a full backup
+
+Single-host Linux installs can enable the optional systemd timer. It runs Sundays at 03:00 in the host timezone. Select a maintenance window appropriate to the size of the installation before enabling it. Missed windows wait until the next scheduled time. Nothing enables this timer during a normal install.
+
+Provide `RESTIC_REPOSITORY` and `RESTIC_PASSWORD_FILE` in the protected file `/etc/vidra/snapshots.env`. The `vidra` service user must be able to access its password file, installation and Docker engine. Adjust the service account, installation path or Python executable in a systemd override when they differ.
+
+```sh
+sudo install -m 0644 deploy/vidra-snapshot.service deploy/vidra-snapshot.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now vidra-snapshot.timer
+systemctl list-timers vidra-snapshot.timer
+```
+
+Scheduled runs appear in the same backup history. View a failed run with `journalctl -u vidra-snapshot.service`. To change the time, use a timer override that clears `OnCalendar=` and then sets the new schedule.
+
 ## Select and restore a date
 
 `list` shows UTC dates, versions and full snapshot IDs. It also lists local nightly and pre-deploy database dumps. A paired legacy configuration archive can supply the configured core tag. A dump without version evidence is marked `unknown`. Database-only entries use the existing `restore.sh` procedure.
@@ -30,7 +45,7 @@ python3 deploy/snapshots.py restore FULL_SNAPSHOT_ID --apply
 python3 deploy/snapshots.py restore FULL_SNAPSHOT_ID --apply --media-bucket NEW_BUCKET
 ```
 
-The first command previews the change. Applying the snapshot verifies a staged copy of the installation and Docker archives before switching the live data. Allow free space under `backups/` for the staged checkout and uncompressed volume archives. S3 media streams directly into the destination bucket. Images reload by their saved IDs. The database and Redis start first. Vidra checks the recovered database against both recorded ledgers, then hashes media and checks its dependencies before the saved application services start.
+The first command previews the change. Applying the snapshot verifies a staged copy of the installation and Docker archives before switching the live data. The preview shows the checkout and volume staging estimate. The restore checks space under `backups/` before staging and leaves a default 1 GiB reserve (adjustable with `VIDRA_RESTORE_RESERVE_BYTES`). Allow additional space in the Docker engine for loaded images and recovered volumes. S3 media streams directly into the destination bucket. Images reload by their saved IDs. The database and Redis start first. Vidra checks the recovered database against both recorded ledgers, then hashes media and checks its dependencies before the saved application services start.
 
 **Preserve current data** is the default. Vidra stops writers and takes a second complete snapshot, labeled `before-restore`, before replacing anything live. Newer messages, videos and photos remain recoverable by selecting that second date. This preserves both timelines separately. The selected snapshot determines which messages, moderation decisions, sessions, and files the restarted site serves. Review account suspensions, takedowns and revoked sessions that happened after that date before reopening public access.
 

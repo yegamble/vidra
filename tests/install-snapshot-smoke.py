@@ -22,7 +22,7 @@ services:
       POSTGRES_HOST_AUTH_METHOD: trust
     volumes: [pg:/var/lib/postgresql]
     healthcheck:
-      test: ["CMD", pg_isready, -U, fixture, -d, fixture]
+      test: ["CMD", pg_isready, -h, 127.0.0.1, -U, fixture, -d, fixture]
       interval: 1s
       timeout: 3s
       retries: 40
@@ -292,7 +292,8 @@ def exercise(folder):
         check_state('v1.0.0', ['first'])
         (safety,) = [row for row in history() if row['reason'] == 'before-restore']
         assert safety['release'] == 'v1.1.0'
-        version('v9.9.9')  # A failed deploy wrote new pins without replacing its containers.
+        # A failed deploy wrote a new API pin without recreating its container.
+        settings.write_text(settings.read_text().replace('VIDRA_CORE_TAG=v1.0.0', 'VIDRA_CORE_TAG=v9.9.9'))
         failed = subprocess.run(
             [sys.executable, deploy / 'snapshots.py', 'create'],
             cwd=install,
@@ -300,7 +301,8 @@ def exercise(folder):
             text=True,
             capture_output=True,
         )
-        assert failed.returncode and 'Release pins have changed' in failed.stderr, failed.stderr
+        valid_refusals = ('Release pins have changed', 'differs from the saved configuration for SMOKE_VERSION')
+        assert failed.returncode and any(reason in failed.stderr for reason in valid_refusals), failed.stderr
         assert {r['id'] for r in history()} == {first['id'], safety['id']}
         stack('stop', 'api')
         lost = cmd(

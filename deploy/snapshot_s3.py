@@ -66,7 +66,10 @@ def _client(env):
 def preflight(api_env):
     """Check read access without requiring a local mirror."""
     s3 = _client(api_env)
-    s3.list_objects_v2(Bucket=api_env['STORAGE_S3_BUCKET'], MaxKeys=1, EncodingType='url')
+    bucket = api_env['STORAGE_S3_BUCKET']
+    page = s3.list_objects_v2(Bucket=bucket, MaxKeys=1, EncodingType='url')
+    for obj in page.get('Contents', []):
+        _tags(s3, {'Bucket': bucket, 'Key': unquote_plus(obj['Key'], errors='strict')}, {})
 
 
 def _check_target(env, destination, protected):
@@ -161,6 +164,31 @@ def _source_info(env):
     return {'bucket': env['STORAGE_S3_BUCKET'], 'endpoint': env['STORAGE_S3_ENDPOINT']}
 
 
+def _tags(s3, target, response):
+    # AWS can omit TagCount when the caller lacks tagging permission. A denied
+    # read must fail the snapshot even when GetObject appeared to have no tags.
+    selector = {'VersionId': response['VersionId']} if response.get('VersionId') else {}
+    try:
+        tags = s3.get_object_tagging(**target, **selector)['TagSet']
+    except Exception as exc:
+        details = getattr(exc, 'response', None)
+        code = details.get('Error', {}).get('Code') if isinstance(details, dict) else None
+        if code in ('NotImplemented', 'XNotImplemented', '501') and not response.get('TagCount'):
+            return ''
+        raise
+    return urlencode(sorted((tag['Key'], tag['Value']) for tag in tags))
+
+
+def _headers(s3, target, response):
+    headers = {h: response[h] for h in HEADERS if h in response}
+    if 'Expires' in headers:
+        headers['Expires'] = headers['Expires'].isoformat()
+    tags = _tags(s3, target, response)
+    if tags:
+        headers['Tagging'] = tags
+    return headers
+
+
 def capture(api_env, output):
     s3 = _client(api_env)
     bucket = api_env['STORAGE_S3_BUCKET']
@@ -176,13 +204,7 @@ def capture(api_env, output):
         with closing(response['Body']) as body:
             if size != response['ContentLength']:
                 raise ValueError('S3 object changed during snapshot')
-            headers = {h: response[h] for h in HEADERS if h in response}
-            if 'Expires' in headers:
-                headers['Expires'] = headers['Expires'].isoformat()
-            if response.get('TagCount'):
-                selector = {'VersionId': response['VersionId']} if response.get('VersionId') else {}
-                tags = s3.get_object_tagging(Bucket=bucket, Key=key, **selector)['TagSet']
-                headers['Tagging'] = urlencode([(tag['Key'], tag['Value']) for tag in tags])
+            headers = _headers(s3, {'Bucket': bucket, 'Key': key}, response)
             header = _frame({'key': key, 'size': size, 'headers': headers})
             output.write(header)
             checksum = hashlib.sha256()
@@ -257,6 +279,8 @@ def _upload(s3, bucket, header, stream):
     stored = s3.get_object(**target, IfMatch=result['ETag'])
     remote = hashlib.sha256()
     with closing(stored['Body']) as body:
+        if _headers(s3, target, stored) != headers:
+            raise ValueError('restored S3 object headers or tagging differ from snapshot')
         _copy(body, size, remote)
         if body.read(1) or digest.digest() != remote.digest():
             raise ValueError('restored S3 object checksum mismatch')

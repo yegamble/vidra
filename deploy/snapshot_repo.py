@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 ID = re.compile(r"[a-f0-9]{64}")
 MANIFEST = "vidra-install.json"
@@ -43,6 +44,19 @@ class Repository:
             if path == self.root or self.root in path.parents:
                 raise ValueError("Choose a backup repository outside the installation")
         output("restic", "cat", "config")
+
+    def separate_from_media(self, api):
+        spec = os.environ.get("RESTIC_REPOSITORY", "")
+        cache = os.environ.get("RESTIC_CACHE_DIR")
+        if cache and self.root in (Path(cache).resolve(), *Path(cache).resolve().parents):
+            raise ValueError("Choose a restic cache outside the installation tree")
+        if api.get("STORAGE_BACKEND") == "s3" and spec.startswith("s3:"):
+            target = spec[3:].lstrip("/")
+            uri = urlsplit(target if "://" in target else "//" + target)
+            bucket = api["STORAGE_S3_BUCKET"]
+            if bucket == uri.path.lstrip("/").split("/", 1)[0] or (uri.hostname or "").split(".")[0] == bucket or (
+                    uri.hostname or "").startswith(bucket + "."):
+                raise ValueError("Use a separate restic repository bucket from the live media bucket")
 
     def entries(self):
         return json.loads(output("restic", "snapshots", "--json", "--tag", self.tag)) or []
@@ -80,6 +94,7 @@ class Capture:
         self.repo = repo
         self.group = "vidra-capture-" + uuid.uuid4().hex
         self.published = False
+        self.sizes = {}
 
     def backup(self, args, *, producer=None, catalog=()):
         command = ["restic", "backup", "--json", "--tag", self.group]
@@ -100,13 +115,17 @@ class Capture:
                 if process.wait() != 0:
                     raise ValueError("restic did not finish capturing every byte")
             result.seek(0)
-            summaries = [item["snapshot_id"] for line in result
+            summaries = [item for line in result
                          if (item := json.loads(line)).get("message_type") == "summary"]
         if len(summaries) != 1:
             raise ValueError("Missing restic snapshot receipt")
-        records = json.loads(output("restic", "snapshots", "--json", summaries[0]))
+        records = json.loads(output("restic", "snapshots", "--json", summaries[0]["snapshot_id"]))
         if len(records) != 1 or not ID.fullmatch(records[0]["id"]):
             raise ValueError("Ambiguous restic snapshot receipt")
+        size = summaries[0]["total_bytes_processed"]
+        if type(size) is not int or size < 0:
+            raise ValueError("Invalid archive size in restic receipt")
+        self.sizes[records[0]["id"]] = size
         return records[0]["id"]
 
     def tree(self, binds):
@@ -120,9 +139,11 @@ class Capture:
     def commit(self, manifest):
         manifest["group"] = self.group
         data = json.dumps(manifest, separators=(",", ":")).encode()
+        tags = [(key, manifest[key]) for key in ("time", "reason", "release", "storage", "bucket")]
+        tags.extend(manifest["components"].items())
+        tags.append(("staging_bytes", str(manifest["staging_bytes"])))
+        tags.extend((name + "_schema", str(version)) for name, version in manifest["schemas"].items())
         ident = self.backup(["--stdin", "--stdin-filename", MANIFEST],
-                            producer=lambda sink: sink.write(data), catalog=[
-                                (key, manifest[key]) for key in ("time", "reason", "release", "storage", "bucket")
-                            ] + list(manifest["components"].items()))
+                            producer=lambda sink: sink.write(data), catalog=tags)
         self.published = True
         return ident

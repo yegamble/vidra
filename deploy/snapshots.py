@@ -52,6 +52,7 @@ def current(root, repo):
         if gitdir.is_file() or gitdir.is_symlink():
             raise ValueError("Linked Git worktrees require a separate backup of their external metadata")
     manifest, api = inventory(root)
+    repo.separate_from_media(api)
     if manifest["storage"] == "s3":
         snapshot_s3.preflight(api)
     return manifest, api
@@ -83,6 +84,8 @@ def capture(repo, manifest, api, reason):
         if doc["storage"] == "s3":
             step("Snapshot step: saving S3 media")
             doc["s3_stream"] = cap.stream("media", lambda dst: snapshot_s3.capture(api, dst))
+        staged = [doc["tree"], *doc["volume_streams"].values(), *doc["bind_streams"].values()]
+        doc["staging_bytes"] = sum(cap.sizes[ident] for ident in staged)
         step("Snapshot step: committing recovery point")
         return cap.commit(doc)
     except BaseException:
@@ -150,6 +153,8 @@ def history(repo):
             tags = dict(t.split("=", 1) for t in entry["tags"] if "=" in t)
             components = {k: tags[k] for k in ("core", "user", "search")}
             rows.append(dict(id=entry["id"], kind="install", components=components,
+                             schemas={k: int(tags[k + "_schema"]) for k in ("core", "search") if k + "_schema" in tags},
+                             staging_bytes=int(tags["staging_bytes"]) if "staging_bytes" in tags else None,
                              **{k: tags[k] for k in FIELDS if k != "components"}))
     return sorted(rows, key=lambda row: row["time"], reverse=True)
 
@@ -178,8 +183,19 @@ def stream_file(repo, ident, name, path):
         repo.extract(ident, name, lambda src: shutil.copyfileobj(src, f))
 
 
+def check_space(stage, size):
+    reserve = int(os.environ.get("VIDRA_RESTORE_RESERVE_BYTES", 1024 ** 3))
+    if type(size) is not int or size < 0 or reserve < 0:
+        raise ValueError("Invalid staging size or free-space reserve")
+    free = shutil.disk_usage(stage).free
+    if free < size + reserve:
+        raise ValueError(f"Restore staging needs {size:,} bytes plus a {reserve:,}-byte reserve. "
+                         f"The staging filesystem has {free:,} bytes free")
+
+
 def prepare(repo, doc, stage, bucket, live):
     step("Restore step: verifying installation and images")
+    check_space(stage, doc["staging_bytes"])
     tree = stage / "tree"
     repo.restore_tree(doc["tree"], tree)
     model = staged_config(tree, doc)
@@ -298,6 +314,8 @@ def restore(repo, args):
           f"Restore {len(doc['volumes'])} volumes and {len(doc['images'])} exact service images. "
           + ("Current state will be replaced without a safety snapshot." if args.discard_current
              else "Current state will be saved as a separate recovery point."), flush=True)
+    if "staging_bytes" in doc:
+        print(f"Local staging estimate: {doc['staging_bytes']:,} bytes before filesystem overhead.")
     if "schemas" in doc:
         print("Database schemas: core {core}, search {search}.".format(**doc["schemas"]))
     if not args.apply:
