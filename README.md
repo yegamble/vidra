@@ -175,6 +175,7 @@ Production/staging operations (all honour `PROD_ENV_FILE=env/staging.env`):
 | `make prod-config` | Render + validate the production compose chain; catches missing required secrets. |
 | `make deploy` | `deploy/deploy.sh`: pre-deploy dump → pull → gated migrations → `up -d --no-build` → probe. |
 | `make rollback TAG=v0.2.0` | Rewrite the three `VIDRA_*_TAG` values, pull, restart, re-probe. App only — no schema change. |
+| `python3 deploy/source-update.py check` | Show installed component pins and the latest recorded release. Use `apply` to snapshot the install, compile its verified Git commits and deploy. [Source upgrade guide](deploy/SOURCE-UPDATE.md) |
 | `make backup` | `deploy/backup.sh`: `pg_dump -Fc` → gzip → optional off-site → 14 daily + 8 weekly retention. |
 | `make restore DUMP=… CONFIRM=1` | **Destructive.** `deploy/restore.sh`: drop, recreate, `pg_restore -j4`, migrate, probe. Prompts, or needs `CONFIRM=1`. |
 | `make prod-logs` / `make prod-down` | Tail / stop the production stack. |

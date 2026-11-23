@@ -114,6 +114,10 @@ vidra_compose_chain() {
     -f docker-compose.yml
     -f docker-compose.prod.yml)
 
+  if is_true "$(env_get VIDRA_SOURCE_BUILD false)"; then
+    COMPOSE+=(-f docker-compose.source.yml)
+  fi
+
   if is_true "$(env_get IPFS_MANAGED_NODE false)"; then
     COMPOSE+=(-f docker-compose.ipfs-managed.yml)
   fi

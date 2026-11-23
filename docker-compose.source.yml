@@ -1,0 +1,21 @@
+# Production overlay selected only for an explicitly source-built installation.
+# Each local alias includes the release tag AND the image configuration digest.
+# --pull and service dependencies cannot silently replace one with a GHCR image.
+x-source-core: &source-core
+  image: vidra-source.invalid/local/vidra-core:${VIDRA_CORE_TAG:?}-${VIDRA_SOURCE_CORE_ID:?}
+  build: !reset null
+  pull_policy: never
+x-source-search: &source-search
+  image: vidra-source.invalid/local/vidra-search:${VIDRA_SEARCH_TAG:?}-${VIDRA_SOURCE_SEARCH_ID:?}
+  build: !reset null
+  pull_policy: never
+services:
+  migrate: *source-core
+  api: *source-core
+  worker: *source-core
+  search-migrate: *source-search
+  search: *source-search
+  frontend:
+    image: vidra-source.invalid/local/vidra-user:${VIDRA_USER_TAG:?}-${VIDRA_SOURCE_USER_ID:?}
+    build: !reset null
+    pull_policy: never
