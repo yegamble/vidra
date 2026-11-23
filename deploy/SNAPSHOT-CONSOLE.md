@@ -3,8 +3,10 @@
 From the Vidra install directory on the server, run the console as the installation owner. Use the same restic repository, credentials and `ENV_FILE` as the snapshot command. If the encrypted repository still needs to be initialized, follow the [install snapshot guide](SNAPSHOTS.md).
 
 ```sh
-python3 deploy/snapshot_ui.py
+vidra backups web
 ```
+
+If the deployment tree contains the console and the installed CLI predates `vidra backups`, run `python3 deploy/snapshot_ui.py` from the same directory. For a terminal listing of backup dates and versions, use `vidra backups list`.
 
 The console prints a private browser link and an SSH tunnel command. On your computer, start the tunnel, substituting your SSH account and host.
 
