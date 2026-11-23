@@ -37,7 +37,13 @@ def first_pending(old, new):
     return version, names[0]
 
 
+def same_schema(old, new):
+    return all(old[key] == new[key] for key in ('core_schema_version', 'search_schema_version'))
+
+
 def ledger(old, new, phase):
+    if phase in ('inject', 'upgrade-fail') and same_schema(old, new):
+        return f"core={old['core_schema_version']}:true search={old['search_schema_version']}:false"
     if phase in OLD_LEDGER_PHASES:
         return f"core={old['core_schema_version']}:false search={old['search_schema_version']}:false"
     if phase == 'upgrade-fail':
@@ -130,5 +136,5 @@ def refusal(old, new):
 
 
 def env(old, new, found):
-    same = all(old[key] == new[key] for key in ('core_schema_version', 'search_schema_version'))
+    same = same_schema(old, new)
     return {'REC03_OLD': old['release'], 'REC03_NEW': new['release'], 'REC03_SAME_SCHEMA': '1' if same else '0', **found}
