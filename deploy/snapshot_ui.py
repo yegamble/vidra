@@ -122,7 +122,7 @@ def run_check(args):
         volumes, images = int(counts[1]), int(counts[2])
         return (f"This recovery restores {volumes} volume{'s' if volumes != 1 else ''} "
                 f"and {images} service image{'s' if images != 1 else ''}.")
-    parts = re.search(rb" (\d+) archive parts\s*$", output)
+    parts = re.search(rb" (\d+) archive parts[ \t]*$", output, re.M)
     if args[0] == "retire" and parts:
         return f"This recovery point includes {int(parts[1])} archive parts."
     return ""

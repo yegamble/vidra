@@ -152,7 +152,7 @@ class ConsoleTest(unittest.TestCase):
     def test_previews_show_only_numeric_counts_from_host_output(self):
         with mock.patch.object(ui.subprocess, "check_output", return_value=b"secret\nRestore 12 volumes and 5 exact service images.\n"):
             self.assertEqual(ui.run_check(["restore", ID]), "This recovery restores 12 volumes and 5 service images.")
-        with mock.patch.object(ui.subprocess, "check_output", return_value=b"private metadata  6 archive parts\n"):
+        with mock.patch.object(ui.subprocess, "check_output", return_value=b"private metadata  6 archive parts\nPreview only.\n"):
             self.assertEqual(ui.run_check(["retire", ID]), "This recovery point includes 6 archive parts.")
 
     def test_staging_estimate_and_schema_ledgers_are_optional_numeric_fields(self):
