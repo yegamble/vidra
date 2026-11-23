@@ -2,6 +2,8 @@
 
 A full install snapshot lets a single-host Vidra operator recover the database, media, configuration and running software together. It records both clean database migration ledgers and saves the exact Docker image IDs for the API, frontend, search and their dependencies. It also saves the installation tree, project-owned Docker volumes (including PostgreSQL), dedicated writable directories under `data/`, and every current object in the configured S3 bucket. Restic encrypts and deduplicates these backups. Use storage independent of the Vidra host and media bucket. When using an rclone or other indirect backend, verify that its destination is a different bucket from the live media.
 
+The snapshot commands and this release’s backup, restore, pin, deploy and rollback scripts share one lock per installation. A competing operation exits before changing the install. Retry it when the active operation finishes. The operating system releases the lock when the command exits. Leave the lock file in place.
+
 ## Set up a recovery repository
 
 Install Python 3.9+, Docker Compose, rsync and restic 0.18.1 or newer on the operator host. Use the installation owner with access to Docker. For S3, install boto3 and botocore with support for conditional multipart completion in that Python environment. boto3 1.44.9 was used in the S3 rehearsal.
