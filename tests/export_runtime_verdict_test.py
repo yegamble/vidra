@@ -203,7 +203,7 @@ class RuntimeVerdictExportTest(unittest.TestCase):
         named = dict(status='FAIL', pair=['v0.7.9', 'v0.7.10'], phases={}, failed_phase='preflight')
         self.rejected(self.run_export(source=named, job='failure', release='v0.7.10'))
 
-    def test_a_pair_with_no_core_migration_is_published_as_fail_and_can_never_pass(self):
+    def test_equal_schemas_require_same_version_dirty_proof_and_explicit_inapplicability(self):
         refused = dict(status='FAIL', pair=['v0.7.9', 'v0.7.11'], phases={}, failed_phase='preflight',
                        failure='pair carries no core migration', diagnostics={})
         summary = self.published(self.run_export(source=refused, job='failure', release='v0.7.11'), 'FAIL')
@@ -214,6 +214,15 @@ class RuntimeVerdictExportTest(unittest.TestCase):
                 item['ledger'] = 'core=189:true search=21:false' if phase == 'upgrade-fail' else 'core=188:false search=21:false'
         self.rejected(self.run_export(source=flat, release='v0.7.11'))
         self.rejected(self.run_export(source=dict(flat, status='FAIL', failed_phase='report'), release='v0.7.11'))
+        for phase in ('inject', 'upgrade-fail'):
+            flat['phases'][phase]['ledger'] = 'core=188:true search=21:false'
+        flat['phases']['restore-refuse'] = {'status': 'NOT_APPLICABLE', 'reason': 'same_schema'}
+        self.published(self.run_export(source=flat, release='v0.7.11'), 'PASS')
+        flat['phases']['inject']['ledger'] = 'core=188:false search=21:false'
+        self.rejected(self.run_export(source=flat, release='v0.7.11'))
+        moved = rec03()
+        moved['phases']['restore-refuse'] = flat['phases']['restore-refuse']
+        self.rejected(self.run_export(source=moved))
 
     def test_every_fixed_refusal_reason_is_publishable_and_nothing_else_is(self):
         for reason in (*release_pair.REASONS, *rec03_pair.REASONS, 'record checkout differs',
@@ -229,7 +238,6 @@ class RuntimeVerdictExportTest(unittest.TestCase):
 
     def test_the_runners_own_preflight_refusals_are_published_as_fail(self):
         for env, pair, reason in (
-                ({'REC03_RELEASE': 'v0.7.11'}, ['v0.7.9', 'v0.7.11'], 'pair carries no core migration'),
                 ({'REC03_RELEASE': 'v0.7.7'}, ['v0.7.5', 'v0.7.7'], 'release record does not list the first pending migration'),
                 ({'REC03_RELEASE': 'v0.7.10'}, [], 'release is not a recorded release'),
                 ({'REC03_RELEASE': 'v0.6.4'}, [], 'release has no previous record'),

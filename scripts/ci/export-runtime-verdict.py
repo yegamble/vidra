@@ -114,8 +114,14 @@ def recorded(args):
         return None
 
 
+def same_schema(pair):
+    return all(pair[0][key] == pair[1][key] for key in ('core_schema_version', 'search_schema_version'))
+
+
 def ledger(pair, phase):
     old, new = pair
+    if phase in ('inject', 'upgrade-fail') and same_schema(pair):
+        return f"core={old['core_schema_version']}:true search={old['search_schema_version']}:false"
     if phase in BEFORE_UPGRADE:
         return f"core={old['core_schema_version']}:false search={old['search_schema_version']}:false"
     if phase == 'upgrade-fail':
@@ -134,10 +140,12 @@ def rec03(value, args, pair):
     unnamed = (value['pair'] == [] and value['status'] == 'FAIL' and value.get('failed_phase') == 'preflight'
                and not value['phases'])
     require(unnamed or pair is not None and value['pair'] == [pair[0]['release'], pair[1]['release']])
-    # A phase only runs for a pair with a core migration to fail.
-    require(not value['phases'] or pair[1]['core_schema_version'] > pair[0]['core_schema_version'])
+    require(not value['phases'] or same_schema(pair) or pair[1]['core_schema_version'] > pair[0]['core_schema_version'])
     complete = {'record_commit', 'installer_commit'} <= set(value) and set(value['phases']) == set(PHASES)
     for phase, facts in value['phases'].items():
+        if phase == 'restore-refuse' and same_schema(pair):
+            require(facts == {'status': 'NOT_APPLICABLE', 'reason': 'same_schema'})
+            continue
         required = {'status', 'media_fingerprint_verified'} | ({'ledger'} if phase in LEDGER else set())
         keys(facts, required)
         identities(facts, {'status': 'PASS', 'media_fingerprint_verified': phase in MEDIA, 'ledger': ledger(pair, phase)})
