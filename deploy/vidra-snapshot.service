@@ -1,0 +1,17 @@
+[Unit]
+Description=Capture a complete versioned Vidra install snapshot
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=vidra
+Group=vidra
+WorkingDirectory=/opt/vidra
+Environment=ENV_FILE=env/production.env
+EnvironmentFile=/etc/vidra/snapshots.env
+UMask=0077
+ExecStart=/usr/bin/env python3 /opt/vidra/deploy/snapshots.py create --reason scheduled
+TimeoutStartSec=infinity
+Nice=10
+IOSchedulingClass=idle
