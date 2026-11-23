@@ -69,6 +69,7 @@
       <label class="choice"><input type="checkbox" id="preserve" checked><span><strong>Save current data first</strong><small>Keep a separate snapshot of newer uploads, messages and settings. You can recover it later.</small></span></label>
       <p id="discard-note" class="warning" hidden>Newer data may be lost when this rollback replaces the live installation.</p>
       <div id="confirm-area" hidden>
+        <p id="restore-summary" class="muted" hidden></p>
         <label for="confirmation">Type <code id="phrase"></code> to confirm this release and UTC date.</label>
         <input id="confirmation" autocomplete="off" autocapitalize="off" spellcheck="false">
       </div>
@@ -82,6 +83,7 @@
       <p id="retire-target"></p>
       <p>Retirement permanently removes this recovery point and its archive parts from backup history. The live installation keeps serving.</p>
       <div id="retire-confirm-area" hidden>
+        <p id="retire-summary" class="muted" hidden></p>
         <label for="retire-confirm">Type <code id="retire-phrase"></code> to remove this snapshot.</label>
         <input id="retire-confirm" autocomplete="off" autocapitalize="off" spellcheck="false">
       </div>

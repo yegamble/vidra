@@ -105,10 +105,17 @@ def restore_args(identifier, preserve, bucket):
 
 def run_check(args):
     try:
-        subprocess.run(cli(*args), check=True, stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL, timeout=120)
+        output = subprocess.check_output(cli(*args), stderr=subprocess.DEVNULL, timeout=120)
     except (OSError, subprocess.SubprocessError) as err:
         raise Problem("The host declined this preview. Check the repository and snapshot on the host.", 409) from err
+    # Expose counts from the host's actual plan, without forwarding its output.
+    counts = re.search(rb"^Restore (\d+) volumes and (\d+) exact service images\.", output, re.M)
+    if args[0] == "restore" and counts:
+        return f"This recovery restores {int(counts[1])} volumes and {int(counts[2])} service images."
+    parts = re.search(rb" (\d+) archive parts\s*$", output)
+    if args[0] == "retire" and parts:
+        return f"This recovery point includes {int(parts[1])} archive parts."
+    return ""
 
 
 def run_operation(args, note):
@@ -172,20 +179,23 @@ class Console:
         entry = self.find(data)
         if kind == "restore":
             preserve, bucket = options(data, entry)
-            self.check(restore_args(entry["id"], preserve, bucket))
+            summary = self.check(restore_args(entry["id"], preserve, bucket))
             selection = {"id": entry["id"], "preserve": preserve, "bucket": bucket}
             phrase = f"{entry['release'].split('@')[0]} {entry['time'][:10]}"
         else:
             if set(data) != {"id"}:
                 raise Problem("Retirement accepts only the selected snapshot.")
-            self.check(["retire", entry["id"]])
+            summary = self.check(["retire", entry["id"]])
             selection = {"id": entry["id"]}
             phrase = "RETIRE " + entry["id"][:12]
         with self.lock:
             self.idle()
             nonce = secrets.token_urlsafe(24)
             self.preview = (kind, time.monotonic() + 600, {**selection, "nonce": nonce, "confirmation": phrase})
-        return {"nonce": nonce, "confirmation": phrase}
+        result = {"nonce": nonce, "confirmation": phrase}
+        if summary:
+            result["summary"] = summary
+        return result
 
     def start(self, kind, data):
         with self.lock:

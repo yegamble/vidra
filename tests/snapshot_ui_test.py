@@ -6,6 +6,7 @@ import re
 import threading
 import types
 import unittest
+from unittest import mock
 
 
 MODULE = Path(__file__).resolve().parents[1] / "deploy" / "snapshot_ui.py"
@@ -147,6 +148,12 @@ class ConsoleTest(unittest.TestCase):
         for ident in re.findall(r'byId\("([\w-]+)"\)', script):
             self.assertIn('id="' + ident + '"', html)
         self.assertNotIn("innerHTML", script)
+
+    def test_previews_show_only_numeric_counts_from_host_output(self):
+        with mock.patch.object(ui.subprocess, "check_output", return_value=b"secret\nRestore 12 volumes and 5 exact service images.\n"):
+            self.assertEqual(ui.run_check(["restore", ID]), "This recovery restores 12 volumes and 5 service images.")
+        with mock.patch.object(ui.subprocess, "check_output", return_value=b"private metadata  6 archive parts\n"):
+            self.assertEqual(ui.run_check(["retire", ID]), "This recovery point includes 6 archive parts.")
 
 
 if __name__ == "__main__":

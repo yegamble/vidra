@@ -255,6 +255,8 @@ byId("retire-form").onsubmit = async (event) => {
       await poll();
     } else {
       retirement = await api("preview-retire", { id: selection });
+      byId("retire-summary").textContent = retirement.summary || "";
+      byId("retire-summary").hidden = !retirement.summary;
       byId("retire-phrase").textContent = retirement.confirmation;
       byId("retire-confirm-area").hidden = false;
       byId("retire-error").hidden = true;
@@ -305,6 +307,8 @@ byId("restore-form").onsubmit = async (event) => {
       await poll();
     } else {
       plan = await api("preview", data);
+      byId("restore-summary").textContent = plan.summary || "";
+      byId("restore-summary").hidden = !plan.summary;
       byId("phrase").textContent = plan.confirmation;
       byId("confirm-area").hidden = false;
       button.textContent = "Restore snapshot";
