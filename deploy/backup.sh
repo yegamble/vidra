@@ -76,6 +76,7 @@ die()  { printf '[backup] ERROR: %s\n' "$*" >&2; exit 1; }
 # after log/die and ENV_FILE, which is the contract lib.sh documents.
 # shellcheck source=deploy/lib.sh
 . "$REPO_ROOT/deploy/lib.sh"
+vidra_maintenance_lock "$REPO_ROOT"
 
 PGUSER="$(env_get POSTGRES_USER vidra)"
 PGDB="$(env_get POSTGRES_DB vidra)"
@@ -261,6 +262,10 @@ elif [ "${ENV_FILE#"$REPO_ROOT"/}" != "$ENV_FILE" ]; then
   CONFIG_MEMBERS+=("${ENV_FILE#"$REPO_ROOT"/}")
 else
   CONFIG_MISSING+=("$ENV_FILE (outside $REPO_ROOT — cannot be stored repo-relative)")
+fi
+
+if [ -f "$REPO_ROOT/env/atproto-pds.env" ]; then
+  CONFIG_MEMBERS+=(env/atproto-pds.env)
 fi
 
 if [ -f "$REPO_ROOT/deploy/Caddyfile.local" ]; then

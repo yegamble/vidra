@@ -172,6 +172,7 @@ require_embedded_migrate_tag() {
 # after log/die and ENV_FILE, which is the contract lib.sh documents.
 # shellcheck source=deploy/lib.sh
 . "$REPO_ROOT/deploy/lib.sh"
+vidra_maintenance_lock "$REPO_ROOT"
 
 PGUSER="$(env_get POSTGRES_USER vidra)"
 PGDB="$(env_get POSTGRES_DB vidra)"

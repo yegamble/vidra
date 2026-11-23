@@ -167,7 +167,7 @@ stack disables the global API rate limiter by default — re-enable it with
 | `make env-check` | Show which env template the compose commands would use. |
 | `make help` | List all targets. |
 
-Production/staging operations (all honour `PROD_ENV_FILE=env/staging.env`):
+For staging, pass `PROD_ENV_FILE=env/staging.env` to the Make targets or `--env env/staging.env` to the Vidra CLI.
 
 | Command | What it does |
 |---------|--------------|
@@ -175,6 +175,8 @@ Production/staging operations (all honour `PROD_ENV_FILE=env/staging.env`):
 | `make prod-config` | Render + validate the production compose chain; catches missing required secrets. |
 | `make deploy` | `deploy/deploy.sh`: pre-deploy dump → pull → gated migrations → `up -d --no-build` → probe. |
 | `make rollback TAG=v0.2.0` | Rewrite the three `VIDRA_*_TAG` values, pull, restart, re-probe. App only — no schema change. |
+| `vidra update --source --check` | Compare installed versions with the latest recorded release. Run `vidra update --source` to build its verified commits and take a full snapshot before deployment. [Source upgrade guide](deploy/SOURCE-UPDATE.md) |
+| `vidra backups web` | Open the private browser console to browse backup dates, create a snapshot, preview a restore or retire an old recovery point. [Backup console guide](deploy/SNAPSHOT-CONSOLE.md) |
 | `make backup` | `deploy/backup.sh`: `pg_dump -Fc` → gzip → optional off-site → 14 daily + 8 weekly retention. |
 | `make restore DUMP=… CONFIRM=1` | **Destructive.** `deploy/restore.sh`: drop, recreate, `pg_restore -j4`, migrate, probe. Prompts, or needs `CONFIRM=1`. |
 | `make prod-logs` / `make prod-down` | Tail / stop the production stack. |

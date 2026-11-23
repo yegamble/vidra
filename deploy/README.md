@@ -15,6 +15,7 @@ stack plus a production overlay, behind Caddy for TLS.
 | [`make-bundle.sh`](./make-bundle.sh) | **Release-time, not host-time.** Assembles `vidra-bundle_<tag>.tar.gz`: this deployment tree plus the six files a deploy needs out of vidra-core, at the same relative paths a checkout has them. Deterministic; `install.sh` unpacks it instead of cloning. |
 | [`rollback.sh`](./rollback.sh) | Rewrite the image tags, pull, restart, re-probe. |
 | [`backup.sh`](./backup.sh) | `pg_dump -Fc` → gzip → **config archive** → optional off-site → retention → success marker. |
+| [Snapshot console](./SNAPSHOT-CONSOLE.md) | Browse backup dates, create an install snapshot, preview a rollback or retire a recovery point in a private browser session. |
 | [`restore.sh`](./restore.sh) | **Destructive.** Drop, recreate, `pg_restore -j4`, migrate, re-probe. |
 | [`provision.sh`](./provision.sh) | Host prep, idempotent, as root: swap, service user, `/opt/vidra`, log cap, unattended-upgrades, backup timer (installed **and verified**). Warns about sshd and the firewall; edits neither. |
 | [`cloud-init.yaml.example`](./cloud-init.yaml.example) | The same, as provider user-data, for a host that does not exist yet. Pure ASCII on purpose. |
@@ -1497,6 +1498,8 @@ is the site origin anyway.
 ---
 
 ## Backups & restore
+
+For a versioned snapshot of the complete single-host install, including media and a recoverable copy of newer data before rollback, see the [install snapshot guide](./SNAPSHOTS.md).
 
 `./deploy/backup.sh` (and the systemd timer) writes **two** files per run, both
 stamped with the same UTC timestamp:

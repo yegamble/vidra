@@ -323,6 +323,13 @@ main() {
     *) die "$(resolve_failure "$rc"). Nothing was changed: the tree has not moved and the env file is untouched" ;;
   esac
 
+  vidra_maintenance_lock "$REPO_ROOT"
+  # A restore can replace the installation tree while owner/flag preflights run.
+  if [ -n "$bundle" ]; then
+    is_bundle_tree "$REPO_ROOT" || die "installation type changed during preflight; retry"
+  else
+    [ -e "$REPO_ROOT/.git" ] || die "installation type changed during preflight; retry"
+  fi
   if [ -z "$bundle" ]; then
     log "fetching tags from origin"
     git -C "$REPO_ROOT" fetch --tags --force --quiet origin \

@@ -36,6 +36,28 @@
 #   release_mapping_check ROOT MODE CORE USER SEARCH
 #                          exit 0 when releases/ allows this tag triple
 
+# Keep the lock on the same open file description as the caller. A Python or
+# Go parent can pass any descriptor; standalone Bash 3.2 reserves descriptor 9.
+vidra_maintenance_lock() {
+  local root="$1" helper="$1/deploy/snapshot_lock.py" lock="$1/backups/.vidra-maintenance.lock"
+  if [ ! -f "$helper" ]; then
+    # Older/minimal trees predate install snapshots. Missing just the helper
+    # in a snapshot-capable install, or during a nested upgrade, is a refusal.
+    if [ -e "$root/deploy/snapshots.py" ] || [ -e "$lock" ] || [ -n "${VIDRA_MAINTENANCE_LOCK_FD:-}" ]; then
+      die "missing $helper in a maintenance-enabled install; restore the deployment helpers"
+    fi
+    return 0
+  fi
+  if [ -z "${VIDRA_MAINTENANCE_LOCK_FD:-}" ]; then
+    # On the first run Python creates the private file with the install owner's
+    # permissions. The actual claim below also arbitrates competing first runs.
+    if [ ! -f "$lock" ]; then python3 "$helper" "$root" || die "maintenance lock unavailable"; fi
+    exec 9<>"$lock" || die "cannot open the installation maintenance lock"
+    export VIDRA_MAINTENANCE_LOCK_FD=9
+  fi
+  python3 "$helper" "$root" || die "maintenance lock unavailable"
+}
+
 # Reads KEY from the env file WITHOUT sourcing it — that file is operator-edited
 # and holds secrets; `source`ing it would execute whatever is in there. A real
 # exported environment variable of the same name wins, so
@@ -114,8 +136,22 @@ vidra_compose_chain() {
     -f docker-compose.yml
     -f docker-compose.prod.yml)
 
+  if is_true "$(env_get VIDRA_SOURCE_BUILD false)"; then
+    COMPOSE+=(-f docker-compose.source.yml)
+  fi
+
   if is_true "$(env_get IPFS_MANAGED_NODE false)"; then
     COMPOSE+=(-f docker-compose.ipfs-managed.yml)
+  fi
+
+  LOCAL_ATPROTO_PDS=0
+  if is_true "$(env_get ATPROTO_ENABLED false)" && [ -z "$(env_get ATPROTO_PDS_URL '')" ]; then
+    # Read by deploy.sh before its first Compose render.
+    # shellcheck disable=SC2034
+    LOCAL_ATPROTO_PDS=1
+    VIDRA_LOCAL_PDS_HOST="$(python3 "$REPO_ROOT/deploy/atproto-pds.py" --hostname "$(env_get PUBLIC_BASE_URL '')")" || die "invalid hostname for the local PDS"
+    export VIDRA_LOCAL_PDS_HOST
+    COMPOSE+=(-f docker-compose.atproto-pds.yml)
   fi
 
   # External/managed datastores. Each overlay parks the bundled service on a

@@ -420,6 +420,11 @@ require_dns_points_here() {
 # shellcheck source=deploy/lib.sh
 . "$REPO_ROOT/deploy/lib.sh"
 
+step "0/6 pre-flight"
+command -v python3 >/dev/null 2>&1 || die "Python 3 is required for checkout preflight; install python3 before deploying"
+python3 "$REPO_ROOT/deploy/checkout-hygiene.py" check "$REPO_ROOT" || die "checkout hygiene preflight failed"
+vidra_maintenance_lock "$REPO_ROOT"
+
 PGUSER="$(env_get POSTGRES_USER vidra)"
 PGDB="$(env_get POSTGRES_DB vidra)"
 HTTP_PORT="$(env_get HTTP_PORT 8080)"
@@ -433,9 +438,6 @@ TLS_MODE="$(env_get VIDRA_TLS_MODE acme)"
 # Sets COMPOSE, EXTERNAL_POSTGRES and EXTERNAL_REDIS.
 vidra_compose_chain
 
-step "0/6 pre-flight"
-command -v python3 >/dev/null 2>&1 || die "Python 3 is required for checkout preflight; install python3 before deploying"
-python3 "$REPO_ROOT/deploy/checkout-hygiene.py" check "$REPO_ROOT" || die "checkout hygiene preflight failed"
 require_compose_version
 require_known_tls_mode
 # Order matters: the mounted Caddyfile must EXIST before it can be checked for a
@@ -591,7 +593,13 @@ fi
 # three VIDRA_*_TAG image tags. `:?` fails on an EMPTY value as well as an unset one,
 # which is what makes it catch the shipped `JWT_SECRET=` blank in an env file
 # that was copied but never edited.
+if [ "$LOCAL_ATPROTO_PDS" = 1 ]; then
+  python3 "$REPO_ROOT/deploy/atproto-pds.py" --prepare "$REPO_ROOT/env/atproto-pds.env"
+fi
 "${COMPOSE[@]}" config -q || die "compose config is invalid — fix $ENV_FILE and retry"
+if is_true "$(env_get VIDRA_SOURCE_BUILD false)"; then
+  python3 "$REPO_ROOT/deploy/source-update.py" verify || die "source image verification failed before the database dump"
+fi
 log "tags: core=$(env_get VIDRA_CORE_TAG '?') user=$(env_get VIDRA_USER_TAG '?') search=$(env_get VIDRA_SEARCH_TAG '?')"
 
 step "1/6 pre-deploy database dump"
@@ -757,14 +765,21 @@ step "5/6 reload Caddy"
 # prevent, and neither is visible in the loopback probes below — they connect
 # to api and frontend directly, behind Caddy.
 reload_caddy() {
-  local attempt mounted
+  local attempt mounted host_site=/etc/caddy/Caddyfile wrapper stale
+  if [ "${LOCAL_ATPROTO_PDS:-0}" = 1 ]; then host_site=/etc/caddy/vidra-site; fi
   for attempt in 1 2 3 4 5; do
     # Setup promotes files with an atomic rename. A file bind mount retains
     # the old inode, so reload can succeed while serving the previous domain
     # or TLS mode. Refresh only Caddy's mount when its bytes actually differ;
     # unchanged deployments keep the graceful reload path.
-    if mounted="$("${COMPOSE[@]}" exec -T caddy cat /etc/caddy/Caddyfile 2>/dev/null)"; then
-      if [ "$mounted" != "$(cat "$REPO_ROOT/deploy/Caddyfile.local")" ]; then
+    if mounted="$("${COMPOSE[@]}" exec -T caddy cat "$host_site" 2>/dev/null)"; then
+      stale=0
+      if [ "$mounted" != "$(cat "$REPO_ROOT/deploy/Caddyfile.local")" ]; then stale=1; fi
+      if [ "${LOCAL_ATPROTO_PDS:-0}" = 1 ]; then
+        wrapper="$("${COMPOSE[@]}" exec -T caddy cat /etc/caddy/Caddyfile)" || return 1
+        if [ "$wrapper" != "$(cat "$REPO_ROOT/deploy/Caddyfile.atproto-pds")" ]; then stale=1; fi
+      fi
+      if [ "$stale" = 1 ]; then
         log "Caddyfile mount is stale; recreating Caddy before reload"
         "${COMPOSE[@]}" up -d --no-build --no-deps --force-recreate caddy || return 1
       fi
