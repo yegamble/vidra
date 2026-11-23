@@ -88,6 +88,11 @@ class SourceUpdateTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Wrong core"):
                 source.verify(self.env)
 
+    def test_gaps_in_the_service_model_cannot_verify_as_a_live_upgrade(self):
+        with patch.object(source, "config", return_value={"services": {}}):
+            with self.assertRaisesRegex(ValueError, "Missing source services"):
+                source.verify(self.env, running=True)
+
     def exercise_apply(self, failed):
         (self.root / "deploy").mkdir()
         (self.root / "deploy/snapshots.py").touch()

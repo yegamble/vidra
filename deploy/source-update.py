@@ -76,7 +76,8 @@ def check_meta(repo, record):
     require(commit == record["meta_commit"], f"The meta tag {tag} moved relative to the release record")
     # Older releases always pull published images and cannot keep source mode across restarts.
     files = set(output("git", "ls-tree", "--name-only", "-r", commit, cwd=repo).splitlines())
-    return {"docker-compose.source.yml", "deploy/source-update.py", "deploy/snapshots.py"} <= files
+    return {"docker-compose.source.yml", "deploy/source-update.py", "deploy/snapshots.py",
+            "deploy/snapshot_lock.py"} <= files
 
 
 def build_args(role, repo, component):
@@ -149,6 +150,8 @@ def meta_commit():
 
 def verify(env, running=False):
     model = config()["services"]
+    expected = set(SERVICES) - {"worker"}
+    require(expected <= model.keys(), f"Missing source services: {sorted(expected - model.keys())}")
     for name, service in model.items():
         repo = service.get("image", "").rsplit("/", 1)[-1].split(":", 1)[0]
         if repo in {f"vidra-{role}" for role in ROLES}:
@@ -165,6 +168,10 @@ def verify(env, running=False):
         if (checkout / ".git").exists():
             require(output("git", "rev-parse", "HEAD", cwd=checkout) == labels["org.opencontainers.image.revision"],
                     f"Installed {role} checkout and compiled image differ")
+        elif role == "core" and (ROOT / "vidra-bundle.manifest").exists():
+            manifest = MAPPING["bundle_manifest"](ROOT / "vidra-bundle.manifest")
+            require(labels["org.opencontainers.image.revision"] == manifest.get("core_commit"),
+                    "Installed bundle and compiled core commit differ")
         for name, service in model.items():
             if SERVICES.get(name) != role:
                 continue
@@ -197,9 +204,12 @@ def activate(env, ids, text=None):
 
 
 def apply(env, record, temp):
-    from snapshot_lock import maintenance_lock
     require(os.geteuid() != 0 and ROOT.stat().st_uid == os.geteuid(), "Run as the install owner")
     require((ROOT / "deploy/snapshots.py").is_file(), "Install snapshot support before a source upgrade")
+    try:
+        from snapshot_lock import maintenance_lock
+    except ImportError as exc:
+        raise ValueError("The installed snapshot maintenance lock is missing") from exc
     require(env.is_file() and not env.is_symlink() and env.stat().st_uid == os.geteuid(),
             "The env file must be a regular file owned by the install user")
     keys = ["VIDRA_IMAGE_REGISTRY", "VIDRA_IMAGE_OWNER", "VIDRA_SOURCE_BUILD"]
@@ -223,6 +233,8 @@ def apply(env, record, temp):
             if (repo / ".git").exists():
                 require(not output("git", "status", "--porcelain", "--untracked-files=no", cwd=repo),
                         f"Commit or move local tracked edits in {repo}")
+                require(not output("git", "ls-files", "--others", "--", "migrations", cwd=repo),
+                        f"Untracked migration files in {repo} could change the schema assertion")
         child = dict(pass_fds=(fd,), env=dict(os.environ, VIDRA_MAINTENANCE_LOCK_FD=str(fd)))
         snapshot = output(sys.executable, ROOT / "deploy/snapshots.py", "create", "--reason", "pre-upgrade", **child)
         require(HEX_ID.fullmatch(snapshot), "Snapshot command did not return a complete snapshot ID")
