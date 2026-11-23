@@ -281,6 +281,8 @@ def main():
     for name in ("check", "apply"):
         sub = commands.add_parser(name)
         sub.add_argument("--tag", metavar="vX.Y.Z")
+        if name == "apply":
+            sub.add_argument("--confirm", action="store_true", help="ask before building the displayed release")
     commands.add_parser("verify", help="check the installed source image identities")
     args = parser.parse_args()
     env = ROOT / os.environ.get("ENV_FILE", "env/production.env")
@@ -299,11 +301,16 @@ def main():
             print(message)
             return
         if args.command == "apply":
+            if args.confirm:
+                require(sys.stdin.isatty(), "Source update needs a terminal to confirm. Use vidra update --source --yes for unattended installs.")
+                prompt = f"Compile and deploy {record['release']} after taking a full snapshot? [y/N] "
+                if input(prompt).strip().lower() not in ("y", "yes"):
+                    sys.exit("Source update declined.")
             apply(env, record, temp)
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, subprocess.CalledProcessError, ValueError, KeyError) as exc:
+    except (OSError, EOFError, subprocess.CalledProcessError, ValueError, KeyError) as exc:
         sys.exit(f"Source update stopped. {exc}")

@@ -1,6 +1,6 @@
 # Upgrade Vidra from its Git sources
 
-Run these commands on the Docker host, in the deployment directory, as the install owner. Both Git checkouts and release bundles use the same commands. To select a different configuration, export the same `ENV_FILE` you use for deployment.
+Run these commands on the Docker host, in the deployment directory, as the install owner. The CLI equivalents are `vidra update --source --check` and `vidra update --source`. The latter shows the chosen release and asks before building. On an older install, first install a release containing both the snapshot manager and source updater using the published-image upgrade instructions. Both Git checkouts and release bundles use the same commands. To select a different configuration, export the same `ENV_FILE` you use for deployment.
 
 ```sh
 python3 deploy/source-update.py check
