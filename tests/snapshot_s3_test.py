@@ -131,6 +131,42 @@ class SnapshotS3Test(unittest.TestCase):
             self.recover(data)
         self.assertEqual(self.s3.data['recovery']['exists'][0], b'keep')
 
+    def test_spaces_multipart_receipt_is_unquoted_but_listing_is_quoted(self):
+        self.s3.add('live', 'video', b'multipart video')
+        archive = self.archive()
+        paginate = self.s3.paginate
+
+        def quoted_listing(*args, **kwargs):
+            for page in paginate(*args, **kwargs):
+                for entry in page['Contents']:
+                    entry['ETag'] = '"' + entry['ETag'] + '"'
+                yield page
+
+        with mock.patch.object(self.s3, 'paginate', side_effect=quoted_listing):
+            self.assertEqual(self.recover(archive)['objects'], 1)
+
+    def test_changed_etag_and_foreign_key_still_refuse_activation(self):
+        self.s3.add('live', 'video', b'multipart video')
+        archive = self.archive()
+        paginate = self.s3.paginate
+
+        for change in ('etag', 'extra'):
+            with self.subTest(change=change):
+                self.s3.data['recovery'].clear()
+
+                def changed_listing(*args, **kwargs):
+                    for page in paginate(*args, **kwargs):
+                        if change == 'etag':
+                            item = page['Contents'][0]
+                            item['ETag'] = '"' + item['ETag'].upper() + '"'
+                        yield page
+                        if change == 'extra':
+                            yield {'Contents': [{'Key': 'late', 'Size': 0, 'ETag': '"other"'}]}
+
+                with mock.patch.object(self.s3, 'paginate', side_effect=changed_listing):
+                    with self.assertRaisesRegex(ValueError, 'destination S3 inventory changed'):
+                        self.recover(archive)
+
     def test_payload_corruption_aborts_multipart_without_writing_the_object(self):
         payload = b'synthetic video contents'
         self.s3.add('live', 'video', payload)

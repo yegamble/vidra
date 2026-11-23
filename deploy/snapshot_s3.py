@@ -160,6 +160,14 @@ def _inventory_item(key, obj):
     return _frame([key, obj['Size'], obj['ETag'], str(obj.get('LastModified', ''))])
 
 
+def _restored_inventory_item(key, size, etag):
+    # Spaces quotes ETags in ListObjectsV2 but omits the surrounding quotes
+    # from CompleteMultipartUpload. The opaque validator itself is case-sensitive.
+    if len(etag) >= 2 and etag[0] == etag[-1] == '"':
+        etag = etag[1:-1]
+    return _frame([key, size, etag])
+
+
 def _source_info(env):
     return {'bucket': env['STORAGE_S3_BUCKET'], 'endpoint': env['STORAGE_S3_ENDPOINT']}
 
@@ -308,10 +316,10 @@ def restore(api_env, source, destination_bucket, *, protected_buckets=()):
         manifest.update(raw + digest)
         stats['objects'] += 1
         stats['bytes'] += header['size']
-        inventory.update(_frame([header['key'], header['size'], etag]))
+        inventory.update(_restored_inventory_item(header['key'], header['size'], etag))
     observed = hashlib.sha256()
     for key, obj in _objects(s3, destination_bucket):
-        observed.update(_frame([key, obj['Size'], obj['ETag']]))
+        observed.update(_restored_inventory_item(key, obj['Size'], obj['ETag']))
     if observed.digest() != inventory.digest():
         raise ValueError('destination S3 inventory changed during restore')
     return dict(stats, bucket=destination_bucket)
