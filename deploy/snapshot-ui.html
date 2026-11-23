@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Backups · Vidra</title>
+  <link rel="stylesheet" href="/screen.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="bar-inner">
+      <strong class="brand"><span class="brand-mark" aria-hidden="true">v</span>vidra</strong>
+      <span class="bar-divider" aria-hidden="true"></span><span>Operator console</span>
+      <span id="connection" role="status">Connecting</span>
+    </div>
+  </header>
+  <main>
+    <section class="heading" aria-labelledby="title">
+      <div><h1 id="title">Backups</h1><p id="summary">Loading snapshot history…</p></div>
+      <button id="create" class="primary" disabled><span aria-hidden="true">＋</span> Create snapshot</button>
+    </section>
+    <div id="notice" role="alert" hidden></div>
+    <div id="setup" class="hint" hidden>To enable install snapshots, initialize an encrypted restic repository on the host and launch this console with its repository and password settings. Existing database archives are listed below.</div>
+    <section id="operation" aria-labelledby="operation-title" hidden>
+      <div><strong id="operation-title"></strong><span id="elapsed"></span></div>
+      <div id="operation-message" role="status" aria-live="polite"></div>
+      <details id="activity"><summary>Operation details</summary><ol id="events"></ol></details>
+    </section>
+    <div class="layout">
+      <section class="panel history" aria-labelledby="history-title">
+        <div class="panel-heading"><h2 id="history-title">Backup history</h2><button class="quiet" id="refresh">Refresh</button></div>
+        <label class="search"><span aria-hidden="true">⌕</span><input id="filter" type="search" aria-label="Filter backup history" placeholder="Filter by date, release or type"></label>
+        <div class="table-wrap"><table>
+          <thead><tr><th scope="col">Backup date</th><th scope="col">Release</th><th scope="col">Trigger</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table></div>
+        <div id="empty" class="empty">Loading backups…</div>
+      </section>
+      <aside class="panel details" aria-labelledby="detail-title">
+        <div class="panel-heading"><h2 id="detail-title">Backup details</h2></div>
+        <div id="detail-empty" class="empty">Select a backup to see its contents and recovery options.</div>
+        <div id="detail" hidden>
+          <span id="kind" class="pill"></span>
+          <h3 id="selected-date"></h3><p id="selected-time" class="muted"></p>
+          <dl id="facts"></dl>
+          <details id="components"><summary>Component versions</summary><dl id="pins"></dl></details>
+          <p id="legacy-note" class="hint" hidden>This archive covers the database. Use the host restore command to recover it with matching media and configuration.</p>
+          <button id="review" class="secondary">Review rollback <span aria-hidden="true">→</span></button>
+          <button id="retire" class="quiet removal" hidden>Retire this snapshot</button>
+        </div>
+      </aside>
+    </div>
+  </main>
+  <dialog id="create-dialog" aria-labelledby="create-title">
+    <form id="create-form">
+      <div class="dialog-head"><h2 id="create-title">Create snapshot</h2><button class="close" value="cancel" type="button" aria-label="Close">×</button></div>
+      <p>Vidra pauses services while it captures the installation. Uploads and playback may be unavailable until services restart.</p>
+      <div class="actions"><button class="secondary cancel" type="button">Cancel</button><button class="primary" type="submit">Create snapshot</button></div>
+    </form>
+  </dialog>
+  <dialog id="restore-dialog" aria-labelledby="restore-title">
+    <form id="restore-form">
+      <div class="dialog-head"><h2 id="restore-title">Review rollback</h2><button class="close" type="button" aria-label="Close">×</button></div>
+      <p id="target"></p>
+      <p class="muted">Account suspensions, video blocks and sign-in sessions also return to the selected date. Recovery needs free disk space on the host to stage install files and database volumes.</p>
+      <label id="bucket-label" hidden>New, empty S3 bucket<input id="bucket" autocomplete="off" spellcheck="false"><small>The snapshot’s media will be restored to this bucket.</small></label>
+      <label class="choice"><input type="checkbox" id="preserve" checked><span><strong>Save current data first</strong><small>Keep a separate snapshot of newer uploads, messages and settings. You can recover it later.</small></span></label>
+      <p id="discard-note" class="warning" hidden>Newer data may be lost when this rollback replaces the live installation.</p>
+      <div id="confirm-area" hidden>
+        <label for="confirmation">Type <code id="phrase"></code> to confirm this release and UTC date.</label>
+        <input id="confirmation" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <p id="restore-error" class="warning" role="alert" hidden></p>
+      <div class="actions"><button class="secondary cancel" type="button">Cancel</button><button id="submit-restore" type="submit" class="primary">Preview rollback</button></div>
+    </form>
+  </dialog>
+  <dialog id="retire-dialog" aria-labelledby="retire-title">
+    <form id="retire-form">
+      <div class="dialog-head"><h2 id="retire-title">Retire snapshot</h2><button class="close" type="button" aria-label="Close">×</button></div>
+      <p id="retire-target"></p>
+      <p>Retirement permanently removes this recovery point and its archive parts from backup history. The live installation keeps serving.</p>
+      <div id="retire-confirm-area" hidden>
+        <label for="retire-confirm">Type <code id="retire-phrase"></code> to remove this snapshot.</label>
+        <input id="retire-confirm" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <p id="retire-error" class="warning" role="alert" hidden></p>
+      <div class="actions"><button class="secondary cancel" type="button">Cancel</button><button id="retire-submit" class="secondary removal" type="submit">Preview retirement</button></div>
+    </form>
+  </dialog>
+</body>
+</html>
