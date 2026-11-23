@@ -36,6 +36,28 @@
 #   release_mapping_check ROOT MODE CORE USER SEARCH
 #                          exit 0 when releases/ allows this tag triple
 
+# Keep the lock on the same open file description as the caller. A Python or
+# Go parent can pass any descriptor; standalone Bash 3.2 reserves descriptor 9.
+vidra_maintenance_lock() {
+  local root="$1" helper="$1/deploy/snapshot_lock.py" lock="$1/backups/.vidra-maintenance.lock"
+  if [ ! -f "$helper" ]; then
+    # Older/minimal trees predate install snapshots. Missing just the helper
+    # in a snapshot-capable install, or during a nested upgrade, is a refusal.
+    if [ -e "$root/deploy/snapshots.py" ] || [ -e "$lock" ] || [ -n "${VIDRA_MAINTENANCE_LOCK_FD:-}" ]; then
+      die "missing $helper in a maintenance-enabled install; restore the deployment helpers"
+    fi
+    return 0
+  fi
+  if [ -z "${VIDRA_MAINTENANCE_LOCK_FD:-}" ]; then
+    # On the first run Python creates the private file with the install owner's
+    # permissions. The actual claim below also arbitrates competing first runs.
+    if [ ! -f "$lock" ]; then python3 "$helper" "$root" || die "maintenance lock unavailable"; fi
+    exec 9<>"$lock" || die "cannot open the installation maintenance lock"
+    export VIDRA_MAINTENANCE_LOCK_FD=9
+  fi
+  python3 "$helper" "$root" || die "maintenance lock unavailable"
+}
+
 # Reads KEY from the env file WITHOUT sourcing it — that file is operator-edited
 # and holds secrets; `source`ing it would execute whatever is in there. A real
 # exported environment variable of the same name wins, so

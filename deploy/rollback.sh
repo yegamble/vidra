@@ -201,9 +201,6 @@ EOF
   USER_TAG="${USER_TAG:-$user}"
   SEARCH_TAG="${SEARCH_TAG:-$search}"
 }
-if [ -n "$BARE_TAG" ]; then
-  resolve_bare_tag
-fi
 
 # The prod overlay closes Postgres/Redis/search with the `!reset` / `!override`
 # merge tags, which need Compose >= 2.24. An older Compose does not error on
@@ -276,8 +273,6 @@ require_embedded_migrate_tag() {
 # below. Deliberate for now: on a git tree deploy.sh's checkout sync would run
 # `git checkout "v0.6.4@sha256:..."` on the same pin. Only --user reaches the
 # digest comparison.
-require_embedded_migrate_tag VIDRA_CORE_TAG   "$CORE_TAG"
-require_embedded_migrate_tag VIDRA_SEARCH_TAG "$SEARCH_TAG"
 
 # env_get, is_true and the compose chain live in deploy/lib.sh — every script
 # that addresses the running stack must assemble the SAME project. Sourced here,
@@ -299,6 +294,12 @@ command -v python3 >/dev/null 2>&1 || die "Python 3 is required for checkout pre
 # and failing here beats failing after the tag pins have been rewritten. Same
 # reasoning as the bundle branch further down — see its comment.
 python3 "$REPO_ROOT/deploy/checkout-hygiene.py" check "$REPO_ROOT" --env-backups warn || die "checkout hygiene preflight failed"
+vidra_maintenance_lock "$REPO_ROOT"
+if [ -n "$BARE_TAG" ]; then
+  resolve_bare_tag
+fi
+require_embedded_migrate_tag VIDRA_CORE_TAG   "$CORE_TAG"
+require_embedded_migrate_tag VIDRA_SEARCH_TAG "$SEARCH_TAG"
 
 # Same key, same default as deploy/lib.sh's edge_profile() and deploy.sh's
 # pre-flight. `external` means the operator's own proxy terminates TLS and this

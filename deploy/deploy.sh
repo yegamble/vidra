@@ -420,6 +420,11 @@ require_dns_points_here() {
 # shellcheck source=deploy/lib.sh
 . "$REPO_ROOT/deploy/lib.sh"
 
+step "0/6 pre-flight"
+command -v python3 >/dev/null 2>&1 || die "Python 3 is required for checkout preflight; install python3 before deploying"
+python3 "$REPO_ROOT/deploy/checkout-hygiene.py" check "$REPO_ROOT" || die "checkout hygiene preflight failed"
+vidra_maintenance_lock "$REPO_ROOT"
+
 PGUSER="$(env_get POSTGRES_USER vidra)"
 PGDB="$(env_get POSTGRES_DB vidra)"
 HTTP_PORT="$(env_get HTTP_PORT 8080)"
@@ -433,9 +438,6 @@ TLS_MODE="$(env_get VIDRA_TLS_MODE acme)"
 # Sets COMPOSE, EXTERNAL_POSTGRES and EXTERNAL_REDIS.
 vidra_compose_chain
 
-step "0/6 pre-flight"
-command -v python3 >/dev/null 2>&1 || die "Python 3 is required for checkout preflight; install python3 before deploying"
-python3 "$REPO_ROOT/deploy/checkout-hygiene.py" check "$REPO_ROOT" || die "checkout hygiene preflight failed"
 require_compose_version
 require_known_tls_mode
 # Order matters: the mounted Caddyfile must EXIST before it can be checked for a
