@@ -2,7 +2,7 @@
 # external PDS. Only Caddy shares the dedicated PDS network.
 services:
   pds:
-    image: ghcr.io/bluesky-social/pds:0.4@sha256:8e58b79746da8a0e85698aa7ba9b53e508b94db2021d963653b6d1bfc14889c6
+    image: ghcr.io/bluesky-social/pds:0.4@sha256:b7dcc38b5ec26d03c096c90d4385c4b29c4fdd22daf3b0b36e159f61a81d55c0
     restart: unless-stopped
     env_file:
       - ./env/atproto-pds.env
