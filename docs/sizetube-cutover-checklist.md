@@ -766,6 +766,30 @@ D1–D14 and D16 were answered 2026-11-08 (audit §6 table). **D15 is the only o
   Cloudflare in front; 1× is still the bandwidth estimate; **3× was not run**, so where it
   falls over now is not known; ladder steps were 3 minutes.
 
+### November 24 production traffic measurement
+
+Cloudflare's adaptive HTTP analytics for the apex recorded about 6.52 million
+eyeball requests in the 24 hours ending at 16:00 UTC on November 24. About
+2.50 million reported an origin response, including 1.40 million under
+`/api/`. The query grouped counts by UTC minute and used a positive origin
+response status for the origin series. Counts are sampling estimates.
+[Cloudflare hostname analytics](https://developers.cloudflare.com/analytics/graphql-api/tutorials/end-customer-analytics/)
+
+| Busiest one-minute interval in the seven days ending November 24 at 16:00 UTC | Requests per minute |
+| --- | ---: |
+| Apex edge, all responses | 11,113 |
+| Apex with an origin response, all statuses | 7,543 |
+| Apex with an origin response, HTTP 200–399 | 3,452 |
+| Apex API with an origin response, all statuses | 6,213 |
+| Apex API with an origin response, HTTP 200–399 | 2,192 |
+
+Each row has its own peak minute. At the API peak on November 18 at
+18:09 UTC, about 4,939 of 6,213 requests received an origin 429 (80%).
+The v0.7.20 rehearsal above completed 2,600 synthetic page views in ten
+minutes. Qualifying v0.7.30 at this measured demand still requires a
+representative route mix and separate measurements for successful responses
+and rate-limited requests. Page views and HTTP requests have different units.
+
 ## H. What is still not checked (after the 2026-11-12 re-read and rehearsal)
 
 - **Anything on the beta itself, as of 2026-11-19.** That day's partial re-read reached no
@@ -775,6 +799,8 @@ D1–D14 and D16 were answered 2026-11-08 (audit §6 table). **D15 is the only o
 - **Prod's transcoding queue now, and prod's real request rate.** Both need read-only SSH to
   prod, which the operator declined on 2026-11-12. D16 therefore rests on the 2026-11-09
   reading, and the load check's "1×" is an estimate (section G).
+  The November 24 queue check and the Cloudflare measurement in section G
+  supersede this historical gap. The final queue read belongs at the freeze.
 - **Where the read path gives out on v0.7.20.** The rerun stopped at the estimated 1× and
   passed; 3× was not run, and at 150 a minute and above the generator sat on the box it was
   loading (section G).
