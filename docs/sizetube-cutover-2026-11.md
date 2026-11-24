@@ -470,9 +470,14 @@ Executed so far (each with the operator's explicit go-ahead):
   hostname and the Cloudflare Origin CA root reached Vidra from the admitted
   network. Ordinary public traffic still reached PeerTube. An isolated restore
   on beta recovered the Nov 24 encrypted off-site database dump with clean
-  migration ledgers. All 91 public local videos listed since the Nov 15 source
-  refresh were absent from beta. The hostname switch, frozen-source import
-  and final media recovery check remain open. The [November 24 rehearsal
+  migration ledgers. Its full top-level inventory and a nine-video strict
+  media sample passed. The active source snapshot contains Nov 22 updates
+  and all 91 recent public UUIDs checked. None had a completed beta mapping.
+  Two beta videos were anonymously readable even though production returned
+  404 and 401 respectively. Chrome playback failed on the staged apex with
+  the beta API origin and passed in a private copy with the apex API origin.
+  The hostname switch, visibility reconciliation, frozen-source import and
+  final media recovery check remain open. The [November 24 rehearsal
   record](sizetube-cutover-checklist.md#november-24-private-apex-rehearsal--hold-production-traffic)
   gives the measured results and the remaining gates.
 
