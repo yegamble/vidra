@@ -185,6 +185,49 @@ or Caddy certificate-directory read ran. The gate and all infrastructure were le
   review is pending. Keep production traffic on PeerTube while this decision
   and the frozen-source and recovery checks are open.
 
+### November 24 private beta import
+
+The v0.7.30 source-authoritative import ran from 15:37 to 16:08 UTC against
+the refreshed, filtered PeerTube snapshot. It added 55 users, 56 channels and
+98 videos, updated 44 videos and reconciled 29,829 existing playlist items.
+Beta finished with 5,658 users, 15,720 videos, 778 video blocks and one user
+ban. The post-import database and configuration backup completed at 16:09 UTC.
+After the playback repair and search reconciliation, both files from the
+16:13 UTC backup were retrieved from the encrypted off-site remote. Both
+SHA-256 digests matched their on-host copies.
+
+- **Privacy.** All 14,956 source video UUIDs had a beta mapping with the
+  expected visibility. All 764 mapped videos absent from the filtered source
+  were blocked. Both previously exposed records returned 404 on the detail
+  and HLS master routes and were suppressed in search. The unpublished
+  private source video remained a private draft and returned 404 on both routes.
+- **Playback.** A single-video retry recovered the one new public video
+  whose initial media transfer failed. Across the 98 additions, all 591
+  playback manifests and 493 media dependencies resolved in source and
+  destination. All dependency sizes matched, totalling 16,027,464,789
+  media bytes. There were 279 matching single-part ETags and nine independent
+  SHA-256 comparisons. Chrome decoded 97 frames of the retried video before
+  seeking to 23 seconds. Every unblocked, published imported video had a
+  ready HLS playlist or an original file.
+- **Private draft exception.** A separate, older draft had a playlist and a
+  media file on the PeerTube host that were absent from its source bucket.
+  Together they measured 28,896,084 bytes. At this check its beta draft still
+  needed both objects.
+- **Search.** After the standalone import, the 92 public additions were
+  absent from the search index. The released API's startup reconciliation
+  indexed all 92. All six private additions stayed out of the index, and the
+  outbox had zero pending or dead events. The anonymous search API returned
+  the retried public video with both service-specific paging fields.
+- **Preview images.** The importer reported 12,702 source-missing seek
+  previews. Regeneration is enabled through the release default. D8 assigns
+  the remaining preview generation to the post-cutover backfill.
+- **Release identity.** The running core, frontend and search containers
+  matched all three release index digests, Linux/amd64 manifest digests and
+  source revisions.
+- **Signing keys.** Independent decryption against the running deployment
+  succeeded for all 5,654 account and 5,713 channel signing keys, including
+  the newly imported keys. Zero rows contained plaintext key material.
+
 ### November 22 go-live decision
 
 **Hold production DNS.** The operator's browser reached SizeTube's 18+ prompt on beta.
