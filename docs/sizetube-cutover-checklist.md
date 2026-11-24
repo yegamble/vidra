@@ -160,6 +160,10 @@ or Caddy certificate-directory read ran. The gate and all infrastructure were le
   mailbox for the operator's active, import-owned account. One request
   returned HTTP 202. The mailbox owner completed the reset, and the beta
   token record showed that exact request redeemed before expiry at 15:17 UTC.
+  At 15:37 UTC the source-authoritative import resynced the same account.
+  That operation writes the source password hash, so the production
+  credential superseded the beta-only reset. A reset intended to carry
+  into production belongs after the final source-authoritative import.
 - **C2/C4 · Source and media rehearsal.** The filtered source refresh
   retained the previous snapshot and selected 14,956 local videos on schema
   1130 after excluding 792 videos belonging to suspended owners. All 98
