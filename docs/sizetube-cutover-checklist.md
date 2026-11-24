@@ -139,6 +139,52 @@ or Caddy certificate-directory read ran. The gate and all infrastructure were le
   anonymous sensitive access was open, registration was closed, both policy
   URL settings were empty and the consent table had zero rows.
 
+### November 24 v0.7.30 private beta verification
+
+- **Release and browser access.** The three published images passed release
+  preflight. The recovery drill upgraded from v0.7.29, rolled back and
+  restored the media fingerprint. The sealed-secret recovery drill passed
+  on a replacement host. The guarded beta deployment completed and the
+  private apex frontend uses the new frontend image. Chrome reached the
+  age prompt from the operator's connection. A separate connection received
+  403 on the beta homepage. [Release record and checks](https://github.com/yegamble/vidra/pull/440)
+- **C5 · Legacy browser links.** On both beta and the privately routed apex,
+  Chrome followed `/c/{handle}/videos`, `/channels/{handle}/videos` and
+  `/video-channels/{handle}` to the canonical channel page. A private
+  imported account's legacy profile returned 404. Beta had zero active
+  public profiles to exercise the positive account case. From a legacy
+  watch link, clicking Play decoded frames and seeking to 23 seconds passed
+  on both hosts. The temporary apex admission was revoked and returned 403
+  on retest. Public SizeTube continued serving PeerTube 8.3.1.
+- **D4 · Imported-account reset passed.** Beta and the source had the same
+  mailbox for the operator's active, import-owned account. One request
+  returned HTTP 202. The mailbox owner completed the reset, and the beta
+  token record showed that exact request redeemed before expiry at 15:17 UTC.
+- **C2/C4 · Source and media rehearsal.** The filtered source refresh
+  retained the previous snapshot and selected 14,956 local videos on schema
+  1130 after excluding 792 videos belonging to suspended owners. All 98
+  previously missing videos had their recorded master in source storage.
+  Walking 591 manifests found 493 nonempty media dependencies and zero
+  unresolved references at measurement time. The public source API
+  advertised the same masters for all 92 public videos. The released
+  importer's read-only plan completed in 54 seconds. Seven granular
+  sensitive-content preferences map to hide, and 33 remote watch-history
+  entries cannot be represented locally. A disconnected two-video copy
+  staged 25,304,536 bytes, published both playlists, matched all nine
+  referenced media hashes and decoded three frames of each video.
+- **Signing keys and backup.** The restored beta database had 5,599 account
+  and 5,657 channel signing keys stored as raw PEM. With operator approval,
+  the release's encryption implementation sealed them first on the restored
+  copy and then in one live transaction. Independent decryption with the key
+  recovered from encrypted off-site storage reproduced every original private
+  key and public identity. The running API uses that key with federation
+  disabled. Both files of the 15:35:56 UTC post-sealing backup matched their
+  retained copies after retrieval from the encrypted remote. Earlier backup
+  contents and the source snapshot retain their original key representation.
+- **D15 · Operator decision.** The operator confirmed the launch-policy
+  review is pending. Keep production traffic on PeerTube while this decision
+  and the frozen-source and recovery checks are open.
+
 ### November 22 go-live decision
 
 **Hold production DNS.** The operator's browser reached SizeTube's 18+ prompt on beta.
