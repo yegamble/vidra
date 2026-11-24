@@ -1,8 +1,8 @@
 # sizetube.com cutover — tracked checklist (living)
 
 A working checklist for cutting `sizetube.com` over from PeerTube to the Vidra beta
-(`beta.sizetube.com`). On 2026-11-22 the running core, user and search image digests
-matched v0.7.24 (core `96dcae14`, user `7c1ca962`, search `d018b07f`).
+(`beta.sizetube.com`). On 2026-11-24 the beta API reported v0.7.29, commit
+`0b0b430`. The November 22 entry records the earlier three-image digest check.
 It tracks **execution status**. The reasoning, evidence and decisions
 live in the audit ([`sizetube-cutover-2026-11.md`](sizetube-cutover-2026-11.md)) and the run
 record ([`sizetube-beta-migration-2026-11.md`](sizetube-beta-migration-2026-11.md)). When an
@@ -40,6 +40,44 @@ found is section I.
 PeerTube 8.3.1. DNS, B2 listings and the beta edge were readable. `/healthz` returned 200;
 `/version`, `/readyz` and `/api/v1/instance` returned 403. SSH timed out: no env, database
 or Caddy certificate-directory read ran. The gate and all infrastructure were left as found.
+
+### November 24 private apex rehearsal — hold production traffic
+
+- **D3 · Origin TLS passed.** The beta host generated its key and received a
+  Cloudflare Origin CA certificate for `sizetube.com` alone, valid through
+  2027-11-24. Caddy's private apex route admits the beta operator IPs and
+  permits GET and HEAD. With the connection directed to beta and the
+  Cloudflare origin root trusted, the homepage, `/version` and `/readyz`
+  returned 200. An unlisted client received 403 on `/healthz` and an admitted
+  OPTIONS request received 405. Normal public DNS still served PeerTube 8.3.1.
+  Public base URL, frontend API URL and CORS still point to beta. The window
+  must replace the private apex block when applying the production config.
+  Preserve the operator's pre-reload Caddyfile for rollback and arrange
+  certificate recovery for a replacement host. The config archive contains
+  the Caddyfile and env. The origin key lives in Caddy's data volume.
+- **C2/C4 · Final import remains open.** The production listing crossed the
+  Nov 15 snapshot cutoff. All 91 later public local UUIDs were absent from
+  beta. The beta still had 5,603 users, 15,622 videos and 17 runs, none
+  source-authoritative. The latest successful copy finished Nov 17. Obtain a
+  fresh queue reading and verify the freeze before taking the final snapshot.
+- **D5/D7 · Recount.** All 683 private, published imports lacking both a ready
+  HLS playlist and an original already had video blocks. The broader prepared
+  D7 predicate matched zero unblocked rows. Repeat the count after the final
+  import. There were 5,600 private import-owned profiles, 685 failed HLS ledger
+  entries and two failed video entries.
+- **D12/D14 · Off-site database restore passed.** Both files from the Nov 24
+  03:26 UTC backup matched their local copies byte for byte after retrieval
+  from the encrypted remote. A separate, network-isolated PostgreSQL container
+  on beta, using the running database image, restored the dump in 76 seconds.
+  Core ledger 191 and search ledger 21 were clean. The restored database had
+  5,603 users, 15,622 videos, 776 video blocks and one user ban. The temporary
+  database was removed. The final dump still needs strict media verification,
+  separate-host recovery and retention through the rollback window.
+- **D4/D15 · Account and visitor checks.** The named owner account has no
+  completed PeerTube user ledger entry. The imported-account reset test still
+  needs a controlled imported mailbox. The browser age setting was 18,
+  anonymous sensitive access was open, registration was closed, both policy
+  URL settings were empty and the consent table had zero rows.
 
 ### November 22 go-live decision
 
@@ -223,8 +261,10 @@ remain the baseline for the window.
   restored from the beta's 2026-11-12 03:26 UTC backup and ran the same release, so the
   password hash and the code are the beta's. It was not repeated on the beta itself.
   `OPERATOR`.
-- [ ] **D3 prerequisite · Origin CA cert for `sizetube.com`** on the droplet and
-  `VIDRA_SKIP_DNS_PREFLIGHT=1` in the env file (Cloudflare-proxied path). **Neither is there**
+- [~] **D3 prerequisite · Origin CA cert for `sizetube.com`** on the droplet and
+  `VIDRA_SKIP_DNS_PREFLIGHT=1` in the env file (Cloudflare-proxied path). The
+  certificate and private origin test passed Nov 24. The preflight flag remains
+  unset for the current beta hostname. **Neither was there**
   (RUNTIME 2026-11-12): the certificate directory holds only the `cdn-beta` pair, the key is
   absent from the env file, and the origin refuses a TLS handshake for `sizetube.com`.
   `OPERATOR`.
