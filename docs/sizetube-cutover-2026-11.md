@@ -484,6 +484,16 @@ Executed so far (each with the operator's explicit go-ahead):
   record](sizetube-cutover-checklist.md#november-24-private-apex-rehearsal--hold-production-traffic)
   gives the measured results and the remaining gates.
 
+- **RUNTIME 2026-11-24 — v0.7.30 on private beta.** The filtered source
+  refresh recovered the recorded master names for all 98 missing videos.
+  The imported-account reset passed. All 11,256 existing account and channel
+  signing keys were sealed and independently verified against a restored
+  copy. The private apex and beta both passed legacy channel redirects,
+  private-account denial, browser playback and seeking on the new release.
+  The operator confirmed D15 is pending. The [private beta verification
+  record](sizetube-cutover-checklist.md#november-24-v0730-private-beta-verification)
+  gives the scope of the tests and backup.
+
 ## 7. What this audit does NOT establish
 
 Byte-level integrity beyond the importer's own checks; feature parity (the parity QA's job);
