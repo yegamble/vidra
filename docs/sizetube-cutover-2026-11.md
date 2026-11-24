@@ -465,6 +465,17 @@ Executed so far (each with the operator's explicit go-ahead):
   succeeded. The browser age prompt, policy settings, scoped counts and recovery gaps are in
   the [November 22 go-live decision](sizetube-cutover-checklist.md#november-22-go-live-decision).
 
+- **RUNTIME 2026-11-24 — private apex TLS and database recovery verified.**
+  The beta API reported v0.7.29. A connection to beta using the production
+  hostname and the Cloudflare Origin CA root reached Vidra from the admitted
+  network. Ordinary public traffic still reached PeerTube. An isolated restore
+  on beta recovered the Nov 24 encrypted off-site database dump with clean
+  migration ledgers. All 91 public local videos listed since the Nov 15 source
+  refresh were absent from beta. The hostname switch, frozen-source import
+  and final media recovery check remain open. The [November 24 rehearsal
+  record](sizetube-cutover-checklist.md#november-24-private-apex-rehearsal--hold-production-traffic)
+  gives the measured results and the remaining gates.
+
 ## 7. What this audit does NOT establish
 
 Byte-level integrity beyond the importer's own checks; feature parity (the parity QA's job);
