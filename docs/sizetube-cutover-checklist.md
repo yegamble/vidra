@@ -50,7 +50,7 @@ or Caddy certificate-directory read ran. The gate and all infrastructure were le
   Cloudflare origin root trusted, the homepage, `/version` and `/readyz`
   returned 200. An unlisted client received 403 on `/healthz` and an admitted
   OPTIONS request received 405. Normal public DNS still served PeerTube 8.3.1.
-  Public base URL, frontend API URL and CORS still point to beta. The window
+  The shared beta frontend, core public URL and CORS still point to beta. The window
   must replace the private apex block when applying the production config.
   Preserve the operator's pre-reload Caddyfile for rollback and arrange
   certificate recovery for a replacement host. The config archive contains
@@ -66,8 +66,15 @@ or Caddy certificate-directory read ran. The gate and all infrastructure were le
   browser then decoded 51 frames and sought to 33.9 seconds. The media CDN
   returned HTTP 206. At the window, set `NEXT_PUBLIC_API_BASE_URL` in the
   Compose env, apply the site URL and CORS settings, then repeat this check
-  on the deployed route. The rehearsal allowed GET and HEAD, and excluded
-  third-party ads. Authenticated writes still need verification.
+  on the production route. The private apex now has its own frontend using the
+  released v0.7.29 image and the tested settings. Chrome repeated the 51-frame
+  decode and 33.9-second seek on that route. Beta still served its own API
+  origin. A separate address received 403 on the private apex and an admitted
+  OPTIONS request received 405. The operator's current browser reached beta's
+  age prompt after its exact address was added to the beta website gate.
+  Recheck or replace the preview frontend when changing the release. The
+  rehearsal covered anonymous reads. Authenticated writes and ads still
+  need verification.
 - **C2/C4 · The configured source is newer than the last import.** The active
   source database contained local video updates through Nov 22 at 18:29 UTC.
   All 91 public local UUIDs listed on production since Nov 15 at 18:42 UTC
@@ -75,8 +82,26 @@ or Caddy certificate-directory read ran. The gate and all infrastructure were le
   successful copy finished Nov 17. All 17 runs were non-authoritative.
   Of 14,956 local source videos and 15,622 mapped beta videos, 14,858 UUIDs
   matched. The 98 source-only rows included 90 public published videos, two
-  public state-2 videos and six private published videos. Obtain a fresh
-  queue reading, verify the freeze and reconcile again on the final snapshot.
+  public state-2 videos and six private published videos. A network-isolated
+  copy of the released worker ran a source-authoritative dry run in 191 seconds
+  and applied metadata changes in 236 seconds with media copying disabled.
+  It mapped all 98 videos, updated 44 existing videos and imported 55 users.
+  The 98 new mappings had no ready HLS on the copy.
+- **C4 · Source media changed after the snapshot.** Of 96 master filenames in
+  the Nov 22 snapshot for those 98 videos, only three existed at the recorded
+  paths in source storage. A directory check found a complete HLS tree for each
+  of the 96 videos, covering 580 playlists and 484 nonempty media objects.
+  Live PeerTube's database referenced those 96 verified masters and also
+  recorded a master for the two videos that had none in the snapshot. Refresh
+  the filtered snapshot before copying media. Verify the exact master names
+  and dependencies again after the production write freeze.
+- **D16 · Production queue inventory at 14:56 UTC.** Across the 16 monitored
+  queues there were 41 outstanding jobs, all transcoding-job-builder parents
+  waiting for child records that Redis no longer held. Of their 41 video UUIDs,
+  28 were published and 13 were absent from production. One separate eligible
+  video remained in state 2. It was private with one HLS playlist and six
+  recorded HLS files. Record its disposition and repeat the queue and state
+  checks at freeze.
 - **D5/D7 · Recount.** All 683 private, published imports lacking both a ready
   HLS playlist and an original already had video blocks. The broader prepared
   D7 predicate matched zero unblocked rows. Repeat the count after the final
@@ -84,14 +109,17 @@ or Caddy certificate-directory read ran. The gate and all infrastructure were le
   entries and two failed video entries. Of the 685 failed HLS entries, 683
   were absent from the active source and blocked on beta. The remaining two
   were beta drafts in source states 7 and 8.
-- **D7 · Two videos need a visibility decision before cutover.** Of 764
+- **D7 · Two visibility mismatches blocked on beta.** Of 764
   mapped beta videos absent from the active local source, 763 had a video
   block. The remaining one returned 200 with an HLS URL to an anonymous beta
   API request and 404 from production. A second UUID present on both sides
   was private in the source and unblocked and public on beta. Its anonymous
   API responses were 200 with an HLS URL on beta and 401 on production. The
-  operator has the exact two-row review set on beta. Verify both anonymously
-  after remediation and repeat the comparison on the frozen source.
+  metadata rehearsal corrected the second video's privacy and left the first
+  one public. With operator approval, both received reversible beta video
+  blocks, audit records and search suppression events. The anonymous detail
+  and HLS endpoints then returned 404 for each. Repeat the comparison on the
+  frozen source before opening traffic.
 - **D12/D14 · Off-site database restore passed.** Both files from the Nov 24
   03:26 UTC backup matched their local copies byte for byte after retrieval
   from the encrypted remote. A separate, network-isolated PostgreSQL container

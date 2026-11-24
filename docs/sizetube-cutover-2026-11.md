@@ -474,9 +474,12 @@ Executed so far (each with the operator's explicit go-ahead):
   media sample passed. The active source snapshot contains Nov 22 updates
   and all 91 recent public UUIDs checked. None had a completed beta mapping.
   Two beta videos were anonymously readable even though production returned
-  404 and 401 respectively. Chrome playback failed on the staged apex with
-  the beta API origin and passed in a private copy with the apex API origin.
-  The hostname switch, visibility reconciliation, frozen-source import and
+  404 and 401 respectively. Both now have approved beta blocks and return
+  404 for anonymous detail and HLS requests. Chrome playback and seeking
+  passed on the staged apex after its frontend was configured for that origin.
+  An isolated metadata import mapped all 98 source-only videos. Of 96 HLS
+  masters recorded in the source snapshot, 93 had changed names in live
+  production and source storage. The production switch, frozen-source import and
   final media recovery check remain open. The [November 24 rehearsal
   record](sizetube-cutover-checklist.md#november-24-private-apex-rehearsal--hold-production-traffic)
   gives the measured results and the remaining gates.
