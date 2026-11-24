@@ -55,23 +55,55 @@ or Caddy certificate-directory read ran. The gate and all infrastructure were le
   Preserve the operator's pre-reload Caddyfile for rollback and arrange
   certificate recovery for a replacement host. The config archive contains
   the Caddyfile and env. The origin key lives in Caddy's data volume.
-- **C2/C4 · Final import remains open.** The production listing crossed the
-  Nov 15 snapshot cutoff. All 91 later public local UUIDs were absent from
-  beta. The beta still had 5,603 users, 15,622 videos and 17 runs, none
-  source-authoritative. The latest successful copy finished Nov 17. Obtain a
-  fresh queue reading and verify the freeze before taking the final snapshot.
+- **C5 · Browser playback depends on the frontend API origin.** On v0.7.29,
+  Chrome followed a public PeerTube watch link on beta, confirmed the age
+  prompt, decoded video and sought to 33.9 seconds. The same link on the
+  staged apex returned a page and set the age cookie, but the browser called
+  the beta API. CORS blocked the requests and the player stayed at zero.
+  A loopback-only copy of the same frontend and proxy used
+  `PUBLIC_API_BASE_URL=https://sizetube.com` and
+  `PUBLIC_BASE_URL=https://sizetube.com`, with beta's CSP settings. The
+  browser then decoded 51 frames and sought to 33.9 seconds. The media CDN
+  returned HTTP 206. At the window, set `NEXT_PUBLIC_API_BASE_URL` in the
+  Compose env, apply the site URL and CORS settings, then repeat this check
+  on the deployed route. The rehearsal allowed GET and HEAD, and excluded
+  third-party ads. Authenticated writes still need verification.
+- **C2/C4 · The configured source is newer than the last import.** The active
+  source database contained local video updates through Nov 22 at 18:29 UTC.
+  All 91 public local UUIDs listed on production since Nov 15 at 18:42 UTC
+  were in that snapshot. None had a completed beta video mapping. The last
+  successful copy finished Nov 17. All 17 runs were non-authoritative.
+  Of 14,956 local source videos and 15,622 mapped beta videos, 14,858 UUIDs
+  matched. The 98 source-only rows included 90 public published videos, two
+  public state-2 videos and six private published videos. Obtain a fresh
+  queue reading, verify the freeze and reconcile again on the final snapshot.
 - **D5/D7 · Recount.** All 683 private, published imports lacking both a ready
   HLS playlist and an original already had video blocks. The broader prepared
   D7 predicate matched zero unblocked rows. Repeat the count after the final
   import. There were 5,600 private import-owned profiles, 685 failed HLS ledger
-  entries and two failed video entries.
+  entries and two failed video entries. Of the 685 failed HLS entries, 683
+  were absent from the active source and blocked on beta. The remaining two
+  were beta drafts in source states 7 and 8.
+- **D7 · Two videos need a visibility decision before cutover.** Of 764
+  mapped beta videos absent from the active local source, 763 had a video
+  block. The remaining one returned 200 with an HLS URL to an anonymous beta
+  API request and 404 from production. A second UUID present on both sides
+  was private in the source and unblocked and public on beta. Its anonymous
+  API responses were 200 with an HLS URL on beta and 401 on production. The
+  operator has the exact two-row review set on beta. Verify both anonymously
+  after remediation and repeat the comparison on the frozen source.
 - **D12/D14 · Off-site database restore passed.** Both files from the Nov 24
   03:26 UTC backup matched their local copies byte for byte after retrieval
   from the encrypted remote. A separate, network-isolated PostgreSQL container
   on beta, using the running database image, restored the dump in 76 seconds.
   Core ledger 191 and search ledger 21 were clean. The restored database had
   5,603 users, 15,622 videos, 776 video blocks and one user ban. The temporary
-  database was removed. The final dump still needs strict media verification,
+  database was removed. A fresh restore of the same dump found all 74,275
+  distinct top-level object keys in 326 seconds. A separate strict sample
+  covered nine imported videos across public, unlisted, internal and private
+  visibility. All nine HLS trees were complete. All 124 objects were present
+  and all 28 recorded hashes matched, including one original. The sample took
+  30 seconds. The final dump still needs full hash and deep HLS verification,
   separate-host recovery and retention through the rollback window.
 - **D4/D15 · Account and visitor checks.** The named owner account has no
   completed PeerTube user ledger entry. The imported-account reset test still
