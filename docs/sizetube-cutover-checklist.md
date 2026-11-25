@@ -55,8 +55,9 @@ apex acceptance, and reconciliation against a frozen source remain open.
 | D5 · Imported profiles | At 15:51 UTC the public account directory contained 10,577 rows, including 5,656 local source user IDs. After backup, 5,629 exact source ID and handle matches became public on beta. Anonymous checks through the private apex returned 200 for an eligible profile and 404 for an excluded one. | Repeat the same eligibility checks for accounts created or changed by the final import. |
 | D12 · Media recovery | A same-bucket version restore took 3.01 seconds. On November 25, replication to a private second account started for new and existing media. A read-only restore from that account matched the newly uploaded video sample byte for byte and decoded three frames in 0.66 seconds. | Verify the historical library against the source inventory and recover an original media path from it. Restore the encrypted database and configuration on a separate host with an independently held key. |
 | D12 · Backup alerts | The operator inbox received a failure email at 17:25 UTC and a recovery email at 17:27 UTC. Both files from the recovery backup matched their encrypted off-site copies. | Complete. |
+| Ads · Provider reporting | On November 25 the operator chose to skip the publisher dashboard check for cutover. The provider's count of beta impressions is unverified. | The dashboard check is waived. |
 | D14 · Rollback | The operator previously accepted loss of Vidra-side writes if traffic rolls back to PeerTube. Keep registrations closed, preserve PeerTube, and take the rollback backup as agreed. | Use the delegated default of at least 24 hours after the switch. Extend the window until the first post-switch off-site backup is verified and any incident affecting data or access is resolved. |
-| C2–C5 · Cutover | Of 15,748 local production video rows, all 13,890 public videos matched playable, indexed beta entries. The comparison found zero extra anonymous or search-visible candidates. | At the window, verify the source write freeze and queue state, refresh the snapshot, reconcile the final authoritative import, and test authenticated workflows on the production hostname. |
+| C2–C5 · Cutover | At 17:25 UTC, the visibility data for all 15,748 local production video rows matched the earlier source snapshot. All 13,890 public videos still had playable, indexed beta entries. The comparison found zero extra anonymous or search-visible candidates. | At the window, verify the source write freeze and queue state, refresh the snapshot, reconcile the final authoritative import, and test authenticated workflows on the production hostname. |
 
 The canonical visitor documents work on the current and staged services.
 [Terms of service](https://sizetube.com/about/instance/home#terms) ·
@@ -81,8 +82,8 @@ The local scanner ran with test signatures and the transcoder produced CMAF.
 The owner retrieved the original with matching SHA-256 and the HLS master with
 HTTP 200. Anonymous detail, original and master requests all returned 404. Separately,
 14 Chromium session and ad-break tests passed with zero skips. They used simulated
-ad tags and beacons. The live apex still needs authenticated acceptance and provider
-reporting. The released mail transports also passed the notification-only unsubscribe
+ad tags and beacons. The live apex still needs authenticated acceptance.
+The released mail transports also passed the notification-only unsubscribe
 header tests with local transports.
 
 **Live access checks.** A signed-out visitor opened the four-field contact form
@@ -93,7 +94,7 @@ server-side requests. Through the actual Origin CA route, the homepage returned
 200, the API allowed credentials for the apex, and preflight returned 204. An
 untrusted origin received no allow-origin header. An unlisted client received
 403 and an admitted POST received 405. The original preview was restored after
-the probes. Authenticated browser actions and ad-provider reporting remain open.
+the probes. Authenticated browser actions remain open.
 
 **Post-change recovery.** The 16:03 UTC database and configuration files matched
 their SHA-256 digests after download from the encrypted off-site store. The
@@ -663,6 +664,8 @@ remain the baseline for the window.
   the provider path, the page policy and the VAST settings are behind the gate or in the
   database. The open points are as they were: no read-back of real fill by format or with a
   blocker on, the mid-roll and post-roll beacons, and the ExoClick dashboard.
+  On November 25 the operator waived the ExoClick dashboard check. Provider
+  counts remain unverified.
 
 ### D12 media recovery and backup monitoring
 
@@ -1077,17 +1080,24 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   logs are unverified. The v0.7.23 guard was read on 2026-11-15, not exercised by hand.
   For window backups use the configured unit and verify its off-site upload, not a local
   exit code. A fresh pre-flip run is still required.
-- [ ] **I2 · Nothing pins the rollback dumps (C7).** Step 7 says "both snapshots + dumps
-  kept" and names no mechanism, and no rollback-window length is recorded (D14 records the
-  write-loss policy only). On the box, the pre-flip `vidra-<stamp>.dump.gz` leaves the daily
-  keep once 14 later days have a dump (CODE `deploy/backup.sh:66,435`). The pre-deploy dump
-  that step 3's `deploy.sh` writes is pruned after 10 later deploys and is never uploaded
-  (`deploy/deploy.sh:46,620,644`). An off-site copy of the pre-flip pair exists only if I1
-  holds. Either record a window shorter than 14 days, or copy the pre-flip dump, its config
-  archive and the step 3 pre-deploy dump to somewhere the scripts do not prune. `OPERATOR`.
+- [~] **I2 · Retain the rollback dumps outside automatic pruning (C7).** The
+  pre-flip database and configuration leave daily retention once 14 later days
+  have a backup. The step 3 pre-deploy dump is pruned after ten later deploys.
+  Hold all three through the D14 rollback window. `OPERATOR`.
   **RUNTIME 2026-11-19 — partial:** the backup bucket listed 60 objects and no lifecycle
   rule. That does not pin a dump. No rollback length or pinned pair is documented; on-host
   copies are unverified. Set the window length and retain both dumps outside local pruning.
+  **November 25 rehearsal.** A root-only directory under `/var/backups` outside both pruning paths
+  retained three same-filesystem hard links. They reference the 17:25 UTC
+  verified database/configuration pair and the latest pre-deploy dump. The
+  held pair matched the off-site SHA-256 digests, and the pre-deploy digest
+  was recorded. All ten retained pre-deploy dumps now have mode 0600 inside
+  the service user's 0700 directory. Eight previously had mode 0664. On the
+  installed v0.7.31 bundle, launch the window deploy with a service-user
+  shell umask of 077. A beta fixture verified that both its compressed and
+  decompressed output use mode 0600. Capture the actual window's three files
+  and their digests after the pre-deploy dump exists. Keep them until the
+  agreed rollback window closes.
 - [ ] **I3 · The restore re-drill in F can pass with media missing.** By default
   `restore.sh` warns and continues when referenced media is missing or cannot be verified
   (CODE `deploy/restore.sh:457-463`); only `--require-media-consistent` refuses
