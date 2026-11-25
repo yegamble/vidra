@@ -107,6 +107,19 @@ private route again returned 405 for a refresh POST. The public hostname
 continued serving PeerTube 8.3.1. Signed-in media playback, a synthetic upload
 and admin pages remain on the real-host cutover checklist.
 
+**Public playback and upload scanning on v0.7.31.** A signed-out Chrome session
+followed a legacy watch link on the private production hostname and sought to
+30 seconds. After clicking Play and seeking, Chrome presented successive frames
+at 30.44 and 30.48 seconds. It reported zero dropped frames, three playlists,
+25 range responses and zero HTTP errors on the requested media. An earlier
+probe that called the video element before using the player controls timed out
+without fetching a playlist. The browser test blocked writes and external ad requests.
+
+Beta advertised uploads and transcoding as enabled. From the API's network,
+the configured fail-closed ClamAV service accepted a clean stream and detected
+the standard harmless EICAR test file. Its signature database was dated
+November 25. A synthetic private upload through the live API remains open.
+
 **Post-change recovery.** The 16:03 UTC database and configuration files matched
 their SHA-256 digests after download from the encrypted off-site store. The
 database restored into a network-isolated PostgreSQL container on beta. Both
