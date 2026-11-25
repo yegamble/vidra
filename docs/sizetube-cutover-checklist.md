@@ -139,7 +139,10 @@ both temporary containers were removed, and the private route again returned
 remains private in Studio. At 19:05 UTC its original was retrieved from the
 separate recovery account with matching SHA-256 and decoded three frames in
 0.66 seconds including download. The replica used server-side encryption and
-carried 30 days of governance retention. Historical-library coverage remains open.
+carried 30 days of governance retention. At 19:11 UTC the recovery account
+held 13 of the clip's 15 streaming objects. The source reported the other two
+as pending. The 19:08 UTC database and configuration backup files matched their
+encrypted off-site copies by SHA-256. Historical-library coverage remains open.
 
 **Post-change recovery.** The 16:03 UTC database and configuration files matched
 their SHA-256 digests after download from the encrypted off-site store. The
