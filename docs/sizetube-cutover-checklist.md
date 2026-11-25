@@ -691,9 +691,11 @@ listings, which cover three of them; all four are still open.
   On November 25 the timer was active and the backup service reported success.
   Both backup configuration files lacked the heartbeat setting, and the unit
   had no failure handler. Delivery of an external failure alert remains open.
-- [ ] Clear the 11 stranded B2 unfinished large files (427.6 MB, 2026-11-05). Still 11
-  (RUNTIME). `OPERATOR`.
-  Still the same 11 on 2026-11-19, and none in the backup bucket (RUNTIME 2026-11-19).
+- [x] **Abandoned media uploads cleared November 25.** All 26 stored parts of
+  the 11 November 5 unfinished uploads matched the provider checksums for the
+  corresponding byte ranges of their completed versions (427,563,053 bytes).
+  Only the unfinished IDs were cancelled. All 11 completed versions remained
+  current, and a fresh listing found zero unfinished uploads in the media bucket.
 
 ## C. The cutover window (§5 steps 1–7)
 
