@@ -369,10 +369,14 @@ class MailConfigCatalogueTest(unittest.TestCase):
         self.assertIn('mail_config', rows)
         self.assertIn('public.mail_config', ' '.join(FakeRun().relations(151)))
 
-    def test_a_192_candidate_is_refused_naming_the_migration_to_read(self):
+    def test_publication_time_keeps_the_whole_video_in_the_catalogue(self):
+        for version in (192, 193):
+            self.assertEqual((), recovery.catalogue_for(version)['videos'])
+
+    def test_a_194_candidate_is_refused_naming_the_migration_to_read(self):
         with self.assertRaises(ValueError) as raised:
-            recovery.catalogue_for(192)
-        self.assertIn('0192', str(raised.exception))
+            recovery.catalogue_for(194)
+        self.assertIn('0194', str(raised.exception))
 
     def test_site_pages_are_fingerprinted_whole_from_0191(self):
         self.assertNotIn('site_pages', recovery.catalogue_for(190))
