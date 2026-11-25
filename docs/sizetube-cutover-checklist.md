@@ -42,6 +42,66 @@ PeerTube 8.3.1. DNS, B2 listings and the beta edge were readable. `/healthz` ret
 `/version`, `/readyz` and `/api/v1/instance` returned 403. SSH timed out: no env, database
 or Caddy certificate-directory read ran. The gate and all infrastructure were left as found.
 
+### November 25 launch policy and recovery decision
+
+**Hold public traffic on PeerTube.** The operator approved D15 on November 25.
+The remaining checks concern the settings that implement that decision, recovery,
+and the final migration window.
+
+| Gate | Verified on November 25 | Work remaining |
+|---|---|---|
+| D15 / D6 · Visitor policies | In fresh, signed-out Chrome sessions on production and private beta, the terms, privacy policy, DMCA and compliance pages rendered before the age prompt. The terms text matched byte for byte. All four pages also served their expected text on the private apex with Origin CA verification. The privacy policy contains a contact placeholder alongside the published contact address. | Correct the placeholder on beta. Set the signup document URLs and versions, enable email verification, apply the approved default quota and keep registration closed through rollback. Verify the effective settings and consent before opening registration. |
+| D15 · Consent | On beta the age gate was enabled at 18, registration was closed and both signup policy URLs were empty. The configured release passed the isolated signup rehearsal below. | Apply the approved values on beta and read them back. Jurisdiction-specific advice and delivery of an imported-user notice have no recorded evidence. |
+| D5 · Imported profiles | The public PeerTube account directory returned 10,575 distinct rows, including 5,656 local accounts with a source user ID. Beta had 5,631 active, non-deleted, import-created private profiles in its ledger. | Match source IDs and handles before applying the backed-up change. Exclude bans, holds, unlisted profiles and beta privacy choices. No profile was made public by this inventory. |
+| D12 · Media recovery | On the private media bucket a 1 MiB synthetic object was hidden. The named read failed, the previous version was readable by ID, and unhiding restored the original bytes in 3.01 seconds. Cleanup left zero versions of the fixture. The provider reported 4,562,434,484,596 bytes across all versions. Both beta buckets had Object Lock off and no replication configured. | Recover a sample from an independently controlled media copy and restore an actual encrypted database/configuration backup on another host using an independently held key. |
+| D14 · Rollback | The operator previously accepted loss of Vidra-side writes if traffic rolls back to PeerTube. Keep registrations closed, preserve PeerTube, and take the rollback backup as agreed. | Use the delegated default of at least 24 hours after the switch. Extend the window until the first post-switch off-site backup is verified and any incident affecting data or access is resolved. |
+| C2–C5 · Cutover | The public video directory still reported 13,890 entries and its newest publication still matched the saved inventory. | At the window, verify the source write freeze and queue state, refresh the snapshot, reconcile the final authoritative import, and test authenticated workflows on the production hostname. |
+
+The canonical visitor documents work on the current and staged services.
+[Terms of service](https://sizetube.com/about/instance/home#terms) ·
+[Privacy policy](https://sizetube.com/p/privacy-policy) ·
+[DMCA](https://sizetube.com/p/dmca) ·
+[Compliance notice](https://sizetube.com/p/compliance-notice)
+
+**Isolated release rehearsal.** The v0.7.31 source commits ran against fresh
+PostgreSQL and Redis instances. The signup policy used the canonical document URLs,
+dated versions, minimum age 18 and email verification. Closed registration returned
+403. With registration open in the fixture, missing consent returned 422 and created
+zero accounts. A consenting signup recorded the terms, privacy and age rows and
+returned 202. Login returned 403 until the confirmation sent to a loopback-only
+mailbox was redeemed, then returned 200. The focused release suite also passed
+21 consent-path tests.
+
+Chrome used the hostname `sizetube.com` with its connection pinned to a loopback
+TLS proxy. The released login form succeeded. The host-only, Secure, HttpOnly,
+SameSite=Lax refresh cookie rotated on reload and cleared on logout. In another
+fresh instance, an authenticated browser uploaded a 75,815-byte private video.
+The local scanner ran with test signatures and the transcoder produced CMAF.
+The owner retrieved the original with matching SHA-256 and the HLS master with
+HTTP 200. Anonymous detail, original and master requests all returned 404. Separately,
+14 Chromium session and ad-break tests passed with zero skips. They used simulated
+ad tags and beacons. The live apex still needs authenticated acceptance and provider
+reporting. The released mail transports also passed the notification-only unsubscribe
+header tests with local transports.
+
+**Live access checks.** A signed-out visitor opened the four-field contact form
+from the beta About page before age confirmation. The check ended before submission.
+The beta API echoed its own origin and allowed credentials. The private apex API
+returned 200 without those headers for the apex origin. Apply the production origin
+settings in the window and repeat the authenticated checks through the actual proxy.
+
+**Draft notice for the source site before the migration window.** Publication
+and delivery remain open.
+
+> SizeTube is moving from PeerTube to Vidra at the same address. We are moving
+> existing accounts, channels and videos. During the migration you can continue
+> watching public videos while uploads and account changes are paused. After
+> sign-in reopens, use your current SizeTube credentials. If you need help with
+> your password or two-factor authentication, use **Contact us** on the About
+> page. You can read the [privacy policy](https://sizetube.com/p/privacy-policy)
+> and [terms of service](https://sizetube.com/about/instance/home#terms) before
+> signing in.
+
 ### November 24 private apex rehearsal — hold production traffic
 
 - **D3 · Origin TLS passed.** The beta host generated its key and received a
@@ -311,9 +371,9 @@ sealed-secret recovery on a replacement runner, and 1,140 Linux tests.
   one address produced 300 successes and 5,913 HTTP 429 responses. The
   production-sized test droplet was deleted. See the
   [workload and route coverage](#november-25-api-capacity-rehearsal-on-v0730).
-- **Before public traffic.** D15 policy sign-off is pending. The separate-host
-  drill with an actual beta backup is deferred. Independent media recovery,
-  rollback duration and acceptable write loss still need an operator decision.
+- **Before public traffic.** The operator subsequently approved D15. The
+  [November 25 launch decision](#november-25-launch-policy-and-recovery-decision)
+  records the settings, remaining recovery checks and rollback window.
   The cutover window also requires a source write freeze, fresh queue and
   visibility reconciliation, and real-host acceptance of authenticated
   workflows, cookies, uploads and ad delivery. D5 imported profile visibility
@@ -340,9 +400,14 @@ remain the baseline for the window.
 
 ---
 
-## A. Blocker — nothing ships until this clears
+## A. Launch policy
 
-- [ ] **D15 · Compliance intake (five questions) — `LAWYER`.** Two BLOCKERs inside it:
+- [x] **D15 · Operator approval received November 25.** The current
+  [launch policy and recovery decision](#november-25-launch-policy-and-recovery-decision)
+  records verification and outstanding implementation. The dated intake below
+  describes conditions at the time of each review.
+
+- **November 8 compliance intake (five questions) — `LAWYER`.** Two blockers identified at the time:
   (a) NSFW catalogue plays for anonymous visitors with no age assurance (12,401 of 15,508
   videos `is_sensitive`; only `hide` is server-enforced); (b) signup records no terms/privacy
   consent (`INSTANCE_TERMS_URL` / `INSTANCE_PRIVACY_URL` empty). Plus HIGH: GDPR Art 13/14
@@ -476,8 +541,8 @@ remain the baseline for the window.
   **RUNTIME 2026-11-19 — unverified** (env and DB unreachable). On 2026-11-15 the minimum
   age was 18, registration was closed and both policy URLs were empty (section A); consent
   code shipped in v0.7.20. Verification and quota were last read on 2026-11-12.
-  D6 opens registration at cutover and D14 keeps it closed during the rollback window (audit
-  §6); which holds on the day is not recorded.
+  November 25 schedule: D14 governs during rollback. Apply D6 controls in advance
+  and open registration only after the window and signup acceptance checks.
 - [~] **Anonymous-NSFW policy decided + applied** (`display` vs `hide`/`warn`/`blur` + login)
   pending D15. Still `display`, last set 2026-11-06 (RUNTIME 2026-11-12). `OPERATOR`.
   **RUNTIME 2026-11-19 — unverified** (settings unreachable). On 2026-11-15 the browser
@@ -711,7 +776,7 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
 - [ ] **6 · DNS:** Cloudflare `sizetube.com` → 159.203.29.27 (proxied, D3). Recheck TLS,
   cookies/CORS, playback, search, old URLs publicly; watch api logs for 429/5xx; then enable
   registration / mail / federation per decisions, each with its own check. `OPERATOR`.
-- [ ] **7 · Rollback window (length per D14):** PeerTube frozen-but-running, env pinned at
+- [ ] **7 · Rollback window (at least 24 hours per the November 25 decision):** PeerTube frozen-but-running, env pinned at
   the release deployed on the day (v0.7.20 when this was written; see the header), both
   snapshots + dumps kept, source bucket untouched, GC still off. Rollback = DNS back +
   unfreeze + a final `backup.sh`. `OPERATOR`.
@@ -730,10 +795,10 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
 - [ ] Decide the fate of `beta.sizetube.com`, `cdn-beta.sizetube.com` and `cdn.sizetube.com`
   (stays on B2 for rollback). `OPERATOR`.
 
-## E. Decisions — all answered except D15
+## E. Operator decisions
 
-D1–D14 and D16 were answered 2026-11-08 (audit §6 table). **D15 is the only open decision**
-(section A). This checklist tracks their *execution*, not the decisions themselves.
+D1–D14 and D16 were answered on November 8 (audit §6 table). The operator
+approved D15 on November 25. Section A records the policy implementation status.
 
 ## F. Standing reminders
 
@@ -996,10 +1061,9 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   until the re-drill on the final dump has been run that way.
   **RUNTIME 2026-11-19 — unverified:** no final strict restore is recorded; the host was
   unreachable. B2 listings cannot demonstrate a restore.
-- [ ] **I4 · The timed lost-object restore named in D12 has no line in the D12 tail.** The
-  audit lists it under D12 and gives it as the second half of the control for media having
-  one copy: replication or Object Lock, "then a timed hide-and-restore drill" (audit §6 D12,
-  §8 Durable). It is neither done nor waived here. It follows the first D12 tail item.
+- [~] **I4 · Timed lost-object restore.** The same-bucket version recovery passed on
+  November 25 in 3.01 seconds. Restoration from an independent copy remains open.
+  Repeat the timed read from the separate D12 destination once it holds a verified copy.
   `OPERATOR`.
   **RUNTIME 2026-11-19:** neither replication nor Object Lock was configured (B2, D12 tail).
   No timed restore or waiver is recorded; neither was verified.

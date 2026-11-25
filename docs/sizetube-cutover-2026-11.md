@@ -319,7 +319,7 @@ import write persists an absolute URL, a local actor id or anything derived from
 | D12 | `MEDIA_GC_ENABLED=false` **applied 2026-11-08 02:55 UTC**, kept off through the rollback window; post-import restore drill PASS 03:34 UTC (10.5); replication/Object Lock, non-deleting key, `HEALTHCHECKS_URL` still open |
 | D13 | Operator states an imported-account login was tested and works (not observed here) |
 | D14 | Accept the loss of Vidra-side writes on rollback; registrations closed during the window; `backup.sh` at rollback time |
-| D15 | **Open** — the five compliance intake questions were not answered |
+| D15 | Open at the November 8 intake. The operator approved the launch policy on November 25. The [current checklist](sizetube-cutover-checklist.md#november-25-launch-policy-and-recovery-decision) records the verified controls and remaining implementation. |
 | D16 | Wait for the prod transcoding queue to drain, move the state-8 pair, then freeze and snapshot |
 | — | White-label: operator enables `branding_hide_software_name` and sets the instance imagery before cutover (finding 10). Switch on since 2026-11-11; imagery still the fallback |
 
@@ -493,6 +493,14 @@ Executed so far (each with the operator's explicit go-ahead):
   The operator confirmed D15 is pending. The [private beta verification
   record](sizetube-cutover-checklist.md#november-24-v0730-private-beta-verification)
   gives the scope of the tests and backup.
+
+- **November 25 — operator decision and runtime checks.** The operator approved
+  D15. Production and private beta served identical terms and both exposed privacy,
+  copyright and compliance contacts to signed-out visitors. The signup settings
+  still had empty document URLs. D14 keeps registrations closed through rollback
+  and accepts loss of Vidra writes if PeerTube resumes. The operational window
+  is at least 24 hours after the switch. See the [checks and exit
+  criteria](sizetube-cutover-checklist.md#november-25-launch-policy-and-recovery-decision).
 
 ## 7. What this audit does NOT establish
 
