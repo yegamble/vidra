@@ -53,7 +53,7 @@ apex acceptance, and reconciliation against a frozen source remain open.
 | D15 / D6 · Visitor policies | Signed-out Chrome reached terms, privacy, DMCA and compliance on production and private beta before the age prompt. The terms matched byte for byte. Beta’s privacy page now uses the existing contact address in place of its placeholder. All four pages served the expected text on the private apex. | Keep the canonical links reachable during the switch. The incumbent PeerTube privacy page still contains the placeholder. |
 | D15 / D6 · Consent | The beta API returned the canonical terms and privacy URLs and their versions. The browser confirmed the effective policy. Email verification is required, minimum age is 18, the default quota is zero, and registration is closed. The isolated release rehearsal below exercised signup, consent and activation. | Keep registration closed through rollback and verify signup before opening it. Delivery of the imported-user notice and independent legal review have no recorded evidence. |
 | D5 · Imported profiles | At 15:51 UTC the public account directory contained 10,577 rows, including 5,656 local source user IDs. After backup, 5,629 exact source ID and handle matches became public on beta. Anonymous checks through the private apex returned 200 for an eligible profile and 404 for an excluded one. | Repeat the same eligibility checks for accounts created or changed by the final import. |
-| D12 · Media recovery | On the private media bucket a 1 MiB synthetic object was hidden. The named read failed, the previous version was readable by ID, and unhiding restored the original bytes in 3.01 seconds. Cleanup left zero versions of the fixture. The provider reported 4,562,434,484,596 bytes across all versions. Both beta buckets had Object Lock off and no replication configured. | Recover a sample from an independently controlled media copy and restore an actual encrypted database/configuration backup on another host using an independently held key. |
+| D12 · Media recovery | A same-bucket version restore took 3.01 seconds. On November 25, replication to a private second account started for new and existing media. A read-only restore from that account matched the newly uploaded video sample byte for byte and decoded three frames in 0.66 seconds. | Verify the historical library against the source inventory and recover an original media path from it. Restore the encrypted database and configuration on a separate host with an independently held key. |
 | D14 · Rollback | The operator previously accepted loss of Vidra-side writes if traffic rolls back to PeerTube. Keep registrations closed, preserve PeerTube, and take the rollback backup as agreed. | Use the delegated default of at least 24 hours after the switch. Extend the window until the first post-switch off-site backup is verified and any incident affecting data or access is resolved. |
 | C2–C5 · Cutover | Of 15,748 local production video rows, all 13,890 public videos matched playable, indexed beta entries. The comparison found zero extra anonymous or search-visible candidates. | At the window, verify the source write freeze and queue state, refresh the snapshot, reconcile the final authoritative import, and test authenticated workflows on the production hostname. |
 
@@ -100,8 +100,8 @@ database restored into a network-isolated PostgreSQL container on beta. Both
 migration ledgers were clean. The restored profile UUID set matched all 5,629
 updated profiles. The six signup settings, corrected privacy page, 14,956
 imported publication dates, 13,890 eligible search entries and 778 video blocks
-also matched. The production recovery drill still needs an independent machine,
-key custody and a media copy.
+also matched. The independent database drill still needs a recovery machine
+and a separately held decryption key. The media copy is tracked under D12.
 
 **Draft notice for the source site before the migration window.** Publication
 and delivery remain open.
@@ -666,13 +666,25 @@ remain the baseline for the window.
 ### D12 media recovery and backup monitoring
 
 On November 25 the running API used a bucket-scoped media key without permanent
-version deletion, and the abandoned uploads had been cleared. Independent media
-recovery and external backup alerts remain open.
+version deletion, and the abandoned uploads had been cleared.
 
-- [ ] B2 replication **or** Object Lock to a separate account. Neither bucket replicates and
-  file lock is off on both (RUNTIME). `OPERATOR`.
-  Unchanged 2026-11-19: no replication, file lock off and no lifecycle rule on either
-  bucket, and both are at the bucket revision they had on 2026-11-12 (RUNTIME 2026-11-19).
+- [x] **Enable cross-account media replication.** At 16:57 UTC on November 25,
+  B2 reported an enabled rule covering the full source bucket, including existing
+  files. Both accounts are in US East. The private destination uses SSE-B2 and
+  30-day governance retention. The provider's destination writer has no permanent
+  deletion permission. At 17:04 UTC a destination-only, read-only credential
+  retrieved a newly replicated 191,098-byte public video sample. Its SHA-256
+  matched the source, three video frames decoded in 0.66 seconds including the
+  download, and the replica carried 30 days of governance retention.
+- [ ] **Verify the historical library in the recovery account.** The inventory
+  taken before the sample contains 251,042 upload versions (4,562,434,489,556
+  bytes), of which 240,878 names were current (4,214,634,454,359 bytes).
+  The first destination comparison found zero baseline versions. Compare names,
+  original upload times, lengths and available checksums, then restore a video
+  from its original path. Apply the source visibility state during recovery.
+  B2 skips hide markers, including the 6,248 in this inventory. It schedules
+  pre-existing files at midnight UTC and dates their retention from the original
+  upload. [Backblaze replication behavior](https://www.backblaze.com/docs/cloud-storage-cloud-replication)
 - [x] **Restrict the runtime media key.** On November 25 the replacement could
   write and read a disposable object. Backblaze denied its attempt to delete
   the object version. The operator removed the fixture and verified the new
@@ -1085,8 +1097,9 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   **RUNTIME 2026-11-19 — unverified:** no final strict restore is recorded; the host was
   unreachable. B2 listings cannot demonstrate a restore.
 - [~] **I4 · Timed lost-object restore.** The same-bucket version recovery passed on
-  November 25 in 3.01 seconds. Restoration from an independent copy remains open.
-  Repeat the timed read from the separate D12 destination once it holds a verified copy.
+  November 25 in 3.01 seconds. A video sample newly copied through the D12
+  replication rule was restored and decoded from the independent account in
+  0.66 seconds. Repeat on a pre-existing library object at its original path.
   `OPERATOR`.
   **RUNTIME 2026-11-19:** neither replication nor Object Lock was configured (B2, D12 tail).
   No timed restore or waiver is recorded; neither was verified.
