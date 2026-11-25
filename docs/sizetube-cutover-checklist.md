@@ -45,17 +45,17 @@ or Caddy certificate-directory read ran. The gate and all infrastructure were le
 ### November 25 launch policy and recovery decision
 
 **Hold public traffic on PeerTube.** The operator approved D15 on November 25.
-The remaining checks concern the settings that implement that decision, recovery,
-and the final migration window.
+Beta now enforces the approved signup settings. Independent recovery, authenticated
+apex acceptance, and reconciliation against a frozen source remain open.
 
 | Gate | Verified on November 25 | Work remaining |
 |---|---|---|
-| D15 / D6 · Visitor policies | In fresh, signed-out Chrome sessions on production and private beta, the terms, privacy policy, DMCA and compliance pages rendered before the age prompt. The terms text matched byte for byte. All four pages also served their expected text on the private apex with Origin CA verification. The privacy policy contains a contact placeholder alongside the published contact address. | Correct the placeholder on beta. Set the signup document URLs and versions, enable email verification, apply the approved default quota and keep registration closed through rollback. Verify the effective settings and consent before opening registration. |
-| D15 · Consent | On beta the age gate was enabled at 18, registration was closed and both signup policy URLs were empty. The configured release passed the isolated signup rehearsal below. | Apply the approved values on beta and read them back. Jurisdiction-specific advice and delivery of an imported-user notice have no recorded evidence. |
-| D5 · Imported profiles | The public PeerTube account directory returned 10,575 distinct rows, including 5,656 local accounts with a source user ID. Beta had 5,631 active, non-deleted, import-created private profiles in its ledger. | Match source IDs and handles before applying the backed-up change. Exclude bans, holds, unlisted profiles and beta privacy choices. No profile was made public by this inventory. |
+| D15 / D6 · Visitor policies | Signed-out Chrome reached terms, privacy, DMCA and compliance on production and private beta before the age prompt. The terms matched byte for byte. Beta’s privacy page now uses the existing contact address in place of its placeholder. All four pages served the expected text on the private apex. | Keep the canonical links reachable during the switch. The incumbent PeerTube privacy page still contains the placeholder. |
+| D15 / D6 · Consent | The beta API returned the canonical terms and privacy URLs and their versions. The browser confirmed the effective policy. Email verification is required, minimum age is 18, the default quota is zero, and registration is closed. The isolated release rehearsal below exercised signup, consent and activation. | Keep registration closed through rollback and verify signup before opening it. Delivery of the imported-user notice and independent legal review have no recorded evidence. |
+| D5 · Imported profiles | At 15:51 UTC the public account directory contained 10,577 rows, including 5,656 local source user IDs. After backup, 5,629 exact source ID and handle matches became public on beta. Anonymous checks through the private apex returned 200 for an eligible profile and 404 for an excluded one. | Repeat the same eligibility checks for accounts created or changed by the final import. |
 | D12 · Media recovery | On the private media bucket a 1 MiB synthetic object was hidden. The named read failed, the previous version was readable by ID, and unhiding restored the original bytes in 3.01 seconds. Cleanup left zero versions of the fixture. The provider reported 4,562,434,484,596 bytes across all versions. Both beta buckets had Object Lock off and no replication configured. | Recover a sample from an independently controlled media copy and restore an actual encrypted database/configuration backup on another host using an independently held key. |
 | D14 · Rollback | The operator previously accepted loss of Vidra-side writes if traffic rolls back to PeerTube. Keep registrations closed, preserve PeerTube, and take the rollback backup as agreed. | Use the delegated default of at least 24 hours after the switch. Extend the window until the first post-switch off-site backup is verified and any incident affecting data or access is resolved. |
-| C2–C5 · Cutover | The public video directory still reported 13,890 entries and its newest publication still matched the saved inventory. | At the window, verify the source write freeze and queue state, refresh the snapshot, reconcile the final authoritative import, and test authenticated workflows on the production hostname. |
+| C2–C5 · Cutover | Of 15,748 local production video rows, all 13,890 public videos matched playable, indexed beta entries. The comparison found zero extra anonymous or search-visible candidates. | At the window, verify the source write freeze and queue state, refresh the snapshot, reconcile the final authoritative import, and test authenticated workflows on the production hostname. |
 
 The canonical visitor documents work on the current and staged services.
 [Terms of service](https://sizetube.com/about/instance/home#terms) ·
@@ -86,9 +86,22 @@ header tests with local transports.
 
 **Live access checks.** A signed-out visitor opened the four-field contact form
 from the beta About page before age confirmation. The check ended before submission.
-The beta API echoed its own origin and allowed credentials. The private apex API
-returned 200 without those headers for the apex origin. Apply the production origin
-settings in the window and repeat the authenticated checks through the actual proxy.
+For a bounded private rehearsal, the released API ran in HTTP-only mode with the
+apex public URL and CORS origin. The matched frontend used that API for
+server-side requests. Through the actual Origin CA route, the homepage returned
+200, the API allowed credentials for the apex, and preflight returned 204. An
+untrusted origin received no allow-origin header. An unlisted client received
+403 and an admitted POST received 405. The original preview was restored after
+the probes. Authenticated browser actions and ad-provider reporting remain open.
+
+**Post-change recovery.** The 16:03 UTC database and configuration files matched
+their SHA-256 digests after download from the encrypted off-site store. The
+database restored into a network-isolated PostgreSQL container on beta. Both
+migration ledgers were clean. The restored profile UUID set matched all 5,629
+updated profiles. The six signup settings, corrected privacy page, 14,956
+imported publication dates, 13,890 eligible search entries and 778 video blocks
+also matched. The production recovery drill still needs an independent machine,
+key custody and a media copy.
 
 **Draft notice for the source site before the migration window.** Publication
 and delivery remain open.
@@ -376,8 +389,8 @@ sealed-secret recovery on a replacement runner, and 1,140 Linux tests.
   records the settings, remaining recovery checks and rollback window.
   The cutover window also requires a source write freeze, fresh queue and
   visibility reconciliation, and real-host acceptance of authenticated
-  workflows, cookies, uploads and ad delivery. D5 imported profile visibility
-  remains an operator action.
+  workflows, cookies, uploads and ad delivery. Recheck newly imported profiles
+  against the D5 criteria after the final import.
 
 ### November 22 go-live decision
 
@@ -509,6 +522,10 @@ remain the baseline for the window.
   (RECORD). `OPERATOR`. **Not re-read since:** the watcher stopped 2026-11-08 09:34 UTC and
   uploads after 2026-11-09 may have refilled the queue. Read it again before the freeze
   (needs prod SSH — section H).
+  On November 25, 31 source queue definitions were read. The transcode and
+  move queues had zero runnable or active jobs. All 41 waiting transcoding
+  parents referenced missing children. Their video UUIDs resolved to 28
+  published videos and 13 absent ones. Repeat at freeze.
 - [x] **D4 · Private-beta mail and imported-account reset.** The operator
   completed the reset and beta recorded redemption on November 24. The
   following source-authoritative import restored the production password hash.
@@ -520,13 +537,11 @@ remain the baseline for the window.
   Admin → General → Branding. Survives deploys and the flip. `OPERATOR`.
   **RUNTIME 2026-11-19 — unverified** (the instance document is behind the gate and the database was
   not reachable); last observed 2026-11-12.
-- [~] **D5 · `profile_public` for imported accounts.** Audited one-off `UPDATE` prepared with
-  dry-run counts in the private `cutover-prep/`; **not applied** — the dry-run still counts
-  5,538 imported accounts, none public (RUNTIME 2026-11-12). Needs backup + approval.
-  `OPERATOR`. (Alt: importer fix + release — see audit D5.)
-  **RUNTIME 2026-11-19 — unverified** (DB unreachable). The catalogue changed after the
-  previous count. Repeat the ledger-scoped dry run before approving the update; 5,538 is
-  historical, not a current expected row count.
+- [x] **D5 · Imported profile visibility applied to the November 25 beta catalogue.**
+  The reviewed transaction changed exactly 5,629 flags. It excluded 24 inactive,
+  deleted or banned accounts, one unlisted or privileged account, and one
+  account with beta activity. It verified every other visibility flag after the
+  update. See the [restore and acceptance record](#november-25-launch-policy-and-recovery-decision).
 - [~] **D7 · Block the remaining 289 media-less published videos** via `video_blocks` (394 of
   683 already blocked; all one inactive owner, all private). SQL prepared, **not applied** —
   the dry-run still counts 289 of 683 (RUNTIME 2026-11-12). `OPERATOR`.
@@ -541,8 +556,8 @@ remain the baseline for the window.
   **RUNTIME 2026-11-19 — unverified** (env and DB unreachable). On 2026-11-15 the minimum
   age was 18, registration was closed and both policy URLs were empty (section A); consent
   code shipped in v0.7.20. Verification and quota were last read on 2026-11-12.
-  November 25 schedule: D14 governs during rollback. Apply D6 controls in advance
-  and open registration only after the window and signup acceptance checks.
+  November 25: the six settings are applied and verified on beta. D14 keeps
+  signup closed until the rollback window ends and signup acceptance passes.
 - [~] **Anonymous-NSFW policy decided + applied** (`display` vs `hide`/`warn`/`blur` + login)
   pending D15. Still `display`, last set 2026-11-06 (RUNTIME 2026-11-12). `OPERATOR`.
   **RUNTIME 2026-11-19 — unverified** (settings unreachable). On 2026-11-15 the browser
@@ -673,10 +688,14 @@ listings, which cover three of them; all four are still open.
   **Unverified 2026-11-19** (`backup.env` not reachable); still unset on 2026-11-15 (RUNTIME
   that day, I1). The backup bucket showed uploads in the nightly slot every night from
   2026-11-05 through 2026-11-19, most recently at 03:43 and 03:56 UTC (RUNTIME 2026-11-19).
-  A listing does not verify the unit result, alert delivery, backup contents or a restore.
-- [ ] Clear the 11 stranded B2 unfinished large files (427.6 MB, 2026-11-05). Still 11
-  (RUNTIME). `OPERATOR`.
-  Still the same 11 on 2026-11-19, and none in the backup bucket (RUNTIME 2026-11-19).
+  On November 25 the timer was active and the backup service reported success.
+  Both backup configuration files lacked the heartbeat setting, and the unit
+  had no failure handler. Delivery of an external failure alert remains open.
+- [x] **Abandoned media uploads cleared November 25.** All 26 stored parts of
+  the 11 November 5 unfinished uploads matched the provider checksums for the
+  corresponding byte ranges of their completed versions (427,563,053 bytes).
+  Only the unfinished IDs were cancelled. All 11 completed versions remained
+  current, and a fresh listing found zero unfinished uploads in the media bucket.
 
 ## C. The cutover window (§5 steps 1–7)
 
@@ -696,8 +715,10 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
   PATCH and DELETE on four paths answer 503 with `Retry-After`, GET and HEAD reach the
   upstream, OPTIONS is not refused, and removing or restoring the include line takes effect
   within a second of the reload. It replaced the first one in `cutover-prep/` the same day.
-  Not covered: prod's own server block. If that block already sets `error_page 503`, the two
-  compete and `nginx -t` will not say so; read `nginx -T` first.
+  On November 25 the installed production nginx parsed both its current model and
+  an in-memory copy with the corrected snippet in the actual apex TLS server.
+  The candidate contained exactly one 503 handler. The serving file digest and
+  master PID matched their initial values. Enforce and verify the freeze at T0.
 - [ ] **2 · Snapshot (Step 25):** dump → SHA-256 both ends → restore as a new DB → §3 grants →
   swap names; keep the previous snapshot. `OPERATOR`.
   Rehearsed 2026-11-12 with the 2026-11-06 dump: restore into a new database 117 s; grants,
