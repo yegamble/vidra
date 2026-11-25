@@ -663,25 +663,27 @@ remain the baseline for the window.
   database. The open points are as they were: no read-back of real fill by format or with a
   blocker on, the mid-roll and post-roll beacons, and the ExoClick dashboard.
 
-### D12 media-DR tail (open, not all window-blocking)
+### D12 media recovery and backup monitoring
 
-All four re-read 2026-11-12 and all four still open. Read again 2026-11-19 from the Backblaze
-listings, which cover three of them; all four are still open.
+On November 25 the running API used a bucket-scoped media key without permanent
+version deletion, and the abandoned uploads had been cleared. Independent media
+recovery and external backup alerts remain open.
 
 - [ ] B2 replication **or** Object Lock to a separate account. Neither bucket replicates and
   file lock is off on both (RUNTIME). `OPERATOR`.
   Unchanged 2026-11-19: no replication, file lock off and no lifecycle rule on either
   bucket, and both are at the bucket revision they had on 2026-11-12 (RUNTIME 2026-11-19).
-- [ ] A media key **without** `deleteFiles`. The key the beta runs with still carries it
-  (RUNTIME). `OPERATOR`.
-  Unchanged 2026-11-19: the account has the same 16 keys, the one key scoped to the media
-  bucket still carries `deleteFiles`, and no other key for that bucket has been made
-  (RUNTIME 2026-11-19, key listing). The key actually in the beta env is unverified.
-  Such a key protects less than its name suggests (REHEARSAL 2026-11-12): the api's own
-  storage probe hid its test object with a key that had no `deleteFiles`, because hiding and
-  overwriting need only `writeFiles`. Nothing is destroyed, but a hidden or overwritten
-  object stops being served until someone with a delete-capable key removes the marker or
-  the newer version, and only while no lifecycle rule has cleared the old versions.
+- [x] **Restrict the runtime media key.** On November 25 the replacement could
+  write and read a disposable object. Backblaze denied its attempt to delete
+  the object version. The operator removed the fixture and verified the new
+  key on an HTTP-only copy of the released API before recreating the live
+  API. Both reported healthy storage and returned a public HLS master. The
+  live release image, other API settings, and closed registration matched
+  their pre-change values. The 16:23 UTC database and configuration backups
+  matched their encrypted off-site copies. The archived environment contained
+  the new running key. The previous credential remains valid for rollback.
+  A key with write access can still hide or overwrite the current version.
+  An independently held recovery copy remains necessary.
 - [ ] `HEALTHCHECKS_URL` in `/etc/vidra/backup.env` (silent on failure today). Absent: the
   file sets only the rclone remote and config path. The nightly backup itself last succeeded
   2026-11-12 03:26 UTC (RUNTIME). `OPERATOR`.
