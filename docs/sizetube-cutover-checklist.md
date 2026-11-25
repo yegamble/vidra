@@ -51,7 +51,8 @@ and the final migration window.
 | Gate | Verified on November 25 | Work remaining |
 |---|---|---|
 | D15 / D6 · Visitor policies | In fresh, signed-out Chrome sessions on production and private beta, the terms, privacy policy, DMCA and compliance pages rendered before the age prompt. The terms text matched byte for byte. All four pages also served their expected text on the private apex with Origin CA verification. The privacy policy contains a contact placeholder alongside the published contact address. | Correct the placeholder on beta. Set the signup document URLs and versions, enable email verification, apply the approved default quota and keep registration closed through rollback. Verify the effective settings and consent before opening registration. |
-| D15 · Consent | Age gate enabled at 18, registration closed, both signup policy URLs empty. On the exact v0.7.31 core commit, 21 signup, approval and provider sign-in tests passed with zero skips. | Verify configured acceptance on a private instance. Operator policy approval is recorded. Jurisdiction-specific advice and delivery of an imported-user notice have no recorded evidence. |
+| D15 · Consent | On beta the age gate was enabled at 18, registration was closed and both signup policy URLs were empty. The configured release passed the isolated signup rehearsal below. | Apply the approved values on beta and read them back. Jurisdiction-specific advice and delivery of an imported-user notice have no recorded evidence. |
+| D5 · Imported profiles | The public PeerTube account directory returned 10,575 distinct rows, including 5,656 local accounts with a source user ID. Beta had 5,631 active, non-deleted, import-created private profiles in its ledger. | Match source IDs and handles before applying the backed-up change. Exclude bans, holds, unlisted profiles and beta privacy choices. No profile was made public by this inventory. |
 | D12 · Media recovery | On the private media bucket a 1 MiB synthetic object was hidden. The named read failed, the previous version was readable by ID, and unhiding restored the original bytes in 3.01 seconds. Cleanup left zero versions of the fixture. The provider reported 4,562,434,484,596 bytes across all versions. Both beta buckets had Object Lock off and no replication configured. | Recover a sample from an independently controlled media copy and restore an actual encrypted database/configuration backup on another host using an independently held key. |
 | D14 · Rollback | The operator previously accepted loss of Vidra-side writes if traffic rolls back to PeerTube. Keep registrations closed, preserve PeerTube, and take the rollback backup as agreed. | Use the delegated default of at least 24 hours after the switch. Extend the window until the first post-switch off-site backup is verified and any incident affecting data or access is resolved. |
 | C2–C5 · Cutover | The public video directory still reported 13,890 entries and its newest publication still matched the saved inventory. | At the window, verify the source write freeze and queue state, refresh the snapshot, reconcile the final authoritative import, and test authenticated workflows on the production hostname. |
@@ -61,6 +62,23 @@ The canonical visitor documents work on the current and staged services.
 [Privacy policy](https://sizetube.com/p/privacy-policy) ·
 [DMCA](https://sizetube.com/p/dmca) ·
 [Compliance notice](https://sizetube.com/p/compliance-notice)
+
+**Isolated release rehearsal.** The v0.7.31 source commits ran against fresh
+PostgreSQL and Redis instances. The signup policy used the canonical document URLs,
+dated versions, minimum age 18 and email verification. Closed registration returned
+403. With registration open in the fixture, missing consent returned 422 and created
+zero accounts. A consenting signup recorded the terms, privacy and age rows and
+returned 202. Login returned 403 until the confirmation sent to a loopback-only
+mailbox was redeemed, then returned 200. The focused release suite also passed
+21 consent-path tests.
+
+Chrome used the hostname `sizetube.com` with its connection pinned to a loopback
+TLS proxy. The released login form succeeded. The host-only, Secure, HttpOnly,
+SameSite=Lax refresh cookie rotated on reload and cleared on logout. Separately,
+14 Chromium session and ad-break tests passed with zero skips. They used simulated
+ad tags and beacons. The live apex still needs authenticated acceptance and provider
+reporting. The released mail transports also passed the notification-only unsubscribe
+header tests with local transports.
 
 ### November 24 private apex rehearsal — hold production traffic
 
