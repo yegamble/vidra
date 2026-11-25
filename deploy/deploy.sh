@@ -603,7 +603,7 @@ fi
 log "tags: core=$(env_get VIDRA_CORE_TAG '?') user=$(env_get VIDRA_USER_TAG '?') search=$(env_get VIDRA_SEARCH_TAG '?')"
 
 step "1/6 pre-deploy database dump"
-mkdir -p "$BACKUP_DIR"
+(umask 077; mkdir -p "$BACKUP_DIR")
 PG_CID=""
 FIRST_DEPLOY=0
 if [ "$EXTERNAL_POSTGRES" -eq 0 ]; then
@@ -626,23 +626,20 @@ elif [ -z "$PG_CID" ]; then
   FIRST_DEPLOY=1
 else
   DUMP="$BACKUP_DIR/pre-deploy-$(date -u +%FT%H%M%S).dump.gz"
-  # `set -e` + pipefail: a failed pg_dump aborts the deploy here, which is the
-  # single most important line in this file.
-  docker exec -i "$PG_CID" pg_dump -U "$PGUSER" -Fc "$PGDB" | gzip -c > "${DUMP}.part"
-  # Verified from a FILE, not a pipe. `pg_restore -l` reads only the table of
-  # contents and exits, closing stdin; whatever is still streaming takes SIGPIPE
-  # and exits 141, which `set -o pipefail` turns into a failed pipeline — so a
-  # good dump is reported corrupt and the deploy refuses. The failure is
-  # size-dependent, so it passes on a small database and starts firing at
-  # exactly the point the pre-deploy dump becomes worth having. See the longer
-  # note in backup.sh, which had the same bug.
-  VERIFY_TMP="${DUMP}.part.verify"
-  gzip -dc "${DUMP}.part" > "$VERIFY_TMP" \
-    || die "could not decompress the pre-deploy dump for verification"
-  docker exec -i "$PG_CID" pg_restore -l < "$VERIFY_TMP" > /dev/null \
-    || { rm -f "$VERIFY_TMP"; die "pre-deploy dump failed its integrity check — NOT deploying"; }
-  rm -f "$VERIFY_TMP"
-  mv "${DUMP}.part" "$DUMP"
+  (
+    # Both the archive and its decompressed verification copy contain account data.
+    # Use a fresh directory so a retry cannot reopen an older, less private file.
+    umask 077
+    staging=$(mktemp -d "$BACKUP_DIR/.pre-deploy.XXXXXXXX")
+    trap 'rm -f -- "$staging/dump.gz" "$staging/verify" && rmdir -- "$staging"' EXIT
+    docker exec -i "$PG_CID" pg_dump -U "$PGUSER" -Fc "$PGDB" | gzip -c > "$staging/dump.gz"
+    # pg_restore -l can finish before a pipe writer. A file avoids SIGPIPE on large dumps.
+    gzip -dc "$staging/dump.gz" > "$staging/verify" \
+      || die "could not decompress the pre-deploy dump for verification"
+    docker exec -i "$PG_CID" pg_restore -l < "$staging/verify" > /dev/null \
+      || die "pre-deploy dump failed its integrity check — NOT deploying"
+    mv -- "$staging/dump.gz" "$DUMP"
+  )
   log "wrote $DUMP ($(du -h "$DUMP" | cut -f1))"
 
   # Prune by count, newest first.
