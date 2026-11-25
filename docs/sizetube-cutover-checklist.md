@@ -45,8 +45,9 @@ or Caddy certificate-directory read ran. The gate and all infrastructure were le
 ### November 25 launch policy and recovery decision
 
 **Hold public traffic on PeerTube.** The operator approved D15 on November 25.
-Beta now enforces the approved signup settings. Independent recovery, authenticated
-apex acceptance, and reconciliation against a frozen source remain open.
+Beta enforces the approved signup settings. The operator signed in, reloaded and
+signed out on beta using the production hostname. Independent recovery, the
+remaining cutover checks and reconciliation against a frozen source remain open.
 
 | Gate | Verified on November 25 | Work remaining |
 |---|---|---|
@@ -82,7 +83,7 @@ The local scanner ran with test signatures and the transcoder produced CMAF.
 The owner retrieved the original with matching SHA-256 and the HLS master with
 HTTP 200. Anonymous detail, original and master requests all returned 404. Separately,
 14 Chromium session and ad-break tests passed with zero skips. They used simulated
-ad tags and beacons. The live apex still needs authenticated acceptance.
+ad tags and beacons.
 The released mail transports also passed the notification-only unsubscribe
 header tests with local transports.
 
@@ -94,7 +95,17 @@ server-side requests. Through the actual Origin CA route, the homepage returned
 200, the API allowed credentials for the apex, and preflight returned 204. An
 untrusted origin received no allow-origin header. An unlisted client received
 403 and an admitted POST received 405. The original preview was restored after
-the probes. Authenticated browser actions remain open.
+the probes.
+
+**Private sign-in on the production hostname.** At 18:36 UTC on November 25,
+the operator signed in through Firefox at `sizetube.com` on the live beta,
+stayed signed in after reloading, and signed out. The operator also received
+the new-sign-in email. The rehearsal API recorded one successful request each
+for login, refresh, current account and logout. After the test, Caddy's config
+matched its original bytes, both temporary containers were removed, and the
+private route again returned 405 for a refresh POST. The public hostname
+continued serving PeerTube 8.3.1. Signed-in media playback, a synthetic upload
+and admin pages remain on the real-host cutover checklist.
 
 **Post-change recovery.** The 16:03 UTC database and configuration files matched
 their SHA-256 digests after download from the encrypted off-site store. The
@@ -575,7 +586,8 @@ remain the baseline for the window.
   with its existing PeerTube password on the first attempt, typing it into a browser pointed
   at the rehearsal copy (REHEARSAL; account and time are in the private log). The copy was
   restored from the beta's 2026-11-12 03:26 UTC backup and ran the same release, so the
-  password hash and the code are the beta's. It was not repeated on the beta itself.
+  password hash and the code are the beta's. On November 25 the operator also
+  passed the private production-hostname sign-in check on live beta, recorded above.
   `OPERATOR`.
 - [~] **D3 prerequisite · Origin CA cert for `sizetube.com`** on the droplet and
   `VIDRA_SKIP_DNS_PREFLIGHT=1` in the env file (Cloudflare-proxied path). The
@@ -801,6 +813,8 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
 - [ ] **5 · Re-accept on the real hostname** via a hosts override: D13 login, reset mail,
   playback (public / private / internal as a permitted user), old links incl. embeds, admin
   pages, a synthetic upload. `OPERATOR`.
+  The private November 25 check on live beta passed login, refresh on reload,
+  and logout. The operator received the new-sign-in email.
   Rehearsed 2026-11-12 from a real browser with the site's names mapped to the copy.
   Passed: sign-in with an imported account's existing password (D13); public playback with a
   seek; a private video (anonymous 404, plays for its owner); an internal video (anonymous

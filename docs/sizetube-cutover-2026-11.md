@@ -506,13 +506,19 @@ Executed so far (each with the operator's explicit go-ahead):
 - **November 25 — advertising evidence.** The operator chose to skip publisher
   dashboard verification. Provider counts for beta impressions remain unverified.
 
+- **November 25 — private sign-in on the production hostname.** The operator
+  stayed signed in after a reload, signed out, and received the new-sign-in
+  email. At 18:36 UTC the live beta recorded successful login, refresh, current
+  account and logout requests. The private route was restored after the test.
+  [Rehearsal evidence](sizetube-cutover-checklist.md#november-25-launch-policy-and-recovery-decision)
+
 ## 7. What this audit does NOT establish
 
 Byte-level integrity beyond the importer's own checks; feature parity (the parity QA's job);
 media disaster recovery; which 38 objects the GC deleted; that the cutover can run without a
 maintenance window (the `acme` path cannot); anything legal — §8 is engineering guidance.
-Login with an imported password was not established by this audit either; it was proven on a
-rehearsal copy on 2026-11-12 (checklist D13).
+Checklist D13 records the imported-password rehearsal on November 12 and the
+private production-hostname sign-in on live beta on November 25.
 
 ## 8. Skill reviews (durable, compliance-guard)
 
