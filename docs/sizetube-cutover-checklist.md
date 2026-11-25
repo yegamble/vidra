@@ -74,11 +74,33 @@ mailbox was redeemed, then returned 200. The focused release suite also passed
 
 Chrome used the hostname `sizetube.com` with its connection pinned to a loopback
 TLS proxy. The released login form succeeded. The host-only, Secure, HttpOnly,
-SameSite=Lax refresh cookie rotated on reload and cleared on logout. Separately,
+SameSite=Lax refresh cookie rotated on reload and cleared on logout. In another
+fresh instance, an authenticated browser uploaded a 75,815-byte private video.
+The local scanner ran with test signatures and the transcoder produced CMAF.
+The owner retrieved the original with matching SHA-256 and the HLS master with
+HTTP 200. Anonymous detail, original and master requests all returned 404. Separately,
 14 Chromium session and ad-break tests passed with zero skips. They used simulated
 ad tags and beacons. The live apex still needs authenticated acceptance and provider
 reporting. The released mail transports also passed the notification-only unsubscribe
 header tests with local transports.
+
+**Live access checks.** A signed-out visitor opened the four-field contact form
+from the beta About page before age confirmation. The check ended before submission.
+The beta API echoed its own origin and allowed credentials. The private apex API
+returned 200 without those headers for the apex origin. Apply the production origin
+settings in the window and repeat the authenticated checks through the actual proxy.
+
+**Draft notice for the source site before the migration window.** Publication
+and delivery remain open.
+
+> SizeTube is moving from PeerTube to Vidra at the same address. We are moving
+> existing accounts, channels and videos. During the migration you can continue
+> watching public videos while uploads and account changes are paused. After
+> sign-in reopens, use your current SizeTube credentials. If you need help with
+> your password or two-factor authentication, use **Contact us** on the About
+> page. You can read the [privacy policy](https://sizetube.com/p/privacy-policy)
+> and [terms of service](https://sizetube.com/about/instance/home#terms) before
+> signing in.
 
 ### November 24 private apex rehearsal — hold production traffic
 
