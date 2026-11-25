@@ -346,6 +346,8 @@ TABLES_ADDED = {
     # rows). This records SQL and core-query review, not a recovery drill.
     190: ('federation_outbox_crawls',),
     191: ('site_pages',),
+    192: (),  # Adds a source publication timestamp to the fingerprinted videos row.
+    193: (),  # Indexes publication order on videos.
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 # Receiver authority is not disposable inbox/cache state. Compare whole rows:
