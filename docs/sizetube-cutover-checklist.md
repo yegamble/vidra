@@ -54,6 +54,7 @@ apex acceptance, and reconciliation against a frozen source remain open.
 | D15 / D6 · Consent | The beta API returned the canonical terms and privacy URLs and their versions. The browser confirmed the effective policy. Email verification is required, minimum age is 18, the default quota is zero, and registration is closed. The isolated release rehearsal below exercised signup, consent and activation. | Keep registration closed through rollback and verify signup before opening it. Delivery of the imported-user notice and independent legal review have no recorded evidence. |
 | D5 · Imported profiles | At 15:51 UTC the public account directory contained 10,577 rows, including 5,656 local source user IDs. After backup, 5,629 exact source ID and handle matches became public on beta. Anonymous checks through the private apex returned 200 for an eligible profile and 404 for an excluded one. | Repeat the same eligibility checks for accounts created or changed by the final import. |
 | D12 · Media recovery | A same-bucket version restore took 3.01 seconds. On November 25, replication to a private second account started for new and existing media. A read-only restore from that account matched the newly uploaded video sample byte for byte and decoded three frames in 0.66 seconds. | Verify the historical library against the source inventory and recover an original media path from it. Restore the encrypted database and configuration on a separate host with an independently held key. |
+| D12 · Backup alerts | The operator inbox received a failure email at 17:25 UTC and a recovery email at 17:27 UTC. Both files from the recovery backup matched their encrypted off-site copies. | Complete. |
 | D14 · Rollback | The operator previously accepted loss of Vidra-side writes if traffic rolls back to PeerTube. Keep registrations closed, preserve PeerTube, and take the rollback backup as agreed. | Use the delegated default of at least 24 hours after the switch. Extend the window until the first post-switch off-site backup is verified and any incident affecting data or access is resolved. |
 | C2–C5 · Cutover | Of 15,748 local production video rows, all 13,890 public videos matched playable, indexed beta entries. The comparison found zero extra anonymous or search-visible candidates. | At the window, verify the source write freeze and queue state, refresh the snapshot, reconcile the final authoritative import, and test authenticated workflows on the production hostname. |
 
@@ -696,15 +697,16 @@ version deletion, and the abandoned uploads had been cleared.
   the new running key. The previous credential remains valid for rollback.
   A key with write access can still hide or overwrite the current version.
   An independently held recovery copy remains necessary.
-- [ ] `HEALTHCHECKS_URL` in `/etc/vidra/backup.env` (silent on failure today). Absent: the
-  file sets only the rclone remote and config path. The nightly backup itself last succeeded
-  2026-11-12 03:26 UTC (RUNTIME). `OPERATOR`.
-  **Unverified 2026-11-19** (`backup.env` not reachable); still unset on 2026-11-15 (RUNTIME
-  that day, I1). The backup bucket showed uploads in the nightly slot every night from
-  2026-11-05 through 2026-11-19, most recently at 03:43 and 03:56 UTC (RUNTIME 2026-11-19).
-  On November 25 the timer was active and the backup service reported success.
-  Both backup configuration files lacked the heartbeat setting, and the unit
-  had no failure handler. Delivery of an external failure alert remains open.
+- [x] **Verify backup failure and recovery email.** On November 25 the operator
+  installed the Healthchecks ping URL in the unit's private environment file.
+  The real backup service completed once to arm the check. At 17:25:23 UTC a
+  separate invocation of the released backup script failed before creating a
+  dump because its test output directory could not exist. Its failure handler
+  ran, and the operator inbox received **DOWN** at 17:25:24 UTC. A second
+  real backup completed at 17:27:02 UTC. The inbox received **UP** at
+  17:27:03 UTC. Both the database dump and configuration archive from that
+  run matched their SHA-256 digests after retrieval from encrypted off-site
+  storage. The timer remained active throughout the drill.
 - [x] **Abandoned media uploads cleared November 25.** All 26 stored parts of
   the 11 November 5 unfinished uploads matched the provider checksums for the
   corresponding byte ranges of their completed versions (427,563,053 bytes).
