@@ -837,6 +837,32 @@ minutes. Qualifying v0.7.30 at this measured demand still requires a
 representative route mix and separate measurements for successful responses
 and rate-limited requests. Page views and HTTP requests have different units.
 
+### November 25 API capacity rehearsal on v0.7.30
+
+The rehearsal used a temporary DigitalOcean host in San Francisco with the
+same 8-vCPU, 16-GB size and the same core, frontend, search, PostgreSQL and
+Redis image digests as beta. The synthetic catalogue held 15,720 videos,
+5,654 owners and 13,894 eligible search documents. The API and load generator
+ran on the host. The generator called only the loopback API.
+
+Cloudflare estimated 2,192 successful apex API origin requests at the
+November 21 peak minute. The production request mix included plugin and
+configuration requests as well as lists, search, channel pages, view events,
+video details, comments and captions. The fixture used Vidra's corresponding
+read routes and view writes. It represented plugin reads with instance reads
+and represented other API routes with discovery requests.
+
+| Workload | Completed | Result |
+| --- | ---: | --- |
+| Successful-request capacity, 2,192/min for ten minutes, per-IP limiter disabled on the fixture | 21,920 of 21,920 | All HTTP 200/204. Aggregate p95 137.3 ms. Search p95 392.8 ms across 2,500 searches. |
+| Concentrated demand, 6,213 requests in one minute from one client, beta's 300/min limit enabled | 6,213 of 6,213 | 300 successful responses and 5,913 HTTP 429s. Aggregate p95 2.1 ms. |
+
+Both runs had zero dropped requests, timeouts and 5xx responses.
+This qualifies the synthetic origin API workload on v0.7.30. The traffic
+it measured excludes browser rendering, media delivery, CDN behavior, ad
+providers and authenticated uploads. The second run measured the single-IP
+limit. Production's observed 429 fraction depends on its visitor mix.
+
 ## H. What is still not checked (after the 2026-11-12 re-read and rehearsal)
 
 - **Anything on the beta itself, as of 2026-11-19.** That day's partial re-read reached no
