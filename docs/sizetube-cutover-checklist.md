@@ -232,6 +232,34 @@ SHA-256 digests matched their on-host copies.
   succeeded for all 5,654 account and 5,713 channel signing keys, including
   the newly imported keys. Zero rows contained plaintext key material.
 
+### November 25 private draft and recovery checks
+
+- **Browser access.** The operator's browser egress changed. Replacing its old
+  single-address entry in the beta gate restored access. A fresh Chrome session
+  confirmed the new address and reached the age prompt. The homepage and
+  readiness endpoint returned 200. A separate connection received 403 on beta
+  and the public apex continued serving PeerTube 8.3.1.
+- **Private draft repair passed.** The released importer recovered the older
+  private draft's HLS playlist on November 24 at 16:35 UTC. An independent
+  readback matched both repaired files to their source SHA-256 digests
+  (28,896,084 bytes). All seven manifests and six media objects resolved.
+  FFmpeg decoded three frames of the repaired video file. Anonymous detail
+  and HLS master requests both returned 404, search had zero eligible
+  documents for the draft, and the media bucket had zero public grants. The
+  verified temporary fallback copies were removed.
+- **Backup coverage.** The 16:13 UTC November 24 backup predates the repair.
+  The 03:21 UTC November 25 database and configuration backups matched their
+  on-host digests after retrieval from the encrypted off-site remote. The
+  database restored into an isolated PostgreSQL instance on beta with clean
+  core and search ledgers (191 and 21). It contained the private draft with
+  its playlist ready. Across the two restored databases, the only addition
+  to the media verifier's reference inputs was this draft's HLS tree. There
+  were no removals.
+- **Full-library check.** At 06:13 UTC on November 25 the released hash and
+  deep HLS verifier on the November 24 restore was still running. Its findings
+  file was empty and its terminal report was pending. The separate-host
+  recovery drill remains open at the operator's request.
+
 ### November 22 go-live decision
 
 **Hold production DNS.** The operator's browser reached SizeTube's 18+ prompt on beta.
