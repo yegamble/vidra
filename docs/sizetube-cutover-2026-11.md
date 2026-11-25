@@ -309,8 +309,8 @@ import write persists an absolute URL, a local actor id or anything derived from
 | D2 | Freeze = nginx returns 503 for non-GET/HEAD on `/api/v1/` (reads stay up); operator owns rollback |
 | D3 | Cloudflare-proxied + Origin CA cert in `Caddyfile.local`; `VIDRA_SKIP_DNS_PREFLIGHT=1` |
 | D4 | **Resend** (HTTPS API) via Admin → Email — chosen 2026-11-08 after ImprovMX SMTP proved unreachable from DigitalOcean; domain verified, key sealed and one test delivered 2026-11-09; a password-reset mail to an imported account is still unproven. Free tier (100/day) covers resets, not a 5,538-user notice |
-| D5 | One-off audited `UPDATE` of `profile_public` on ledger users, after a backup, with approval |
-| D6 | Registration open at cutover with e-mail verification, `registration_minimum_age=18`, terms/privacy acceptance first; `INSTANCE_DEFAULT_QUOTA_BYTES=0` |
+| D5 | Applied on private beta November 25 after a verified backup. Exactly 5,629 eligible imported profiles were made public. Repeat eligibility checks after the final import. |
+| D6 | On November 25 beta required email verification, published versioned consent URLs and had minimum age 18 and a zero default quota. Open registration after the D14 rollback window and signup checks. |
 | D7 | Block the remaining 289 of the 683 media-less published videos via `video_blocks` (394 already blocked; all private; one owner) |
 | D8 | Keep `storyboards_enabled` on; let the backfill run after cutover |
 | D9 | Federation stays off through cutover and the rollback window; enable later with §9 checks 1–3 |
@@ -496,9 +496,10 @@ Executed so far (each with the operator's explicit go-ahead):
 
 - **November 25 — operator decision and runtime checks.** The operator approved
   D15. Production and private beta served identical terms and both exposed privacy,
-  copyright and compliance contacts to signed-out visitors. The signup settings
-  still had empty document URLs. D14 keeps registrations closed through rollback
-  and accepts loss of Vidra writes if PeerTube resumes. The operational window
+  copyright and compliance contacts to signed-out visitors. Beta now serves both
+  versioned signup policy URLs and requires email verification. D14 keeps
+  registrations closed through rollback and accepts loss of Vidra writes if
+  PeerTube resumes. The operational window
   is at least 24 hours after the switch. See the [checks and exit
   criteria](sizetube-cutover-checklist.md#november-25-launch-policy-and-recovery-decision).
 
