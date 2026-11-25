@@ -515,8 +515,11 @@ Executed so far (each with the operator's explicit go-ahead):
 - **November 25 — live media checks on v0.7.31.** A signed-out browser decoded
   a public video through a legacy link on the private production hostname and
   resumed playback after a seek. Beta's configured scanner accepted a clean
-  stream and detected the harmless EICAR test signature. The live private
-  upload and permitted-user media checks remain open.
+  stream and detected the harmless EICAR test signature. At 19:04 UTC the
+  owner completed a private Studio upload, played private and internal videos
+  after seeking, and opened the admin Overview and Infrastructure pages.
+  Signed-out checks enforced both media visibility levels. The restored
+  synthetic original from the separate account matched its source SHA-256.
   [Playback and scanning results](sizetube-cutover-checklist.md#november-25-launch-policy-and-recovery-decision)
 
 ## 7. What this audit does NOT establish

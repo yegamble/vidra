@@ -58,7 +58,7 @@ remaining cutover checks and reconciliation against a frozen source remain open.
 | D12 · Backup alerts | The operator inbox received a failure email at 17:25 UTC and a recovery email at 17:27 UTC. Both files from the recovery backup matched their encrypted off-site copies. | Complete. |
 | Ads · Provider reporting | On November 25 the operator chose to skip the publisher dashboard check for cutover. The provider's count of beta impressions is unverified. | The dashboard check is waived. |
 | D14 · Rollback | The operator previously accepted loss of Vidra-side writes if traffic rolls back to PeerTube. Keep registrations closed, preserve PeerTube, and take the rollback backup as agreed. | Use the delegated default of at least 24 hours after the switch. Extend the window until the first post-switch off-site backup is verified and any incident affecting data or access is resolved. |
-| C2–C5 · Cutover | At 17:25 UTC, the visibility data for all 15,748 local production video rows matched the earlier source snapshot. All 13,890 public videos still had playable, indexed beta entries. The comparison found zero extra anonymous or search-visible candidates. | At the window, verify the source write freeze and queue state, refresh the snapshot, reconcile the final authoritative import, and test authenticated workflows on the production hostname. |
+| C2–C5 · Cutover | At 18:47 UTC the visibility data for all 15,748 local production video rows matched the saved snapshot. All 13,890 public videos had playable, indexed beta entries. The comparison found zero extra anonymous or search-visible candidates. At 19:04 UTC the owner completed the private production-hostname rehearsal below. | At the window, verify the source write freeze and queues, refresh the snapshot, reconcile the final authoritative import, and repeat acceptance against the final configuration. |
 
 The canonical visitor documents work on the current and staged services.
 [Terms of service](https://sizetube.com/about/instance/home#terms) ·
@@ -104,8 +104,7 @@ the new-sign-in email. The rehearsal API recorded one successful request each
 for login, refresh, current account and logout. After the test, Caddy's config
 matched its original bytes, both temporary containers were removed, and the
 private route again returned 405 for a refresh POST. The public hostname
-continued serving PeerTube 8.3.1. Signed-in media playback, a synthetic upload
-and admin pages remain on the real-host cutover checklist.
+continued serving PeerTube 8.3.1.
 
 **Public playback and upload scanning on v0.7.31.** A signed-out Chrome session
 followed a legacy watch link on the private production hostname and sought to
@@ -118,7 +117,29 @@ without fetching a playlist. The browser test blocked writes and external ad req
 Beta advertised uploads and transcoding as enabled. From the API's network,
 the configured fail-closed ClamAV service accepted a clean stream and detected
 the standard harmless EICAR test file. Its signature database was dated
-November 25. A synthetic private upload through the live API remains open.
+November 25.
+
+**Owner upload, playback and administration.** At 19:03 UTC the operator
+signed in once on the private production hostname after redeeming an emailed
+password reset on beta. Chrome loaded the Overview and Infrastructure pages
+and their protected APIs returned 200. The anonymous admin stats request
+returned 401. The rehearsal made no admin changes.
+
+Studio uploaded an eight-second, 246,571-byte clip with private visibility.
+The stored original matched the fixture's SHA-256. The transcoder produced
+one ready rendition and the clip was ineligible for search. Chrome presented
+successive frames after a four-second seek as the owner. Signed-out requests
+for its details, original and master playlist each returned 404. The same
+signed-in browser played an existing internal video after a 15-second seek.
+An anonymous request for that video's details returned 401.
+
+The owner signed out. The original Caddy configuration matched byte for byte,
+both temporary containers were removed, and the private route again returned
+405 for a refresh POST. Public traffic remained on PeerTube 8.3.1. The clip
+remains private in Studio. At 19:05 UTC its original was retrieved from the
+separate recovery account with matching SHA-256 and decoded three frames in
+0.66 seconds including download. The replica used server-side encryption and
+carried 30 days of governance retention. Historical-library coverage remains open.
 
 **Post-change recovery.** The 16:03 UTC database and configuration files matched
 their SHA-256 digests after download from the encrypted off-site store. The
@@ -828,6 +849,9 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
   pages, a synthetic upload. `OPERATOR`.
   The private November 25 check on live beta passed login, refresh on reload,
   and logout. The operator received the new-sign-in email.
+  The subsequent owner rehearsal passed private upload, private and internal
+  playback with a seek, and read-only access to two admin pages. Repeat on the
+  final window configuration.
   Rehearsed 2026-11-12 from a real browser with the site's names mapped to the copy.
   Passed: sign-in with an imported account's existing password (D13); public playback with a
   seek; a private video (anonymous 404, plays for its owner); an internal video (anonymous
