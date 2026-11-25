@@ -255,10 +255,25 @@ SHA-256 digests matched their on-host copies.
   its playlist ready. Across the two restored databases, the only addition
   to the media verifier's reference inputs was this draft's HLS tree. There
   were no removals.
-- **Full-library check.** At 06:13 UTC on November 25 the released hash and
-  deep HLS verifier on the November 24 restore was still running. Its findings
-  file was empty and its terminal report was pending. The separate-host
-  recovery drill remains open at the operator's request.
+- **Full-library check and retry.** The November 24 restore finished its
+  integrity check at 06:57 UTC on November 25. The verifier checked 240,796
+  objects across 14,990 HLS trees and matched all 45,179 recorded checksums.
+  It reported zero missing objects, zero checksum mismatches and one playlist
+  read error. That tree was incomplete and the command exited 3. Two later
+  reads of the 24,264-byte manifest from beta matched the production source
+  byte for byte. A focused run of the same released verifier on the November
+  25 restore checked that entire tree and the repaired draft. It found all
+  32 objects, matched four recorded hashes and exited 0. Comparing the two
+  terminal reports accounted for every incomplete tree in the first run.
+  Across both runs all 14,991 HLS trees in the newer backup were covered.
+  The separate-host recovery drill remains open at the operator's request.
+- **Public catalogue and dates.** All 13,890 videos in the live PeerTube
+  public listing mapped to unblocked, published public beta records. Each
+  had a ready HLS playlist or an original and was eligible for search.
+  On v0.7.30 the watch page and channel cards use the creation timestamp.
+  For 10,966 of the 13,890 matched public videos the PeerTube publication
+  date falls on a different UTC calendar day. The operator requires watch
+  pages and newest-first listings to preserve publication dates before cutover.
 
 ### November 22 go-live decision
 
