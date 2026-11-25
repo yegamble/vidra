@@ -316,7 +316,7 @@ import write persists an absolute URL, a local actor id or anything derived from
 | D9 | Federation stays off through cutover and the rollback window; enable later with §9 checks 1–3 |
 | D10 | Export moderation state from PeerTube for the record; re-apply suspension/blacklist deltas by hand; accept losing mutes and reports |
 | D11 | Operator-restricted MFA re-enrolment window for the 10 held accounts |
-| D12 | `MEDIA_GC_ENABLED=false` **applied 2026-11-08 02:55 UTC**, kept off through the rollback window; post-import restore drill PASS 03:34 UTC (10.5); replication/Object Lock, non-deleting key, `HEALTHCHECKS_URL` still open |
+| D12 | Media GC stays off through rollback. The post-import restore passed November 8. On November 25 beta switched to a bucket-scoped media key without permanent version deletion. Independent recovery and backup alerting remain open. |
 | D13 | Operator states an imported-account login was tested and works (not observed here) |
 | D14 | Accept the loss of Vidra-side writes on rollback; registrations closed during the window; `backup.sh` at rollback time |
 | D15 | Open at the November 8 intake. The operator approved the launch policy on November 25. The [current checklist](sizetube-cutover-checklist.md#november-25-launch-policy-and-recovery-decision) records the verified controls and remaining implementation. |
