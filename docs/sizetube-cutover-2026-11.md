@@ -318,7 +318,7 @@ import write persists an absolute URL, a local actor id or anything derived from
 | D11 | Operator-restricted MFA re-enrolment window for the 10 held accounts |
 | D12 | Media GC stays off through rollback. On November 25 beta switched to a bucket-scoped media key without permanent version deletion. Cross-account B2 replication is enabled, and a newly uploaded video sample was restored from the private destination under 30-day governance retention. The operator inbox received both backup failure and recovery emails. Historical media coverage and a separate-host database restore remain open. [Recovery evidence](sizetube-cutover-checklist.md#d12-media-recovery-and-backup-monitoring) |
 | D13 | Operator states an imported-account login was tested and works (not observed here) |
-| D14 | Accept the loss of Vidra-side writes on rollback; registrations closed during the window; `backup.sh` at rollback time |
+| D14 | The operator accepts loss of Vidra-side writes on rollback. Keep registrations closed during the window and take a backup at rollback. On November 25 a verified database/configuration pair and a pre-deploy dump were retained outside on-host pruning. Repeat with the final window files. |
 | D15 | Open at the November 8 intake. The operator approved the launch policy on November 25. The [current checklist](sizetube-cutover-checklist.md#november-25-launch-policy-and-recovery-decision) records the verified controls and remaining implementation. |
 | D16 | Wait for the prod transcoding queue to drain, move the state-8 pair, then freeze and snapshot |
 | — | White-label: operator enables `branding_hide_software_name` and sets the instance imagery before cutover (finding 10). Switch on since 2026-11-11; imagery still the fallback |
@@ -502,6 +502,9 @@ Executed so far (each with the operator's explicit go-ahead):
   PeerTube resumes. The operational window
   is at least 24 hours after the switch. See the [checks and exit
   criteria](sizetube-cutover-checklist.md#november-25-launch-policy-and-recovery-decision).
+
+- **November 25 — advertising evidence.** The operator chose to skip publisher
+  dashboard verification. Provider counts for beta impressions remain unverified.
 
 ## 7. What this audit does NOT establish
 
