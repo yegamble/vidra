@@ -1,8 +1,9 @@
 # sizetube.com cutover — tracked checklist (living)
 
 A working checklist for cutting `sizetube.com` over from PeerTube to the Vidra beta
-(`beta.sizetube.com`). On 2026-11-24 the beta API reported v0.7.29, commit
-`0b0b430`. The November 22 entry records the earlier three-image digest check.
+(`beta.sizetube.com`). On November 25, private beta ran v0.7.31 and public
+SizeTube served PeerTube 8.3.1. The [v0.7.31 acceptance results](#november-25-publication-date-acceptance-on-private-beta)
+record the current deployment and the remaining production gates.
 It tracks **execution status**. The reasoning, evidence and decisions
 live in the audit ([`sizetube-cutover-2026-11.md`](sizetube-cutover-2026-11.md)) and the run
 record ([`sizetube-beta-migration-2026-11.md`](sizetube-beta-migration-2026-11.md)). When an
@@ -275,6 +276,49 @@ SHA-256 digests matched their on-host copies.
   date falls on a different UTC calendar day. The operator requires watch
   pages and newest-first listings to preserve publication dates before cutover.
 
+### November 25 publication-date acceptance on private beta
+
+**Private beta passed the publication-date rehearsal. Hold public traffic on PeerTube.**
+The deployed core, frontend and search image digests and revisions matched v0.7.31.
+The release passed the published-image upgrade and rollback drill, synthetic
+sealed-secret recovery on a replacement runner, and 1,140 Linux tests.
+[Release record and checks](https://github.com/yegamble/vidra/pull/448)
+
+- **Dates and discovery.** All 14,956 eligible source UUIDs in the saved snapshot
+  matched completed video mappings. One transaction set their PeerTube publication
+  timestamps. It checked every other video field before committing. All 14,956
+  dates matched afterward, with zero dates written outside that set. After search
+  reconciliation, all 13,890 eligible documents had the expected date and the
+  search outbox had zero pending or dead events.
+- **Viewer checks.** Chrome followed the reported legacy link, displayed the
+  November 22 publication age, and found the video in both the recent feed and
+  its channel's newest-first listing. Its creation timestamp remained August 30.
+  The private apex, using its Origin CA certificate, redirected the same link
+  within `sizetube.com` and served the correct date. An outside connection
+  received 403 on beta. Public DNS still served PeerTube.
+- **Media and recovery.** On the deployed release the repaired private draft
+  matched both saved source hashes, resolved seven playlists and six media
+  objects, and decoded three frames. Anonymous detail and playlist requests
+  returned 404. The 08:06 UTC pre-deploy and 08:23 UTC post-backfill database
+  and configuration backups each matched their encrypted off-site copies.
+  The post-backfill database restored into an isolated PostgreSQL instance on
+  beta with clean ledgers 193 and 21, all 14,956 corrected timestamps, 13,890
+  eligible search documents and all 778 video blocks.
+- **Capacity.** The tested core source tree matched the merged release source.
+  At 2,192 synthetic origin API requests per minute for ten minutes, all
+  21,920 requests succeeded. Aggregate p95 was 109 ms and search p95 was
+  399 ms. With the beta limit enabled, a one-minute 6,213-request burst from
+  one address produced 300 successes and 5,913 HTTP 429 responses. The
+  production-sized test droplet was deleted. See the
+  [workload and route coverage](#november-25-api-capacity-rehearsal-on-v0730).
+- **Before public traffic.** D15 policy sign-off is pending. The separate-host
+  drill with an actual beta backup is deferred. Independent media recovery,
+  rollback duration and acceptable write loss still need an operator decision.
+  The cutover window also requires a source write freeze, fresh queue and
+  visibility reconciliation, and real-host acceptance of authenticated
+  workflows, cookies, uploads and ad delivery. D5 imported profile visibility
+  remains an operator action.
+
 ### November 22 go-live decision
 
 **Hold production DNS.** The operator's browser reached SizeTube's 18+ prompt on beta.
@@ -400,17 +444,11 @@ remain the baseline for the window.
   (RECORD). `OPERATOR`. **Not re-read since:** the watcher stopped 2026-11-08 09:34 UTC and
   uploads after 2026-11-09 may have refilled the queue. Read it again before the freeze
   (needs prod SSH — section H).
-- [~] **D4 · Mail (Resend, HTTPS API via Admin → Email).** Done 2026-11-09: domain verified,
-  key sealed in Admin → Email, one test message delivered (RECORD). Confirmed 2026-11-12: the
-  DKIM record and both Resend CNAMEs resolve, the saved transport is `resend` with its secret
-  set, and the instance reports `features.mail=true` (RUNTIME). **Open:** a password-reset
-  mail to an imported account. None has been requested on the beta: `password_reset_tokens`
-  has no rows (RUNTIME; whether used rows are purged was not checked). `OPERATOR`.
-  **2026-11-19:** the DKIM record (the same key as on 2026-11-12), both Resend CNAMEs and the
-  `send.` MX and SPF still resolve (RUNTIME 2026-11-19, DNS). The saved transport and the
-  reset-token table are **unverified 2026-11-19** (database not reachable). The operator sent
-  a password-reset mail from the beta and it arrived (RECORD, reported in I10 on 2026-11-15).
-  Whether that account was an imported one is not recorded, so the open point stands.
+- [x] **D4 · Private-beta mail and imported-account reset.** The operator
+  completed the reset and beta recorded redemption on November 24. The
+  following source-authoritative import restored the production password hash.
+  Recheck mail and credentials on the real hostname during the window.
+  [Imported-account verification](#november-24-v0730-private-beta-verification)
 - [~] **Finding 10 · White-label on.** `branding_hide_software_name=true` since 2026-11-11
   14:28 UTC (RUNTIME). **Open:** the imagery — avatar, banner, favicon, both header logos and
   OpenGraph are all still the fallback, and no instance image is stored (RUNTIME). Set them in
