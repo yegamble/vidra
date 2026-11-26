@@ -14,10 +14,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
-	"net/url"
 	"os"
 	"path"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,10 +23,11 @@ import (
 )
 
 type publisher struct {
-	client *http.Client
-	origin string
-	rpc    string
-	token  string
+	client   *http.Client
+	origin   string
+	rpc      string
+	token    string
+	stateDir string
 }
 
 func (p publisher) stream(ctx context.Context, m manifest, o object, dst io.Writer) error {
@@ -43,6 +42,10 @@ func (p publisher) stream(ctx context.Context, m manifest, o object, dst io.Writ
 		response, err := p.client.Do(req)
 		if err != nil {
 			return fmt.Errorf("read reference: %w", err)
+		}
+		if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusForbidden || response.StatusCode == http.StatusGone {
+			response.Body.Close()
+			return errApprovalLost
 		}
 		if response.StatusCode == http.StatusTooManyRequests {
 			response.Body.Close()
@@ -193,6 +196,13 @@ func readAddResult(resp *http.Response, files map[string]object) (string, error)
 }
 
 func (p publisher) publish(ctx context.Context, filename string) (string, error) {
+	current, err := p.reconcile(ctx, filename)
+	if err != nil && !errors.Is(err, errUnpinned) {
+		return "", err
+	}
+	if current != "" {
+		return current, nil
+	}
 	m, files, err := readApproval(filename)
 	if err != nil {
 		return "", err
@@ -209,25 +219,8 @@ func (p publisher) publish(ctx context.Context, filename string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	// Adding can take minutes. Re-read both the approval and the authorized
-	// master before changing the set of recursively pinned roots.
-	current, _, err := readApproval(filename)
-	if err != nil || !reflect.DeepEqual(m, current) {
-		return "", errors.New("approval changed during add")
-	}
-	if err := p.stream(ctx, m, files["master.m3u8"], io.Discard); err != nil {
+	if err := p.commitPin(ctx, filename, m, root); err != nil {
 		return "", err
-	}
-	resp, err := p.rpcRequest(ctx, "pin/add?recursive=true&arg="+url.QueryEscape(root), nil, "")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 65537))
-	var pinned struct{ Pins []string }
-	if err != nil || len(raw) > 65536 || json.Unmarshal(raw, &pinned) != nil ||
-		resp.Trailer.Get("X-Stream-Error") != "" || len(pinned.Pins) != 1 || pinned.Pins[0] != root {
-		return "", errors.New("no recursive pin confirmation for the approved root")
 	}
 	return root, nil
 }
@@ -237,6 +230,8 @@ func run() error {
 	tokenFile := flag.String("rpc-token-file", "", "private file containing the Kubo bearer token")
 	rpcPort := flag.Int("rpc-port", 5181, "loopback Kubo RPC port")
 	originPort := flag.Int("origin-port", 8785, "loopback S3 reference origin port")
+	stateDir := flag.String("state-dir", "/var/lib/vidra-ipfs-reference/publications", "private publication journal directory")
+	reconcile := flag.Bool("reconcile", false, "reconcile the recorded pin without staging any media, also after approval removal")
 	timeout := flag.Duration("timeout", 2*time.Hour, "overall publication deadline")
 	flag.Parse()
 	if *approval == "" || *tokenFile == "" || flag.NArg() != 0 || *timeout <= 0 ||
@@ -262,10 +257,15 @@ func run() error {
 			ResponseHeaderTimeout: *timeout, IdleConnTimeout: 30 * time.Second},
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 		origin: "http://127.0.0.1:" + strconv.Itoa(*originPort),
-		rpc:    "http://127.0.0.1:" + strconv.Itoa(*rpcPort), token: token,
+		rpc:    "http://127.0.0.1:" + strconv.Itoa(*rpcPort), token: token, stateDir: *stateDir,
 	}
-	root, err := p.publish(ctx, *approval)
-	if err == nil {
+	var root string
+	if *reconcile {
+		root, err = p.reconcile(ctx, *approval)
+	} else {
+		root, err = p.publish(ctx, *approval)
+	}
+	if err == nil && root != "" {
 		fmt.Println(root)
 	}
 	return err

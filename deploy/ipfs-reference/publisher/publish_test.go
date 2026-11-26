@@ -125,6 +125,12 @@ func TestPublishOnlyApprovedReferences(t *testing.T) {
 					if failure == "approval_withdrawn" {
 						os.Remove(filename)
 					}
+				case "/api/v0/pin/ls":
+					if pinCalls > 0 && failure != "wrong_pin" {
+						fmt.Fprintf(w, `{"Keys":{%q:{"Type":"recursive"}}}`, testRoot)
+					} else {
+						fmt.Fprint(w, `{"Keys":{}}`)
+					}
 				case "/api/v0/pin/add":
 					pinCalls++
 					root := testRoot
@@ -137,7 +143,7 @@ func TestPublishOnlyApprovedReferences(t *testing.T) {
 				}
 			}))
 			defer rpc.Close()
-			p := publisher{client: rpc.Client(), origin: origin.URL, rpc: rpc.URL, token: "test"}
+			p := publisher{client: rpc.Client(), origin: origin.URL, rpc: rpc.URL, token: "test", stateDir: filepath.Join(t.TempDir(), "state")}
 			root, err := p.publish(context.Background(), filename)
 			if failure == "" {
 				if err != nil || root != testRoot || pinCalls != 1 {
