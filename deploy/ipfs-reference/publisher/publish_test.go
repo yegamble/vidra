@@ -156,7 +156,11 @@ func TestRejectSupplementaryAndExternalMedia(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, reference := range []string{"https://elsewhere/clip.m3u8", "../other.mp4", "#EXT-X-KEY:METHOD=AES-128,URI=\"key\""} {
+	for _, reference := range []string{
+		"https://elsewhere/clip.m3u8", "../other.mp4", "#EXT-X-KEY:METHOD=AES-128,URI=\"key\"",
+		"#EXT-X-CONTENT-STEERING:SERVER-URI=\"https://elsewhere/steering\"\nv/index.m3u8",
+		"#EXT-X-UNKNOWN:EXTERNAL=\"https://elsewhere/file\"\nv/index.m3u8",
+	} {
 		err := verifyPlaybackTree(files, func(o object) ([]byte, error) {
 			if strings.HasSuffix(o.Key, "/master.m3u8") {
 				return []byte("#EXTM3U\n" + reference), nil

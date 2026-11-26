@@ -143,11 +143,27 @@ func verifyPlaybackTree(files map[string]object, playlist func(object) ([]byte, 
 				media = true
 			case line == "#EXT-X-ENDLIST":
 				endList = true
-			case strings.HasPrefix(line, "#EXT-X-KEY:"), strings.HasPrefix(line, "#EXT-X-SESSION-KEY:"),
-				strings.HasPrefix(line, "#EXT-X-DEFINE:"), strings.HasPrefix(line, "#EXT-X-CONTENT-STEERING:"):
-				return errors.New("encrypted or externally configured HLS is ineligible")
 			case strings.HasPrefix(line, "#EXT"):
-				for _, match := range uriAttr.FindAllStringSubmatch(line, -1) {
+				tag, _, _ := strings.Cut(line, ":")
+				// Accept tags emitted by the native VOD packager. New extensions
+				// can introduce external resources with a different attribute name.
+				switch tag {
+				case "#EXT-X-MAP", "#EXT-X-MEDIA", "#EXT-X-I-FRAME-STREAM-INF":
+				case "#EXT-X-VERSION", "#EXT-X-INDEPENDENT-SEGMENTS", "#EXT-X-TARGETDURATION",
+					"#EXT-X-MEDIA-SEQUENCE", "#EXT-X-PLAYLIST-TYPE", "#EXT-X-STREAM-INF",
+					"#EXT-X-BYTERANGE", "#EXT-X-DISCONTINUITY", "#EXT-X-I-FRAMES-ONLY",
+					"#EXT-X-DISCONTINUITY-SEQUENCE", "#EXT-X-PROGRAM-DATE-TIME":
+					if strings.Contains(line, "URI=") {
+						return errors.New("unexpected URI in HLS tag")
+					}
+				default:
+					return errors.New("unsupported HLS tag in approved generation")
+				}
+				matches := uriAttr.FindAllStringSubmatch(line, -1)
+				if len(matches) != strings.Count(line, "URI=") {
+					return errors.New("invalid HLS URI attribute")
+				}
+				for _, match := range matches {
 					refs = append(refs, match[1])
 				}
 			case !strings.HasPrefix(line, "#"):
