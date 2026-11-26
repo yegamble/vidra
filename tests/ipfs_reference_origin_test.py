@@ -134,25 +134,67 @@ class OriginHTTPTest(unittest.TestCase):
         self.assertEqual(self.request()[0], 503)
         self.assertEqual(len(self.store.calls), 1)
 
-    def test_connection_limit_rejects_excess_before_storage(self):
-        entering = threading.Barrier(3)
+    def test_burst_waits_for_the_existing_workers(self):
         release = threading.Event()
+        saturated = threading.Event()
+        mutex = threading.Lock()
+        active = 0
+        peak = 0
 
         def hold_read():
-            entering.wait(2)
+            nonlocal active, peak
+            with mutex:
+                active += 1
+                peak = max(peak, active)
+                if active == 2:
+                    saturated.set()
             release.wait(2)
+            with mutex:
+                active -= 1
 
         self.store.after_read = hold_read
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        with ThreadPoolExecutor(max_workers=12) as pool:
             clients = [pool.submit(self.request) for _ in range(2)]
             try:
-                entering.wait(2)
-                with self.assertRaises((http.client.RemoteDisconnected, ConnectionResetError, BrokenPipeError)):
-                    self.request()
+                self.assertTrue(saturated.wait(2))
+                queued = threading.Event()
+                process = self.server.process_request
+
+                def observe(request, address):
+                    queued.set()
+                    process(request, address)
+
+                self.server.process_request = observe
+                clients.extend(pool.submit(self.request) for _ in range(10))
+                self.assertTrue(queued.wait(2))
             finally:
                 release.set()
-            self.assertEqual([client.result()[0] for client in clients], [200, 200])
-        self.assertEqual(len(self.store.calls), 2)
+            self.assertEqual([client.result()[0] for client in clients], [200] * 12)
+        self.assertEqual(peak, 2)
+        self.assertEqual(len(self.store.calls), 12)
+
+    def test_busy_response_on_queue_timeout_or_shutdown(self):
+        for _ in range(2):
+            self.server.slots.acquire()
+            self.addCleanup(self.server.slots.release)
+        self.server.network_timeout = 0.1
+        status, headers, data = self.request()
+        self.assertEqual((status, headers["Retry-After"], data), (503, "1", b""))
+        self.server.network_timeout = 30
+        waiting = threading.Event()
+        process = self.server.process_request
+
+        def observe(request, address):
+            waiting.set()
+            process(request, address)
+
+        self.server.process_request = observe
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            client = pool.submit(self.request)
+            self.assertTrue(waiting.wait(2))
+            self.server.shutdown()
+            self.assertEqual(client.result()[0], 503)
+        self.assertEqual(self.store.calls, [])
 
     def test_throttled_payload_is_not_read(self):
         self.server.budget = origin.ByteBudget(1)
