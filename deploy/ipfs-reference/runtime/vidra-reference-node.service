@@ -1,0 +1,33 @@
+[Unit]
+Description=Vidra isolated IPFS media reference node
+After=vidra-reference-origin.service
+Wants=vidra-reference-origin.service
+
+[Service]
+User=vidra-ref-node
+Group=vidra-ref-node
+Environment=IPFS_PATH=/var/lib/vidra-ipfs-reference/node
+Environment=IPFS_TELEMETRY=off
+ExecStart=/usr/local/lib/vidra-ipfs-reference/kubo-v0.43.0 daemon --offline --enable-gc=false
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/vidra-ipfs-reference/node
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+MemoryMax=768M
+LimitNOFILE=16384
+
+[Install]
+WantedBy=multi-user.target
