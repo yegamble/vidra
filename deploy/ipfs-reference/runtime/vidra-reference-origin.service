@@ -1,0 +1,29 @@
+[Unit]
+Description=Vidra approved media reference origin (synthetic rehearsal)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=vidra-ref-origin
+Group=vidra-ref-origin
+EnvironmentFile=/etc/vidra-ipfs-reference/origin.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /usr/local/lib/vidra-ipfs-reference/origin.py --mode synthetic --manifest-dir /etc/vidra-ipfs-reference/approvals --endpoint ${S3_ENDPOINT} --bucket ${S3_BUCKET} --region ${S3_REGION} --bind 127.0.0.1 --port 8785
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=192M
+
+[Install]
+WantedBy=multi-user.target
