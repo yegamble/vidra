@@ -46,15 +46,16 @@ or Caddy certificate-directory read ran. The gate and all infrastructure were le
 
 **Hold public traffic on PeerTube.** The operator approved D15 on November 25.
 Beta enforces the approved signup settings. The operator signed in, reloaded and
-signed out on beta using the production hostname. Independent recovery, the
-remaining cutover checks and reconciliation against a frozen source remain open.
+signed out on beta using the production hostname. The independent database and
+configuration restore passed on November 26. Full media recovery, frozen-source
+reconciliation and cutover acceptance remain open.
 
 | Gate | Verified November 25–26 (UTC) | Work remaining |
 |---|---|---|
 | D15 / D6 · Visitor policies | Signed-out Chrome reached terms, privacy, DMCA and compliance on production and private beta before the age prompt. The terms matched byte for byte. Beta’s privacy page now uses the existing contact address in place of its placeholder. All four pages served the expected text on the private apex. | Keep the canonical links reachable during the switch. The incumbent PeerTube privacy page still contains the placeholder. |
 | D15 / D6 · Consent | The beta API returned the canonical terms and privacy URLs and their versions. The browser confirmed the effective policy. Email verification is required, minimum age is 18, the default quota is zero, and registration is closed. The isolated release rehearsal below exercised signup, consent and activation. The public PeerTube banner now carries the migration notice. | Keep registration closed through rollback and verify signup before opening it. Individual delivery to imported users and independent legal review remain unverified. |
 | D5 · Imported profiles | At 15:51 UTC the public account directory contained 10,577 rows, including 5,656 local source user IDs. After backup, 5,629 exact source ID and handle matches became public on beta. Anonymous checks through the private apex returned 200 for an eligible profile and 404 for an excluded one. | Repeat the same eligibility checks for accounts created or changed by the final import. |
-| D12 · Media recovery | A same-bucket version restore took 3.01 seconds. The private second account received new media under a rule that also includes existing files. A read-only restore from that account matched the newly uploaded video sample byte for byte and decoded three frames in 0.66 seconds. The November 26 inventory found zero historical copies. | Verify the historical library against the source inventory and recover an original media path from it. Restore the encrypted database and configuration on a separate host with an independently held key. |
+| D12 · Independent recovery | The separate-host database and configuration restore passed. Two historical video samples matched their source SHA-256 and decoded. On November 26 at 15:00 UTC the recovery account held 240,870 of 251,042 historical versions. The older private upload had 13 of 15 streaming objects at 14:56 UTC. All seven objects for a separate synthetic upload were restored and its CID rebuilt offline. [November 26 recovery checks](evidence/sizetube-recovery-2026-11-26.md) | Reconcile the remaining 10,172 historical versions (260,363,280,859 bytes), verify the full recovery inventory through its recorded cutoff, and decode the older private upload using only its recovery copies. |
 | D12 · Backup alerts | The operator inbox received a failure email at 17:25 UTC and a recovery email at 17:27 UTC. Both files from the recovery backup matched their encrypted off-site copies. | Complete. |
 | Ads · Provider reporting | On November 25 the operator chose to skip the publisher dashboard check for cutover. The provider's count of beta impressions is unverified. | The dashboard check is waived. |
 | D14 · Rollback | The operator previously accepted loss of Vidra-side writes if traffic rolls back to PeerTube. Keep registrations closed, preserve PeerTube, and take the rollback backup as agreed. | Use the delegated default of at least 24 hours after the switch. Extend the window until the first post-switch off-site backup is verified and any incident affecting data or access is resolved. |
@@ -149,7 +150,8 @@ account held 116 replicas. None matched the 251,042 upload versions in the
 saved inventory (4,562,434,489,556 bytes). A source listing from 00:49 to
 00:50 found every one of those versions. Backblaze reported SSE-B2 encryption
 for all of them and supplied no per-file replication status on any of them.
-The time of the provider's internal scan remains unconfirmed.
+The time of the provider's internal scan remains unconfirmed. Later comparisons
+found historical replicas. [November 26 inventory checkpoints](evidence/sizetube-recovery-2026-11-26.md)
 
 **Post-change recovery.** The 16:03 UTC database and configuration files matched
 their SHA-256 digests after download from the encrypted off-site store. The
@@ -157,8 +159,9 @@ database restored into a network-isolated PostgreSQL container on beta. Both
 migration ledgers were clean. The restored profile UUID set matched all 5,629
 updated profiles. The six signup settings, corrected privacy page, 14,956
 imported publication dates, 13,890 eligible search entries and 778 video blocks
-also matched. The independent database drill still needs a recovery machine
-and a separately held decryption key. The media copy is tracked under D12.
+also matched. On November 26 the operator restored the 19:08 UTC backup from
+November 25 on a separate machine using the operator-held recovery key.
+[Independent restore results](evidence/sizetube-recovery-2026-11-26.md)
 
 **Migration notice published on PeerTube.** At 00:51 UTC on November 26,
 an anonymous read of the production PeerTube configuration returned the text
@@ -401,7 +404,8 @@ SHA-256 digests matched their on-host copies.
   32 objects, matched four recorded hashes and exited 0. Comparing the two
   terminal reports accounted for every incomplete tree in the first run.
   Across both runs all 14,991 HLS trees in the newer backup were covered.
-  The separate-host recovery drill remains open at the operator's request.
+  The separate-host drill was pending at this checkpoint and passed on November 26.
+  [Independent restore results](evidence/sizetube-recovery-2026-11-26.md)
 - **Public catalogue and dates.** All 13,890 videos in the live PeerTube
   public listing mapped to unblocked, published public beta records. Each
   had a ready HLS playlist or an original and was eligible for search.
@@ -740,12 +744,15 @@ version deletion, and the abandoned uploads had been cleared.
   retrieved a newly replicated 191,098-byte public video sample. Its SHA-256
   matched the source, three video frames decoded in 0.66 seconds including the
   download, and the replica carried 30 days of governance retention.
-- [ ] **Verify the historical library in the recovery account.** The inventory
+- [~] **Verify the historical library in the recovery account.** The inventory
   taken before the sample contains 251,042 upload versions (4,562,434,489,556
   bytes), of which 240,878 names were current (4,214,634,454,359 bytes).
-  The first destination comparison found zero baseline versions. Compare names,
-  original upload times, lengths and available checksums, then restore a video
-  from its original path. Apply the source visibility state during recovery.
+  The early November 26 comparison found zero baseline versions. By 15:00 UTC
+  the destination held 240,870. Both historical video samples passed restore
+  checks at their original paths. Continue comparing names, original upload
+  times, lengths and available checksums through the selected recovery cutoff.
+  Apply the source visibility state during recovery.
+  [Recovery checks and outstanding versions](evidence/sizetube-recovery-2026-11-26.md)
   B2 skips hide markers, including the 6,248 in this inventory. It schedules
   pre-existing files at midnight UTC and dates their retention from the original
   upload. [Backblaze replication behavior](https://www.backblaze.com/docs/cloud-storage-cloud-replication)
@@ -1173,11 +1180,12 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   until the re-drill on the final dump has been run that way.
   **RUNTIME 2026-11-19 — unverified:** no final strict restore is recorded; the host was
   unreachable. B2 listings cannot demonstrate a restore.
-- [~] **I4 · Timed lost-object restore.** The same-bucket version recovery passed on
+- [x] **I4 · Timed lost-object restore.** The same-bucket version recovery passed on
   November 25 in 3.01 seconds. A video sample newly copied through the D12
   replication rule was restored and decoded from the independent account in
-  0.66 seconds. Repeat on a pre-existing library object at its original path.
-  `OPERATOR`.
+  0.66 seconds. On November 26 two distinct historical samples restored from
+  their original paths in 5.16 and 0.68 seconds. Each matched its source
+  SHA-256 and decoded three frames. [Recovery checks](evidence/sizetube-recovery-2026-11-26.md)
   **RUNTIME 2026-11-19:** neither replication nor Object Lock was configured (B2, D12 tail).
   No timed restore or waiver is recorded; neither was verified.
 - [ ] **I5 · How many copies of the backup encryption secret exist is still unverified.**
