@@ -27,7 +27,7 @@ func (n *mockPins) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else if n.pinned {
 			fmt.Fprintf(w, `{"Keys":{%q:{"Type":"recursive"}}}`, testRoot)
 		} else {
-			fmt.Fprint(w, `{"Keys":{}}`)
+			fmt.Fprint(w, `{}`)
 		}
 	case "/api/v0/pin/add":
 		n.adds++

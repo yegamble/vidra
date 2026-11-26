@@ -160,18 +160,24 @@ func (p publisher) recursivePin(ctx context.Context, root string) (bool, error) 
 		return false, err
 	}
 	defer resp.Body.Close()
-	var list struct {
-		Keys map[string]struct{ Type string }
-	}
-	if err := parseRPC(resp, 16<<20, &list); err != nil || list.Keys == nil {
+	var fields map[string]json.RawMessage
+	if err := parseRPC(resp, 16<<20, &fields); err != nil || fields == nil {
 		return false, errors.New("cannot verify the recursive pin set")
 	}
-	for _, pin := range list.Keys {
+	// Kubo v0.43 omits Keys when the selected pin type has zero members.
+	if len(fields) == 0 {
+		return false, nil
+	}
+	var keys map[string]struct{ Type string }
+	if len(fields) != 1 || json.Unmarshal(fields["Keys"], &keys) != nil || keys == nil {
+		return false, errors.New("invalid recursive pin response")
+	}
+	for _, pin := range keys {
 		if pin.Type != "recursive" {
 			return false, errors.New("unexpected entry in recursive pin set")
 		}
 	}
-	_, present := list.Keys[root]
+	_, present := keys[root]
 	return present, nil
 }
 
