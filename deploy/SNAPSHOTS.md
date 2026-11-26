@@ -57,6 +57,10 @@ A failed recovery keeps its private staging data and journal under `backups/`. R
 
 ## Coverage and retention
 
+For the complementary nightly database/configuration pair, recovery key
+custody, and media checks on a separate machine, use the
+[independent recovery drill](RECOVERY-DRILL.md).
+
 - The automatic restore targets the same installation path, Compose project and hostname. Store the recovery password, operator instructions and the host's infrastructure settings independently for host-loss recovery. Other hosts can inspect and extract the encrypted archive with the restic CLI.
 - External PostgreSQL/Redis, shared or externally mounted volumes and an active two-store migration need their own coordinated recovery policy. A managed IPFS control socket outside the checkout and a PeerTube importer in reference mode also require separate handling. Remote peers, public pins, external PDS accounts, CDN configuration and external source buckets can retain independent copies or references.
 - For a new S3 bucket, provision the required IAM permissions, CORS, encryption, public-delivery policy and CDN wiring. The archived credentials need permission to read and upload objects, verify contents, inspect versions and handle multipart uploads. The restore checks for existing objects, versions and unfinished uploads and verifies each restored object's bytes. Keep the old bucket until playback and any stored external URLs have been checked.
