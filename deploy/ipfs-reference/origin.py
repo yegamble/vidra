@@ -52,8 +52,7 @@ def check_manifest(doc, video, mode):
         raise ValueError("master key")
     prefix = master.rsplit("/", 1)[0] + "/"
     if mode == "synthetic":
-        valid = (master.startswith(f"operator-readiness/ipfs-reference/{video}/")
-                 and master.endswith("/master.m3u8"))
+        valid = master == f"operator-readiness/ipfs-reference/{video}/master.m3u8"
     else:
         valid = re.fullmatch(rf"streaming-playlists/{video}/r[1-9][0-9]*/master\.m3u8", master)
     if not valid:

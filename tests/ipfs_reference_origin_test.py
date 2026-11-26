@@ -175,7 +175,9 @@ class ContractTest(unittest.TestCase):
                     origin.check_manifest(dict(doc, objects=[changed]), VIDEO, mode)
 
     def test_refuses_outside_generation_even_with_correct_object_id(self):
-        for mode, master in (("live", SYNTHETIC), ("synthetic", LIVE), ("live", LIVE.replace("/r2/", "/r0/")),
+        for mode, master in (("live", SYNTHETIC), ("synthetic", LIVE),
+                             ("synthetic", SYNTHETIC.replace("/master.", "/nested/master.")),
+                             ("live", LIVE.replace("/r2/", "/r0/")),
                              ("live", LIVE.replace("/r2/", "/r2/child/"))):
             with self.subTest(master=master), self.assertRaises(ValueError):
                 origin.check_manifest(make_manifest(master), VIDEO, mode)
