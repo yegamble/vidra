@@ -295,6 +295,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class Server(ThreadingHTTPServer):
+    request_queue_size = 64
+
     def __init__(self, addr, manifests, approve, storage, concurrency, byte_rate, timeout):
         ip = ipaddress.IPv4Address(addr[0])
         networks = ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
@@ -303,12 +305,25 @@ class Server(ThreadingHTTPServer):
         self.manifests, self.approve, self.storage = manifests, approve, storage
         self.budget = ByteBudget(byte_rate)
         self.slots = threading.BoundedSemaphore(concurrency)
+        self.stopping = threading.Event()
         self.network_timeout = timeout
         super().__init__(addr, Handler)
 
+    def acquire_slot(self):
+        # Wait in the single accept thread so Kubo bursts can queue in the
+        # bounded kernel backlog without allocating additional workers.
+        deadline = time.monotonic() + self.network_timeout
+        while not self.stopping.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            if self.slots.acquire(timeout=min(remaining, 0.1)):
+                return True
+        return False
+
     def process_request(self, request, address):
-        if not self.slots.acquire(blocking=False):
-            self.shutdown_request(request)
+        if not self.acquire_slot():
+            self.busy(request)
             return
         try:
             request.settimeout(self.network_timeout)
@@ -316,6 +331,20 @@ class Server(ThreadingHTTPServer):
         except BaseException:
             self.slots.release()
             raise
+
+    def busy(self, request):
+        try:
+            request.settimeout(0.25)
+            request.sendall(b"HTTP/1.0 503 Service Unavailable\r\nConnection: close\r\n"
+                            b"Retry-After: 1\r\nContent-Length: 0\r\nCache-Control: private, no-store\r\n\r\n")
+        except OSError:
+            pass
+        finally:
+            self.shutdown_request(request)
+
+    def shutdown(self):
+        self.stopping.set()
+        super().shutdown()
 
     def process_request_thread(self, request, address):
         try:
