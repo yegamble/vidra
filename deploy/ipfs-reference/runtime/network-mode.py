@@ -18,7 +18,10 @@ BACKUP = APP / "node.offline.json"
 UNIT = "vidra-reference-node.service"
 DROP = Path("/etc/systemd/system") / (UNIT + ".d") / "10-synthetic-network.conf"
 KUBO = "/usr/local/lib/vidra-ipfs-reference/kubo-v0.43.0"
-ONLINE = f"[Service]\nExecStart=\nExecStart={KUBO} daemon --enable-gc=false\nIPAddressDeny=\nIPAddressAllow=\n"
+ONLINE_V1 = f"[Service]\nExecStart=\nExecStart={KUBO} daemon --enable-gc=false\nIPAddressDeny=\nIPAddressAllow=\n"
+# The Go network stack reads route/interface information through AF_NETLINK.
+# Keep the offline unit tighter and grant the online node no Linux capabilities.
+ONLINE = ONLINE_V1 + "RestrictAddressFamilies=\nRestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK\n"
 
 
 def atomic(path, data, uid, gid, mode):
@@ -99,7 +102,7 @@ def approved_root(video_id, cid):
 def configure(mode, video_id, cid, port, check_only):
     if mode == "online":
         approved_root(video_id, cid)
-    if DROP.exists() and DROP.read_text() != ONLINE:
+    if DROP.exists() and DROP.read_text() not in (ONLINE, ONLINE_V1):
         raise ValueError("unrecognized networking override")
     current = CONFIG.read_bytes()
     if not BACKUP.exists() and DROP.exists():
