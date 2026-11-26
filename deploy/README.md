@@ -541,6 +541,14 @@ recognise the tree (they skip the component-checkout sync, which has nothing to
 sync, and read the expected schema version from the manifest instead of from a
 `migrations/` directory the bundle deliberately does not ship).
 
+For individually approved IPFS publication, the bundle includes the reference
+tools in `deploy/ipfs-reference/`. From the unpacked tree, follow the
+[offline node installation](ipfs-reference/runtime/README.md), the
+[manifest preparation guide](ipfs-reference/PREPARATION.md) and the
+[publisher build and verification steps](ipfs-reference/publisher/README.md).
+Building the publisher requires Go 1.22 or later and uses the bundled source.
+Installing the offline services is an explicit operator step.
+
 **The clone path is still there**, and is reached two ways: `--git`, and a
 release that carries no bundle asset — every release cut before the bundle
 existed, which must keep installing. Both say so. That path is the old one

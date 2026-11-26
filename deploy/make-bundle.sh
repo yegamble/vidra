@@ -129,7 +129,7 @@ for f in "$REPO_ROOT"/env/*.env.example; do
   copy_in "env/$(basename "$f")"
 done
 
-# The whole deploy/ directory, minus three things:
+# Top-level deploy/ files, minus three things:
 #   Caddyfile.local  generated per host, gitignored, and carries a real domain
 #   .*               the setup engine's atomic-write temp files
 #   make-bundle.sh   this script. It needs a vidra-core checkout to run, which is
@@ -144,6 +144,17 @@ done <<EOF
 $(LC_ALL=C find "$REPO_ROOT/deploy" -maxdepth 1 -type f \
     ! -name 'Caddyfile.local' ! -name '.*' ! -name 'make-bundle.sh' | LC_ALL=C sort)
 EOF
+
+# Optional IPFS reference tools install separately from Compose. Operators can
+# build the publisher beside its runbook. Name every input explicitly: the
+# same directories may contain a local binary, S3 credentials or approvals.
+for rel in PREPARATION.md prepare.py origin.py \
+    runtime/README.md runtime/init-node.py runtime/network-mode.py \
+    runtime/vidra-reference-node.service runtime/vidra-reference-origin.service \
+    publisher/README.md publisher/go.mod publisher/main.go publisher/manifest.go \
+    publisher/state.go publisher/publish_test.go publisher/state_test.go; do
+  copy_in "deploy/ipfs-reference/$rel"
+done
 
 # The platform release records deploy.sh and rollback.sh check the pinned tag
 # triple against (deploy/release-mapping.py). A bundle host has no checkout to

@@ -1115,9 +1115,8 @@ class CommittedRecordTests(unittest.TestCase):
                                     capture_output=True, text=True)
         self.assertEqual(result.returncode, OK, result.stdout + result.stderr)
 
-    def test_the_bundle_ships_the_records_and_the_checker(self):
-        """A bundle host has no checkout to read releases/ from: make-bundle.sh
-        must carry it, or every bundle deploy is refused for want of records."""
+    def test_the_bundle_ships_the_records_checker_and_reference_tools(self):
+        """A no-Git host needs the release records and optional operator tools."""
         with tempfile.TemporaryDirectory() as tmp:
             core = Path(tmp) / 'core'
             (core / 'deploy').mkdir(parents=True)
@@ -1133,6 +1132,26 @@ class CommittedRecordTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             with tarfile.open(out) as archive:
                 names = set(archive.getnames())
+                prefix = './deploy/ipfs-reference/'
+                reference_files = {
+                    item.name[len(prefix):] for item in archive.getmembers()
+                    if item.name.startswith(prefix) and not item.isdir()
+                }
+                expected = {
+                    'PREPARATION.md', 'prepare.py', 'origin.py',
+                    'runtime/README.md', 'runtime/init-node.py', 'runtime/network-mode.py',
+                    'runtime/vidra-reference-node.service', 'runtime/vidra-reference-origin.service',
+                    'publisher/README.md', 'publisher/go.mod', 'publisher/main.go',
+                    'publisher/manifest.go', 'publisher/state.go',
+                    'publisher/publish_test.go', 'publisher/state_test.go',
+                }
+                self.assertEqual(reference_files, expected)
+                for relative in sorted(expected):
+                    with self.subTest(relative=relative):
+                        member = archive.getmember(prefix + relative)
+                        self.assertTrue(member.isfile())
+                        self.assertEqual(archive.extractfile(member).read(),
+                                         (ROOT / 'deploy/ipfs-reference' / relative).read_bytes())
         for member in ('./releases/v0.6.4.json', './releases/README.md', './deploy/release-mapping.py'):
             self.assertIn(member, names)
 
