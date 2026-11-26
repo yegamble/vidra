@@ -49,12 +49,12 @@ Beta enforces the approved signup settings. The operator signed in, reloaded and
 signed out on beta using the production hostname. Independent recovery, the
 remaining cutover checks and reconciliation against a frozen source remain open.
 
-| Gate | Verified on November 25 | Work remaining |
+| Gate | Verified November 25–26 (UTC) | Work remaining |
 |---|---|---|
 | D15 / D6 · Visitor policies | Signed-out Chrome reached terms, privacy, DMCA and compliance on production and private beta before the age prompt. The terms matched byte for byte. Beta’s privacy page now uses the existing contact address in place of its placeholder. All four pages served the expected text on the private apex. | Keep the canonical links reachable during the switch. The incumbent PeerTube privacy page still contains the placeholder. |
-| D15 / D6 · Consent | The beta API returned the canonical terms and privacy URLs and their versions. The browser confirmed the effective policy. Email verification is required, minimum age is 18, the default quota is zero, and registration is closed. The isolated release rehearsal below exercised signup, consent and activation. | Keep registration closed through rollback and verify signup before opening it. Delivery of the imported-user notice and independent legal review have no recorded evidence. |
+| D15 / D6 · Consent | The beta API returned the canonical terms and privacy URLs and their versions. The browser confirmed the effective policy. Email verification is required, minimum age is 18, the default quota is zero, and registration is closed. The isolated release rehearsal below exercised signup, consent and activation. The public PeerTube banner now carries the migration notice. | Keep registration closed through rollback and verify signup before opening it. Individual delivery to imported users and independent legal review remain unverified. |
 | D5 · Imported profiles | At 15:51 UTC the public account directory contained 10,577 rows, including 5,656 local source user IDs. After backup, 5,629 exact source ID and handle matches became public on beta. Anonymous checks through the private apex returned 200 for an eligible profile and 404 for an excluded one. | Repeat the same eligibility checks for accounts created or changed by the final import. |
-| D12 · Media recovery | A same-bucket version restore took 3.01 seconds. On November 25, replication to a private second account started for new and existing media. A read-only restore from that account matched the newly uploaded video sample byte for byte and decoded three frames in 0.66 seconds. | Verify the historical library against the source inventory and recover an original media path from it. Restore the encrypted database and configuration on a separate host with an independently held key. |
+| D12 · Media recovery | A same-bucket version restore took 3.01 seconds. The private second account received new media under a rule that also includes existing files. A read-only restore from that account matched the newly uploaded video sample byte for byte and decoded three frames in 0.66 seconds. The November 26 inventory found zero historical copies. | Verify the historical library against the source inventory and recover an original media path from it. Restore the encrypted database and configuration on a separate host with an independently held key. |
 | D12 · Backup alerts | The operator inbox received a failure email at 17:25 UTC and a recovery email at 17:27 UTC. Both files from the recovery backup matched their encrypted off-site copies. | Complete. |
 | Ads · Provider reporting | On November 25 the operator chose to skip the publisher dashboard check for cutover. The provider's count of beta impressions is unverified. | The dashboard check is waived. |
 | D14 · Rollback | The operator previously accepted loss of Vidra-side writes if traffic rolls back to PeerTube. Keep registrations closed, preserve PeerTube, and take the rollback backup as agreed. | Use the delegated default of at least 24 hours after the switch. Extend the window until the first post-switch off-site backup is verified and any incident affecting data or access is resolved. |
@@ -144,6 +144,13 @@ held 13 of the clip's 15 streaming objects. The source reported the other two
 as pending. The 19:08 UTC database and configuration backup files matched their
 encrypted off-site copies by SHA-256. Historical-library coverage remains open.
 
+**Historical media inventory, November 26 UTC.** At 00:45 the recovery
+account held 116 replicas. None matched the 251,042 upload versions in the
+saved inventory (4,562,434,489,556 bytes). A source listing from 00:49 to
+00:50 found every one of those versions. Backblaze reported SSE-B2 encryption
+for all of them and supplied no per-file replication status on any of them.
+The time of the provider's internal scan remains unconfirmed.
+
 **Post-change recovery.** The 16:03 UTC database and configuration files matched
 their SHA-256 digests after download from the encrypted off-site store. The
 database restored into a network-isolated PostgreSQL container on beta. Both
@@ -153,8 +160,12 @@ imported publication dates, 13,890 eligible search entries and 778 video blocks
 also matched. The independent database drill still needs a recovery machine
 and a separately held decryption key. The media copy is tracked under D12.
 
-**Draft notice for the source site before the migration window.** Publication
-and delivery remain open.
+**Migration notice published on PeerTube.** At 00:51 UTC on November 26,
+an anonymous read of the production PeerTube configuration returned the text
+below in the existing site-wide banner. Comparing the public configuration
+before and after the update found a single changed field,
+`broadcastMessage.message`. The banner retains the fundraising appeal and
+both its information level and non-dismissible setting.
 
 > SizeTube is moving from PeerTube to Vidra at the same address. We are moving
 > existing accounts, channels and videos. During the migration you can continue
