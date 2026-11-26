@@ -18,7 +18,10 @@ A reference pin depends on the origin, its read credential and those object vers
 3. Start the dedicated reference origin and Kubo. Use URLStore, raw leaves and
    a fresh repository for the first adoption. Bind the authenticated RPC and
    reference origin to loopback. Start offline for initial verification. Keep
-   regular catalogue copying disabled on this node.
+   regular catalogue copying disabled on this node. Give the publisher a private,
+   persistent state directory. Its default is
+   `/var/lib/vidra-ipfs-reference/publications`. The process creates it with mode
+   0700 if its parent exists and is writable.
 4. Build and run the publisher with Go 1.22 or later. Set `APPROVAL_FILE` to the
    installed manifest and `KUBO_TOKEN_FILE` to the private bearer-token file.
 
@@ -29,9 +32,11 @@ A reference pin depends on the origin, its read credential and those object vers
    ```
 
    The default RPC and origin ports are 5181 and 8785. The token needs Kubo
-   `/api/v0/add` and `/api/v0/pin/add`. The publisher checks the HLS links and
-   SHA-256 digests, rechecks approval, then prints the recursively pinned
-   directory CID. The playback entry point is `/ipfs/<directory-cid>/master.m3u8`.
+   `/api/v0/add`, `/api/v0/pin/add`, `/api/v0/pin/ls` and `/api/v0/pin/rm`.
+   The publisher checks the HLS links and SHA-256 digests and records the
+   expected root before committing it. It rechecks approval and prints the
+   recursively pinned directory CID. The playback entry point is
+   `/ipfs/<directory-cid>/master.m3u8`.
 5. Restart the offline node. Read every HLS file by CID and compare its
    SHA-256 with the manifest. Seek into the video and decode frames. Inspect
    Kubo's URLStore entries and compare the repository size before and after.
@@ -51,14 +56,22 @@ operations. The publisher accepts one manifest per invocation.
 
 ## Withdraw and recover
 
-Remove the approval from the origin first. Confirm a cold read through the
-operator's node can no longer retrieve that video's media. Remove its recursive
-pin using the node's authenticated operator interface. Check for another
-approved video using the same CID before removing a shared pin. Run garbage
-collection on the dedicated node and repeat the cold read. If two approved
-videos shared source blocks, verify the retained video after withdrawal.
+Remove the approval from the origin first. Reconcile using the original
+manifest path, including when the file is gone. This uses the journal to
+withdraw the managed recursive pin and retain roots another approval uses.
 
-Back up the approval manifests, the verified root CIDs, the node identity and
+```sh
+./vidra-reference-publish -reconcile -manifest "$APPROVAL_FILE" -rpc-token-file "$KUBO_TOKEN_FILE"
+```
+
+Use the same command after an interrupted pin request. A printed CID confirms
+an approved, recursively pinned root. If the command reports a missing pin and
+the approval still applies, rerun the publication command. A previously pinned
+root owned by another operator remains their responsibility. Confirm withdrawal
+with a cold media read and verify any other approved video sharing the same
+source blocks.
+
+Back up the approval manifests, the publication journal, the node identity and
 the origin configuration with the operator's encrypted recovery materials.
 Preserve the corresponding immutable S3 versions. To rebuild, restore the
 approvals and source access, repeat publication on an empty offline node and
