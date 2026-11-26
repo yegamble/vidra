@@ -76,3 +76,27 @@ the origin configuration with the operator's encrypted recovery materials.
 Preserve the corresponding immutable S3 versions. To rebuild, restore the
 approvals and source access, repeat publication on an empty offline node and
 compare each resulting CID to the saved CID before advertising it again.
+
+### Rebuild with replacement object versions
+
+A recovery bucket may assign different VersionIds, as Backblaze B2 does for
+replicas. Retain the original approval and journal as evidence of the approved
+object set and expected directory CID. Start with a new offline Kubo repository
+so cached URLStore records cannot send cold reads to the lost origin.
+
+For each still-approved video, read the corresponding version of every object
+from recovery. Compare each full-file SHA-256, byte length and relative HLS path
+with the saved manifest. Build a candidate for the replacement origin using
+the same video UUID and master key. Update each object's `version_id` and
+recompute `id` using `object_id` in the reference origin. The native preparer
+can regenerate these fields from an eligible generation whose current objects
+match the verified versions. Review the entire candidate before installing it.
+[Native manifest preparation](../PREPARATION.md)
+
+Publish only the reapproved manifest to the offline node with the recorded Kubo
+version, publisher and import settings. Compare the new CID with the saved CID,
+inspect the recursive pin inventory, restart cold, verify all file hashes, and
+seek and decode playback through the replacement origin. A mismatch keeps
+the node offline. Obtain fresh authorization for peering after a successful
+rebuild.
+[Recovery after primary bucket loss](https://vidra.yosef.app/docs/install/production#rebuilding-a-pin-after-losing-the-primary-bucket)
