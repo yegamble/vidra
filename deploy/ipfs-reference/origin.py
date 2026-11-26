@@ -120,7 +120,7 @@ class Manifests:
             raise Refusal(404) from None
 
 
-def live_approval(video, master):
+def read_view(query, **bindings):
     # -X disables operator startup files. Bind both values as SQL literals, on stdin so
     # psql interpolates them. Pass only the connection settings needed by the reader.
     env = {k: v for k, v in os.environ.items() if k.startswith("PG") or k in ("PATH", "HOME")}
@@ -128,11 +128,17 @@ def live_approval(video, master):
                PGCONNECT_TIMEOUT="2", PGAPPNAME="vidra-ipfs-origin")
     result = subprocess.run(
         ["psql", "-X", "--no-password", "-Atq", "-v", "ON_ERROR_STOP=1",
-         "-v", "video=" + video, "-v", "master=" + master],
-        input="SELECT 1 FROM public.ipfs_public_reference_videos "
-              "WHERE video_id=:'video'::uuid AND master_key=:'master' LIMIT 1;\n",
+         *[arg for name, value in bindings.items() for arg in ("-v", name + "=" + value)]],
+        input=query + "\n",
         text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env, timeout=4, check=True)
-    return result.stdout == "1\n"
+    return result.stdout
+
+
+def live_approval(video, master):
+    result = read_view("SELECT 1 FROM public.ipfs_public_reference_videos "
+                       "WHERE video_id=:'video'::uuid AND master_key=:'master' LIMIT 1;",
+                       video=video, master=master)
+    return result == "1\n"
 
 
 def bounds(headers, size, head):
@@ -205,11 +211,13 @@ class S3:
         self.signer = S3SigV4Auth(credentials, "s3", region)
         self.request = AWSRequest
 
-    def read(self, obj, start, end, head=False):
-        path = "/" + self.bucket + "/" + quote(obj["key"], safe="/")
-        target = path + "?versionId=" + quote(obj["version_id"], safe="")
-        method = "HEAD" if head else "GET"
-        headers = {} if head else {"Range": f"bytes={start}-{end}"}
+    @contextmanager
+    def response(self, key, version=None, span=None):
+        target = "/" + self.bucket + "/" + quote(key, safe="/")
+        if version is not None:
+            target += "?versionId=" + quote(version, safe="")
+        method = "HEAD" if span is None else "GET"
+        headers = {} if span is None else {"Range": f"bytes={span[0]}-{span[1]}"}
         request = self.request(method=method, url=self.base + target, headers=headers)
         self.signer.add_auth(request)
         with closing(http.client.HTTPSConnection(self.host, self.port, timeout=self.timeout)) as conn:
@@ -217,10 +225,14 @@ class S3:
             with socket_deadline(conn.sock, self.timeout):
                 conn.request(method, target, headers=dict(request.headers))
                 with conn.getresponse() as response:
-                    return self.checked_body(response, obj, start, end, head)
+                    yield response
+
+    def read(self, obj, start, end, head=False):
+        with self.response(obj["key"], obj["version_id"], None if head else (start, end)) as response:
+            return self.checked_body(response, obj, start, end, head)
 
     @staticmethod
-    def checked_body(response, obj, start, end, head):
+    def checked_length(response, obj, start, end, head):
         size = obj["size"]
         length = size if head else end - start + 1
         if (response.status != (200 if head else 206)
@@ -230,10 +242,15 @@ class S3:
                 or response.getheader("Content-Encoding", "identity") != "identity"
                 or (not head and response.getheader("Content-Range") != f"bytes {start}-{end}/{size}")):
             raise Refusal(502)
+        return length
+
+    @staticmethod
+    def checked_body(response, obj, start, end, head):
+        length = S3.checked_length(response, obj, start, end, head)
         if head:
             return b""
         payload = response.read(length)
-        if len(payload) != length or (length == size and hashlib.sha256(payload).hexdigest() != obj["sha256"]):
+        if len(payload) != length or (length == obj["size"] and hashlib.sha256(payload).hexdigest() != obj["sha256"]):
             raise Refusal(502)
         return payload
 
