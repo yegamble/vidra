@@ -849,9 +849,13 @@ The November 12 rehearsal timings are in section G.
   Afterwards `/healthz` answered on `sizetube.com`, the admin infrastructure page reported
   `public_base_url=https://sizetube.com`, the sitemap and the RSS feed carried only the new
   origin (5,143 and 152 occurrences, none of the old), and `beta.sizetube.com` answered 301.
-- [ ] **4 · Final rerun:** dry run, then `run` with `source_authoritative=true` (D1); confirm
+- [x] **4 · Final rerun:** dry run, then `run` with `source_authoritative=true` (D1); confirm
   `remote_follower.imported=20`, the state-8 pair's HLS, the 8 drafts now `published`, zero
   transient failures; re-run the §9.5 / §9.6 / §9.12 diffs and apply D10 by hand. `OPERATOR`.
+  The November 27 frozen run passed the catalogue, publication, access and
+  moderation reconciliation. Its 12,702 missing seek-preview files matched
+  the earlier D8 set exactly. Thirteen remote followers imported and seven
+  were deferred. [Window results](evidence/sizetube-beta-2026-11-27.md#controlled-cutover-window)
   No run has used `source_authoritative=true` yet; `remote_follows` is empty (RUNTIME
   2026-11-12). **Runs between now and the window import nothing new, and that is expected:**
   the importer reads `peertube_source_snapshot`, a copy on the beta's own Postgres restored

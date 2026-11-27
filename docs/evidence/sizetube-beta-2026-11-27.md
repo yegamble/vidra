@@ -50,6 +50,34 @@ apex and withheld that permission from an unrelated origin. Chrome followed
 the reported legacy watch URL, sought past 30 seconds and decoded successive
 frames, with zero media HTTP errors.
 
+The released importer completed its dry run and source-authoritative copy
+against the frozen snapshot. By 15:54 UTC all 13,890 eligible production
+video IDs matched the public beta catalogue and search index. Every eligible
+video had a ready playlist or original, and all 14,956 imported publication
+dates matched. The 764 retained imports excluded from the filtered source
+were still blocked and suppressed in search. All 5,629 approved imported
+profiles retained their public visibility.
+
+The importer's only failed operations were 12,702 storyboard fetches. Their
+source IDs matched the previously recorded set exactly, and the corresponding
+seek-preview files were absent from the frozen production disk. D8 assigns
+their regeneration to the post-cutover backfill. The repaired private draft
+still had seven valid manifests and six media dependencies. Its two repaired
+files matched the source across 28,896,084 bytes. Anonymous detail and
+playlist requests returned 404 for the draft and both manually blocked videos.
+
+Of the original 411 video blacklist decisions, 410 videos had beta records.
+All 410 were blocked and excluded from search. The remaining video had no
+beta record. The frozen moderation archive preserved the source reports,
+mutes, blacklist decisions and suspension records. All 14 suspended source
+accounts remained excluded from login and public profiles. All ten imported
+MFA accounts remained held.
+
+All 20 source remote-follow targets matched canonical Vidra channel URLs.
+Thirteen accepted relationships preserved the follower, target and original
+Follow activity ID. The other seven had remote actor documents the importer
+could not fetch or recognize. The report defers those seven to a later run.
+
 ## Release and deployment
 
 Private beta upgraded at 03:46 UTC. At 03:48:52 UTC, the public apex still
