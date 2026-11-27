@@ -255,32 +255,49 @@ approval.
 SizeTube enabled ActivityPub at **18:07:15 UTC** on November 27. Before
 deployment, the published v0.7.32/v0.7.33 pair passed upgrade, rollback and
 media fingerprint checks. On a separate, empty runner, the sealed recovery
-drill verified the backup hash, catalogue, schema and MFA sign-in. The verifier classified cross-schema restore refusal
-as inapplicable because both releases use core schema 194 and search schema 21. The release-pinned media stack also uploaded a fixture,
-transcoded it to CMAF, served its HLS segments and returned it through search
-after the event queue drained.
+drill verified the backup hash, catalogue, schema and MFA sign-in. The
+verifier classified cross-schema restore refusal as inapplicable because both
+releases use core schema 194 and search schema 21. The release-pinned media
+stack also uploaded a fixture, transcoded it to CMAF, served its HLS segments
+and returned it through search after the event queue drained.
 [Qualified release record and CI runs](https://github.com/yegamble/vidra/pull/481)
 
 At **18:08 UTC**, an external client followed ordinary public Cloudflare
 routing. NodeInfo advertised ActivityPub. WebFinger resolved an opted-in
 Person, a public channel Group and the instance Application. Their actor IDs
 matched their public-key owners. The Application URL served ActivityPub JSON
-to a protocol client and redirected an HTML client to the instance page.
-Both responses included `Vary: Accept`.
+to a protocol client and redirected an HTML client to the instance page. Both
+responses included `Vary: Accept`.
 
 The operator's private account actor, outbox, follower and following
-collections returned HTTP 404. WebFinger withheld the private Person link.
-The same account's public channel omitted private owner attribution and its
-first outbox page excluded the private draft. The draft's ActivityPub representation returned 404 and the
-anonymous admin request returned 401. The public homepage and legacy watch
-page returned 200. The www redirect preserved the watch path and query, and
-the public PDS served its expected identity with invitations required.
+collections returned HTTP 404. WebFinger withheld the private Person link. The
+same account's public channel omitted private owner attribution and its first
+outbox page excluded the private draft. The draft's ActivityPub representation
+returned 404 and the anonymous admin request returned 401. The public homepage
+and legacy watch page returned 200. The www redirect preserved the watch path
+and query, and the public PDS served its expected identity with invitations
+required.
 
-At **18:08:40 UTC**, a fresh Kubo consumer with provider announcements disabled
-retrieved the approved synthetic clip from the public network. All seven files
-matched their reference SHA-256 hashes across 1,969,881 bytes. Three decoded
-frames matched after a four-second seek. The consumer kept the clip unpinned.
-A separate request to a third-party HTTP gateway received HTTP 429.
+At **18:08:40 UTC**, a fresh Kubo consumer with provider announcements
+disabled retrieved the approved synthetic clip from the public network. All
+seven files matched their reference SHA-256 hashes across 1,969,881 bytes.
+Three decoded frames matched after a four-second seek. The consumer kept the
+clip unpinned. A separate request to a third-party HTTP gateway received HTTP
+429.
+
+By 18:17:37 UTC, the server had handled 42 incoming activities with verified
+remote signatures. Its follow ledger contained 13 accepted remote follows
+and zero pending follows. The counters recorded zero outbound delivery
+attempts and zero crawls during this observation.
+
+The backup service completed a post-activation run at 18:09:22 UTC. Its
+production verifier retrieved both database and configuration objects by
+their original version IDs, decrypted them and matched the source hashes.
+An independent operator reader retrieved the encrypted hosted PDS point and
+index by their immutable versions. The two ciphertexts matched across 60,935
+bytes. The offline restore verified three SQLite databases, the service
+identity, TLS and mail configuration. The restored service had zero creator
+blobs.
 
 ## Release and deployment
 
