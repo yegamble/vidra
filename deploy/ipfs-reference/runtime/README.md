@@ -4,6 +4,8 @@ Use this deployment to rehearse publication of an individually approved syntheti
 
 Prepare a new service account, node identity and empty repository for this deployment. Sharing another node's repository can expose blocks outside the approval. External peers may retain any material they receive from a public swarm.
 
+For an individually approved native upload, use the [separate native origin](native/README.md).
+
 ## Install the offline services
 
 1. Install Python 3 with botocore, the reference origin, and Kubo 0.43.0. Verify the upstream archive digest for the target architecture. The official Linux amd64 archive SHA-256 is `2ccb2c16c4ed0c893858dc6ac8a062d789e36a03339a7164459a917b64354c3d`. Install executables and scripts under root ownership in `/usr/local/lib/vidra-ipfs-reference/`. Use the filenames `kubo-v0.43.0`, `origin.py`, `init-node.py`, `network-mode.py` and `publish`.

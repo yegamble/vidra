@@ -1140,6 +1140,10 @@ class CommittedRecordTests(unittest.TestCase):
                 expected = {
                     'PREPARATION.md', 'prepare.py', 'origin.py',
                     'runtime/README.md', 'runtime/init-node.py', 'runtime/network-mode.py',
+                    'runtime/native/Dockerfile', 'runtime/native/Dockerfile.dockerignore',
+                    'runtime/native/README.md', 'runtime/native/compose.yml',
+                    'runtime/native/run-native.py', 'runtime/native/init-reader.py',
+                    'runtime/native/verify-dormant.py',
                     'runtime/vidra-reference-node.service', 'runtime/vidra-reference-origin.service',
                     'publisher/README.md', 'publisher/go.mod', 'publisher/main.go',
                     'publisher/manifest.go', 'publisher/state.go',
