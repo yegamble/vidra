@@ -215,6 +215,41 @@ outbound traffic blocked. All eight guide files reopened from Downloads and
 the external recovery drive. The old instance remains running and frozen
 through the operator-approved hold and scheduled off-site backup check.
 
+### Hosted AT Protocol service and public IPFS pin
+
+The operator enabled creator cross-posting and selected an invite-only PDS
+on the existing Vidra server. Through public TLS, the PDS reported the
+service DID `did:web:pds.sizetube.com` and the handle suffix
+`.pds.sizetube.com`. Vidra advertised the same PDS URL. At 16:56 UTC
+the public repository list was empty. Vidra sign-in through an AT Protocol
+identity is a separate setting and remained off.
+
+The PDS authenticated to the existing transactional mail provider over
+TLS 1.3. This check sent no email. On the first invited account, provision
+the handle's `_atproto` TXT record with the DID assigned to that account.
+The PDS notifies its configured relay when new repository events arrive.
+A creator's public post and delivery to a mail recipient await actual use.
+[Creator connections](https://vidra.yosef.app/docs/concepts/federation#connecting-a-creator-account)
+
+The combined backup job verified the 17:07 UTC database, configuration
+and PDS recovery points before signaling success to the external monitor.
+The PDS capture paused and restarted that service in 5.644 seconds. The
+operator's independent reader discovered the encrypted point index and
+retrieved both original versions. At 17:11 UTC the restored package from
+the physical recovery drive matched its Downloads copy. The offline
+restore used the earlier drive kit to recover all nine captured files,
+including three SQLite databases, matching cryptographic identities and
+the final mail configuration. The new service had zero creator blobs.
+[PDS backup and restore](https://vidra.yosef.app/docs/install/production#backing-up-a-hosted-pds)
+
+On the production IPFS node, the sole approved public pin remained the
+synthetic clip. A fresh peer found it through the public DHT, fetched all
+seven files totaling 1,969,881 bytes, matched their hashes and decoded
+three frames after a four-second seek. Kubo held eleven URL references
+and zero raw media blocks. Both reference origins denied the private
+upload. These checks exercised S3-backed reference pinning with per-video
+approval.
+
 ## Release and deployment
 
 Private beta upgraded at 03:46 UTC. At 03:48:52 UTC, the public apex still
