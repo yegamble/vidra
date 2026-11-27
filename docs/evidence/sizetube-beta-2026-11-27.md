@@ -293,6 +293,9 @@ attempts and zero crawls during this observation.
 The backup service completed a post-activation run at 18:09:22 UTC. Its
 production verifier retrieved both database and configuration objects by
 their original version IDs, decrypted them and matched the source hashes.
+The operator's independent read-only recovery account fetched the same two
+immutable objects from the 18:08:24 UTC point. Both ciphertext and decrypted
+SHA-256 digests matched, covering 193,004,333 decrypted bytes.
 An independent operator reader retrieved the encrypted hosted PDS point and
 index by their immutable versions. The two ciphertexts matched across 60,935
 bytes. The offline restore verified three SQLite databases, the service
