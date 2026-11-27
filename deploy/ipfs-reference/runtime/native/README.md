@@ -95,6 +95,41 @@ The verifier checks the running image ID, loopback publishing, read-only mounts 
 
 ## Restart and recover
 
-Docker's `unless-stopped` policy restarts the service with the daemon after a normal host reboot. Ordinary PostgreSQL container recreation can change its private address. Every eligibility query uses the `postgres` service name and a fresh connection. A database outage fails approved reads closed. If the application stack's private network is deliberately removed, recreate that network with the stack and run `native up -d --force-recreate origin`. Re-run the reader bootstrap after a database restore that predates the role. The role secret is held independently from the application database dump.
+Docker's `unless-stopped` policy restarts the service with the daemon after a normal host reboot. Ordinary PostgreSQL container recreation can change its private address. Every eligibility query uses the `postgres` service name and a fresh connection. A database outage fails approved reads closed. If the application stack's private network is deliberately removed, recreate that network with the stack and run `native up -d --force-recreate origin`.
 
 Record the reviewed source commit, the package versions from `docker run --rm --entrypoint apk "$image" info -v`, image ID and SHA-256 of an exported image archive (`docker image save "$image" | gzip -n`). Encrypt these with the Compose file and environment, the adapter and shipped origin/preparer source, grant and verification scripts, service UID/GID, `config/pgpass`, scope, approval manifests and any active per-generation storage credentials. Include the offline node's separate identity, token, publication receipts and expected CID when provisioned. Keep credentials out of source control. On restoration verify the archive hash and loaded image ID. Recreate service ownership, verify role privileges, restore the selected scope and use the offline recovery procedure before any separately authorized peering. [Rebuilding references after primary loss](../../publisher/README.md)
+
+
+### Restore a database that grants the native reader access
+
+A database dump records the grant on the view. PostgreSQL stores logins in the cluster, outside that dump. On a fresh recovery host, create the reader **before** replaying the dump. Keep the native origin stopped and the replacement host off public traffic during recovery.
+
+1. Recover the reviewed image archive, the protected native configuration and the release-matched application stack on the replacement host. Restore `config/pgpass` from encrypted escrow with the native service UID/GID and mode 0400. Keep its parent root-controlled and mode 0750. Hold saved approvals and storage credentials outside the dormant configuration while verifying the restore.
+2. Start the isolated bundled database and run the compatible release's ordinary core migrations on its empty application database. Migration 194 supplies the view the reader bootstrap checks. From the installed meta repository root, use the replacement host’s configured production Compose project.
+
+   ```bash
+   sudo -u vidra ./deploy/compose.sh up -d --wait postgres
+   sudo -u vidra ./deploy/compose.sh run --rm --no-deps migrate
+   ```
+
+3. Provision the cluster login using the recovered password. Pass `--container` and `--project` to the reader command when the recovery names differ from the defaults.
+
+   ```sh
+   app=/etc/vidra-native-reference
+   reader() { python3 "$app/init-reader.py" --dir "$app/config" --uid "$(id -u vidra-native-ref)" --gid "$(id -g vidra-native-ref)"; }
+   reader
+   ```
+
+4. Run the standard restore against the intended recovery database, retaining its access-control entries. The script stops application writers, drops and recreates the database, and runs `pg_restore`. The cluster login survives, so PostgreSQL can replay the view grant. If a previous restore failed while granting access to a missing login, repeat the restore from a clean target after provisioning the login. With recovery acceptance enabled the script also checks referenced media before it starts applications. [Database restore procedure](../../../README.md)
+
+   ```sh
+   sudo -u vidra ./deploy/restore.sh --require-media-consistent "$recovery_dump"
+   ```
+
+5. Run `reader` again after restore. Database recreation also removes the per-database login settings. Reapplying the bootstrap restores the reader's read-only default and statement timeout, then checks its effective application privileges. Start the origin in dormant mode and verify its protected-table and HTTP denials. Restore selected scopes and approvals individually after that check.
+
+   ```sh
+   reader
+   docker compose --env-file "$app/compose.env" -f "$app/compose.yml" up -d --no-build
+   python3 "$app/verify-dormant.py" --env-file "$app/compose.env" --image-id-file "$app/image.id"
+   ```

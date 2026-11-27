@@ -1732,6 +1732,7 @@ sudo -u vidra tar -xzf backups/vidra-config-20260820T031500Z.tar.gz -C /opt/vidr
 #    after provision.sh it alone can read the 0600 env file, and it is the one
 #    in the docker group, so the login user gets a permission error here.
 sudo -u vidra ./deploy/compose.sh up -d postgres
+#    For a native reference reader, provision its escrowed cluster login now.
 #    Confirm the target is the replacement, then allow database replacement.
 sudo -u vidra env RESTORE_MEDIA_TIMEOUT=36h ./deploy/restore.sh \
   --yes --require-media-consistent backups/vidra-20260820T031500Z.dump.gz
@@ -1740,6 +1741,10 @@ sudo -u vidra env RESTORE_MEDIA_TIMEOUT=36h ./deploy/restore.sh \
 #    private route. During a real recovery, switch DNS after the owner accepts
 #    the results and confirms the rollback point.
 ```
+
+When the dump includes the native reference view grant, the restore needs its
+cluster login before step 6 replays permissions. Reapply the login’s per-database
+settings after the restore. [Native reader restore procedure](ipfs-reference/runtime/native/README.md#restore-a-database-that-grants-the-native-reader-access)
 
 Two things to check before you trust the result. The env file pins
 `VIDRA_*_TAG`, so the rebuilt host comes back on **the release the dump was
