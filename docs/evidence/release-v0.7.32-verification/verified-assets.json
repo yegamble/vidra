@@ -1,0 +1,33 @@
+{
+  "release": "v0.7.32",
+  "core": "d36f7a333a2b1d7e07ac9f0a664e538eb3ba4df0",
+  "meta": "d397c3cf165c6f73a8c4f182a7bfc441d6fa77ee",
+  "bundle_schema": 194,
+  "reference_files_matched": 15,
+  "assets": {
+    "SHA256SUMS": {
+      "sha256": "sha256:98dd53c95a678e639babe688a0a36b66e6e552450ac4dcd7824a5cf2fb4298cf",
+      "bytes": 464
+    },
+    "vidra-bundle_v0.7.32.tar.gz": {
+      "sha256": "sha256:cec8ee106b6650b66282c7422ceaf443ea63790c42ba2dbeaca0debbd0fdec21",
+      "bytes": 449884
+    },
+    "vidra_v0.7.32_darwin_amd64": {
+      "sha256": "sha256:ddefc5efb10aee62eb50a644829d2161c4a85bc4be95bc267c92d8cb1ba58f28",
+      "bytes": 35722912
+    },
+    "vidra_v0.7.32_darwin_arm64": {
+      "sha256": "sha256:2288de4cea5b87415e733606a054e1afa3bccae9798e8f5db3ccfdad7787c5fc",
+      "bytes": 33772050
+    },
+    "vidra_v0.7.32_linux_amd64": {
+      "sha256": "sha256:92ed411dadda96583fa75477deecba6146731d1390845ff6160b02860c876700",
+      "bytes": 34847998
+    },
+    "vidra_v0.7.32_linux_arm64": {
+      "sha256": "sha256:090d24e47e7c21fba02172e1120d81fc0a6f897d26edc86aee8070c22cf29060",
+      "bytes": 32651482
+    }
+  }
+}
