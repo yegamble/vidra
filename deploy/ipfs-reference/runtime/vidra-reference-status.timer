@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh approved Vidra IPFS reference pin health each minute
+
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec=60s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

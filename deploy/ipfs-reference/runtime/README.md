@@ -64,3 +64,63 @@ replacement store and install only manifests reviewed against its immutable
 versions. Rebuild on an empty repository, then verify the saved CIDs, pin
 inventory and playback before requesting authorization to reconnect.
 [Publisher procedure for replacement versions](../publisher/README.md#rebuild-with-replacement-object-versions)
+
+## Reporting reference pin health in Vidra
+
+On the reference-node host, an optional timer compares the approval manifests and
+publisher receipts with the dedicated Kubo node's recursive and direct pins. For
+each approved video it reads and hashes the master and variant playlists through
+the local no-fetch gateway, follows a media segment named by `#EXTINF`, and
+compares up to 8 KiB of that segment with its immutable version through the
+reference origin. Native origins check live video eligibility and generation at
+read time. The publisher's dedicated reference node can run this check while
+swarm peering is disabled.
+
+1. As a host administrator, build and install the release's `publish` binary using
+   the [publisher build instructions](../publisher/README.md). Keep the
+   reference gateway and origins bound to loopback. Configure a Kubo bearer
+   with `AllowedPaths` containing only `/api/v0/pin/ls`. Store its raw token in
+   the root-owned, mode-0600 file named by `token_file`.
+2. Copy [status.example.json](status.example.json) to
+   `/etc/vidra-ipfs-reference/status.json` with root ownership and mode 0600.
+   List every approval directory and publication journal served by this Kubo
+   node. Add native approvals as a separate source using their private journal
+   and eligibility-checking reader port. For a newly installed source that has
+   never published, set `"allow_unpublished": true` until its first journal is
+   created. Only an empty, readable approval directory can pass in that state.
+3. Install the service and timer, run the first check, and inspect the aggregate.
+
+   ```sh
+   install -m 0644 deploy/ipfs-reference/runtime/vidra-reference-status.{service,timer} /etc/systemd/system/
+   systemctl daemon-reload
+   systemctl start vidra-reference-status.service
+   cat /var/lib/vidra-reference-status/status.json
+   systemctl enable --now vidra-reference-status.timer
+   ```
+
+4. With a Vidra core release that supports reference status, set
+   `IPFS_REFERENCE_STATUS_DIR=/var/lib/vidra-reference-status` in the stack
+   environment. Run the standard deployment and inspect the admin connection
+   status. The API receives a read-only mount of the directory so atomic file
+   replacements are visible. Keep this directory dedicated to aggregate status.
+   If the API runs on a different host, deliver this single file via an
+   authenticated channel and replace it atomically there. Preserve the
+   node's original observation time.
+
+| State and reason | Interpretation and operator action |
+| --- | --- |
+| `ok / verified` | The verified count is the number of unique approved recursive roots. Zero means both the configured approvals and observed pin inventory are empty. |
+| `degraded / pin_set_mismatch` | Inspect missing, unfinished, withdrawn or unexpected pins and any native eligibility refusal. Reconcile through the normal publisher workflow. |
+| `degraded / media_unverified` | Check gateway, playlists, immutable origin access and probe limits. |
+| `down / approval_unavailable` | Check the configured approval and journal paths, permissions and native eligibility reader. |
+| `down / node_unavailable` | Check the Kubo service, local RPC port and inventory bearer. |
+
+The report refreshes every minute and contains only its schema version, UTC
+observation time, state, reason and count when verified. The API treats a report
+older than five minutes as stale. A check allows 40 seconds, at most 64
+approvals, 256 KiB per playlist, eight playlist levels and 4 MiB of aggregate
+media reads. It samples one rendition per approval. Decoding, whole-library
+integrity and retrieval by an independent swarm peer require separate tests.
+
+To remove the integration, clear `IPFS_REFERENCE_STATUS_DIR`, redeploy the API
+and disable the timer with `systemctl disable --now vidra-reference-status.timer`.

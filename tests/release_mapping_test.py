@@ -1146,6 +1146,8 @@ class CommittedRecordTests(unittest.TestCase):
                     'runtime/native/verify-dormant.py',
                     'runtime/vidra-reference-node.service', 'runtime/vidra-reference-origin.service',
                     'publisher/README.md', 'publisher/go.mod', 'publisher/main.go',
+                    'runtime/vidra-reference-status.service', 'runtime/vidra-reference-status.timer',
+                    'runtime/status.example.json', 'publisher/status.go', 'publisher/status_test.go',
                     'publisher/manifest.go', 'publisher/state.go',
                     'publisher/publish_test.go', 'publisher/state_test.go',
                 }
@@ -1156,7 +1158,8 @@ class CommittedRecordTests(unittest.TestCase):
                         self.assertTrue(member.isfile())
                         self.assertEqual(archive.extractfile(member).read(),
                                          (ROOT / 'deploy/ipfs-reference' / relative).read_bytes())
-        for member in ('./releases/v0.6.4.json', './releases/README.md', './deploy/release-mapping.py'):
+        for member in ('./releases/v0.6.4.json', './releases/README.md', './deploy/release-mapping.py',
+                       './docker-compose.ipfs-reference-status.yml'):
             self.assertIn(member, names)
 
 

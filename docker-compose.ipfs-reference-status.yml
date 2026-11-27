@@ -1,0 +1,12 @@
+# Bind the directory so the API observes atomic replacements of status.json.
+services:
+  api:
+    environment:
+      IPFS_REFERENCE_STATUS_FILE: /run/vidra-reference-status/status.json
+    volumes:
+      - type: bind
+        source: ${IPFS_REFERENCE_STATUS_DIR:?Set the directory containing the aggregate reference status}
+        target: /run/vidra-reference-status
+        read_only: true
+        bind:
+          create_host_path: false

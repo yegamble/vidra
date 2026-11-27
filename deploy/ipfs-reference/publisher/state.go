@@ -84,8 +84,14 @@ func (p publisher) withJournal(ctx context.Context, operation func(*journal) err
 		}
 	}
 	j := &journal{dir: dir, Items: make(map[string]receipt)}
-	name := filepath.Join(p.stateDir, "publications.json")
-	info, err = os.Lstat(name)
+	if err := readJournal(filepath.Join(p.stateDir, "publications.json"), j); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return operation(j)
+}
+
+func readJournal(name string, j *journal) error {
+	info, err := os.Lstat(name)
 	if err == nil {
 		if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > 16<<20 {
 			return errors.New("invalid publication journal")
@@ -116,10 +122,10 @@ func (p publisher) withJournal(ctx context.Context, operation func(*journal) err
 				}
 			}
 		}
-	} else if !errors.Is(err, os.ErrNotExist) {
+	} else {
 		return err
 	}
-	return operation(j)
+	return nil
 }
 
 func (j *journal) save() error {
@@ -155,30 +161,37 @@ func (j *journal) save() error {
 // missing member in a valid, bounded result proves absence. An HTTP error or
 // incomplete result leaves ownership and the pending receipt intact.
 func (p publisher) recursivePin(ctx context.Context, root string) (bool, error) {
-	resp, err := p.rpcRequest(ctx, "pin/ls?type=recursive&stream=false", nil, "")
+	pins, err := p.pinSet(ctx, "recursive")
+	_, present := pins[root]
+	return present, err
+}
+
+func (p publisher) pinSet(ctx context.Context, kind string) (map[string]struct{}, error) {
+	resp, err := p.rpcRequest(ctx, "pin/ls?type="+kind+"&stream=false", nil, "")
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	var fields map[string]json.RawMessage
 	if err := parseRPC(resp, 16<<20, &fields); err != nil || fields == nil {
-		return false, errors.New("cannot verify the recursive pin set")
+		return nil, errors.New("cannot verify the recursive pin set")
 	}
 	// Kubo v0.43 omits Keys when the selected pin type has zero members.
 	if len(fields) == 0 {
-		return false, nil
+		return map[string]struct{}{}, nil
 	}
 	var keys map[string]struct{ Type string }
 	if len(fields) != 1 || json.Unmarshal(fields["Keys"], &keys) != nil || keys == nil {
-		return false, errors.New("invalid recursive pin response")
+		return nil, errors.New("invalid recursive pin response")
 	}
-	for _, pin := range keys {
-		if pin.Type != "recursive" {
-			return false, errors.New("unexpected entry in recursive pin set")
+	result := make(map[string]struct{}, len(keys))
+	for cid, pin := range keys {
+		if pin.Type != kind {
+			return nil, errors.New("unexpected entry in recursive pin set")
 		}
+		result[cid] = struct{}{}
 	}
-	_, present := keys[root]
-	return present, nil
+	return result, nil
 }
 
 func parseRPC(resp *http.Response, maximum int64, out any) error {

@@ -1,0 +1,12 @@
+{
+  "rpc_port": 5181,
+  "gateway_port": 8185,
+  "token_file": "/etc/vidra-ipfs-reference/status-rpc.token",
+  "sources": [
+    {
+      "approvals": "/etc/vidra-ipfs-reference/approvals",
+      "journal": "/var/lib/vidra-ipfs-reference/publications/publications.json",
+      "origin_port": 8785
+    }
+  ]
+}
