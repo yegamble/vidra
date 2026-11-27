@@ -1,13 +1,13 @@
 # sizetube.com cutover — tracked checklist (living)
 
 A working checklist for moving public SizeTube traffic from PeerTube to the Vidra beta.
-**November 27, 2026 — Go to schedule and open the controlled cutover window
-for v0.7.32.** Public traffic remains on PeerTube. Before switching, verify the
-source write freeze, take a fresh snapshot and backup, run the authoritative
-import and reconcile changes after the recovery cutoff. Repeat hostname,
-playback, access and moderation checks, then obtain the explicit switch
-decision. Keep PeerTube available for the agreed rollback window of at least
-24 hours and verify the first post-switch off-site backup.
+**Public SizeTube traffic switched to Vidra v0.7.32 on November 27 at
+16:35:51 UTC.** The operator approved the switch after verification of the
+frozen import, independent recovery, physical kit and real-hostname account
+and media checks. Public playback, search, legacy links and access checks
+passed. Keep PeerTube available read-only until at least November 28 at
+16:35:52 UTC and through verification of the first scheduled post-switch
+off-site backup and resolution of any incident affecting access or data.
 [November 27 evidence](evidence/sizetube-beta-2026-11-27.md)
 
 This checklist tracks **execution status**. The reasoning, evidence and decisions
@@ -798,10 +798,12 @@ version deletion, and the abandoned uploads had been cleared.
 
 ## C. The cutover window (§5 steps 1–7)
 
-Not started on prod or the beta. Steps 1–5 and the rollback in step 7 were rehearsed on a
-throwaway copy on 2026-11-12; what each showed is under the step. Measured times are in G.
+The production write freeze began on November 27 at 15:17:02 UTC. The frozen
+snapshot reached beta and the canonical private hostname deployment passed.
+[Live window evidence](evidence/sizetube-beta-2026-11-27.md#controlled-cutover-window)
+The November 12 rehearsal timings are in section G.
 
-- [ ] **1 · Freeze prod (D2):** nginx returns 503 for non-GET/HEAD on `/api/v1/`; verify a
+- [x] **1 · Freeze prod (D2):** nginx returns 503 for non-GET/HEAD on `/api/v1/`; verify a
   write is refused; record T0. Snippet prepared in `cutover-prep/`. `OPERATOR`.
   The prepared snippet is wider than that wording: it refuses every request that is not
   GET, HEAD or OPTIONS on the whole site, so logins, view pings and the ActivityPub inbox
@@ -818,17 +820,20 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
   an in-memory copy with the corrected snippet in the actual apex TLS server.
   The candidate contained exactly one 503 handler. The serving file digest and
   master PID matched their initial values. Enforce and verify the freeze at T0.
-- [ ] **2 · Snapshot (Step 25):** dump → SHA-256 both ends → restore as a new DB → §3 grants →
+- [x] **2 · Snapshot (Step 25):** dump → SHA-256 both ends → restore as a new DB → §3 grants →
   swap names; keep the previous snapshot. `OPERATOR`.
   Rehearsed 2026-11-12 with the 2026-11-06 dump: restore into a new database 117 s; grants,
   rename swap and check 4 s. Through the importer's own connection string the reader could
   read, and an `UPDATE` was refused twice: by the read-only default, then by the missing
   grant once that default was switched off. The role's read-only setting followed the rename.
-- [ ] **3 · Hostname flip on the beta:** `backup.sh` → env (`PUBLIC_BASE_URL`,
+- [x] **3 · Hostname flip on the beta:** `backup.sh` → env (`PUBLIC_BASE_URL`,
   `NEXT_PUBLIC_API_BASE_URL`, `CORS_ALLOWED_ORIGINS` → `https://sizetube.com`;
   `VIDRA_SKIP_DNS_PREFLIGHT=1`) → `vidra setup` → re-add the hand-added Caddy blocks (site
   `sizetube.com`, cdn `Host`, drop the IP gate and `noindex`) → `deploy.sh` → verify
   `/healthz` via `--resolve` and the admin infra `public_base_url`. `OPERATOR`.
+  On November 27 the actual deployment set the canonical origin and retained
+  the private admission and indexing controls. The public ingress configuration
+  passed a separate Caddy test and is staged for the switch decision.
   Today all three URLs are `https://beta.sizetube.com` and the hand-edited `Caddyfile.local`
   is unchanged since 2026-11-05 (RUNTIME 2026-11-12).
   Rehearsed 2026-11-12. The command the prepared notes did not spell out is
@@ -844,9 +849,13 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
   Afterwards `/healthz` answered on `sizetube.com`, the admin infrastructure page reported
   `public_base_url=https://sizetube.com`, the sitemap and the RSS feed carried only the new
   origin (5,143 and 152 occurrences, none of the old), and `beta.sizetube.com` answered 301.
-- [ ] **4 · Final rerun:** dry run, then `run` with `source_authoritative=true` (D1); confirm
+- [x] **4 · Final rerun:** dry run, then `run` with `source_authoritative=true` (D1); confirm
   `remote_follower.imported=20`, the state-8 pair's HLS, the 8 drafts now `published`, zero
   transient failures; re-run the §9.5 / §9.6 / §9.12 diffs and apply D10 by hand. `OPERATOR`.
+  The November 27 frozen run passed the catalogue, publication, access and
+  moderation reconciliation. Its 12,702 missing seek-preview files matched
+  the earlier D8 set exactly. Thirteen remote followers imported and seven
+  were deferred. [Window results](evidence/sizetube-beta-2026-11-27.md#controlled-cutover-window)
   No run has used `source_authoritative=true` yet; `remote_follows` is empty (RUNTIME
   2026-11-12). **Runs between now and the window import nothing new, and that is expected:**
   the importer reads `peertube_source_snapshot`, a copy on the beta's own Postgres restored
@@ -878,14 +887,15 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
   `internal/peertubeimport/importer.go:865`, `entities_videoimages.go`). The operator decided
   against it. Its media part therefore has no measured time: the earlier gap-fill runs on the
   beta took 12–43 min, and each run retries about 9,900 fetches that are known to fail.
-- [ ] **5 · Re-accept on the real hostname** via a hosts override: D13 login, reset mail,
+- [x] **5 · Re-accept on the real hostname** via a hosts override: D13 login, reset mail,
   playback (public / private / internal as a permitted user), old links incl. embeds, admin
   pages, a synthetic upload. `OPERATOR`.
-  The private November 25 check on live beta passed login, refresh on reload,
-  and logout. The operator received the new-sign-in email.
-  The subsequent owner rehearsal passed private upload, private and internal
-  playback with a seek, and read-only access to two admin pages. Repeat on the
-  final window configuration.
+  On November 27 the imported user reset their password, signed in, reloaded
+  and signed out after the authoritative import. The owner then verified
+  private upload and original download, private and internal playback with
+  seeks, and access to two admin pages. Anonymous access checks passed after
+  logout. Public playback and all eight legacy links passed on the private apex.
+  [Final browser acceptance](evidence/sizetube-beta-2026-11-27.md#final-acceptance-on-the-production-hostname)
   Rehearsed 2026-11-12 from a real browser with the site's names mapped to the copy.
   Passed: sign-in with an imported account's existing password (D13); public playback with a
   seek; a private video (anonymous 404, plays for its owner); an internal video (anonymous
@@ -898,10 +908,13 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
   Not rehearsed: the reset mail (the copy had mail removed) and the admin pages beyond the
   infrastructure and import pages. The upload ran as the copy's owner, not as the imported
   account.
-- [ ] **6 · DNS:** Cloudflare `sizetube.com` → 159.203.29.27 (proxied, D3). Recheck TLS,
+- [x] **6 · DNS:** Cloudflare `sizetube.com` → 159.203.29.27 (proxied, D3). Recheck TLS,
   cookies/CORS, playback, search, old URLs publicly; watch api logs for 429/5xx; then enable
   registration / mail / federation per decisions, each with its own check. `OPERATOR`.
-- [ ] **7 · Rollback window (at least 24 hours per the November 25 decision):** PeerTube frozen-but-running, env pinned at
+  Cloudflare readback and public acceptance passed November 27. Registration
+  remains closed and federation remains disabled under the launch decisions.
+  [Public switch and rollback hold](evidence/sizetube-beta-2026-11-27.md#public-switch-and-rollback-hold)
+- [~] **7 · Rollback window (at least 24 hours per the November 25 decision):** PeerTube frozen-but-running, env pinned at
   the release deployed on the day (v0.7.20 when this was written; see the header), both
   snapshots + dumps kept, source bucket untouched, GC still off. Rollback = DNS back +
   unfreeze + a final `backup.sh`. `OPERATOR`.

@@ -1,12 +1,181 @@
 # SizeTube private beta qualification, November 27, 2026
 
-**Go to schedule and open a controlled cutover window for Vidra v0.7.32.**
-The verified point satisfies the operator-approved supplemental recovery
-method. The external recovery kit passed readback at 14:37 UTC. The public apex still served PeerTube 8.3.1 at
-that time. Switching public traffic requires a verified write freeze, a fresh source
-snapshot and authoritative import, recovery coverage for changes since the
-cutoff, final acceptance and an explicit switch decision.
+**Vidra v0.7.32 began serving public SizeTube traffic on November 27.**
+The operator approved the switch after the frozen import, account and media
+checks, independent restore and physical recovery-kit readback passed.
+Cloudflare updated the apex at 16:35:51 UTC. PeerTube remains available
+read-only for rollback through at least November 28 at 16:35:52 UTC.
 [Cutover checklist](../sizetube-cutover-checklist.md)
+
+## Controlled cutover window
+
+At 15:01 UTC the beta backup service captured the database and configuration.
+An independent reader fetched the encrypted versions from off-site storage and
+verified the SHA-256 digests of the restored pair. The operator retained the
+pair and rollback dump outside automatic pruning. A disposable PostgreSQL
+instance restored the pair with clean core and search schemas at 194 and 21.
+
+The released verifier's eleven database queries found five new file/hash
+references, one new video and one new HLS root relative to the previously
+verified restore. No previous references disappeared. The focused deep check
+on the fresh restore found all 236 affected objects, matched all 199 recorded
+hashes and traversed all three affected HLS trees. In a separate storage
+comparison, all 251 current application objects touched since November 24
+matched their independent recovery versions by full SHA-256 across
+1,139,374,746 bytes. Four additional affected names were hidden.
+
+PeerTube's public write freeze began at **15:17:02 UTC**. A public write
+request returned HTTP 503 with a retry interval. Video detail, master and
+variant playlists still returned HTTP 200. The first media range returned
+HTTP 206 with an MP4 header. At 15:17:27 UTC the application database role
+refused a write and the 27 paused worker queues had zero active jobs.
+
+The frozen PostgreSQL dump and its reference fingerprint came from the same
+repeatable-read snapshot. A separate transaction matched all 91 tables
+and 5,379,895 row versions, including visibility and publication data for
+15,748 local videos. The 218,537,930-byte archive matched by SHA-256 on
+both hosts. By 15:27:35 UTC beta had restored the filtered source into a
+fresh database containing 14,956 local videos and retained the previous
+snapshot. The importer could read the new snapshot and its role had no
+update grant.
+
+At 15:28:38 UTC the ordinary deployment finished with the canonical
+`sizetube.com` configuration behind private admission. All application
+containers were healthy, and the IPFS node and origin were active. The
+actual pre-deployment dump was retained outside pruning. All eight tested
+legacy watch, channel, account and embed links reached canonical pages with
+HTTP 200. The browser preflight admitted credentialed requests from the
+apex and withheld that permission from an unrelated origin. Chrome followed
+the reported legacy watch URL, sought past 30 seconds and decoded successive
+frames, with zero media HTTP errors.
+
+The released importer completed its dry run and source-authoritative copy
+against the frozen snapshot. By 15:54 UTC all 13,890 eligible production
+video IDs matched the public beta catalogue and search index. Every eligible
+video had a ready playlist or original, and all 14,956 imported publication
+dates matched. The 764 retained imports excluded from the filtered source
+were still blocked and suppressed in search. All 5,629 approved imported
+profiles retained their public visibility.
+
+The importer's only failed operations were 12,702 storyboard fetches. Their
+source IDs matched the previously recorded set exactly, and the corresponding
+seek-preview files were absent from the frozen production disk. D8 assigns
+their regeneration to the post-cutover backfill. The repaired private draft
+still had seven valid manifests and six media dependencies. Its two repaired
+files matched the source across 28,896,084 bytes. Anonymous detail and
+playlist requests returned 404 for the draft and both manually blocked videos.
+
+Of the original 411 video blacklist decisions, 410 videos had beta records.
+All 410 were blocked and excluded from search. The remaining video had no
+beta record. The frozen moderation archive preserved the source reports,
+mutes, blacklist decisions and suspension records. All 14 suspended source
+accounts remained excluded from login and public profiles. All ten imported
+MFA accounts remained held.
+
+All 20 source remote-follow targets matched canonical Vidra channel URLs.
+Thirteen accepted relationships preserved the follower, target and original
+Follow activity ID. The other seven had remote actor documents the importer
+could not fetch or recognize. The report defers those seven to a later run.
+
+### Final acceptance on the production hostname
+
+At 16:27:45 UTC Chrome completed the post-import account and media checks
+through the private route for `sizetube.com`. The operator received the
+reset email. The account audit recorded a redemption at 16:18:56 UTC, and
+the imported user signed in with the new password, reloaded and signed out.
+The owner then signed in, reloaded and opened the Overview and Infrastructure
+admin pages.
+
+Studio accepted one 309,625-byte private upload. The downloaded original
+matched the fixture's SHA-256. Chrome decoded 31 frames of the new video
+and played past 4.31 seconds after seeking. It decoded 46 frames of an
+existing internal video and played past 12.33 seconds. All 25 media
+responses across the two playbacks succeeded. The browser checks used the
+refresh cookie's actual path and the session token in effect after navigation.
+After the owner signed out, the private detail, original and playlist returned
+404. The internal detail and admin endpoint returned 401.
+
+### Final recovery point
+
+The post-acceptance media inventory closed at 16:28:57 UTC. It covered
+251,675 upload versions totaling 4,562,446,315,574 bytes, plus 6,836 hide
+records. The recovery map assigns 251,070 uploads to exact native replicas,
+584 to SHA-256-verified supplemental copies, nine to individually verified
+protected copies of identical operational probe content and twelve to
+62-byte hidden operational probes preserved in the encrypted map.
+
+All 24 application versions added after the earlier recovery point were
+read from the independent account. Two initialization files totaling
+1,594 bytes required supplemental copies. Their complete source and
+destination SHA-256 digests matched. Both copies had server-side encryption
+and at least 30 days of governance retention. The temporary restricted
+writer was revoked, and a new authentication attempt failed. The new
+private upload restored from 15 independent immutable versions totaling
+2,794,455 bytes. All hashes matched, all 18 playlist references resolved,
+and playback decoded three frames after a four-second seek.
+
+A second listing at 16:31:33 UTC found zero changes across the final media
+point and the database backup. The comparison of current objects changed
+since the earlier verified baseline matched 272 full objects totaling
+1,144,066,594 bytes on each side. Eight previously changed names were hidden.
+
+The database and configuration backup started at 16:29 UTC. The independent
+reader fetched two immutable ciphertexts and verified both decrypted hashes
+across 185,011,824 bytes. At 16:32 UTC a fresh PostgreSQL instance restored
+5,658 users, 15,722 videos, 5,714 channels, 778 blocks and 13,890 eligible
+search entries, with clean migration ledgers at 194 and 21. The restored
+configuration decrypted all 5,654 account and 5,713 channel signing keys.
+Each key matched its public identity. The new owner upload was playable and
+excluded from search on the restored database.
+
+All eleven storage-reference inventories matched the live database. The
+released verifier checked all 18 changed references, including seven stored
+digests and eleven HLS-listed objects, with zero errors. These checks extend
+the earlier full-library verification to the final point. A fresh full scan
+of the historical library was still running at 16:32 UTC.
+
+At 16:32:18 UTC PeerTube still matched the frozen source fingerprint across
+all 91 tables and 5,379,895 row versions. The original configuration, dump
+and reopening procedure remained available.
+
+At 16:34:32 UTC all 28 members of the encrypted companion reopened from
+the external WD_BLACK drive. The readback checked every media binding and
+hide record, restored a hidden operational probe by source ID and refused
+its hidden filename. All four decrypted database and configuration files
+from the pre-window and final pairs matched their hashes. The frozen
+moderation archive contained all 2,250 records. The copy in Downloads
+matched the external ciphertext byte for byte.
+
+### Public switch and rollback hold
+
+Following operator approval, the public apex ingress opened at 16:35:28
+UTC. At 16:35:51 UTC Cloudflare updated the proxied apex A record. Readback
+confirmed the intended origin and preserved the proxy flag, TTL and record
+metadata. The first public Chrome check at 16:36:18 UTC decoded the
+reported legacy video and played past 30.73 seconds after seeking, with
+23 media responses and zero media errors. During propagation the same
+Cloudflare location briefly served both releases.
+
+By 16:38 UTC all eight tested legacy watch, channel, account and embed
+links redirected to canonical pages returning HTTP 200. The legacy embed
+retained its start time. The apex received a credentialed 204 preflight,
+and the unrelated origin received no allow-origin header. The public
+catalogue contained 13,890 videos. Search returned the reported video,
+and its publication timestamp matched November 22 at 22:15:51.369 UTC.
+Signed-out detail, original and playlist requests for the private upload
+returned 404. Internal-video and admin requests returned 401.
+
+The first post-switch database and configuration backup ran at 16:36:11
+UTC. Both immutable off-site copies were retrieved and decrypted. Their
+SHA-256 digests matched across 185,012,589 bytes. The next scheduled backup
+is due November 28 at 03:29 UTC.
+
+Direct checks of the incumbent after the switch returned a playable media
+range, refused a write at both the HTTP and database layers, and confirmed
+all 27 deferred queues stayed paused with zero active jobs. The source dump
+still matched its SHA-256. Keep the incumbent intact until at least
+November 28 at 16:35:52 UTC, the first scheduled post-switch off-site backup
+passes verification, and any incident affecting access or data is resolved.
 
 ## Release and deployment
 
