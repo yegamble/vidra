@@ -1,9 +1,10 @@
 # sizetube.com cutover — tracked checklist (living)
 
-A working checklist for cutting `sizetube.com` over from PeerTube to the Vidra beta
-(`beta.sizetube.com`). On November 25, private beta ran v0.7.31 and public
-SizeTube served PeerTube 8.3.1. The [v0.7.31 acceptance results](#november-25-publication-date-acceptance-on-private-beta)
-record the current deployment and the remaining production gates.
+A working checklist for moving public SizeTube traffic from PeerTube to the Vidra beta.
+On November 27, private beta ran v0.7.32. Public traffic remains on PeerTube
+pending full media recovery, frozen-source reconciliation and cutover acceptance.
+The [November 27 beta evidence](evidence/sizetube-beta-2026-11-27.md) records
+the deployed release, rehearsal results and remaining recovery work.
 It tracks **execution status**. The reasoning, evidence and decisions
 live in the audit ([`sizetube-cutover-2026-11.md`](sizetube-cutover-2026-11.md)) and the run
 record ([`sizetube-beta-migration-2026-11.md`](sizetube-beta-migration-2026-11.md)). When an
@@ -14,7 +15,8 @@ Update an item's status and date in the same commit that changes the fact. Keep 
 
 **Owners:** `OPERATOR` = a live prod / droplet / DNS / provider action (I will prepare, not
 run). `LAWYER` = counsel. `AGENT` = code or an in-repo artifact I can produce. `WATCHER` = a
-read-only monitor (none is running today: the queue watcher stopped 2026-11-08 09:34 UTC).
+read-only monitor. The November 8 queue watcher stopped at 09:34 UTC. See the
+[current media recovery checks](evidence/sizetube-beta-2026-11-27.md#media-recovery).
 
 **Status:** `[ ]` open · `[~]` in progress / prepared-but-not-applied · `[x]` done (dated).
 
@@ -756,6 +758,8 @@ version deletion, and the abandoned uploads had been cleared.
   B2 skips hide markers, including the 6,248 in this inventory. It schedules
   pre-existing files at midnight UTC and dates their retention from the original
   upload. [Backblaze replication behavior](https://www.backblaze.com/docs/cloud-storage-cloud-replication)
+  The [November 27 inventory and private playback checks](evidence/sizetube-beta-2026-11-27.md#media-recovery)
+  record the latest comparison.
 - [x] **Restrict the runtime media key.** On November 25 the replacement could
   write and read a disposable object. Backblaze denied its attempt to delete
   the object version. The operator removed the fixture and verified the new
