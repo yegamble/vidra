@@ -1,13 +1,13 @@
 # sizetube.com cutover — tracked checklist (living)
 
 A working checklist for moving public SizeTube traffic from PeerTube to the Vidra beta.
-**November 27, 2026 — Go to schedule and open the controlled cutover window
-for v0.7.32.** Public traffic remains on PeerTube. Before switching, verify the
-source write freeze, take a fresh snapshot and backup, run the authoritative
-import and reconcile changes after the recovery cutoff. Repeat hostname,
-playback, access and moderation checks, then obtain the explicit switch
-decision. Keep PeerTube available for the agreed rollback window of at least
-24 hours and verify the first post-switch off-site backup.
+**Public SizeTube traffic switched to Vidra v0.7.32 on November 27 at
+16:35:51 UTC.** The operator approved the switch after verification of the
+frozen import, independent recovery, physical kit and real-hostname account
+and media checks. Public playback, search, legacy links and access checks
+passed. Keep PeerTube available read-only until at least November 28 at
+16:35:52 UTC and through verification of the first scheduled post-switch
+off-site backup and resolution of any incident affecting access or data.
 [November 27 evidence](evidence/sizetube-beta-2026-11-27.md)
 
 This checklist tracks **execution status**. The reasoning, evidence and decisions
@@ -908,10 +908,13 @@ The November 12 rehearsal timings are in section G.
   Not rehearsed: the reset mail (the copy had mail removed) and the admin pages beyond the
   infrastructure and import pages. The upload ran as the copy's owner, not as the imported
   account.
-- [ ] **6 · DNS:** Cloudflare `sizetube.com` → 159.203.29.27 (proxied, D3). Recheck TLS,
+- [x] **6 · DNS:** Cloudflare `sizetube.com` → 159.203.29.27 (proxied, D3). Recheck TLS,
   cookies/CORS, playback, search, old URLs publicly; watch api logs for 429/5xx; then enable
   registration / mail / federation per decisions, each with its own check. `OPERATOR`.
-- [ ] **7 · Rollback window (at least 24 hours per the November 25 decision):** PeerTube frozen-but-running, env pinned at
+  Cloudflare readback and public acceptance passed November 27. Registration
+  remains closed and federation remains disabled under the launch decisions.
+  [Public switch and rollback hold](evidence/sizetube-beta-2026-11-27.md#public-switch-and-rollback-hold)
+- [~] **7 · Rollback window (at least 24 hours per the November 25 decision):** PeerTube frozen-but-running, env pinned at
   the release deployed on the day (v0.7.20 when this was written; see the header), both
   snapshots + dumps kept, source bucket untouched, GC still off. Rollback = DNS back +
   unfreeze + a final `backup.sh`. `OPERATOR`.

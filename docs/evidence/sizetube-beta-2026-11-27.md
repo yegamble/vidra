@@ -1,11 +1,10 @@
 # SizeTube private beta qualification, November 27, 2026
 
-**Go to schedule and open a controlled cutover window for Vidra v0.7.32.**
-The verified point satisfies the operator-approved supplemental recovery
-method. The external recovery kit passed readback at 14:37 UTC. The public apex still served PeerTube 8.3.1 at
-that time. Switching public traffic requires a verified write freeze, a fresh source
-snapshot and authoritative import, recovery coverage for changes since the
-cutoff, final acceptance and an explicit switch decision.
+**Vidra v0.7.32 began serving public SizeTube traffic on November 27.**
+The operator approved the switch after the frozen import, account and media
+checks, independent restore and physical recovery-kit readback passed.
+Cloudflare updated the apex at 16:35:51 UTC. PeerTube remains available
+read-only for rollback through at least November 28 at 16:35:52 UTC.
 [Cutover checklist](../sizetube-cutover-checklist.md)
 
 ## Controlled cutover window
@@ -95,6 +94,88 @@ responses across the two playbacks succeeded. The browser checks used the
 refresh cookie's actual path and the session token in effect after navigation.
 After the owner signed out, the private detail, original and playlist returned
 404. The internal detail and admin endpoint returned 401.
+
+### Final recovery point
+
+The post-acceptance media inventory closed at 16:28:57 UTC. It covered
+251,675 upload versions totaling 4,562,446,315,574 bytes, plus 6,836 hide
+records. The recovery map assigns 251,070 uploads to exact native replicas,
+584 to SHA-256-verified supplemental copies, nine to individually verified
+protected copies of identical operational probe content and twelve to
+62-byte hidden operational probes preserved in the encrypted map.
+
+All 24 application versions added after the earlier recovery point were
+read from the independent account. Two initialization files totaling
+1,594 bytes required supplemental copies. Their complete source and
+destination SHA-256 digests matched. Both copies had server-side encryption
+and at least 30 days of governance retention. The temporary restricted
+writer was revoked, and a new authentication attempt failed. The new
+private upload restored from 15 independent immutable versions totaling
+2,794,455 bytes. All hashes matched, all 18 playlist references resolved,
+and playback decoded three frames after a four-second seek.
+
+A second listing at 16:31:33 UTC found zero changes across the final media
+point and the database backup. The comparison of current objects changed
+since the earlier verified baseline matched 272 full objects totaling
+1,144,066,594 bytes on each side. Eight previously changed names were hidden.
+
+The database and configuration backup started at 16:29 UTC. The independent
+reader fetched two immutable ciphertexts and verified both decrypted hashes
+across 185,011,824 bytes. At 16:32 UTC a fresh PostgreSQL instance restored
+5,658 users, 15,722 videos, 5,714 channels, 778 blocks and 13,890 eligible
+search entries, with clean migration ledgers at 194 and 21. The restored
+configuration decrypted all 5,654 account and 5,713 channel signing keys.
+Each key matched its public identity. The new owner upload was playable and
+excluded from search on the restored database.
+
+All eleven storage-reference inventories matched the live database. The
+released verifier checked all 18 changed references, including seven stored
+digests and eleven HLS-listed objects, with zero errors. These checks extend
+the earlier full-library verification to the final point. A fresh full scan
+of the historical library was still running at 16:32 UTC.
+
+At 16:32:18 UTC PeerTube still matched the frozen source fingerprint across
+all 91 tables and 5,379,895 row versions. The original configuration, dump
+and reopening procedure remained available.
+
+At 16:34:32 UTC all 28 members of the encrypted companion reopened from
+the external WD_BLACK drive. The readback checked every media binding and
+hide record, restored a hidden operational probe by source ID and refused
+its hidden filename. All four decrypted database and configuration files
+from the pre-window and final pairs matched their hashes. The frozen
+moderation archive contained all 2,250 records. The copy in Downloads
+matched the external ciphertext byte for byte.
+
+### Public switch and rollback hold
+
+Following operator approval, the public apex ingress opened at 16:35:28
+UTC. At 16:35:51 UTC Cloudflare updated the proxied apex A record. Readback
+confirmed the intended origin and preserved the proxy flag, TTL and record
+metadata. The first public Chrome check at 16:36:18 UTC decoded the
+reported legacy video and played past 30.73 seconds after seeking, with
+23 media responses and zero media errors. During propagation the same
+Cloudflare location briefly served both releases.
+
+By 16:38 UTC all eight tested legacy watch, channel, account and embed
+links redirected to canonical pages returning HTTP 200. The legacy embed
+retained its start time. The apex received a credentialed 204 preflight,
+and the unrelated origin received no allow-origin header. The public
+catalogue contained 13,890 videos. Search returned the reported video,
+and its publication timestamp matched November 22 at 22:15:51.369 UTC.
+Signed-out detail, original and playlist requests for the private upload
+returned 404. Internal-video and admin requests returned 401.
+
+The first post-switch database and configuration backup ran at 16:36:11
+UTC. Both immutable off-site copies were retrieved and decrypted. Their
+SHA-256 digests matched across 185,012,589 bytes. The next scheduled backup
+is due November 28 at 03:29 UTC.
+
+Direct checks of the incumbent after the switch returned a playable media
+range, refused a write at both the HTTP and database layers, and confirmed
+all 27 deferred queues stayed paused with zero active jobs. The source dump
+still matched its SHA-256. Keep the incumbent intact until at least
+November 28 at 16:35:52 UTC, the first scheduled post-switch off-site backup
+passes verification, and any incident affecting access or data is resolved.
 
 ## Release and deployment
 
