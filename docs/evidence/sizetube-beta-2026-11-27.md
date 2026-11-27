@@ -8,6 +8,48 @@ snapshot and authoritative import, recovery coverage for changes since the
 cutoff, final acceptance and an explicit switch decision.
 [Cutover checklist](../sizetube-cutover-checklist.md)
 
+## Controlled cutover window
+
+At 15:01 UTC the beta backup service captured the database and configuration.
+An independent reader fetched the encrypted versions from off-site storage and
+verified the SHA-256 digests of the restored pair. The operator retained the
+pair and rollback dump outside automatic pruning. A disposable PostgreSQL
+instance restored the pair with clean core and search schemas at 194 and 21.
+
+The released verifier's eleven database queries found five new file/hash
+references, one new video and one new HLS root relative to the previously
+verified restore. No previous references disappeared. The focused deep check
+on the fresh restore found all 236 affected objects, matched all 199 recorded
+hashes and traversed all three affected HLS trees. In a separate storage
+comparison, all 251 current application objects touched since November 24
+matched their independent recovery versions by full SHA-256 across
+1,139,374,746 bytes. Four additional affected names were hidden.
+
+PeerTube's public write freeze began at **15:17:02 UTC**. A public write
+request returned HTTP 503 with a retry interval. Video detail, master and
+variant playlists still returned HTTP 200. The first media range returned
+HTTP 206 with an MP4 header. At 15:17:27 UTC the application database role
+refused a write and the 27 paused worker queues had zero active jobs.
+
+The frozen PostgreSQL dump and its reference fingerprint came from the same
+repeatable-read snapshot. A separate transaction matched all 91 tables
+and 5,379,895 row versions, including visibility and publication data for
+15,748 local videos. The 218,537,930-byte archive matched by SHA-256 on
+both hosts. By 15:27:35 UTC beta had restored the filtered source into a
+fresh database containing 14,956 local videos and retained the previous
+snapshot. The importer could read the new snapshot and its role had no
+update grant.
+
+At 15:28:38 UTC the ordinary deployment finished with the canonical
+`sizetube.com` configuration behind private admission. All application
+containers were healthy, and the IPFS node and origin were active. The
+actual pre-deployment dump was retained outside pruning. All eight tested
+legacy watch, channel, account and embed links reached canonical pages with
+HTTP 200. The browser preflight admitted credentialed requests from the
+apex and withheld that permission from an unrelated origin. Chrome followed
+the reported legacy watch URL, sought past 30 seconds and decoded successive
+frames, with zero media HTTP errors.
+
 ## Release and deployment
 
 Private beta upgraded at 03:46 UTC. At 03:48:52 UTC, the public apex still

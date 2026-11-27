@@ -798,10 +798,12 @@ version deletion, and the abandoned uploads had been cleared.
 
 ## C. The cutover window (§5 steps 1–7)
 
-Not started on prod or the beta. Steps 1–5 and the rollback in step 7 were rehearsed on a
-throwaway copy on 2026-11-12; what each showed is under the step. Measured times are in G.
+The production write freeze began on November 27 at 15:17:02 UTC. The frozen
+snapshot reached beta and the canonical private hostname deployment passed.
+[Live window evidence](evidence/sizetube-beta-2026-11-27.md#controlled-cutover-window)
+The November 12 rehearsal timings are in section G.
 
-- [ ] **1 · Freeze prod (D2):** nginx returns 503 for non-GET/HEAD on `/api/v1/`; verify a
+- [x] **1 · Freeze prod (D2):** nginx returns 503 for non-GET/HEAD on `/api/v1/`; verify a
   write is refused; record T0. Snippet prepared in `cutover-prep/`. `OPERATOR`.
   The prepared snippet is wider than that wording: it refuses every request that is not
   GET, HEAD or OPTIONS on the whole site, so logins, view pings and the ActivityPub inbox
@@ -818,17 +820,20 @@ throwaway copy on 2026-11-12; what each showed is under the step. Measured times
   an in-memory copy with the corrected snippet in the actual apex TLS server.
   The candidate contained exactly one 503 handler. The serving file digest and
   master PID matched their initial values. Enforce and verify the freeze at T0.
-- [ ] **2 · Snapshot (Step 25):** dump → SHA-256 both ends → restore as a new DB → §3 grants →
+- [x] **2 · Snapshot (Step 25):** dump → SHA-256 both ends → restore as a new DB → §3 grants →
   swap names; keep the previous snapshot. `OPERATOR`.
   Rehearsed 2026-11-12 with the 2026-11-06 dump: restore into a new database 117 s; grants,
   rename swap and check 4 s. Through the importer's own connection string the reader could
   read, and an `UPDATE` was refused twice: by the read-only default, then by the missing
   grant once that default was switched off. The role's read-only setting followed the rename.
-- [ ] **3 · Hostname flip on the beta:** `backup.sh` → env (`PUBLIC_BASE_URL`,
+- [~] **3 · Hostname flip on the beta:** `backup.sh` → env (`PUBLIC_BASE_URL`,
   `NEXT_PUBLIC_API_BASE_URL`, `CORS_ALLOWED_ORIGINS` → `https://sizetube.com`;
   `VIDRA_SKIP_DNS_PREFLIGHT=1`) → `vidra setup` → re-add the hand-added Caddy blocks (site
   `sizetube.com`, cdn `Host`, drop the IP gate and `noindex`) → `deploy.sh` → verify
   `/healthz` via `--resolve` and the admin infra `public_base_url`. `OPERATOR`.
+  On November 27 the actual deployment set the canonical origin and retained
+  the private admission and indexing controls. The public ingress configuration
+  passed a separate Caddy test and is staged for the switch decision.
   Today all three URLs are `https://beta.sizetube.com` and the hand-edited `Caddyfile.local`
   is unchanged since 2026-11-05 (RUNTIME 2026-11-12).
   Rehearsed 2026-11-12. The command the prepared notes did not spell out is
