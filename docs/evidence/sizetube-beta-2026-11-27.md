@@ -177,6 +177,44 @@ still matched its SHA-256. Keep the incumbent intact until at least
 November 28 at 16:35:52 UTC, the first scheduled post-switch off-site backup
 passes verification, and any incident affecting access or data is resolved.
 
+### First ten minutes of production
+
+Vidra recorded 50,729 API requests in the first ten minutes. Median latency
+was 2 ms, p95 was 359 ms and p99 was one second. The API logged 137 responses
+in the 5xx range. Of those, 101 were requests to the disabled ActivityPub
+inbox, 32 ended with a canceled request context, and four hit the disabled
+AT Protocol account endpoint. The logs did not identify which hop canceled
+those 32 requests. There were zero rate-limit responses, Caddy errors or
+service restarts. The search queue had eight pending events and zero dead
+events. There were 4,402 HTTP 404 responses, including 2,740 channel-avatar
+requests and 1,282 unsupported API routes. The logs do not establish which
+clients made the unsupported requests.
+
+A signed-out browser followed the Terms, Privacy, DMCA and Compliance links
+and read the expected text from all four pages before any age confirmation.
+One legacy DNS dependency remained on the `www` alias. At that point its TLS
+origin check returned HTTP 526. An edge redirect now preserves the path and
+query when sending visitors from `www` to the apex. Three public browser
+checks passed, including a legacy watch link and an API URL with two query
+parameters. The zone has no origin records pointing at the old host.
+
+### Incumbent snapshot
+
+The old PeerTube instance has a single 50 GB boot disk. PostgreSQL completed
+a checkpoint, Redis persisted its queue state, and the guest flushed its
+filesystems. A separate Redis process read the saved database and found all
+27 protected queues paused with zero active jobs. The frozen PostgreSQL
+dump matched its transfer checksum again.
+
+DigitalOcean completed the live disk snapshot at 16:46:48 UTC. The provider
+listed a private, available 33.05 GB image in NYC3 belonging to the old
+instance. The external B2 source bucket and its CDN are separate recovery
+dependencies. The encrypted guide records the image ID, original network
+settings, restore checks and the procedure for booting a replacement with
+outbound traffic blocked. All eight guide files reopened from Downloads and
+the external recovery drive. The old instance remains running and frozen
+through the operator-approved hold and scheduled off-site backup check.
+
 ## Release and deployment
 
 Private beta upgraded at 03:46 UTC. At 03:48:52 UTC, the public apex still
