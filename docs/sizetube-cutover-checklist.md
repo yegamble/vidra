@@ -826,7 +826,7 @@ The November 12 rehearsal timings are in section G.
   rename swap and check 4 s. Through the importer's own connection string the reader could
   read, and an `UPDATE` was refused twice: by the read-only default, then by the missing
   grant once that default was switched off. The role's read-only setting followed the rename.
-- [~] **3 · Hostname flip on the beta:** `backup.sh` → env (`PUBLIC_BASE_URL`,
+- [x] **3 · Hostname flip on the beta:** `backup.sh` → env (`PUBLIC_BASE_URL`,
   `NEXT_PUBLIC_API_BASE_URL`, `CORS_ALLOWED_ORIGINS` → `https://sizetube.com`;
   `VIDRA_SKIP_DNS_PREFLIGHT=1`) → `vidra setup` → re-add the hand-added Caddy blocks (site
   `sizetube.com`, cdn `Host`, drop the IP gate and `noindex`) → `deploy.sh` → verify
@@ -887,14 +887,15 @@ The November 12 rehearsal timings are in section G.
   `internal/peertubeimport/importer.go:865`, `entities_videoimages.go`). The operator decided
   against it. Its media part therefore has no measured time: the earlier gap-fill runs on the
   beta took 12–43 min, and each run retries about 9,900 fetches that are known to fail.
-- [ ] **5 · Re-accept on the real hostname** via a hosts override: D13 login, reset mail,
+- [x] **5 · Re-accept on the real hostname** via a hosts override: D13 login, reset mail,
   playback (public / private / internal as a permitted user), old links incl. embeds, admin
   pages, a synthetic upload. `OPERATOR`.
-  The private November 25 check on live beta passed login, refresh on reload,
-  and logout. The operator received the new-sign-in email.
-  The subsequent owner rehearsal passed private upload, private and internal
-  playback with a seek, and read-only access to two admin pages. Repeat on the
-  final window configuration.
+  On November 27 the imported user reset their password, signed in, reloaded
+  and signed out after the authoritative import. The owner then verified
+  private upload and original download, private and internal playback with
+  seeks, and access to two admin pages. Anonymous access checks passed after
+  logout. Public playback and all eight legacy links passed on the private apex.
+  [Final browser acceptance](evidence/sizetube-beta-2026-11-27.md#final-acceptance-on-the-production-hostname)
   Rehearsed 2026-11-12 from a real browser with the site's names mapped to the copy.
   Passed: sign-in with an imported account's existing password (D13); public playback with a
   seek; a private video (anonymous 404, plays for its owner); an internal video (anonymous

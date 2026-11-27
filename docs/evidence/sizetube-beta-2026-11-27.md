@@ -78,6 +78,24 @@ Thirteen accepted relationships preserved the follower, target and original
 Follow activity ID. The other seven had remote actor documents the importer
 could not fetch or recognize. The report defers those seven to a later run.
 
+### Final acceptance on the production hostname
+
+At 16:27:45 UTC Chrome completed the post-import account and media checks
+through the private route for `sizetube.com`. The operator received the
+reset email. The account audit recorded a redemption at 16:18:56 UTC, and
+the imported user signed in with the new password, reloaded and signed out.
+The owner then signed in, reloaded and opened the Overview and Infrastructure
+admin pages.
+
+Studio accepted one 309,625-byte private upload. The downloaded original
+matched the fixture's SHA-256. Chrome decoded 31 frames of the new video
+and played past 4.31 seconds after seeking. It decoded 46 frames of an
+existing internal video and played past 12.33 seconds. All 25 media
+responses across the two playbacks succeeded. The browser checks used the
+refresh cookie's actual path and the session token in effect after navigation.
+After the owner signed out, the private detail, original and playlist returned
+404. The internal detail and admin endpoint returned 401.
+
 ## Release and deployment
 
 Private beta upgraded at 03:46 UTC. At 03:48:52 UTC, the public apex still
