@@ -172,6 +172,8 @@ class SQLShapes(Refusals, unittest.TestCase):
         for sql, expected in (
                 ('CREATE TABLE t (id UUID PRIMARY KEY);', self.TABLE),
                 ('create   table\n t(\n id uuid\n)', self.TABLE),
+                ('CREATE VIEW t AS SELECT 1 AS n;', self.TABLE),
+                ('create view t\nWITH (security_barrier = true) AS SELECT 1 AS n;', self.TABLE),
                 ('ALTER TABLE t ADD COLUMN c INT;', self.COLUMN),
                 ('alter table t\n    add column c int not null default 0;', self.COLUMN),
                 ('ALTER TABLE t ADD COLUMN c INT, ADD COLUMN d VARCHAR(8);', self.COLUMN),
@@ -198,6 +200,8 @@ class SQLShapes(Refusals, unittest.TestCase):
                     'CREATE FUNCTION f(a INT) RETURNS INT LANGUAGE sql AS $$ SELECT a $$;',
                     'CREATE FUNCTION public.f() RETURNS INT LANGUAGE sql AS $$ SELECT 1 $$;',
                     'CREATE TABLE public.t (id INT);', 'CREATE TABLE "t" (id INT);', 'CREATE TABLE T (id INT);',
+                    'CREATE OR REPLACE VIEW t AS SELECT 1;', 'CREATE VIEW public.t AS SELECT 1;',
+                    'CREATE VIEW "t" AS SELECT 1;', 'CREATE MATERIALIZED VIEW t AS SELECT 1;',
                     'CREATE TEMP TABLE t (id INT);', 'CREATE UNLOGGED TABLE t (id INT);', 'CREATE TABLE t AS SELECT 1;',
                     'ALTER TABLE ONLY t ADD COLUMN c INT;', 'alter table only t add column c int;',
                     'ALTER TABLE IF EXISTS t ADD COLUMN c INT;', 'alter table if exists t add column c int;',
@@ -234,6 +238,7 @@ class SQLShapes(Refusals, unittest.TestCase):
 
     def test_an_object_an_earlier_statement_touches_is_passed_over(self):
         for sql in ('DROP TABLE IF EXISTS t; CREATE TABLE t (id INT);',
+                    'DROP VIEW IF EXISTS t; CREATE VIEW t AS SELECT 1;',
                     'DROP FUNCTION IF EXISTS f(); CREATE FUNCTION f() RETURNS INT LANGUAGE sql AS $$ SELECT 1 $$;',
                     'ALTER TABLE t DROP COLUMN IF EXISTS c; ALTER TABLE t ADD COLUMN c INT;',
                     'CREATE TABLE IF NOT EXISTS t (id INT); ALTER TABLE t ADD COLUMN c INT;',
