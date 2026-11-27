@@ -1,0 +1,19 @@
+{
+  "release": "v0.7.33",
+  "core": "87d1cac243df0ccd6b60fb10a0c4650152257447",
+  "meta": "8b94f738591cfd955e462207fde8c201b9ab1aa0",
+  "assets": {
+    "SHA256SUMS": {
+      "url": "https://github.com/yegamble/vidra-core/releases/download/v0.7.33/SHA256SUMS",
+      "sha256": "d5a9724756733efb802e5d73e1c753ef86dac7c08a5a568e381d55f5b6e7ee40"
+    },
+    "vidra-bundle_v0.7.33.tar.gz": {
+      "url": "https://github.com/yegamble/vidra-core/releases/download/v0.7.33/vidra-bundle_v0.7.33.tar.gz",
+      "sha256": "ca657b0043894209364e13a2e9f38689b213ce5c9b9467a50a33eba8b8ce09f1"
+    },
+    "vidra_v0.7.33_linux_amd64": {
+      "url": "https://github.com/yegamble/vidra-core/releases/download/v0.7.33/vidra_v0.7.33_linux_amd64",
+      "sha256": "4eb4b498533ea35672a6ca3f2154ecaa2a49c0e75c0ce0a8cf72dd1d74bf12e4"
+    }
+  }
+}
