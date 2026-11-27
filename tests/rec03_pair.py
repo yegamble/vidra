@@ -13,6 +13,8 @@ IDENT = r'[a-z_][a-z0-9_]{0,62}'
 TYPES = frozenset('UUID TEXT BOOLEAN SMALLINT INT INTEGER BIGINT REAL NUMERIC JSONB DATE TIMESTAMP TIMESTAMPTZ'.split())
 # Only creations that fail when the object exists: IF NOT EXISTS and OR REPLACE do not match.
 SHAPES = (('table', re.compile(rf'(?i:CREATE TABLE) ({IDENT}) ?\(')),
+          # A table occupies the same PostgreSQL relation name as a view.
+          ('table', re.compile(rf'(?i:CREATE VIEW) ({IDENT}) (?i:AS\b|WITH ?\()')),
           ('column', re.compile(rf'(?i:ALTER TABLE) ({IDENT}) (?i:ADD COLUMN) (?!if )({IDENT}) ([A-Za-z]+)\b')),
           ('function', re.compile(rf'(?i:CREATE FUNCTION) ({IDENT}) ?\( ?\)')))
 DOLLAR_QUOTE = re.compile(r'\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$')
