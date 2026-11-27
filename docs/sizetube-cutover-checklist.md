@@ -758,8 +758,9 @@ version deletion, and the abandoned uploads had been cleared.
   the destination held 240,870. Both historical video samples passed restore
   checks at their original paths. The November 27 recovery point covers all
   251,513 uploads before 05:11:06.780 UTC and preserves 6,694 hide actions.
-  The operator accepted 250,922 native replicas, 582 independently verified
-  supplemental originals and nine byte-matched hidden write probes. The
+  The verified point met the operator-approved recovery method with 250,922
+  native replicas, 582 independently verified supplemental originals and nine
+  newer recovery probes matched byte for byte to the hidden source probes. The
   external recovery kit and destination-only playback passed. Native
   replication still had 582 historical versions outstanding at verification.
   [Recovery checks and outstanding versions](evidence/sizetube-recovery-2026-11-26.md)
@@ -1201,8 +1202,9 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   **RUNTIME 2026-11-19:** neither replication nor Object Lock was configured (B2, D12 tail).
   No timed restore or waiver is recorded; neither was verified.
 - [x] **I5 · Verify an independently held copy of the backup encryption secret.**
-  On November 27 the operator reopened the external encrypted kit using
-  the previously verified recovery identity and checked all 49 files. The
+  On November 27 the encrypted archive was independently reopened on the
+  operator’s external drive using the previously verified recovery identity.
+  All 49 files passed verification. The
   separate-host restore used the escrowed reader and matched both decrypted
   off-site backups. [Recovery evidence](evidence/sizetube-beta-2026-11-27.md)
   The audit rated it Medium: "the crypt password/salt is a single point of failure (copy

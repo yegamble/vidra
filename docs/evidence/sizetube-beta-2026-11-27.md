@@ -1,8 +1,8 @@
 # SizeTube private beta qualification, November 27, 2026
 
 **Go to schedule and open a controlled cutover window for Vidra v0.7.32.**
-The operator accepted the verified recovery point, and the external recovery kit
-passed readback at 14:37 UTC. The public apex still served PeerTube 8.3.1 at
+The verified point satisfies the operator-approved supplemental recovery
+method. The external recovery kit passed readback at 14:37 UTC. The public apex still served PeerTube 8.3.1 at
 that time. Switching public traffic requires a verified write freeze, a fresh source
 snapshot and authoritative import, recovery coverage for changes since the
 cutoff, final acceptance and an explicit switch decision.
@@ -120,8 +120,8 @@ preserved all 6,694 source hide actions.
 | Recovery route | Upload versions | Bytes | Verification |
 | --- | ---: | ---: | --- |
 | Native B2 replicas | 250,922 | 4,529,515,501,290 | Source name, original upload time, length and available provider checksum. All had the expected SSE-B2 encryption and governance retention. |
-| Supplemental copies of historical uploads | 582 | 32,925,589,285 | Full source and independent destination SHA-256 matched. All had SSE-B2 and 30 days of governance retention at upload. |
-| Copies of hidden operational write probes | 9 | 558 | Each 62-byte probe matched its own distinct recovery copy by SHA-256. All nine retain their original hidden status in the map. |
+| Supplemental copies of historical uploads | 582 | 32,925,589,285 | Full source and independent destination SHA-256 matched. At final verification, all used SSE-B2 and had at least 30 days of governance retention measured from their upload timestamps. |
+| Copies of hidden operational write probes | 9 | 558 | Each 62-byte source mapped to a distinct newer recovery probe with identical bytes and SHA-256. The nine original native replicas were pending. Their source names remain hidden. |
 
 The native checksums comprised 55,632 provider-verified SHA-1 matches, 181,400
 matches marked unverified by the provider and 13,890 versions without a
@@ -140,8 +140,8 @@ also matched its source SHA-256 and decoded three frames at the same seek.
 At 14:36:56 UTC the operator restore helper refused a hidden name. Given the
 original names, the existing recovery reader retrieved a 430-byte private HLS
 master and a 1,036-byte supplemental object with the expected SHA-256. At
-14:37:45 UTC the operator independently reopened the encrypted archive on the
-external recovery drive. All 49 files passed verification, the protected
+14:37:45 UTC the encrypted archive was independently reopened on the
+operator’s external recovery drive. All 49 files passed verification, the protected
 identity matched the previously tested copy, and the external map reopened
 with all 251,513 destination IDs and 6,694 hide actions. The local operator
 kit also passed verification.
