@@ -659,40 +659,18 @@ jobs:
       # against the Go list can see.
       - name: Every config key vidra-core reads has a compose consumer
         run: |
-          SEARCH_INTERNAL_SECRET=dummy docker compose --profile core --profile worker config > /tmp/base-config.yml
+          export SEARCH_INTERNAL_SECRET=dummy
+          docker compose --profile core --profile worker config --format json > "$RUNNER_TEMP/base-config.json"
+          # The configurable host directory makes this an API-only read; workers never mount it.
+          export IPFS_REFERENCE_STATUS_DIR="$RUNNER_TEMP/reference-status"
+          mkdir -p "$IPFS_REFERENCE_STATUS_DIR"
+          docker compose -f docker-compose.yml -f docker-compose.ipfs-reference-status.yml \
+            --profile core --profile worker config --format json > "$RUNNER_TEMP/reference-config.json"
           grep -oE '(getEnv[A-Za-z]*|p\.(Str|Int|Int64|Bool|Duration))\("[A-Z0-9_]+"' \
             vidra-core/internal/config/config.go \
-            | sed 's/.*"\(.*\)"/\1/' | sort -u > /tmp/go-keys.txt
-          python3 - <<'PY'
-          import sys, yaml
-          svcs = yaml.safe_load(open('/tmp/base-config.yml'))['services']
-          go = [k.strip() for k in open('/tmp/go-keys.txt') if k.strip()]
-          envs = {}
-          missing_anywhere = False
-          for name in ('api', 'worker'):
-              if name not in svcs:
-                  print(f'::error::the rendered model has no {name} service, so this assert is inspecting nothing')
-                  sys.exit(1)
-              envs[name] = svcs[name].get('environment') or {}
-              missing = sorted(k for k in go if k not in envs[name])
-              if missing:
-                  missing_anywhere = True
-                  print(f'::error::config keys read by vidra-core with NO consumer in the rendered {name} environment:')
-                  print('\n'.join(missing))
-          if missing_anywhere:
-              print('Add them to the shared environment anchor in vidra-core/docker-compose.yml.')
-              sys.exit(1)
-          api_only = sorted(set(envs['api']) - set(envs['worker']))
-          worker_only = sorted(set(envs['worker']) - set(envs['api']))
-          if api_only or worker_only:
-              print('::error::api and worker do not carry the same config keys - they run the same binary, so one half is configured differently than its operator thinks:')
-              for k in api_only:
-                  print(f'  api only:    {k}')
-              for k in worker_only:
-                  print(f'  worker only: {k}')
-              sys.exit(1)
-          print(f'OK: all {len(go)} config keys reach BOTH api and worker ({len(envs["api"])} entries in each map).')
-          PY
+            | sed 's/.*"\(.*\)"/\1/' | sort -u > "$RUNNER_TEMP/go-keys.txt"
+          python3 scripts/ci/check-core-compose-consumers.py "$RUNNER_TEMP/base-config.json" "$RUNNER_TEMP/reference-config.json" \
+            "$IPFS_REFERENCE_STATUS_DIR" "$RUNNER_TEMP/go-keys.txt"
 
       # THE OTHER HALF OF THE SAME CONTRACT, and the half the step above cannot
       # see. It proves a key is settable in the CONTAINER; it says nothing about
