@@ -1,13 +1,18 @@
 # SizeTube private beta qualification, November 27, 2026
 
-**Hold public traffic on PeerTube.** Private beta upgraded to Vidra v0.7.32 at
-03:46 UTC. At 03:48:52 UTC, the public apex's configuration API returned HTTP
-200 and identified PeerTube 8.3.1. Media recovery, the final import from a
-frozen source and cutover acceptance remain open. [Cutover checklist](../sizetube-cutover-checklist.md)
+**Go to schedule and open a controlled cutover window for Vidra v0.7.32.**
+The operator accepted the verified recovery point, and the external recovery kit
+passed readback at 14:37 UTC. The public apex still served PeerTube 8.3.1 at
+that time. Switching public traffic requires a verified write freeze, a fresh source
+snapshot and authoritative import, recovery coverage for changes since the
+cutoff, final acceptance and an explicit switch decision.
+[Cutover checklist](../sizetube-cutover-checklist.md)
 
 ## Release and deployment
 
-Beta's core image matched the published v0.7.32 index and its API reported the
+Private beta upgraded at 03:46 UTC. At 03:48:52 UTC, the public apex still
+served PeerTube 8.3.1. Beta's core image matched the published v0.7.32
+index and its API reported the
 tagged core commit. The frontend and search image digests matched their v0.7.31
 pins. The database reported clean core and search migration ledgers at 194 and
 21, respectively. The readiness and HTTPS edge checks passed.
@@ -92,6 +97,76 @@ upload versions. The remaining 4,824 versions totaled 182,529,231,836 bytes.
 All matched versions had the expected encryption and retention. Among them,
 13,870 had no comparable checksum and 177,920 matched a provider checksum
 marked unverified. Comparable checksums had zero mismatches. The remaining
-versions, source visibility and subsequent uploads through the recorded
-cutoff still require reconciliation.
+versions, source visibility and subsequent uploads through the cutoff
+were still outstanding at that check.
 [November 26 recovery checks](sizetube-recovery-2026-11-26.md)
+
+At 14:33:04 UTC the supplemental transfer finished. An independent recovery
+reader fetched all 582 historical uploads by their destination version IDs.
+Their SHA-256 digests and lengths matched the source versions across
+32,925,589,285 bytes. Six uploads used multipart transfers. Two destination
+retention periods were extended and verified. All 582 originals were accounted
+for, with zero substitutions or unresolved transfers. The operator Mac sent
+the files directly to the private recovery bucket. At 14:37:53 UTC both
+temporary transfer keys were absent from their account inventories and failed
+fresh authentication.
+[Supplemental media recovery procedure](https://vidra.yosef.app/docs/install/production#recovering-media-while-b2-replication-is-pending)
+
+At 14:35:46 UTC the encrypted recovery map covered all 251,513 upload versions
+and 4,562,441,091,133 bytes recorded before the 05:11:06.780 UTC cutoff.
+Each upload mapped to a distinct immutable destination version. The map
+preserved all 6,694 source hide actions.
+
+| Recovery route | Upload versions | Bytes | Verification |
+| --- | ---: | ---: | --- |
+| Native B2 replicas | 250,922 | 4,529,515,501,290 | Source name, original upload time, length and available provider checksum. All had the expected SSE-B2 encryption and governance retention. |
+| Supplemental copies of historical uploads | 582 | 32,925,589,285 | Full source and independent destination SHA-256 matched. All had SSE-B2 and 30 days of governance retention at upload. |
+| Copies of hidden operational write probes | 9 | 558 | Each 62-byte probe matched its own distinct recovery copy by SHA-256. All nine retain their original hidden status in the map. |
+
+The native checksums comprised 55,632 provider-verified SHA-1 matches, 181,400
+matches marked unverified by the provider and 13,890 versions without a
+comparable checksum. There were zero comparable mismatches. The native
+replication queue remained open. Of the 251,042 historical uploads, 250,460
+had native replicas and 582 used the supplemental route. The other 471
+uploads in the selected point comprised 462 native replicas and nine probes.
+
+At 14:36:39 UTC an independent check reopened the encrypted map and matched
+every upload and hide record to the frozen inventory. The last recorded source
+action left 240,907 names current and 6,691 hidden. A recovery reader retrieved
+the private playback fixture's 15 objects through the final map and decoded
+three frames after a four-second seek. A 1,713,981-byte public supplemental video
+also matched its source SHA-256 and decoded three frames at the same seek.
+
+At 14:36:56 UTC the operator restore helper refused a hidden name. Given the
+original names, the existing recovery reader retrieved a 430-byte private HLS
+master and a 1,036-byte supplemental object with the expected SHA-256. At
+14:37:45 UTC the operator independently reopened the encrypted archive on the
+external recovery drive. All 49 files passed verification, the protected
+identity matched the previously tested copy, and the external map reopened
+with all 251,513 destination IDs and 6,694 hide actions. The local operator
+kit also passed verification.
+
+## Live catalogue and queues
+
+At 13:50 and 14:36 UTC, read-only queries matched all 13,890 publicly eligible
+PeerTube video IDs to the public beta catalogue and its search index. Both sets had zero
+missing or extra IDs. Each eligible video had a ready HLS playlist or an
+original file recorded on beta. All 14,956 imported publication timestamps
+matched production exactly. The live source had 792 local rows absent from
+the saved import snapshot. All 792 belonged to blocked accounts or were
+themselves blocked. The common rows showed no changes in video privacy,
+publication state or time, moderation, account or channel assignment.
+
+Production's four media queues had zero runnable or active jobs at both
+13:50:43 and 14:36:50 UTC. The transcoding builder retained 41 waiting
+parent entries whose child jobs were all absent. Of their source videos, 28 were published and 13 were
+absent. The four queues also retained five historical failed jobs.
+
+At 13:51 and 14:37 UTC both sites' anonymous APIs returned 13,890 local
+public videos.
+All twelve newest production videos resolved by their source IDs on beta,
+with identical publication times and list order. The reported legacy watch
+link redirected once to its canonical page, which returned HTTP 200.
+The admitted beta readiness endpoint returned HTTP 200 and reported healthy.
+The public apex configuration API returned HTTP 200 and identified PeerTube
+8.3.1. Production was still writable when these checks ran.
