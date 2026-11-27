@@ -250,6 +250,38 @@ and zero raw media blocks. Both reference origins denied the private
 upload. These checks exercised S3-backed reference pinning with per-video
 approval.
 
+### Production ActivityPub activation on v0.7.33
+
+SizeTube enabled ActivityPub at **18:07:15 UTC** on November 27. Before
+deployment, the published v0.7.32/v0.7.33 pair passed upgrade, rollback and
+media fingerprint checks. On a separate, empty runner, the sealed recovery
+drill verified the backup hash, catalogue, schema and MFA sign-in. The verifier classified cross-schema restore refusal
+as inapplicable because both releases use core schema 194 and search schema 21. The release-pinned media stack also uploaded a fixture,
+transcoded it to CMAF, served its HLS segments and returned it through search
+after the event queue drained.
+[Qualified release record and CI runs](https://github.com/yegamble/vidra/pull/481)
+
+At **18:08 UTC**, an external client followed ordinary public Cloudflare
+routing. NodeInfo advertised ActivityPub. WebFinger resolved an opted-in
+Person, a public channel Group and the instance Application. Their actor IDs
+matched their public-key owners. The Application URL served ActivityPub JSON
+to a protocol client and redirected an HTML client to the instance page.
+Both responses included `Vary: Accept`.
+
+The operator's private account actor, outbox, follower and following
+collections returned HTTP 404. WebFinger withheld the private Person link.
+The same account's public channel omitted private owner attribution and its
+first outbox page excluded the private draft. The draft's ActivityPub representation returned 404 and the
+anonymous admin request returned 401. The public homepage and legacy watch
+page returned 200. The www redirect preserved the watch path and query, and
+the public PDS served its expected identity with invitations required.
+
+At **18:08:40 UTC**, a fresh Kubo consumer with provider announcements disabled
+retrieved the approved synthetic clip from the public network. All seven files
+matched their reference SHA-256 hashes across 1,969,881 bytes. Three decoded
+frames matched after a four-second seek. The consumer kept the clip unpinned.
+A separate request to a third-party HTTP gateway received HTTP 429.
+
 ## Release and deployment
 
 Private beta upgraded at 03:46 UTC. At 03:48:52 UTC, the public apex still
