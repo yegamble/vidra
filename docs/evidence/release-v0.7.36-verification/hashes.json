@@ -1,0 +1,10 @@
+{
+  "bundle-provenance.txt": "c80aa4eaaa2e6cc26bd04664b57aa9b890e8adf0b46a147a34b115e56ecf9f8d",
+  "capture-commands.json": "2ec0ecc538737217209885c20c9c1b9deb329c491d9a054b8653a60de97a2196",
+  "embedded-max.txt": "f579a87096e68e727f7419959ef481b23ff3ea35f106cb9542c76b3d078da044",
+  "manifest.json": "cdcd3da76ce96156ec4f9b9e290042452f86e861c3a15999adf0484d528738c4",
+  "platform-digests.txt": "c12b01ca2c14537e4cded8afebee05be8a295006f256bc4ea0b8acbf1dd8b193",
+  "verified-assets.json": "3e2948a64bbb275d4d4289fff88a780ca218d28709049f5244d604d7579ba0fc",
+  "verified-attestation.json": "80d5bc7ed976f6d5d6fc02e5404616002431a1d52a6a84044e2ad7a4774cf504",
+  "verified-frontend-attestation.json": "a6a5fe8d094b43a9d39167577295d71cd8ebff882bdb66301bb6752bd6c3ea76"
+}
