@@ -1,0 +1,100 @@
+# Run a separate native S3 reference origin
+
+This optional Compose project serves immutable S3 byte ranges for **one operator-selected Vidra video and generation**. An operator must also install an approval manifest. Each approved read checks the current native public eligibility view before and after storage I/O. Removing the manifest withdraws the next read. The service starts dormant with an empty scope and approval directory. Dormant operation requires zero storage credentials.
+
+Use a Linux Docker host with the standard private Compose PostgreSQL service (`postgres`, database `vidra`), migration 194 or later, a verified database/configuration backup, and Python 3 on the host. The origin joins the database's existing network. Docker publishes its HTTP listener on loopback. Other containers on that private bridge can reach the listener and encounter the same approval checks. The project does not publish a database port, mount the Docker socket or start a Kubo node.
+
+## Install and verify the dormant origin
+
+Run these commands as root from `deploy/ipfs-reference` in the reviewed checkout or bundle. For another host, load the independently verified image archive and compare its image ID with the saved build record.
+
+```sh
+umask 077
+app=/etc/vidra-native-reference
+image=vidra-native-reference-origin:reviewed
+useradd --system --user-group --no-create-home --shell /usr/sbin/nologin vidra-native-ref
+install -d -m 0700 "$app"
+install -d -m 0750 -o root -g vidra-native-ref "$app/config" "$app/approvals"
+install -m 0600 runtime/native/compose.yml "$app/compose.yml"
+install -m 0700 runtime/native/init-reader.py runtime/native/verify-dormant.py "$app/"
+docker build -f runtime/native/Dockerfile -t "$image" .
+docker image inspect --format '{{.Id}}' "$image" > "$app/image.id"
+```
+
+Confirm the application database container belongs to the intended project and determine its private Docker network name. Use that network in the environment file. These examples use the standard names. Create the empty scope once on a fresh installation.
+
+```sh
+docker inspect --format '{{.Config.Labels}} {{range $name, $net := .NetworkSettings.Networks}}{{$name}} {{end}}' vidra-postgres-1
+test ! -e "$app/config/scope.json"
+printf '{}\n' | install -m 0440 -o root -g vidra-native-ref /dev/stdin "$app/config/scope.json"
+cat > "$app/compose.env" <<ENV
+NATIVE_ORIGIN_IMAGE=$image
+NATIVE_UID=$(id -u vidra-native-ref)
+NATIVE_GID=$(id -g vidra-native-ref)
+NATIVE_CONFIG_DIR=$app/config
+NATIVE_APPROVAL_DIR=$app/approvals
+NATIVE_DB_NETWORK=vidra_default
+NATIVE_PORT=8786
+ENV
+python3 "$app/init-reader.py" --dir "$app/config" \
+  --uid "$(id -u vidra-native-ref)" --gid "$(id -g vidra-native-ref)"
+native() { docker compose --env-file "$app/compose.env" -f "$app/compose.yml" "$@"; }
+native config -q
+native up -d --no-build
+python3 "$app/verify-dormant.py" --env-file "$app/compose.env" --image-id-file "$app/image.id"
+```
+
+The provisioning command stores a random reader password in a service-owned, mode-0400 `pgpass`, then creates the dedicated login and grants SELECT on the eligibility view. It checks for unexpected application privileges and refuses to adopt an existing role with another credential. Repeated runs verify the saved credential. PostgreSQL's usual `PUBLIC` temporary-table and built-in function privileges still apply. The command leaves application roles and cluster-wide grants alone.
+
+The verifier checks the running image ID, loopback publishing, read-only mounts and restart policy. It queries the view as the reader, verifies a protected-table permission denial, checks that approvals and storage credentials are absent, and requires an unknown reference to return HTTP 404 with an empty body for both HEAD and GET. Keep this result separate from an approved playback test.
+
+## Prepare and withdraw a single approval
+
+1. Obtain approval to **prepare** one canonical native video UUID and HLS generation for review. The catalogue view excludes imported paths, blocked, sensitive or unpublished videos and ineligible owners. Read the currently eligible master using the installed reader and a psql variable.
+
+   ```sh
+   printf "%s\n" "SELECT master_key FROM public.ipfs_public_reference_videos WHERE video_id = :'video'::uuid;" | \
+     native exec -T origin psql -XAtq --no-password -v ON_ERROR_STOP=1 -v "video=$video_uuid"
+   ```
+
+2. For Backblaze B2, create a new application key scoped to the **primary** bucket and exactly `streaming-playlists/<video-uuid>/r<generation>/`, including the trailing slash. Verify the returned bucket and prefix restrictions and that the only capability is `readFiles`. Other S3 implementations must restrict immutable GET and HEAD to that same generation. Install the key ID and secret into `config/b2.key-id` and `config/b2.read-key`, owned by the service UID with mode 0400. Use a protected credential source. The origin and preparer do not require a write, delete, recovery-bucket or whole-library credential.
+
+3. Under the root-controlled configuration directory, atomically replace `scope.json` with a mode-0440 file owned by root and the service group. Use the real bucket, fixed HTTPS endpoint and region. The example values are placeholders.
+
+   ```json
+   {"video_id":"<video-uuid>","generation":1,"endpoint":"https://<s3-endpoint>","bucket":"<primary-bucket>","region":"<region>"}
+   ```
+
+4. Restart only this origin to load the selected scope. With the approval directory still empty, prepare the candidate **outside** it. The preparer rechecks the generation and current object versions after hashing every HLS object.
+
+   ```sh
+   native restart origin
+   mkdir -p -m 0700 "$app/review"
+   native run --rm --no-deps -T origin prepare > "$app/review/$video_uuid.json"
+   ```
+
+5. Review the complete HLS graph, sizes, per-object SHA-256 digests and immutable version IDs. After separate approval for that candidate, install it atomically.
+
+   ```sh
+   install -m 0440 -o root -g vidra-native-ref "$app/review/$video_uuid.json" "$app/approvals/.approved.tmp"
+   mv -T "$app/approvals/.approved.tmp" "$app/approvals/$video_uuid.json"
+   ```
+
+6. Verify a known object range through the origin against the reviewed immutable bytes. To rehearse publication, use a **separate offline Kubo repository**, its own token, RPC port and publication receipt directory, and the publisher's `--origin-port 8786`. Record the expected CID, cold restart, digest checks and decoded playback. For example, with a separately initialized offline native node on RPC port 5182, use the following command. Configure that node's loopback API and gateway to distinct free ports before starting it. Keep its swarm addresses and bootstrap list empty and start it with `daemon --offline`.
+
+   ```sh
+   publisher=/usr/local/lib/vidra-ipfs-reference/publish
+   "$publisher" --manifest "$app/approvals/$video_uuid.json" \
+     --origin-port 8786 --rpc-port 5182 --rpc-token-file "$app/native-node.token" \
+     --state-dir /var/lib/vidra-native-reference/publications
+   ```
+
+   The existing synthetic-only peering guard admits its approved synthetic root. Global native peering requires a separate reviewed admission procedure and explicit per-video permission. [Publisher and withdrawal procedure](../../publisher/README.md)
+
+7. To withdraw, unlink the one approved manifest from `approvals/` and require HTTP 404 with zero bytes for previously approved references. Reconcile or withdraw the managed pin on its own offline node. Revoke the scoped storage credential, restore `scope.json` to `{}`, remove its two credential files and restart only this origin. Repeat the dormant checks. Independently held public copies remain under the control of their peers.
+
+## Restart and recover
+
+Docker's `unless-stopped` policy restarts the service with the daemon after a normal host reboot. Ordinary PostgreSQL container recreation can change its private address. Every eligibility query uses the `postgres` service name and a fresh connection. A database outage fails approved reads closed. If the application stack's private network is deliberately removed, recreate that network with the stack and run `native up -d --force-recreate origin`. Re-run the reader bootstrap after a database restore that predates the role. The role secret is held independently from the application database dump.
+
+Record the reviewed source commit, the package versions from `docker run --rm --entrypoint apk "$image" info -v`, image ID and SHA-256 of an exported image archive (`docker image save "$image" | gzip -n`). Encrypt these with the Compose file and environment, the adapter and shipped origin/preparer source, grant and verification scripts, service UID/GID, `config/pgpass`, scope, approval manifests and any active per-generation storage credentials. Include the offline node's separate identity, token, publication receipts and expected CID when provisioned. Keep credentials out of source control. On restoration verify the archive hash and loaded image ID. Recreate service ownership, verify role privileges, restore the selected scope and use the offline recovery procedure before any separately authorized peering. [Rebuilding references after primary loss](../../publisher/README.md)

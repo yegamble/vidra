@@ -149,7 +149,9 @@ EOF
 # build the publisher beside its runbook. Name every input explicitly: the
 # same directories may contain a local binary, S3 credentials or approvals.
 for rel in PREPARATION.md prepare.py origin.py \
-    runtime/README.md runtime/init-node.py runtime/network-mode.py \
+    runtime/native/Dockerfile runtime/native/Dockerfile.dockerignore runtime/native/README.md \
+    runtime/native/run-native.py runtime/native/init-reader.py runtime/native/verify-dormant.py \
+    runtime/native/compose.yml runtime/README.md runtime/init-node.py runtime/network-mode.py \
     runtime/vidra-reference-node.service runtime/vidra-reference-origin.service \
     publisher/README.md publisher/go.mod publisher/main.go publisher/manifest.go \
     publisher/state.go publisher/publish_test.go publisher/state_test.go; do

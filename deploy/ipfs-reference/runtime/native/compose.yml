@@ -1,0 +1,40 @@
+name: vidra-native-reference
+services:
+  origin:
+    image: ${NATIVE_ORIGIN_IMAGE:?set the tested local image}
+    pull_policy: never
+    restart: unless-stopped
+    user: "${NATIVE_UID:?set service UID}:${NATIVE_GID:?set service GID}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 96
+    mem_limit: 192m
+    tmpfs: ["/tmp:rw,nosuid,nodev,noexec,size=8m"]
+    environment:
+      PGHOST: postgres
+      PGUSER: vidra_native_reference_reader
+      PGDATABASE: vidra
+      PGPORT: "5432"
+      PGPASSFILE: /run/vidra-native/pgpass
+      PGSSLMODE: disable
+      PGAPPNAME: vidra-native-reference
+      PGCONNECT_TIMEOUT: "3"
+    ports:
+      - "127.0.0.1:${NATIVE_PORT:-8786}:8786"
+    volumes:
+      - type: bind
+        source: ${NATIVE_CONFIG_DIR:?set scoped origin config directory}
+        target: /run/vidra-native
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${NATIVE_APPROVAL_DIR:?set root-owned approvals directory}
+        target: /etc/vidra-native/approvals
+        read_only: true
+        bind: {create_host_path: false}
+    networks: [stack]
+networks:
+  stack:
+    external: true
+    name: ${NATIVE_DB_NETWORK:?set the private PostgreSQL network}
