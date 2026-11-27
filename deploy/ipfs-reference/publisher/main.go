@@ -226,6 +226,9 @@ func (p publisher) publish(ctx context.Context, filename string) (string, error)
 }
 
 func run() error {
+	if len(os.Args) > 1 && os.Args[1] == "status" {
+		return runStatus(os.Args[2:])
+	}
 	approval := flag.String("manifest", "", "path to the single approved UUID.json file")
 	tokenFile := flag.String("rpc-token-file", "", "private file containing the Kubo bearer token")
 	rpcPort := flag.Int("rpc-port", 5181, "loopback Kubo RPC port")

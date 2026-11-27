@@ -1,0 +1,25 @@
+[Unit]
+Description=Check approved Vidra IPFS reference pins and write aggregate health
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/vidra-ipfs-reference/publish status --config /etc/vidra-ipfs-reference/status.json --output /var/lib/vidra-reference-status/status.json
+StateDirectory=vidra-reference-status
+StateDirectoryMode=0755
+UMask=0077
+TimeoutStartSec=50
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+MemoryMax=192M
