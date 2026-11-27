@@ -935,6 +935,8 @@ Before enabling federation publicly, run these checks:
 
 ## 10. Accept, switch traffic, and retain rollback
 
+If the rollback copy is a disk image of a frozen PeerTube server, verify that it boots under the saved database and queue settings before retiring the original compute. [Restore a frozen PeerTube source](peertube-frozen-source-recovery.md)
+
 Record pass/fail evidence on the **exact running release manifests**, with the
 candidate storage and settings, for:
 
