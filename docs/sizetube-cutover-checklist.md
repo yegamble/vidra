@@ -1,11 +1,16 @@
 # sizetube.com cutover — tracked checklist (living)
 
 A working checklist for moving public SizeTube traffic from PeerTube to the Vidra beta.
-On November 27, private beta ran v0.7.32. Public traffic remains on PeerTube
-pending full media recovery, frozen-source reconciliation and cutover acceptance.
-The [November 27 beta evidence](evidence/sizetube-beta-2026-11-27.md) records
-the deployed release, rehearsal results and remaining recovery work.
-It tracks **execution status**. The reasoning, evidence and decisions
+**November 27, 2026 — Go to schedule and open the controlled cutover window
+for v0.7.32.** Public traffic remains on PeerTube. Before switching, verify the
+source write freeze, take a fresh snapshot and backup, run the authoritative
+import and reconcile changes after the recovery cutoff. Repeat hostname,
+playback, access and moderation checks, then obtain the explicit switch
+decision. Keep PeerTube available for the agreed rollback window of at least
+24 hours and verify the first post-switch off-site backup.
+[November 27 evidence](evidence/sizetube-beta-2026-11-27.md)
+
+This checklist tracks **execution status**. The reasoning, evidence and decisions
 live in the audit ([`sizetube-cutover-2026-11.md`](sizetube-cutover-2026-11.md)) and the run
 record ([`sizetube-beta-migration-2026-11.md`](sizetube-beta-migration-2026-11.md)). When an
 item here and the audit disagree, fix one of them in the same change — do not let them drift.
@@ -746,16 +751,20 @@ version deletion, and the abandoned uploads had been cleared.
   retrieved a newly replicated 191,098-byte public video sample. Its SHA-256
   matched the source, three video frames decoded in 0.66 seconds including the
   download, and the replica carried 30 days of governance retention.
-- [~] **Verify the historical library in the recovery account.** The inventory
+- [x] **Verify the historical library in the recovery account.** The inventory
   taken before the sample contains 251,042 upload versions (4,562,434,489,556
   bytes), of which 240,878 names were current (4,214,634,454,359 bytes).
   The early November 26 comparison found zero baseline versions. By 15:00 UTC
   the destination held 240,870. Both historical video samples passed restore
-  checks at their original paths. Continue comparing names, original upload
-  times, lengths and available checksums through the selected recovery cutoff.
-  Apply the source visibility state during recovery.
+  checks at their original paths. The November 27 recovery point covers all
+  251,513 uploads before 05:11:06.780 UTC and preserves 6,694 hide actions.
+  The verified point met the operator-approved recovery method with 250,922
+  native replicas, 582 independently verified supplemental originals and nine
+  newer recovery probes matched byte for byte to the hidden source probes. The
+  external recovery kit and destination-only playback passed. Native
+  replication still had 582 historical versions outstanding at verification.
   [Recovery checks and outstanding versions](evidence/sizetube-recovery-2026-11-26.md)
-  B2 skips hide markers, including the 6,248 in this inventory. It schedules
+  B2 skips hide markers, including the 6,248 in the original historical inventory. It schedules
   pre-existing files at midnight UTC and dates their retention from the original
   upload. [Backblaze replication behavior](https://www.backblaze.com/docs/cloud-storage-cloud-replication)
   The [November 27 inventory and private playback checks](evidence/sizetube-beta-2026-11-27.md#media-recovery)
@@ -1192,7 +1201,12 @@ I6–I10 blocks the window is for counsel and the operator, and is not decided h
   SHA-256 and decoded three frames. [Recovery checks](evidence/sizetube-recovery-2026-11-26.md)
   **RUNTIME 2026-11-19:** neither replication nor Object Lock was configured (B2, D12 tail).
   No timed restore or waiver is recorded; neither was verified.
-- [ ] **I5 · How many copies of the backup encryption secret exist is still unverified.**
+- [x] **I5 · Verify an independently held copy of the backup encryption secret.**
+  On November 27 the encrypted archive was independently reopened on the
+  operator’s external drive using the previously verified recovery identity.
+  All 49 files passed verification. The
+  separate-host restore used the escrowed reader and matched both decrypted
+  off-site backups. [Recovery evidence](evidence/sizetube-beta-2026-11-27.md)
   The audit rated it Medium: "the crypt password/salt is a single point of failure (copy
   count unverified)" (audit §8 Durable). If the off-site copies are encrypted with it, they
   cannot be read without it (DEDUCED). Confirm a copy is held off the droplet. `OPERATOR`.
