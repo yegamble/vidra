@@ -373,10 +373,11 @@ class MailConfigCatalogueTest(unittest.TestCase):
         for version in (192, 193):
             self.assertEqual((), recovery.catalogue_for(version)['videos'])
 
-    def test_a_194_candidate_is_refused_naming_the_migration_to_read(self):
+    def test_an_unaudited_candidate_is_refused_naming_the_migration_to_read(self):
+        next_version = recovery.CATALOGUE_AUDITED_THROUGH + 1
         with self.assertRaises(ValueError) as raised:
-            recovery.catalogue_for(194)
-        self.assertIn('0194', str(raised.exception))
+            recovery.catalogue_for(next_version)
+        self.assertIn(f'{next_version:04d}', str(raised.exception))
 
     def test_site_pages_are_fingerprinted_whole_from_0191(self):
         self.assertNotIn('site_pages', recovery.catalogue_for(190))
@@ -1126,6 +1127,25 @@ class CatalogErrorEvidenceRecoveryTest(unittest.TestCase):
         query = next(q for q in run.queries if 'pg_trigger' in q)
         for fragment in ('pg_get_constraintdef', 'convalidated', "'public.search_catalog_state'::regclass"):
             self.assertIn(fragment, query)
+
+
+class ReferenceViewRecoveryTest(unittest.TestCase):
+    def snapshot(self, version, reply):
+        run = CatalogProgramRecoveryTest.run_with(self, CatalogErrorEvidenceRecoveryTest.objects())
+        sql = run.sql
+        with mock.patch.object(run, 'sql', side_effect=lambda q: reply if q == recovery.REFERENCE_VIEW_SQL else sql(q)):
+            return recovery.fingerprint(run, version, 18)
+
+    def test_the_view_enters_the_fingerprint_in_194(self):
+        self.assertNotIn(recovery.REFERENCE_VIEW, self.snapshot(193, ''))
+        before = self.snapshot(194, '[compose] psql\n' + 'a' * 32)
+        after = self.snapshot(194, 'b' * 32)
+        self.assertEqual(recovery.differing(before, after), [recovery.REFERENCE_VIEW])
+
+    def test_a_view_that_fails_the_catalogue_query_cannot_be_a_baseline(self):
+        for reply in ('[compose] psql\n', '\n'.join(['a' * 32, 'b' * 32])):
+            with self.subTest(reply=reply), self.assertRaisesRegex(ValueError, 'ipfs_public_reference_videos'):
+                self.snapshot(194, reply)
 
 
 if __name__ == '__main__':

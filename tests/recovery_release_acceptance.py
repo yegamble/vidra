@@ -348,6 +348,7 @@ TABLES_ADDED = {
     191: ('site_pages',),
     192: (),  # Adds a source publication timestamp to the fingerprinted videos row.
     193: (),  # Indexes publication order on videos.
+    194: (),  # Defines the IPFS reference eligibility view over existing tables.
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 # Receiver authority is not disposable inbox/cache state. Compare whole rows:
@@ -632,6 +633,21 @@ SCHEMA_SHAPE_SQL = (
     "WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relispartition "
     "AND a.attnum > 0 AND NOT a.attisdropped")
 
+# This view carries access policy without storing any rows. Record its definition
+# and grants, and refuse a baseline that lacks its barrier or gives PUBLIC access.
+REFERENCE_VIEW = 'public.ipfs_public_reference_videos'
+REFERENCE_VIEW_SQL = """
+SELECT md5(jsonb_build_array(
+    pg_get_viewdef(c.oid), pg_get_userbyid(c.relowner),
+    ARRAY(SELECT opt FROM unnest(c.reloptions) opt ORDER BY opt),
+    ARRAY(SELECT acl::text FROM unnest(coalesce(c.relacl, acldefault('r', c.relowner))) acl ORDER BY acl::text)
+)::text)
+FROM pg_class c
+WHERE c.oid = to_regclass('public.ipfs_public_reference_videos') AND c.relkind = 'v'
+  AND c.reloptions @> ARRAY['security_barrier=true']
+  AND NOT EXISTS (SELECT 1 FROM aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) WHERE grantee = 0)
+"""
+
 
 # Preserve the archived search-18 projection exactly. From19 onward the FULL
 # manifest attests all canonical metadata: a title/id/eligible projection would
@@ -717,6 +733,10 @@ def fingerprint(run, core_version, search_version):
     rows[SEARCH_DOCUMENTS] = run.sql(SEARCH_SQL if search_version == 18
                                     else fingerprint_sql('documents', schema='search'))
     rows[SCHEMA_SHAPE] = run.sql(SCHEMA_SHAPE_SQL)
+    if core_version >= 194:
+        digests = re.findall(r'^[0-9a-f]{32}$', run.sql(REFERENCE_VIEW_SQL), re.MULTILINE)
+        require(len(digests) == 1, f'{REFERENCE_VIEW} missing, lacks its security barrier, or grants PUBLIC access')
+        rows[REFERENCE_VIEW] = digests[0]
     for table in search_tables:
         rows[qualified('search', table)] = run.sql(fingerprint_sql(
             table, schema='search', digest_rows=table == 'catalog_snapshot_pages'))
