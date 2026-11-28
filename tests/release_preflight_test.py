@@ -8,6 +8,7 @@ import json
 from unittest.mock import patch
 from pathlib import Path
 import shutil
+import tarfile
 import tempfile
 import unittest
 
@@ -19,6 +20,53 @@ RELEASES = ROOT / 'releases'
 
 
 class PreflightTests(unittest.TestCase):
+    def test_normalizer_files_match_the_frozen_meta_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            meta = Path(tmp)
+            (meta / 'deploy').mkdir()
+            archive_path = meta / 'bundle.tar'
+
+            def archive_with(names, wrong=None, linked=None):
+                with tarfile.open(archive_path, 'w') as archive:
+                    for name in names:
+                        body = name.encode()
+                        if name == wrong:
+                            body = b'X' + body[1:]
+                        entry = tarfile.TarInfo('./' + name)
+                        if name == linked:
+                            entry.type = tarfile.SYMTYPE
+                            entry.linkname = 'other-file'
+                            archive.addfile(entry)
+                        else:
+                            entry.size = len(body)
+                            archive.addfile(entry, io.BytesIO(body))
+
+            names = p.NORMALIZER_FILES
+            archive_with([])
+            with tarfile.open(archive_path) as archive:
+                self.assertEqual(p.verify_normalizer_files(archive, meta), {})
+            archive_with(names)
+            with tarfile.open(archive_path) as archive, self.assertRaises(ValueError):
+                p.verify_normalizer_files(archive, meta)
+            for name in names:
+                (meta / name).write_bytes(name.encode())
+            archive_with(names)
+            with tarfile.open(archive_path) as archive:
+                expected = {name: hashlib.sha256(name.encode()).hexdigest() for name in names}
+                self.assertEqual(p.verify_normalizer_files(archive, meta), expected)
+            for entries, alter in [(names[1:], None), (names + (names[0],), None), (names, names[0])]:
+                with self.subTest(entries=entries, alter=alter):
+                    archive_with(entries, alter)
+                    with tarfile.open(archive_path) as archive, self.assertRaises(ValueError):
+                        p.verify_normalizer_files(archive, meta)
+            archive_with(names, linked=names[0])
+            with tarfile.open(archive_path) as archive, self.assertRaises(ValueError):
+                p.verify_normalizer_files(archive, meta)
+            archive_with(names)
+            (meta / names[0]).unlink()
+            with tarfile.open(archive_path) as archive, self.assertRaises(ValueError):
+                p.verify_normalizer_files(archive, meta)
+
     def test_image_requires_digest_platform_and_matching_source(self):
         image = {'manifest': {'digest': 'sha256:' + 'a' * 64}, 'image': {
             'os': 'linux', 'architecture': 'amd64', 'config': {'Labels': {
