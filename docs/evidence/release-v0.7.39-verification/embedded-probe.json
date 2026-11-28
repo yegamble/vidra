@@ -1,0 +1,26 @@
+{
+  "at": "2026-11-28T15:43:52.527132+00:00",
+  "host": "production cached images in isolated one-shot containers",
+  "network": "none",
+  "read_only": true,
+  "capabilities": [],
+  "mounts": [],
+  "components": {
+    "core": {
+      "release": "v0.7.39",
+      "source": "32442ce90ba6a81dd07a9a9553acc25acfb72725",
+      "index": "sha256:e6ed8ac7330b974a2a6e5b51e12f0f9ed45cadd2574d1a97d4f23dd03fb7dd81",
+      "local_image_id": "sha256:e6ed8ac7330b974a2a6e5b51e12f0f9ed45cadd2574d1a97d4f23dd03fb7dd81",
+      "stdout": "196",
+      "embedded_max": 196
+    },
+    "search": {
+      "release": "v0.7.31",
+      "source": "79d77e3013123c4f9d78c14a7cc0069bd810395b",
+      "index": "sha256:84ff7cd6edef5ad3ee919394428d194692e899d2ba16d88ccc929255e657d6ec",
+      "local_image_id": "sha256:84ff7cd6edef5ad3ee919394428d194692e899d2ba16d88ccc929255e657d6ec",
+      "stdout": "21",
+      "embedded_max": 21
+    }
+  }
+}
