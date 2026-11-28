@@ -521,6 +521,18 @@ services:
     ports: !reset []
     restart: unless-stopped
     logging: *logging
+    # Existing sites keep the image's settings until they supply these keys.
+    # The official image translates each CLAMD_CONF_* value into clamd.conf.
+    environment:
+      - CLAMD_CONF_StreamMaxLength
+      - CLAMD_CONF_MaxFileSize
+      - CLAMD_CONF_MaxScanSize
+      - CLAMD_CONF_MaxScanTime
+      - CLAMD_CONF_AlertExceedsMax
+      - CLAMD_CONF_MaxThreads
+      - CLAMD_CONF_MaxQueue
+    cpus: "${CLAMAV_CPUS:-0}"
+    mem_limit: ${CLAMAV_MEM_LIMIT:-0}
 
   whisper:
     ports: !reset []
