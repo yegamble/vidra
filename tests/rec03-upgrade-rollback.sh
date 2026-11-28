@@ -14,7 +14,7 @@
 #   REC03_OLD / REC03_NEW      the release pair, e.g. REC03_OLD=v0.6.6 REC03_NEW=v0.7.5.
 #                              REQUIRED, vX.Y.Z; they become a git ref and a raw.githubusercontent
 #                              URL, so they are pattern-checked rather than trusted.
-#   REC03_INJECT=column|table|function|dirty
+#   REC03_INJECT=column|table|function|constraint|dirty
 #                              how the upgrade is made to fail. `column` pre-creates a column the
 #                              upgrade's FIRST pending migration adds without IF NOT EXISTS, so
 #                              the real, unmodified migrator fails on it. `table` does the same
@@ -53,6 +53,8 @@
 #   REC03_INJECT_FUNCTION      the zero-argument function to pre-create. REQUIRED when
 #                              REC03_INJECT=function, with no fallback for the same reason, and
 #                              held to the same identifier pattern.
+#   REC03_INJECT_CONSTRAINT    for constraint mode, pre-create this new CHECK on
+#                              REC03_INJECT_TABLE. Recovery drops only that named CHECK.
 #   REC03_SAME_SCHEMA=1        assert the pair carries the SAME core schema, so `restore-refuse`
 #                              has no input and is recorded not applicable. Checked against the
 #                              ledger versions the drill actually captured: a contradiction is
@@ -110,6 +112,7 @@ INJECT_TABLE="${REC03_INJECT_TABLE:-}"
 INJECT_COLUMN="${REC03_INJECT_COLUMN:-}"
 INJECT_TYPE="${REC03_INJECT_TYPE:-}"
 INJECT_FUNCTION="${REC03_INJECT_FUNCTION:-}"
+INJECT_CONSTRAINT="${REC03_INJECT_CONSTRAINT:-}"
 INSTALL="${REC03_INSTALL:-bundle}"
 RECORD_REF="${REC03_RECORD_REF:-main}"
 INSTALLER_REF="${REC03_INSTALLER_REF:-main}"
@@ -212,7 +215,11 @@ require_injection_setup() {
       [ -n "$INJECT_FUNCTION" ] || die "REC03_INJECT=function needs REC03_INJECT_FUNCTION, the zero-argument function the first pending migration CREATEs. No default: another release's function either already exists here or is created by a migration this upgrade never runs."
       matches "$INJECT_FUNCTION" "$IDENT_RE" || die "REC03_INJECT_FUNCTION=\"$INJECT_FUNCTION\" is not a bare lower-case SQL identifier; this value is executed as SQL against the drill database."
       return 0 ;;
-    *)      die "REC03_INJECT=\"$INJECT\" is not column, table, function or dirty; a misspelling must not fall through to a column injection." ;;
+    constraint)
+      matches "$INJECT_TABLE" "$IDENT_RE" || die "constraint mode requires a bare lower-case SQL identifier in REC03_INJECT_TABLE"
+      matches "$INJECT_CONSTRAINT" "$IDENT_RE" || die "constraint mode requires a bare lower-case SQL identifier in REC03_INJECT_CONSTRAINT"
+      return 0 ;;
+    *)      die "Unknown REC03_INJECT=\"$INJECT\"; expected column, table, function, constraint or dirty." ;;
   esac
   local missing=''
   [ -n "$INJECT_TABLE" ]  || missing="$missing REC03_INJECT_TABLE"
@@ -234,11 +241,13 @@ require_injection_setup() {
 # collide, whatever it returns. The body carries no `$` or `"`: the statement is sent inside a
 # double-quoted `su -c` string, where either would be expanded or would end the string.
 inject_ddl() {
+  if [ "$INJECT" = constraint ]; then printf 'ALTER TABLE %s ADD CONSTRAINT %s CHECK (true)' "$INJECT_TABLE" "$INJECT_CONSTRAINT"; return; fi
   if [ "$INJECT" = table ]; then printf 'CREATE TABLE %s (rec03_injected BOOLEAN)' "$INJECT_TABLE"; return; fi
   if [ "$INJECT" = function ]; then printf "CREATE FUNCTION %s() RETURNS BOOLEAN LANGUAGE sql AS 'SELECT true'" "$INJECT_FUNCTION"; return; fi
   printf 'ALTER TABLE %s ADD COLUMN %s %s' "$INJECT_TABLE" "$INJECT_COLUMN" "$(printf '%s' "$INJECT_TYPE" | tr '[:lower:]' '[:upper:]')"
 }
 inject_undo_ddl() {
+  if [ "$INJECT" = constraint ]; then printf 'ALTER TABLE %s DROP CONSTRAINT %s' "$INJECT_TABLE" "$INJECT_CONSTRAINT"; return; fi
   if [ "$INJECT" = table ]; then printf 'DROP TABLE %s' "$INJECT_TABLE"; return; fi
   if [ "$INJECT" = function ]; then printf 'DROP FUNCTION %s()' "$INJECT_FUNCTION"; return; fi
   printf 'ALTER TABLE %s DROP COLUMN %s' "$INJECT_TABLE" "$INJECT_COLUMN"
