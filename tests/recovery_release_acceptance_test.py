@@ -1147,6 +1147,41 @@ class ReferenceViewRecoveryTest(unittest.TestCase):
             with self.subTest(reply=reply), self.assertRaisesRegex(ValueError, 'ipfs_public_reference_videos'):
                 self.snapshot(194, reply)
 
+    def test_retained_upload_table_and_eligibility_views_survive_restore(self):
+        views = ('public.retained_scan_sources', 'public.current_retained_scan_recoveries')
+        table = 'retained_upload_recoveries'
+
+        def snapshot(version, replies):
+            run = CatalogProgramRecoveryTest.run_with(self, CatalogErrorEvidenceRecoveryTest.objects())
+            sql = run.sql
+
+            def respond(query):
+                if query == recovery.REFERENCE_VIEW_SQL:
+                    return 'a' * 32
+                for name, value in replies.items():
+                    if f"to_regclass('{name}')" in query and 'pg_get_viewdef' in query:
+                        return value
+                return sql(query)
+
+            with mock.patch.object(run, 'sql', side_effect=respond):
+                result = recovery.fingerprint(run, version, 18)
+            if version == 195:
+                self.assertIn(recovery.fingerprint_sql(table), run.queries)
+            return result
+
+        replies = dict.fromkeys(views, 'b' * 32)
+        old = snapshot(194, replies)
+        self.assertTrue({*views, table}.isdisjoint(old))
+        current = snapshot(195, replies)
+        self.assertIn(table, current)
+        for name in views:
+            with self.subTest(view=name):
+                self.assertEqual(current[name], 'b' * 32)
+                changed = snapshot(195, {**replies, name: 'c' * 32})
+                self.assertEqual(recovery.differing(current, changed), [name])
+                with self.assertRaisesRegex(ValueError, name):
+                    snapshot(195, {**replies, name: ''})
+
 
 if __name__ == '__main__':
     unittest.main()
