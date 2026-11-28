@@ -133,3 +133,14 @@ A database dump records the grant on the view. PostgreSQL stores logins in the c
    docker compose --env-file "$app/compose.env" -f "$app/compose.yml" up -d --no-build
    python3 "$app/verify-dormant.py" --env-file "$app/compose.env" --image-id-file "$app/image.id"
    ```
+
+## Offer IPFS on approved watch pages
+
+Use this bridge with a Vidra core release that accepts `IPFS_REFERENCE_PLAYBACK_SOCKET`. The existing **Use IPFS** player control takes its URL from the playback session for the current public video and generation. Viewers choose it manually. The normal HLS source remains available for fallback.
+
+1. Configure the reference reporter for the same Kubo node and include the native approval directory, publication journal and native origin port in its sources. The bridge uses the same local gateway and the restricted `pin/ls` token. Keep the gateway in NoFetch mode, keep the gateway, origin and RPC on loopback and keep their credentials on the host. The already-approved external synthetic rehearsal has its own manifest format and no native watch record.
+2. Build and install the matching publisher binary as described in the [publisher guide](../../publisher/README.md). Install `vidra-reference-playback.service` and `vidra-reference-playback.socket` from the parent directory under `/etc/systemd/system/`. Run `systemctl daemon-reload` and `systemctl enable --now vidra-reference-playback.socket`. Systemd creates `/run/vidra-reference-playback/playback.sock` for UID 10001, the standard production API user. Adjust the socket owner through a unit override if the API runs under another host UID.
+3. Set `IPFS_REFERENCE_PLAYBACK_DIR=/run/vidra-reference-playback` in the production environment and use the standard guarded deployment. The optional Compose overlay mounts only this socket directory into the API. A fresh installation can start with empty approvals. With an approved native publication, open that video's watch page, select **Use IPFS** and confirm the browser retrieves the approved generation's master, variant and media and decodes frames. Check an unapproved watch page for normal playback without a reference option.
+4. Each file request requires the exact generation in the native eligibility view and membership in the installed HLS manifest, a matching published receipt and a live recursive pin. The gateway reads the CID selected by that receipt. Withdrawing the approval removes the URL from new sessions and denies subsequent file requests, including from previously issued links. Follow the withdrawal procedure above for the pin and its restricted S3 reader.
+
+To remove the watch option for all reference pins, clear `IPFS_REFERENCE_PLAYBACK_DIR`, redeploy the API and disable both the socket and service. The separate aggregate status reporter can continue monitoring the node. Include the bridge units and config in the operator recovery kit alongside the node's existing approval and publication records.

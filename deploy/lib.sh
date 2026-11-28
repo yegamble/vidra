@@ -144,6 +144,10 @@ vidra_compose_chain() {
     COMPOSE+=(-f docker-compose.ipfs-reference-status.yml)
   fi
 
+  if [ -n "$(env_get IPFS_REFERENCE_PLAYBACK_DIR '')" ]; then
+    COMPOSE+=(-f docker-compose.ipfs-reference-playback.yml)
+  fi
+
   if is_true "$(env_get IPFS_MANAGED_NODE false)"; then
     COMPOSE+=(-f docker-compose.ipfs-managed.yml)
   fi

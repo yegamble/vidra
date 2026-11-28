@@ -117,6 +117,7 @@ copy_in docker-compose.prod.yml
 copy_in docker-compose.source.yml
 copy_in docker-compose.ipfs-managed.yml
 copy_in docker-compose.ipfs-reference-status.yml
+copy_in docker-compose.ipfs-reference-playback.yml
 copy_in docker-compose.atproto-pds.yml
 copy_in docker-compose.external-postgres.yml
 copy_in docker-compose.external-redis.yml
@@ -156,7 +157,9 @@ for rel in PREPARATION.md prepare.py origin.py \
     runtime/vidra-reference-node.service runtime/vidra-reference-origin.service \
     runtime/vidra-reference-status.service runtime/vidra-reference-status.timer runtime/status.example.json \
     publisher/README.md publisher/go.mod publisher/main.go publisher/manifest.go \
-    publisher/state.go publisher/status.go publisher/publish_test.go publisher/state_test.go publisher/status_test.go; do
+    publisher/state.go publisher/status.go publisher/playback.go publisher/playback_test.go \
+    runtime/vidra-reference-playback.socket runtime/vidra-reference-playback.service \
+    publisher/publish_test.go publisher/state_test.go publisher/status_test.go; do
   copy_in "deploy/ipfs-reference/$rel"
 done
 

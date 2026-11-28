@@ -226,6 +226,9 @@ func (p publisher) publish(ctx context.Context, filename string) (string, error)
 }
 
 func run() error {
+	if len(os.Args) > 1 && os.Args[1] == "serve-playback" {
+		return runPlayback(os.Args[2:])
+	}
 	if len(os.Args) > 1 && os.Args[1] == "status" {
 		return runStatus(os.Args[2:])
 	}
