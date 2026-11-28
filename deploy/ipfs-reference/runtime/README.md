@@ -49,6 +49,16 @@ python3 /usr/local/lib/vidra-ipfs-reference/network-mode.py online \
   --swarm-port 4201 --check-only
 ```
 
+One additional native generation can share this node after explicit global approval and an independent offline rehearsal. Verify its original bytes, eligible public state, exact generation-scoped S3 reader, reviewed manifest and offline directory CID using the [native procedure](native/README.md#prepare-and-withdraw-a-single-approval). Run the original one-root check before publication. After adding only the rehearsed native CID, supply all three native arguments together. The generation is the positive integer from the reviewed master key.
+
+```sh
+python3 /usr/local/lib/vidra-ipfs-reference/network-mode.py online \
+  --video-id "$approved_video_uuid" --cid "$approved_root_cid" \
+  --native "$native_video_uuid" "$native_generation" "$native_root_cid" --check-only
+```
+
+This check requires exactly the two named recursive pins. Every raw leaf must resolve through the URLStore references for its own video's manifest, and every local block must belong to an approved directory or Kubo's empty directory. Keep both identities, CIDs and the native generation with the recovery journals. For withdrawal, remove the native approval, reconcile its journal, and verify the one-root inventory again on a clean node. Unpinning can leave unreferenced blocks locally until garbage collection. Keep the node offline if it retains any block outside the remaining approval.
+
 After explicit approval for global publication, run that command again without `--check-only`. The helper saves the offline config in `/etc/vidra-ipfs-reference/node.offline.json`, enables bootstrap and TCP peering on the selected port, and creates a systemd override for the dedicated node. The online override allows `AF_NETLINK` so libp2p can enumerate the node's external address. The service runs with an empty capability set. Check its advertised multiaddress and peer count and verify retrieval from a second independent peer with an empty cache. For direct connections, a separately authorized firewall rule may admit the selected swarm TCP port on this node. Record the target, source scope and rule identity so that rule can be removed independently.
 
 ## Withdraw, roll back and recover
