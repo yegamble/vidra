@@ -339,36 +339,44 @@ func writeStatus(filename string, value referenceStatus) error {
 	return d.Sync()
 }
 
-func configuredStatus(ctx context.Context, filename string) referenceStatus {
+func loadProbeConfig(filename string) (statusConfig, publisher, string) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return statusValue("approval_unavailable", nil)
+		return statusConfig{}, publisher{}, "approval_unavailable"
 	}
 	defer file.Close()
 	raw, err := io.ReadAll(io.LimitReader(file, 16385))
 	var c statusConfig
 	if err != nil || len(raw) > 16384 || json.Unmarshal(raw, &c) != nil || len(c.Sources) == 0 || len(c.Sources) > 8 {
-		return statusValue("approval_unavailable", nil)
+		return statusConfig{}, publisher{}, "approval_unavailable"
 	}
 	validPort := func(port int) bool { return port > 0 && port <= 65535 }
 	if !validPort(c.RPCPort) || !validPort(c.GatewayPort) || c.RPCPort == c.GatewayPort || !filepath.IsAbs(c.TokenFile) {
-		return statusValue("approval_unavailable", nil)
+		return statusConfig{}, publisher{}, "approval_unavailable"
 	}
 	for _, s := range c.Sources {
 		if !validPort(s.OriginPort) || s.OriginPort == c.RPCPort || s.OriginPort == c.GatewayPort || !filepath.IsAbs(s.Approvals) || !filepath.IsAbs(s.Journal) {
-			return statusValue("approval_unavailable", nil)
+			return statusConfig{}, publisher{}, "approval_unavailable"
 		}
 	}
 	info, err := os.Lstat(c.TokenFile)
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > 4096 {
-		return statusValue("node_unavailable", nil)
+		return statusConfig{}, publisher{}, "node_unavailable"
 	}
 	b, err := os.ReadFile(c.TokenFile)
 	token := strings.TrimSpace(string(b))
 	if err != nil || token == "" || strings.ContainsAny(token, " \r\n\t") {
-		return statusValue("node_unavailable", nil)
+		return statusConfig{}, publisher{}, "node_unavailable"
 	}
 	p := publisher{rpc: local(c.RPCPort), token: token, client: &http.Client{Transport: &http.Transport{Proxy: nil, DisableCompression: true, ResponseHeaderTimeout: 5 * time.Second}, Timeout: 8 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	return c, p, ""
+}
+
+func configuredStatus(ctx context.Context, filename string) referenceStatus {
+	c, p, reason := loadProbeConfig(filename)
+	if reason != "" {
+		return statusValue(reason, nil)
+	}
 	return p.collectStatus(ctx, c)
 }
 

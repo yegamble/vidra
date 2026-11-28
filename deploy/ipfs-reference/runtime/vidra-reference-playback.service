@@ -1,0 +1,22 @@
+[Unit]
+Description=Read explicitly approved native Vidra HLS files from the reference IPFS node
+Requires=vidra-reference-playback.socket
+After=vidra-reference-playback.socket
+
+[Service]
+ExecStart=/usr/local/lib/vidra-ipfs-reference/playback serve-playback --config /etc/vidra-ipfs-reference/status.json
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+MemoryMax=192M

@@ -1,0 +1,12 @@
+# Only the API can reach the read-only per-video playback bridge.
+services:
+  api:
+    environment:
+      IPFS_REFERENCE_PLAYBACK_SOCKET: /run/vidra-reference-playback/playback.sock
+    volumes:
+      - type: bind
+        source: ${IPFS_REFERENCE_PLAYBACK_DIR:?Set the directory containing the reference playback socket}
+        target: /run/vidra-reference-playback
+        read_only: true
+        bind:
+          create_host_path: false

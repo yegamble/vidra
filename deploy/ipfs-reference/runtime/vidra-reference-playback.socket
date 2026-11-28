@@ -1,0 +1,13 @@
+[Unit]
+Description=Private socket for approved Vidra IPFS watch playback
+
+[Socket]
+ListenStream=/run/vidra-reference-playback/playback.sock
+DirectoryMode=0755
+# Production API runs as UID 10001. The host directory is root-owned.
+SocketUser=10001
+SocketMode=0600
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target
