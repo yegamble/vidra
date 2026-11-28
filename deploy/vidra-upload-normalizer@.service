@@ -1,0 +1,25 @@
+[Unit]
+Description=Process one private Vidra upload in an isolated container
+After=docker.service
+Requires=docker.service
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/lib/vidra/upload-normalizer.py
+ExecStopPost=/usr/bin/python3 /usr/local/lib/vidra/upload-normalizer.py --clean
+StandardInput=socket
+StandardOutput=journal
+StandardError=journal
+StateDirectory=vidra-upload-normalizer
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE
+RuntimeMaxSec=26h

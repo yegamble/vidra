@@ -1,0 +1,17 @@
+[Unit]
+Description=Private socket for the Vidra large upload processor
+After=docker.service
+Requires=docker.service
+
+[Socket]
+ExecStartPre=/usr/bin/python3 /usr/local/lib/vidra/upload-normalizer.py --clean
+ListenStream=/run/vidra-upload-normalizer/processor.sock
+SocketMode=0600
+ExecStartPost=/usr/bin/chown +10001 /run/vidra-upload-normalizer/processor.sock
+DirectoryMode=0755
+Accept=yes
+MaxConnections=8
+RemoveOnStop=true
+
+[Install]
+WantedBy=sockets.target
