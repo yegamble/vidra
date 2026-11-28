@@ -4,7 +4,7 @@ Requires=vidra-reference-playback.socket
 After=vidra-reference-playback.socket
 
 [Service]
-ExecStart=/usr/local/lib/vidra-ipfs-reference/publish serve-playback --config /etc/vidra-ipfs-reference/status.json
+ExecStart=/usr/local/lib/vidra-ipfs-reference/playback serve-playback --config /etc/vidra-ipfs-reference/status.json
 UMask=0077
 NoNewPrivileges=yes
 ProtectSystem=strict
