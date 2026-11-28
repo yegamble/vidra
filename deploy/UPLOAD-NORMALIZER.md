@@ -12,9 +12,10 @@ meta_commit=$(jq -er '.meta_commit' "$RELEASE_RECORD")
 core_commit=$(jq -er '.components.core.commit' "$RELEASE_RECORD")
 core_tag=$(jq -er '.components.core.tag' "$RELEASE_RECORD")
 image=$(jq -er '.components.core.image | .repository + "@" + .index_digest' "$RELEASE_RECORD")
-jq -e --arg meta "$meta_commit" --arg core "$core_commit" \
+jq -e --arg meta "$meta_commit" --arg core "$core_commit" --arg image "$image" \
   '.status == "PASS" and .repositories.vidra.revision == $meta
-   and .repositories["vidra-core"].revision == $core and (.upload_normalizer_files | length == 4)' \
+   and .repositories["vidra-core"].revision == $core and .images["vidra-core"].reference == $image
+   and (.upload_normalizer_files | length == 4)' \
   "$PREFLIGHT/manifest.json" >/dev/null
 test "$(gh api "repos/yegamble/vidra/git/commits/$meta_commit" --jq '.verification.verified')" = true
 gh attestation verify "oci://$image" --repo yegamble/vidra-core \
