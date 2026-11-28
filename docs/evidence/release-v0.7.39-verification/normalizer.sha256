@@ -1,0 +1,4 @@
+3500bc3286025e692c55fe561aa574673c54f2a4e15b45712281463170629611  deploy/upload-normalizer.py
+e6f56b69bf3ccd0ad63baa605991d958d70ee5ee384c03116f6d2b85408f1137  deploy/vidra-upload-normalizer.socket
+e806688c7b127e3e7e719802a725934d1bd8d7e2af699457a42e945f5ec87b72  deploy/vidra-upload-normalizer@.service
+2ff72bdb5696b9f2ec14bf0589198bca9423c025e96bc3a1c35e11b436b98eac  docker-compose.processed-uploads.yml

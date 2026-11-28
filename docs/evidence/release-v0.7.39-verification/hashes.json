@@ -1,0 +1,14 @@
+{
+  "bundle-provenance.txt": "6d44a1b65e52e9e454ebe2ed721a6a6f1abfc21e32563c0377d243f44ecd3752",
+  "capture-commands.json": "7ca2c64f501b5ac651bc21f8ddb7e6fcabbc96dcff809aa5afd4ad6156b6ec37",
+  "core-image": "3a12d2fe4f2ee42a741f5e66643faa4228115c127bba19e1f46935f40ba91bbb",
+  "embedded-max.txt": "d378bf6c59ae5f96d58c523ddfad12dd70dc946dac33a8d7cec170694856f0a6",
+  "embedded-probe.json": "1679918f119b0370314f2787298cece97327114a81cdec76c4345cd9981ec0bc",
+  "manifest.json": "cfe72dea598f3b78ff8c5da6e5cc0141416206d7c434b03216a3472ab1c3d9a6",
+  "normalizer.sha256": "23ae6573daaed9e8941baa22675abd569080e66d373e3a7ee3c1c6331a445704",
+  "platform-digests.txt": "eb325c7f0583968e175b3ad88d049fcc2f79688598af94f550bb05d3b3908f39",
+  "verified-assets.json": "1ecb98142049cd1412938154eaa9d6b7b27777ad6eb1288946a0d5c8d371279e",
+  "verified-attestation.json": "decaee6790ee5c78c52e597f2011b2d02263bb9b4267d185c54da6b5229ade3e",
+  "verified-frontend-attestation.json": "e3a05d0d5b2ccd3063c72d13f17f8c6641da95392a2b8a84a9846e64e7b8464a",
+  "verified-meta-commit.json": "01cc4979b603b486f7d707ed1bd5f35443a88baef0d5174ed80f09420da9d55f"
+}
