@@ -888,6 +888,17 @@ record itself is wrong.
 ./deploy/rollback.sh v0.2.0
 ```
 
+Before rolling core back across the introduction of reconstructed uploads
+(migration 0196), remove `UPLOAD_NORMALIZER_DIR` and redeploy the current API,
+or stop every API replica. This closes admission of new large uploads. Restore
+the previous upload size limit before opening an older core to traffic.
+The rollback checks the database before pulling images and again just before
+restart. An active reconstructed upload, retained rebuilt original or unfinished
+transcode needs a worker that scans its generated files. Keep that worker
+version in service while these records exist. For recovery to an earlier
+point in time, restore a verified backup from before large uploads opened on
+an isolated instance and reconcile subsequent creator changes before cutover.
+
 The second form has a trap worth reading before you need it: `restore.sh` runs
 both migrators *after* it has dropped and reloaded the database, so exactly one
 pairing works — a dump whose schema the tags pinned in `env/production.env` can

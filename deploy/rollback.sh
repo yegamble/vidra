@@ -763,6 +763,66 @@ oidc_providers_gate() {
 }
 oidc_providers_gate
 
+# A pre-0196 worker ignores the durable scan policy carried by a reconstructed
+# source's object key. It could generate unscanned media after an app-only
+# rollback, including from a completed upload whose session has already expired.
+PROCESSED_UPLOADS_RECHECK=0
+processed_uploads_quiet() {
+  local replicas cid
+  replicas="$("${COMPOSE[@]}" ps -q api)" || { log "could not list the running API replicas"; return 1; }
+  for cid in $replicas; do
+    if ! docker exec "$cid" sh -c 'test -z "${UPLOAD_NORMALIZER_SOCKET:-}"'; then
+      log "redeploy the current API without UPLOAD_NORMALIZER_DIR, or stop all its replicas, to close new reconstructed upload admissions"
+      return 1
+    fi
+  done
+  local sql="SELECT EXISTS (SELECT 1 FROM upload_sessions WHERE purpose='processed' AND
+    (state IN ('queued','processing') OR (state='active' AND expires_at > CURRENT_TIMESTAMP)))
+    OR EXISTS (SELECT 1 FROM video_files WHERE kind='original' AND
+      storage_key = 'web-videos/' || CAST(video_id AS text) || '.vidra-processed.mp4')
+    OR EXISTS (SELECT 1 FROM transcode_jobs WHERE state <> 'done' AND
+      source_key = 'web-videos/' || CAST(video_id AS text) || '.vidra-processed.mp4');"
+  if ! privacy_pg '-c default_transaction_read_only=on' "$sql"; then
+    log "could not check reconstructed uploads: ${PRIVACY_UNASKED}"
+    return 1
+  fi
+  case "$PG_OUT" in
+    f) return 0 ;;
+    t) log "reconstructed upload sessions, retained sources or transcode jobs require a scan-aware worker; keep this core running or restore a verified pre-onboarding backup separately" ;;
+    *) log "unexpected answer while checking reconstructed uploads" ;;
+  esac
+  return 1
+}
+
+processed_uploads_gate() {
+  local current migration=0196_processed_uploads.up.sql old=0 bundle_floor=""
+  [ -n "$CORE_TAG" ] || return 0
+  current="$(env_get VIDRA_CORE_TAG '')"
+  [ "$current" != "$CORE_TAG" ] || return 0
+  if python3 "$REPO_ROOT/deploy/release-mapping.py" core-migration --releases "$REPO_ROOT/releases" --core "$CORE_TAG" --migration "$migration" >/dev/null; then
+    return 0
+  fi
+  if [ -z "$(env_get UPLOAD_NORMALIZER_DIR '')" ]; then
+    python3 "$REPO_ROOT/deploy/release-mapping.py" core-migration --releases "$REPO_ROOT/releases" --core "$current" --migration "$migration" >/dev/null || old=$?
+    [ "$old" != 4 ] || return 0
+    if [ "$old" = 3 ] && is_bundle_tree "$REPO_ROOT" && [ "$(bundle_manifest_get "$REPO_ROOT" tag)" = "$current" ]; then
+      bundle_floor="$(bundle_manifest_get "$REPO_ROOT" core_schema_version)"
+      if [[ "$bundle_floor" =~ ^[0-9]{1,5}$ ]] && (( 10#$bundle_floor < 196 )); then return 0; fi
+    fi
+  fi
+  local schema="SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('upload_sessions')
+    AND conname='upload_sessions_processed_filename_check');"
+  privacy_pg '-c default_transaction_read_only=on' "$schema" || die "could not establish whether this database can admit reconstructed uploads: ${PRIVACY_UNASKED}"
+  case "$PG_OUT" in
+    f) return 0 ;;
+    t) ;;
+    *) die "could not establish whether this database can admit reconstructed uploads" ;;
+  esac
+  processed_uploads_quiet || die "reconstructed upload rollback check failed before the tag change"
+  PROCESSED_UPLOADS_RECHECK=1
+}
+processed_uploads_gate
+
 HTTP_PORT="$(env_get HTTP_PORT 8080)"
 FRONTEND_PORT="$(env_get FRONTEND_PORT 3000)"
 
@@ -892,6 +952,9 @@ EOF
   exit 1
 }
 
+if [ "$PROCESSED_UPLOADS_RECHECK" = 1 ]; then
+  processed_uploads_quiet || restore_env_and_die "reconstructed upload rollback check failed after the pull"
+fi
 log "restarting"
 # WHY THIS IS GUARDED. `up -d` starts the 'migrate' and 'search-migrate'
 # one-shots too — api and search depend on them with
