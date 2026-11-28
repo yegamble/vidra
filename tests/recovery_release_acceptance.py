@@ -244,6 +244,7 @@ CATALOGUE = {
                                        'last_error', 'updated_at')),
     # A restore must preserve the legal text, its public address, menu and edit revision.
     'site_pages': (191, ()),
+    'retained_upload_recoveries': (195, ()),
 }
 
 # BYTEA is hex-encoded by to_jsonb. Aggregating a 512MiB frozen snapshot can
@@ -349,6 +350,7 @@ TABLES_ADDED = {
     192: (),  # Adds a source publication timestamp to the fingerprinted videos row.
     193: (),  # Indexes publication order on videos.
     194: (),  # Defines the IPFS reference eligibility view over existing tables.
+    195: ('retained_upload_recoveries',),  # Retained original, creator, visibility and rescan outcome.
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 # Receiver authority is not disposable inbox/cache state. Compare whole rows:
@@ -636,17 +638,20 @@ SCHEMA_SHAPE_SQL = (
 # This view carries access policy without storing any rows. Record its definition
 # and grants, and refuse a baseline that lacks its barrier or gives PUBLIC access.
 REFERENCE_VIEW = 'public.ipfs_public_reference_videos'
-REFERENCE_VIEW_SQL = """
+VIEW_DEFINITION_SQL = """
 SELECT md5(jsonb_build_array(
     pg_get_viewdef(c.oid), pg_get_userbyid(c.relowner),
     ARRAY(SELECT opt FROM unnest(c.reloptions) opt ORDER BY opt),
     ARRAY(SELECT acl::text FROM unnest(coalesce(c.relacl, acldefault('r', c.relowner))) acl ORDER BY acl::text)
 )::text)
 FROM pg_class c
-WHERE c.oid = to_regclass('public.ipfs_public_reference_videos') AND c.relkind = 'v'
+WHERE c.oid = to_regclass('{view}') AND c.relkind = 'v'
+"""
+REFERENCE_VIEW_SQL = VIEW_DEFINITION_SQL.format(view=REFERENCE_VIEW) + """
   AND c.reloptions @> ARRAY['security_barrier=true']
   AND NOT EXISTS (SELECT 1 FROM aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) WHERE grantee = 0)
 """
+RETAINED_UPLOAD_VIEWS = ('public.retained_scan_sources', 'public.current_retained_scan_recoveries')
 
 
 # Preserve the archived search-18 projection exactly. From19 onward the FULL
@@ -737,6 +742,14 @@ def fingerprint(run, core_version, search_version):
         digests = re.findall(r'^[0-9a-f]{32}$', run.sql(REFERENCE_VIEW_SQL), re.MULTILINE)
         require(len(digests) == 1, f'{REFERENCE_VIEW} missing, lacks its security barrier, or grants PUBLIC access')
         rows[REFERENCE_VIEW] = digests[0]
+    if core_version >= 195:
+        # These definitions decide whether the worker can process an original again.
+        # The enrollment rows alone cannot detect a different eligibility predicate.
+        for view in RETAINED_UPLOAD_VIEWS:
+            output = run.sql(VIEW_DEFINITION_SQL.format(view=view))
+            digests = re.findall(r'^[0-9a-f]{32}$', output, re.MULTILINE)
+            require(len(digests) == 1, f'{view} missing or invalid')
+            rows[view] = digests[0]
     for table in search_tables:
         rows[qualified('search', table)] = run.sql(fingerprint_sql(
             table, schema='search', digest_rows=table == 'catalog_snapshot_pages'))
