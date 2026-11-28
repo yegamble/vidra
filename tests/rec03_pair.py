@@ -18,7 +18,8 @@ SHAPES = (('table', re.compile(rf'(?i:CREATE TABLE) ({IDENT}) ?\(')),
           ('column', re.compile(rf'(?i:ALTER TABLE) ({IDENT}) (?i:ADD COLUMN) (?!if )({IDENT}) ([A-Za-z]+)\b')),
           ('function', re.compile(rf'(?i:CREATE FUNCTION) ({IDENT}) ?\( ?\)')))
 DOLLAR_QUOTE = re.compile(r'\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$')
-CONFLICTS = {'table': r'(?<!of )relation "{REC03_INJECT_TABLE}" already exists\b',
+CONFLICTS = {'table': r'(?<!of )(?<!for )relation "{REC03_INJECT_TABLE}" already exists\b',
+             'constraint': r'constraint "{REC03_INJECT_CONSTRAINT}" (?:of|for) relation "{REC03_INJECT_TABLE}" already exists\b',
              'column': r'column "{REC03_INJECT_COLUMN}" of relation "{REC03_INJECT_TABLE}" already exists\b',
              'function': r'function "{REC03_INJECT_FUNCTION}" already exists with same argument types\b'}
 
@@ -102,6 +103,44 @@ def statements(sql):
     return [statement for statement in found if statement]
 
 
+def check_constraint(statement, earlier):
+    """Select a new named CHECK from an ALTER containing only constraint drops/adds."""
+    alter = re.fullmatch(rf'(?i:ALTER TABLE) ({IDENT}) (.+)', statement)
+    if not alter or re.search(rf'\b{alter[1]}\b', earlier):
+        return None
+    # Split only on commas outside the CHECK expressions. Literal bodies have
+    # already been blanked by statements(); quoted identifiers are unsupported.
+    actions = alter[2]
+    if '"' in actions:
+        return None
+    dropped, added = set(), []
+    start = depth = 0
+    for pos, char in enumerate(actions + ','):
+        if char == '(':
+            depth += 1
+        elif char == ')':
+            depth -= 1
+            if depth < 0:
+                return None
+        elif char == ',' and depth == 0:
+            clause = actions[start:pos].strip()
+            drop = re.fullmatch(rf'(?i:DROP CONSTRAINT) ({IDENT})', clause)
+            add = re.fullmatch(rf'(?i:ADD CONSTRAINT) ({IDENT}) (?i:CHECK) ?\(.+\)', clause)
+            if drop:
+                dropped.add(drop[1])
+            elif add:
+                added.append(add[1])
+            else:
+                return None
+            start = pos + 1
+    if depth or len(added) != len(set(added)):
+        return None
+    for name in added:
+        if name not in dropped and not re.search(rf'\b{name}\b', earlier):
+            return {'REC03_INJECT': 'constraint', 'REC03_INJECT_TABLE': alter[1], 'REC03_INJECT_CONSTRAINT': name}
+    return None
+
+
 def injection(sql):
     """The driver's REC03_INJECT* for the first statement that fails when its object pre-exists."""
     earlier = ''
@@ -121,6 +160,9 @@ def injection(sql):
             if kind == 'column':
                 found.update(REC03_INJECT_COLUMN=names[1], REC03_INJECT_TYPE=match[3].upper())
             return found
+        constraint = check_constraint(statement, earlier)
+        if constraint:
+            return constraint
         earlier += ' ' + statement
     raise Refused(NOT_INJECTABLE)
 
