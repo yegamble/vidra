@@ -89,7 +89,7 @@ The verifier checks the running image ID, loopback publishing, read-only mounts 
      --state-dir /var/lib/vidra-native-reference/publications
    ```
 
-   The existing synthetic-only peering guard admits its approved synthetic root. Global native peering requires a separate reviewed admission procedure and explicit per-video permission. [Publisher and withdrawal procedure](../../publisher/README.md)
+   For global distribution, obtain explicit permission for this UUID, generation and verified CID. Verify the existing public fixture alone with the [peering admission guard](../README.md#verify-and-switch-a-synthetic-node-to-public-peering). The publisher may expose new blocks as soon as it stages them on an online node. Compare the reviewed manifest digest again before running the publisher on that node. For the native job, set `--origin-port 8786`, use the public node's loopback RPC and its protected token, and keep the native journal separate. Require the returned CID to equal the offline CID. Run the two-root guard immediately and retrieve both roots from a fresh peer. [Publisher and withdrawal procedure](../../publisher/README.md)
 
 7. To withdraw, unlink the one approved manifest from `approvals/` and require HTTP 404 with zero bytes for previously approved references. Reconcile or withdraw the managed pin on its own offline node. Revoke the scoped storage credential, restore `scope.json` to `{}`, remove its two credential files and restart only this origin. Repeat the dormant checks. Independently held public copies remain under the control of their peers.
 
