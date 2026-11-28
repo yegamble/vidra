@@ -207,7 +207,7 @@ class SQLShapes(Refusals, unittest.TestCase):
                     'ALTER TABLE IF EXISTS t ADD COLUMN c INT;', 'alter table if exists t add column c int;',
                     'ALTER TABLE t ADD c INT;', 'ALTER TABLE t ADD COLUMN "c" INT;', 'ALTER TABLE public.t ADD COLUMN c INT;',
                     'ALTER TABLE t DROP COLUMN x, ADD COLUMN c INT;',
-                    'ALTER TABLE t ADD CONSTRAINT t_check CHECK (c > 0);', 'CREATE INDEX t_idx ON t (c);',
+                    'ALTER TABLE t ADD CONSTRAINT t_check CHECK (c > 0) NOT VALID;', 'CREATE INDEX t_idx ON t (c);',
                     'CREATE UNIQUE INDEX IF NOT EXISTS t_idx ON t (c);', 'CREATE EXTENSION IF NOT EXISTS pg_trgm;',
                     'CREATE TABLE ' + 'a' * 64 + ' (id INT);', 'CREATE FUNCTION ' + 'a' * 64 + '() RETURNS INT;'):
             with self.subTest(sql=sql):
@@ -235,6 +235,31 @@ class SQLShapes(Refusals, unittest.TestCase):
         self.assertEqual(pair.injection("SELECT 'a;b'; /* c; */ CREATE FUNCTION f() RETURNS INT LANGUAGE sql AS 'SELECT 1';"),
                          self.FUNCTION)
         self.assertEqual(pair.injection('ALTER TABLE x ADD COLUMN y VARCHAR(8); ALTER TABLE t ADD COLUMN c INT;'), self.COLUMN)
+
+    def test_check_constraint_selection_and_recovery(self):
+        sql = """ALTER TABLE t DROP CONSTRAINT old_policy,
+          ADD CONSTRAINT old_policy CHECK (purpose IN ('a', 'b')),
+          ADD CONSTRAINT new_policy CHECK (right(filename, 4) = '.mp4');"""
+        found = pair.injection(sql)
+        self.assertEqual(found, {'REC03_INJECT': 'constraint', 'REC03_INJECT_TABLE': 't',
+                                 'REC03_INJECT_CONSTRAINT': 'new_policy'})
+        result = driver.helpers('require_injection_setup && inject_ddl && echo && inject_undo_ddl', **found)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ['ALTER TABLE t ADD CONSTRAINT new_policy CHECK (true)',
+                                                      'ALTER TABLE t DROP CONSTRAINT new_policy'])
+        for field in ('REC03_INJECT_TABLE', 'REC03_INJECT_CONSTRAINT'):
+            for bad in ('', 'a.b', 'name with spaces', 'a' * 64):
+                self.assertNotEqual(driver.helpers('require_injection_setup', **dict(found, **{field: bad})).returncode, 0)
+        error = 'constraint "new_policy" for relation "t" already exists'
+        self.assertRegex(error, pair.conflict(found))
+        self.assertNotRegex(error, pair.conflict(self.TABLE))
+        for near in (error.replace('new_policy', 'old_policy'), error.replace('"t"', '"u"'),
+                     error.replace('already exists', 'does not exist')):
+            self.assertNotRegex(near, pair.conflict(found))
+        for refused in (sql.replace('new_policy', 'old_policy'), 'DROP TABLE t; ' + sql,
+                        sql.replace('new_policy', '"quoted"'), sql.replace('CHECK (right', 'UNIQUE (right'),
+                        sql.replace(', 4)', ', 4'), sql.replace('DROP CONSTRAINT', 'DROP COLUMN')):
+            self.refused(pair.NOT_INJECTABLE, pair.injection, refused)
 
     def test_an_object_an_earlier_statement_touches_is_passed_over(self):
         for sql in ('DROP TABLE IF EXISTS t; CREATE TABLE t (id INT);',
@@ -264,7 +289,7 @@ class SQLShapes(Refusals, unittest.TestCase):
                 except pair.Refused:
                     continue
                 kind = found.pop('REC03_INJECT')
-                self.assertIn(kind, ('table', 'column', 'function'))
+                self.assertIn(kind, ('table', 'column', 'function', 'constraint'))
                 declared = found.pop('REC03_INJECT_TYPE', 'INT')
                 self.assertIn(declared, pair.TYPES)
                 for value in found.values():
