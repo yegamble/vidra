@@ -351,6 +351,7 @@ TABLES_ADDED = {
     193: (),  # Indexes publication order on videos.
     194: (),  # Defines the IPFS reference eligibility view over existing tables.
     195: ('retained_upload_recoveries',),  # Retained original, creator, visibility and rescan outcome.
+    196: (),  # Changes the purpose and filename checks on existing upload sessions.
 }
 CATALOGUE_AUDITED_THROUGH = max(TABLES_ADDED)
 # Receiver authority is not disposable inbox/cache state. Compare whole rows:
@@ -653,6 +654,32 @@ REFERENCE_VIEW_SQL = VIEW_DEFINITION_SQL.format(view=REFERENCE_VIEW) + """
 """
 RETAINED_UPLOAD_VIEWS = ('public.retained_scan_sources', 'public.current_retained_scan_recoveries')
 
+PROCESSED_UPLOAD_CHECKS = ('upload_sessions_purpose_check', 'upload_sessions_processed_filename_check')
+UPLOAD_CHECK_SQL = """
+SELECT md5(pg_get_constraintdef(oid))
+FROM pg_constraint
+WHERE conrelid = to_regclass('public.upload_sessions') AND contype = 'c' AND convalidated
+  AND conname = '{name}'
+"""
+
+
+def processed_upload_fingerprint(run):
+    rows = {}
+    for name in PROCESSED_UPLOAD_CHECKS:
+        digests = re.findall(r'^[0-9a-f]{32}$', run.sql(UPLOAD_CHECK_SQL.format(name=name)), re.MULTILINE)
+        require(len(digests) == 1, f'public.upload_sessions.{name} missing or unvalidated')
+        rows[f'public.upload_sessions.{name}'] = digests[0]
+    # The drill quiesces writers. Hash the entire protected session and its child
+    # rows so restoring a draft without its transfer or pending work is visible.
+    # Ordinary resumable uploads keep their existing recovery policy.
+    for table, session_key in (('upload_sessions', 'id'), ('upload_chunks', 'upload_id'),
+                               ('upload_finalize_jobs', 'upload_id')):
+        projection = (f'WITH {table} AS (SELECT t.* FROM public.{table} t '
+                      f'WHERE t.{session_key} IN (SELECT id FROM public.upload_sessions '
+                      "WHERE purpose = 'processed')) ")
+        rows[f'public.{table}.processed'] = run.sql(projection + fingerprint_sql(table, digest_rows=True))
+    return rows
+
 
 # Preserve the archived search-18 projection exactly. From19 onward the FULL
 # manifest attests all canonical metadata: a title/id/eligible projection would
@@ -750,6 +777,8 @@ def fingerprint(run, core_version, search_version):
             digests = re.findall(r'^[0-9a-f]{32}$', output, re.MULTILINE)
             require(len(digests) == 1, f'{view} missing or invalid')
             rows[view] = digests[0]
+    if core_version >= 196:
+        rows.update(processed_upload_fingerprint(run))
     for table in search_tables:
         rows[qualified('search', table)] = run.sql(fingerprint_sql(
             table, schema='search', digest_rows=table == 'catalog_snapshot_pages'))

@@ -1183,5 +1183,40 @@ class ReferenceViewRecoveryTest(unittest.TestCase):
                     snapshot(195, {**replies, name: ''})
 
 
+class ProcessedUploadRecoveryTest(unittest.TestCase):
+    def snapshot(self, version=196, changed=None, value=''):
+        run = CatalogProgramRecoveryTest.run_with(self, CatalogErrorEvidenceRecoveryTest.objects())
+        sql = run.sql
+
+        def respond(query):
+            if changed and changed in query:
+                return value
+            if 'pg_get_viewdef' in query or query.startswith('WITH upload_') or 'FROM pg_constraint\n' in query:
+                return 'a' * 32 if not query.startswith('WITH') else '1|' + 'b' * 32
+            return sql(query)
+
+        with mock.patch.object(run, 'sql', side_effect=respond):
+            return recovery.fingerprint(run, version, 18)
+
+    def test_each_guard_must_exist_and_keep_its_validated_definition(self):
+        before = self.snapshot()
+        for name in recovery.PROCESSED_UPLOAD_CHECKS:
+            with self.subTest(name=name):
+                after = self.snapshot(changed=name, value='c' * 32)
+                self.assertEqual(recovery.differing(before, after), [f'public.upload_sessions.{name}'])
+                with self.assertRaisesRegex(ValueError, name):
+                    self.snapshot(changed=name)
+        self.assertIn('AND convalidated', recovery.UPLOAD_CHECK_SQL)
+
+    def test_each_protected_row_set_is_compared_from_196(self):
+        baseline = self.snapshot()
+        older = self.snapshot(195)
+        for table in ('upload_sessions', 'upload_chunks', 'upload_finalize_jobs'):
+            key = f'public.{table}.processed'
+            self.assertNotIn(key, older)
+            after = self.snapshot(changed=f'WITH {table} AS', value='0|' + 'd' * 32)
+            self.assertEqual(recovery.differing(baseline, after), [key])
+
+
 if __name__ == '__main__':
     unittest.main()
