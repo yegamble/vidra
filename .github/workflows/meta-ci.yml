@@ -661,16 +661,17 @@ jobs:
         run: |
           export SEARCH_INTERNAL_SECRET=dummy
           docker compose --profile core --profile worker config --format json > "$RUNNER_TEMP/base-config.json"
-          # The configurable host directory makes this an API-only read; workers never mount it.
+          # Render both API-only inputs so a worker mount fails validation.
           export IPFS_REFERENCE_STATUS_DIR="$RUNNER_TEMP/reference-status"
-          mkdir -p "$IPFS_REFERENCE_STATUS_DIR"
-          docker compose -f docker-compose.yml -f docker-compose.ipfs-reference-status.yml \
+          export IPFS_REFERENCE_PLAYBACK_DIR="$RUNNER_TEMP/reference-playback"
+          mkdir -p "$IPFS_REFERENCE_STATUS_DIR" "$IPFS_REFERENCE_PLAYBACK_DIR"
+          docker compose -f docker-compose.yml -f docker-compose.ipfs-reference-status.yml -f docker-compose.ipfs-reference-playback.yml \
             --profile core --profile worker config --format json > "$RUNNER_TEMP/reference-config.json"
           grep -oE '(getEnv[A-Za-z]*|p\.(Str|Int|Int64|Bool|Duration))\("[A-Z0-9_]+"' \
             vidra-core/internal/config/config.go \
             | sed 's/.*"\(.*\)"/\1/' | sort -u > "$RUNNER_TEMP/go-keys.txt"
           python3 scripts/ci/check-core-compose-consumers.py "$RUNNER_TEMP/base-config.json" "$RUNNER_TEMP/reference-config.json" \
-            "$IPFS_REFERENCE_STATUS_DIR" "$RUNNER_TEMP/go-keys.txt"
+            "$IPFS_REFERENCE_STATUS_DIR" "$RUNNER_TEMP/go-keys.txt" "$IPFS_REFERENCE_PLAYBACK_DIR"
 
       # THE OTHER HALF OF THE SAME CONTRACT, and the half the step above cannot
       # see. It proves a key is settable in the CONTAINER; it says nothing about

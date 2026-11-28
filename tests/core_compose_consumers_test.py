@@ -50,6 +50,27 @@ class CoreComposeConsumersTest(unittest.TestCase):
                     check(self.base, self.enabled, SOURCE, self.go_keys)
                 del model[name]['volumes']
 
+    def test_playback_is_accounted_for_only_after_proving_the_api_mount(self):
+        key = 'IPFS_REFERENCE_PLAYBACK_SOCKET'
+        host = '/tmp/reference-playback'
+        target = '/run/vidra-reference-playback'
+        self.go_keys.add(key)
+        with self.assertRaisesRegex(ValueError, 'enabled API'):
+            check(self.base, self.enabled, SOURCE, self.go_keys, host)
+        self.enabled['api']['environment'][key] = target + '/playback.sock'
+        self.enabled['api']['volumes'].append({'type': 'bind', 'source': host, 'target': target, 'read_only': True})
+        self.assertEqual(check(self.base, self.enabled, SOURCE, self.go_keys, host), 1)
+        self.enabled['worker']['environment'][key] = target + '/playback.sock'
+        with self.assertRaisesRegex(ValueError, 'worker unexpectedly exposes'):
+            check(self.base, self.enabled, SOURCE, self.go_keys, host)
+        del self.enabled['worker']['environment'][key]
+        for exposed in (host, host + '/playback.sock', '/tmp'):
+            with self.subTest(source=exposed):
+                self.enabled['worker']['volumes'] = [
+                    {'type': 'bind', 'source': exposed, 'target': '/different-path', 'read_only': True}]
+                with self.assertRaisesRegex(ValueError, 'worker unexpectedly exposes'):
+                    check(self.base, self.enabled, SOURCE, self.go_keys, host)
+
     def test_enabled_api_requires_exact_read_only_directory(self):
         bad = [([], '/run/vidra-reference-status/status.json'),
                (self.enabled['api']['volumes'], '/wrong/status.json')]
