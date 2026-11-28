@@ -118,6 +118,7 @@ copy_in docker-compose.source.yml
 copy_in docker-compose.ipfs-managed.yml
 copy_in docker-compose.ipfs-reference-status.yml
 copy_in docker-compose.ipfs-reference-playback.yml
+copy_in docker-compose.processed-uploads.yml
 copy_in docker-compose.atproto-pds.yml
 copy_in docker-compose.external-postgres.yml
 copy_in docker-compose.external-redis.yml

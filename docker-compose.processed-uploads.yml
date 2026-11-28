@@ -1,0 +1,15 @@
+# The decoder runs on the host in a separate container. The app receives only
+# the processor's local socket. The Docker API and job folders stay on the host.
+x-upload-processor: &upload-processor
+  environment:
+    UPLOAD_NORMALIZER_SOCKET: /run/vidra-upload-normalizer/processor.sock
+  volumes:
+    - type: bind
+      source: ${UPLOAD_NORMALIZER_DIR:?Set the local upload normalizer socket directory}
+      target: /run/vidra-upload-normalizer
+      read_only: true
+      bind:
+        create_host_path: false
+services:
+  api: *upload-processor
+  worker: *upload-processor
