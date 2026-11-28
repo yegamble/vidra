@@ -18,6 +18,8 @@ import tarfile
 
 
 REPOS = ('vidra', 'vidra-core', 'vidra-user', 'vidra-search')
+NORMALIZER_FILES = ('deploy/upload-normalizer.py', 'deploy/vidra-upload-normalizer.socket',
+                    'deploy/vidra-upload-normalizer@.service', 'docker-compose.processed-uploads.yml')
 
 # Platform release records name components by ROLE; this script works in
 # repository names. The meta repository is the release itself, so it is never
@@ -174,6 +176,27 @@ def verify_checksum(path, sums):
     return actual
 
 
+def verify_normalizer_files(archive, meta):
+    """Match the bytes of the privileged broker and its wiring to the frozen checkout."""
+    if not any((meta / name).exists() or (meta / name).is_symlink() for name in NORMALIZER_FILES):
+        if any(Path(member.name).as_posix() in NORMALIZER_FILES for member in archive.getmembers()):
+            raise ValueError('bundle includes normalizer files absent from frozen source')
+        return {}  # A release before the optional normalizer.
+    digests = {}
+    for name in NORMALIZER_FILES:
+        source = meta / name
+        if source.is_symlink() or not source.is_file():
+            raise ValueError(f'frozen normalizer file is missing or not regular: {name}')
+        members = [m for m in archive.getmembers() if Path(m.name).as_posix() == name]
+        if len(members) != 1 or not members[0].isfile():
+            raise ValueError(f'bundle must contain one regular normalizer file: {name}')
+        expected = source.read_bytes()
+        if members[0].size != len(expected) or archive.extractfile(members[0]).read() != expected:
+            raise ValueError(f'bundled normalizer file differs from frozen source: {name}')
+        digests[name] = hashlib.sha256(expected).hexdigest()
+    return digests
+
+
 def without_resolver(spec):
     result, count = re.subn(r'^  /api/v1/videos/resolve:\n.*?(?=^  /|^\S|\Z)', '', spec,
                             flags=re.MULTILINE | re.DOTALL)
@@ -256,16 +279,19 @@ def freeze(args, out, manifest):
     sums = (assets / 'SHA256SUMS').read_text()
     for name in names[1:]:
         verify_checksum(assets / name, sums)
-    # Read just the manifest, never extract or execute the downloaded bundle.
+    # Read the manifest and optional host broker without extracting the bundle.
     with tarfile.open(assets / names[1]) as archive:
         members = [m for m in archive.getmembers() if m.name.removeprefix('./') == 'vidra-bundle.manifest']
         if len(members) != 1 or not members[0].isfile():
             raise ValueError('bundle must contain one regular provenance manifest')
         provenance = archive.extractfile(members[0]).read().decode()
+        files = verify_normalizer_files(archive, source / 'vidra')
     (out / 'bundle-provenance.txt').write_text(provenance)
     for key, repo in [('meta_commit', 'vidra'), ('core_commit', 'vidra-core')]:
         if not re.search(rf'^{key}={manifest["repositories"][repo]["revision"]}$', provenance, re.MULTILINE):
             raise ValueError(f'bundle {key} does not match frozen source')
+    if files:
+        manifest['upload_normalizer_files'] = files
     manifest['checks']['assets'] = 'PASS'
     save(out, manifest)
 
